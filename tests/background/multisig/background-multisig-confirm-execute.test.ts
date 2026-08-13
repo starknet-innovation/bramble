@@ -15,13 +15,14 @@ import {
   multisigId,
   multisigProposalId,
 } from "@mc-wallet/multisig/repository";
+import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
 import {
   HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,
   HARNESS_TARGET,
-  HARNESS_TX_ID,
   harnessAccount,
   harnessExtensionSender,
+  harnessTxId,
   makeMultisigHarness,
 } from "../../support/multisig-harness";
 
@@ -34,6 +35,11 @@ const proposalCall = {
   salt: "0x0",
 } as const;
 
+// The real component id for that call: an execute is only ever built after the
+// stored (call, salt) pair is re-hashed back to the id it is filed under, so a
+// fixture that invented an id here would be refused before quorum is checked.
+const PROPOSAL_TX_ID = harnessTxId(proposalCall);
+
 // A 3-of-3 multisig so "reaches quorum" and "does not reach quorum" are both
 // expressible by moving the reported confirmation count alone.
 const makeHarness = async (options: {
@@ -41,6 +47,9 @@ const makeHarness = async (options: {
   readonly multisigStore?: MultisigStore;
   readonly quorum?: number;
   readonly storedQuorum?: number;
+  readonly submitInvoke?: (
+    calls: readonly unknown[],
+  ) => Promise<{ readonly transactionHash: string }>;
   readonly withCall?: boolean;
 }) => {
   const quorum = options.quorum ?? 3;
@@ -54,6 +63,7 @@ const makeHarness = async (options: {
       state: "pending",
     }),
     signers,
+    ...(options.submitInvoke ? { submitInvoke: options.submitInvoke } : {}),
   });
   const record: MultisigRecord = {
     address: HARNESS_MULTISIG,
@@ -65,11 +75,11 @@ const makeHarness = async (options: {
   const proposal: MultisigProposalRecord = {
     call: options.withCall === false ? null : proposalCall,
     confirmations: options.confirmations,
-    id: multisigProposalId(record.id, HARNESS_TX_ID) ?? "",
+    id: multisigProposalId(record.id, PROPOSAL_TX_ID) ?? "",
     multisigId: record.id,
     state: "pending",
     summary: "Pay vendor",
-    txId: HARNESS_TX_ID,
+    txId: PROPOSAL_TX_ID,
   };
   await harness.multisigStore.upsertMultisig(record);
   await harness.multisigStore.upsertProposal(proposal);
@@ -111,11 +121,57 @@ describe("multisig confirm and execute", () => {
     });
     expect(estimatedCalls).toEqual([
       [
-        buildMultisigConfirmCall(HARNESS_MULTISIG, HARNESS_TX_ID),
+        buildMultisigConfirmCall(HARNESS_MULTISIG, PROPOSAL_TX_ID),
         buildMultisigExecuteCall(HARNESS_MULTISIG, proposalCall, proposalCall.salt),
       ],
     ]);
     expect(invokeCalls).toHaveLength(0);
+  });
+
+  test("binds the co-signing invoke to the fee its review displayed", async () => {
+    // MCW-V09-119: the review returns a fee, the panel echoes it back, and the
+    // submission carries it as a ceiling. Without the echo the signer's STRK is
+    // spent at whatever the node quotes when the click lands.
+    const { handler, proposal, submittedInvokes } = await makeHarness({ confirmations: 2 });
+    const review = (await handler(
+      {
+        mode: "confirm-and-execute",
+        proposalId: proposal.id,
+        type: "wallet.prepareMultisigConfirmation",
+      },
+      harnessExtensionSender,
+    )) as { readonly confirmationReview: { readonly fee: unknown } };
+
+    await expect(
+      handler(
+        {
+          mode: "confirm-and-execute",
+          proposalId: proposal.id,
+          reviewedFee: review.confirmationReview.fee,
+          type: "wallet.confirmMultisigProposal",
+        },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(submittedInvokes).toHaveLength(1);
+    expect(submittedInvokes[0]?.reviewedFee).toEqual({ overallFee: "1", unit: "FRI" });
+  });
+
+  test("refuses a confirmation whose echoed fee is not a fee", async () => {
+    const { handler, proposal, submittedInvokes } = await makeHarness({ confirmations: 2 });
+    await expect(
+      handler(
+        {
+          mode: "confirm-and-execute",
+          proposalId: proposal.id,
+          reviewedFee: { overallFee: "1", unit: "STRK" },
+          type: "wallet.confirmMultisigProposal",
+        },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ error: expect.any(String) });
+    expect(submittedInvokes).toHaveLength(0);
   });
 
   test("batches confirm and execute into one invoke when this signer reaches quorum", async () => {
@@ -136,7 +192,7 @@ describe("multisig confirm and execute", () => {
     // the component sees the confirm's storage write when execute re-reads it.
     expect(invokeCalls).toHaveLength(1);
     expect(invokeCalls[0]).toEqual([
-      buildMultisigConfirmCall(HARNESS_MULTISIG, HARNESS_TX_ID),
+      buildMultisigConfirmCall(HARNESS_MULTISIG, PROPOSAL_TX_ID),
       buildMultisigExecuteCall(HARNESS_MULTISIG, proposalCall, proposalCall.salt),
     ]);
     expect(await summaries(handler, record.id)).toEqual(["Confirm and execute: Pay vendor"]);
@@ -156,7 +212,7 @@ describe("multisig confirm and execute", () => {
       ),
     ).resolves.toMatchObject({ ok: true });
 
-    expect(invokeCalls[0]).toEqual([buildMultisigConfirmCall(HARNESS_MULTISIG, HARNESS_TX_ID)]);
+    expect(invokeCalls[0]).toEqual([buildMultisigConfirmCall(HARNESS_MULTISIG, PROPOSAL_TX_ID)]);
     expect(await summaries(handler, record.id)).toEqual(["Confirm: Pay vendor"]);
   });
 
@@ -295,11 +351,11 @@ describe("multisig confirm and execute", () => {
     const proposal: MultisigProposalRecord = {
       call: proposalCall,
       confirmations: 2,
-      id: multisigProposalId(record.id, HARNESS_TX_ID) ?? "",
+      id: multisigProposalId(record.id, PROPOSAL_TX_ID) ?? "",
       multisigId: record.id,
       state: "pending",
       summary: "Pay vendor",
-      txId: HARNESS_TX_ID,
+      txId: PROPOSAL_TX_ID,
     };
     await harness.multisigStore.upsertMultisig(record);
     await harness.multisigStore.upsertProposal(proposal);
@@ -340,6 +396,34 @@ describe("multisig confirm and execute", () => {
     } as const;
 
     await expect(handler(message, harnessExtensionSender)).resolves.toMatchObject({ ok: true });
+    await expect(handler(message, harnessExtensionSender)).resolves.toMatchObject({
+      error: expect.stringContaining("proposal action in progress"),
+    });
+    await expect(
+      handler(
+        { proposalId: proposal.id, type: "wallet.revokeMultisigConfirmation" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ error: expect.any(String) });
+    expect(invokeCalls).toHaveLength(1);
+  });
+
+  test("retains a hashless claim when the broadcast outcome is indeterminate", async () => {
+    const { handler, invokeCalls, proposal } = await makeHarness({
+      confirmations: 2,
+      submitInvoke: async () => {
+        throw new IndeterminateRpcWriteError("submission status unknown");
+      },
+    });
+    const message = {
+      mode: "confirm-and-execute",
+      proposalId: proposal.id,
+      type: "wallet.confirmMultisigProposal",
+    } as const;
+
+    await expect(handler(message, harnessExtensionSender)).resolves.toEqual({
+      error: "submission status unknown",
+    });
     await expect(handler(message, harnessExtensionSender)).resolves.toMatchObject({
       error: expect.stringContaining("proposal action in progress"),
     });

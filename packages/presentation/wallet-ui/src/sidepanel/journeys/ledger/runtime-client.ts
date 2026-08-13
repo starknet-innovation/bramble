@@ -23,7 +23,7 @@ import {
  * One Ledger candidate's best-effort on-chain state as the panel consumes it:
  * deployed status and balance display string, each null when the RPC degraded.
  */
-export type LedgerAccountStatus = {
+type LedgerAccountStatus = {
   readonly balance: string | null;
   readonly deployed: boolean | null;
 };

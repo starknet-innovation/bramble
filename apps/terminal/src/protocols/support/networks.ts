@@ -47,88 +47,9 @@ export const STARKNET_NETWORKS: Readonly<Record<StarknetNetworkId, StarknetNetwo
 };
 
 /**
- * ERC20 token metadata used by the default wallet home.
- */
-export type DefaultToken = {
-  readonly address: string;
-  readonly decimals: number;
-  readonly name: string;
-  readonly networkId: StarknetNetworkId;
-  readonly symbol: string;
-};
-
-const ETH_TOKEN_ADDRESS = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
-const STRK_TOKEN_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-
-/**
- * Default ERC20 tokens queried on each configured network.
- */
-export const DEFAULT_TOKENS: readonly DefaultToken[] = [
-  {
-    address: ETH_TOKEN_ADDRESS,
-    decimals: 18,
-    name: "Ether",
-    networkId: "SN_MAIN",
-    symbol: "ETH",
-  },
-  {
-    address: STRK_TOKEN_ADDRESS,
-    decimals: 18,
-    name: "Starknet Token",
-    networkId: "SN_MAIN",
-    symbol: "STRK",
-  },
-  {
-    address: ETH_TOKEN_ADDRESS,
-    decimals: 18,
-    name: "Sepolia Ether",
-    networkId: "SN_SEPOLIA",
-    symbol: "ETH",
-  },
-  {
-    address: STRK_TOKEN_ADDRESS,
-    decimals: 18,
-    name: "Sepolia Starknet Token",
-    networkId: "SN_SEPOLIA",
-    symbol: "STRK",
-  },
-  {
-    address: ETH_TOKEN_ADDRESS,
-    decimals: 18,
-    name: "Devnet Ether",
-    networkId: "SN_DEVNET",
-    symbol: "ETH",
-  },
-  {
-    address: STRK_TOKEN_ADDRESS,
-    decimals: 18,
-    name: "Devnet Starknet Token",
-    networkId: "SN_DEVNET",
-    symbol: "STRK",
-  },
-];
-
-/**
- * Checks whether an untrusted value is one of the supported Starknet network ids.
- */
-export const isStarknetNetworkId = (value: unknown): value is StarknetNetworkId =>
-  typeof value === "string" && Object.hasOwn(STARKNET_NETWORKS, value);
-
-/**
- * Resolves a configured network id from a Starknet chain id.
- *
- * Each configured network carries a distinct `chainId` (devnet uses a sentinel
- * rather than reusing Sepolia's on-chain id), so this lookup is deterministic:
- * insertion order is stable and no two networks share a chain id. Returns
- * `null` for any chain id the wallet is not configured for.
- */
-export const networkIdForChainId = (chainId: string): StarknetNetworkId | null =>
-  Object.values(STARKNET_NETWORKS).find((network) => network.chainId === chainId)?.id ?? null;
-
-/**
  * Stark curve field modulus for validating hashes before signing.
  */
-export const STARK_FIELD_PRIME = BigInt(
+const STARK_FIELD_PRIME = BigInt(
   "0x800000000000011000000000000000000000000000000000000000000000001",
 );
 

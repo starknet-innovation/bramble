@@ -35,8 +35,3 @@ export const KNOWN_TOKENS: readonly KnownToken[] = (
   address: MAINNET_TOKEN_ADDRESSES[symbol],
   decimals: MAINNET_TOKEN_DECIMALS[symbol],
 }));
-
-/** Lowercased contract address -> known token, for reverse lookups. */
-export const KNOWN_TOKENS_BY_ADDRESS: Readonly<Record<string, KnownToken>> = Object.fromEntries(
-  KNOWN_TOKENS.map((token) => [token.address.toLowerCase(), token]),
-);

@@ -30,7 +30,8 @@ export const filterVesuMarkets = (
     )
     .sort((left, right) => {
       if (sort === "borrow") return left.borrowApr - right.borrowApr;
-      if (sort === "liquidity") return right.liquidity * right.priceUsd - left.liquidity * left.priceUsd;
+      if (sort === "liquidity")
+        return right.liquidity * right.priceUsd - left.liquidity * left.priceUsd;
       if (sort === "utilization") return right.utilization - left.utilization;
       return right.supplyApy - left.supplyApy;
     });
@@ -45,8 +46,7 @@ export const collateralMarketsFor = (
   pairs
     .filter(
       (pair) =>
-        pair.poolId === debtMarket.poolId &&
-        sameAddress(pair.debtAddress, debtMarket.assetAddress),
+        pair.poolId === debtMarket.poolId && sameAddress(pair.debtAddress, debtMarket.assetAddress),
     )
     .flatMap((pair) => {
       const market = markets.find(
@@ -68,9 +68,7 @@ export const resolveCollateralAddress = (
     (choice) => requested !== "" && sameAddress(choice.market.assetAddress, requested),
   );
   if (requestedChoice !== undefined) return requestedChoice.market.assetAddress;
-  const currentChoice = choices.find((choice) =>
-    sameAddress(choice.market.assetAddress, current),
-  );
+  const currentChoice = choices.find((choice) => sameAddress(choice.market.assetAddress, current));
   return currentChoice?.market.assetAddress ?? choices[0]?.market.assetAddress ?? "";
 };
 
@@ -87,13 +85,8 @@ export const projectedLtv = (
 };
 
 /** Compact risk band for utilization and collateral health. */
-export const riskTone = (value: number, warning: number, danger: number): "danger" | "safe" | "warn" =>
-  value >= danger ? "danger" : value >= warning ? "warn" : "safe";
-
-/** Converts raw integer token units to a concise decimal display. */
-export const rawTokenAmount = (raw: string, decimals: number): string => {
-  const padded = raw.padStart(decimals + 1, "0");
-  const integer = padded.slice(0, -decimals) || "0";
-  const fraction = decimals === 0 ? "" : padded.slice(-decimals).replace(/0+$/, "").slice(0, 6);
-  return fraction === "" ? integer : `${integer}.${fraction}`;
-};
+export const riskTone = (
+  value: number,
+  warning: number,
+  danger: number,
+): "danger" | "safe" | "warn" => (value >= danger ? "danger" : value >= warning ? "warn" : "safe");

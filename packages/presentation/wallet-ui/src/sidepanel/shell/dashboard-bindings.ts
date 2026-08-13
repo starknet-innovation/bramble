@@ -104,7 +104,14 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
         result.textContent =
           action === "approve" ? "Approved. Signing and broadcasting…" : "Rejecting request…";
       }
-      void wallet.decideApproval(id, action === "approve").then(
+      // The fee this card painted, read back off the control that was clicked
+      // rather than from any later status refresh, so the figure the user saw is
+      // the figure the decision reports. A card that showed no fee reports none.
+      const overallFee = button.dataset["approvalFee"];
+      const unit = button.dataset["approvalFeeUnit"];
+      const reviewedFee =
+        overallFee !== undefined && unit !== undefined ? { overallFee, unit } : undefined;
+      void wallet.decideApproval(id, action === "approve", reviewedFee).then(
         async () => {
           showToast(action === "approve" ? "Request approved" : "Request denied", "success");
           await render(await wallet.loadStatus());

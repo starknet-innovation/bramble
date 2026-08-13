@@ -27,7 +27,7 @@ const PENDING_POLL_INTERVAL_MS = 3_000;
  * `apply` is only called for a reading `stillCurrent` accepts, so an answer that
  * arrives after an account or network change is dropped rather than rendered.
  */
-export type PendingRegistrationPollPort = {
+type PendingRegistrationPollPort = {
   readonly apply: (state: PrivacyAccountState) => void;
   readonly clearTimer?: (handle: ReturnType<typeof setTimeout>) => void;
   readonly load: () => Promise<PrivacyAccountState>;

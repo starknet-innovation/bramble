@@ -12,53 +12,6 @@ import type { ConnectedSite, WalletStatus } from "../../../popup/responses/respo
 import { accountLabel, copyButton, flowHeader, flowScreen } from "../../shared/parts";
 
 /**
- * Backup flow: export or restore non-secret wallet data. Never includes the
- * vault or any key material.
- */
-export const backupFlow = (status: WalletStatus): string => {
-  const hasLedgerAccount = status.accounts.some((account) => account.derivation.kind === "ledger");
-  return (
-    flowHeader("Backup & restore", status, "Preferences, labels, and contacts") +
-    flowScreen(
-      "backup",
-      `<section class="section">
-      <p class="eyebrow">Export</p>
-      <p class="hint">Downloads tokens, contacts, labels, and settings as JSON. Your recovery phrase and keys are never included.</p>
-      ${
-        hasLedgerAccount
-          ? '<p class="review-flag" role="note">Ledger accounts are not restored by this JSON backup or by MC Wallet’s recovery phrase. Recover them with your Ledger device and its Ledger recovery phrase.</p>'
-          : ""
-      }
-      ${button({
-        attributes: { id: "backup-export" },
-        icon: "receive",
-        label: "Download backup",
-        variant: "secondary",
-      })}
-      <p id="backup-result" role="status"></p>
-    </section>
-    <section class="section">
-      <p class="eyebrow">Restore</p>
-      <p class="hint">Replaces current preferences with a backup file exported from this wallet.</p>
-      ${textField({
-        accept: "application/json",
-        attributes: { id: "backup-file" },
-        label: "Backup file",
-        name: "backupFile",
-        type: "file",
-      })}
-      ${button({
-        attributes: { id: "backup-import" },
-        icon: "check",
-        label: "Restore backup",
-        variant: "secondary",
-      })}
-    </section>`,
-    )
-  );
-};
-
-/**
  * Connected sites flow: list origins with active grants and revoke access.
  */
 export const connectedSitesFlow = (status: WalletStatus, sites: readonly ConnectedSite[]): string =>

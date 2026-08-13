@@ -30,13 +30,13 @@ export type StarknetWindowObject = {
 /**
  * The window key the MC Wallet extension injects its provider under.
  */
-export const MC_WALLET_WINDOW_KEY = "starknet_mcWallet" as const;
+const MC_WALLET_WINDOW_KEY = "starknet_mcWallet" as const;
 
 /**
  * Substring used to recognise the MC Wallet among discovered providers when the
  * exact injected key is unavailable.
  */
-export const MC_WALLET_NAME_MATCH = /mc\s*wallet/i;
+const MC_WALLET_NAME_MATCH = /mc\s*wallet/i;
 
 type StarknetWindow = Window & {
   readonly [MC_WALLET_WINDOW_KEY]?: StarknetWindowObject;
@@ -48,14 +48,14 @@ type StarknetWindow = Window & {
  * page's first paint, so a synchronous read on click frequently loses the race
  * and returns nothing — which is why "Connect" sometimes did not prompt at all.
  */
-export const INJECTION_POLL_INTERVAL_MS = 50 as const;
+const INJECTION_POLL_INTERVAL_MS = 50 as const;
 export const INJECTION_TIMEOUT_MS = 3000 as const;
 
 /**
  * Reads the MC Wallet provider directly off the window, if the extension has
  * injected it. Returns null in SSR or when the extension is absent.
  */
-export const readInjectedMcWallet = (): StarknetWindowObject | null => {
+const readInjectedMcWallet = (): StarknetWindowObject | null => {
   if (typeof window === "undefined") {
     return null;
   }
@@ -66,9 +66,7 @@ export const readInjectedMcWallet = (): StarknetWindowObject | null => {
  * Picks the MC Wallet from a list of discovered providers, matching first on the
  * canonical id, then on a name substring. Returns null when none match.
  */
-export const pickMcWallet = (
-  wallets: readonly StarknetWindowObject[],
-): StarknetWindowObject | null =>
+const pickMcWallet = (wallets: readonly StarknetWindowObject[]): StarknetWindowObject | null =>
   wallets.find(
     (wallet) => wallet.id === "mcWallet" || MC_WALLET_NAME_MATCH.test(wallet.name ?? ""),
   ) ?? null;
@@ -96,7 +94,7 @@ const isStarknetWindowObject = (value: unknown): value is StarknetWindowObject =
  * `starknet_mcWallet`, `starknet_argentX`, `starknet_braavos`, ...). Used as a
  * development fallback so the terminal works against any wallet, not only MC.
  */
-export const scanInjectedStarknetWallets = (): readonly StarknetWindowObject[] => {
+const scanInjectedStarknetWallets = (): readonly StarknetWindowObject[] => {
   if (typeof window === "undefined") {
     return [];
   }

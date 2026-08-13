@@ -6,17 +6,19 @@
  * submit path (which drives the injected signHash callback). Complements
  * background-strk20-messages.test.ts.
  */
+
 import { describe, expect, test } from "bun:test";
 import type { OriginGuard } from "@mc-wallet/permissions/blocklist";
 import type { Strk20Service } from "@mc-wallet/privacy/service";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import type { InvokeInput } from "@mc-wallet/starknet/rpc";
 import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import type { SignHashInput, WalletStatus } from "@mc-wallet/vault/service";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ec } from "starknet";
 import type { LedgerSignQueue } from "../../../apps/extension/src/background/ledger/ledger-sign-queue";
-import { executeStrk20InvokeApproval } from "../../../apps/extension/src/background/privacy/strk20-ops";
+import { executeStrk20InvokeApproval } from "../../../apps/extension/src/background/privacy/strk20-approval-execution";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
@@ -314,6 +316,7 @@ describe("executeStrk20InvokeApproval", () => {
     const session = createUnlockSession(); // never unlocked
     const deps = {
       activity: memoryActivityLog(),
+      allowanceStore: memoryAllowanceStore(),
       preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {
@@ -343,6 +346,7 @@ describe("executeStrk20InvokeApproval", () => {
     session.unlock(vaultPassphrase);
     return {
       activity: memoryActivityLog(),
+      allowanceStore: memoryAllowanceStore(),
       ...(queue ? { ledgerSignQueue: queue } : {}),
       preferencesStore: {
         ...unavailablePreferencesStore,
@@ -431,6 +435,7 @@ describe("executeStrk20InvokeApproval", () => {
     const activity = memoryActivityLog(() => 42);
     const deps = {
       activity,
+      allowanceStore: memoryAllowanceStore(),
       preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {

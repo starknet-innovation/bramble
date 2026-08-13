@@ -11,16 +11,7 @@ import { EXTENDED_REST_BASE, EXTENDED_WS_BASE } from "../core/endpoints";
  * ISO-8601 candle intervals accepted by both the candles REST endpoint and the
  * candles WS stream (identical enum in the catalog).
  */
-export const CANDLE_INTERVALS = [
-  "PT1M",
-  "PT5M",
-  "PT15M",
-  "PT30M",
-  "PT1H",
-  "PT2H",
-  "PT4H",
-  "P1D",
-] as const;
+const CANDLE_INTERVALS = ["PT1M", "PT5M", "PT15M", "PT30M", "PT1H", "PT2H", "PT4H", "P1D"] as const;
 
 /** One of the ISO-8601 candle intervals. */
 export type CandleInterval = (typeof CANDLE_INTERVALS)[number];
@@ -29,7 +20,7 @@ export type CandleInterval = (typeof CANDLE_INTERVALS)[number];
  * Candle price series available for a market: executed-trade candles, mark-price
  * candles, and index-price candles.
  */
-export const CANDLE_TYPES = ["trades", "mark-prices", "index-prices"] as const;
+const CANDLE_TYPES = ["trades", "mark-prices", "index-prices"] as const;
 
 /** One of the candle price-series types. */
 export type CandleType = (typeof CANDLE_TYPES)[number];

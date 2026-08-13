@@ -9,7 +9,7 @@ export type StudioOperation = {
   readonly transactionHash?: string;
 };
 
-export const StudioStatus = ({
+const StudioStatus = ({
   chainId,
   operation,
 }: {
@@ -46,9 +46,8 @@ export const StudioRecipe = (): ReactNode => (
     <div className="studio-recipe__eyebrow">Deployed collection</div>
     <h2>One collection. One focused mint flow.</h2>
     <p>
-      MC Punks is already live on Starknet Mainnet. This surface prepares only
-      the owner-authorized mint call and leaves deployment and transfers to
-      dedicated tooling.
+      MC Punks is already live on Starknet Mainnet. This surface prepares only the owner-authorized
+      mint call and leaves deployment and transfers to dedicated tooling.
     </p>
     <ul>
       <li>
@@ -158,8 +157,7 @@ export const StudioWorkbench = ({
             disabled={busy || tokenId === null || !isMainnet}
             type="submit"
           >
-            {isMainnet ? `Mint Punk #${previewId}` : "Switch to Mainnet"}{" "}
-            <Sparkles size={14} />
+            {isMainnet ? `Mint Punk #${previewId}` : "Switch to Mainnet"} <Sparkles size={14} />
           </button>
         )}
       </form>

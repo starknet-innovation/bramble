@@ -33,7 +33,7 @@ import { accountDrawer } from "../../src/sidepanel/shell/account-drawer";
 
 // Minimal WAAPI + matchMedia so the toast/motion helpers run under happy-dom
 // (which ships neither): reduced motion routes through a no-op cut-to-final.
-export const installMotionStubs = (): void => {
+const installMotionStubs = (): void => {
   const media = (query: string): MediaQueryList =>
     ({
       matches: true,
@@ -122,7 +122,7 @@ export const acctA: AccountRef = { ...account, address: "0x2a", id: "SN_MAIN:0x2
 export const acctB: AccountRef = { ...account, address: "0x3b", id: "SN_MAIN:0x3b" };
 // Id the fake `addAccount` returns, so the "add account joins the folder" flow
 // can assert the follow-up membership call carries the freshly created id.
-export const newAccountId = "SN_MAIN:0x9c";
+const newAccountId = "SN_MAIN:0x9c";
 
 export const status: WalletStatus = {
   accountCount: 2,
@@ -142,7 +142,7 @@ export const status: WalletStatus = {
 // A recording fake wallet that applies the real pure model to an in-memory
 // groups list, so a mutation persists as the background store would and the next
 // render re-derives from it. Only the methods the bindings call are implemented.
-export type Calls = {
+type Calls = {
   createGroup: Array<readonly [string, AccountGroupIcon]>;
   renameGroup: Array<readonly [string, string]>;
   setGroupIcon: Array<readonly [string, AccountGroupIcon]>;

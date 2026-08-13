@@ -5,15 +5,18 @@
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { multisigCallMatchesId } from "@mc-wallet/multisig/chain";
 import {
   isMultisigProposalRecord,
   isMultisigRecord,
   type MultisigProposalCall,
   type MultisigProposalRecord,
   type MultisigRecord,
+  multisigAddressBookEntry,
 } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { verifyCalls } from "@mc-wallet/transactions/verify";
+import { verificationContext } from "@mc-wallet/transactions/verify-decode";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { Call } from "starknet";
@@ -60,6 +63,7 @@ export const multisigProposalEffect = (
   call: MultisigProposalCall,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
+  multisig: MultisigRecord | null = null,
 ): MultisigProposalEffect => {
   const token = preferences?.tokens.find((stored) =>
     sameFelt(stored.address, call.contractAddress),
@@ -74,11 +78,20 @@ export const multisigProposalEffect = (
       targetLabel,
     };
   }
-  const report = verifyCalls([asCall(call)], {
-    account,
-    addressBook: preferences?.addressBook ?? [],
-    tokens: preferences?.tokens ?? [],
-  });
+  // Built through the shared trusted-set builder rather than a local literal,
+  // so this review scopes contacts, tokens, and watched collections to the
+  // account's network exactly as every background review path does.
+  const report = verifyCalls(
+    [asCall(call)],
+    verificationContext(account, {
+      addressBook: [
+        ...(preferences?.addressBook ?? []),
+        ...(multisig ? [multisigAddressBookEntry(multisig)] : []),
+      ],
+      nfts: preferences?.nfts ?? [],
+      tokens: preferences?.tokens ?? [],
+    }),
+  );
   return {
     flags: report.flags.map((flag) => flag.message),
     summary: report.calls[0]?.summary ?? `Call ${call.entrypoint} on ${targetLabel}`,
@@ -116,7 +129,13 @@ export const parseMultisigReviewPackage = (raw: string): MultisigReviewPackage |
       value["version"] !== 1 ||
       !isMultisigRecord(value["multisig"]) ||
       !isMultisigProposalRecord(value["proposal"]) ||
-      value["proposal"].multisigId !== value["multisig"].id
+      value["proposal"].multisigId !== value["multisig"].id ||
+      (value["proposal"].call !== null &&
+        !multisigCallMatchesId(
+          value["proposal"].call,
+          value["proposal"].call.salt,
+          value["proposal"].txId,
+        ))
     ) {
       return null;
     }

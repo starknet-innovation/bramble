@@ -37,14 +37,8 @@ import {
 } from "./spec-fixtures";
 
 export {
-  ACCOUNT,
-  ADDRESS,
-  CALL_AND_PROOF,
-  CHAIN_ID,
   ERROR_CODES,
   ORIGIN,
-  PADDED_FELT,
-  PADDED_TXN_HASH,
   REQUEST_ID,
   type SpecMethod,
 } from "./spec-fixtures";

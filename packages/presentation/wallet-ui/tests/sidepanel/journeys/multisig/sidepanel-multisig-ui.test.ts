@@ -3,7 +3,9 @@
  * cannot re-enable a statically forbidden signer action, and explicit retry
  * controls rehydrate instead of leaving a false empty state.
  */
+
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { multisigTransactionId } from "@mc-wallet/multisig/chain";
 import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { serializeMultisigReviewPackage } from "../../../../src/sidepanel/journeys/multisig/multisig-model";
@@ -148,19 +150,26 @@ describe("bindMultisigs", () => {
       },
       {
         multisig: {
-          async declareClass() {
+          async declareClass(reviewed) {
             declarations += 1;
-            return submitted;
+            return reviewed ? submitted : { overallFee: "1", unit: "FRI" };
           },
         } as MultisigUiDeps["multisig"],
       },
     );
     const declareButton = app.querySelector<HTMLButtonElement>("#multisig-declare");
     declareButton?.click();
-    declareButton?.click();
-    await Promise.resolve();
+    for (let turn = 0; turn < 3; turn += 1) await Promise.resolve();
 
     expect(declarations).toBe(1);
+    expect(declareButton?.disabled).toBe(false);
+    expect(app.querySelector("#multisig-declare-result")?.textContent).toContain(
+      "Maximum network fee",
+    );
+
+    declareButton?.click();
+    await Promise.resolve();
+    expect(declarations).toBe(2);
     expect(declareButton?.disabled).toBe(true);
     expect(declareButton?.hasAttribute("data-busy")).toBe(true);
     expect(app.querySelector("#multisig-declare-result")?.textContent).toBe("Submitting declare…");
@@ -190,7 +199,7 @@ describe("bindMultisigs", () => {
         multisig: {
           async proposeTransaction(proposal) {
             proposals.push(proposal);
-            return "0xabc";
+            return proposal.reviewedFee ? "0xabc" : { overallFee: "1", unit: "FRI" };
           },
         } as MultisigUiDeps["multisig"],
         selectedMultisigId: () => "SN_MAIN:0x999",
@@ -200,7 +209,8 @@ describe("bindMultisigs", () => {
     const submit = app.querySelector<HTMLButtonElement>('button[type="submit"]');
 
     form?.requestSubmit();
-    expect(proposals).toEqual([]);
+    for (let turn = 0; turn < 3; turn += 1) await Promise.resolve();
+    expect(proposals).toHaveLength(1);
     expect(form?.dataset["proposalStage"]).toBe("review");
     expect(app.querySelector("#multisig-propose-review")?.textContent).toContain(
       "Transaction details",
@@ -209,16 +219,18 @@ describe("bindMultisigs", () => {
 
     form?.requestSubmit();
     await Promise.resolve();
+    const expected = {
+      calldata: ["0x456", "0x1"],
+      entrypoint: "transfer",
+      multisigId: "SN_MAIN:0x999",
+      salt: "0x789",
+      signerAccountId: "SN_MAIN:0x123",
+      summary: "Pay contributor",
+      to: "0x123",
+    };
     expect(proposals).toEqual([
-      {
-        calldata: ["0x456", "0x1"],
-        entrypoint: "transfer",
-        multisigId: "SN_MAIN:0x999",
-        salt: "0x789",
-        signerAccountId: "SN_MAIN:0x123",
-        summary: "Pay contributor",
-        to: "0x123",
-      },
+      expected,
+      { ...expected, reviewedFee: { overallFee: "1", unit: "FRI" } },
     ]);
   });
 
@@ -230,19 +242,21 @@ describe("bindMultisigs", () => {
       quorum: 1,
       signers: ["0x123"],
     };
+    const call = {
+      calldata: ["0x1"],
+      contractAddress: "0x456",
+      entrypoint: "transfer",
+      salt: "0x2",
+    } as const;
+    const txId = multisigTransactionId(call, call.salt);
     const proposal: MultisigProposalRecord = {
-      call: {
-        calldata: ["0x1"],
-        contractAddress: "0x456",
-        entrypoint: "transfer",
-        salt: "0x2",
-      },
+      call,
       confirmations: 0,
-      id: `${multisig.id}:0x789`,
+      id: `${multisig.id}:${txId}`,
       multisigId: multisig.id,
       state: "pending",
       summary: "Pay contributor",
-      txId: "0x789",
+      txId,
     };
     const tracked: unknown[] = [];
     const app = mount(
@@ -310,17 +324,26 @@ describe("bindMultisigs", () => {
       quorum: 2,
       signers: [first.address, second.address],
     };
+    // Filed under the id its call hashes to; an unbound record would render the
+    // recovery acknowledgment instead of a directly clickable confirmation.
+    const call = {
+      calldata: ["0x1"],
+      contractAddress: "0x456",
+      entrypoint: "transfer",
+      salt: "0x0",
+    } as const;
+    const txId = multisigTransactionId(call, call.salt);
     const proposal: MultisigProposalRecord = {
-      call: { calldata: ["0x1"], contractAddress: "0x456", entrypoint: "transfer", salt: "0x0" },
+      call,
       confirmations: 1,
       confirmedBySigner: true,
       confirmedBySignerAddress: first.address,
       confirmedSignerAddresses: [first.address],
-      id: `${record.id}:0x789`,
+      id: `${record.id}:${txId}`,
       multisigId: record.id,
       state: "pending",
       summary: "Pay contributor",
-      txId: "0x789",
+      txId,
     };
     const calls: string[] = [];
     const app = mount(

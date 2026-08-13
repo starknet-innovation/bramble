@@ -105,7 +105,7 @@ const senderRegistration = (privacy: PrivacyDisclosureState): PoolRegistration =
  * absent disclosure therefore fails private spending closed; it never guesses
  * that a relay exists.
  */
-export const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
+const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
   const { fields } = context;
   return {
     amountRaw: rawAmount(fields.amount, fields.tokenDecimals),

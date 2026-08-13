@@ -15,7 +15,6 @@ import type {
   TokenConfig,
   WalletPreferences,
 } from "@mc-wallet/settings/preferences";
-import { receiptRows } from "@mc-wallet/ui-kit/content";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
@@ -31,6 +30,7 @@ import {
   swapValueDeltaPercent,
 } from "./swap-client";
 import { bindSwapPicker, pickerSide, repaintSwapPicker, setPickerSide } from "./swap-picker";
+import { swapConfirmReceipt } from "./swap-views";
 
 /**
  * State accessors and services the swap bindings close over.
@@ -48,7 +48,6 @@ export type SwapUiDeps = {
 };
 
 const QUOTE_DEBOUNCE_MS = 350;
-const SLIPPAGE = 0.005;
 
 let sellTokenId: string | null = null;
 let buyTokenId: string | null = null;
@@ -236,30 +235,21 @@ const paintSwapStages = (root: Element, figures: SwapFigures): void => {
   if (!receipt) {
     return;
   }
-  const minReceived = compactAmount((Number(quote.buyAmount) * (1 - SLIPPAGE)).toFixed(8));
-  receipt.innerHTML = receiptRows([
-    { label: "You sell", value: `${compactAmount(quote.sellAmount)} ${sellToken.symbol}` },
-    {
-      label: "You receive (est.)",
-      value: `${compactAmount(quote.buyAmount)} ${buyToken.symbol}`,
-    },
-    { label: "Minimum received", value: `${minReceived} ${buyToken.symbol}` },
-    ...(valueDelta === null
-      ? []
-      : [
-          {
-            label: "Value change",
-            value: `${valueDelta > 0 ? "+" : ""}${valueDelta.toFixed(2)}%`,
-            valueTone:
-              figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
-                ? ("danger" as const)
-                : ("default" as const),
-          },
-        ]),
-    { label: "Network fee", value: `≈ ${formatFiat(quote.gasFeesInUsd, "usd")}` },
-    { label: "Slippage cap", value: "0.5%" },
-    { label: "Route", value: "AVNU aggregator" },
-  ]);
+  // The minimum comes off the FROZEN preparation, where the background decoded
+  // it out of the route calldata it is about to sign. It is never recomputed
+  // here from the quote and a panel-local slippage constant, which is what once
+  // let this card state a minimum the transaction did not carry.
+  receipt.innerHTML = swapConfirmReceipt({
+    buyAmount: quote.buyAmount,
+    buySymbol: buyToken.symbol,
+    gasFeesInUsd: quote.gasFeesInUsd,
+    lossPercent: figures.lossPercent,
+    minBuyAmount: preparation.minBuyAmount,
+    networkFee: preparation.reviewedFee,
+    sellAmount: quote.sellAmount,
+    sellSymbol: sellToken.symbol,
+    valueDelta,
+  });
   const calls = root.querySelector("#swap-call-review");
   if (calls) {
     const warnings = preparation.flags.map(
@@ -363,6 +353,10 @@ export const bindSwap = (deps: SwapUiDeps): void => {
 
   root.querySelector<HTMLInputElement>("#swap-sell-amount")?.addEventListener("input", (event) => {
     amountText = (event.target as HTMLInputElement).value.trim();
+    quote = null;
+    preparation = null;
+    quoteSeq += 1;
+    applySwapUi(deps, root);
     scheduleQuote(deps, root);
   });
   root.querySelector("#swap-max")?.addEventListener("click", () => {
@@ -398,16 +392,25 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     buttonBusy(reviewButton, true);
     setResult(root, "Building and validating the executable route…");
     const quoted = quote;
+    const preparationSeq = quoteSeq;
     deps.swap
       .prepare({
         amount: quoted.sellAmount,
-        buyAmount: compactAmount(quoted.buyAmount),
+        // The RAW quoted amount, never the display form: compactAmount groups
+        // thousands ("1000" reads "1,000"), and the background's amount reader
+        // rejects a grouped string — formatting one into the message made every
+        // quote of 1000 units or more unpreparable. Grouping is for the screen.
+        buyAmount: quoted.buyAmount,
         buyTokenId,
         quoteId: quoted.quoteId,
         sellTokenId,
       })
       .then(
         (prepared) => {
+          if (preparationSeq !== quoteSeq || quote !== quoted) {
+            buttonBusy(reviewButton, false);
+            return;
+          }
           preparation = prepared;
           stage = "confirm";
           setResult(root, "");
@@ -415,6 +418,10 @@ export const bindSwap = (deps: SwapUiDeps): void => {
           applySwapUi(deps, root);
         },
         (error: unknown) => {
+          if (preparationSeq !== quoteSeq || quote !== quoted) {
+            buttonBusy(reviewButton, false);
+            return;
+          }
           setResult(root, errorMessage(error, "Could not prepare a safe swap route."));
           buttonBusy(reviewButton, false);
           applySwapUi(deps, root);

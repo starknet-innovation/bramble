@@ -4,6 +4,7 @@
  * payload that was reviewed.
  */
 import { WalletError } from "@mc-wallet/core/errors";
+import { bytesToHex } from "@mc-wallet/core/hex";
 import { JSON_BUDGETS, type Json, normalizeFeltBigints } from "@mc-wallet/core/json";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
@@ -32,9 +33,6 @@ const canonicalJson = (value: Json): string => {
     .join(",")}}`;
 };
 
-const toHex = (bytes: Uint8Array): string =>
-  [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-
 /**
  * Computes a deterministic SHA-256 digest after bounded, accessor-safe JSON
  * normalization. Invalid, cyclic, or over-budget payloads fail closed.
@@ -46,7 +44,7 @@ export const digestApprovalPayload = async (payload: unknown): Promise<string> =
   }
   const bytes = new TextEncoder().encode(canonicalJson(normalized));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return `sha256:${toHex(new Uint8Array(digest))}`;
+  return `sha256:${bytesToHex(new Uint8Array(digest))}`;
 };
 
 /**

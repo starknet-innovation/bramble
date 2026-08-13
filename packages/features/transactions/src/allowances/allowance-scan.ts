@@ -1,5 +1,10 @@
 /**
- * On-chain discovery of ERC20 allowances granted outside this wallet. For each
+ * On-chain reading of ERC20 allowances. Two entry points, both RPC-backed:
+ * {@link readTrackedAllowances} reads the live amount of a pair the wallet
+ * already has a local record for (no event scan, no token registry, any owner),
+ * and {@link scanExternalAllowances} discovers pairs the wallet has never seen.
+ *
+ * Discovery of allowances granted outside this wallet works as follows. For each
  * tracked token it pages the token's `Approval` events to find spenders the
  * active account has approved, then reads the current `allowance(owner,
  * spender)` so the amount reflects live chain state (an approval later changed
@@ -16,6 +21,7 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 import { type Call, CallData, type RpcProvider } from "starknet";
 import {
+  type AllowanceReading,
   APPROVAL_EVENT_KEY,
   decodeApprovalEvent,
   type ExternalAllowance,
@@ -48,12 +54,20 @@ export type AllowanceEvent = {
 };
 
 /**
- * The RPC surface discovery needs: paged event reads and contract calls. Kept
- * narrow so it can be driven by a fake in tests and by an {@link RpcProvider}
- * in production.
+ * The RPC surface a direct allowance read needs. Kept separate from
+ * {@link AllowanceRpc} so reading an already-known pair does not have to be
+ * handed an event reader it will never call.
  */
-export type AllowanceRpc = {
+export type AllowanceCallRpc = {
   readonly callContract: (call: Call) => Promise<readonly string[]>;
+};
+
+/**
+ * The RPC surface event-driven discovery needs: paged event reads plus contract
+ * calls. Kept narrow so it can be driven by a fake in tests and by an
+ * {@link RpcProvider} in production.
+ */
+export type AllowanceRpc = AllowanceCallRpc & {
   readonly getEvents: (filter: AllowanceEventFilter) => Promise<{
     readonly continuation_token?: string;
     readonly events?: readonly AllowanceEvent[];
@@ -112,18 +126,30 @@ const discoverSpenders = async (
   return [...spenders];
 };
 
+// The single `allowance(owner, spender)` read every discovery path shares, so
+// event-driven discovery and the direct read of an already-tracked pair can
+// never disagree about calldata or response parsing.
+const readAllowanceAmount = async (
+  rpc: AllowanceCallRpc,
+  token: string,
+  owner: string,
+  spender: string,
+): Promise<string | null> =>
+  parseAllowanceAmount(
+    await rpc.callContract({
+      calldata: CallData.compile([owner, spender]),
+      contractAddress: token,
+      entrypoint: "allowance",
+    }),
+  );
+
 const readAllowance = async (
   rpc: AllowanceRpc,
   token: string,
   owner: string,
   spender: string,
 ): Promise<ExternalAllowance | null> => {
-  const response = await rpc.callContract({
-    calldata: CallData.compile([owner, spender]),
-    contractAddress: token,
-    entrypoint: "allowance",
-  });
-  const amount = parseAllowanceAmount(response);
+  const amount = await readAllowanceAmount(rpc, token, owner, spender);
   return amount && amount !== "0" ? { amount, spender, token } : null;
 };
 
@@ -199,6 +225,92 @@ export const collectExternalAllowances = async (
     discovered.push(...(await collectTokenAllowancesSafe(rpc, token, canonicalOwner)));
   }
   return discovered;
+};
+
+/**
+ * One (owner, token, spender) triple the wallet already has a local record for,
+ * carrying that record's id so a reading can be matched back to it without
+ * re-deriving the id shape.
+ */
+export type TrackedAllowancePair = {
+  readonly id: string;
+  readonly owner: string;
+  readonly spender: string;
+  readonly token: string;
+};
+
+/**
+ * Inputs for reading the live amount of allowances the wallet already tracks.
+ */
+export type TrackedAllowanceScan = {
+  readonly pairs: readonly TrackedAllowancePair[];
+  readonly rpcUrls: readonly string[];
+};
+
+// One contract call per pair, so the list is bounded. Callers order the pairs
+// that most need a fresh reading first (see ../background/allowance-ops.ts):
+// beyond this many, a record simply keeps its stored amount.
+const MAX_TRACKED_PAIRS = 60;
+
+/**
+ * Reads the live `allowance(owner, spender)` for pairs the wallet already
+ * tracks, using an injected RPC surface.
+ *
+ * Unlike {@link collectExternalAllowances} this needs no event scan and no
+ * token registry: the pair comes from the local log, so it reaches a token the
+ * user does not track and an owner that is not the active account (a multisig
+ * the account signs for). A per-pair semantic failure is skipped — a contract
+ * with no ERC20 `allowance` view simply yields no reading — while a transport
+ * failure propagates so the caller can fail over to another endpoint.
+ */
+export const collectTrackedAllowances = async (
+  rpc: AllowanceCallRpc,
+  pairs: readonly TrackedAllowancePair[],
+): Promise<readonly AllowanceReading[]> => {
+  const readings: AllowanceReading[] = [];
+  for (const pair of pairs.slice(0, MAX_TRACKED_PAIRS)) {
+    const owner = canonicalFelt(pair.owner);
+    const token = canonicalFelt(pair.token);
+    const spender = canonicalFelt(pair.spender);
+    if (!owner || !token || !spender || !isNonZeroStarkFieldElement(owner)) {
+      continue;
+    }
+    try {
+      const amount = await readAllowanceAmount(rpc, token, owner, spender);
+      if (amount !== null) {
+        readings.push({ amount, id: pair.id });
+      }
+    } catch (error) {
+      if (isTransportRpcError(error)) {
+        throw error;
+      }
+    }
+  }
+  return readings;
+};
+
+/**
+ * Reads live amounts for already-tracked allowances, failing over across the
+ * configured RPC endpoints. Returns an empty list when there is nothing to read;
+ * a caller treats a thrown transport error as "reading unavailable" and keeps
+ * the locally tracked amounts.
+ */
+export const readTrackedAllowances = async (
+  { pairs, rpcUrls }: TrackedAllowanceScan,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<readonly AllowanceReading[]> => {
+  if (pairs.length === 0) {
+    return [];
+  }
+  return withRpcFallback(
+    rpcUrls,
+    (provider) =>
+      collectTrackedAllowances(
+        { callContract: (call) => provider.callContract(call, "latest") },
+        pairs,
+      ),
+    makeProvider,
+  );
 };
 
 /**

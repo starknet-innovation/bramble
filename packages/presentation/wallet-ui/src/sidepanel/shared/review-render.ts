@@ -10,6 +10,7 @@
  * messages directly.
  */
 import { escapeHtml } from "@mc-wallet/core/html";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { button } from "@mc-wallet/ui-kit/controls";
 import type { UiAttributes } from "@mc-wallet/ui-kit/html-attributes";
 import { icon } from "./icons";
@@ -22,7 +23,7 @@ import { formatFri } from "./parts";
  * cannot drift between them (issue 189).
  */
 export type ReviewFeeState = {
-  readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+  readonly fee: FeeEstimate | null;
   /**
    * Verdict of the shared fee-affordability predicate (issue 191). Only
    * "insufficient" renders a warning; "ok"/"unknown"/absent render nothing

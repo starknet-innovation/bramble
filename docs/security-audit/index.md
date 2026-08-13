@@ -19,10 +19,14 @@ changes are reviewed in versioned release follow-ups rather than rewriting the h
 | v0.6 runtime follow-up | `cf1b174a8297264141b0449b129c11c7ad1d44d0` |
 | v0.7 runtime follow-up | `7be9ab68788083c417e169d75c2a5a0bbf7b1afa` |
 | v0.9 software follow-up | `e973d1d8ca761ad5f43b78598086966e484ea30d` |
-| Current phase | Repository root, manifest, `.github/`, all `src/` packages, and v0.6-v0.9 release follow-ups complete |
-| Open product security findings | 0 |
-| Open defense-in-depth and audit-assurance findings | 0 |
-| Open documentation findings | 0 |
+| v0.9 deep adversarial audit | `bd9fcbb` |
+| v0.9.1 external security review | `8955af2` |
+| Current phase | Repository root, manifest, `.github/`, all `src/` packages, and v0.6-v0.9 release follow-ups complete; v0.9 deep audit, external review, and PR 234 follow-up remediated |
+| Open product security findings | 0 of 11 (`MCW-V09-101`..`111`) |
+| Open defense-in-depth and audit-assurance findings | 1 of 18 (`MCW-V09-127`, partial) |
+| Open documentation findings | 0 (`MCW-V09-130`, `MCW-V09-131` resolved) |
+| Open external-review findings | 0 of 15 (`EXT-H01`, `EXT-H02`, `EXT-M01`..`M06`, `EXT-L01`..`L07`) |
+| Open PR 234 follow-up findings | 0 of 10 (`REV-L-01`..`09`, plus the claim-release ordering finding) |
 
 ## Audit documents
 
@@ -34,6 +38,16 @@ changes are reviewed in versioned release follow-ups rather than rewriting the h
 - [v0.7 NFT and approval-surface release assurance](releases/v0.7/)
 - [v0.8 on-chain animation sandbox (independent security review complete)](releases/v0.8/)
 - [v0.9 store, privacy, Send, gateway, and Ledger software assurance](releases/v0.9/)
+- [v0.9 deep adversarial audit — full product surface](releases/v0.9-deep/)
+  - [High and medium findings](releases/v0.9-deep-high/)
+  - [Low findings](releases/v0.9-deep-tail/) — `MCW-V09-112`..`120`
+  - [Low findings, continued](releases/v0.9-deep-tail2/) — `MCW-V09-121`..`129`
+  - [Informational findings](releases/v0.9-deep-info/)
+  - [Release build provenance](releases/v0.9-deep-supply-chain/) — `EXT-H02`
+- [v0.9.1 external security review](releases/v0.9-external-review/) — `EXT-H01`, `EXT-H02`,
+  `EXT-M01`..`M06`, `EXT-L01`..`L07`
+- [PR 234 independent review follow-up](releases/v0.9-pr234-followup/) — `REV-L-01`..`09` and
+  the multisig indeterminate-claim ordering follow-up
 - [Directory review log](reviews/)
 
 ## Review sequence

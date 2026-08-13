@@ -2,6 +2,14 @@
  * Checks that extension builds and release artifacts retain their fail-closed
  * validation, exact file set, reproducible archive, and checksum ordering.
  */
+import { pinnedActionLine } from "./workflow-inventory";
+
+/**
+ * Every ordering failure in the build and release-artifact policy, or an empty
+ * list when the sources satisfy it. Pure over the three sources it is handed:
+ * it reads no files and throws on none of them, so a caller that cannot read a
+ * source must fail on its own rather than pass an empty string here.
+ */
 export const artifactPolicyFailures = (
   buildScript: string,
   ciWorkflow: string,
@@ -10,9 +18,9 @@ export const artifactPolicyFailures = (
   const failures: string[] = [];
   const ciLines = ciWorkflow.split("\n").map((line) => line.trim());
   const packageCommandIndex = ciLines.indexOf("- run: bun run package:extension");
-  const uploadActionIndex = ciLines.findIndex((line) =>
-    /^- uses: actions\/upload-artifact@[0-9a-f]{40}/.test(line),
-  );
+  // Pin grammar comes from ./workflow-inventory so this gate cannot drift from
+  // the workflow security policy; 0 (absent) sorts before every found index.
+  const uploadActionIndex = pinnedActionLine(ciWorkflow, "actions/upload-artifact@") - 1;
   const uploadNameIndex = ciLines.indexOf("name: mc-wallet-extension");
   const uploadZipIndex = ciLines.indexOf("artifacts/*.zip");
   const uploadChecksumIndex = ciLines.indexOf("artifacts/*.zip.sha256");

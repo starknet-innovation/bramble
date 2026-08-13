@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/html-vite";
 import { expect, waitFor } from "storybook/test";
 import { createUiLab } from "./lab-runtime";
 
-export type LabArgs = {
+type LabArgs = {
   readonly checkpointId: string;
   readonly scenarioId: string;
 };

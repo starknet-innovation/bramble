@@ -354,10 +354,8 @@ describe("Send review vs dApp invoke card fee parity (#189)", () => {
     const card = dappCard(summaries, flags, fee);
     expect(card).toContain(alert);
     expect(card).toContain('data-approval-retry-fee="b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14"');
-    // Approve stays enabled on a failed estimate — deliberate divergence from
-    // Send's Confirm gating, so a flaky RPC cannot block dApp transactions.
-    expect(card).toContain('data-approval-action="approve"');
-    expect(card).not.toContain(
+    // Both submission surfaces fail closed until the fee can be reviewed.
+    expect(card).toContain(
       'data-approval-action="approve" data-approval-id="b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14" type="button" disabled',
     );
   });

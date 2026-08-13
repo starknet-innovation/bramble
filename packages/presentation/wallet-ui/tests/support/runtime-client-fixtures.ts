@@ -39,14 +39,18 @@ export const walletStatus = {
   ready: true,
 };
 
+// The address is the canonical 64-hex-digit spelling and the id is the
+// `tokenConfigId` shape built from it: this fixture stands in for a row the
+// token store would have accepted, so a shorter spelling here would make the
+// shared corpus a counterexample to the popup's TokenBalance = TokenConfig rule.
 export const tokenBalance = {
-  address: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+  address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
   balance: "100",
   decimals: 6,
   formatted: "0.0001",
-  id: "SN_SEPOLIA:USDC:0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+  id: "SN_SEPOLIA:USDC:0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
   name: "USD Coin",
-  networkId: "SN_SEPOLIA",
+  networkId: "SN_SEPOLIA" as const,
   symbol: "USDC",
 };
 

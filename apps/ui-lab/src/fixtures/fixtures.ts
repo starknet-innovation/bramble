@@ -1,3 +1,4 @@
+import { multisigTransactionId } from "@mc-wallet/multisig/chain";
 import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
@@ -191,19 +192,22 @@ export const multisig: MultisigRecord = {
   signers: [softwareAccount.address, ledgerAccount.address, secondAccount.address],
 };
 
+const pendingProposalCall = {
+  calldata: [RECIPIENT_ADDRESS, "0x5f5e100", "0x0"],
+  contractAddress: USDC_ADDRESS,
+  entrypoint: "transfer",
+  salt: "0x2",
+} as const;
+const pendingProposalId = multisigTransactionId(pendingProposalCall, pendingProposalCall.salt);
+
 export const pendingProposal: MultisigProposalRecord = {
-  call: {
-    calldata: [RECIPIENT_ADDRESS, "0x5f5e100", "0x0"],
-    contractAddress: USDC_ADDRESS,
-    entrypoint: "transfer",
-    salt: "0x2",
-  },
+  call: pendingProposalCall,
   confirmations: 1,
   confirmedBySigner: false,
   confirmedBySignerAddress: softwareAccount.address,
-  id: `${multisig.id}:0x901`,
+  id: `${multisig.id}:${pendingProposalId}`,
   multisigId: multisig.id,
   state: "pending",
   summary: "Pay 100 USDC to research treasury",
-  txId: "0x901",
+  txId: pendingProposalId,
 };

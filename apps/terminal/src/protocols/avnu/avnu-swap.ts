@@ -20,7 +20,7 @@ import { AVNU_ADDRESSES } from "../constants";
 /**
  * Basis-points denominator (100% = 10_000 bps).
  */
-export const BPS_DENOMINATOR = 10_000n;
+const BPS_DENOMINATOR = 10_000n;
 
 /**
  * Default swap slippage tolerance (0.1%) applied when a caller omits one, matching
@@ -33,7 +33,7 @@ export const DEFAULT_SLIPPAGE_BPS = 10;
  * Number of quotes to request from the aggregator; the terminal only consumes the
  * best route (`quotes[0]`).
  */
-export const AVNU_QUOTE_SIZE = 1;
+const AVNU_QUOTE_SIZE = 1;
 
 /**
  * AVNU quotes endpoint sub-path (best multi-venue route for a pair).

@@ -4,6 +4,7 @@
  * withRpcFallback path with RpcProvider.callContract stubbed per entrypoint, so
  * both the happy decode and every malformed-response throw are exercised.
  */
+
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import {
   computeMultisigTransactionId,
@@ -11,6 +12,7 @@ import {
   getMultisigProposalStatus,
 } from "@mc-wallet/multisig/chain";
 import { RpcProvider } from "starknet";
+import { multisigTransactionId } from "../src/chain";
 
 const MULTISIG = "0x111111111111111111111111111111111111111111111111111111111111111";
 const TARGET = "0x222222222222222222222222222222222222222222222222222222222222222";
@@ -142,12 +144,13 @@ describe("getMultisigProposalStatus", () => {
 });
 
 describe("computeMultisigTransactionId", () => {
-  test("returns the contract-derived id as a canonical hex string", async () => {
-    stubContract({ hash_transaction: ["0xdead"] });
+  test("returns the locally derived id when the contract view agrees", async () => {
+    const derived = multisigTransactionId(call, "0x7");
+    stubContract({ hash_transaction: [derived] });
 
     await expect(
       computeMultisigTransactionId({ address: MULTISIG, call, rpcUrls: RPC, salt: "0x7" }),
-    ).resolves.toBe("0xdead");
+    ).resolves.toBe(derived);
   });
 
   test("throws when the hash view returns no felt", async () => {

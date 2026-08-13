@@ -64,12 +64,11 @@ import { addressBookFlow, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
 export { backupHubFlow as backupFlow } from "../../journeys/settings/settings-views";
-export { addressBookFlow, connectedSitesFlow } from "./support-flows";
 
 /**
  * Receive flow: show and copy the active account address.
  */
-export const receiveFlow = (
+const receiveFlow = (
   status: WalletStatus,
   account: AccountRef | null,
   privacy: PrivacyDisclosureState,

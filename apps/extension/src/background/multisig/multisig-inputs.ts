@@ -5,18 +5,19 @@
  * and the multisig contract enforces them again at execution time.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
-import {
-  isMultisigConfirmationMode,
-  type MultisigConfirmationMode,
-} from "@mc-wallet/multisig/confirmation";
 import {
   isMultisigCallInput,
   isMultisigEntrypoint,
   MULTISIG_LIMITS,
   type MultisigCallInput,
 } from "@mc-wallet/multisig/chain";
+import {
+  isMultisigConfirmationMode,
+  type MultisigConfirmationMode,
+} from "@mc-wallet/multisig/confirmation";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 
 // Stored ids compose `<networkId>:<address>:<txId>`; with full-length felts a
 // proposal id runs to ~144 characters, so the cap must sit comfortably above.
@@ -110,6 +111,7 @@ export type ProposeMultisigInput = {
   readonly calldata: readonly string[];
   readonly entrypoint: string;
   readonly multisigId: string;
+  readonly reviewedFee?: FeeEstimate;
   readonly salt: string;
   readonly signerAccountId?: string;
   readonly summary?: string;
@@ -125,6 +127,7 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
     "calldata",
     "entrypoint",
     "multisigId",
+    "reviewedFee",
     "salt",
     "signerAccountId",
     "summary",
@@ -138,12 +141,14 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
   isMultisigEntrypoint(message["entrypoint"]) &&
   isFeltList(message["calldata"], MAX_CALLDATA_FELTS) &&
   isOptionalSalt(message["salt"]) &&
+  (message["reviewedFee"] === undefined || isFeeEstimate(message["reviewedFee"])) &&
   (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
   isOptionalSummary(message["summary"])
     ? {
         calldata: message["calldata"],
         entrypoint: message["entrypoint"] as string,
         multisigId: message["multisigId"] as string,
+        ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
         salt: message["salt"] ?? "0x0",
         ...(message["signerAccountId"] === undefined
           ? {}
@@ -160,6 +165,7 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
  */
 export type MultisigProposalActionInput = {
   readonly proposalId: string;
+  readonly reviewedFee?: FeeEstimate;
   readonly signerAccountId?: string;
   readonly untrackedVerified?: boolean;
 };
@@ -171,6 +177,12 @@ export type MultisigProposalActionInput = {
  */
 export type ConfirmMultisigProposalInput = MultisigProposalActionInput & {
   readonly mode: MultisigConfirmationMode;
+  /**
+   * The fee `wallet.prepareMultisigConfirmation` displayed for these exact
+   * calls, echoed back on submit. The background turns it into the ceiling the
+   * co-signing invoke may sign under (MCW-V09-119).
+   */
+  readonly reviewedFee?: FeeEstimate;
 };
 
 /**
@@ -185,6 +197,7 @@ export const readConfirmMultisigProposalInput = (
   hasOnlyKnownKeys(message, [
     "mode",
     "proposalId",
+    "reviewedFee",
     "signerAccountId",
     "type",
     "untrackedVerified",
@@ -193,10 +206,12 @@ export const readConfirmMultisigProposalInput = (
   isMultisigConfirmationMode(message["mode"]) &&
   isId(message["proposalId"]) &&
   (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
+  (message["reviewedFee"] === undefined || isFeeEstimate(message["reviewedFee"])) &&
   (message["untrackedVerified"] === undefined || message["untrackedVerified"] === true)
     ? {
         mode: message["mode"],
         proposalId: message["proposalId"],
+        ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
         ...(message["signerAccountId"] === undefined
           ? {}
           : { signerAccountId: message["signerAccountId"] }),
@@ -214,15 +229,16 @@ export const readMultisigProposalActionInput = (
 ): MultisigProposalActionInput | null => {
   const keys =
     type === "wallet.executeMultisigProposal"
-      ? (["proposalId", "signerAccountId", "type"] as const)
-      : (["proposalId", "signerAccountId", "type", "untrackedVerified"] as const);
+      ? (["proposalId", "reviewedFee", "signerAccountId", "type"] as const)
+      : (["proposalId", "reviewedFee", "signerAccountId", "type", "untrackedVerified"] as const);
   if (
     !(
       isRecord(message) &&
       hasOnlyKnownKeys(message, keys) &&
       message["type"] === type &&
       isId(message["proposalId"]) &&
-      (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"]))
+      (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
+      (message["reviewedFee"] === undefined || isFeeEstimate(message["reviewedFee"]))
     )
   ) {
     return null;
@@ -232,6 +248,7 @@ export const readMultisigProposalActionInput = (
   }
   return {
     proposalId: message["proposalId"],
+    ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
     ...(message["signerAccountId"] === undefined
       ? {}
       : { signerAccountId: message["signerAccountId"] }),
@@ -281,6 +298,7 @@ export const readTrackMultisigProposalInput = (
  */
 export type DeployMultisigInput = {
   readonly quorum: number;
+  readonly reviewedFee?: FeeEstimate;
   readonly salt: string;
   readonly signers: readonly string[];
 };
@@ -291,7 +309,7 @@ export type DeployMultisigInput = {
  */
 export const readDeployMultisigInput = (message: unknown): DeployMultisigInput | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["quorum", "salt", "signers", "type"]) &&
+  hasOnlyKnownKeys(message, ["quorum", "reviewedFee", "salt", "signers", "type"]) &&
   message["type"] === "wallet.deployMultisig" &&
   Array.isArray(message["signers"]) &&
   message["signers"].length >= 1 &&
@@ -303,9 +321,11 @@ export const readDeployMultisigInput = (message: unknown): DeployMultisigInput |
   Number.isSafeInteger(message["quorum"]) &&
   message["quorum"] >= 1 &&
   message["quorum"] <= message["signers"].length &&
+  (message["reviewedFee"] === undefined || isFeeEstimate(message["reviewedFee"])) &&
   isOptionalSalt(message["salt"])
     ? {
         quorum: message["quorum"],
+        ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
         salt: message["salt"] ?? "0x0",
         signers: message["signers"] as readonly string[],
       }

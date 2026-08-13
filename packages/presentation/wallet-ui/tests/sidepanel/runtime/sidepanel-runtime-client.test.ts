@@ -12,6 +12,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createSidepanelRuntime, emptyStatus } from "../../../src/sidepanel/runtime/runtime";
+import { unavailableStatus } from "../../../src/sidepanel/runtime/runtime-status";
 import {
   APPROVAL_ID,
   account,
@@ -43,11 +44,14 @@ describe("createSidepanelRuntime — emptyStatus and no-runtime fallback", () =>
     expect(status.network).toBe("Unavailable");
   });
 
-  test("loadStatus falls back to emptyStatus when no runtime is injected", async () => {
+  test("loadStatus falls back to the unavailable status when no runtime is injected", async () => {
     // sendMessage resolves undefined (runtime?.sendMessage short-circuits), so
-    // every guard fails and the fallbacks fire.
+    // every guard fails and the fallbacks fire. An unanswered status read is a
+    // fault, not evidence of a fresh browser: it must not paint the first-run
+    // screen (MCW-V09-126).
     const wallet = createSidepanelRuntime();
-    expect(await wallet.loadStatus()).toEqual(emptyStatus());
+    expect(await wallet.loadStatus()).toEqual(unavailableStatus());
+    expect((await wallet.loadStatus()).hasVault).toBe(true);
     expect(await wallet.loadBalances()).toEqual({ error: "balances unavailable" });
     expect(await wallet.connectedSites()).toEqual([]);
     await expect(wallet.generateMnemonic()).rejects.toThrow("wallet unavailable");
@@ -166,6 +170,28 @@ describe("approvals and connected sites", () => {
     const { sent, wallet } = captureRuntime(accountsResponse);
     await expect(wallet.decideApproval(APPROVAL_ID, true)).resolves.toBeUndefined();
     expect(sent[0]).toEqual({ id: APPROVAL_ID, type: "wallet.approveOrigin" });
+  });
+
+  // The reviewed figure the card was painting travels with the approval, so the
+  // background can hold the submission to it and refuse if its own copy moved
+  // after the paint. A denial commits to no fee, so it carries none.
+  test("decideApproval carries the card's reviewed fee on an approval only", async () => {
+    const reviewedFee = { overallFee: "1000", unit: "FRI" } as const;
+    const approving = captureRuntime(accountsResponse);
+    await expect(
+      approving.wallet.decideApproval(APPROVAL_ID, true, reviewedFee),
+    ).resolves.toBeUndefined();
+    expect(approving.sent[0]).toEqual({
+      id: APPROVAL_ID,
+      reviewedFee,
+      type: "wallet.approveOrigin",
+    });
+
+    const denying = captureRuntime(pendingApprovalsResponse);
+    await expect(
+      denying.wallet.decideApproval(APPROVAL_ID, false, reviewedFee),
+    ).resolves.toBeUndefined();
+    expect(denying.sent[0]).toEqual({ id: APPROVAL_ID, type: "wallet.denyOrigin" });
   });
 
   test("decideApproval denies via denyOrigin and accepts a pending-list echo", async () => {

@@ -6,9 +6,10 @@
  * failure response.
  */
 
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
-import { type ActivityLog, isUnresolvedActivityStatus } from "@mc-wallet/transactions/activity";
 import { type MultisigOperationRecord, multisigOperationId } from "@mc-wallet/multisig/repository";
+import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
+import { type ActivityLog, isUnresolvedActivityStatus } from "@mc-wallet/transactions/activity";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { MultisigOpsDeps } from "./multisig-ops";
 
 type SetupOperationKind = Extract<MultisigOperationRecord["kind"], "declare" | "deploy">;
@@ -26,18 +27,21 @@ type OperationKeyInput = Omit<OperationClaimInput, "pendingError">;
 type OperationClaim = { readonly error: string } | { readonly operationId: string };
 
 /**
- * Proposal actions serialized independently for each signer and tx id.
+ * Proposal actions serialized per signer, watched multisig, and tx id.
  */
 export type MultisigProposalOperationKind = Extract<
   MultisigOperationRecord["kind"],
-  "confirm" | "execute" | "revoke"
+  "confirm" | "execute" | "propose" | "revoke"
 >;
 
 type ProposalOperationClaimInput = {
   readonly accountId: string;
   readonly kind: MultisigProposalOperationKind;
+  readonly multisigId: string;
   readonly networkId: MultisigOperationRecord["networkId"];
   readonly pendingError: string;
+  readonly releaseAccepted?: boolean;
+  readonly releasePropose?: boolean;
   readonly txId: string;
 };
 
@@ -117,21 +121,42 @@ export const claimMultisigOperation = async (
 const isProposalOperation = (
   operation: MultisigOperationRecord,
 ): operation is MultisigOperationRecord & { readonly kind: MultisigProposalOperationKind } =>
-  operation.kind === "confirm" || operation.kind === "execute" || operation.kind === "revoke";
+  operation.kind === "confirm" ||
+  operation.kind === "execute" ||
+  operation.kind === "propose" ||
+  operation.kind === "revoke";
 
 /**
- * Atomically reserves one signer action for a proposal. An unresolved or
- * unreadable prior submission of the same action stays blocked. The caller has
- * already refreshed and validated the proposal's chain state, so an opposite
- * action cannot represent the same intent (for example, revoke is valid only
- * after confirm has landed). Rejected/reverted submissions are retryable; an
- * accepted inverse action releases older accepted claims.
+ * Atomically reserves one signer action for a proposal, scoped to the watched
+ * multisig it runs against: transaction ids hash `(call, salt)` and not the
+ * contract, so the same id can name a live proposal on two different multisigs
+ * and neither may block the other.
+ *
+ * Any unresolved or unreadable prior claim for that `(signer, multisig, txId)`
+ * stays blocked, whatever its kind. Kind-separated claims used to let an
+ * execute and a revoke broadcast together: the state each one validated was
+ * read while the other was still unmined, so both passed their gates and both
+ * paid a fee for a pair of transactions that contradict each other. A claim
+ * still carrying no transaction hash may be racing a broadcast or may have lost
+ * its post-broadcast bookkeeping write, so it also blocks every kind. Legacy
+ * claims carry no multisig and block every contract, which fails closed for the
+ * one upgrade during which they can still be in flight. Rejected/reverted
+ * submissions are retryable. A caller that just proved its chosen action is
+ * currently valid on chain may also release accepted claims made stale by an
+ * action submitted elsewhere. Once the proposal itself is visible, that same
+ * read may release its submit claim; other unresolved claims remain blocked.
  */
 export const claimMultisigProposalOperation = async (
   deps: MultisigOpsDeps,
   input: ProposalOperationClaimInput,
 ): Promise<OperationClaim> => {
-  const operationId = multisigOperationId(input.kind, input.networkId, input.accountId, input.txId);
+  const operationId = multisigOperationId(
+    input.kind,
+    input.networkId,
+    input.accountId,
+    input.txId,
+    input.multisigId,
+  );
   if (!operationId) {
     return { error: "invalid multisig proposal operation claim" };
   }
@@ -145,6 +170,7 @@ export const claimMultisigProposalOperation = async (
       isProposalOperation(operation) &&
       operation.accountId === input.accountId &&
       operation.networkId === input.networkId &&
+      (operation.multisigId === undefined || operation.multisigId === input.multisigId) &&
       sameFelt(operation.target, input.txId);
     const sameSignerProposal = operations.filter(matchesSignerProposal);
     const settledElsewhere = operations.filter((operation) => {
@@ -166,6 +192,11 @@ export const claimMultisigProposalOperation = async (
         (left, right) => (left.activity?.submittedAt ?? 0) - (right.activity?.submittedAt ?? 0),
       );
     const latestAccepted = accepted.at(-1)?.operation.id;
+    const existing = input.releaseAccepted
+      ? undefined
+      : sameSignerProposal.find(
+          (operation) => operation.id === operationId && operation.id === latestAccepted,
+        );
     await Promise.all([
       ...settledElsewhere.map((operation) => deps.multisigStore.releaseOperation(operation.id)),
       ...sameSignerProposal
@@ -174,26 +205,28 @@ export const claimMultisigProposalOperation = async (
             ? activityByHash.get(operation.transactionHash)
             : undefined;
           return (
+            (input.releasePropose === true && operation.kind === "propose") ||
             activity?.status === "rejected" ||
             activity?.status === "reverted" ||
-            (activity?.status === "accepted" && operation.id !== latestAccepted)
+            (activity?.status === "accepted" &&
+              (input.releaseAccepted === true || operation.id !== existing?.id))
           );
         })
         .map((operation) => deps.multisigStore.releaseOperation(operation.id)),
     ]);
-    const existing = sameSignerProposal.find(
-      (operation) => operation.id === operationId && operation.id === latestAccepted,
-    );
     if (existing) {
       return {
         error: pendingClaimError(input.pendingError, existing.transactionHash),
       };
     }
+    // Every unresolved claim is kind-blind. In particular, no hash does NOT
+    // prove no broadcast: the worker can be torn down after the RPC answers but
+    // before the best-effort hash write. Availability must lose to duplicate or
+    // contradictory signing when the outcome is unknowable.
     const unresolved = sameSignerProposal.find((operation) => {
-      if (operation.kind !== input.kind) return false;
-      const status = operation.transactionHash
-        ? activityByHash.get(operation.transactionHash)?.status
-        : undefined;
+      if (input.releasePropose === true && operation.kind === "propose") return false;
+      if (operation.transactionHash === undefined) return true;
+      const status = activityByHash.get(operation.transactionHash)?.status;
       return status === undefined || isUnresolvedActivityStatus(status);
     });
     if (unresolved) {
@@ -201,10 +234,14 @@ export const claimMultisigProposalOperation = async (
         error: pendingClaimError(input.pendingError, unresolved.transactionHash),
       };
     }
-    const claim = await deps.multisigStore.claimOperation({
+    // This store mutation repeats the kind-blind conflict check atomically with
+    // the write. The reads above provide cleanup and a useful hash in the error;
+    // they are not the concurrency control.
+    const claim = await deps.multisigStore.claimProposalOperation({
       accountId: input.accountId,
       id: operationId,
       kind: input.kind,
+      multisigId: input.multisigId,
       networkId: input.networkId,
       target: input.txId,
     });
@@ -233,6 +270,21 @@ export const releaseMultisigOperation = async (
 };
 
 /**
+ * Releases a claim only when submission failed before broadcast or was
+ * rejected determinately. An indeterminate write may already be live, so its
+ * hashless claim is the only durable barrier against a blind duplicate.
+ */
+export const releaseFailedMultisigOperation = async (
+  deps: MultisigOpsDeps,
+  operationId: string,
+  error: unknown,
+): Promise<void> => {
+  if (!(error instanceof IndeterminateRpcWriteError)) {
+    await releaseMultisigOperation(deps, operationId);
+  }
+};
+
+/**
  * Clears a claim once an authoritative chain read proves the class/address is
  * already present. This keeps successful historical operations from occupying
  * the bounded claim registry.
@@ -257,7 +309,7 @@ export const clearCompletedMultisigOperation = async (
  * succeeded, without allowing failure to discard the caller's transaction
  * hash.
  */
-export const recordSubmittedActivity = async (
+const recordSubmittedActivity = async (
   activity: ActivityLog,
   entry: Parameters<ActivityLog["record"]>[0],
 ): Promise<boolean> => {

@@ -5,7 +5,6 @@
  * fail closed across panels and service-worker restarts.
  */
 
-import { canonicalFelt, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import {
   buildMultisigDeployCall,
   MULTISIG_CLASS_HASH,
@@ -13,20 +12,31 @@ import {
   predictMultisigAddress,
   requireMultisigContractClass,
 } from "@mc-wallet/multisig/deploy";
+import {
+  type MultisigRecord,
+  multisigId,
+  multisigOperationId,
+} from "@mc-wallet/multisig/repository";
 import { isUnresolvedActivityStatus } from "@mc-wallet/transactions/activity";
-import { type MultisigRecord, multisigId, multisigOperationId } from "@mc-wallet/multisig/repository";
-import { readTypeOnlyInput } from "../routing/message-inputs";
+import { canonicalFelt, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { signerForContext } from "../accounts/wallet-ops";
+import { readFeeReviewInput, readTypeOnlyInput } from "../routing/message-inputs";
+import {
+  activeAccountContext,
+  networkRpcUrls,
+  observedAccountContext,
+} from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
+import { requiredFeeReview } from "../transactions/fee-review";
 import { readDeployMultisigInput } from "./multisig-inputs";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-ops";
 import {
   claimMultisigOperation,
   clearCompletedMultisigOperation,
   recordClaimedMultisigSubmission,
+  releaseFailedMultisigOperation,
   releaseMultisigOperation,
 } from "./multisig-submission";
-import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import { signerForContext } from "../accounts/wallet-ops";
 
 type MultisigDeployHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
@@ -34,7 +44,9 @@ const multisigClassStatus: MultisigDeployHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.multisigClassStatus")) {
     return { error: "invalid class status request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  // Read-only status the multisig-deploy screen re-reads on every ambient
+  // hydration, so it observes the unlock window and never extends it.
+  const context = await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
     return { error: context.error };
   }
@@ -76,7 +88,8 @@ const multisigClassStatus: MultisigDeployHandler = async (deps, message) => {
 };
 
 const declareMultisigClass: MultisigDeployHandler = async (deps, message) => {
-  if (!readTypeOnlyInput(message, "wallet.declareMultisigClass")) {
+  const input = readFeeReviewInput(message, "wallet.declareMultisigClass");
+  if (!input) {
     return { error: "invalid declare request" };
   }
   const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
@@ -111,6 +124,20 @@ const declareMultisigClass: MultisigDeployHandler = async (deps, message) => {
     return { error: "a declare transaction is already pending — wait for it to complete" };
   }
   const contractClass = requireMultisigContractClass(await deps.loadMultisigClass());
+  const signHash = signerForContext(deps, context);
+  if (!input.reviewedFee) {
+    return requiredFeeReview(async () => {
+      if (!deps.runtimeRpc.estimateDeclareFee) throw new Error("fee estimator unavailable");
+      return deps.runtimeRpc.estimateDeclareFee({
+        account: context.account,
+        classHash: MULTISIG_CLASS_HASH,
+        compiledClassHash: MULTISIG_COMPILED_CLASS_HASH,
+        contractClass,
+        rpcUrls,
+        signHash,
+      });
+    });
+  }
   const claim = await claimMultisigOperation(deps, {
     ...operationKey,
     pendingError: "a declare transaction is already unresolved — wait for it to settle",
@@ -125,11 +152,12 @@ const declareMultisigClass: MultisigDeployHandler = async (deps, message) => {
       classHash: MULTISIG_CLASS_HASH,
       compiledClassHash: MULTISIG_COMPILED_CLASS_HASH,
       contractClass,
+      reviewedFee: input.reviewedFee,
       rpcUrls,
-      signHash: signerForContext(deps, context),
+      signHash,
     });
   } catch (error) {
-    await releaseMultisigOperation(deps, claim.operationId);
+    await releaseFailedMultisigOperation(deps, claim.operationId, error);
     throw error;
   }
   await recordClaimedMultisigSubmission(deps, claim.operationId, {
@@ -176,6 +204,7 @@ const deployMultisig: MultisigDeployHandler = async (deps, message) => {
     networkId: context.networkId,
     target: address,
   };
+  const call = buildMultisigDeployCall(config);
   let occupied: boolean;
   try {
     occupied = await deps.runtimeRpc.getDeploymentStatus({ accountAddress: address, rpcUrls });
@@ -202,6 +231,17 @@ const deployMultisig: MultisigDeployHandler = async (deps, message) => {
         "a deploy transaction for this multisig configuration is already pending — wait for it to complete",
     };
   }
+  const signHash = signerForContext(deps, context);
+  if (!input.reviewedFee) {
+    return requiredFeeReview(() =>
+      deps.runtimeRpc.estimateInvokeFee({
+        account: context.account,
+        calls: [call],
+        rpcUrls,
+        signHash,
+      }),
+    );
+  }
   const claim = await claimMultisigOperation(deps, {
     ...operationKey,
     pendingError:
@@ -214,12 +254,13 @@ const deployMultisig: MultisigDeployHandler = async (deps, message) => {
   try {
     result = await deps.runtimeRpc.submitInvokeTransaction({
       account: context.account,
-      calls: [buildMultisigDeployCall(config)],
+      calls: [call],
+      reviewedFee: input.reviewedFee,
       rpcUrls,
-      signHash: signerForContext(deps, context),
+      signHash,
     });
   } catch (error) {
-    await releaseMultisigOperation(deps, claim.operationId);
+    await releaseFailedMultisigOperation(deps, claim.operationId, error);
     throw error;
   }
   await recordClaimedMultisigSubmission(deps, claim.operationId, {
@@ -254,6 +295,8 @@ export const handleMultisigDeployOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = DEPLOY_HANDLERS[messageType];
+  const handler = Object.hasOwn(DEPLOY_HANDLERS, messageType)
+    ? DEPLOY_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message) : null;
 };

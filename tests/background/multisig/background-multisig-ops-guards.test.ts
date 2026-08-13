@@ -18,6 +18,7 @@ import {
 } from "../../../apps/extension/src/background/multisig/multisig-ops";
 import {
   HARNESS_MULTISIG,
+  HARNESS_PROPOSED_TX_ID,
   HARNESS_TARGET,
   harnessAccount,
   harnessExtensionSender,
@@ -191,14 +192,17 @@ describe("multisig proposal builders", () => {
     expect(summary).not.toContain(HARNESS_TARGET);
   });
 
+  // Filed under the id `baseInput`'s call really hashes to: a record whose call
+  // and id disagree is refused by the offline binding before any confirm,
+  // revoke, or execute, so no fixture should model one as ordinary output.
   test("buildMultisigProposalRecord assembles an optimistic pending record", () => {
     const record = buildMultisigProposalRecord({
-      id: "SN_MAIN:0xabc:0x7ff",
+      id: `SN_MAIN:0xabc:${HARNESS_PROPOSED_TX_ID}`,
       input: baseInput,
       multisigId: "SN_MAIN:0xabc",
       submitTransactionHash: "0xhash",
       summary: "Pay vendor",
-      txId: "0x7ff",
+      txId: HARNESS_PROPOSED_TX_ID,
     });
     expect(record).toEqual({
       call: {
@@ -208,12 +212,12 @@ describe("multisig proposal builders", () => {
         salt: "0x0",
       },
       confirmations: 0,
-      id: "SN_MAIN:0xabc:0x7ff",
+      id: `SN_MAIN:0xabc:${HARNESS_PROPOSED_TX_ID}`,
       multisigId: "SN_MAIN:0xabc",
       state: "pending",
       submitTransactionHash: "0xhash",
       summary: "Pay vendor",
-      txId: "0x7ff",
+      txId: HARNESS_PROPOSED_TX_ID,
     });
   });
 });

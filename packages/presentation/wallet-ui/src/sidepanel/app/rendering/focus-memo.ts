@@ -169,7 +169,7 @@ export type GroupNameDraft = {
  * {@link restoreGroupNameDraft} across the shell swap so a streaming repaint
  * never discards text the user is mid-typing into a new-group or rename field.
  */
-export const groupNameDraftMemo = (): GroupNameDraft | null => {
+const groupNameDraftMemo = (): GroupNameDraft | null => {
   const active = document.activeElement;
   if (!(active instanceof HTMLInputElement) || active.dataset["groupName"] === undefined) {
     return null;
@@ -191,7 +191,7 @@ export const groupNameDraftMemo = (): GroupNameDraft | null => {
  * its caret, so both text and cursor position survive a repaint. A no-op when
  * there is no draft or the field is gone (e.g. the group was deleted).
  */
-export const restoreGroupNameDraft = (root: Element | null, draft: GroupNameDraft | null): void => {
+const restoreGroupNameDraft = (root: Element | null, draft: GroupNameDraft | null): void => {
   if (!draft) {
     return;
   }

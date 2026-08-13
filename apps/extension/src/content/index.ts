@@ -2,7 +2,6 @@
  * Content-script bridge between untrusted pages and the extension background worker.
  */
 
-import { invalidRequestPayload, unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
 import {
   isTrustedPageMessage,
   providerResponse,
@@ -10,7 +9,12 @@ import {
   toProviderPayload,
   toRuntimeMessage,
 } from "@mc-wallet/wallet-protocol/bridge";
-import { addressesFromPayload, isWalletEventMessage, pageEventsFor } from "@mc-wallet/wallet-protocol/events";
+import {
+  addressesFromPayload,
+  isWalletEventMessage,
+  pageEventsFor,
+} from "@mc-wallet/wallet-protocol/events";
+import { invalidRequestPayload, unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
 
 type RuntimeApi = {
   readonly getURL: (path: string) => string;

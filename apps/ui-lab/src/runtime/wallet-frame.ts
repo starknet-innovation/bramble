@@ -53,7 +53,7 @@ export const walletFrameDocument = (
 </body>
 </html>`;
 
-export type LoadedWalletFrame = {
+type LoadedWalletFrame = {
   readonly app: HTMLElement;
   readonly document: Document;
 };
@@ -67,7 +67,7 @@ type TransitionDocument = Document & {
   startViewTransition?: (callback: () => void) => unknown;
 };
 
-export const loadWalletFrame = async (
+const loadWalletFrame = async (
   frame: HTMLIFrameElement,
   content: string,
   surface: LabSurface,

@@ -1,5 +1,6 @@
 /**
- * Shared JSON guards used at storage and extension message trust boundaries.
+ * Shared JSON guards, plus the scalar grammars that travel inside those JSON
+ * values, used at storage and extension message trust boundaries.
  */
 export type JsonPrimitive = boolean | null | number | string;
 /**
@@ -75,6 +76,18 @@ export const isRecord = (value: unknown): value is Record<string, unknown> => {
 };
 
 /**
+ * Narrows a property descriptor to an own enumerable data property — the only
+ * shape a validator may read an untrusted value from. A missing key, a
+ * non-enumerable key, or an accessor is rejected, so hostile input can never run
+ * a getter (or return a different value on a second read) during validation.
+ * This is the one shared predicate behind the JSON normalizers and the popup
+ * response readers; do not re-derive it locally.
+ */
+export const isOwnDataProperty = (
+  descriptor: PropertyDescriptor | undefined,
+): descriptor is PropertyDescriptor => descriptor?.enumerable === true && "value" in descriptor;
+
+/**
  * Checks that a parsed object contains only keys its boundary understands.
  */
 export const hasOnlyKnownKeys = (
@@ -86,9 +99,7 @@ export const hasOnlyKnownKeys = (
       return false;
     }
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return (
-      descriptor?.enumerable === true && "value" in descriptor && descriptor.value !== undefined
-    );
+    return isOwnDataProperty(descriptor) && descriptor.value !== undefined;
   });
 
 const isArrayIndexKey = (key: string, length: number): boolean => {
@@ -134,7 +145,15 @@ const normalizeBigint = (value: bigint, context: NormalizationContext): Normaliz
   return normalizeString(`0x${value.toString(16)}`, context.tracker);
 };
 
-const hasOnlyArrayEntries = (value: readonly unknown[]): boolean =>
+/**
+ * Checks that an array carries nothing but `length` and its own in-range index
+ * keys. An extra own property — `Object.defineProperty(list, "evil", …)`, a
+ * symbol key, or an out-of-range index — makes the value fail, so a boundary
+ * that validates by walking indices can never miss data a later consumer would
+ * still read. Shared by the JSON normalizer and the popup consent-queue reader;
+ * do not re-derive it locally.
+ */
+export const hasOnlyArrayEntries = (value: readonly unknown[]): boolean =>
   Reflect.ownKeys(value).every(
     (key) => key === "length" || (typeof key === "string" && isArrayIndexKey(key, value.length)),
   );
@@ -150,7 +169,7 @@ const normalizeJsonArray = (
   const normalized: Json[] = [];
   for (let index = 0; index < value.length; index += 1) {
     const descriptor = Object.getOwnPropertyDescriptor(value, index);
-    if (descriptor?.enumerable !== true || !("value" in descriptor)) {
+    if (!isOwnDataProperty(descriptor)) {
       return INVALID_JSON;
     }
     const item = normalizeJsonValue(descriptor.value, context, depth + 1);
@@ -181,7 +200,7 @@ const normalizeJsonRecord = (
       return INVALID_JSON;
     }
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (descriptor?.enumerable !== true || !("value" in descriptor)) {
+    if (!isOwnDataProperty(descriptor)) {
       return INVALID_JSON;
     }
     const item = normalizeJsonValue(descriptor.value, context, depth + 1);
@@ -285,6 +304,84 @@ export const isStringArray = (value: unknown): value is readonly string[] =>
  */
 export const isSafeDecimals = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 36;
+
+const TOKEN_SYMBOL_PATTERN = /^[A-Z0-9]{2,12}$/;
+// Every base-units integer the wallet handles is an on-chain u256 or smaller,
+// so 78 digits is the widest one that can exist (2^256 - 1 has 78). The bound
+// belongs in the grammar rather than at each call site: an unbounded digit
+// string reaching `BigInt()` from a message boundary is work an untrusted caller
+// chose the size of, and "each boundary caps it" only holds until one forgets.
+const MAX_BASE_UNITS_DIGITS = 78;
+const BASE_UNITS_PATTERN = new RegExp(`^(?:0|[1-9][0-9]{0,${MAX_BASE_UNITS_DIGITS - 1}})$`);
+const DECIMAL_AMOUNT_PATTERN = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
+
+/**
+ * Checks a value is an uppercase token ticker of 2..12 alphanumerics — the
+ * grammar the on-chain metadata reader, the watch-asset boundary, the stored
+ * token entry, and the popup balance reader all have to agree on. The one
+ * shared rule; do not re-derive the pattern locally (five copies once drifted,
+ * so a symbol one layer stored was rejected by the next).
+ */
+export const isTokenSymbol = (value: unknown): value is string =>
+  typeof value === "string" && TOKEN_SYMBOL_PATTERN.test(value);
+
+/**
+ * Checks a value is a canonical base-units integer string: digits only, no sign,
+ * no leading zero, no exponent, so one amount has exactly one spelling, and at
+ * most {@link MAX_BASE_UNITS_DIGITS} of them — the width of an on-chain u256,
+ * so nothing legitimate is refused and no untrusted caller decides how much
+ * `BigInt()` work the wallet does. Boundaries with a tighter limit still apply
+ * it next to this call. The one shared grammar for raw amounts, fees, and
+ * numeric NFT token ids; do not re-derive the pattern locally.
+ */
+export const isBaseUnitsAmount = (value: unknown): value is string =>
+  typeof value === "string" && BASE_UNITS_PATTERN.test(value);
+
+/**
+ * Checks a value is a human-scale decimal amount as typed or displayed: a
+ * canonical integer part plus an optional fractional part, never a sign or an
+ * exponent. Scaling to base units happens later via `parseTokenAmount`. The one
+ * shared grammar behind the transfer, swap, and privacy amount readers; do not
+ * re-derive the pattern locally.
+ */
+export const isDecimalAmountText = (value: unknown): value is string =>
+  typeof value === "string" && DECIMAL_AMOUNT_PATTERN.test(value);
+
+// A chain descriptor's `id` and display name are free text a dapp chooses, so
+// the only rules are "says something" and "cannot be used as a storage bomb".
+// 256 raw characters is far past any real chain name and is the width the
+// stored custom network was already built for.
+const MAX_NETWORK_LABEL_LENGTH = 256;
+
+/**
+ * Checks a value is a custom-network label: a string of at most 256 characters
+ * whose trimmed form says something. The one shared grammar for a chain
+ * descriptor's `id` and display name, applied identically by the dapp-facing
+ * `wallet_addStarknetChain` reader and by the stored-network validator, so a
+ * descriptor the bridge accepts is always one the store can persist — trimming
+ * only shortens a label, so the trimmed text the reader hands on still passes
+ * this same bound. The size bound is measured on the raw string, never the
+ * trimmed one: the raw string is what an untrusted runtime message carries and
+ * what the store would persist if a lane forgot to trim, so a trimmed measure
+ * would let megabytes of padding through the background re-validation. Do not
+ * re-derive either half locally (two near-identical copies once differed on
+ * whether the surrounding whitespace counted).
+ */
+export const isNetworkLabel = (value: unknown): value is string =>
+  typeof value === "string" && value.length <= MAX_NETWORK_LABEL_LENGTH && value.trim().length > 0;
+
+const RISK_FLAG_CODE_PATTERN = /^[a-z][a-z-]{1,40}$/;
+
+/**
+ * Checks a value is a reviewed-risk code: lowercase kebab-case, 2..41
+ * characters. The vocabulary itself is owned by the verifier
+ * (`starknet/verify`'s `RiskFlagCode`); this is only the lexical rule every
+ * surface that re-reads a flag off the message boundary applies before
+ * rendering it. The one shared spelling — do not re-derive the pattern locally,
+ * or a code one screen shows becomes a code the next silently drops.
+ */
+export const isRiskFlagCode = (value: unknown): value is string =>
+  typeof value === "string" && RISK_FLAG_CODE_PATTERN.test(value);
 
 /**
  * Checks that a list of strings has no duplicates. The one shared implementation

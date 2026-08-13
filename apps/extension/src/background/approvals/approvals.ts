@@ -1,41 +1,59 @@
 /**
  * Background-only dapp approval queue. Requests are intentionally not persisted.
+ * Admission is bounded globally and per origin, and unanswered prompts expire,
+ * so an untrusted page cannot hold the wallet's consent surface hostage — see
+ * `./approval-limits` for those rules and `./approval-snapshot` for what a
+ * queued approval is allowed to show its readers.
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { isUuid } from "@mc-wallet/core/ids";
 import { isWalletOrigin } from "@mc-wallet/core/origin";
+import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
+import { systemClock } from "@mc-wallet/transactions/activity";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { ProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
 import type { ProviderDeclare } from "@mc-wallet/wallet-protocol/declare";
-import type {
-  Strk20Action,
-  Strk20Proof,
-  Strk20WithdrawAction,
-} from "@mc-wallet/wallet-protocol/strk20";
+import type { Strk20Action, Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Call } from "starknet";
-import type { DeclareFeeEstimate } from "@mc-wallet/starknet/declare";
-import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
-import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-import type { ApprovalContext } from "./approval-context";
 import {
-  type ApprovalKind,
+  matchesStrk20DisclosureKind,
+  type Strk20DisclosureApprovalKind,
+  type Strk20DisclosureRequest,
+} from "../privacy/strk20-approval-types";
+import type { ApprovalContext } from "./approval-context";
+import type { ApprovalFeeRevision } from "./approval-limits";
+import {
+  approvalAdmissionRefusal,
+  approvalCapacityVictim,
+  isExpiredApproval,
+} from "./approval-limits";
+import {
   type ApprovalPayload,
   cloneApprovalCall,
   cloneApprovalValue,
   readStoredApprovalPayload,
 } from "./approval-payload";
 import {
-  matchesStrk20DisclosureKind,
-  type Strk20DisclosureApprovalKind,
-  type Strk20DisclosureRequest,
-} from "../privacy/strk20-approval-types";
+  type ApprovalRequest,
+  type ApprovalRiskFlag,
+  approvalSnapshot,
+  type DeclarationReview,
+  type InvokeFeeReview,
+  type PendingApproval,
+  type WatchAssetToken,
+} from "./approval-snapshot";
 
 /**
- * Maximum queued dapp connection approvals kept in background memory.
+ * Queue admission caps and the abandoned-approval TTL. Re-exported here so the
+ * queue's limits stay one definition shared by callers and tests; the rest of
+ * `./approval-limits` is imported from there directly.
  */
-export const MAX_PENDING_APPROVALS = 50;
+export {
+  APPROVAL_TTL_MS,
+  MAX_PENDING_APPROVALS,
+  MAX_PENDING_APPROVALS_PER_ORIGIN,
+} from "./approval-limits";
 
 /**
  * Public approval discriminants and private payload shape used by background
@@ -44,79 +62,26 @@ export const MAX_PENDING_APPROVALS = 50;
 export type { ApprovalKind, ApprovalPayload } from "./approval-payload";
 
 /**
- * ERC20 token metadata carried by a watch-asset approval, in the shape the
- * preferences store accepts when the request is approved.
+ * Display-only approval snapshot types shared with the approval UI, the dapp
+ * bridge, and the executors. Their definitions live with the deep copy producing them.
  */
-export type WatchAssetToken = {
-  readonly address: string;
-  readonly decimals: number;
-  readonly name: string;
-  readonly networkId: StarknetNetworkId;
-  readonly symbol: string;
-};
+export type {
+  ApprovalRiskFlag,
+  InvokeFeeReview,
+  PendingApproval,
+  WatchAssetToken,
+} from "./approval-snapshot";
+
+type ApprovalEntry = ApprovalRequest & { readonly feeRevision: number; readonly queuedAt: number };
 
 /**
- * One decoded, user-facing risk flag surfaced on an invoke approval card.
+ * Observer invoked with approval ids removed without a user decision: either
+ * TTL expiry or fair replacement at the global cap. Whatever holds state keyed
+ * by an approval id — above all the waiter registry holding the dapp's parked
+ * response — must release it here, otherwise the queue stops bounding that
+ * state. Entries are already removed when it runs.
  */
-export type ApprovalRiskFlag = {
-  readonly code: string;
-  readonly message: string;
-};
-
-/**
- * Safe, display-only facts derived from a private Cairo declaration payload.
- * The contract class itself never crosses to the approval UI.
- */
-export type DeclarationReview = {
-  readonly abiEntryCount: number;
-  readonly accountDeployment: "deployed" | "undeployed" | "unknown";
-  readonly classHash?: string;
-  readonly compiledClassHash: string;
-  readonly deploymentFee: DeclareFeeEstimate | null;
-  readonly deploymentFeeEstimateFailed: boolean;
-  readonly entryPointCount: number;
-  readonly fee: DeclareFeeEstimate | null;
-  readonly feeEstimateFailed: boolean;
-  readonly sierraProgramLength: number;
-};
-
-/**
- * Display-only invoke fee state, aligned with Send review classification.
- */
-export type InvokeFeeReview = {
-  readonly fee: FeeEstimate | null;
-  readonly feeAffordability: FeeAffordability;
-  readonly feeEstimateFailed: boolean;
-  readonly feeEstimatePending: boolean;
-  readonly requiresDeployment: boolean;
-};
-
-/**
- * Pending dapp approval snapshot. Kind-specific review fields are display-only;
- * reputation fields are attached when listed and are not queue state.
- */
-export type PendingApproval = {
-  readonly actionReviews?: readonly Strk20Action[];
-  readonly blocked?: boolean;
-  readonly context?: ApprovalContext;
-  readonly declaration?: DeclarationReview;
-  readonly fee?: FeeEstimate | null;
-  readonly feeAffordability?: FeeAffordability;
-  readonly feeEstimateFailed?: boolean;
-  readonly feeEstimatePending?: boolean;
-  readonly flags?: readonly ApprovalRiskFlag[];
-  readonly id: string;
-  readonly insights?: readonly string[];
-  readonly kind: ApprovalKind;
-  readonly origin: string;
-  readonly relayFeeAction?: Strk20WithdrawAction;
-  readonly requiresDeployment?: boolean;
-  readonly summaries?: readonly string[];
-  readonly token?: WatchAssetToken;
-  readonly typedData?: unknown;
-};
-
-type ApprovalEntry = PendingApproval & ApprovalPayload;
+type ApprovalDropObserver = (ids: readonly string[]) => void;
 
 /**
  * Atomically claimed approval snapshot and its private execution payload. Once
@@ -126,16 +91,30 @@ export type ApprovalClaim = {
   readonly approval: PendingApproval;
   readonly payload: ApprovalPayload | null;
 };
-
 /**
- * In-memory dapp approval queue for connection, watch-asset, and invoke prompts.
+ * In-memory dapp approval queue.
  */
 export type ApprovalQueue = {
-  readonly approve: (id: string) => PendingApproval | null;
+  /**
+   * Claims the fee slot of a queued invoke or declare approval, invalidating
+   * every claim outstanding on it.
+   */
+  readonly beginFeeEstimate: (id: string) => ApprovalFeeRevision | null;
+  /**
+   * The refusal one more approval for `origin` would fail with, or null when
+   * there is room. A probe; dapp surfaces apply `requireApprovalAdmission`.
+   */
+  readonly canAdmit: (origin: string) => string | null;
   readonly claim: (id: string) => ApprovalClaim | null;
-  readonly deny: (id: string) => PendingApproval | null;
   readonly get: (id: string) => PendingApproval | null;
   readonly list: () => readonly PendingApproval[];
+  /**
+   * Registers the {@link ApprovalDropObserver} for this queue. Exactly one
+   * observer is held — a second call replaces the first — because the runtime
+   * registers it once while wiring the router context. Registration is the only
+   * way expiry becomes visible: the sweep is lazy and fires no event of its own.
+   */
+  readonly observeDrops: (observe: ApprovalDropObserver) => void;
   readonly payload: (id: string) => ApprovalPayload | null;
   readonly request: (origin: string) => PendingApproval;
   readonly requestAddChain: (input: {
@@ -189,83 +168,88 @@ export type ApprovalQueue = {
     readonly origin: string;
     readonly token: WatchAssetToken;
   }) => PendingApproval;
-  readonly updateInvokeFee: (id: string, fee: InvokeFeeReview) => PendingApproval | null;
+  /** Writes a fee review only while its queue revision remains current. */
+  readonly updateFee: (
+    revision: ApprovalFeeRevision,
+    update:
+      | { readonly declaration: DeclarationReview; readonly kind: "declare" }
+      | { readonly kind: "invoke"; readonly review: InvokeFeeReview },
+  ) => PendingApproval | null;
 };
 
-// Copies an invoke entry's fee review onto its snapshot without materializing
-// absent fields, so non-invoke snapshots stay byte-identical to before.
-const feeReviewSnapshot = (approval: ApprovalEntry): Partial<PendingApproval> => ({
-  ...(approval.fee === undefined ? {} : { fee: approval.fee && { ...approval.fee } }),
-  ...(approval.feeAffordability === undefined
-    ? {}
-    : { feeAffordability: approval.feeAffordability }),
-  ...(approval.feeEstimateFailed === undefined
-    ? {}
-    : { feeEstimateFailed: approval.feeEstimateFailed }),
-  ...(approval.feeEstimatePending === undefined
-    ? {}
-    : { feeEstimatePending: approval.feeEstimatePending }),
-  ...(approval.requiresDeployment === undefined
-    ? {}
-    : { requiresDeployment: approval.requiresDeployment }),
-});
-
-const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
-  ...(approval.actionReviews === undefined
-    ? {}
-    : { actionReviews: cloneApprovalValue(approval.actionReviews) }),
-  ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
-  ...feeReviewSnapshot(approval),
-  ...(approval.declaration === undefined
-    ? {}
-    : {
-        declaration: {
-          ...approval.declaration,
-          deploymentFee: approval.declaration.deploymentFee && {
-            ...approval.declaration.deploymentFee,
-          },
-          fee: approval.declaration.fee && { ...approval.declaration.fee },
-        },
-      }),
-  id: approval.id,
-  kind: approval.kind,
-  origin: approval.origin,
-  ...(approval.relayFeeAction === undefined
-    ? {}
-    : { relayFeeAction: cloneApprovalValue(approval.relayFeeAction) }),
-  ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
-  ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
-  ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
-  ...(approval.typedData === undefined
-    ? {}
-    : { typedData: cloneApprovalValue(approval.typedData) }),
-});
+/**
+ * Construction options for the approval queue.
+ */
+export type ApprovalQueueOptions = {
+  /**
+   * Wall-clock reader used to stamp and age queued approvals. Injected so the
+   * TTL sweep is deterministic under test; defaults to the system clock, which
+   * keeps this module free of a clock boundary of its own.
+   */
+  readonly now?: () => number;
+};
 
 /**
  * Creates a deduplicating approval queue. Connection prompts dedupe per origin;
  * watch-asset prompts dedupe per origin and token address so different tokens
  * from the same site queue independently. Invoke prompts never dedupe — each
  * transaction is a distinct action that must be approved on its own.
+ *
+ * Admission is bounded twice: globally and per origin (see `./approval-limits`),
+ * so one untrusted site cannot fill the queue and deny consent to every other
+ * site. Both refusals throw a {@link WalletError}, but a dapp never reads its
+ * message: `runtimeErrorResponse` (see `./messages`) reveals an error message
+ * only to an extension-page sender, which a content script is not, so the page
+ * observes the generic "wallet request failed" (spec UNKNOWN_ERROR). It learns
+ * that its request failed, not which cap it hit — the distinct messages are
+ * diagnostics for the panel and tests, not a signal a site can probe.
+ *
+ * Approvals older than the TTL are swept lazily on every read and write — no
+ * timer runs in the service worker — and an expired approval reads as absent:
+ * it is never listed, claimed, approved, or denied. Because expiry frees an
+ * admission slot, the swept ids are reported to the registered
+ * {@link ApprovalDropObserver} so held dapp responses parked behind them are
+ * released too; without that observer the queue would stop bounding the
+ * privileged worker's parked-promise heap.
  */
-export const createApprovalQueue = (): ApprovalQueue => {
+export const createApprovalQueue = (options: ApprovalQueueOptions = {}): ApprovalQueue => {
   const pending = new Map<string, ApprovalEntry>();
+  const now = options.now ?? systemClock;
+  let dropObserver: ApprovalDropObserver = () => undefined;
+
+  const sweep = (): void => {
+    const at = now();
+    const expired: string[] = [];
+    for (const [id, approval] of pending) {
+      if (isExpiredApproval(approval, at)) {
+        expired.push(id);
+      }
+    }
+    if (expired.length === 0) {
+      return;
+    }
+    for (const id of expired) {
+      pending.delete(id);
+    }
+    dropObserver(expired);
+  };
+
+  const queued = (): readonly ApprovalEntry[] => {
+    sweep();
+    return [...pending.values()];
+  };
 
   const entry = (id: string): ApprovalEntry | null => {
     if (!isUuid(id)) {
       return null;
     }
+    sweep();
     return pending.get(id) ?? null;
   };
 
   const get = (id: string): PendingApproval | null => {
     const approval = entry(id);
     return approval ? approvalSnapshot(approval) : null;
-  };
-
-  const remove = (id: string): PendingApproval | null => {
-    const approval = get(id);
-    pending.delete(id);
-    return approval;
   };
 
   const claim = (id: string): ApprovalClaim | null => {
@@ -280,21 +264,39 @@ export const createApprovalQueue = (): ApprovalQueue => {
     };
   };
 
-  const enqueue = (approval: ApprovalEntry): PendingApproval => {
-    if (pending.size >= MAX_PENDING_APPROVALS) {
-      throw new WalletError("Too many pending approvals");
+  const enqueue = (approval: ApprovalRequest): PendingApproval => {
+    const live = queued();
+    const refusal = approvalAdmissionRefusal(live, approval.origin);
+    if (refusal) {
+      throw new WalletError(refusal);
     }
-    pending.set(approval.id, approval);
+    const victim = approvalCapacityVictim(live);
+    if (victim) {
+      pending.delete(victim.id);
+      dropObserver([victim.id]);
+    }
+    pending.set(approval.id, { ...approval, feeRevision: 0, queuedAt: now() });
     return approvalSnapshot(approval);
   };
 
   return {
-    approve: remove,
+    beginFeeEstimate(id) {
+      const approval = entry(id);
+      if (approval?.kind !== "invoke" && approval?.kind !== "declare") {
+        return null;
+      }
+      const revision = approval.feeRevision + 1;
+      pending.set(id, { ...approval, feeRevision: revision });
+      return { id, revision };
+    },
+    canAdmit: (origin) => approvalAdmissionRefusal(queued(), origin),
     claim,
-    deny: remove,
     get,
     list() {
-      return [...pending.values()].map(approvalSnapshot);
+      return queued().map(approvalSnapshot);
+    },
+    observeDrops(observe) {
+      dropObserver = observe;
     },
     payload(id) {
       const approval = entry(id);
@@ -305,7 +307,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
         throw new WalletError("Invalid origin");
       }
 
-      const existing = [...pending.values()].find(
+      const existing = queued().find(
         (approval) => approval.kind === "connect" && approval.origin === origin,
       );
       if (existing) {
@@ -318,7 +320,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
         throw new WalletError("Invalid origin");
       }
 
-      const existing = [...pending.values()].find(
+      const existing = queued().find(
         (approval) =>
           approval.kind === "add-chain" &&
           approval.origin === origin &&
@@ -430,7 +432,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
         throw new WalletError("Invalid origin");
       }
 
-      const existing = [...pending.values()].find(
+      const existing = queued().find(
         (approval) =>
           approval.kind === "switch-chain" &&
           approval.origin === origin &&
@@ -453,7 +455,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
         throw new WalletError("Invalid origin");
       }
 
-      const existing = [...pending.values()].find(
+      const existing = queued().find(
         (approval) =>
           approval.kind === "watch-asset" &&
           approval.origin === origin &&
@@ -465,19 +467,32 @@ export const createApprovalQueue = (): ApprovalQueue => {
       }
       return enqueue({ id: crypto.randomUUID(), kind: "watch-asset", origin, token: { ...token } });
     },
-    updateInvokeFee(id, fee) {
+    updateFee({ id, revision }, update) {
       const approval = entry(id);
-      if (approval?.kind !== "invoke") {
+      if (!approval || approval.feeRevision !== revision || approval.kind !== update.kind) {
         return null;
       }
-      pending.set(id, {
-        ...approval,
-        fee: fee.fee && { ...fee.fee },
-        feeAffordability: fee.feeAffordability,
-        feeEstimateFailed: fee.feeEstimateFailed,
-        feeEstimatePending: fee.feeEstimatePending,
-        requiresDeployment: fee.requiresDeployment,
-      });
+      if (approval.kind === "declare" && update.kind === "declare") {
+        pending.set(id, {
+          ...approval,
+          declaration: {
+            ...update.declaration,
+            deploymentFee: update.declaration.deploymentFee && {
+              ...update.declaration.deploymentFee,
+            },
+            fee: update.declaration.fee && { ...update.declaration.fee },
+          },
+        });
+      } else if (approval.kind === "invoke" && update.kind === "invoke") {
+        pending.set(id, {
+          ...approval,
+          fee: update.review.fee && { ...update.review.fee },
+          feeAffordability: update.review.feeAffordability,
+          feeEstimateFailed: update.review.feeEstimateFailed,
+          feeEstimatePending: update.review.feeEstimatePending,
+          requiresDeployment: update.review.requiresDeployment,
+        });
+      }
       return get(id);
     },
   };

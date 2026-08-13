@@ -3,15 +3,18 @@
  * RPC overrides, and backup imports.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { isStrk20NetworkConfig, type Strk20NetworkConfig } from "@mc-wallet/privacy/config";
+import { type AccountGroupIcon, isAccountGroupIcon } from "@mc-wallet/settings/groups";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
-import { isStrk20NetworkConfig, type Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import { type AccountGroupIcon, isAccountGroupIcon } from "@mc-wallet/settings/groups";
-import { isApprovalSurfacePreference, isDisplayCurrency } from "@mc-wallet/wallet-model/preferences";
+import {
+  isApprovalSurfacePreference,
+  isDisplayCurrency,
+} from "@mc-wallet/wallet-model/preferences";
 
 const isGroupNameText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;
@@ -195,6 +198,23 @@ export const readImportPreferencesInput = (
   message["type"] === "wallet.importPreferences" &&
   isRecord(message["preferences"])
     ? { preferences: message["preferences"] }
+    : null;
+
+/**
+ * Parses an explicit per-network explorer-fallback choice. Extension-page only
+ * and untrusted like every other message: an unknown key, a non-boolean
+ * `enabled`, or an unknown network yields null so the caller answers with an
+ * error instead of recording a disclosure decision the user did not make.
+ */
+export const readSetExplorerFallbackInput = (
+  message: unknown,
+): { readonly enabled: boolean; readonly networkId: StarknetNetworkId } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["enabled", "networkId", "type"]) &&
+  message["type"] === "wallet.setExplorerFallback" &&
+  isStarknetNetworkId(message["networkId"]) &&
+  typeof message["enabled"] === "boolean"
+    ? { enabled: message["enabled"], networkId: message["networkId"] }
     : null;
 
 /**

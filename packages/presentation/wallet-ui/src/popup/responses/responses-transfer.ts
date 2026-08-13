@@ -2,7 +2,8 @@
  * Pure popup validators for pre-sign transfer review responses.
  */
 
-import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isJson, isRecord, isRiskFlagCode } from "@mc-wallet/core/json";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 
 /**
  * Pre-sign transfer review accepted from the background boundary.
@@ -10,7 +11,7 @@ import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
 export type TransferReviewResponse = {
   readonly ok: true;
   readonly review: {
-    readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+    readonly fee: FeeEstimate | null;
     /**
      * Fee-affordability verdict from the shared predicate (issue 191).
      * "unknown" means no claim was possible; surfaces warn only on
@@ -24,25 +25,38 @@ export type TransferReviewResponse = {
   };
 };
 
+/**
+ * Network fee returned before a wallet-initiated operation may be confirmed.
+ */
+export type FeeReviewResponse = {
+  readonly feeReview: FeeEstimate;
+  readonly ok: true;
+};
+
+/**
+ * Checks a wallet-initiated fee review before any extension page renders it.
+ */
+export const isFeeReviewResponse = (value: unknown): value is FeeReviewResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["feeReview", "ok"]) &&
+  value["ok"] === true &&
+  isFeeEstimate(value["feeReview"]);
+
 const isRiskFlagShape = (value: unknown): value is { code: string; message: string } =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["code", "message"]) &&
-  typeof value["code"] === "string" &&
-  /^[a-z][a-z-]{1,40}$/.test(value["code"]) &&
+  isRiskFlagCode(value["code"]) &&
   typeof value["message"] === "string" &&
   value["message"].length > 0 &&
   value["message"].length <= 300;
 
 /**
- * Checks a fee estimate before any extension page renders it.
+ * Checks a fee estimate before any extension page renders it. Re-exported from
+ * the one definition in `../starknet/fee-bounds` so the page and the background
+ * cannot disagree about what a fee is.
  */
-export const isFeeShape = (value: unknown): value is { overallFee: string; unit: string } =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["overallFee", "unit"]) &&
-  typeof value["overallFee"] === "string" &&
-  /^(?:0|[1-9][0-9]*)$/.test(value["overallFee"]) &&
-  typeof value["unit"] === "string" &&
-  /^[A-Z]{2,10}$/.test(value["unit"]);
+export const isFeeShape = isFeeEstimate;
 
 /**
  * Checks transfer review responses before rendering the review step.

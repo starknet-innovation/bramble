@@ -98,6 +98,9 @@ describe("official STRK20 SDK submission boundary", () => {
     });
 
     await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).resolves.toEqual({
+      // A zero pool fee approves nothing, and the submitter says so rather
+      // than leaving the caller to infer it (see Strk20SubmissionResult).
+      allowanceGrants: [],
       transactionHash: "0xabc",
     });
     expect(registerCalls).toBe(1);
@@ -158,6 +161,9 @@ describe("official STRK20 SDK submission boundary", () => {
     });
 
     await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).resolves.toEqual({
+      // A zero pool fee approves nothing, and the submitter says so rather
+      // than leaving the caller to infer it (see Strk20SubmissionResult).
+      allowanceGrants: [],
       transactionHash: "0xabc",
     });
     expect(proofAttempts).toBe(3);
@@ -242,7 +248,18 @@ describe("official STRK20 SDK submission boundary", () => {
 
     await expect(
       service.register?.({ ...context, poolFeeFri: "0x3782dace9d900000" }),
-    ).resolves.toEqual({ transactionHash: "0xabc" });
+    ).resolves.toEqual({
+      // The fee approval is reported back so the allowance log can track the
+      // pool's standing right to pull it.
+      allowanceGrants: [
+        {
+          calldata: ["0x123", "0x3782dace9d900000", "0x0"],
+          contractAddress: num.toHex(BigInt(STRK_TOKEN_ADDRESS)),
+          entrypoint: "approve",
+        },
+      ],
+      transactionHash: "0xabc",
+    });
     expect(submitted).toEqual([
       [
         {
@@ -356,7 +373,12 @@ describe("official STRK20 SDK submission boundary", () => {
         ],
         plan: { mode: "account", poolFeeFri: "0x0" },
       }),
-    ).resolves.toEqual({ transactionHash: "0xdef" });
+    ).resolves.toEqual({
+      allowanceGrants: [
+        { calldata: ["0x123", "0x0", "0x1"], contractAddress: token, entrypoint: "approve" },
+      ],
+      transactionHash: "0xdef",
+    });
     expect(submitted).toEqual([
       [
         {
@@ -452,6 +474,9 @@ describe("official STRK20 SDK submission boundary", () => {
     // And the scope is not left stuck on `submitting`, so the retry proceeds.
     expect(await maturityStore.read(scope)).toBeNull();
     await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).resolves.toEqual({
+      // A zero pool fee approves nothing, and the submitter says so rather
+      // than leaving the caller to infer it (see Strk20SubmissionResult).
+      allowanceGrants: [],
       transactionHash: "0xabc",
     });
     expect(attempts).toBe(2);

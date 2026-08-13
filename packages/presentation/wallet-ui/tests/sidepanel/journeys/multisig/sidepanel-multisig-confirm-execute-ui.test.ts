@@ -2,7 +2,9 @@
  * Confirm-and-execute review invariants: exact effects and fees precede one
  * explicit submission, mode/signer changes re-prepare, and failure is retryable.
  */
+
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { multisigTransactionId } from "@mc-wallet/multisig/chain";
 import type { MultisigConfirmationMode } from "@mc-wallet/multisig/confirmation";
 import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
@@ -47,22 +49,36 @@ const record: MultisigRecord = {
   signers: [signer.address, OTHER_SIGNER],
 };
 
+const proposalCall = {
+  calldata: ["0x1"],
+  contractAddress: "0x456",
+  entrypoint: "transfer",
+  salt: "0x0",
+} as const;
+
+// The id the stored call really hashes to. A hand-picked felt would model the
+// unbound recovery shape instead, which the panel deliberately gates behind an
+// acknowledgment — not what this review flow is about.
+const BOUND_TX_ID = multisigTransactionId(proposalCall, proposalCall.salt);
+
 const makeProposal = (overrides: Partial<MultisigProposalRecord> = {}): MultisigProposalRecord => ({
-  call: { calldata: ["0x1"], contractAddress: "0x456", entrypoint: "transfer", salt: "0x0" },
+  call: proposalCall,
   confirmations: 1,
   confirmedBySigner: false,
   confirmedSignerAddresses: [OTHER_SIGNER],
-  id: `${record.id}:0x789`,
+  id: `${record.id}:${BOUND_TX_ID}`,
   multisigId: record.id,
   state: "pending",
   summary: "Pay contributor",
-  txId: "0x789",
+  txId: BOUND_TX_ID,
   ...overrides,
 });
 
 type ConfirmationInput = {
   readonly mode: MultisigConfirmationMode;
   readonly proposalId: string;
+  /** MCW-V09-119: the fee the panel rendered, echoed back on submit. */
+  readonly reviewedFee?: { readonly overallFee: string; readonly unit: string };
   readonly signerAccountId: string;
 };
 
@@ -132,10 +148,14 @@ describe("multisig confirm-and-execute review", () => {
     expect(submit?.disabled).toBe(false);
     submit?.click();
     await flush();
+    // MCW-V09-119: the confirmation carries back the exact fee this panel
+    // rendered, which is what lets the background refuse a co-signing invoke
+    // whose cost has moved since the signer read it.
     expect(submitted).toEqual([
       {
         mode: "confirm-and-execute",
         proposalId: proposal.id,
+        reviewedFee: { overallFee: "1000", unit: "FRI" },
         signerAccountId: signer.id,
       },
     ]);

@@ -6,13 +6,14 @@
 
 import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { type ActivityLog, memoryActivityLog } from "@mc-wallet/transactions/activity";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
 
 export const invokeAccount: AccountRef = {
@@ -90,15 +91,26 @@ export const invokeWalletStub = (connected: readonly AccountRef[]) => ({
 export const fixedInvokePreferences = (preferences: WalletPreferences): WalletPreferencesStore =>
   ({ read: async () => preferences }) as unknown as WalletPreferencesStore;
 
+/**
+ * An activity log whose write always fails, standing in for a storage quota or
+ * IO fault after a transaction has already been broadcast. Bookkeeping that
+ * matters — the allowance log — must survive it.
+ */
+export const failingInvokeActivityLog = (): ActivityLog => ({
+  ...memoryActivityLog(),
+  record: () => Promise.reject(new Error("storage quota exceeded")),
+});
+
 export const makeInvokeHarness = (
   connected: readonly AccountRef[] = [invokeAccount],
   preferencesStore?: WalletPreferencesStore,
   rpcOverrides: Partial<RuntimeRpc> = {},
+  activityLog?: ActivityLog,
 ) => {
   const session = createUnlockSession();
   session.unlock(invokeVaultPassphrase);
   const approvals = createApprovalQueue();
-  const activity = memoryActivityLog();
+  const activity = activityLog ?? memoryActivityLog();
   const invoked: InvokeInput[] = [];
   const rpc = makeRuntimeRpc({
     async submitInvokeTransaction(input: InvokeInput) {
@@ -118,8 +130,15 @@ export const makeInvokeHarness = (
   return { activity, handler, invoked, session };
 };
 
-export const invokeMessage = (target = invokeOrigin) => ({
-  calls: [call],
+export const invokeMessage = (
+  target = invokeOrigin,
+  calls: readonly {
+    readonly calldata: readonly string[];
+    readonly contractAddress: string;
+    readonly entrypoint: string;
+  }[] = [call],
+) => ({
+  calls,
   origin: target,
   type: "wallet.addInvokeTransaction" as const,
 });

@@ -4,21 +4,35 @@
  * part of it. Kept beside the router rather than inside it so `messages.ts`
  * stays a dispatch table.
  */
+
+import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import { type SwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
+import {
+  memoryOriginHistory,
+  type OriginHistoryStore,
+} from "@mc-wallet/permissions/origin-history";
 import { type PriceService, unavailablePriceService } from "@mc-wallet/portfolio/prices";
+import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import { type ActivityLog, memoryActivityLog, systemClock } from "@mc-wallet/transactions/activity";
 import { type AllowanceStore, memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
-import { memoryOriginHistory, type OriginHistoryStore } from "@mc-wallet/permissions/origin-history";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { type SwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { type ApprovalQueue, createApprovalQueue } from "../approvals/approvals";
+import {
+  createSignatureWaiters,
+  releaseWaitersOnApprovalDrop,
+  type SignatureWaiters,
+} from "../approvals/signature-waiters";
 import {
   createLedgerSignQueue,
   type LedgerSignQueue,
   type LedgerSignQueueTimeout,
 } from "../ledger/ledger-sign-queue";
+import {
+  createStrk20WalletPreparationStore,
+  type Strk20WalletPreparationStore,
+} from "../privacy/strk20-wallet-preparations";
 import { defaultRuntimeRpc, type RuntimeRpc } from "../runtime/runtime-rpc";
 import {
   type ActiveStateCoordinator,
@@ -26,13 +40,10 @@ import {
   unavailablePreferencesStore,
 } from "../runtime/runtime-state";
 import type { UnlockSession } from "../runtime/session";
-import { createSignatureWaiters, type SignatureWaiters } from "../approvals/signature-waiters";
 import {
-  createStrk20WalletPreparationStore,
-  type Strk20WalletPreparationStore,
-} from "../privacy/strk20-wallet-preparations";
-import { createSwapPreparationStore, type SwapPreparationStore } from "../transactions/swap-preparations";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
+  createSwapPreparationStore,
+  type SwapPreparationStore,
+} from "../transactions/swap-preparations";
 
 /**
  * Everything the runtime router hands to a sub-handler.
@@ -117,31 +128,43 @@ const activeStateCoordinatorFor = (
  * Resolves every optional collaborator into the fully wired router context.
  * Absent collaborators fall back to in-memory or explicitly-unavailable
  * defaults, never to a silently permissive one.
+ *
+ * The approval queue and the waiter registry are bound together here: an
+ * approval swept by the queue's TTL frees an admission slot, so the dapp
+ * response parked behind it must be released in the same step, or the
+ * unbounded growth the caps exist to prevent simply moves into the registry.
+ * The binding is applied to a caller-supplied queue too, so the entrypoint's
+ * own queue is never left unbound.
  */
 export const routerContext = (
   wallet: WalletStatusReader,
   extensionId: string,
   options: MessageHandlerOptions,
   session: UnlockSession,
-): RouterContext => ({
-  activeStateCoordinator: activeStateCoordinatorFor(options.activeStateCoordinator),
-  activity: options.activity ?? memoryActivityLog(),
-  allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
-  approvals: options.approvals ?? createApprovalQueue(),
-  extensionId,
-  guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
-  ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
-  loadMultisigClass: options.loadMultisigClass,
-  multisigStore: options.multisigStore ?? memoryMultisigStore(),
-  now: options.now ?? systemClock,
-  originHistory: options.originHistory ?? memoryOriginHistory(),
-  preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
-  prices: options.prices ?? unavailablePriceService,
-  runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
-  session,
-  swap: options.swap ?? unavailableSwapService,
-  swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
-  strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
-  waiters: createSignatureWaiters(),
-  wallet,
-});
+): RouterContext => {
+  const approvals = options.approvals ?? createApprovalQueue();
+  const waiters = createSignatureWaiters();
+  releaseWaitersOnApprovalDrop(approvals, waiters, notifyApprovalsChanged);
+  return {
+    activeStateCoordinator: activeStateCoordinatorFor(options.activeStateCoordinator),
+    activity: options.activity ?? memoryActivityLog(),
+    allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
+    approvals,
+    extensionId,
+    guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
+    ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
+    loadMultisigClass: options.loadMultisigClass,
+    multisigStore: options.multisigStore ?? memoryMultisigStore(),
+    now: options.now ?? systemClock,
+    originHistory: options.originHistory ?? memoryOriginHistory(),
+    preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
+    prices: options.prices ?? unavailablePriceService,
+    runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
+    session,
+    swap: options.swap ?? unavailableSwapService,
+    swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
+    strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
+    waiters,
+    wallet,
+  };
+};

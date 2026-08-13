@@ -10,7 +10,8 @@
  * `./tx-monitor.ts` (every scope, on a cadence), so a transaction keeps being
  * verified after the user closes the side panel.
  */
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+
+import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
 import {
   type ActivityEntry,
@@ -19,7 +20,7 @@ import {
   type ActivityScope,
   activityForScope,
 } from "@mc-wallet/transactions/activity";
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import {

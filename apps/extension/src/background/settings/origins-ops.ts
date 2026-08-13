@@ -4,10 +4,10 @@
  * are privileged and require an unlocked session.
  */
 import { connectedSitesFromVault } from "@mc-wallet/vault/origin-grants";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { readRevokeOriginInput, readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
 
 /**
  * Dependencies shared by the connected-sites handlers.
@@ -30,7 +30,8 @@ export const handleOriginOps = async (
     if (!readTypeOnlyInput(message, "wallet.connectedSites")) {
       return { error: "invalid connected sites request" };
     }
-    const passphrase = deps.session.getPassphrase();
+    // Peek, never renew: the panel re-reads this list on its ambient cadence.
+    const passphrase = deps.session.peekPassphrase();
     if (!passphrase) {
       return { error: "wallet locked" };
     }

@@ -32,8 +32,6 @@ concurrency:
 jobs:
   test-and-publish:
     runs-on: ubuntu-latest
-    env:
-      CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,7 +53,9 @@ jobs:
         with:
           path: apps/ui-lab/storybook-static
       - name: Publish to Chromatic
-        if: ${{ env.CHROMATIC_PROJECT_TOKEN != '' }}
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
         run: bun run --filter @mc-wallet/ui-lab chromatic
 
   deploy-pages:

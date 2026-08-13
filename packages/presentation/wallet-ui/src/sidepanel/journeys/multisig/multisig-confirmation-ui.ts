@@ -1,15 +1,24 @@
 /** Confirmation review bindings: fee preparation, signer/mode choice, and submit. */
+
 import { isMultisigConfirmationMode } from "@mc-wallet/multisig/confirmation";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { formatFri } from "../../shared/parts";
+import type { MultisigReviewFee } from "./multisig-runtime";
 import { closeMultisigSheet, openMultisigSheet } from "./multisig-sheet-motion";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 const reviewSerials = new WeakMap<HTMLElement, number>();
+// The fee this panel actually rendered, kept so the confirmation echoes back the
+// exact figure the signer read. The background makes it the ceiling the
+// co-signing invoke may sign under (MCW-V09-119), so a stale or invented value
+// here would turn that guarantee into a decoration.
+const reviewedFees = new WeakMap<HTMLElement, MultisigReviewFee>();
 
 const nextReviewSerial = (panel: HTMLElement): number => {
   const serial = (reviewSerials.get(panel) ?? 0) + 1;
   reviewSerials.set(panel, serial);
+  reviewedFees.delete(panel);
   return serial;
 };
 
@@ -38,7 +47,7 @@ const setChoicesDisabled = (panel: HTMLElement, disabled: boolean): void => {
     });
 };
 
-const formatFee = (fee: { readonly overallFee: string; readonly unit: string }): string =>
+const formatFee = (fee: FeeEstimate): string =>
   fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
 
 const prepareReview = async (deps: MultisigUiDeps, panel: HTMLElement): Promise<void> => {
@@ -91,6 +100,7 @@ const prepareReview = async (deps: MultisigUiDeps, panel: HTMLElement): Promise<
       return;
     }
     fee.textContent = formatFee(review.fee);
+    reviewedFees.set(panel, review.fee);
     panel.setAttribute("data-ms-review-ready", "true");
     submit.disabled = false;
     status.textContent = "Ready to sign. Nothing has been submitted yet.";
@@ -221,6 +231,8 @@ export const bindMultisigConfirmation = (deps: MultisigUiDeps): void => {
         showToast("Verify the proposal and check the acknowledgment first", "error");
         return;
       }
+      const reviewedFee = reviewedFees.get(panel);
+      if (!reviewedFee) return;
       buttonBusy(button, true);
       setChoicesDisabled(panel, true);
       panel.dataset["msSubmitting"] = "true";
@@ -232,6 +244,7 @@ export const bindMultisigConfirmation = (deps: MultisigUiDeps): void => {
         .confirmProposal({
           mode,
           proposalId,
+          reviewedFee,
           signerAccountId,
           ...(acknowledgment?.checked === true ? { untrackedVerified: true } : {}),
         })
@@ -247,6 +260,8 @@ export const bindMultisigConfirmation = (deps: MultisigUiDeps): void => {
             await deps.render(await deps.wallet.loadStatus());
           },
           (error: unknown) => {
+            reviewedFees.delete(panel);
+            panel.dataset["msReviewReady"] = "false";
             const failed = errorMessage(
               error,
               mode === "confirm-and-execute" ? "Confirm and execute failed" : "Confirmation failed",

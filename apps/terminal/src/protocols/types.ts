@@ -1,27 +1,8 @@
 /**
  * Shared protocol-integration types for the trade terminal. These are the
- * common shapes the five protocol modules (ekubo, avnu, vesu, privacy,
- * extended) speak in, so the sidepanel and background layers can treat swap,
- * lending, perps, and privacy quotes uniformly. All on-chain builders return
- * starknet-js `Call`s destined for the in-wallet invoke path
- * (submitInvokeTransaction), never the dapp-approval path.
+ * common shapes the live Ekubo, AVNU, and Vesu integrations speak in.
  */
-import type { Call } from "starknet";
-
-/**
- * Identifiers for the wired protocol integrations.
- */
-export type ProtocolId = "avnu" | "ekubo" | "extended" | "privacy" | "vesu";
-
-/**
- * A token amount in the token's smallest on-chain unit. `address` is the ERC20
- * contract; `amount` is a decimal integer string (never a float) so it round
- * trips through felts without precision loss.
- */
-export type TokenAmount = {
-  readonly address: string;
-  readonly amount: string;
-};
+type ProtocolId = "avnu" | "ekubo";
 
 /**
  * Inputs shared by every swap quote request: the pair, the exact input amount,
@@ -73,7 +54,7 @@ export type SwapParams = {
  * The lending actions Vesu exposes: supply for yield, withdraw supply, borrow
  * against collateral, repay debt.
  */
-export type LendingAction = "borrow" | "repay" | "supply" | "withdraw";
+type LendingAction = "borrow" | "repay" | "supply" | "withdraw";
 
 /**
  * Inputs for a lending quote: which action, which asset and amount, on which
@@ -123,69 +104,3 @@ export type LendingParams = {
   readonly quote: LendingQuote;
   readonly accountAddress: string;
 };
-
-/**
- * A perpetual market as surfaced by the Extended exchange. Prices, sizes, and
- * rates are decimal strings as returned by the API; leverage is an integer.
- */
-export type PerpMarketInfo = {
-  readonly name: string;
-  readonly baseAsset: string;
-  readonly lastPrice: string;
-  readonly fundingRate: string;
-  readonly openInterest: string;
-  readonly maxLeverage: number;
-  readonly status: "ACTIVE" | "DELISTED" | "REDUCE_ONLY";
-};
-
-/**
- * Direction of a perp order.
- */
-export type PerpOrderSide = "buy" | "sell";
-
-/**
- * Inputs for signing a perp order. Extended settles off-chain, so this produces
- * a Stark-signed payload rather than an invoke `Call`.
- */
-export type PerpOrderParams = {
-  readonly market: string;
-  readonly side: PerpOrderSide;
-  readonly size: string;
-  readonly price: string;
-  readonly leverage: number;
-  readonly reduceOnly?: boolean;
-};
-
-/**
- * A perp order payload plus its Stark sig (r, s), ready to POST to the exchange.
- */
-export type SignedPerpOrder = {
-  readonly market: string;
-  readonly side: PerpOrderSide;
-  readonly size: string;
-  readonly price: string;
-  readonly payload: Readonly<Record<string, unknown>>;
-  readonly sig: { readonly r: string; readonly s: string };
-};
-
-/**
- * The common on-chain protocol surface: a quote (read) and a call builder
- * (write) whose calls flow through the in-wallet invoke path. Ekubo, AVNU, and
- * Vesu conform to a specialization of this; privacy and extended settle
- * differently and expose their own module-level functions.
- */
-export type OnchainProtocol<TQuoteParams, TQuote, TBuildParams> = {
-  readonly id: ProtocolId;
-  readonly quote: (params: TQuoteParams) => Promise<TQuote>;
-  readonly buildCalls: (params: TBuildParams) => readonly Call[];
-};
-
-/**
- * Concrete swap-protocol surface (Ekubo, AVNU).
- */
-export type SwapProtocol = OnchainProtocol<SwapQuoteParams, SwapQuote, SwapParams>;
-
-/**
- * Concrete lending-protocol surface (Vesu).
- */
-export type LendingProtocol = OnchainProtocol<LendingQuoteParams, LendingQuote, LendingParams>;

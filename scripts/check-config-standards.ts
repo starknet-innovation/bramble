@@ -145,7 +145,8 @@ if (
     "!.claude",
     "!.impeccable",
     "!.playwright-cli",
-    "!apps",
+    "!apps/terminal",
+    "!apps/ui-lab",
     "!bun.lock",
     "!contracts/multisig/target",
     "!dist",
@@ -415,6 +416,9 @@ for (const command of ciCommands) {
   }
   previousCiCommand = index;
 }
+// Release-artifact policy lives in ./artifact-policy, which locates the upload
+// step through the shared pin grammar in ./workflow-inventory rather than
+// re-deriving it.
 failures.push(...artifactPolicyFailures(buildScript, ciWorkflow, packageScript));
 
 if (failures.length > 0) {

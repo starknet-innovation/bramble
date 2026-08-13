@@ -188,6 +188,7 @@ jobs:
       - run: bun run check:extension
       - run: bun run check:imports
       - run: bun run check:cycles
+      - run: bun run check:deadcode
       # The leading `./` prevents Bun from matching tests inside ignored vendor checkouts.
       - run: bun test ./tests
       - run: bun run check:workspaces
@@ -220,6 +221,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: 1.96.1
+          # scripts/vendor-krusty.ts requires this exact rustc release and
+          # builds the crypto core for this target; it refuses to run on any
+          # other toolchain, so two builds stay comparable.
+          targets: wasm32-unknown-unknown
       # Cache the wasm-pack binary and the cargo download/registry so each run
       # skips recompiling wasm-pack from source and re-fetching crates. Keyed on
       # the pinned krusty revision (vendor-krusty.ts) plus the wasm-pack version;

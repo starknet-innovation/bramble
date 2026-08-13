@@ -163,11 +163,12 @@ export const createOfficialStrk20Service = ({
         // reason was replaced by a generic failure. Map it with the submission
         // stage so the on-chain reason survives, sanitized, to the user.
         async (callAndProof) => {
+          const allowanceGrants = approveCalls([], config.poolAddress, reviewedPoolFee);
           try {
             const result = await submitInvoke({
               account: input.account,
               calls: [
-                ...approveCalls([], config.poolAddress, reviewedPoolFee),
+                ...allowanceGrants,
                 {
                   calldata: [...callAndProof.call.calldata],
                   contractAddress: config.poolAddress,
@@ -181,7 +182,7 @@ export const createOfficialStrk20Service = ({
                 return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
               },
             });
-            return { transactionHash: result.transactionHash };
+            return { allowanceGrants, transactionHash: result.transactionHash };
           } catch (error) {
             return mapStrk20StageError("submission", error);
           }
@@ -276,11 +277,16 @@ export const createOfficialStrk20Service = ({
           // invoke calldata and the proof blob. Map it with the submission
           // stage so only the sanitized on-chain reason survives to the user.
           async (callAndProof) => {
+            const allowanceGrants = approveCalls(
+              input.actions,
+              config.poolAddress,
+              reviewedPoolFee,
+            );
             try {
               const result = await submitInvoke({
                 account: input.account,
                 calls: [
-                  ...approveCalls(input.actions, config.poolAddress, reviewedPoolFee),
+                  ...allowanceGrants,
                   {
                     calldata: [...callAndProof.call.calldata],
                     contractAddress: callAndProof.call.contract_address,
@@ -294,7 +300,7 @@ export const createOfficialStrk20Service = ({
                   return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
                 },
               });
-              return { transactionHash: result.transactionHash };
+              return { allowanceGrants, transactionHash: result.transactionHash };
             } catch (error) {
               return mapStrk20StageError("submission", error);
             }
@@ -321,8 +327,14 @@ export const createOfficialStrk20Service = ({
             pauseForServiceRetry,
             input.beforeProof,
           ),
-        async (callAndProof) =>
-          submitStrk20PaymasterPlan({
+        async (callAndProof) => ({
+          // The relay executes the batch, but the approvals inside it are still
+          // granted BY this account — derived here from the one shared
+          // `approveCalls` rule, on the same actions and fee terms the reviewed
+          // plan was quoted with, so the log tracks the private route's grants
+          // exactly as it tracks the public one's.
+          allowanceGrants: approveCalls(input.actions, config.poolAddress, RELAY_PAYS_POOL_FEE),
+          ...(await submitStrk20PaymasterPlan({
             accountAddress: input.account.address,
             call: {
               calldata: [...callAndProof.call.calldata],
@@ -345,7 +357,8 @@ export const createOfficialStrk20Service = ({
               const signature = await input.signHash(messageHash);
               return [signature.r, signature.s];
             },
-          }),
+          })),
+        }),
       );
     },
     async submitPrepared(input) {
@@ -370,6 +383,7 @@ export const createOfficialStrk20Service = ({
             account: prepared.account,
             calls: [prepared.call],
             proof: prepared.proof,
+            ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
             rpcUrls: prepared.rpcUrls,
             signHash: async (messageHash) => {
               const signature = await prepared.signHash(messageHash);

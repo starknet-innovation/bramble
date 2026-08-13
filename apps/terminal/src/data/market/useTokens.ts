@@ -88,9 +88,7 @@ const latestLinePrice = (points: readonly AvnuPricePoint[] | undefined): number 
  * This avoids presenting a thin local pool's temporary dislocation as the
  * token's market-wide daily move (most visibly for dollar stablecoins).
  */
-export const avnuDailyChange = (
-  points: readonly AvnuPricePoint[] | undefined,
-): number | null => {
+const avnuDailyChange = (points: readonly AvnuPricePoint[] | undefined): number | null => {
   const rows =
     points
       ?.flatMap((point) => {
@@ -135,8 +133,9 @@ export const toAvnuRows = (payload: AvnuTokensResponse): readonly TokenRow[] => 
     const globalPrice = num(global.usd) ?? latestLinePrice(token.linePriceFeedInUsd);
     const lineChange = avnuDailyChange(token.linePriceFeedInUsd);
     const globalChange = num(global.usdMarketCapChangePercentage24h);
-    const isDollarStable =
-      /^(?:USDC(?:\.E)?|USDT|DAI|DAIV0|AUSD\d*|USDU|LUSD|USN|CASH)$/i.test(symbol);
+    const isDollarStable = /^(?:USDC(?:\.E)?|USDT|DAI|DAIV0|AUSD\d*|USDU|LUSD|USN|CASH)$/i.test(
+      symbol,
+    );
     const reliableStableChange = [lineChange, globalChange].find(
       (change) => change !== null && Math.abs(change) <= 1,
     );
@@ -155,13 +154,12 @@ export const toAvnuRows = (payload: AvnuTokensResponse): readonly TokenRow[] => 
         num(market.starknetTradingVolume24h) ??
         num(market.volume),
       liquidityUsd: num(starknet.usdTvl) ?? num(market.totalLiquidityInUsd),
-      change24h:
-        (isDollarStable
-          ? (reliableStableChange ?? null)
-          : (globalChange ??
-            lineChange ??
-            num(starknet.usdPriceChangePercentage24h) ??
-            num(market.priceChangePercentage24h))),
+      change24h: isDollarStable
+        ? (reliableStableChange ?? null)
+        : (globalChange ??
+          lineChange ??
+          num(starknet.usdPriceChangePercentage24h) ??
+          num(market.priceChangePercentage24h)),
     });
   }
   return rows;

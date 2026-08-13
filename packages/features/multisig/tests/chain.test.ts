@@ -61,6 +61,7 @@ describe("multisig call builders", () => {
 
   test("rejects invalid entrypoints, felts, and oversized calldata", () => {
     expect(isMultisigEntrypoint("transfer_from")).toBe(true);
+    expect(isMultisigEntrypoint("transferFrom")).toBe(true);
     expect(isMultisigEntrypoint("Transfer")).toBe(false);
     expect(isMultisigEntrypoint("1bad")).toBe(false);
     expect(() => buildMultisigSubmitCall(MULTISIG, { ...call, entrypoint: "Bad!" }, "0x0")).toThrow(

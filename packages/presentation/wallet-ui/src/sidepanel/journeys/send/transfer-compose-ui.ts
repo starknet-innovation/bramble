@@ -25,7 +25,7 @@ export const sendFormInput = (form: HTMLFormElement, name: string): HTMLInputEle
 /**
  * Updates one named hidden field when it exists.
  */
-export const setSendFormValue = (form: HTMLFormElement, name: string, value: string): void => {
+const setSendFormValue = (form: HTMLFormElement, name: string, value: string): void => {
   const input = sendFormInput(form, name);
   if (input) input.value = value;
 };

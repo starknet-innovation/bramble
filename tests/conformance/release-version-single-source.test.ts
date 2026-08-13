@@ -182,7 +182,7 @@ describe("repository sources", () => {
 
   test("the checked-in version matches the v0.9 release line", async () => {
     const packageJson = await readJson("package.json");
-    expect(packageJson["version"]).toBe("0.9.0");
+    expect(packageJson["version"]).toBe("0.9.1");
   });
 });
 
@@ -201,18 +201,30 @@ describe("main (CLI over the real repository sources)", () => {
     return join(dir, "github_output");
   };
 
-  test("writes release/version/tag/kind to GITHUB_OUTPUT for this release promotion", async () => {
+  test("writes release/version/tag/kind to GITHUB_OUTPUT for this hotfix promotion", async () => {
     const outPath = await outputPath();
     const code = await main({
-      HEAD_REF: "release/v0.9",
+      HEAD_REF: "hotfix/v09-audit-remediation",
       GITHUB_OUTPUT: outPath,
     });
     expect(code).toBe(0);
     const output = await readFile(outPath, "utf8");
     expect(output).toContain("release=true");
-    expect(output).toContain("version=0.9.0");
-    expect(output).toContain("tag=v0.9.0");
-    expect(output).toContain("kind=release");
+    expect(output).toContain("version=0.9.1");
+    expect(output).toContain("tag=v0.9.1");
+    expect(output).toContain("kind=hotfix");
+  });
+
+  // A patch version can only travel on a hotfix branch: `release/vX.Y` implies
+  // `X.Y.0`, so promoting the checked-in patch from the release branch must fail
+  // closed rather than silently cut the wrong tag.
+  test("refuses to promote the checked-in patch version from the v0.9 release branch", async () => {
+    const outPath = await outputPath();
+    const code = await main({
+      HEAD_REF: "release/v0.9",
+      GITHUB_OUTPUT: outPath,
+    });
+    expect(code).toBe(1);
   });
 
   test("treats an empty HEAD_REF as no promotion (release=false)", async () => {

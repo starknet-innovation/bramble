@@ -9,6 +9,7 @@ import type { Strk20Service, Strk20SubmissionPlan } from "@mc-wallet/privacy/ser
 import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
 import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { POISONED_RECIPIENT, poolPreferences } from "../../support/poisoned-recipients";
 import {
   buildStrk20Handler,
   STRK20_CALL_AND_PROOF,
@@ -352,6 +353,50 @@ describe("background private-send operations", () => {
         STRK20_EXTENSION_SENDER,
       ),
     ).resolves.toEqual({ error: "The recipient has not activated private balances" });
+    expect(proofCalls).toBe(0);
+    expect(capture.submissions).toEqual([]);
+  });
+
+  test("re-reads the saved-contact policy immediately before proving", async () => {
+    let current: WalletPreferences = { ...poolPreferences(), addressBook: [] };
+    let proofCalls = 0;
+    const capture = {
+      beforeProof: () => {
+        current = poolPreferences();
+      },
+      proofStarted: () => {
+        proofCalls += 1;
+      },
+      recipientRegistered: true,
+      submissions: [] as { actions: readonly Strk20Action[]; plan: Strk20SubmissionPlan }[],
+    };
+    const handler = buildStrk20Handler({
+      preferencesRead: () => current,
+      strk20: service(capture),
+    });
+    const currentToken = current.tokens.find(
+      (candidate) => candidate.networkId === "SN_SEPOLIA" && candidate.address === STRK20_TOKEN,
+    );
+    if (!currentToken) {
+      throw new Error("Sepolia token fixture missing");
+    }
+    const prepared = (await handler(
+      {
+        amount: "0.5",
+        recipient: POISONED_RECIPIENT,
+        tokenId: currentToken.id,
+        type: "wallet.strk20PrepareTransfer",
+      },
+      STRK20_EXTENSION_SENDER,
+    )) as { readonly strk20Preparation: { readonly id: string } };
+
+    expect(prepared).toMatchObject({ ok: true });
+    await expect(
+      handler(
+        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
     expect(proofCalls).toBe(0);
     expect(capture.submissions).toEqual([]);
   });

@@ -4,6 +4,7 @@
  * the advanced path reviews; only the reviewed shape can be submitted.
  */
 import { escapeHtml } from "@mc-wallet/core/html";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { buildErc20TransferCall, parseTokenAmount } from "@mc-wallet/starknet/rpc";
 import {
   canonicalFelt,
@@ -14,6 +15,7 @@ import { buttonBusy, errorMessage, renderFragment, showToast } from "../../share
 import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { accountLabel } from "../../shared/parts";
+import { formatFeeEstimate } from "../../shared/review-render";
 import { tokenGlyph } from "../portfolio/token-row";
 import {
   balanceShortcut,
@@ -314,9 +316,7 @@ const proposalFields = (form: HTMLFormElement): ProposalFields => {
   const recipientLabel = form.dataset["recipientLabel"] || accountLabel(recipient);
   return {
     amount,
-    // starknet.js compiles uint256 calldata as decimal strings, while the
-    // extension message boundary accepts only canonical Starknet felts. Keep
-    // the guided path aligned with the advanced path before review and submit.
+    // Canonicalize starknet.js decimal calldata for the extension boundary.
     calldata: canonicalCallCalldata(call.calldata),
     entrypoint: call.entrypoint,
     mode: "send",
@@ -329,7 +329,11 @@ const proposalFields = (form: HTMLFormElement): ProposalFields => {
   };
 };
 
-const reviewMarkup = (form: HTMLFormElement, fields: ProposalFields): string => {
+const reviewMarkup = (
+  form: HTMLFormElement,
+  fields: ProposalFields,
+  reviewedFee: FeeEstimate,
+): string => {
   const targetLabel =
     fields.mode === "send"
       ? `${fields.symbol ?? "Token"} · Tracked ERC-20`
@@ -357,6 +361,7 @@ const reviewMarkup = (form: HTMLFormElement, fields: ProposalFields): string => 
       <div><dt>From</dt><dd><strong>${escapeHtml(form.dataset["multisigName"] ?? "Shared account")}</strong><code>${escapeHtml(accountLabel(form.dataset["multisigAddress"] ?? ""))}</code></dd></div>
       <div><dt>Signer</dt><dd><strong>${escapeHtml(form.dataset["signerAccountName"] ?? "Wallet account")}</strong><code>${escapeHtml(accountLabel(form.dataset["signerAccountAddress"] ?? ""))}</code></dd></div>
       <div><dt>Network</dt><dd><strong>${escapeHtml(form.dataset["network"] ?? "Starknet")}</strong></dd></div>
+      <div><dt>Maximum network fee</dt><dd><strong>${escapeHtml(formatFeeEstimate(reviewedFee))}</strong></dd></div>
     </dl>
   </div>
   <details class="send-review-disclosure">
@@ -383,8 +388,12 @@ export const bindMultisigProposalForm = (deps: MultisigProposalUiDeps): void => 
   const submit = form.querySelector<HTMLButtonElement>("#proposal-submit");
   const review = form.querySelector<HTMLElement>("#multisig-propose-review");
   let reviewedKey: string | null = null;
+  let reviewedFee: FeeEstimate | null = null;
+  let reviewVersion = 0;
   let editStage: "advanced" | "amount" = "amount";
   const invalidate = (): void => {
+    reviewVersion += 1;
+    reviewedFee = null;
     reviewedKey = null;
     if (review) renderFragment(review, "");
   };
@@ -402,12 +411,29 @@ export const bindMultisigProposalForm = (deps: MultisigProposalUiDeps): void => 
     invalidate();
     showStage(form, "advanced");
   });
-  const prepareReview = (): void => {
+  const prepareReview = async (): Promise<void> => {
     try {
       const fields = proposalFields(form);
+      const multisigId = deps.selectedMultisigId();
+      const signerAccountId = form.dataset["signerAccountId"];
+      if (!multisigId || !signerAccountId) throw new Error("No signer is available");
+      const version = ++reviewVersion;
+      deps.setResult("multisig-propose-result", "Estimating network fee…");
+      const fee = await deps.multisig.proposeTransaction({
+        calldata: fields.calldata,
+        entrypoint: fields.entrypoint,
+        multisigId,
+        salt: fields.salt,
+        signerAccountId,
+        summary: fields.summary,
+        to: fields.to,
+      });
+      if (version !== reviewVersion) return;
+      if (typeof fee === "string") throw new Error("proposal fee review unavailable");
+      reviewedFee = fee;
       reviewedKey = JSON.stringify(fields);
       editStage = fields.mode === "advanced" ? "advanced" : "amount";
-      if (review) renderFragment(review, reviewMarkup(form, fields));
+      if (review) renderFragment(review, reviewMarkup(form, fields, fee));
       deps.setResult("multisig-propose-result", "");
       showStage(form, "review");
     } catch (error: unknown) {
@@ -418,9 +444,11 @@ export const bindMultisigProposalForm = (deps: MultisigProposalUiDeps): void => 
   };
   form.querySelector("#proposal-review-button")?.addEventListener("click", () => {
     form.dataset["proposalMode"] = "send";
-    prepareReview();
+    void prepareReview();
   });
-  form.querySelector("#proposal-advanced-review")?.addEventListener("click", prepareReview);
+  form.querySelector("#proposal-advanced-review")?.addEventListener("click", () => {
+    void prepareReview();
+  });
   form.querySelector("#proposal-edit")?.addEventListener("click", () => {
     invalidate();
     showStage(form, editStage);
@@ -443,21 +471,27 @@ export const bindMultisigProposalForm = (deps: MultisigProposalUiDeps): void => 
       return;
     }
     if (reviewedKey !== JSON.stringify(fields)) {
-      prepareReview();
+      void prepareReview();
       showToast("Review the updated proposal before submitting", "error");
       return;
     }
+    const fee = reviewedFee;
+    if (!fee) return;
+    reviewedFee = null;
+    reviewedKey = null;
     buttonBusy(submit, true);
     deps.runAction(submit, "multisig-propose-result", "Submitting proposal…", async () => {
       const transactionHash = await deps.multisig.proposeTransaction({
         calldata: fields.calldata,
         entrypoint: fields.entrypoint,
         multisigId,
+        reviewedFee: fee,
         salt: fields.salt,
         signerAccountId,
         summary: fields.summary,
         to: fields.to,
       });
+      if (typeof transactionHash !== "string") throw new Error("proposal fee review changed");
       deps.openDetail(multisigId);
       return `Proposal submitted: ${transactionHash}`;
     });

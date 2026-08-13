@@ -88,10 +88,19 @@ describe("switchChain grant gate (A-M1)", () => {
   test("lets a connected origin switch the active network after approval", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
+    let coordinatedMutations = 0;
     const handler = createMessageHandler(
       walletStub(() => [account]),
       "extension-id",
-      { session },
+      {
+        activeStateCoordinator: {
+          run: async (operation) => {
+            coordinatedMutations += 1;
+            return operation();
+          },
+        },
+        session,
+      },
     );
 
     // The switch is held behind an explicit approval — it never changes the
@@ -105,6 +114,7 @@ describe("switchChain grant gate (A-M1)", () => {
       pending: [],
     });
     await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
+    expect(coordinatedMutations).toBe(1);
   });
 
   test("rejects a switch from an origin with no grant", async () => {

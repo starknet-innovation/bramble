@@ -152,6 +152,63 @@ describe("cluster views", () => {
     expect(html).not.toContain("wallet-dock");
   });
 
+  // MCW-V09-108: a record the wallet can only bound from below (an increase on
+  // top of a grant made elsewhere) must not be printed as if it were the
+  // standing allowance — that understatement is what hid a drainer's reach.
+  test("an allowance the wallet can only bound from below renders as 'at least'", () => {
+    const listing = (view: AllowanceView): string =>
+      dashboard(
+        "allowances",
+        status,
+        [],
+        preferences,
+        { balances: [] },
+        null,
+        [],
+        [],
+        {},
+        [],
+        null,
+        [view],
+      );
+
+    expect(listing({ ...allowance, lowerBound: true })).toContain("at least 1,000");
+    // The hint paragraph explains the wording, so assert on the row itself.
+    expect(listing(allowance)).not.toContain("at least 1,000");
+    // An unlimited lower bound is still unlimited, so the badge wins.
+    expect(listing({ ...allowance, amount: (1n << 128n).toString(), lowerBound: true })).toContain(
+      "Unlimited",
+    );
+    // A bound of zero bounds nothing: the pair is approved for an amount this
+    // wallet cannot state, and "at least 0" would read as harmless.
+    const unknown = listing({ ...allowance, amount: "0", lowerBound: true });
+    expect(unknown).toContain("an unknown amount");
+    expect(unknown).not.toContain("at least 0");
+  });
+
+  // MCW-V09-108(c): an ERC721 `approve(to, item_id)` on a contract the wallet
+  // cannot classify carries an item id where an ERC20 carries an amount, and
+  // the ERC20 revoke — `approve(spender, 0)` — would APPROVE item #0 there. The
+  // row therefore states its uncertainty and offers no revoke control.
+  test("an approval on an unconfirmed contract is labelled and offers no revoke", () => {
+    const html = dashboard(
+      "allowances",
+      status,
+      [],
+      preferences,
+      { balances: [] },
+      null,
+      [],
+      [],
+      {},
+      [],
+      null,
+      [{ ...allowance, unconfirmedToken: true }],
+    );
+    expect(html).toContain("may be an NFT item id");
+    expect(html).not.toContain("data-revoke-allowance");
+  });
+
   test("NFT gallery grids visible NFTs and routes watch and hidden management", () => {
     const html = dashboardWithNft("nfts");
     expect(html).toContain('data-nft-open="SN_MAIN:0x511a2b3:5"');

@@ -33,7 +33,7 @@ import { buildErc20ApproveCall } from "../support/rpc-assets";
 /**
  * Basis-points denominator (100% = 10_000 bps).
  */
-export const BPS_DENOMINATOR = 10_000n;
+const BPS_DENOMINATOR = 10_000n;
 
 /**
  * Per-asset config resolved from a Vesu pool: the ERC20 underlying, its
@@ -176,7 +176,7 @@ export const findVesuAsset = (config: VesuPoolConfig, asset: string): VesuAssetC
  * negative value marks the withdraw/repay direction; positive marks
  * supply/borrow.
  */
-export const toI257 = (value: bigint): Record<string, unknown> => ({
+const toI257 = (value: bigint): Record<string, unknown> => ({
   abs: cairo.uint256(value < 0n ? -value : value),
   is_negative: value < 0n,
 });

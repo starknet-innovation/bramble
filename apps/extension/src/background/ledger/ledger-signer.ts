@@ -9,10 +9,10 @@
  * so it does not weaken "Krusty owns wallet crypto".
  */
 import { WalletError } from "@mc-wallet/core/errors";
+import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
+import { verifyStarkSignature } from "@mc-wallet/transactions/ledger-verify";
 import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { DeviceSignature } from "@mc-wallet/wallet-model/signing";
-import { verifyStarkSignature } from "@mc-wallet/transactions/ledger-verify";
-import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
 
 /**
  * A request to sign one hash on a Ledger device at a specific account and its

@@ -34,7 +34,7 @@ const address = (value: unknown): string | null => {
 };
 
 /** Converts a Vesu `{ value, decimals }` fixed-point value to a finite number. */
-export const vesuFixed = (value: unknown): number => {
+const vesuFixed = (value: unknown): number => {
   const fixed = record(value);
   if (fixed === null) return 0;
   const raw = text(fixed["value"]);
@@ -77,16 +77,13 @@ const parseAsset = (pool: JsonRecord, value: unknown): VesuMarket | null => {
     debt,
     decimals: numeric(asset?.["decimals"]),
     feeRate: vesuFixed(config?.["feeRate"]) * 100,
-    fullUtilizationApr:
-      vesuFixed(config?.["lastFullUtilizationRate"]) * SECONDS_PER_YEAR * 100,
+    fullUtilizationApr: vesuFixed(config?.["lastFullUtilizationRate"]) * SECONDS_PER_YEAR * 100,
     isPaused: pool["isPaused"] === true,
     liquidity: Math.max(0, supplied - debt),
     maxUtilization: vesuFixed(config?.["maxUtilization"]) * 100,
-    maxFullUtilizationApr:
-      vesuFixed(rate?.["maxFullUtilizationRate"]) * SECONDS_PER_YEAR * 100,
+    maxFullUtilizationApr: vesuFixed(rate?.["maxFullUtilizationRate"]) * SECONDS_PER_YEAR * 100,
     maxTargetUtilization: vesuFixed(rate?.["maxTargetUtilization"]) * 100,
-    minFullUtilizationApr:
-      vesuFixed(rate?.["minFullUtilizationRate"]) * SECONDS_PER_YEAR * 100,
+    minFullUtilizationApr: vesuFixed(rate?.["minFullUtilizationRate"]) * SECONDS_PER_YEAR * 100,
     minTargetUtilization: vesuFixed(rate?.["minTargetUtilization"]) * 100,
     name: text(asset?.["name"], "Unknown asset"),
     oracleAddress,
@@ -109,8 +106,7 @@ const parseAsset = (pool: JsonRecord, value: unknown): VesuMarket | null => {
     targetRatePercent: vesuFixed(rate?.["targetRatePercent"]) * 100,
     utilization: vesuFixed(stats?.["currentUtilization"]) * 100,
     vTokenAddress,
-    zeroUtilizationApr:
-      vesuFixed(rate?.["zeroUtilizationRate"]) * SECONDS_PER_YEAR * 100,
+    zeroUtilizationApr: vesuFixed(rate?.["zeroUtilizationRate"]) * SECONDS_PER_YEAR * 100,
   };
 };
 
@@ -183,12 +179,7 @@ export const parseVesuPositions = (body: unknown): readonly VesuPosition[] => {
   for (const value of array(record(body)?.["data"])) {
     const item = record(value);
     const type = item?.["type"];
-    if (
-      type !== "earn" &&
-      type !== "borrow" &&
-      type !== "multiply" &&
-      type !== "vault"
-    ) {
+    if (type !== "earn" && type !== "borrow" && type !== "multiply" && type !== "vault") {
       continue;
     }
     if (type !== "vault" && item?.["protocolVersion"] !== "v2") continue;
@@ -213,12 +204,16 @@ export const parseVesuPositions = (body: unknown): readonly VesuPosition[] => {
       debtDecimals: debt?.decimals ?? null,
       debtRaw: debt?.raw ?? null,
       debtSymbol: debt?.symbol ?? null,
-      healthFactor:
-        item?.["healthFactor"] === undefined ? null : vesuFixed(item["healthFactor"]),
+      healthFactor: item?.["healthFactor"] === undefined ? null : vesuFixed(item["healthFactor"]),
       id: text(item?.["id"], `${poolId}:${collateral.address}:${type}`),
       maxLtv: ltv === null ? null : vesuFixed(ltv["max"]) * 100,
       poolId,
-      poolName: text(pool?.["name"] ?? (type === "vault" ? record(item?.["shares"])?.["name"] : undefined) ?? item?.["vaultName"], "Vesu"),
+      poolName: text(
+        pool?.["name"] ??
+          (type === "vault" ? record(item?.["shares"])?.["name"] : undefined) ??
+          item?.["vaultName"],
+        "Vesu",
+      ),
       sharesAmount: shares?.amount ?? null,
       sharesDecimals: shares?.decimals ?? null,
       sharesRaw: shares?.raw ?? null,
@@ -305,13 +300,8 @@ export const parseVesuRewards = (summary: unknown, calldata: unknown): VesuRewar
   const decimals = numeric(reward?.["decimals"], 18);
   return {
     amount: /^(?:0x[0-9a-f]+|[0-9]+)$/i.test(amount) ? amount : "0",
-    claimableRaw: /^(?:0x[0-9a-f]+|[0-9]+)$/i.test(claimableRaw)
-      ? claimableRaw
-      : "0",
-    decimals:
-      Number.isInteger(decimals) && decimals >= 0 && decimals <= 36
-        ? decimals
-        : 18,
+    claimableRaw: /^(?:0x[0-9a-f]+|[0-9]+)$/i.test(claimableRaw) ? claimableRaw : "0",
+    decimals: Number.isInteger(decimals) && decimals >= 0 && decimals <= 36 ? decimals : 18,
     proof: array(claim?.["proof"]).flatMap((value) => {
       if (typeof value !== "string") return [];
       const normalized = value.toLowerCase();

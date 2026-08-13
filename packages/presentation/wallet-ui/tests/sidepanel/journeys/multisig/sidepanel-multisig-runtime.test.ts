@@ -150,6 +150,7 @@ describe("createMultisigClient", () => {
       await client.confirmProposal({
         mode: "confirm-only",
         proposalId: proposal.id,
+        reviewedFee: { overallFee: "1000", unit: "FRI" },
         signerAccountId: account.id,
         untrackedVerified: true,
       }),
@@ -212,6 +213,7 @@ describe("createMultisigClient", () => {
     expect(sent).toContainEqual({
       mode: "confirm-only",
       proposalId: proposal.id,
+      reviewedFee: { overallFee: "1000", unit: "FRI" },
       signerAccountId: account.id,
       type: "wallet.confirmMultisigProposal",
       untrackedVerified: true,

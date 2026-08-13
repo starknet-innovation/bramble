@@ -399,7 +399,7 @@ describe("sidepanel views", () => {
     expect(backupExport).toContain('id="backup-export"');
     const backupRestore = dashboard("backup-restore", status, [], preferences, { balances: [] });
     expect(backupRestore).toContain('id="backup-import"');
-    expect(backupRestore).toContain('id="backup-file"');
+    expect(backupRestore).toContain("Saved contacts and tracked assets");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain('class="wallet-dock"');
   });

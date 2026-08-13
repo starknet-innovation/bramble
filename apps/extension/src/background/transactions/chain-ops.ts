@@ -5,34 +5,35 @@
  */
 
 import { walletErrorMessage } from "@mc-wallet/core/errors";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
+import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { typedDataHash } from "@mc-wallet/starknet/typed-data";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import { typedDataHash } from "@mc-wallet/starknet/typed-data";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { accountHashSigner } from "../ledger/account-hash-signer";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
+import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
+import type { SignatureWaiters } from "../approvals/signature-waiters";
+import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
   readOriginRequestInput,
   readSignTypedDataInput,
   readSwitchChainInput,
 } from "../routing/message-inputs";
+import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import {
   type ActiveStateCoordinator,
   runActiveStateMutation,
   switchActiveNetwork,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
-import type { UnlockSession } from "../runtime/session";
-import type { SignatureWaiters } from "../approvals/signature-waiters";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
+import type { PassiveUnlockSession, UnlockSession } from "../runtime/session";
 
 /**
  * Dependencies for the provider chain and signing operations.
@@ -48,7 +49,12 @@ export type ChainOpsDeps = {
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
-  readonly session: UnlockSession;
+  /**
+   * Non-renewing session view: every handler here is reachable from a page on
+   * a cadence the user does not control, so a passphrase read must observe the
+   * unlock window and never extend it.
+   */
+  readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
   readonly waiters: SignatureWaiters;
 };
@@ -85,7 +91,7 @@ export const executeSignApproval = async (
   },
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, session, wallet } = deps;
-  const passphrase = session.getPassphrase();
+  const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
@@ -135,7 +141,6 @@ type ChainOpsHandler = (
 const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
   const input = readSignTypedDataInput(message);
-  const passphrase = session.getPassphrase();
   if (!input) {
     return { error: "invalid sign typed data request" };
   }
@@ -148,6 +153,16 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
     return { error: "origin blocked" };
   }
+  // Refuse a flooding origin BEFORE the expensive work, not after it. Hashing a
+  // maximum-size SNIP-12 document can monopolize synchronous Pedersen work in
+  // the service worker that also serves the panel, and reading the grants decrypts
+  // the vault — paying both for a request the queue cap will refuse anyway is
+  // how a per-origin cap that bounds memory leaves CPU unbounded.
+  requireApprovalAdmission(approvals, input.origin);
+  // Read the session only after the message is well-formed and its origin is
+  // both claimed truthfully and unblocked: the background must validate type,
+  // origin, and capability before it acts on a message at all.
+  const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
@@ -204,7 +219,7 @@ const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
   if (!networkId) {
     return { error: "unsupported chain" };
   }
-  const passphrase = session.getPassphrase();
+  const passphrase = session.peekPassphrase();
   const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
   // Only an origin that already holds a connection grant may ask to switch the
   // network — and even then it may only ask: the switch never happens without
@@ -242,7 +257,9 @@ export const handleChainOps = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  const handler = CHAIN_OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(CHAIN_OPS_HANDLERS, messageType)
+    ? CHAIN_OPS_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message, sender) : null;
 };
 
@@ -253,12 +270,19 @@ export const handleChainOps = async (
  * approval time, so an approved card can never reconnect a disconnected site.
  */
 export const executeSwitchChainApproval = async (
-  deps: Pick<ChainOpsDeps, "activeStateCoordinator" | "preferencesStore" | "session" | "wallet">,
+  deps: Pick<ChainOpsDeps, "activeStateCoordinator" | "preferencesStore" | "wallet"> & {
+    /**
+     * The full session: applying the approval switches the active network, and
+     * that cross-store mutation locks its own generation when it cannot be
+     * completed. The grant re-check below still only observes the session.
+     */
+    readonly session: UnlockSession;
+  },
   input: { readonly networkId: StarknetNetworkId; readonly origin: string },
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, session, wallet } = deps;
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
-    const passphrase = session.getPassphrase();
+    const passphrase = session.peekPassphrase();
     if (!passphrase) {
       return { error: "wallet locked" };
     }

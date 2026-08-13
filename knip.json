@@ -19,7 +19,13 @@
       "project": ["src/**/*.ts"]
     },
     "apps/terminal": {
-      "entry": ["api/**/*.ts"]
+      "entry": ["api/**/*.ts", "scripts/*.ts"],
+      "ignoreDependencies": ["@types/ws", "ws"],
+      "project": ["api/**/*.ts", "scripts/**/*.ts", "src/**/*.{ts,tsx}"]
+    },
+    "apps/ui-lab": {
+      "entry": [".storybook/*.ts", "src/**/*.stories.ts"],
+      "project": [".storybook/*.ts", "src/**/*.ts"]
     },
     "packages/platform/ledger-browser": {
       "ignoreDependencies": ["buffer"]

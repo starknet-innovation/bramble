@@ -335,7 +335,7 @@ describe("reconcileActiveAccount", () => {
 
   test("repairs an unlocked session without renewing it", async () => {
     let now = 0;
-    const session = createUnlockSession(100, () => now);
+    const session = createUnlockSession({ now: () => now, ttlMs: 100 });
     session.unlock(vaultPassphrase);
     const selected: string[] = [];
     const wallet = makeWallet({

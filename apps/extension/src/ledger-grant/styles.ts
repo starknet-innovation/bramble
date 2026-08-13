@@ -4,7 +4,17 @@
  * chrome; this styles the trusted MC Wallet handoff and its safe diagnostic
  * states so the one-time permission step feels continuous with the side panel.
  */
-import { EASE, FONT, MOTION, RADIUS, SHADOW, SPACE, TRACKING, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import {
+  EASE,
+  FONT,
+  MOTION,
+  RADIUS,
+  SHADOW,
+  SPACE,
+  TRACKING,
+  TYPE,
+  WEIGHT,
+} from "@mc-wallet/ui-kit/tokens";
 
 /**
  * Token-driven stylesheet for `ledger-grant.html`.

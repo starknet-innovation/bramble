@@ -14,7 +14,12 @@ import {
   unavailablePreferencesStore,
 } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
-import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
+import {
+  flushHeld,
+  latestApprovalId,
+  reviewedApprovalFee,
+  waitForPendingApprovals,
+} from "../../support/held";
 
 const account: AccountRef = {
   address: "0xabcabcdef",
@@ -304,8 +309,9 @@ describe("background network messages", () => {
     expect(invoked).toHaveLength(0);
 
     const invokeId = await latestApprovalId(handler, sender);
+    const reviewedFee = await reviewedApprovalFee(handler, sender, invokeId);
     await expect(
-      handler({ id: invokeId, type: "wallet.approveOrigin" }, sender),
+      handler({ id: invokeId, reviewedFee, type: "wallet.approveOrigin" }, sender),
     ).resolves.toMatchObject({ ok: true, pending: [] });
     await expect(invokeHeld).resolves.toMatchObject({ ok: true, transactionHash: "0x123" });
 

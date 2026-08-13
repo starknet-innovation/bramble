@@ -4,6 +4,7 @@
  * the user's tracked-token registry in the handler — the UI can never smuggle
  * a raw token address through these messages.
  */
+import { isSha256Digest } from "@mc-wallet/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import { isTransferAmount } from "../routing/message-inputs";
 
@@ -92,7 +93,6 @@ export const readSwapExecuteInput = (
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["preparationId", "type"]) &&
   message["type"] === "wallet.swapExecute" &&
-  typeof message["preparationId"] === "string" &&
-  /^sha256:[0-9a-f]{64}$/.test(message["preparationId"])
+  isSha256Digest(message["preparationId"])
     ? { preparationId: message["preparationId"] }
     : null;

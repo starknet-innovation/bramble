@@ -5,17 +5,21 @@
  * signer's own account, so no new signing or key material is involved — the
  * multisig contract itself enforces signer membership and quorum on-chain.
  * All inputs are validated as field elements before any calldata is built,
- * and malformed RPC responses throw rather than degrade.
+ * and malformed RPC responses throw rather than degrade. Proposal ids are
+ * derived locally from the reviewed call; the contract view is only ever a
+ * cross-check that must agree.
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import { createRpcProvider, withRpcFallback } from "@mc-wallet/starknet/provider";
+import { createRpcProvider, timedRpcFetch, withRpcFallback } from "@mc-wallet/starknet/provider";
+
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
+  sameFelt,
   canonicalFelt as sharedCanonicalFelt,
 } from "@mc-wallet/wallet-model/networks";
-import { type Call, hash, type RpcProvider, type RpcProviderOptions } from "starknet";
+import { type Call, hash, type RpcProvider } from "starknet";
 
 /**
  * Shared multisig limits. These are the single source of truth consumed by
@@ -37,14 +41,15 @@ const MAX_CALLDATA_FELTS = MULTISIG_LIMITS.calldataFelts;
 const MAX_SIGNERS = MULTISIG_LIMITS.signers;
 const MULTISIG_READ_TIMEOUT_MS = 6_000;
 
-// Multisig verification is an interactive read and must not leave the wallet
-// parked behind starknet.js's unbounded default fetch. The timeout aborts the
-// current endpoint so withRpcFallback can try the next configured RPC.
-const timedMultisigFetch: NonNullable<RpcProviderOptions["baseFetch"]> = (input, init) =>
-  fetch(input, { ...init, signal: AbortSignal.timeout(MULTISIG_READ_TIMEOUT_MS) });
-
+// Multisig verification is an interactive read: the user is waiting on a
+// confirmation screen, so it takes a tighter deadline than the wallet-wide
+// RPC_REQUEST_TIMEOUT_MS every provider already carries. Only the NUMBER is
+// local — the transport is the shared one, so a multisig read cannot drift away
+// from how the rest of the wallet composes signals or aborts a socket. The
+// abort surfaces as a transport error, which is what withRpcFallback needs to
+// move to the next configured RPC.
 const multisigReadProvider = (nodeUrl: string): RpcProvider =>
-  createRpcProvider(nodeUrl, { baseFetch: timedMultisigFetch });
+  createRpcProvider(nodeUrl, { baseFetch: timedRpcFetch(MULTISIG_READ_TIMEOUT_MS) });
 
 /**
  * One inner call a multisig proposal will execute, using the entrypoint name
@@ -99,9 +104,8 @@ export type MultisigProposalStatus = {
 };
 
 /**
- * Inputs for computing a proposal's transaction id via the contract's own
- * `hash_transaction` view, so the wallet never re-implements the Pedersen
- * scheme locally.
+ * Inputs for deriving a proposal's transaction id locally and cross-checking
+ * it against the contract's own `hash_transaction` view.
  */
 export type MultisigTransactionIdInput = {
   readonly address: string;
@@ -110,7 +114,7 @@ export type MultisigTransactionIdInput = {
   readonly salt: string;
 };
 
-const ENTRYPOINT_PATTERN = /^[a-z_][a-z0-9_]{0,63}$/;
+const ENTRYPOINT_PATTERN = /^[a-z_][A-Za-z0-9_]{0,63}$/;
 
 /**
  * Checks a proposal entrypoint name before deriving a selector from it.
@@ -354,9 +358,61 @@ export const getMultisigProposalStatus = async ({
   });
 };
 
+// MultisigComponent hashes a batch of calls, and the wallet only ever proposes
+// one, so the chain always opens with a batch length of exactly one.
+const SINGLE_CALL_BATCH = "0x1";
+
 /**
- * Computes a proposal's transaction id by calling the contract's own
- * `hash_transaction` view with the inner call and salt.
+ * Derives a proposal's transaction id locally from the inner call and salt.
+ *
+ * Mirrors OpenZeppelin MultisigComponent v3.0.0's `hash_transaction_batch`
+ * exactly: a Pedersen chain started at 0 over the batch length, then the
+ * call's `to`, selector, and calldata length, then each calldata felt, and
+ * finally the salt. Pure and offline — this, not any node's answer, is the
+ * wallet's binding between the call a user reviewed and the id it will confirm
+ * or execute. Throws `WalletError` when the call or salt is not a well-formed
+ * field element.
+ */
+export const multisigTransactionId = (call: MultisigCallInput, salt: string): string =>
+  canonicalFelt(
+    [SINGLE_CALL_BATCH, ...innerCallCalldata(call, salt)].reduce(
+      (state, felt) => hash.computePedersenHash(state, felt),
+      "0x0",
+    ),
+  );
+
+/**
+ * Checks that a stored `(call, salt)` pair really hashes to the proposal id it
+ * is filed under.
+ *
+ * A proposal record keeps its id and its call as separate fields, so only this
+ * re-derivation binds them; call it before building any `execute` invoke from
+ * a stored record, including records written by an earlier version. Total by
+ * design — a malformed call, salt, or id yields `false` rather than throwing,
+ * so every disagreement is a plain refusal.
+ */
+export const multisigCallMatchesId = (
+  call: MultisigCallInput,
+  salt: string,
+  txId: string,
+): boolean => {
+  try {
+    return sameFelt(multisigTransactionId(call, salt), txId);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Computes a proposal's transaction id and requires the multisig contract to
+ * agree with it.
+ *
+ * The returned id always comes from {@link multisigTransactionId}; the
+ * contract's `hash_transaction` view is read purely as a cross-check. Any node
+ * that answers with a different id — because it is hostile, because it is out
+ * of sync, or because the address is not the pinned MultisigComponent — makes
+ * this throw `WalletError`, so no proposal id the wallet did not derive itself
+ * can ever be stored, confirmed, or signed against.
  */
 export const computeMultisigTransactionId = async ({
   address,
@@ -366,11 +422,18 @@ export const computeMultisigTransactionId = async ({
 }: MultisigTransactionIdInput): Promise<string> => {
   const multisig = requireAddress(address);
   const calldata = innerCallCalldata(call, salt);
-  return withRpcFallback(rpcUrls, async (provider) => {
+  const derived = multisigTransactionId(call, salt);
+  const reported = await withRpcFallback(rpcUrls, async (provider) => {
     const response = await provider.callContract(
       { calldata, contractAddress: multisig, entrypoint: "hash_transaction" },
       "latest",
     );
-    return `0x${feltAt(response, 0, "transaction id").toString(16)}`;
+    return feltAt(response, 0, "transaction id");
   });
+  if (reported !== BigInt(derived)) {
+    throw new WalletError(
+      "Multisig transaction id mismatch: this endpoint's hash_transaction answer does not match the id derived from the reviewed call",
+    );
+  }
+  return derived;
 };

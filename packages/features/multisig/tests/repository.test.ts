@@ -131,6 +131,33 @@ describe("multisig store", () => {
     expect(await registry.getOperation(operation.id)).toBeNull();
   });
 
+  test("claims proposal actions atomically across action kinds", async () => {
+    const { store } = memoryKv();
+    const registry = createMultisigStore({ store });
+    const owner = multisigId("SN_MAIN", record.address) ?? "";
+    const confirm: MultisigOperationRecord = {
+      accountId: OP_ACCOUNT_ID,
+      id: multisigOperationId("confirm", "SN_MAIN", OP_ACCOUNT_ID, proposal.txId, owner) ?? "",
+      kind: "confirm",
+      multisigId: owner,
+      networkId: "SN_MAIN",
+      target: proposal.txId,
+    };
+    const revoke: MultisigOperationRecord = {
+      ...confirm,
+      id: multisigOperationId("revoke", "SN_MAIN", OP_ACCOUNT_ID, proposal.txId, owner) ?? "",
+      kind: "revoke",
+    };
+
+    expect(
+      await Promise.all([
+        registry.claimProposalOperation(confirm),
+        registry.claimProposalOperation(revoke),
+      ]),
+    ).toEqual(["claimed", "exists"]);
+    expect(await registry.listOperations()).toHaveLength(1);
+  });
+
   test("persists multisigs and proposals and reads them back newest-first", async () => {
     const { store } = memoryKv();
     const registry = createMultisigStore({ store });

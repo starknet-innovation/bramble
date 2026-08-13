@@ -27,16 +27,20 @@ const account: AccountRef = {
   publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
 
+// Revision 1, the modern SNIP-12 shape. Revision 0 is signable too — the
+// MCW-V09-101 forgery is closed by the name grammar rather than by a revision
+// ban — and is exercised in `typed-data-revisions.test.ts`.
 const typedData = {
-  domain: { chainId: "SN_MAIN", name: "MC Test", version: "1" },
+  domain: { chainId: "SN_MAIN", name: "MC Test", revision: "1", version: "1" },
   message: { content: "hello" },
   primaryType: "Message",
   types: {
     Message: [{ name: "content", type: "felt" }],
-    StarkNetDomain: [
-      { name: "name", type: "felt" },
-      { name: "chainId", type: "felt" },
-      { name: "version", type: "felt" },
+    StarknetDomain: [
+      { name: "name", type: "shortstring" },
+      { name: "chainId", type: "shortstring" },
+      { name: "version", type: "shortstring" },
+      { name: "revision", type: "shortstring" },
     ],
   },
 };

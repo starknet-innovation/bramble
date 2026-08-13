@@ -21,7 +21,7 @@ import { setApprovalNotifier } from "../../../apps/extension/src/background/appr
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
-import { waitForPendingApprovals } from "../../support/held";
+import { reviewedApprovalFee, waitForPendingApprovals } from "../../support/held";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const PASSPHRASE = "correct horse battery staple";
@@ -49,12 +49,12 @@ const vault = {
 
 // A well-formed SNIP-12 typed message that hashes cleanly for the account.
 const TYPED_DATA = {
-  domain: { chainId: "0x534e5f4d41494e", name: "Example", version: "1" },
+  domain: { chainId: "0x534e5f4d41494e", name: "Example", revision: "1", version: "1" },
   message: { contents: "hello" },
   primaryType: "Mail",
   types: {
     Mail: [{ name: "contents", type: "felt" }],
-    StarkNetDomain: [
+    StarknetDomain: [
       { name: "name", type: "felt" },
       { name: "version", type: "felt" },
       { name: "chainId", type: "felt" },
@@ -153,10 +153,18 @@ const driveThrow = async (dappMessage: Record<string, unknown>) => {
   const before = await waitForPendingApprovals<{ id: string }>(handler, page);
   const id = before[0]?.id ?? "";
   const heldBeforeApprove = settled;
+  const reviewedFee =
+    dappMessage["type"] === "wallet.addInvokeTransaction" ||
+    dappMessage["type"] === "wallet.addDeclareTransaction"
+      ? await reviewedApprovalFee(handler, page, id)
+      : undefined;
 
   // Arm the throw so it fires from inside the executor, not the request path.
   control.throwOnGrant = true;
-  const decision = await handler({ id, type: "wallet.approveOrigin" }, page);
+  const decision = await handler(
+    { id, ...(reviewedFee ? { reviewedFee } : {}), type: "wallet.approveOrigin" },
+    page,
+  );
   const result = await held;
   const after = await pendingIds(handler);
   return { after, before, decision, heldBeforeApprove, result, submitted };

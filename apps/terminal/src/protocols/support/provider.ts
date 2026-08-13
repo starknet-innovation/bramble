@@ -13,20 +13,6 @@ import { WalletError } from "./errors";
 import { isRecord } from "./json";
 
 /**
- * Checks whether an RPC failure means the queried contract is not deployed.
- */
-export const isContractNotFoundError = (error: unknown): boolean => {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  if (/contract not found/i.test(error.message)) {
-    return true;
-  }
-  const baseError = (error as { readonly baseError?: unknown }).baseError;
-  return isRecord(baseError) && baseError.code === 20;
-};
-
-/**
  * Checks whether an RPC failure is transport-level (node unreachable or
  * malfunctioning) rather than a semantic contract or execution error.
  */

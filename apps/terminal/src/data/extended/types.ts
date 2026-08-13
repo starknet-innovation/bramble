@@ -9,8 +9,6 @@
  * `number` here for display/arithmetic. Where a live value's units are ambiguous
  * (notably `dailyPriceChange`) the ambiguity is flagged at the parse site.
  */
-import type { CandleType } from "./config";
-
 /**
  * MarketStatsModel — the per-market trading statistics block. Returned both
  * nested inside a market (endpoint #1) and standalone (endpoint #2). This is the
@@ -162,13 +160,4 @@ export type StreamEnvelope = {
 export type ExtendedFunding = {
   readonly latest: ExtendedFundingRate | null;
   readonly history: readonly ExtendedFundingRate[];
-};
-
-/** Re-exported so consumers can import the candle enums from one module. */
-export type { CandleInterval, CandleType } from "./config";
-
-/** A candle series tagged with the price-series it was built from. */
-export type CandleSeries = {
-  readonly candleType: CandleType;
-  readonly candles: readonly ExtendedCandle[];
 };

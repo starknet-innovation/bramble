@@ -4,9 +4,10 @@
  * and declare the pinned multisig class when a network lacks it. Every
  * submission goes through the shared verified invoke path with an explicitly
  * selected vault account; the multisig contract re-checks signer membership
- * and quorum on-chain, so these handlers can never bypass it.
+ * and quorum on-chain, so these handlers can never bypass it. The resolution,
+ * recipient-policy, submission, and status plumbing they compose lives in
+ * ./multisig-tx-context.
  */
-import type { Call } from "starknet";
 import {
   buildMultisigConfirmCall,
   buildMultisigExecuteCall,
@@ -16,7 +17,9 @@ import {
   type MultisigCallInput,
   type MultisigProposalStatus,
 } from "@mc-wallet/multisig/chain";
-import { type MultisigProposalRecord, multisigProposalId } from "@mc-wallet/multisig/repository";
+import { multisigProposalId } from "@mc-wallet/multisig/repository";
+import { signerForContext } from "../accounts/wallet-ops";
+import type { RuntimeResponse } from "../runtime/runtime-types";
 import { handleMultisigDeployOps } from "./multisig-deploy-ops";
 import {
   type ConfirmMultisigProposalInput,
@@ -27,189 +30,45 @@ import {
 import {
   buildMultisigProposalRecord,
   defaultSummary,
-  type MultisigContext,
   type MultisigOpsDeps,
-  multisigContext,
   multisigRpc,
-  refreshSignerMembership,
 } from "./multisig-ops";
-import { confirmedSignersAfterStatus, isProposalSubmitPending } from "./multisig-proposal-status";
 import {
-  claimMultisigProposalOperation,
-  type MultisigProposalOperationKind,
-  recordClaimedMultisigSubmission,
-  recordSubmittedActivity,
-  releaseMultisigOperation,
-} from "./multisig-submission";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import { signerForContext } from "../accounts/wallet-ops";
+  confirmGuard,
+  executableCall,
+  revokeGuard,
+  revokeRecordGuardError,
+} from "./multisig-proposal-guards";
+import {
+  freshProposalStatus,
+  type ProposalActionPlan,
+  proposalById,
+  type ResolvedProposal,
+  recordGuardError,
+  refreshAfterAction,
+  refusePoisonedProposalRecipient,
+  requiredMultisigFeeReview,
+  reserveProposalAction,
+  reserveProposalSubmission,
+  resolveMultisigTarget,
+  submitClaimedAndRecord,
+} from "./multisig-tx-context";
 
 type MultisigTxHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
-type ResolvedProposal = {
-  readonly proposal: MultisigProposalRecord;
-  readonly resolved: MultisigContext;
-};
-
-// Resolves the selected signer + watched record and re-proves signer membership
-// in one step. Every signer-gated submission runs this first so stale registry
-// data can never offer a transaction the chain would reject.
-const resolveMultisigTarget = async (
+// The recipient gate for a proposal whose inner call is already stored. Every
+// action that would advance that call — co-signing it or executing it — applies
+// the same policy the proposer applied, because the stored call was proposed by
+// another signer and this wallet re-decides for itself what it is willing to
+// broadcast. Revocation is deliberately never gated: withdrawing a confirmation
+// from a poisoned proposal must always stay possible.
+const refuseStoredProposalRecipient = async (
   deps: MultisigOpsDeps,
-  id: string,
-  signerAccountId?: string,
-): Promise<{ readonly error: string } | MultisigContext> => {
-  const resolved = await multisigContext(deps, id, signerAccountId);
-  if ("error" in resolved) {
-    return { error: resolved.error };
-  }
-  return refreshSignerMembership(deps, resolved);
-};
-
-// Submits one or more calls as a single invoke through the shared path and
-// records activity. The caller's descriptive summary is recorded verbatim: the
-// generic call decoder cannot describe multisig entrypoints, and the dedup
-// guards below match on these summaries, so they must stay deterministic and
-// specific. Batched calls share one transaction, so they succeed or revert
-// together.
-const submitAndRecord = async (
-  deps: MultisigOpsDeps,
-  resolved: MultisigContext,
-  calls: readonly Call[],
-  summary: string,
-): Promise<string> => {
-  const result = await deps.runtimeRpc.submitInvokeTransaction({
-    account: resolved.account.account,
-    calls,
-    rpcUrls: resolved.rpcUrls,
-    signHash: signerForContext(deps, resolved.account),
-  });
-  await recordSubmittedActivity(deps.activity, {
-    accountId: resolved.record.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: resolved.account.networkId,
-    summary,
-  });
-  return result.transactionHash;
-};
-
-const submitClaimedAndRecord = async (
-  deps: MultisigOpsDeps,
-  resolved: MultisigContext,
-  calls: readonly Call[],
-  summary: string,
-  operationId: string,
-): Promise<string> => {
-  let result: { readonly transactionHash: string };
-  try {
-    result = await deps.runtimeRpc.submitInvokeTransaction({
-      account: resolved.account.account,
-      calls,
-      rpcUrls: resolved.rpcUrls,
-      signHash: signerForContext(deps, resolved.account),
-    });
-  } catch (error) {
-    await releaseMultisigOperation(deps, operationId);
-    throw error;
-  }
-  await recordClaimedMultisigSubmission(deps, operationId, {
-    accountId: resolved.record.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: resolved.account.networkId,
-    summary,
-  });
-  return result.transactionHash;
-};
-
-const proposalById = async (
-  deps: MultisigOpsDeps,
-  proposalId: string,
-  signerAccountId?: string,
-): Promise<{ readonly error: string } | ResolvedProposal> => {
-  const proposal = (await deps.multisigStore.listProposals()).find(
-    (stored) => stored.id === proposalId,
-  );
-  if (!proposal) {
-    return { error: "proposal not found" };
-  }
-  const resolved = await resolveMultisigTarget(deps, proposal.multisigId, signerAccountId);
-  if ("error" in resolved) {
-    return { error: resolved.error };
-  }
-  return { proposal, resolved };
-};
-
-const requireUntrackedVerification = (
-  proposal: MultisigProposalRecord,
-  untrackedVerified: boolean | undefined,
-): string | null =>
-  proposal.call === null && untrackedVerified !== true
-    ? "verify this proposal on a block explorer or with the proposer, then acknowledge before confirming"
+  found: ResolvedProposal,
+): Promise<{ readonly error: string } | null> =>
+  found.proposal.call
+    ? refusePoisonedProposalRecipient(deps, found.resolved, found.proposal.call)
     : null;
-
-// A wallet-submitted proposal reading as not-found is kept only while its submit
-// transaction is still pending. Once that submit is accepted/rejected, not-found
-// is the authoritative chain state and should be persisted.
-const persistFreshStatus = async (
-  deps: MultisigOpsDeps,
-  proposal: MultisigProposalRecord,
-  status: MultisigProposalStatus,
-  signer: string,
-): Promise<void> => {
-  if (status.state === "not-found" && (await isProposalSubmitPending(deps, proposal))) {
-    return;
-  }
-  await deps.multisigStore.upsertProposal({
-    ...proposal,
-    confirmations: status.confirmations,
-    confirmedBySigner: status.confirmedBySigner,
-    confirmedBySignerAddress: signer,
-    confirmedSignerAddresses: confirmedSignersAfterStatus(
-      proposal,
-      signer,
-      status.confirmedBySigner,
-    ),
-    state: status.state,
-  });
-};
-
-const refreshAfterAction = async (
-  deps: MultisigOpsDeps,
-  found: ResolvedProposal,
-): Promise<void> => {
-  const status = await multisigRpc(deps)
-    .getProposalStatus({
-      address: found.resolved.record.address,
-      rpcUrls: found.resolved.rpcUrls,
-      signer: found.resolved.account.account.address,
-      txId: found.proposal.txId,
-    })
-    .catch(() => null);
-  if (status) {
-    await persistFreshStatus(deps, found.proposal, status, found.resolved.account.account.address);
-  }
-};
-
-const freshProposalStatus = async (
-  deps: MultisigOpsDeps,
-  found: ResolvedProposal,
-): Promise<{ readonly error: string } | MultisigProposalStatus> => {
-  let status: MultisigProposalStatus;
-  try {
-    status = await multisigRpc(deps).getProposalStatus({
-      address: found.resolved.record.address,
-      rpcUrls: found.resolved.rpcUrls,
-      signer: found.resolved.account.account.address,
-      txId: found.proposal.txId,
-    });
-  } catch {
-    return { error: "could not refresh proposal status — try again" };
-  }
-  await persistFreshStatus(deps, found.proposal, status, found.resolved.account.account.address);
-  return status;
-};
 
 const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
   const input = readProposeMultisigInput(message);
@@ -225,6 +84,13 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
     contractAddress: input.to,
     entrypoint: input.entrypoint,
   };
+  // Verified BEFORE the proposal id is derived and long before the submit
+  // transaction is broadcast, so a poisoned recipient never becomes a stored
+  // proposal other signers are asked to co-sign.
+  const refusal = await refusePoisonedProposalRecipient(deps, target, call);
+  if (refusal) {
+    return refusal;
+  }
   const txId = await multisigRpc(deps).computeTransactionId({
     address: target.record.address,
     call,
@@ -236,11 +102,18 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
     return { error: "invalid propose request" };
   }
   const summary = defaultSummary(input);
-  const transactionHash = await submitAndRecord(
+  const calls = [buildMultisigSubmitCall(target.record.address, call, input.salt)];
+  if (!input.reviewedFee) {
+    return requiredMultisigFeeReview(deps, target, calls);
+  }
+  const claim = await reserveProposalSubmission(deps, target, txId);
+  if ("error" in claim) return claim;
+  const transactionHash = await submitClaimedAndRecord(
     deps,
     target,
-    [buildMultisigSubmitCall(target.record.address, call, input.salt)],
-    `Propose: ${summary}`,
+    { calls, summary: `Propose: ${summary}` },
+    claim.operationId,
+    input.reviewedFee,
   );
   const proposal = buildMultisigProposalRecord({
     id,
@@ -257,43 +130,6 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
   return { ok: true, proposal, transactionHash };
 };
 
-// What one proposal action will broadcast: the calls for a single invoke plus
-// the activity summary describing them.
-type ProposalActionPlan = {
-  readonly calls: readonly Call[];
-  readonly summary: string;
-};
-
-const reserveProposalAction = async (
-  deps: MultisigOpsDeps,
-  found: ResolvedProposal,
-  kind: MultisigProposalOperationKind,
-): Promise<{ readonly error: string } | { readonly operationId: string }> =>
-  claimMultisigProposalOperation(deps, {
-    accountId: found.resolved.account.account.id,
-    kind,
-    networkId: found.resolved.account.networkId,
-    pendingError: "this signer already has a proposal action in progress — wait for it to settle",
-    txId: found.proposal.txId,
-  });
-
-const confirmGuard = (status: MultisigProposalStatus): string | null => {
-  if (status.state === "executed" || status.state === "not-found") {
-    return `cannot confirm a proposal that is ${status.state}`;
-  }
-  if (status.state === "confirmed") {
-    return "proposal already has quorum — execute it instead of adding more confirmations";
-  }
-  return status.confirmedBySigner ? "this account has already confirmed this proposal" : null;
-};
-
-const revokeGuard = (status: MultisigProposalStatus): string | null => {
-  if (status.state === "executed" || status.state === "not-found") {
-    return `cannot revoke a proposal that is ${status.state}`;
-  }
-  return status.confirmedBySigner ? null : "this account has not confirmed this proposal";
-};
-
 // The atomic mode is allowed only when this confirmation reaches quorum. The
 // contract sees confirm's storage write before execute; a failed execution
 // reverts both calls, which is why the mode remains explicit.
@@ -307,13 +143,11 @@ const planConfirm = (
   if (input.mode === "confirm-only") {
     return { calls: [confirmCall], summary: `Confirm: ${found.proposal.summary}` };
   }
-  const proposalCall = found.proposal.call;
-  if (!proposalCall) {
-    return {
-      error:
-        "this proposal was tracked by id only; executing needs the original call, so confirm it here and execute from the wallet that proposed it",
-    };
-  }
+  const executable = executableCall(
+    found.proposal,
+    "call, so confirm it here and execute from the wallet that proposed it",
+  );
+  if ("error" in executable) return executable;
   if (
     !confirmationCompletesQuorum({
       confirmations: status.confirmations,
@@ -327,18 +161,8 @@ const planConfirm = (
     };
   }
   return {
-    calls: [
-      confirmCall,
-      buildMultisigExecuteCall(
-        record.address,
-        {
-          calldata: proposalCall.calldata,
-          contractAddress: proposalCall.contractAddress,
-          entrypoint: proposalCall.entrypoint,
-        },
-        proposalCall.salt,
-      ),
-    ],
+    calls: [confirmCall, buildMultisigExecuteCall(record.address, executable, executable.salt)],
+    executed: executable,
     summary: `Confirm and execute: ${found.proposal.summary}`,
   };
 };
@@ -358,8 +182,14 @@ const confirmationContext = async (
   if (!input) return { error: "invalid confirm request" };
   const found = await proposalById(deps, input.proposalId, input.signerAccountId);
   if ("error" in found) return found;
-  const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
-  if (verifyError) return { error: verifyError };
+  // Before any chain read or fee estimate: a confirmation names the stored
+  // txId, so an unbound record must not reach `planConfirm` in either mode.
+  const recordError = recordGuardError(found.proposal, input.untrackedVerified);
+  if (recordError) return { error: recordError };
+  // Applied to the review as well as the submission, so the panel never shows a
+  // fee estimate for a payment this wallet would refuse to co-sign.
+  const refusal = await refuseStoredProposalRecipient(deps, found);
+  if (refusal) return refusal;
   const status = await freshProposalStatus(deps, found);
   if ("error" in status) return status;
   const guardError = confirmGuard(status);
@@ -394,14 +224,20 @@ const prepareMultisigConfirmation: MultisigTxHandler = async (deps, message) => 
 const confirmMultisigProposal: MultisigTxHandler = async (deps, message) => {
   const context = await confirmationContext(deps, message, "wallet.confirmMultisigProposal");
   if ("error" in context) return context;
+  if (!context.input.reviewedFee) {
+    return requiredMultisigFeeReview(deps, context.found.resolved, context.plan.calls);
+  }
   const claim = await reserveProposalAction(deps, context.found, "confirm");
   if ("error" in claim) return claim;
   const transactionHash = await submitClaimedAndRecord(
     deps,
     context.found.resolved,
-    context.plan.calls,
-    context.plan.summary,
+    context.plan,
     claim.operationId,
+    // The figure `prepareMultisigConfirmation` returned for these same calls,
+    // echoed back by the panel: co-signing is the step that actually spends the
+    // signer's STRK, so it is bound to the fee they read (MCW-V09-119).
+    context.input.reviewedFee,
   );
   await refreshAfterAction(deps, context.found).catch(() => undefined);
   return { ok: true, transactionHash };
@@ -412,20 +248,33 @@ const revokeMultisigConfirmation: MultisigTxHandler = async (deps, message) => {
   if (!input) return { error: "invalid revoke request" };
   const found = await proposalById(deps, input.proposalId, input.signerAccountId);
   if ("error" in found) return found;
-  const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
-  if (verifyError) return { error: verifyError };
+  // A revocation names the stored txId, but its calldata is that id alone and
+  // it only ever REMOVES this signer's authority — so an unbound record is not
+  // refused here the way confirm and execute refuse it. It takes the explicit
+  // acknowledgment instead, which is the only way a legacy poisoned record's
+  // confirmation can still be withdrawn. The fresh-status gate below is what
+  // bounds that path: it must be an id the chain says this signer confirmed.
+  const recordError = revokeRecordGuardError(found.proposal, input.untrackedVerified);
+  if (recordError) return { error: recordError };
   const status = await freshProposalStatus(deps, found);
   if ("error" in status) return status;
   const guardError = revokeGuard(status);
   if (guardError) return { error: guardError };
+  const plan = {
+    calls: [buildMultisigRevokeCall(found.resolved.record.address, found.proposal.txId)],
+    summary: `Revoke confirmation: ${found.proposal.summary}`,
+  };
+  if (!input.reviewedFee) {
+    return requiredMultisigFeeReview(deps, found.resolved, plan.calls);
+  }
   const claim = await reserveProposalAction(deps, found, "revoke");
   if ("error" in claim) return claim;
   const transactionHash = await submitClaimedAndRecord(
     deps,
     found.resolved,
-    [buildMultisigRevokeCall(found.resolved.record.address, found.proposal.txId)],
-    `Revoke confirmation: ${found.proposal.summary}`,
+    plan,
     claim.operationId,
+    input.reviewedFee,
   );
   await refreshAfterAction(deps, found).catch(() => undefined);
   return { ok: true, transactionHash };
@@ -436,13 +285,16 @@ const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
   if (!input) return { error: "invalid execute request" };
   const found = await proposalById(deps, input.proposalId, input.signerAccountId);
   if ("error" in found) return found;
-  const proposalCall = found.proposal.call;
-  if (!proposalCall) {
-    return {
-      error:
-        "this proposal was tracked by id only; executing needs the original call, so execute it from the wallet that proposed it",
-    };
-  }
+  const executable = executableCall(
+    found.proposal,
+    "call, so execute it from the wallet that proposed it",
+  );
+  if ("error" in executable) return executable;
+  // The last gate before the multisig runs the inner call: this wallet is the
+  // one broadcasting it, so the recipient policy applies here exactly as it does
+  // to a public send, whoever proposed it.
+  const refusal = await refusePoisonedProposalRecipient(deps, found.resolved, executable);
+  if (refusal) return refusal;
   const status = await freshProposalStatus(deps, found);
   if ("error" in status) {
     return status;
@@ -450,24 +302,22 @@ const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
   if (status.state !== "confirmed") {
     return { error: `cannot execute a proposal that is ${status.state}` };
   }
+  const plan = {
+    calls: [buildMultisigExecuteCall(found.resolved.record.address, executable, executable.salt)],
+    executed: executable,
+    summary: `Execute: ${found.proposal.summary}`,
+  };
+  if (!input.reviewedFee) {
+    return requiredMultisigFeeReview(deps, found.resolved, plan.calls);
+  }
   const claim = await reserveProposalAction(deps, found, "execute");
   if ("error" in claim) return claim;
   const transactionHash = await submitClaimedAndRecord(
     deps,
     found.resolved,
-    [
-      buildMultisigExecuteCall(
-        found.resolved.record.address,
-        {
-          calldata: proposalCall.calldata,
-          contractAddress: proposalCall.contractAddress,
-          entrypoint: proposalCall.entrypoint,
-        },
-        proposalCall.salt,
-      ),
-    ],
-    `Execute: ${found.proposal.summary}`,
+    plan,
     claim.operationId,
+    input.reviewedFee,
   );
   await refreshAfterAction(deps, found).catch(() => undefined);
   return { ok: true, transactionHash };
@@ -492,6 +342,6 @@ export const handleMultisigTxOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = TX_HANDLERS[messageType];
+  const handler = Object.hasOwn(TX_HANDLERS, messageType) ? TX_HANDLERS[messageType] : undefined;
   return handler ? handler(deps, message) : handleMultisigDeployOps(deps, messageType, message);
 };

@@ -9,6 +9,10 @@ import {
 } from "@mc-wallet/settings/preferences";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 
+// The stored spelling of "0x123": every entry address is canonicalized by the
+// shared id builder (MCW-V09-110), so the id is derived from this form.
+const CANONICAL_123 = `0x${"0".repeat(61)}123`;
+
 describe("createPreferencesStore", () => {
   test("creates default network, token, and address book preferences", async () => {
     const preferences = await createPreferencesStore({ store: createMemoryStore() }).read();
@@ -30,9 +34,14 @@ describe("createPreferencesStore", () => {
       networkId: "SN_DEVNET",
     });
 
+    // Stored in the one canonical spelling every entry id is derived from
+    // (MCW-V09-110), so a contact re-saved in another spelling of the same
+    // address replaces it rather than joining it.
     await expect(preferences.read()).resolves.toMatchObject({
       activeNetworkId: "SN_DEVNET",
-      addressBook: [{ address: "0x123", id: "SN_DEVNET:0x123", label: "Treasury" }],
+      addressBook: [
+        { address: CANONICAL_123, id: `SN_DEVNET:${CANONICAL_123}`, label: "Treasury" },
+      ],
     });
   });
 
@@ -242,7 +251,7 @@ describe("createPreferencesStore", () => {
       theme: "dark",
     });
     await preferences.saveAddress({ address: "0x123", label: "Ada", networkId: "SN_MAIN" });
-    await preferences.removeAddress("SN_MAIN:0x123");
+    await preferences.removeAddress(`SN_MAIN:${CANONICAL_123}`);
 
     const stored = await preferences.read();
     expect(stored.accountLabels?.[accountId]).toBe("Savings");

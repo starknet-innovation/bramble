@@ -1,6 +1,6 @@
 {
   "name": "mc-wallet",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -11,11 +11,11 @@
   ],
   "scripts": {
     "build": "bun run --filter @mc-wallet/extension build",
-    "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun run check:privacy && bun run test && bun run check:workspaces",
+    "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:multisig && bun run check:privacy && bun run test && bun run check:workspaces",
     "check:audit": "bun audit --audit-level=high",
     "check:coverage": "bun run scripts/check-coverage.ts",
     "check:cycles": "madge --circular --extensions ts apps/extension/src packages",
-    "check:deadcode": "knip --no-exit-code",
+    "check:deadcode": "knip",
     "check:extension": "bun run scripts/check-extension-manifest.ts",
     "check:files": "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
     "check:imports": "bun run scripts/check-workspace-architecture.ts",
@@ -25,7 +25,7 @@
     "check:privacy": "bun run scripts/check-privacy-sdk.ts",
     "check:release-version": "bun run scripts/release-version.ts",
     "check:types": "tsc --noEmit",
-    "check:workspaces": "bun run --filter './packages/**' check && bun run --filter @mc-wallet/extension check && bun run --filter @mc-wallet/terminal check && bun run --filter @mc-wallet/ui-lab check:static",
+    "check:workspaces": "bun run --filter './packages/foundation/**' check && bun run --filter './packages/platform/**' check && bun run --filter './packages/features/**' check && bun run --filter './packages/presentation/**' check && bun run --filter './packages/testing/**' check && bun run --filter @mc-wallet/extension check && bun run --filter @mc-wallet/terminal check && bun run --filter @mc-wallet/ui-lab check:static",
     "changelog": "bun run scripts/generate-changelog.ts",
     "format": "biome check --write .",
     "package:extension": "bun run scripts/package-extension.ts",
@@ -53,6 +53,7 @@
   "dependencies": {
     "@mc-wallet/core": "workspace:*",
     "@mc-wallet/kms-krusty": "workspace:*",
+    "@mc-wallet/ledger-protocol": "workspace:*",
     "@mc-wallet/multisig": "workspace:*",
     "@mc-wallet/permissions": "workspace:*",
     "@mc-wallet/privacy": "workspace:*",

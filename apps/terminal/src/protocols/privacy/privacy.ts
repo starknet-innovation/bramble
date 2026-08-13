@@ -20,7 +20,6 @@
  * below are the real wrap.
  */
 import type {
-  Strk20Action,
   Strk20DepositAction,
   Strk20TransferAction,
   Strk20WithdrawAction,
@@ -80,46 +79,4 @@ export const buildPrivacyTransfer = (params: PrivacyTransferParams): Strk20Trans
   recipient: params.recipient,
   token: params.token,
   type: "transfer",
-});
-
-/**
- * A batch of privacy actions submitted together in one shielded transaction.
- * Members come from the builders above; the union type keeps a mixed batch (e.g.
- * a deposit alongside a transfer) assignable in a single array.
- */
-export type PrivacyActionBatch = readonly Strk20Action[];
-
-/**
- * Inputs for the shielded invoke request: the built action batch plus the origin
- * whose live connection grant authorizes the STRK20 transaction. `origin` must
- * be a normalized wallet origin the background already trusts.
- */
-export type PrivacyInvokeParams = {
-  readonly actions: PrivacyActionBatch;
-  readonly origin: string;
-};
-
-/**
- * The `wallet.strk20InvokeTransaction` request envelope consumed by the existing
- * background STRK20 handler (handleStrk20Ops). It carries exactly the keys that
- * handler validates — the action batch and the origin — and nothing else.
- */
-export type PrivacyInvokeRequest = {
-  readonly actions: PrivacyActionBatch;
-  readonly origin: string;
-  readonly type: "wallet.strk20InvokeTransaction";
-};
-
-/**
- * Builds the STRK20 invoke request for a shielded action batch, handing it to
- * the existing invoke path without broadcasting. The caller posts this message
- * to the background (chrome.runtime); handleStrk20Ops queues it as a "Private
- * transaction" approval, and only executeStrk20InvokeApproval re-prepares the
- * prover call and submits it once the user confirms. No new contract or SDK is
- * involved — the flow only needs a configured prover (strk20ProverUrl).
- */
-export const buildPrivacyInvokeRequest = (params: PrivacyInvokeParams): PrivacyInvokeRequest => ({
-  actions: params.actions,
-  origin: params.origin,
-  type: "wallet.strk20InvokeTransaction",
 });

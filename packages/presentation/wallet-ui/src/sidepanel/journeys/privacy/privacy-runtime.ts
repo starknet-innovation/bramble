@@ -2,10 +2,17 @@
  * Strict extension-runtime client for wallet-owned STRK20 journeys.
  */
 
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { isSha256Digest } from "@mc-wallet/core/ids";
+import {
+  hasOnlyKnownKeys,
+  isDecimalAmountText,
+  isRecord,
+  isStringArray,
+} from "@mc-wallet/core/json";
 import type { PaymasterAuthorizationReview } from "@mc-wallet/privacy/paymaster-typed-data";
 import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
 import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
+
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
@@ -14,7 +21,7 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 import { isTokenId } from "@mc-wallet/wallet-model/preferences";
 import { STRK20_LIMITS } from "@mc-wallet/wallet-protocol/strk20";
-import { isErrorResponse } from "../../../popup/responses/responses";
+import { responseError } from "../../runtime/runtime-errors";
 
 /**
  * Display-safe private balance derived from validated SDK note totals.
@@ -71,11 +78,6 @@ export type PrivacyPreparation = {
   readonly tokenId: string;
 };
 
-const errorFrom = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
-
-const PREPARATION_ID_PATTERN = /^sha256:[0-9a-f]{64}$/;
-const DISPLAY_AMOUNT_PATTERN = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
 const MAX_SUMMARIES = 32;
 const MAX_SUMMARY_CHARACTERS = 256;
 const MAX_DISPLAY_CHARACTERS = 128;
@@ -83,13 +85,15 @@ const MAX_DISPLAY_CHARACTERS = 128;
 const isDisplayString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= MAX_DISPLAY_CHARACTERS;
 
-const isStringArray = (value: unknown): value is readonly string[] =>
-  Array.isArray(value) &&
+// The review card's summary list: the shared string-array guard (which also
+// rejects a sparse or property-carrying array) plus the two display bounds this
+// screen owns. It composes the shared guard rather than shadowing its name with
+// a private, stricter copy — the previous local `isStringArray` read at every
+// call site as if it were the shared one.
+const isSummaryList = (value: unknown): value is readonly string[] =>
+  isStringArray(value) &&
   value.length <= MAX_SUMMARIES &&
-  value.every(
-    (entry) =>
-      typeof entry === "string" && entry.length > 0 && entry.length <= MAX_SUMMARY_CHARACTERS,
-  );
+  value.every((entry) => entry.length > 0 && entry.length <= MAX_SUMMARY_CHARACTERS);
 
 const readAuthorization = (value: unknown): PaymasterAuthorizationReview | null => {
   if (
@@ -184,20 +188,17 @@ const readPreparation = (
     ]) ||
     value["kind"] !== expected.kind ||
     (value["route"] !== "private-relay" && value["route"] !== "public-account") ||
-    typeof value["id"] !== "string" ||
-    !PREPARATION_ID_PATTERN.test(value["id"]) ||
+    !isSha256Digest(value["id"]) ||
     typeof value["payloadDigest"] !== "string" ||
     value["id"] !== value["payloadDigest"] ||
     typeof value["poolAddress"] !== "string" ||
     !isNonZeroStarkFieldElement(value["poolAddress"]) ||
-    !isStringArray(value["summaries"]) ||
+    !isSummaryList(value["summaries"]) ||
     !isDisplayString(value["symbol"]) ||
     !isTokenId(value["tokenId"]) ||
     (expected.tokenId !== undefined && value["tokenId"] !== expected.tokenId) ||
     (value["amount"] !== undefined &&
-      (typeof value["amount"] !== "string" ||
-        value["amount"].length > MAX_DISPLAY_CHARACTERS ||
-        !DISPLAY_AMOUNT_PATTERN.test(value["amount"]))) ||
+      (!isDecimalAmountText(value["amount"]) || value["amount"].length > MAX_DISPLAY_CHARACTERS)) ||
     (value["authorization"] !== undefined && !authorization) ||
     (value["relayFee"] !== undefined && !relayFee) ||
     (value["route"] === "private-relay" && !relayFee) ||
@@ -335,7 +336,7 @@ export const createPrivacyRuntimeClient = (
     ) {
       return response["transactionHash"];
     }
-    throw errorFrom(response, "Private transaction failed");
+    throw responseError(response, "Private transaction failed");
   },
   async loadPrivacyState(): Promise<PrivacyAccountState> {
     const response = await sendMessage({ type: "wallet.strk20State" });
@@ -343,7 +344,7 @@ export const createPrivacyRuntimeClient = (
     if (state) {
       return state;
     }
-    throw errorFrom(response, "Private balances unavailable");
+    throw responseError(response, "Private balances unavailable");
   },
   async preparePrivacyDeposit(
     tokenId: string,
@@ -360,7 +361,7 @@ export const createPrivacyRuntimeClient = (
     if (preparation) {
       return preparation;
     }
-    throw errorFrom(response, "Shielding preparation failed");
+    throw responseError(response, "Shielding preparation failed");
   },
   async preparePrivacyRegistration(): Promise<PrivacyPreparation> {
     const response = await sendMessage({ type: "wallet.strk20PrepareRegistration" });
@@ -368,7 +369,7 @@ export const createPrivacyRuntimeClient = (
     if (preparation) {
       return preparation;
     }
-    throw errorFrom(response, "Privacy activation preparation failed");
+    throw responseError(response, "Privacy activation preparation failed");
   },
   async preparePrivacyTransfer(
     tokenId: string,
@@ -390,7 +391,7 @@ export const createPrivacyRuntimeClient = (
     if (preparation) {
       return preparation;
     }
-    throw errorFrom(response, "Private send preparation failed");
+    throw responseError(response, "Private send preparation failed");
   },
   async preparePrivacyWithdraw(
     tokenId: string,
@@ -412,7 +413,7 @@ export const createPrivacyRuntimeClient = (
     if (preparation) {
       return preparation;
     }
-    throw errorFrom(response, "Unshielding preparation failed");
+    throw responseError(response, "Unshielding preparation failed");
   },
   async loadPrivacyRecipientStatus(
     tokenId: string,
@@ -432,6 +433,6 @@ export const createPrivacyRuntimeClient = (
     ) {
       return response["strk20RecipientRegistration"];
     }
-    throw errorFrom(response, "Recipient check unavailable");
+    throw responseError(response, "Recipient check unavailable");
   },
 });
