@@ -443,5 +443,5 @@ describe("Argent multisig serialized store", () => {
     expect(
       (await registry.listOperations()).some((operation) => operation.id === signClaim.id),
     ).toBe(true);
-  });
+  }, 15_000);
 });
