@@ -10,6 +10,7 @@ import {
   mapStrk20ProtocolError,
   mapStrk20StageError,
   sanitizeStrk20Detail,
+  strk20RetryAfterMilliseconds,
 } from "@mc-wallet/privacy/official-sdk-errors";
 import { assertNoSdkWarnings } from "@mc-wallet/privacy/official-sdk-results";
 
@@ -144,6 +145,45 @@ describe("STRK20 stage error mapping", () => {
     expect(isRetryableStrk20ServiceError(new Error("Failed to fetch"))).toBe(false);
   });
 
+  test("uses bounded delta-seconds retry hints from plain and Fetch response headers", () => {
+    const retryAfter = Object.assign(new Error("HTTP 429"), {
+      response: { headers: { "retry-after": "2" } },
+    });
+    expect(strk20RetryAfterMilliseconds(retryAfter)).toBe(2_000);
+    expect(
+      strk20RetryAfterMilliseconds(
+        Object.assign(new Error("HTTP 429"), {
+          response: { headers: new Headers({ "retry-after": "3" }) },
+        }),
+      ),
+    ).toBe(3_000);
+    expect(
+      strk20RetryAfterMilliseconds(
+        Object.assign(new Error("HTTP 429"), {
+          response: new Response(null, { headers: { "retry-after": "4" } }),
+        }),
+      ),
+    ).toBe(4_000);
+    expect(
+      strk20RetryAfterMilliseconds(
+        Object.assign(new Error("HTTP 429"), { response: { headers: { "retry-after": "45" } } }),
+      ),
+    ).toBe(5_000);
+    expect(
+      strk20RetryAfterMilliseconds(
+        Object.assign(new Error("HTTP 429"), { response: { headers: { "retry-after": "soon" } } }),
+      ),
+    ).toBeUndefined();
+    const throwingResponse = new Error("HTTP 429");
+    Object.defineProperty(throwingResponse, "response", {
+      get() {
+        throw new Error("untrusted response accessor");
+      },
+    });
+    expect(isRetryableStrk20ServiceError(throwingResponse)).toBe(true);
+    expect(strk20RetryAfterMilliseconds(throwingResponse)).toBeUndefined();
+  });
+
   test("preserves reviewed wallet errors and the protocol base message", () => {
     // A already-mapped WalletError must pass through untouched so the curated
     // spec messages keep their exact wire form.
@@ -152,6 +192,9 @@ describe("STRK20 stage error mapping", () => {
     );
     expect(() => mapStrk20ProtocolError(new Error("not enough private notes"))).toThrow(
       "insufficient private balance",
+    );
+    expect(() => mapStrk20ProtocolError(new Error("Discovery HTTP 429"))).toThrow(
+      "strk20 services unavailable (rate limited; retry shortly)",
     );
   });
 

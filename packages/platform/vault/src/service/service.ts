@@ -352,6 +352,7 @@ export const createWalletVaultService = ({
       return kms.generateMnemonic();
     },
     previewAccount: (input) => deriveAccountRef(kms, input),
+    validateMnemonic: (mnemonic) => kms.validateMnemonic(mnemonic),
     async grantOrigin(input) {
       if (!isWalletOrigin(input.origin)) {
         throw new WalletError("Invalid origin");

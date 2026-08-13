@@ -250,6 +250,13 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.generateMnemonic" }, sender: extensionSender },
   {
     message: {
+      mnemonic: SECRET_MNEMONIC,
+      type: "wallet.validateMnemonic",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
       accountContractType: "openzeppelin",
       mnemonic: SECRET_MNEMONIC,
       networkId: "SN_MAIN",

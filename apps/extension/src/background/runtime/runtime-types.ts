@@ -57,6 +57,14 @@ type GenerateMnemonicResponse = {
 };
 
 /**
+ * Successful mnemonic-validity response. Carries only the boolean verdict.
+ */
+export type ValidateMnemonicResponse = {
+  readonly ok: true;
+  readonly valid: boolean;
+};
+
+/**
  * Re-authenticated secret reveal returned only to the extension reveal flow.
  */
 type RevealSecretsResponse = {
@@ -472,6 +480,7 @@ export type RuntimeResponse =
   | TokenChartResponse
   | TransactionAlertsResponse
   | TransferResponse
+  | ValidateMnemonicResponse
   | WalletStatus
   | WatchAssetResponse
   | { readonly error: string };

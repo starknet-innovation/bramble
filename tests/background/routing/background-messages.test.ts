@@ -95,6 +95,22 @@ describe("createMessageHandler", () => {
     });
   });
 
+  test("validates mnemonics through the wallet service only", async () => {
+    const handler = createMessageHandler(createWallet(), "extension-id");
+    const message = {
+      mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+      type: "wallet.validateMnemonic",
+    };
+
+    await expect(handler(message, sender)).resolves.toEqual({ ok: true, valid: true });
+    await expect(handler(message, contentSender)).resolves.toEqual({
+      error: "privileged sender required",
+    });
+    await expect(handler({ ...message, networkId: "SN_MAIN" }, sender)).resolves.toEqual({
+      error: "invalid mnemonic validation request",
+    });
+  });
+
   test("handles provider chain id and gates dapp invoke submission", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);

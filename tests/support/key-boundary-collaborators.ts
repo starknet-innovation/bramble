@@ -119,6 +119,9 @@ export const walletStub = {
   async previewAccount() {
     return account;
   },
+  async validateMnemonic() {
+    return true;
+  },
   // Answered through the real grant policy over the stub vault, so an origin
   // the vault never granted reads as unconnected and its request queues a
   // consent prompt instead of being silently satisfied.

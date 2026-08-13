@@ -13,28 +13,18 @@ import {
   type Strk20PrepareInput,
 } from "../service";
 import { strk20BuilderFor } from "./official-sdk-builder";
-import {
-  isRetryableStrk20ServiceError,
-  mapStrk20StageError,
-  type Strk20FailureStage,
-} from "./official-sdk-errors";
+import { mapStrk20StageError, type Strk20FailureStage } from "./official-sdk-errors";
 import type { Strk20MaturityRuntime } from "./official-sdk-maturity";
 import { areHistoricalDepositsReady, isHistoricalAccountReady } from "./official-sdk-readiness";
 import { assertNoSdkWarnings, readCallAndProof } from "./official-sdk-results";
+import { retryStrk20ServiceRead, type ServiceRetryPause } from "./official-sdk-retry";
 import type { PrivacySdkRuntime, SdkBuilder, SdkTransfers } from "./official-sdk-runtime";
 import { transfersFor } from "./official-sdk-transfers";
 import { requireStrk20Config } from "./official-sdk-values";
 
-const MAX_SERVICE_ATTEMPTS = 3;
 const noFinalProofGate = (): Promise<void> => Promise.resolve();
 
-/**
- * Default backoff between bounded privacy-service retries.
- */
-export const defaultServiceRetryPause = (attempt: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, attempt * 1_000);
-  });
+export { defaultServiceRetryPause } from "./official-sdk-retry";
 
 /**
  * Builds the persisted maturity key for one account and privacy pool.
@@ -130,7 +120,7 @@ export const prepareWith = async (
   input: Strk20PrepareInput,
   maturity: Strk20MaturityRuntime,
   providerFor: (nodeUrl: string) => RpcProvider,
-  pauseForServiceRetry: (attempt: number) => Promise<void>,
+  pauseForServiceRetry: ServiceRetryPause,
   beforeProof: () => Promise<void> = noFinalProofGate,
   builderForTransfers?: (transfers: SdkTransfers) => SdkBuilder,
   historicalState?: HistoricalState,
@@ -146,10 +136,11 @@ export const prepareWith = async (
   if (!nodeUrl) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
-  for (let attempt = 1; attempt <= MAX_SERVICE_ATTEMPTS; attempt += 1) {
-    let stage: Strk20FailureStage =
-      historicalState === "registration" ? "registration-preparation" : "discovery";
-    try {
+  let stage: Strk20FailureStage =
+    historicalState === "registration" ? "registration-preparation" : "discovery";
+  try {
+    return await retryStrk20ServiceRead(async () => {
+      stage = historicalState === "registration" ? "registration-preparation" : "discovery";
       const { builder, transfers } = discoverWith(sdk, input, builderForTransfers);
       const provider = providerFor(nodeUrl);
       stage = "proving";
@@ -163,12 +154,8 @@ export const prepareWith = async (
         provider,
         transfers,
       });
-    } catch (error) {
-      if (attempt === MAX_SERVICE_ATTEMPTS || !isRetryableStrk20ServiceError(error)) {
-        return mapStrk20StageError(stage, error);
-      }
-      await pauseForServiceRetry(attempt);
-    }
+    }, pauseForServiceRetry);
+  } catch (error) {
+    return mapStrk20StageError(stage, error);
   }
-  throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
 };

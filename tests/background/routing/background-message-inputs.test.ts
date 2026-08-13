@@ -2,7 +2,10 @@
  * Background message parser checks reject ambiguous runtime command shapes.
  */
 import { describe, expect, test } from "bun:test";
-import { readPreviewAccountInput } from "../../../apps/extension/src/background/accounts/account-creation-inputs";
+import {
+  readPreviewAccountInput,
+  readValidateMnemonicInput,
+} from "../../../apps/extension/src/background/accounts/account-creation-inputs";
 import {
   readAddAccountInput,
   readAddInvokeTransactionInput,
@@ -349,6 +352,24 @@ describe("background message parsers", () => {
       }),
     ).toBeNull();
     expect(readPreviewAccountInput({ mnemonic: "  ", type: "wallet.previewAccount" })).toBeNull();
+  });
+
+  test("reads exact mnemonic validation without accepting extra fields", () => {
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+    expect(readValidateMnemonicInput({ mnemonic, type: "wallet.validateMnemonic" })).toEqual({
+      mnemonic,
+    });
+    expect(
+      readValidateMnemonicInput({
+        mnemonic,
+        type: "wallet.validateMnemonic",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
+    expect(
+      readValidateMnemonicInput({ mnemonic: "  ", type: "wallet.validateMnemonic" }),
+    ).toBeNull();
+    expect(readValidateMnemonicInput({ mnemonic, type: "wallet.previewAccount" })).toBeNull();
   });
 
   test("reads and rejects origin-revocation messages", () => {

@@ -16,6 +16,8 @@ import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { verifyBackupWords } from "./backup-verify";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
+import { bindRecoveryImportControls } from "./recovery-import-bind";
+import { bindRecoveryWordAssist } from "./recovery-word-assist";
 
 /**
  * Dependencies the onboarding binding closes over.
@@ -28,9 +30,10 @@ export type OnboardingUiDeps = {
 
 /**
  * Binds the staged first-run journey. Recovery material stays in this page and
- * is sent only to the privileged KMS-backed preview/create messages. Preview
- * returns public account metadata and writes nothing; creation remains the
- * final, explicitly confirmed step.
+ * is sent only to the privileged KMS-backed validate/preview/create messages.
+ * Import Continue asks Krusty to validate the phrase before the passphrase
+ * step; preview returns public account metadata and writes nothing; creation
+ * remains the final, explicitly confirmed step.
  */
 export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const { app, wallet } = deps;
@@ -89,16 +92,27 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     steps.find((step) => step.dataset["onboardingStep"] === id);
   const transitionStep = createOnboardingStepTransition(app, steps);
 
+  let invalidateValidation = (): void => {};
+  let refreshRecovery = (): void => {};
+
   const showStep = (id: string, direction: OnboardingDirection = "forward", push = true): void => {
     const next = stepFor(id);
     const current = steps.find((step) => !step.hidden);
     if (!next || current === next) {
       return;
     }
+    const wasRecovery = current?.dataset["onboardingStep"] === "recovery";
+    const nextIsRecovery = id === "recovery";
     if (push && history.at(-1) !== id) {
       history.push(id);
     }
     transitionStep(next, direction);
+    if (wasRecovery !== nextIsRecovery) {
+      invalidateValidation();
+      if (nextIsRecovery) {
+        refreshRecovery();
+      }
+    }
   };
 
   const goBack = (): void => {
@@ -126,7 +140,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   };
 
   const wordsFrom = (inputs: readonly HTMLInputElement[], count: number): readonly string[] =>
-    inputs.slice(0, count).map((input) => input.value.trim());
+    inputs.slice(0, count).map((input) => input.value.trim().toLowerCase());
 
   const importedMnemonic = (): string => wordsFrom(importInputs, importWordCount).join(" ").trim();
 
@@ -138,7 +152,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     const count: 12 | 24 = words.length > 12 ? 24 : 12;
     setWordCount(inputs, count, kind);
     for (const [index, input] of inputs.entries()) {
-      input.value = words[index] ?? "";
+      input.value = (words[index] ?? "").trim().toLowerCase();
     }
   };
 
@@ -155,15 +169,27 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     }
   };
 
-  const refreshRecovery = (): void => {
+  const recoveryFields = form.querySelector<HTMLElement>(
+    '[data-onboarding-step="recovery"] .onboarding-fields',
+  );
+  const wordAssist = bindRecoveryWordAssist(importInputs, recoveryFields ?? form);
+
+  refreshRecovery = (): void => {
     const words = wordsFrom(importInputs, importWordCount);
+    const incomplete = words.some((word) => word.length === 0);
+    const unknown = !incomplete && !wordAssist.wordsKnown(importWordCount);
+    wordAssist.refreshWordValidity();
     if (recoveryContinue) {
-      recoveryContinue.disabled = words.some((word) => word.length === 0);
+      // Emptiness only — BIP39 membership stays advisory; Krusty validates.
+      recoveryContinue.disabled = incomplete;
     }
     if (recoveryResult) {
-      recoveryResult.textContent =
-        words.some((word) => word.length === 0) && words.some((word) => word.length > 0)
+      recoveryResult.textContent = incomplete
+        ? words.some((word) => word.length > 0)
           ? `Enter all ${importWordCount} words to continue.`
+          : ""
+        : unknown
+          ? "Highlighted words are not in the BIP39 English list."
           : "";
     }
     previewMatchesInput = false;
@@ -252,41 +278,28 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   form.querySelector("#phrase-length-toggle")?.addEventListener("click", () => {
     setWordCount(importInputs, importWordCount === 12 ? 24 : 12, "import");
+    invalidateValidation();
     refreshRecovery();
   });
 
-  for (const [index, input] of importInputs.entries()) {
-    input.addEventListener("input", () => {
-      const pastedWords = input.value.trim().split(/\s+/).filter(Boolean);
-      if (pastedWords.length === 12 || pastedWords.length === 24) {
-        fillWords(importInputs, pastedWords, "import");
-      }
-      refreshRecovery();
-    });
-    input.addEventListener("keydown", (event) => {
-      if (event.key === " " && input.value.trim().length > 0) {
-        event.preventDefault();
-        importInputs[index + 1]?.focus();
-      } else if (event.key === "Backspace" && input.value.length === 0) {
-        importInputs[index - 1]?.focus();
-      }
-    });
-    input.addEventListener("paste", (event) => {
-      const words = event.clipboardData?.getData("text").trim().split(/\s+/).filter(Boolean) ?? [];
-      if (words.length !== 12 && words.length !== 24) {
-        return;
-      }
-      event.preventDefault();
-      fillWords(importInputs, words, "import");
-      refreshRecovery();
-    });
-  }
-
-  recoveryContinue?.addEventListener("click", () => {
-    mnemonic = importedMnemonic();
-    showStep("password");
-    refreshPassword();
-  });
+  ({ invalidateValidation } = bindRecoveryImportControls({
+    fillWords,
+    importInputs,
+    importedMnemonic,
+    importWordCount: () => importWordCount,
+    isRecoveryActive: () =>
+      steps.find((step) => !step.hidden)?.dataset["onboardingStep"] === "recovery",
+    recoveryContinue,
+    recoveryResult,
+    refreshPassword,
+    refreshRecovery,
+    setMnemonic: (phrase) => {
+      mnemonic = phrase;
+    },
+    showPasswordStep: () => showStep("password"),
+    wallet,
+    wordAssist,
+  }));
 
   const createNew = form.querySelector<HTMLButtonElement>("#create-new-button");
   createNew?.addEventListener("click", () => {

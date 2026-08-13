@@ -71,6 +71,13 @@ including the residual on the partially remediated `MCW-V09-127`, is in
 - The sign-request card renders domain rows by the payload's actual revision;
   rows that were never in the hash no longer appear as signed.
 
+## [Unreleased]
+
+### Added
+- Recovery-phrase import now flags unknown BIP39 words, offers prefix completions
+  while typing, and runs Krusty mnemonic validation on Continue before the vault
+  passphrase step.
+
 ## [0.9.0] - 2026-08-10
 
 Account-safe upgrades, one coherent public/private Send journey, managed service

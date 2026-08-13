@@ -126,6 +126,9 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     async previewAccount() {
       return account;
     },
+    async validateMnemonic() {
+      return true;
+    },
     async getGrantedAccounts(origin: string) {
       const current = vault();
       return grantedAccountIdsFor(current, origin)

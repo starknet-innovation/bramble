@@ -228,17 +228,68 @@ export const ONBOARDING_STYLES = `
     gap: ${SPACE.sm};
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  .recovery-fields { position: relative; }
+  .recovery-word-cell {
+    align-items: center;
+    display: flex;
+    gap: ${SPACE.xs};
+  }
+  .recovery-word-cell:has(> input[hidden]) { display: none; }
+  /* user-select: the position is a marker, not phrase text to copy. */
+  .recovery-word-cell > span:first-child {
+    font-family: var(--mc-font-mono);
+    font-size: ${TYPE.micro.size};
+    font-variant-numeric: tabular-nums;
+    min-width: 2ch;
+    text-align: right;
+    user-select: none;
+  }
+  /* Trades side padding for glyphs so an 8-character word still fits at 320px. */
   .recovery-word {
+    flex: 1;
     font-family: var(--mc-font-mono);
     font-size: ${TYPE.caption.size};
-    padding: 0 ${SPACE.sm};
+    min-width: 0;
+    padding: 0 ${SPACE.xs};
     text-align: center;
+  }
+  .recovery-word.is-invalid {
+    background: color-mix(in srgb, var(--mc-danger) 12%, transparent);
+    color: var(--mc-danger);
+  }
+  .recovery-suggestions {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-elev-md);
+    display: grid;
+    gap: 2px;
+    padding: ${SPACE.xs};
+    position: absolute;
+    z-index: 2;
+  }
+  .recovery-suggestion {
+    background: transparent;
+    border-radius: ${RADIUS.sm};
+    color: var(--mc-text);
+    font-family: var(--mc-font-mono);
+    font-size: ${TYPE.caption.size};
+    justify-content: flex-start;
+    min-height: 32px;
+    padding: 0 ${SPACE.sm};
+    text-align: left;
+  }
+  .recovery-suggestion:hover,
+  .recovery-suggestion:focus-visible {
+    background: var(--mc-elevated);
   }
   .recovery-grid.is-masked .recovery-word {
     filter: blur(6px);
     pointer-events: none;
     user-select: none;
   }
+  /* A label forwards clicks to its control even when the control is
+     pointer-events:none, so the cell must opt out too. */
+  .recovery-grid.is-masked .recovery-word-cell { pointer-events: none; }
   .onboarding-inline-action {
     background: transparent;
     color: var(--mc-muted);

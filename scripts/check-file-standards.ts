@@ -128,13 +128,19 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-views.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  // English BIP39 word list embeds the token `seed`; assist-only, never crypto.
+  "packages/presentation/wallet-ui/src/recovery/bip39-english.ts",
+  "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-import-bind.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-word-assist.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
   // Privileged UI message client: credentials transit directly to the
   // background and are never retained or rendered here.
   "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime-accounts.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-runtime.ts",
   // Public Argent multisig packages and verified signature fragments cross
   // these UI boundaries; no private signing material is ever present.
   "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-model.ts",
