@@ -64,6 +64,9 @@ const RAW_ERROR_BOUNDARY_FILES = new Set([
 const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/ledger/account-hash-signer.ts",
   "apps/extension/src/background/accounts/account-creation-inputs.ts",
+  // Privileged first-run boundary: the phrase is validated through Krusty and
+  // only the boolean verdict returns; the phrase is never logged or persisted.
+  "apps/extension/src/background/onboarding/onboarding-ops.ts",
   // Keeps the unlocked vault credential inside the privileged worker while
   // coordinating fail-closed network/vault commits; never persists or emits it.
   "apps/extension/src/background/runtime/active-network-mutation.ts",

@@ -115,7 +115,7 @@ test("does not re-enter proof preparation after the final registration read exha
         finalChecks += 1;
         await registrationStatus({ ...context, subject: "0x789", token });
       },
-      plan: { mode: "account", poolFeeFri: "0x0" },
+      plan: { mode: "account", poolFeeFri: "0x0", reviewedFee },
     }),
   ).rejects.toThrow("could not read pool registration (rate limited; retry shortly)");
   expect(finalChecks).toBe(1);

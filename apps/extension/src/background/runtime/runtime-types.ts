@@ -59,7 +59,7 @@ type GenerateMnemonicResponse = {
 /**
  * Successful mnemonic-validity response. Carries only the boolean verdict.
  */
-export type ValidateMnemonicResponse = {
+type ValidateMnemonicResponse = {
   readonly ok: true;
   readonly valid: boolean;
 };
