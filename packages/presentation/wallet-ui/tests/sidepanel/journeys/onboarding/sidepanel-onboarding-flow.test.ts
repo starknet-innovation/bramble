@@ -61,6 +61,24 @@ const click = (root: ParentNode, selector: string): void => {
   button.click();
 };
 
+const cellsOf = (root: ParentNode, kind: "generated" | "import"): readonly HTMLElement[] =>
+  Array.from(
+    root.querySelectorAll<HTMLElement>(`[data-recovery-grid="${kind}"] .recovery-word-cell`),
+  );
+
+const inputOf = (cell: HTMLElement): HTMLInputElement => {
+  const input = cell.querySelector<HTMLInputElement>("input.recovery-word");
+  if (!input) {
+    throw new Error("missing recovery word input");
+  }
+  return input;
+};
+
+const positionOf = (cell: HTMLElement): number =>
+  Number(cell.querySelector("span")?.textContent ?? Number.NaN);
+
+const wordOf = (cell: HTMLElement): string => inputOf(cell).value;
+
 const activeStep = (root: ParentNode): string | undefined =>
   Array.from(root.querySelectorAll<HTMLElement>("[data-onboarding-step]")).find(
     (step) => !step.hidden,
@@ -179,6 +197,31 @@ describe("staged onboarding", () => {
     click(flow.app, "#verify-continue");
     expect(activeStep(flow.app)).toBe("password");
     expect(flow.creations).toEqual([]);
+  });
+
+  test("keeps word positions labelled once filled, and cell visibility on the inputs", async () => {
+    const flow = mount();
+    click(flow.app, "#create-new-button");
+    await tick();
+
+    const generated = cellsOf(flow.app, "generated");
+    expect(generated.length).toBe(24);
+    expect(generated.slice(0, 12).map(wordOf)).toEqual(MNEMONIC.split(" "));
+    expect(generated.map(positionOf)).toEqual(Array.from({ length: 24 }, (_, index) => index + 1));
+
+    // The toggle drives `hidden` on the inputs only; a cell carrying it could
+    // never be revealed again (see recoveryWordInputs).
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    const imported = cellsOf(flow.app, "import");
+    const hiddenFlags = () => imported.map((cell) => inputOf(cell).hidden);
+    expect(hiddenFlags().filter(Boolean).length).toBe(12);
+    click(flow.app, "#phrase-length-toggle");
+    expect(hiddenFlags().filter(Boolean).length).toBe(0);
+    click(flow.app, "#phrase-length-toggle");
+    expect(hiddenFlags().filter(Boolean).length).toBe(12);
+    expect(imported.map(positionOf)).toEqual(Array.from({ length: 24 }, (_, index) => index + 1));
+    expect(imported.some((cell) => cell.hasAttribute("hidden"))).toBe(false);
   });
 
   test("keeps BIP39 membership advisory without blocking Continue", async () => {
