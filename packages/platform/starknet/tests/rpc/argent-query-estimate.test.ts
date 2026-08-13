@@ -13,6 +13,7 @@ const account: DerivedAccountRef = {
   accountContractType: "argent",
   address: "0x123",
   classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+  deploymentSalt: "0x789",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
   id: "SN_MAIN:0x123",
   networkId: "SN_MAIN",
@@ -20,8 +21,14 @@ const account: DerivedAccountRef = {
   publicKeyY: "0xabc",
 };
 
-const makeProvider = (liveClassHash = account.classHash) => {
+const makeProvider = (
+  liveClassHash = account.classHash,
+  liveOwner = account.publicKeyX,
+  liveGuardian = "0x0",
+  acceptedHash: () => string | undefined = () => "0xdeadbeef",
+) => {
   const calls: { readonly args: readonly unknown[]; readonly method: string }[] = [];
+  const stateReads: unknown[] = [];
   const channel = new Proxy(
     {},
     {
@@ -50,7 +57,7 @@ const makeProvider = (liveClassHash = account.classHash) => {
           }
           if (method === "getChainId") return "0x534e5f4d41494e";
           if (method === "getNonceForAddress") return "0x0";
-          if (method === "invoke") return { transaction_hash: "0xdeadbeef" };
+          if (method === "invoke") return { transaction_hash: acceptedHash() };
           if (method === "getBlockWithTxs") {
             return { block_number: 100, timestamp: 1_700_000_000, transactions: [] };
           }
@@ -62,10 +69,19 @@ const makeProvider = (liveClassHash = account.classHash) => {
   );
   const provider = {
     channel,
+    callContract: async (call: { readonly entrypoint?: unknown }, block: unknown) => {
+      const role = call.entrypoint === "get_guardian" ? "guardian" : "owner";
+      stateReads.push([role, block]);
+      return [role === "guardian" ? liveGuardian : liveOwner];
+    },
     getChainId: async () => "0x534e5f4d41494e",
-    getClassHashAt: async () => liveClassHash,
+    getBlockNumber: async () => 100,
+    getClassHashAt: async (_address: string, block: unknown) => {
+      stateReads.push(["class", block]);
+      return liveClassHash;
+    },
   } as unknown as RpcProvider;
-  return { calls, provider };
+  return { calls, provider, stateReads };
 };
 
 const requestFor = (
@@ -101,23 +117,29 @@ test("Argent invoke estimates validate with a public query signature", async () 
 });
 
 test("Argent submission settles validation-inclusive bounds before private signing", async () => {
-  const { calls, provider } = makeProvider();
+  let signedHash: string | undefined;
+  const { calls, provider } = makeProvider(
+    account.classHash,
+    account.publicKeyX,
+    "0x0",
+    () => signedHash,
+  );
   let privatelySigned = 0;
-  await expect(
-    submitInvokeTransaction(
-      {
-        account,
-        calls: [{ calldata: [], contractAddress: "0x111", entrypoint: "transfer" }],
-        reviewedFee: { overallFee: "100", unit: "FRI" },
-        rpcUrls: ["https://rpc.invalid"],
-        signHash: async () => {
-          privatelySigned += 1;
-          return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
-        },
+  const result = await submitInvokeTransaction(
+    {
+      account,
+      calls: [{ calldata: [], contractAddress: "0x111", entrypoint: "transfer" }],
+      reviewedFee: { overallFee: "100", unit: "FRI" },
+      rpcUrls: ["https://rpc.invalid"],
+      signHash: async (messageHash) => {
+        privatelySigned += 1;
+        signedHash = messageHash;
+        return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
       },
-      () => provider,
-    ),
-  ).resolves.toMatchObject({ transactionHash: "0xdeadbeef" });
+    },
+    () => provider,
+  );
+  expect(signedHash).toBe(result.transactionHash);
 
   expect(requestFor(calls, "getEstimateFee")).toContain(
     `"signature":["1","0","${account.publicKeyX}","0x1","0x1"]`,
@@ -147,6 +169,64 @@ test("Argent invoke estimate and submission reject a different live class before
     () => submitInvokeTransaction(input, () => makeProvider("0x456").provider),
   ]) {
     await expect(operation()).rejects.toThrow("class does not match the pinned release");
+  }
+  expect(privatelySigned).toBe(0);
+});
+
+test("Argent operations reject a changed owner at the same accepted block", async () => {
+  let privatelySigned = 0;
+  const input = {
+    account,
+    calls: [{ calldata: [], contractAddress: "0x111", entrypoint: "transfer" }],
+    reviewedFee: { overallFee: "100", unit: "FRI" } as const,
+    rpcUrls: ["https://rpc.invalid"],
+    signHash: async () => {
+      privatelySigned += 1;
+      return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+    },
+  };
+
+  for (const operation of [estimateInvokeFee, submitInvokeTransaction]) {
+    const { provider, stateReads } = makeProvider(account.classHash, "0x456");
+    await expect(operation(input, () => provider)).rejects.toThrow(
+      "owner does not match the wallet signer",
+    );
+    expect(stateReads).toEqual([
+      ["class", 100],
+      ["owner", 100],
+    ]);
+  }
+  expect(privatelySigned).toBe(0);
+});
+
+test("Argent operations reject a guardian at the same accepted block", async () => {
+  let privatelySigned = 0;
+  const input = {
+    account,
+    calls: [{ calldata: [], contractAddress: "0x111", entrypoint: "transfer" }],
+    reviewedFee: { overallFee: "100", unit: "FRI" } as const,
+    rpcUrls: ["https://rpc.invalid"],
+    signHash: async () => {
+      privatelySigned += 1;
+      return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+    },
+  };
+
+  for (const operation of [estimateInvokeFee, submitInvokeTransaction]) {
+    const { calls, provider, stateReads } = makeProvider(
+      account.classHash,
+      account.publicKeyX,
+      "0x456",
+    );
+    await expect(operation(input, () => provider)).rejects.toThrow(
+      "guardian is not supported by this wallet",
+    );
+    expect(stateReads).toEqual([
+      ["class", 100],
+      ["owner", 100],
+      ["guardian", 100],
+    ]);
+    expect(calls).toHaveLength(0);
   }
   expect(privatelySigned).toBe(0);
 });

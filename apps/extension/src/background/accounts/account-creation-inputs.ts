@@ -7,7 +7,11 @@ import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
 import type { CreateVaultAccountInput } from "@mc-wallet/vault/service";
 import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import {
+  isStarkFieldElement,
+  isStarknetNetworkId,
+  normalizeFeltInput,
+} from "@mc-wallet/wallet-model/networks";
 import {
   isMnemonicPassphrase,
   isMnemonicText,
@@ -21,6 +25,20 @@ const readOptionalIndex = (value: unknown): number | null | undefined => {
   return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
 };
 
+const readDeploymentSalt = (
+  value: unknown,
+  accountContractType: AccountDerivationInput["accountContractType"],
+): string | null | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || accountContractType === "openzeppelin") {
+    return null;
+  }
+  const salt = normalizeFeltInput(value);
+  return isStarkFieldElement(salt) ? salt : null;
+};
+
 const readDerivationFields = (
   message: Record<string, unknown>,
 ): Omit<AccountDerivationInput, "mnemonic"> | null => {
@@ -32,14 +50,20 @@ const readDerivationFields = (
   if (!isMnemonicPassphrase(message["mnemonicPassphrase"])) {
     return null;
   }
-  if (!isAccountContractType(message["accountContractType"])) {
+  const accountContractType = message["accountContractType"];
+  if (!isAccountContractType(accountContractType)) {
+    return null;
+  }
+  const deploymentSalt = readDeploymentSalt(message["deploymentSalt"], accountContractType);
+  if (deploymentSalt === null) {
     return null;
   }
   if (message["networkId"] !== undefined && !isStarknetNetworkId(message["networkId"])) {
     return null;
   }
   return {
-    accountContractType: message["accountContractType"],
+    accountContractType,
+    ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
     ...(accountIndex === undefined ? {} : { accountIndex }),
     ...(addressIndex === undefined ? {} : { addressIndex }),
     ...(message["mnemonicPassphrase"] === undefined
@@ -60,6 +84,7 @@ export const readCreateAccountInput = (message: unknown): CreateVaultAccountInpu
       "accountIndex",
       "accountContractType",
       "addressIndex",
+      "deploymentSalt",
       "mnemonic",
       "mnemonicPassphrase",
       "networkId",
@@ -89,6 +114,7 @@ export const readPreviewAccountInput = (message: unknown): AccountDerivationInpu
       "accountIndex",
       "accountContractType",
       "addressIndex",
+      "deploymentSalt",
       "mnemonic",
       "mnemonicPassphrase",
       "networkId",

@@ -16,7 +16,11 @@ import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { MultisigOpsDeps } from "./multisig-deps";
 
-const sameStrings = (left: readonly string[], right: readonly string[]): boolean =>
+/**
+ * Compares already-canonical ordered signer GUIDs. Untrusted aliases fail by
+ * inequality; this pure comparison never throws or normalizes authority.
+ */
+export const sameArgentSignerGuids = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length && left.every((value, index) => value === right[index]);
 
 /**
@@ -28,7 +32,7 @@ export const storedArgentPublicConfig = (
 
 const matchesChain = (current: ArgentMultisigPublicConfig, chain: ArgentMultisigConfig): boolean =>
   current.threshold === chain.threshold &&
-  sameStrings(current.signerPublicKeys.map(argentSignerGuid), chain.signerGuids);
+  sameArgentSignerGuids(current.signerPublicKeys.map(argentSignerGuid), chain.signerGuids);
 
 type ConfigCandidate = {
   readonly change: ArgentMultisigConfigChange;

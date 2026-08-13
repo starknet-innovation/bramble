@@ -43,7 +43,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 
 | Key / state | Area | Sensitivity | Identity and bounds | Failure policy |
 | --- | --- | --- | --- | --- |
-| `mc-wallet:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, optional viewing keys, grants | schema v6; account ids unique; strict cross-references | fail closed |
+| `mc-wallet:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v7; account ids unique; strict cross-references | fail closed |
 | `mc-wallet:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
 | `mc-wallet:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
 | `mc-wallet:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |

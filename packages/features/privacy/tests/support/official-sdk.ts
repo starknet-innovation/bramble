@@ -29,6 +29,7 @@ export const STRK20_SDK_CONTEXT: Strk20AccountContext = {
     proverUrl: "https://prover.example",
     subaccountAnonymizerAddress: "0x789",
   },
+  isAuthorized: () => true,
   rpcUrls: ["https://rpc.example"],
   signHash: async () => ({ publicKey: "0x1", r: "0x2", s: "0x3" }),
   viewingKey: async () => "0x55",

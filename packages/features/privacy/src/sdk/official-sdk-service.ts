@@ -241,6 +241,7 @@ export const createOfficialStrk20Service = ({
                   entrypoint: "apply_actions",
                 },
               ],
+              isAuthorized: input.isAuthorized,
               proof: callAndProof.proof,
               rpcUrls: input.rpcUrls,
               signHash: async (messageHash) => {
@@ -363,6 +364,7 @@ export const createOfficialStrk20Service = ({
                     entrypoint: callAndProof.call.entry_point,
                   },
                 ],
+                isAuthorized: input.isAuthorized,
                 proof: callAndProof.proof,
                 reviewedFee,
                 rpcUrls: input.rpcUrls,
@@ -459,6 +461,7 @@ export const createOfficialStrk20Service = ({
           const result = await submitInvoke({
             account: prepared.account,
             calls,
+            isAuthorized: prepared.isAuthorized,
             proof: prepared.proof,
             ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
             rpcUrls: prepared.rpcUrls,

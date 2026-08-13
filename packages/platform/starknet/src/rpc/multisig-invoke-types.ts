@@ -79,22 +79,12 @@ export type PreparedArgentMultisigInvokeV3 = {
 };
 
 /**
- * Optional V3 data fields fixed at preparation time.
- */
-export type PrepareArgentMultisigInvokeV3Options = {
-  readonly feeDataAvailabilityMode?: EDataAvailabilityMode;
-  readonly nonceDataAvailabilityMode?: EDataAvailabilityMode;
-  readonly tip?: string;
-};
-
-/**
  * Inputs for read-only preparation against configured RPC failover.
  */
 export type PrepareArgentMultisigInvokeV3Input = {
   readonly account: ArgentMultisigAccountInput;
   readonly calls: readonly ArgentMultisigCall[];
   readonly config: ArgentMultisigConfig;
-  readonly options?: PrepareArgentMultisigInvokeV3Options;
   readonly rpcUrls: readonly string[];
 };
 
@@ -103,6 +93,8 @@ export type PrepareArgentMultisigInvokeV3Input = {
  */
 export type SubmitPreparedArgentMultisigInvokeV3Input = {
   readonly config: ArgentMultisigConfig;
+  /** Live authorization captured by the privileged caller. */
+  readonly isAuthorized?: () => boolean;
   readonly prepared: PreparedArgentMultisigInvokeV3;
   readonly rpcUrls: readonly string[];
   readonly signatures: readonly StarkSignature[];

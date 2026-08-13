@@ -11,6 +11,7 @@ import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
+  isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
   sameFelt,
@@ -79,6 +80,24 @@ export const resolveAccountClassHash = async (
   return input.classHash ?? getOzAccountClassHash(kms, networkId);
 };
 
+const resolvedDeploymentSalt = (
+  accountContractType: AccountContractType,
+  value: string | undefined,
+  publicKeyX: string,
+): string | undefined => {
+  if (accountContractType === "openzeppelin") {
+    if (value !== undefined) {
+      throw new WalletError("OpenZeppelin accounts do not accept an Argent deployment salt");
+    }
+    return undefined;
+  }
+  const salt = value ?? publicKeyX;
+  if (!isStarkFieldElement(salt)) {
+    throw new WalletError("Invalid Argent deployment salt");
+  }
+  return canonicalFelt(salt) as string;
+};
+
 /**
  * Resolves one supported contract class and counterfactual address from an
  * already-public signer key. Invalid inputs and boundary results fail closed.
@@ -88,10 +107,15 @@ export const deriveAccountContractAddress = async (
   input: {
     readonly accountContractType: AccountContractType;
     readonly classHash?: string;
+    readonly deploymentSalt?: string;
     readonly networkId: StarknetNetworkId;
     readonly publicKeyX: string;
   },
-): Promise<{ readonly address: string; readonly classHash: string }> => {
+): Promise<{
+  readonly address: string;
+  readonly classHash: string;
+  readonly deploymentSalt?: string;
+}> => {
   if (!isStarknetNetworkId(input.networkId)) {
     throw new WalletError("Invalid Starknet network");
   }
@@ -104,9 +128,14 @@ export const deriveAccountContractAddress = async (
   }
   const classHash = canonicalFelt(classHashInput) as string;
   const publicKeyX = canonicalFelt(input.publicKeyX) as string;
+  const deploymentSalt = resolvedDeploymentSalt(
+    input.accountContractType,
+    input.deploymentSalt,
+    publicKeyX,
+  );
   const addressInput =
     input.accountContractType === "argent"
-      ? argentAccountAddress(publicKeyX, publicKeyX)
+      ? argentAccountAddress(publicKeyX, deploymentSalt)
       : await kms.deriveOzAccountAddress(publicKeyX, classHash);
   if (!isNonZeroStarkFieldElement(addressInput)) {
     throw new WalletError(
@@ -115,5 +144,9 @@ export const deriveAccountContractAddress = async (
         : "Krusty KMS returned invalid account address",
     );
   }
-  return { address: canonicalFelt(addressInput) as string, classHash };
+  return {
+    address: canonicalFelt(addressInput) as string,
+    classHash,
+    ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
+  };
 };

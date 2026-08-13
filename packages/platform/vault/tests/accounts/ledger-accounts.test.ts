@@ -10,7 +10,7 @@ import {
 } from "@mc-wallet/starknet/account-contracts";
 import { fakeKms } from "@mc-wallet/testkit/fake-kms";
 import { deriveLedgerAccount, deriveLedgerAccountRefs } from "@mc-wallet/vault/accounts";
-import { isVaultV2, isVaultV6, type Vault } from "@mc-wallet/vault/schema";
+import { isVaultV2, isVaultV7, type Vault } from "@mc-wallet/vault/schema";
 import { isAccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 
@@ -68,6 +68,7 @@ describe("deriveLedgerAccount", () => {
     expect(account).toMatchObject({
       accountContractType: "argent",
       address: argentAccountAddress(PUBLIC_KEY_X, PUBLIC_KEY_X),
+      deploymentSalt: PUBLIC_KEY_X,
     });
     expect(sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)).toBe(true);
   });
@@ -149,8 +150,8 @@ describe("keyless account in the vault schema", () => {
   };
 
   test("a current vault admits a keyless Ledger account with no signing key", () => {
-    const vault: Vault = { ...base, schemaVersion: 6 };
-    expect(isVaultV6(vault)).toBe(true);
+    const vault: Vault = { ...base, schemaVersion: 7 };
+    expect(isVaultV7(vault)).toBe(true);
   });
 
   test("a Ledger account is rejected at the legacy v2 schema", () => {
@@ -159,9 +160,9 @@ describe("keyless account in the vault schema", () => {
 
   test("a Ledger account carrying a signing key is rejected", () => {
     expect(
-      isVaultV6({
+      isVaultV7({
         ...base,
-        schemaVersion: 6,
+        schemaVersion: 7,
         signingKeys: [{ accountId: ledgerAccount.id, privateKey: "0x1" }],
       }),
     ).toBe(false);
@@ -179,13 +180,13 @@ describe("keyless account in the vault schema", () => {
       publicKeyY: "0x4",
     };
     expect(
-      isVaultV6({
+      isVaultV7({
         accounts: [hdAccount],
         accountSecrets: [],
         activeAccountId: hdAccount.id,
         mnemonic: null,
         originGrants: [],
-        schemaVersion: 6,
+        schemaVersion: 7,
         signingKeys: [],
       }),
     ).toBe(false);

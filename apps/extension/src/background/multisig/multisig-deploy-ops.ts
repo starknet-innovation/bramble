@@ -24,6 +24,7 @@ import {
   readDeployMultisigInput,
   readReviewDeploymentInput,
 } from "./multisig-inputs";
+import { recoverArgentDeploymentHash } from "./multisig-operation-recovery";
 
 type DeployableArgentRecord = ArgentMultisigRecord & {
   readonly deployment: NonNullable<ArgentMultisigRecord["deployment"]>;
@@ -69,8 +70,10 @@ const checkedDeploymentRecord = async (
 const claimDeployment = async (
   deps: MultisigOpsDeps,
   record: DeployableArgentRecord,
+  isAuthorized: () => boolean,
 ): Promise<RuntimeResponse | string> => {
-  const stored = await deps.multisigStore.upsertMultisig(record);
+  const stored = await deps.multisigStore.upsertMultisig(record, isAuthorized);
+  if (stored === "unauthorized") return { error: "wallet locked" };
   if (stored !== "stored") {
     return { error: `Argent multisig registry ${stored}` };
   }
@@ -90,12 +93,14 @@ const claimDeployment = async (
       : { error: `Argent multisig deployment claim ${claim}` };
   }
   const existing = await deps.multisigStore.getOperation(operationId);
-  return existing?.transactionHash
+  const transactionHash =
+    existing?.transactionHash ?? (await recoverArgentDeploymentHash(deps, record, operationId));
+  return transactionHash
     ? {
         address: record.address,
         multisig: deploymentView(record),
         ok: true,
-        transactionHash: existing.transactionHash,
+        transactionHash,
       }
     : { error: "Argent multisig deployment outcome is unresolved" };
 };
@@ -185,7 +190,7 @@ const submitDeployment = async (
   if (context.error !== undefined) {
     return { error: context.error };
   }
-  const claimed = await claimDeployment(deps, record);
+  const claimed = await claimDeployment(deps, record, context.authorized.isCurrent);
   if (typeof claimed !== "string") {
     return claimed;
   }
@@ -203,6 +208,7 @@ const submitDeployment = async (
         account: context.signer,
         vaultPassphrase: context.active.vaultPassphrase,
       }),
+      isAuthorized: context.authorized.isCurrent,
     });
     transactionHash = submitted.transactionHash;
   } catch (error) {

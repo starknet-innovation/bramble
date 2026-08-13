@@ -34,6 +34,7 @@ const account: AccountRef = {
 const context: Strk20AccountContext = {
   account,
   config: null,
+  isAuthorized: () => true,
   rpcUrls: ["https://rpc.example"],
   async signHash() {
     return { publicKey: "0x3", r: "0x1", s: "0x2" };

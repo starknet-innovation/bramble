@@ -199,17 +199,13 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
     if (!multisigId) return;
     const data = new FormData(form);
     run(deps, button, "multisig-propose-result", async () => {
-      const result = await deps.multisig.prepareIntent(
-        multisigId,
-        [
-          {
-            calldata: parseFelts(String(data.get("calldata") ?? "")),
-            contractAddress: normalizeFeltInput(String(data.get("contractAddress") ?? "")),
-            entrypoint: String(data.get("entrypoint") ?? "").trim(),
-          },
-        ],
-        String(data.get("summary") ?? "").trim(),
-      );
+      const result = await deps.multisig.prepareIntent(multisigId, [
+        {
+          calldata: parseFelts(String(data.get("calldata") ?? "")),
+          contractAddress: normalizeFeltInput(String(data.get("contractAddress") ?? "")),
+          entrypoint: String(data.get("entrypoint") ?? "").trim(),
+        },
+      ]);
       return `Exact intent prepared · maximum fee ${result.feeReview ? formatFeeEstimate(result.feeReview) : "bound in package"}`;
     });
   });

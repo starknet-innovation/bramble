@@ -54,10 +54,7 @@ const MAX_INTENTS = 100;
 const MAX_OPERATIONS = 100;
 
 const isTerminalIntent = (intent: ArgentMultisigSigningIntent): boolean =>
-  intent.state === "accepted" ||
-  intent.state === "rejected" ||
-  intent.state === "stale" ||
-  intent.state === "submitted";
+  intent.state === "accepted" || intent.state === "rejected" || intent.state === "stale";
 
 /**
  * Trusted-recipient projection of one watched shared account.
@@ -72,7 +69,7 @@ export const multisigAddressBookEntry = (record: ArgentMultisigRecord): AddressB
 /**
  * Mutation outcome. Invalid and conflicting data is refused without writes.
  */
-export type MultisigStoreWriteResult = "conflict" | "full" | "invalid" | "stored";
+export type MultisigStoreWriteResult = "conflict" | "full" | "invalid" | "stored" | "unauthorized";
 
 /**
  * Persistent registry API used by privileged background orchestration.
@@ -86,16 +83,28 @@ export type MultisigStore = {
   readonly listIntents: () => Promise<readonly ArgentMultisigSigningIntent[]>;
   readonly listMultisigs: () => Promise<readonly ArgentMultisigRecord[]>;
   readonly listOperations: () => Promise<readonly ArgentMultisigOperationRecord[]>;
+  /** Clears restart-abandoned signer claims before this worker accepts messages. */
+  readonly recoverSigningClaims: () => Promise<number>;
   readonly releaseOperation: (id: string) => Promise<void>;
-  readonly removeMultisig: (id: string) => Promise<void>;
+  readonly removeMultisig: (
+    id: string,
+    isAuthorized?: () => boolean,
+  ) => Promise<"removed" | "unauthorized">;
   readonly setOperationHash: (id: string, transactionHash: string) => Promise<void>;
   readonly updateCurrentConfig: (
     id: string,
     expected: ArgentMultisigCurrentConfig,
     next: ArgentMultisigCurrentConfig,
+    isAuthorized?: () => boolean,
   ) => Promise<MultisigStoreWriteResult>;
-  readonly upsertIntent: (record: ArgentMultisigSigningIntent) => Promise<MultisigStoreWriteResult>;
-  readonly upsertMultisig: (record: ArgentMultisigRecord) => Promise<MultisigStoreWriteResult>;
+  readonly upsertIntent: (
+    record: ArgentMultisigSigningIntent,
+    isAuthorized?: () => boolean,
+  ) => Promise<MultisigStoreWriteResult>;
+  readonly upsertMultisig: (
+    record: ArgentMultisigRecord,
+    isAuthorized?: () => boolean,
+  ) => Promise<MultisigStoreWriteResult>;
 };
 
 type StoredShape = {
@@ -291,10 +300,7 @@ const claimOperationIn = (
     const terminalTargets = new Set(
       shape.intents.filter(isTerminalIntent).map((intent) => intent.prepared.transactionHash),
     );
-    const evict = shape.operations.findIndex(
-      (operation) =>
-        operation.transactionHash !== undefined || terminalTargets.has(operation.target),
-    );
+    const evict = shape.operations.findIndex((operation) => terminalTargets.has(operation.target));
     if (evict < 0) {
       return { result: "full", shape };
     }
@@ -338,6 +344,15 @@ const createStoreMethods = (
   async listOperations() {
     return [...(await read()).operations];
   },
+  async recoverSigningClaims() {
+    const shape = await read();
+    const operations = shape.operations.filter((record) => record.kind !== "sign");
+    const recovered = shape.operations.length - operations.length;
+    if (recovered > 0) {
+      await write({ ...shape, operations });
+    }
+    return recovered;
+  },
   async releaseOperation(id) {
     const shape = await read();
     await write({
@@ -345,8 +360,17 @@ const createStoreMethods = (
       operations: shape.operations.filter((record) => record.id !== id),
     });
   },
-  async removeMultisig(id) {
-    await write(removeMultisigIn(await read(), id));
+  async removeMultisig(id, isAuthorized = () => true) {
+    if (!isAuthorized()) return "unauthorized";
+    const previous = await read();
+    const next = removeMultisigIn(previous, id);
+    if (!isAuthorized()) return "unauthorized";
+    await write(next);
+    if (!isAuthorized()) {
+      await write(previous);
+      return "unauthorized";
+    }
+    return "removed";
   },
   async setOperationHash(id, transactionHash) {
     const shape = await read();
@@ -363,24 +387,49 @@ const createStoreMethods = (
       operations: shape.operations.map((record) => (record.id === id ? updated : record)),
     });
   },
-  async updateCurrentConfig(id, expected, next) {
-    const mutation = updateCurrentConfigIn(await read(), id, expected, next);
+  async updateCurrentConfig(id, expected, next, isAuthorized = () => true) {
+    if (!isAuthorized()) return "unauthorized";
+    const previous = await read();
+    const mutation = updateCurrentConfigIn(previous, id, expected, next);
     if (mutation.result === "stored") {
+      if (!isAuthorized()) return "unauthorized";
       await write(mutation.shape);
+      if (!isAuthorized()) {
+        await write(previous);
+        return "unauthorized";
+      }
     }
     return mutation.result;
   },
-  async upsertIntent(record) {
-    const mutation = upsertIntentIn(await read(), record);
+  async upsertIntent(record, isAuthorized = () => true) {
+    if (!isAuthorized()) {
+      return "unauthorized";
+    }
+    const previous = await read();
+    const mutation = upsertIntentIn(previous, record);
     if (mutation.result === "stored") {
+      if (!isAuthorized()) {
+        return "unauthorized";
+      }
       await write(mutation.shape);
+      if (!isAuthorized()) {
+        await write(previous);
+        return "unauthorized";
+      }
     }
     return mutation.result;
   },
-  async upsertMultisig(record) {
-    const mutation = upsertMultisigIn(await read(), record);
+  async upsertMultisig(record, isAuthorized = () => true) {
+    if (!isAuthorized()) return "unauthorized";
+    const previous = await read();
+    const mutation = upsertMultisigIn(previous, record);
     if (mutation.result === "stored") {
+      if (!isAuthorized()) return "unauthorized";
       await write(mutation.shape);
+      if (!isAuthorized()) {
+        await write(previous);
+        return "unauthorized";
+      }
     }
     return mutation.result;
   },
@@ -403,10 +452,13 @@ export const createMultisigStore = ({ store }: { readonly store: KeyValueStore }
  */
 export const memoryMultisigStore = (): MultisigStore => {
   let shape = EMPTY_SHAPE;
-  return createStoreMethods(
-    async () => shape,
-    async (next) => {
-      shape = next;
-    },
+  return serializeStoreMutations<MultisigStore>(
+    createStoreMethods(
+      async () => shape,
+      async (next) => {
+        shape = next;
+      },
+    ),
+    ["getIntent", "getOperation", "listIntents", "listMultisigs", "listOperations"],
   );
 };

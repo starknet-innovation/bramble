@@ -62,7 +62,7 @@ const walletStub = (connected: () => readonly AccountRef[], grants: string[] = [
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 6 as const,
+      schemaVersion: 7 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

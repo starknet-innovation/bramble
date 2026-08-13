@@ -36,11 +36,20 @@ const isName = (value: unknown): value is string | undefined =>
     value.length <= MULTISIG_LIMITS.nameLength &&
     value.trim() === value);
 
-const isSummary = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length > 0 &&
-  value.length <= MULTISIG_LIMITS.summaryLength &&
-  value.trim() === value;
+type NormalizedArgentMultisigCall = {
+  readonly calldata: string[];
+  readonly contractAddress: string;
+  readonly entrypoint: string;
+};
+
+/**
+ * Copies validated frozen calls into Starknet.js's mutable calldata shape.
+ * This projection adds no authority and cannot fail.
+ */
+export const normalizedArgentMultisigCalls = (
+  calls: ArgentMultisigSigningIntent["prepared"]["calls"],
+): readonly NormalizedArgentMultisigCall[] =>
+  calls.map((call) => ({ ...call, calldata: [...call.calldata] }));
 
 const isDeployFields = (value: Record<string, unknown>): boolean => {
   if (
@@ -164,18 +173,15 @@ export const readPrepareIntentInput = (
 ): {
   readonly calls: readonly ArgentMultisigCall[];
   readonly multisigId: string;
-  readonly summary: string;
 } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["calls", "multisigId", "summary", "type"]) &&
+  hasOnlyKnownKeys(message, ["calls", "multisigId", "type"]) &&
   message["type"] === "wallet.prepareArgentMultisigIntent" &&
   isAccountId(message["multisigId"]) &&
-  isArgentMultisigCalls(message["calls"]) &&
-  isSummary(message["summary"])
+  isArgentMultisigCalls(message["calls"])
     ? {
         calls: message["calls"],
         multisigId: message["multisigId"],
-        summary: message["summary"],
       }
     : null;
 
@@ -235,6 +241,21 @@ export const argentMultisigIntentPackage = (
   kind: "mc-wallet.argent-multisig-intent",
   version: 1,
 });
+
+/**
+ * Discards untrusted remote lifecycle claims and derives local authority only
+ * from already-validated signature count. This pure projection never throws.
+ */
+export const locallyDerivedImportedIntent = (
+  intent: ArgentMultisigSigningIntent,
+): ArgentMultisigSigningIntent => {
+  const { broadcastTransactionHash: _remoteBroadcast, ...imported } = intent;
+  return {
+    ...imported,
+    state:
+      imported.signatures.length === imported.configSnapshot.threshold ? "ready" : "collecting",
+  };
+};
 
 /**
  * Parses a full frozen intent package without normalizing any signed field.

@@ -31,7 +31,7 @@ import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { PassiveUnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 import { FEE_REVIEW_REQUIRED } from "./fee-review";
 
 /**
@@ -347,6 +347,7 @@ export const executeDeclareApproval = async (
   if (!passphrase) {
     return { error: "wallet locked" };
   }
+  const authorized = captureSessionAuthorization(session);
   const preferences = await preferencesStore.read();
   if (input.context && preferences.activeNetworkId !== input.context.networkId) {
     return { error: "approval context changed" };
@@ -376,6 +377,7 @@ export const executeDeclareApproval = async (
       account,
       compiledClassHash: input.declare.compiledClassHash,
       contractClass: input.declare.contractClass,
+      isAuthorized: authorized.isCurrent,
       // The declaration fee the approval card showed becomes the ceiling this
       // submission may sign under (MCW-V09-119), and the deployment fee it
       // showed alongside becomes the ceiling on the deployment submitted first.

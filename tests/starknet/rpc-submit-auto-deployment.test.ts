@@ -41,15 +41,16 @@ type Seen = {
   deploys: number;
   estimateBatchSizes: number[];
   invokes: number;
+  signedHashes: string[];
 };
 
 const undeployedProvider = (invokeHash: string | null): { provider: RpcProvider; seen: Seen } => {
-  const seen: Seen = { deploys: 0, estimateBatchSizes: [], invokes: 0 };
+  const seen: Seen = { deploys: 0, estimateBatchSizes: [], invokes: 0, signedHashes: [] };
   const channel = new Proxy(
     {
       async deployAccount() {
         seen.deploys += 1;
-        return { transaction_hash: "0xdedede" };
+        return { transaction_hash: seen.signedHashes[0] };
       },
       async getEstimateFee(invocations: readonly unknown[]) {
         seen.estimateBatchSizes.push(invocations.length);
@@ -95,7 +96,11 @@ const undeployedProvider = (invokeHash: string | null): { provider: RpcProvider;
   return { provider, seen };
 };
 
-const submit = async (provider: RpcProvider, reviewedFee: string): Promise<unknown> =>
+const submit = async (
+  provider: RpcProvider,
+  reviewedFee: string,
+  signedHashes: string[],
+): Promise<unknown> =>
   submitInvokeTransaction(
     {
       account,
@@ -103,7 +108,8 @@ const submit = async (provider: RpcProvider, reviewedFee: string): Promise<unkno
       reviewedDeploymentFee: { overallFee: "100000", unit: "FRI" },
       reviewedFee: { overallFee: reviewedFee, unit: "FRI" },
       rpcUrls: ["https://rpc.example"],
-      async signHash() {
+      async signHash(messageHash) {
+        signedHashes.push(messageHash);
         return { publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
       },
     },
@@ -113,7 +119,7 @@ const submit = async (provider: RpcProvider, reviewedFee: string): Promise<unkno
 describe("auto-deployed invoke submission", () => {
   test("settles invoke bounds against deploy-then-invoke state before broadcasting deployment", async () => {
     const { provider, seen } = undeployedProvider("0xcafe");
-    const result = await submit(provider, "1");
+    const result = await submit(provider, "1", seen.signedHashes);
 
     expect(result).toBeInstanceOf(Error);
     expect((result as Error).message).toContain("rose above the amount you reviewed");
@@ -127,10 +133,12 @@ describe("auto-deployed invoke submission", () => {
     ["a malformed invoke success hash", "not-a-hash"],
   ])("reports the accepted deployment hash after %s", async (_label, invokeHash) => {
     const { provider, seen } = undeployedProvider(invokeHash);
-    const result = await submit(provider, "100000");
+    const result = await submit(provider, "100000", seen.signedHashes);
 
     expect(result).toBeInstanceOf(Error);
-    expect((result as Error).message).toContain("Account deployment 0xdedede completed");
+    expect((result as Error).message).toContain(
+      `Account deployment ${seen.signedHashes[0]} completed`,
+    );
     expect((result as Error).message).toContain("Check on-chain state before retrying");
     expect(seen.estimateBatchSizes).toEqual([2, 1]);
     expect(seen.deploys).toBe(1);

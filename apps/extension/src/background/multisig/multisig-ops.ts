@@ -23,6 +23,7 @@ import { captureSessionAuthorization } from "../runtime/session";
 import {
   markObservedArgentIntentOutcomes,
   reconcileArgentCurrentConfig,
+  sameArgentSignerGuids,
   storedArgentPublicConfig,
 } from "./multisig-config-reconcile";
 import { handleMultisigDeployOps } from "./multisig-deploy-ops";
@@ -42,20 +43,23 @@ export type { MultisigOpsDeps } from "./multisig-deps";
 const addRecord = async (
   store: MultisigStore,
   record: ArgentMultisigRecord,
+  isAuthorized: () => boolean,
 ): Promise<{
   readonly record: ArgentMultisigRecord;
   readonly result: Awaited<ReturnType<MultisigStore["upsertMultisig"]>>;
 }> => {
   const existing = (await store.listMultisigs()).find((candidate) => candidate.id === record.id);
-  if (!existing) return { record, result: await store.upsertMultisig(record) };
+  if (!existing) return { record, result: await store.upsertMultisig(record, isAuthorized) };
   const expected = storedArgentPublicConfig(existing);
   if (!expected || !record.currentConfig) return { record, result: "invalid" };
   const returned = { ...existing, currentConfig: record.currentConfig };
-  const updated = await store.updateCurrentConfig(existing.id, expected, record.currentConfig);
-  return {
-    record: returned,
-    result: updated === "stored" ? await store.upsertMultisig(returned) : updated,
-  };
+  const result = await store.updateCurrentConfig(
+    existing.id,
+    expected,
+    record.currentConfig,
+    isAuthorized,
+  );
+  return { record: returned, result };
 };
 
 const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigInput) => {
@@ -81,7 +85,7 @@ const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigIn
   const matches =
     config.signerGuids.includes(argentSignerGuid(signer.publicKeyX)) &&
     config.threshold === input.threshold &&
-    sameStrings(config.signerGuids, input.signerPublicKeys.map(argentSignerGuid));
+    sameArgentSignerGuids(config.signerGuids, input.signerPublicKeys.map(argentSignerGuid));
   return matches
     ? { authorized, config }
     : { error: "Argent multisig current config or selected signer does not match chain state" };
@@ -140,9 +144,6 @@ export const signerAccountFor = (
     (account) => account.id === signerAccountId && account.networkId === context.record.networkId,
   ) ?? null;
 
-const sameStrings = (left: readonly string[], right: readonly string[]): boolean =>
-  left.length === right.length && left.every((value, index) => value === right[index]);
-
 /**
  * Converts a fresh chain view into the immutable intent snapshot shape.
  */
@@ -175,7 +176,7 @@ export const currentConfigFor = async (
     rpcUrls: context.rpcUrls,
   });
   const guids = current.signerPublicKeys.map(argentSignerGuid);
-  if (chain.threshold !== current.threshold || !sameStrings(chain.signerGuids, guids)) {
+  if (chain.threshold !== current.threshold || !sameArgentSignerGuids(chain.signerGuids, guids)) {
     throw new Error("Argent multisig signer configuration changed on-chain");
   }
   return {
@@ -195,7 +196,7 @@ const markChangedIntentsStale = async (
       intent.accountId === accountId &&
       (intent.state === "collecting" || intent.state === "ready") &&
       (intent.configSnapshot.threshold !== config.threshold ||
-        !sameStrings(intent.configSnapshot.signerGuids, config.signerGuids))
+        !sameArgentSignerGuids(intent.configSnapshot.signerGuids, config.signerGuids))
     ) {
       await store.upsertIntent({ ...intent, state: "stale" });
     }
@@ -260,7 +261,8 @@ const addMultisig = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   if (!context.authorized.isCurrent()) {
     return { error: "wallet locked" };
   }
-  const stored = await addRecord(deps.multisigStore, record);
+  const stored = await addRecord(deps.multisigStore, record, context.authorized.isCurrent);
+  if (stored.result === "unauthorized") return { error: "wallet locked" };
   return stored.result === "stored"
     ? { intents: [], multisig: { config: context.config, record: stored.record }, ok: true }
     : { error: `Argent multisig registry ${stored.result}` };
@@ -344,8 +346,10 @@ const removeMultisig = async (
   if (!authorized.isCurrent()) {
     return { error: "wallet locked" };
   }
-  await deps.multisigStore.removeMultisig(context.record.id);
-  return { ok: true };
+  return (await deps.multisigStore.removeMultisig(context.record.id, authorized.isCurrent)) ===
+    "removed"
+    ? { ok: true }
+    : { error: "wallet locked" };
 };
 
 const multisigBalances = async (

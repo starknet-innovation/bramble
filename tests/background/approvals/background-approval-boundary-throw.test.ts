@@ -44,7 +44,7 @@ const vault = {
   activeAccountId: account.id,
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: ORIGIN }],
-  schemaVersion: 6,
+  schemaVersion: 7,
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 

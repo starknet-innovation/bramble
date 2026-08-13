@@ -106,7 +106,7 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     activeAccountId: options.activeAccountId?.() ?? account.id,
     mnemonic: null,
     originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
-    schemaVersion: 6,
+    schemaVersion: 7,
     signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
   });
   return {

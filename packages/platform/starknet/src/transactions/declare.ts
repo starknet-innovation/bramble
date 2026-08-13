@@ -4,18 +4,36 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import { ensureAccountDeployed, isCompatibleAccountDeployed } from "@mc-wallet/starknet/deployment";
+import {
+  accountDeployment,
+  type DeploySubmission,
+  ensureAccountDeployed,
+  isCompatibleAccountDeployed,
+} from "@mc-wallet/starknet/deployment";
 import {
   acceptedRpcWriteHash,
   argentQueryAccount,
+  IndeterminateRpcWriteError,
   krustyAccount,
+  matchingAcceptedRpcWriteHash,
   type StarkHashSigner,
   withRpcFallback,
   withRpcWrite,
 } from "@mc-wallet/starknet/provider";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import type { Account, CompiledContract, RpcProvider } from "starknet";
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  STARKNET_NETWORKS,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
+import {
+  type Account,
+  type CompiledContract,
+  hash,
+  type RpcProvider,
+  TransactionType,
+} from "starknet";
 import {
   authorizedSpendFor,
   exceedsReviewedFee,
@@ -32,6 +50,8 @@ export type DeclareInput = {
   readonly classHash?: string;
   readonly compiledClassHash: string;
   readonly contractClass: unknown;
+  /** Live authorization checked immediately before each on-chain mutation. */
+  readonly isAuthorized?: () => boolean;
   /**
    * The declaration fee the approval card displayed. Supplying it makes that
    * figure a signing ceiling — see {@link submitDeclareTransaction}. Absent on
@@ -71,11 +91,91 @@ const declarePayload = ({
   classHash,
   compiledClassHash,
   contractClass,
-}: Pick<DeclareInput, "classHash" | "compiledClassHash" | "contractClass">) => ({
-  compiledClassHash,
-  contract: contractClass as CompiledContract,
-  ...(classHash === undefined ? {} : { classHash }),
-});
+}: Pick<DeclareInput, "classHash" | "compiledClassHash" | "contractClass">) => {
+  let computed: string;
+  try {
+    computed = hash.computeContractClassHash(contractClass as CompiledContract);
+  } catch {
+    throw new WalletError("Invalid Starknet contract class");
+  }
+  const computedClassHash = canonicalFelt(computed);
+  if (computedClassHash === null || !isNonZeroStarkFieldElement(computedClassHash)) {
+    throw new WalletError("Invalid Starknet contract class hash");
+  }
+  if (classHash !== undefined && !sameFelt(classHash, computedClassHash)) {
+    throw new WalletError("Supplied class hash does not match the Starknet contract class");
+  }
+  return {
+    classHash: computedClassHash,
+    compiledClassHash,
+    contract: contractClass as CompiledContract,
+  };
+};
+
+const acceptedDeclareSubmission = (
+  result: { readonly class_hash: unknown; readonly transaction_hash: unknown },
+  intendedClassHash: string,
+  transactionHash: unknown,
+): DeclareSubmission => {
+  const classHash = acceptedRpcWriteHash(result.class_hash);
+  if (!sameFelt(classHash, intendedClassHash)) {
+    throw new IndeterminateRpcWriteError(
+      "RPC accepted a different declared class hash. Check on-chain state before retrying.",
+    );
+  }
+  return {
+    classHash,
+    transactionHash: matchingAcceptedRpcWriteHash(result.transaction_hash, transactionHash),
+  };
+};
+
+const rethrowDeclareAfterDeployment = (
+  error: unknown,
+  deployment: DeploySubmission | null,
+): never => {
+  if (!deployment) {
+    throw error;
+  }
+  const message = `Account deployment ${deployment.transactionHash} completed, but the following declaration could not be confirmed. Check on-chain state before retrying.`;
+  if (error instanceof IndeterminateRpcWriteError) {
+    throw new IndeterminateRpcWriteError(message);
+  }
+  throw new WalletError(message);
+};
+
+const estimateExactDeclareFee = async (
+  estimatingAccount: Account,
+  account: AccountRef,
+  payload: ReturnType<typeof declarePayload>,
+  deployed: boolean,
+  skipValidate: boolean,
+): ReturnType<Account["estimateDeclareFee"]> => {
+  const details = { skipValidate, tip: "0x0" } as Parameters<Account["estimateDeclareFee"]>[1];
+  if (deployed) {
+    return estimatingAccount.estimateDeclareFee(payload, details);
+  }
+  const deployment = accountDeployment(account);
+  const estimates = await estimatingAccount.estimateFeeBulk(
+    [
+      {
+        type: TransactionType.DEPLOY_ACCOUNT,
+        payload: {
+          addressSalt: deployment.addressSalt,
+          classHash: deployment.classHash,
+          constructorCalldata: [...deployment.constructorCalldata],
+          contractAddress: deployment.contractAddress,
+        },
+      },
+      { type: TransactionType.DECLARE, payload },
+    ],
+    details,
+  );
+  const estimate = estimates[1];
+  if (!estimate) {
+    throw new WalletError("The node did not return a declaration fee estimate");
+  }
+  return estimate;
+};
 
 /**
  * Estimates a Cairo 1 declaration fee without broadcasting or private signing.
@@ -91,38 +191,42 @@ export const estimateDeclareFee = async (
     input.rpcUrls,
     async (provider) => {
       const validateArgent = input.account.accountContractType === "argent";
-      if (validateArgent) {
-        await isCompatibleAccountDeployed(provider, input.account);
-      }
+      const deployed = await isCompatibleAccountDeployed(provider, input.account);
       const estimatingAccount = validateArgent
         ? argentQueryAccount(provider, input.account)
         : makeAccount(provider, input.account, input.signHash);
-      const estimate = await estimatingAccount.estimateDeclareFee(declarePayload(input), {
-        skipValidate: !validateArgent,
-      });
+      const estimate = await estimateExactDeclareFee(
+        estimatingAccount,
+        input.account,
+        declarePayload(input),
+        deployed,
+        !validateArgent,
+      );
       return reviewedSpendFor(estimate, "standard");
     },
     makeProvider,
   );
 
-// Settles the resource bounds a declaration will sign under. With no reviewed
-// fee this is `{}` — starknet.js estimates internally, the pre-existing
-// behaviour. With one, the estimate is taken here, the spend its bounds would
-// authorise is compared against the figure the approval card showed, and those
-// same bounds are then PASSED to `declare`, so what is signed is what was
-// checked rather than a second quote the library takes moments later.
+// Settles declaration bounds before an optional account deployment. An
+// undeployed account is simulated as DEPLOY_ACCOUNT then DECLARE, so no fee
+// refusal or estimation failure can occur only after deployment was broadcast.
 const checkedDeclareBounds = async (
   estimatingAccount: Account,
+  account: AccountRef,
   payload: ReturnType<typeof declarePayload>,
+  deployed: boolean,
   reviewedFee: FeeEstimate | undefined,
   skipValidate: boolean,
 ): Promise<Record<string, unknown>> => {
-  if (!reviewedFee && skipValidate) {
-    return {};
-  }
-  const estimate = await estimatingAccount.estimateDeclareFee(payload, { skipValidate });
+  const estimate = await estimateExactDeclareFee(
+    estimatingAccount,
+    account,
+    payload,
+    deployed,
+    skipValidate,
+  );
   if (!reviewedFee) {
-    return { resourceBounds: estimate.resourceBounds };
+    return { resourceBounds: estimate.resourceBounds, tip: "0x0" };
   }
   const authorized = authorizedSpendFor(estimate, "standard");
   if (!authorized || exceedsReviewedFee(reviewedFee, authorized)) {
@@ -130,7 +234,7 @@ const checkedDeclareBounds = async (
       "The network fee for this declaration rose above the amount you reviewed. Nothing was submitted — review it again.",
     );
   }
-  return { resourceBounds: estimate.resourceBounds };
+  return { resourceBounds: estimate.resourceBounds, tip: "0x0" };
 };
 
 /**
@@ -154,6 +258,7 @@ export const submitDeclareTransaction = async (
     classHash,
     compiledClassHash,
     contractClass,
+    isAuthorized,
     reviewedDeploymentFee,
     reviewedFee,
     rpcUrls,
@@ -166,28 +271,55 @@ export const submitDeclareTransaction = async (
     rpcUrls,
     STARKNET_NETWORKS[account.networkId].chainId,
     async (provider) => {
-      const starknetAccount = makeAccount(provider, account, signHash);
-      await ensureAccountDeployed(provider, starknetAccount, account, reviewedDeploymentFee);
+      const signedHashes: string[] = [];
+      const capturingSigner: StarkHashSigner = async (messageHash) => {
+        const signature = await signHash(messageHash);
+        signedHashes.push(messageHash);
+        return signature;
+      };
+      const starknetAccount = makeAccount(provider, account, capturingSigner);
       const payload = declarePayload({
         compiledClassHash,
         contractClass,
         ...(classHash === undefined ? {} : { classHash }),
       });
       const validateArgent = account.accountContractType === "argent";
+      const deployed = await isCompatibleAccountDeployed(provider, account);
       const bounds = await checkedDeclareBounds(
         validateArgent ? argentQueryAccount(provider, account) : (starknetAccount as Account),
+        account,
         payload,
+        deployed,
         reviewedFee,
         !validateArgent,
       );
-      const result = await (starknetAccount as Account).declare(
-        payload,
-        bounds as Parameters<Account["declare"]>[1],
-      );
-      return {
-        classHash: acceptedRpcWriteHash(result.class_hash),
-        transactionHash: acceptedRpcWriteHash(result.transaction_hash),
-      };
+      const deployment = deployed
+        ? null
+        : await ensureAccountDeployed(
+            provider,
+            starknetAccount,
+            account,
+            reviewedDeploymentFee,
+            () => signedHashes[0],
+            isAuthorized,
+          );
+      const declarationHashIndex = signedHashes.length;
+      try {
+        if (isAuthorized?.() === false) {
+          throw new WalletError("wallet locked");
+        }
+        const result = await (starknetAccount as Account).declare(
+          payload,
+          bounds as Parameters<Account["declare"]>[1],
+        );
+        return acceptedDeclareSubmission(
+          result,
+          payload.classHash,
+          signedHashes[declarationHashIndex],
+        );
+      } catch (error) {
+        return rethrowDeclareAfterDeployment(error, deployment);
+      }
     },
     makeProvider,
   );

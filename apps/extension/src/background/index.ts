@@ -211,13 +211,10 @@ const swapService = (() => {
     return unavailableSwapService;
   }
 })();
-const multisigLog = (() => {
-  try {
-    return createMultisigStore({ store: createBrowserLocalStore() });
-  } catch {
-    return undefined;
-  }
-})();
+// Durable intent and operation claims are part of the signing safety model.
+// If local storage is unavailable, fail background initialization rather than
+// silently accepting signatures or broadcasts into a volatile registry.
+const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
 // Live phishing feed: fetched from the configured source under an explicit host
 // permission, cached in local storage, and refreshed on the first worker wake
 // after its TTL. The guard reads the feed's in-memory snapshot on every check,
@@ -256,6 +253,7 @@ const runtimeRpc = {
 const walletReader = createWalletReader(wallet);
 const activeStateCoordinator = createActiveStateCoordinator();
 const runtimeReady = sessionReady.then(async () => {
+  await multisigLog.recoverSigningClaims();
   const store = await preferences;
   if (store) {
     await reconcileUnlockedActiveAccount(walletReader, session, store, activeStateCoordinator);
@@ -273,7 +271,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   prices: priceService,
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
-  ...(multisigLog ? { multisigStore: multisigLog } : {}),
+  multisigStore: multisigLog,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm

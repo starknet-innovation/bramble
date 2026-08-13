@@ -46,7 +46,6 @@ export const multisigProposeFlow = (
           ${textField({ className: "mono", label: "Target contract", name: "contractAddress", placeholder: "0x…", required: true, spellcheck: false })}
           ${textField({ className: "mono", label: "Entrypoint", name: "entrypoint", placeholder: "transfer", required: true, spellcheck: false })}
           ${textareaField({ className: "mono", hint: "Whitespace-separated canonical felts. Leave empty only when the entrypoint takes no calldata.", label: "Calldata", name: "calldata", rows: 4, spellcheck: false })}
-          ${textField({ label: "Signing note", maxlength: 120, name: "summary", placeholder: "Describe the intended effect", required: true })}
           ${button({ label: "Prepare exact transaction", type: "submit" })}
           <p id="multisig-propose-result" role="status" aria-live="assertive"></p>
         </form>

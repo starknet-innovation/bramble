@@ -21,6 +21,7 @@ const account: DerivedAccountRef = {
   accountContractType: "argent",
   address: argentAccountAddress(PUBLIC_KEY),
   classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+  deploymentSalt: PUBLIC_KEY,
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
   id: `SN_MAIN:${argentAccountAddress(PUBLIC_KEY)}`,
   networkId: "SN_MAIN",
@@ -68,8 +69,14 @@ const makeQueryProvider = (liveClassHash: string | null = null) => {
   );
   const provider = {
     channel,
+    async callContract() {
+      return [PUBLIC_KEY];
+    },
     async getChainId() {
       return "0x534e5f4d41494e";
+    },
+    async getBlockNumber() {
+      return 100;
     },
     async getClassHashAt() {
       if (liveClassHash !== null) return liveClassHash;
@@ -134,10 +141,11 @@ test("settles ordinary Argent deployment bounds with validated query signing", a
         signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
       },
       () => provider,
-      () =>
+      (_provider, _stored, guardedSignHash) =>
         ({
           async deployAccount(_payload: unknown, details: unknown) {
             signedBounds = details;
+            await guardedSignHash("0x123");
             return { transaction_hash: "0x123" };
           },
           async estimateAccountDeployFee() {

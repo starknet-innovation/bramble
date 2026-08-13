@@ -38,7 +38,7 @@ import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { PassiveUnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import {
   readGetPermissionsInput,
@@ -430,6 +430,7 @@ export const executeInvokeApproval = async (
     return resolved;
   }
   const { account, preferences } = resolved;
+  const authorized = captureSessionAuthorization(deps.session);
   // The recipient policy is re-applied to the exact calls that are about to be
   // broadcast, not only to the ones that were queued: the address book can gain
   // a contact while the prompt sits open, and a payee that mimics it becomes a
@@ -472,6 +473,7 @@ export const executeInvokeApproval = async (
           account,
           calls,
           ...ceiling,
+          isAuthorized: authorized.isCurrent,
           rpcUrls,
           signHash: context.signHash,
         });

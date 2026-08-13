@@ -3,6 +3,7 @@
  */
 import {
   type ArgentMultisigConfigReview,
+  MULTISIG_LIMITS,
   requireSafeArgentMultisigCalls,
   reviewArgentMultisigConfigChange,
 } from "@mc-wallet/multisig/chain";
@@ -20,16 +21,27 @@ import type { MultisigOpsDeps } from "./multisig-deps";
 import type { ArgentMultisigContext, currentConfigFor } from "./multisig-ops";
 
 /**
- * Validates the exact call set and returns a trusted deterministic summary for
- * the only four permitted stable-0.2 signer-management self-calls.
+ * Trusted local description of one validated frozen call set. Invalid or
+ * poisoned input never produces this shape; the reviewer returns an error.
+ */
+export type ArgentMultisigCallReview = {
+  readonly config?: ArgentMultisigConfigReview;
+  readonly summary: string;
+};
+
+import { normalizedArgentMultisigCalls } from "./multisig-inputs";
+
+/**
+ * Validates the exact call set and returns a trusted deterministic bounded
+ * summary. Poisoned recipients and invalid config self-calls fail closed.
  */
 export const reviewArgentMultisigCalls = async (
   deps: MultisigOpsDeps,
   context: ArgentMultisigContext,
   calls: ArgentMultisigSigningIntent["prepared"]["calls"],
   currentConfig: Awaited<ReturnType<typeof currentConfigFor>>,
-): Promise<{ readonly error: string } | ArgentMultisigConfigReview | null> => {
-  const normalized = calls.map((call) => ({ ...call, calldata: [...call.calldata] }));
+): Promise<{ readonly error: string } | ArgentMultisigCallReview> => {
+  const normalized = normalizedArgentMultisigCalls(calls);
   requireSafeArgentMultisigCalls(context.record.address, normalized);
   const selfCall = normalized.find((call) =>
     sameFelt(call.contractAddress, context.record.address),
@@ -43,16 +55,19 @@ export const reviewArgentMultisigCalls = async (
       },
       selfCall,
     );
-    return review;
+    return { config: review, summary: review.summary };
   }
   const preferences = await deps.preferencesStore.read();
-  return refuseOnPoisonedRecipient(
-    verifyCalls(
-      normalized,
-      verificationContext(context.active.account, {
-        ...preferences,
-        addressBook: [...preferences.addressBook, multisigAddressBookEntry(context.record)],
-      }),
-    ),
+  const report = verifyCalls(
+    normalized,
+    verificationContext(context.record, {
+      ...preferences,
+      addressBook: [...preferences.addressBook, multisigAddressBookEntry(context.record)],
+    }),
   );
+  const refusal = refuseOnPoisonedRecipient(report);
+  if (refusal) return refusal;
+  const first = report.calls[0]?.summary ?? "Review Argent multisig call";
+  const suffix = report.calls.length > 1 ? ` (+${report.calls.length - 1} more)` : "";
+  return { summary: `${first}${suffix}`.slice(0, MULTISIG_LIMITS.summaryLength) };
 };

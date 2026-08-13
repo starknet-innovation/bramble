@@ -36,7 +36,7 @@ import { deriveVaultStrk20ViewingKey } from "../accounts/strk20-viewing-key";
 import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV6, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV7, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
@@ -79,7 +79,7 @@ const writeVault = async (
   vault: Vault,
   vaultPassphrase: string,
 ): Promise<void> => {
-  if (!isVaultV6(vault)) {
+  if (!isVaultV7(vault)) {
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase);
@@ -150,9 +150,7 @@ export const createWalletVaultService = ({
     },
     async createAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
-      // First-run or same-phrase only, mirroring `createLedgerVault`: a second,
-      // different phrase would displace the one the user backed up, and any
-      // phrase written over a Ledger vault leaves its accounts unrecoverable.
+      // Never displace the one recovery phrase the user backed up.
       const displacesStoredSeed =
         vault.mnemonic === null ? vault.accounts.length > 0 : vault.mnemonic !== input.mnemonic;
       if (displacesStoredSeed) {
@@ -183,6 +181,7 @@ export const createWalletVaultService = ({
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const { account, privateKey } = await deriveImportedAccount(kms, {
         accountContractType: input.accountContractType,
+        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
         networkId: input.networkId,
         privateKey: input.privateKey,
       });
@@ -208,6 +207,7 @@ export const createWalletVaultService = ({
       const account = await deriveLedgerAccount(kms, {
         accountContractType: input.accountContractType,
         accountIndex: input.accountIndex,
+        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
         networkId: input.networkId,
         publicKeyX: input.publicKeyX,
         ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
@@ -227,23 +227,20 @@ export const createWalletVaultService = ({
     },
     async createLedgerVault(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
-      // First-run only: a mnemonic-less Ledger vault is created over a fresh
-      // store. Refuse if any account or a recovery phrase already exists so this
-      // can never quietly drop an existing seeded wallet's key material.
+      // A mnemonic-less Ledger vault can only be created over a fresh store.
       if (vault.accounts.length > 0 || vault.mnemonic !== null) {
         throw new WalletError("Wallet already exists");
       }
       const account = await deriveLedgerAccount(kms, {
         accountContractType: input.accountContractType,
         accountIndex: input.accountIndex,
+        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
         networkId: input.networkId,
         publicKeyX: input.publicKeyX,
         ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
       });
 
-      // The vault holds no seed and no signing key: the account is keyless, so
-      // the mnemonic stays null and signingKeys stays empty. The relaxed
-      // account↔signingKey bijection admits exactly this shape.
+      // Ledger stays keyless: no mnemonic and no signing-key entry.
       await writeVault(
         encryptedStore,
         {
@@ -263,6 +260,7 @@ export const createWalletVaultService = ({
     deriveLedgerAccounts(input) {
       return deriveLedgerAccountRefs(kms, {
         accountContractType: input.accountContractType,
+        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
         entries: input.entries,
         networkId: input.networkId,
       });

@@ -93,6 +93,7 @@ describe("starknet RPC helpers", () => {
       ...ozAccount(argentAccountAddress(PUBLIC_KEY)),
       accountContractType: "argent" as const,
       classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+      deploymentSalt: PUBLIC_KEY,
     };
     expect(accountDeployment(argent)).toMatchObject({
       addressSalt: PUBLIC_KEY,

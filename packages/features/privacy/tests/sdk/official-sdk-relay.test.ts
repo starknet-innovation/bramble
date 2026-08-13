@@ -167,7 +167,11 @@ describe("relay quote approvals", () => {
     });
     const argentContext = {
       ...relayContext,
-      account: { ...relayContext.account, accountContractType: "argent" as const },
+      account: {
+        ...relayContext.account,
+        accountContractType: "argent" as const,
+        deploymentSalt: relayContext.account.publicKeyX,
+      },
     };
     const actions = [{ amount: "0x64", token: STRK_TOKEN_ADDRESS, type: "deposit" as const }];
     const plan = await service.quoteActions({ ...argentContext, actions });

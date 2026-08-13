@@ -1,12 +1,7 @@
 /** Frozen Argent multisig V3 preparation and exact-signature submission. */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import {
-  isStarknetNetworkId,
-  STARKNET_NETWORKS,
-  sameFelt,
-  UINT128_LIMIT,
-} from "@mc-wallet/wallet-model/networks";
+import { isStarknetNetworkId, STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { ETransactionVersion3, type RpcProvider, transaction } from "starknet";
 import {
   ARGENT_MULTISIG_CONTRACT,
@@ -18,7 +13,6 @@ import {
   argentMultisigRpcResourceBounds,
   argentMultisigTransactionHash,
   canonicalArgentMultisigFelt,
-  canonicalArgentMultisigInteger,
   isPreparedArgentMultisigInvokeV3,
   normalizeArgentMultisigCalls,
   normalizeArgentMultisigResourceBounds,
@@ -28,26 +22,15 @@ import {
   type ArgentMultisigAccountInput,
   type ArgentMultisigCall,
   type PrepareArgentMultisigInvokeV3Input,
-  type PrepareArgentMultisigInvokeV3Options,
   type PreparedArgentMultisigInvokeV3,
   type SubmitPreparedArgentMultisigInvokeV3Input,
 } from "./multisig-invoke-types";
 import {
-  acceptedRpcWriteHash,
   argentQueryAccount,
-  IndeterminateRpcWriteError,
+  matchingAcceptedRpcWriteHash,
   withRpcFallback,
   withRpcWrite,
 } from "./provider";
-
-const UINT64_LIMIT = UINT128_LIMIT >> 64n;
-
-const availabilityMode = (value: unknown, label: string): "L1" | "L2" => {
-  if (value !== "L1" && value !== "L2") {
-    throw new WalletError(`Invalid ${label}`);
-  }
-  return value;
-};
 
 /**
  * Re-exports strict guards and fee/comparison helpers for untrusted prepared
@@ -68,7 +51,6 @@ export {
   type ArgentMultisigAccountInput,
   type ArgentMultisigCall,
   type PrepareArgentMultisigInvokeV3Input,
-  type PrepareArgentMultisigInvokeV3Options,
   type PreparedArgentMultisigCall,
   type PreparedArgentMultisigInvokeV3,
   type PreparedResourceBound,
@@ -87,7 +69,6 @@ export const prepareArgentMultisigInvokeV3WithProvider = async (
   account: ArgentMultisigAccountInput,
   calls: readonly ArgentMultisigCall[],
   config: ArgentMultisigConfig,
-  options: PrepareArgentMultisigInvokeV3Options = {},
 ): Promise<PreparedArgentMultisigInvokeV3> => {
   if (
     account.accountContractType !== "argent-multisig" ||
@@ -111,21 +92,11 @@ export const prepareArgentMultisigInvokeV3WithProvider = async (
     await provider.getNonceForAddress(senderAddress, "latest"),
     "Argent multisig nonce",
   );
-  const tip = canonicalArgentMultisigInteger(
-    options.tip ?? "0x0",
-    "Argent multisig tip",
-    UINT64_LIMIT,
-  );
+  const tip = "0x0";
   const accountDeploymentData: readonly string[] = [];
   const paymasterData: readonly string[] = [];
-  const nonceDataAvailabilityMode = availabilityMode(
-    options.nonceDataAvailabilityMode ?? "L1",
-    "nonce data availability mode",
-  );
-  const feeDataAvailabilityMode = availabilityMode(
-    options.feeDataAvailabilityMode ?? "L1",
-    "fee data availability mode",
-  );
+  const nonceDataAvailabilityMode = "L1";
+  const feeDataAvailabilityMode = "L1";
   const queryAccount = argentQueryAccount(provider, account, { multisig: normalizedConfig });
   const estimate = await queryAccount.estimateInvokeFee(
     normalizedCalls.map((call) => ({ ...call, calldata: [...call.calldata] })),
@@ -171,13 +142,12 @@ export const prepareArgentMultisigInvokeV3WithProvider = async (
  * Prepares a frozen transaction using transport-only read failover.
  */
 export const prepareArgentMultisigInvokeV3 = async (
-  { account, calls, config, options, rpcUrls }: PrepareArgentMultisigInvokeV3Input,
+  { account, calls, config, rpcUrls }: PrepareArgentMultisigInvokeV3Input,
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<PreparedArgentMultisigInvokeV3> =>
   withRpcFallback(
     rpcUrls,
-    (provider) =>
-      prepareArgentMultisigInvokeV3WithProvider(provider, account, calls, config, options),
+    (provider) => prepareArgentMultisigInvokeV3WithProvider(provider, account, calls, config),
     makeProvider,
   );
 
@@ -186,7 +156,13 @@ export const prepareArgentMultisigInvokeV3 = async (
  * No nonce read, fee estimate, transaction rebuild, or private signing occurs.
  */
 export const submitPreparedArgentMultisigInvokeV3 = async (
-  { config, prepared, rpcUrls, signatures }: SubmitPreparedArgentMultisigInvokeV3Input,
+  {
+    config,
+    isAuthorized,
+    prepared,
+    rpcUrls,
+    signatures,
+  }: SubmitPreparedArgentMultisigInvokeV3Input,
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<string> => {
   if (!isPreparedArgentMultisigInvokeV3(prepared)) {
@@ -197,6 +173,9 @@ export const submitPreparedArgentMultisigInvokeV3 = async (
     rpcUrls,
     prepared.chainId,
     async (provider) => {
+      if (isAuthorized?.() === false) {
+        throw new WalletError("wallet locked");
+      }
       const submitted = await provider.invokeFunction(
         {
           calldata: [...prepared.calldata],
@@ -214,12 +193,7 @@ export const submitPreparedArgentMultisigInvokeV3 = async (
           version: prepared.version,
         },
       );
-      const accepted = acceptedRpcWriteHash(submitted.transaction_hash);
-      if (!sameFelt(accepted, prepared.transactionHash)) {
-        throw new IndeterminateRpcWriteError(
-          "RPC accepted a different transaction hash. Check on-chain state before retrying.",
-        );
-      }
+      matchingAcceptedRpcWriteHash(submitted.transaction_hash, prepared.transactionHash);
       return prepared.transactionHash;
     },
     makeProvider,

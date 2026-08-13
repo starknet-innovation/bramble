@@ -65,6 +65,7 @@ type Submission = {
   broadcasts: number;
   estimateArgs: readonly unknown[];
   estimates: number;
+  signedHash?: string;
 };
 
 // Drives one submission against a fake channel, recording what reached the
@@ -92,7 +93,7 @@ const submit = async (
     async invoke(_invocation: unknown, details: { readonly resourceBounds?: unknown }) {
       seen.broadcasts += 1;
       seen.bounds = details.resourceBounds;
-      return { transaction_hash: "0xdeadbeef" };
+      return { transaction_hash: seen.signedHash };
     },
   };
   const responses: Readonly<Record<string, unknown>> = {
@@ -129,7 +130,8 @@ const submit = async (
       ...(proof ? { proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] } } : {}),
       ...(reviewedFee ? { reviewedFee } : {}),
       rpcUrls: ["https://rpc.example"],
-      async signHash() {
+      async signHash(messageHash) {
+        seen.signedHash = messageHash;
         return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
       },
       ...(speed === undefined ? {} : { speed }),
@@ -142,7 +144,7 @@ const submit = async (
 describe("invoke submission fee bounds", () => {
   test("a fast send signs bounds scaled 1.5x above the node's own", async () => {
     const { result, seen } = await submit("fast");
-    expect(result).toMatchObject({ transactionHash: "0xdeadbeef" });
+    expect(result).toMatchObject({ transactionHash: seen.signedHash });
     expect(seen.broadcasts).toBe(1);
     expect(seen.bounds).toEqual({
       l1_data_gas: { max_amount: 22n, max_price_per_unit: 4n },
@@ -153,7 +155,7 @@ describe("invoke submission fee bounds", () => {
 
   test("a standard send adds no bounds of its own and estimates once", async () => {
     const { result, seen } = await submit();
-    expect(result).toMatchObject({ transactionHash: "0xdeadbeef" });
+    expect(result).toMatchObject({ transactionHash: seen.signedHash });
     expect(seen.broadcasts).toBe(1);
     expect(seen.estimates).toBe(1);
     // Standard speed signs the same bounds that were compared to the review.
@@ -169,7 +171,7 @@ describe("invoke submission fee bounds", () => {
 
   test("estimates the exact proof-bearing invocation before signing it", async () => {
     const { result, seen } = await submit("standard", undefined, true);
-    expect(result).toMatchObject({ transactionHash: "0xdeadbeef" });
+    expect(result).toMatchObject({ transactionHash: seen.signedHash });
     expect(seen.estimateArgs[0]).toEqual(
       expect.arrayContaining([expect.objectContaining({ proof: "proof", proofFacts: ["0x2"] })]),
     );
@@ -204,7 +206,7 @@ describe("the reviewed fee is a ceiling on what gets signed", () => {
 
   test("signs the bounds it just checked rather than a second quote", async () => {
     const { result, seen } = await submit("standard", { overallFee: String(QUOTED), unit: "FRI" });
-    expect(result).toMatchObject({ transactionHash: "0xdeadbeef" });
+    expect(result).toMatchObject({ transactionHash: seen.signedHash });
     expect(seen.estimates).toBe(1);
     // Explicit bounds, even at standard speed: a ceiling checked against one
     // estimate while starknet.js quietly signs bounds from another would bind
@@ -214,7 +216,7 @@ describe("the reviewed fee is a ceiling on what gets signed", () => {
 
   test("allows the whole headroom and not one unit more", async () => {
     const allowed = await submit("standard", AT_CEILING);
-    expect(allowed.result).toMatchObject({ transactionHash: "0xdeadbeef" });
+    expect(allowed.result).toMatchObject({ transactionHash: allowed.seen.signedHash });
 
     const refused = await submit("standard", ONE_SHORT);
     expect(refused.result).toBeInstanceOf(Error);
@@ -243,7 +245,7 @@ describe("the reviewed fee is a ceiling on what gets signed", () => {
     // 3238 is the whole of what the scaled bounds authorise: 22x4 + 225x4 +
     // 2250x1. Reviewed at that figure, the send goes out and signs exactly it.
     const allowed = await submit("fast", { overallFee: String(FAST_AUTHORIZED), unit: "FRI" });
-    expect(allowed.result).toMatchObject({ transactionHash: "0xdeadbeef" });
+    expect(allowed.result).toMatchObject({ transactionHash: allowed.seen.signedHash });
     expect(allowed.seen.bounds).toEqual(FAST_BOUNDS);
   });
 
@@ -252,7 +254,7 @@ describe("the reviewed fee is a ceiling on what gets signed", () => {
     // 2159 and no further. Pinned as an exact boundary because a headroom that
     // silently composes with the fast scale is the finding restated.
     const allowed = await submit("fast", { overallFee: "2159", unit: "FRI" });
-    expect(allowed.result).toMatchObject({ transactionHash: "0xdeadbeef" });
+    expect(allowed.result).toMatchObject({ transactionHash: allowed.seen.signedHash });
 
     const refused = await submit("fast", { overallFee: "2158", unit: "FRI" });
     expect(refused.result).toBeInstanceOf(Error);

@@ -35,7 +35,7 @@ const vault = {
   activeAccountId: account.id,
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 6,
+  schemaVersion: 7,
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 
@@ -111,7 +111,11 @@ const signMessage = {
 
 describe("signTypedData approval gate", () => {
   test("returns the standard Argent account signature for approved typed data", async () => {
-    const argentAccount = { ...account, accountContractType: "argent" as const };
+    const argentAccount = {
+      ...account,
+      accountContractType: "argent" as const,
+      deploymentSalt: account.publicKeyX,
+    };
     const session = createUnlockSession();
     session.unlock(PASSPHRASE);
 

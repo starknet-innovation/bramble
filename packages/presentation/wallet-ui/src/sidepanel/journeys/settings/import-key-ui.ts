@@ -22,6 +22,7 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     event.preventDefault();
     const data = new FormData(form);
     const privateKey = String(data.get("rawKey") ?? "").trim();
+    const deploymentSalt = String(data.get("deploymentSalt") ?? "").trim() || undefined;
     const accountContractType = data.get("accountContractType");
     if (!privateKey || !isAccountContractType(accountContractType)) {
       if (result) {
@@ -33,20 +34,22 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     }
 
     buttonBusy(submitButton, true);
-    void deps.wallet.importAccount(deps.networkId(), privateKey, accountContractType).then(
-      async () => {
-        form.reset();
-        showToast("Account imported", "success");
-        await deps.render(await deps.refresh());
-      },
-      (error: unknown) => {
-        const message = errorMessage(error, "Import failed");
-        showToast(message, "error");
-        if (result) {
-          result.textContent = message;
-        }
-        buttonBusy(submitButton, false);
-      },
-    );
+    void deps.wallet
+      .importAccount(deps.networkId(), privateKey, accountContractType, deploymentSalt)
+      .then(
+        async () => {
+          form.reset();
+          showToast("Account imported", "success");
+          await deps.render(await deps.refresh());
+        },
+        (error: unknown) => {
+          const message = errorMessage(error, "Import failed");
+          showToast(message, "error");
+          if (result) {
+            result.textContent = message;
+          }
+          buttonBusy(submitButton, false);
+        },
+      );
   });
 };

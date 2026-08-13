@@ -104,6 +104,7 @@ export type AddDerivedAccountInput = {
  */
 export type ImportRawKeyAccountInput = {
   readonly accountContractType: AccountContractType;
+  readonly deploymentSalt?: string;
   readonly networkId: StarknetNetworkId;
   readonly privateKey: string;
   readonly vaultPassphrase: string;
@@ -116,6 +117,7 @@ export type ImportRawKeyAccountInput = {
 export type AddLedgerAccountInput = {
   readonly accountContractType: AccountContractType;
   readonly accountIndex: number;
+  readonly deploymentSalt?: string;
   readonly eip2645application?: string;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
@@ -158,6 +160,7 @@ export type ForgetLedgerStrk20ViewingKeyInput = Omit<
  */
 export type DeriveLedgerAccountsInput = {
   readonly accountContractType: AccountContractType;
+  readonly deploymentSalt?: string;
   readonly entries: readonly LedgerPubKeyEntry[];
   readonly networkId: StarknetNetworkId;
 };

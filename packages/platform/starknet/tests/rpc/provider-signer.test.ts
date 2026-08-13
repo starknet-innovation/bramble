@@ -85,6 +85,7 @@ describe("krustyAccount signer", () => {
       ...account,
       accountContractType: "argent",
       classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+      deploymentSalt: PUBLIC_KEY,
     } as const;
     const { signHash } = recordingSignHash();
     const signer = krustyAccount(provider, argentAccount, signHash).signer as unknown as RawSigner;
@@ -96,7 +97,11 @@ describe("krustyAccount signer", () => {
     expect(() =>
       krustyAccount(
         provider,
-        { ...account, accountContractType: "argent" },
+        {
+          ...account,
+          accountContractType: "argent",
+          deploymentSalt: PUBLIC_KEY,
+        },
         recordingSignHash().signHash,
       ),
     ).toThrow("class hash does not match");
@@ -178,6 +183,7 @@ describe("krustyAccount signer", () => {
       ...account,
       accountContractType: "argent",
       classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+      deploymentSalt: PUBLIC_KEY,
     }).signer as unknown as RawSigner;
 
     await expect(signer.signRaw("0xabc")).resolves.toEqual(["1", "0", PUBLIC_KEY, "0x1", "0x1"]);

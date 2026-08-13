@@ -64,7 +64,7 @@ export type DecodedCall = {
  * calldata alone.
  */
 export type VerificationContext = {
-  readonly account: AccountRef;
+  readonly account: Pick<AccountRef, "address" | "networkId">;
   readonly addressBook: readonly AddressBookEntry[];
   /** Wallet-pinned application contracts that should not raise an unknown-contract warning. */
   readonly knownContracts?: readonly string[];
@@ -92,7 +92,7 @@ export type VerificationContext = {
  * filters the preferences it is handed and never reads storage itself.
  */
 export const verificationContext = (
-  account: AccountRef,
+  account: Pick<AccountRef, "address" | "networkId">,
   preferences: {
     readonly addressBook: readonly AddressBookEntry[];
     // Structurally typed rather than importing `WatchedNft`: the watched-NFT

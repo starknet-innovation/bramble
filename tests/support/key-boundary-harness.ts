@@ -366,7 +366,6 @@ const preparedIntent = async (
         },
       ],
       multisigId: `SN_MAIN:${KEY_BOUNDARY_MULTISIG}`,
-      summary: `Key-boundary intent ${marker}`,
       type: "wallet.prepareArgentMultisigIntent",
     },
     extensionSender,

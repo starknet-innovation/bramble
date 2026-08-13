@@ -35,7 +35,6 @@ export const MULTISIG_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: {
       calls: [{ calldata: ["0x9"], contractAddress: account.address, entrypoint: "transfer" }],
       multisigId: "",
-      summary: "Prepare key-boundary intent",
       type: "wallet.prepareArgentMultisigIntent",
     },
     sender: extensionSender,

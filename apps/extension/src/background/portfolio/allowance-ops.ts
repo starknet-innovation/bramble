@@ -43,6 +43,7 @@ import {
   observedAccountContext,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { captureSessionAuthorization } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { requiredFeeReview } from "../transactions/fee-review";
 import { readRevokeAllowanceInput } from "./allowance-inputs";
@@ -222,6 +223,7 @@ const handleRevokeAllowance: AllowanceOpsHandler = async (deps, message) => {
   if (context.error !== undefined) {
     return { error: context.error };
   }
+  const authorized = captureSessionAuthorization(deps.session);
   const record = (await deps.allowanceStore.list()).find((entry) => entry.id === input.id);
   if (record && record.accountId !== context.account.id) {
     return { error: "switch to the account that granted this allowance" };
@@ -272,6 +274,7 @@ const handleRevokeAllowance: AllowanceOpsHandler = async (deps, message) => {
   const result = await deps.runtimeRpc.submitInvokeTransaction({
     account: context.account,
     calls: [call],
+    isAuthorized: authorized.isCurrent,
     reviewedFee: input.reviewedFee,
     rpcUrls,
     signHash,

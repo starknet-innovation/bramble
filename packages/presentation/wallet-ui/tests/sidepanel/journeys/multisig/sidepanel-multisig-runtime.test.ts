@@ -132,11 +132,9 @@ describe("createMultisigClient", () => {
       multisigs: [fixture.view],
     });
     await expect(
-      client.prepareIntent(
-        fixture.record.id,
-        [{ calldata: ["0x1"], contractAddress: "0xdef", entrypoint: "transfer" }],
-        "Send funds",
-      ),
+      client.prepareIntent(fixture.record.id, [
+        { calldata: ["0x1"], contractAddress: "0xdef", entrypoint: "transfer" },
+      ]),
     ).resolves.toEqual({
       feeReview: { overallFee: "44", unit: "FRI" },
       intent: fixture.intent,
@@ -152,7 +150,6 @@ describe("createMultisigClient", () => {
       {
         calls: [{ calldata: ["0x1"], contractAddress: "0xdef", entrypoint: "transfer" }],
         multisigId: fixture.record.id,
-        summary: "Send funds",
         type: "wallet.prepareArgentMultisigIntent",
       },
       {

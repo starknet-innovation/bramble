@@ -66,6 +66,8 @@ export const STRK20_SUBMISSION_UNAVAILABLE = "strk20 private submission unavaila
 export type Strk20AccountContext = {
   readonly account: AccountRef;
   readonly config: Strk20NetworkConfig | null;
+  /** Live unlock authorization checked at the final public-account write. */
+  readonly isAuthorized: () => boolean;
   readonly rpcUrls: readonly string[];
   readonly signHash: (messageHash: string) => Promise<StarkSignature>;
   readonly viewingKey: () => Promise<string>;

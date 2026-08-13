@@ -2,7 +2,10 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@mc-wallet/core/json";
-import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
+import {
+  type AccountContractType,
+  ARGENT_ACCOUNT_CLASS_HASH,
+} from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -17,7 +20,7 @@ const ARGENT_UPSTREAM_COMMIT = "1352198956f36fb35fa544c4e46a3507a3ec20e3";
  * Pinned Argent Account 0.4 declaration from the update-2024Q2 release.
  */
 export const ARGENT_ACCOUNT_CONTRACT = {
-  classHash: "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+  classHash: ARGENT_ACCOUNT_CLASS_HASH,
   compiledClassHash: "0x0294a323246c017d00a98f11942e1e38d562c97bc79426742110a14ce497e9b5",
   upstreamCommit: ARGENT_UPSTREAM_COMMIT,
   version: "0.4.0",

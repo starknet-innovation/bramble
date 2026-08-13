@@ -123,6 +123,14 @@ export const importKeyFlow = (status: WalletStatus): string =>
           required: true,
           spellcheck: false,
         })}
+        ${textField({
+          autocomplete: "off",
+          hint: "Argent only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for MC Wallet's public-key salt.",
+          label: "Argent deployment salt (optional)",
+          name: "deploymentSalt",
+          placeholder: "0x…",
+          spellcheck: false,
+        })}
         ${button({
           icon: "wallet",
           label: "Import account",

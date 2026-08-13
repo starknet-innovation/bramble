@@ -44,7 +44,7 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
           attributes: { "data-view": "multisig-watch" },
           icon: "search",
           label: "Add an existing multisig",
-          supportingText: "Verify its full constructor and current signer authority.",
+          supportingText: "Verify its address and current live signer authority.",
         })}
       </div>
     </section>`,
@@ -81,7 +81,7 @@ export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | nu
   );
 
 /**
- * Renders fresh signer GUID authority, never stale constructor claims.
+ * Renders fresh signer GUID authority, never stale setup claims.
  */
 export const multisigSignersFlow = (
   status: WalletStatus,

@@ -44,7 +44,6 @@ describe("Argent multisig configuration intents", () => {
             },
           ],
           multisigId: HARNESS_MULTISIG_ID,
-          summary: "untrusted generic summary",
           type: "wallet.prepareArgentMultisigIntent",
         },
         harnessExtensionSender,
@@ -142,7 +141,6 @@ describe("Argent multisig configuration intents", () => {
         {
           calls: [{ calldata: ["0x1"], contractAddress: address, entrypoint: "change_threshold" }],
           multisigId: HARNESS_MULTISIG_ID,
-          summary: "ignored",
           type: "wallet.prepareArgentMultisigIntent",
         },
         harnessExtensionSender,

@@ -86,6 +86,31 @@ const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   multisigStore: ctx.multisigStore,
 });
 
+const MULTISIG_ACTIVE_STATE_MESSAGES = new Set([
+  "wallet.addMultisig",
+  "wallet.deployArgentMultisig",
+  "wallet.importArgentMultisigIntent",
+  "wallet.importArgentMultisigSignature",
+  "wallet.prepareArgentMultisigIntent",
+  "wallet.removeMultisig",
+  "wallet.reviewArgentMultisigDeployment",
+  "wallet.signArgentMultisigIntent",
+  "wallet.submitArgentMultisigIntent",
+]);
+
+const handleMultisig: RouterHandler = async (ctx, messageType, message) => {
+  const handle = async (): Promise<RuntimeResponse | null> => {
+    const deps = buildMultisigDeps(ctx);
+    return (
+      (await handleMultisigOps(deps, messageType, message)) ??
+      handleMultisigTxOps(deps, messageType, message)
+    );
+  };
+  return MULTISIG_ACTIVE_STATE_MESSAGES.has(messageType)
+    ? ctx.activeStateCoordinator.run(handle)
+    : handle();
+};
+
 const handleCreateAccount: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.createAccount") {
     return null;
@@ -358,8 +383,7 @@ const HANDLERS: readonly RouterHandler[] = [
     ),
   (ctx, messageType, message) => handleAllowanceOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleNftOps(buildOpsDeps(ctx), messageType, message),
-  (ctx, messageType, message) => handleMultisigOps(buildMultisigDeps(ctx), messageType, message),
-  (ctx, messageType, message) => handleMultisigTxOps(buildMultisigDeps(ctx), messageType, message),
+  handleMultisig,
   handlePreferences,
   (ctx, messageType, message, sender) => handleChainOps(ctx, messageType, message, sender),
   (ctx, messageType, message, sender) => handleProviderOps(ctx, messageType, message, sender),

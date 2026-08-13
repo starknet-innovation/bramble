@@ -4,7 +4,7 @@ import { normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../../shared/dom";
 import { formatFeeEstimate } from "../../shared/review-render";
-import type { MultisigClient } from "./multisig-runtime";
+import type { ArgentMultisigDeploymentSetup, MultisigClient } from "./multisig-runtime";
 
 type MultisigDeployUiDeps = {
   readonly app: Element | null;
@@ -14,7 +14,14 @@ type MultisigDeployUiDeps = {
   readonly setResult: (id: string, message: string) => void;
 };
 
-const reviews = new WeakMap<HTMLFormElement, ArgentMultisigDeploymentReview>();
+const reviews = new WeakMap<
+  HTMLFormElement,
+  {
+    readonly input: ArgentMultisigDeploymentSetup;
+    readonly review: ArgentMultisigDeploymentReview;
+  }
+>();
+const reviewGenerations = new WeakMap<HTMLFormElement, number>();
 
 const publicKeys = (raw: string): readonly string[] =>
   raw
@@ -22,21 +29,58 @@ const publicKeys = (raw: string): readonly string[] =>
     .filter(Boolean)
     .map(normalizeFeltInput);
 
+const deploymentSetup = (form: HTMLFormElement): ArgentMultisigDeploymentSetup => {
+  const data = new FormData(form);
+  return {
+    ...(String(data.get("name") ?? "").trim()
+      ? { name: String(data.get("name") ?? "").trim() }
+      : {}),
+    networkId: String(data.get("signerAccountId") ?? "").split(":")[0] ?? "",
+    salt: normalizeFeltInput(String(data.get("salt") ?? "")),
+    signerAccountId: String(data.get("signerAccountId") ?? ""),
+    signerPublicKeys: publicKeys(String(data.get("signerPublicKeys") ?? "")),
+    threshold: Number(data.get("threshold")),
+  };
+};
+
+const sameSetup = (
+  left: ArgentMultisigDeploymentSetup,
+  right: ArgentMultisigDeploymentSetup,
+): boolean => JSON.stringify(left) === JSON.stringify(right);
+
 /**
  * Binds review then exact echoed deployment; editing invalidates consent.
  */
 export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#multisig-deploy-form");
   const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const reviewEnabled = button?.disabled === false;
   const reviewPanel = deps.app?.querySelector<HTMLElement>("#multisig-deploy-review");
   form?.addEventListener("input", () => {
     reviews.delete(form);
+    reviewGenerations.set(form, (reviewGenerations.get(form) ?? 0) + 1);
     if (reviewPanel) renderFragment(reviewPanel, "");
     button?.lastChild?.replaceWith("Review deployment");
+    if (reviewEnabled) buttonBusy(button, false);
   });
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const reviewed = reviews.get(form);
+    let input: ArgentMultisigDeploymentSetup;
+    try {
+      input = deploymentSetup(form);
+    } catch (error) {
+      const message = errorMessage(error, "Invalid deployment fields");
+      deps.setResult("multisig-deploy-result", message);
+      showToast(message, "error");
+      return;
+    }
+    const stored = reviews.get(form);
+    const reviewed = stored && sameSetup(stored.input, input) ? stored.review : undefined;
+    if (stored && !reviewed) {
+      reviews.delete(form);
+      if (reviewPanel) renderFragment(reviewPanel, "");
+      button?.lastChild?.replaceWith("Review deployment");
+    }
     buttonBusy(button, true);
     if (reviewed) {
       deps.setResult("multisig-deploy-result", "Submitting exact reviewed deployment…");
@@ -56,21 +100,22 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       );
       return;
     }
-    const data = new FormData(form);
+    const generation = (reviewGenerations.get(form) ?? 0) + 1;
+    reviewGenerations.set(form, generation);
+    const isCurrent = (): boolean => {
+      if (reviewGenerations.get(form) !== generation) return false;
+      try {
+        return sameSetup(deploymentSetup(form), input);
+      } catch {
+        return false;
+      }
+    };
     deps.setResult("multisig-deploy-result", "Preparing exact deployment fee…");
     void deps.multisig
-      .reviewDeployment({
-        ...(String(data.get("name") ?? "").trim()
-          ? { name: String(data.get("name") ?? "").trim() }
-          : {}),
-        networkId: String(data.get("signerAccountId") ?? "").split(":")[0] ?? "",
-        salt: normalizeFeltInput(String(data.get("salt") ?? "")),
-        signerAccountId: String(data.get("signerAccountId") ?? ""),
-        signerPublicKeys: publicKeys(String(data.get("signerPublicKeys") ?? "")),
-        threshold: Number(data.get("threshold")),
-      })
+      .reviewDeployment(input)
       .then((next) => {
-        reviews.set(form, next);
+        if (!isCurrent()) return;
+        reviews.set(form, { input, review: next });
         if (reviewPanel) {
           renderFragment(
             reviewPanel,
@@ -93,6 +138,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         buttonBusy(button, false);
       })
       .catch((error: unknown) => {
+        if (!isCurrent()) return;
         const message = errorMessage(error, "Deployment review failed");
         deps.setResult("multisig-deploy-result", message);
         showToast(message, "error");

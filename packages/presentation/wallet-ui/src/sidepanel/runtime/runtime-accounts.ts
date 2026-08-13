@@ -39,9 +39,11 @@ export const createAccountRuntimeClient = (
     networkId: string,
     privateKey: string,
     accountContractType: AccountContractType,
+    deploymentSalt?: string,
   ): Promise<string> {
     const response = await sendMessage({
       accountContractType,
+      ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
       networkId,
       privateKey,
       type: "wallet.importAccount",

@@ -157,6 +157,8 @@ describe("Argent multisig intent guards", () => {
       false,
     );
     expect(isArgentMultisigSigningIntent({ ...intent, state: "ready" })).toBe(false);
+    expect(isArgentMultisigSigningIntent({ ...intent, summary: "" })).toBe(false);
+    expect(isArgentMultisigSigningIntent({ ...intent, summary: " Send funds" })).toBe(false);
     expect(isArgentMultisigSigningIntent({ ...intent, extra: true })).toBe(false);
   });
 
@@ -250,6 +252,27 @@ describe("Argent multisig serialized store", () => {
       target: intent.prepared.transactionHash,
     };
     expect(isArgentMultisigOperationRecord(operation)).toBe(true);
+    expect(isArgentMultisigOperationRecord({ ...operation, signerGuid: undefined })).toBe(false);
+    expect(
+      isArgentMultisigOperationRecord({ ...operation, transactionHash: operation.target }),
+    ).toBe(false);
+    const submit = {
+      accountId: ACCOUNT_ID,
+      id: argentMultisigOperationId("submit", ACCOUNT_ID, operation.target) ?? "",
+      kind: "submit" as const,
+      target: operation.target,
+    };
+    expect(isArgentMultisigOperationRecord(submit)).toBe(true);
+    expect(isArgentMultisigOperationRecord({ ...submit, signerGuid: guid })).toBe(false);
+    expect(isArgentMultisigOperationRecord({ ...submit, transactionHash: "0x123" })).toBe(false);
+    const deploy = {
+      accountId: ACCOUNT_ID,
+      id: argentMultisigOperationId("deploy", ACCOUNT_ID, record.address) ?? "",
+      kind: "deploy" as const,
+      target: record.address,
+    };
+    expect(isArgentMultisigOperationRecord(deploy)).toBe(true);
+    expect(isArgentMultisigOperationRecord({ ...deploy, signerGuid: guid })).toBe(false);
     expect(
       await Promise.all([registry.claimOperation(operation), registry.claimOperation(operation)]),
     ).toEqual(["claimed", "exists"]);
@@ -282,7 +305,64 @@ describe("Argent multisig serialized store", () => {
     expect(await registry.listIntents()).toEqual([]);
   });
 
-  test("prunes only terminal history at lifetime caps and retains live replay claims", async () => {
+  test("rolls back a signature mutation when its authorization expires during persistence", async () => {
+    const { store } = memoryKv();
+    const registry = createMultisigStore({ store });
+    const intent = await preparedIntent();
+    await registry.upsertMultisig(record);
+    await registry.upsertIntent(intent);
+    const signature = orderedSignatures(intent)[0];
+    if (!signature) throw new Error("missing signature fixture");
+    let checks = 0;
+    expect(
+      await registry.upsertIntent({ ...intent, signatures: [signature] }, () => ++checks < 3),
+    ).toBe("unauthorized");
+    expect(await registry.getIntent(intent.id)).toEqual(intent);
+  });
+
+  test("rolls back account metadata mutations when authorization expires during persistence", async () => {
+    const { store } = memoryKv();
+    const registry = createMultisigStore({ store });
+    let checks = 0;
+    expect(await registry.upsertMultisig(record, () => ++checks < 3)).toBe("unauthorized");
+    expect(await registry.listMultisigs()).toEqual([]);
+
+    await registry.upsertMultisig(record);
+    checks = 0;
+    expect(await registry.removeMultisig(record.id, () => ++checks < 3)).toBe("unauthorized");
+    expect(await registry.listMultisigs()).toEqual([record]);
+  });
+
+  test("recovers only restart-abandoned signing claims", async () => {
+    const { store } = memoryKv();
+    const firstWorker = createMultisigStore({ store });
+    await firstWorker.upsertMultisig(record);
+    const intent = await preparedIntent();
+    const guid = argentSignerGuid(PUBLIC_A);
+    const sign: ArgentMultisigOperationRecord = {
+      accountId: ACCOUNT_ID,
+      id:
+        argentMultisigOperationId("sign", ACCOUNT_ID, intent.prepared.transactionHash, guid) ?? "",
+      kind: "sign",
+      signerGuid: guid,
+      target: intent.prepared.transactionHash,
+    };
+    const submit: ArgentMultisigOperationRecord = {
+      accountId: ACCOUNT_ID,
+      id: argentMultisigOperationId("submit", ACCOUNT_ID, intent.prepared.transactionHash) ?? "",
+      kind: "submit",
+      target: intent.prepared.transactionHash,
+    };
+    await firstWorker.claimOperation(sign);
+    await firstWorker.claimOperation(submit);
+
+    const restartedWorker = createMultisigStore({ store });
+    expect(await restartedWorker.recoverSigningClaims()).toBe(1);
+    expect(await restartedWorker.listOperations()).toEqual([submit]);
+    expect(await restartedWorker.recoverSigningClaims()).toBe(0);
+  });
+
+  test("prunes only observed terminal history at lifetime caps and retains live replay claims", async () => {
     const { data, store } = memoryKv();
     const registry = createMultisigStore({ store });
     const collecting = await Promise.all(
@@ -292,7 +372,7 @@ describe("Argent multisig serialized store", () => {
       ...intent,
       broadcastTransactionHash: intent.prepared.transactionHash,
       signatures: orderedSignatures(intent),
-      state: "submitted" as const,
+      state: "accepted" as const,
     }));
     const operations = terminal.map((intent) => ({
       accountId: ACCOUNT_ID,
@@ -323,6 +403,10 @@ describe("Argent multisig serialized store", () => {
       multisigs: [record],
       operations: [],
     });
+    expect(await registry.upsertIntent(next)).toBe("full");
+
+    const submitted = terminal.map((intent) => ({ ...intent, state: "submitted" as const }));
+    data.set(MULTISIG_STORE_KEY, { intents: submitted, multisigs: [record], operations });
     expect(await registry.upsertIntent(next)).toBe("full");
 
     data.set(MULTISIG_STORE_KEY, { intents: terminal, multisigs: [record], operations });

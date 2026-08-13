@@ -48,7 +48,7 @@ import {
   statusResponse,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { UnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
@@ -149,8 +149,10 @@ const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
   if (!input) return { error: "invalid deploy account request" };
   const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) return { error: context.error };
+  const authorized = captureSessionAuthorization(deps.session);
   return submitReviewedAccountDeployment(deps, {
     account: context.account,
+    isAuthorized: authorized.isCurrent,
     networkId: context.networkId,
     ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
     signHash: accountHashSigner(deps, context.account, context.vaultPassphrase),
@@ -275,6 +277,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     return { error: context.error };
   }
   const { account, preferences, token, vaultPassphrase } = context;
+  const authorized = captureSessionAuthorization(deps.session);
   // Verified BEFORE anything is broadcast. This call is built exactly as
   // `submitErc20Transfer` builds it (same parse, same encoder), so the report is
   // about the transaction that would actually go out, and running it first makes
@@ -302,6 +305,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
   const result = await deps.runtimeRpc.submitErc20Transfer({
     account,
     amount: input.amount,
+    isAuthorized: authorized.isCurrent,
     recipient: input.recipient,
     ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
     reviewedFee: input.reviewedFee,

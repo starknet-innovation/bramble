@@ -81,10 +81,16 @@ software recovery phrase.
 
 Choose either a stable Argent Account or an OpenZeppelin compatibility account,
 backed by the encrypted software vault or a Ledger. A newly created account
-first exists as a *counterfactual* address; **on
--chain deployment is a separate action** you take from the dashboard when you are
+first exists as a *counterfactual* address; **on-chain deployment is a separate
+action** you take from the dashboard when you are
 ready. Use the dashboard to send transfers, receive (share your address), switch
 networks, and deploy.
+
+To attach an existing Argent Account 0.4 from a private key, enter its original
+deployment salt during import. Before signing, MC Wallet verifies the pinned
+account class, Stark owner, and absence of a guardian at one accepted block.
+Accounts using another signer type or a guardian are not supported and fail
+closed.
 
 ### Connect to a dApp
 
@@ -109,12 +115,16 @@ reads the name, image, description, and attributes from the token's `token_uri`
 ### Multisig
 
 MC Wallet supports the pinned Argent Multisig account contract. You can deploy
-a new account or add an existing account from its constructor details. The
-wallet verifies the live signer GUIDs and threshold, freezes the exact Starknet
-transaction and fee ceiling, and collects signatures from eligible local or
-Ledger accounts. Independent signers exchange the versioned intent package or
-individual signature fragments; submission is enabled only when the exact
-threshold is met. There is no separate on-chain proposal or confirmation state.
+a new account or add an existing account by its address and current signer
+authority. The wallet verifies the live signer GUIDs and threshold, freezes the
+exact Starknet transaction and fee ceiling, and collects signatures from
+eligible local or Ledger accounts. Every signer reviews decoded actions, risk
+warnings, the full sender, chain ID, nonce, fee ceiling, and transaction hash;
+the collaborator note is unsigned context only. Independent signers exchange
+the versioned intent package or individual signature fragments; signing and
+submission remain disabled unless the fresh on-chain authority exactly matches
+the intent and the exact threshold is met. There is no separate on-chain
+proposal or confirmation state.
 
 ### Allowance manager
 

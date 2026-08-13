@@ -89,7 +89,49 @@ describe("Argent multisig deployment review", () => {
         { review: retry, type: "wallet.deployArgentMultisig" },
         harnessExtensionSender,
       ),
-    ).resolves.toEqual({ error: "Argent multisig deployment outcome is unresolved" });
+    ).resolves.toMatchObject({ ok: true, transactionHash: "0x7cd" });
+    expect(harness.deploymentSubmitCount()).toBe(1);
+  });
+
+  test("revokes and releases deployment authority when the wallet locks at the RPC write", async () => {
+    let lockAtWrite = true;
+    let lock = () => {};
+    const harness = await makeMultisigHarness({
+      beforeAccountDeployment() {
+        if (lockAtWrite) lock();
+      },
+    });
+    lock = () => harness.session.lock();
+    const input = {
+      networkId: "SN_MAIN",
+      salt: "0xb",
+      signerAccountId: harnessAccountA.id,
+      signerPublicKeys: HARNESS_KEYS,
+      threshold: 2,
+      type: "wallet.reviewArgentMultisigDeployment",
+    } as const;
+    const reviewed = await harness.handler(input, harnessExtensionSender);
+    const review = (reviewed as { readonly deploymentReview: Record<string, unknown> })
+      .deploymentReview;
+    await expect(
+      harness.handler({ review, type: "wallet.deployArgentMultisig" }, harnessExtensionSender),
+    ).resolves.toEqual({ error: "wallet locked" });
+    expect(harness.deploymentSubmitCount()).toBe(0);
+    expect(
+      (await harness.multisigStore.listOperations()).some(({ kind }) => kind === "deploy"),
+    ).toBe(false);
+
+    lockAtWrite = false;
+    harness.session.unlock("correct horse battery staple");
+    const reviewedAgain = await harness.handler(input, harnessExtensionSender);
+    const retry = (reviewedAgain as { readonly deploymentReview: Record<string, unknown> })
+      .deploymentReview;
+    await expect(
+      harness.handler(
+        { review: retry, type: "wallet.deployArgentMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
     expect(harness.deploymentSubmitCount()).toBe(1);
   });
 });

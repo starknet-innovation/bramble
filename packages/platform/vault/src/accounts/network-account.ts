@@ -8,6 +8,7 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { type AccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { KmsPort } from "../kms-port";
 import type { SigningKeyRef, Vault } from "../schema/schema";
 import { deriveAccountContractAddress, deriveLedgerAccount, sameWalletKey } from "./accounts";
@@ -32,6 +33,9 @@ export const findNetworkAccount = (
     (stored) =>
       stored.networkId === networkId &&
       stored.accountContractType === source.accountContractType &&
+      (source.accountContractType !== "argent" ||
+        (stored.accountContractType === "argent" &&
+          sameFelt(stored.deploymentSalt, source.deploymentSalt))) &&
       sameWalletKey(stored, source),
   );
 
@@ -50,6 +54,7 @@ export const deriveNetworkAccount = async (
     const account = await deriveLedgerAccount(kms, {
       accountContractType: source.accountContractType,
       accountIndex: source.derivation.accountIndex,
+      ...(source.deploymentSalt === undefined ? {} : { deploymentSalt: source.deploymentSalt }),
       eip2645application: source.derivation.eip2645application,
       networkId,
       publicKeyX: source.publicKeyX,
@@ -62,6 +67,7 @@ export const deriveNetworkAccount = async (
   }
   const projection = await deriveAccountContractAddress(kms, {
     accountContractType: source.accountContractType,
+    ...(source.deploymentSalt === undefined ? {} : { deploymentSalt: source.deploymentSalt }),
     networkId,
     publicKeyX: source.publicKeyX,
   });

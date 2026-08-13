@@ -13,6 +13,7 @@ import {
 import { prepareArgentMultisigInvokeV3WithProvider } from "@mc-wallet/starknet/multisig-invoke";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import type { Vault } from "@mc-wallet/vault/schema";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ec, RpcProvider } from "starknet";
@@ -40,6 +41,7 @@ const accountFor = (publicKeyX: string): AccountRef => {
     address,
     classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
     derivation: { kind: "imported-raw-key" },
+    deploymentSalt: publicKeyX,
     id: `SN_MAIN:${address}`,
     networkId: "SN_MAIN",
     publicKeyX,
@@ -82,6 +84,9 @@ provider.getEstimateFeeBulk = (async () => [
  * Harness controls for fresh-chain and response-loss branches.
  */
 export type MultisigHarnessOptions = {
+  readonly beforeAccountDeployment?: () => Promise<void> | void;
+  readonly beforeSubmitPrepared?: () => Promise<void> | void;
+  readonly failPreferencesAfterSubmit?: boolean;
   readonly getConfig?: () => {
     readonly classHash: string;
     readonly signerGuids: readonly string[];
@@ -89,7 +94,13 @@ export type MultisigHarnessOptions = {
   };
   readonly multisigStore?: MultisigStore;
   readonly getNonce?: () => string;
+  readonly getTransactionStatuses?: (
+    transactionHash: string,
+  ) => Promise<
+    Readonly<Record<string, { finalizedOnL1: boolean; found: boolean; status: "pending" }>>
+  >;
   readonly nonce?: string;
+  readonly onSigned?: () => void;
   readonly submitAccountDeployment?: () => Promise<string>;
   readonly submitPrepared?: (transactionHash: string) => Promise<string>;
 };
@@ -104,12 +115,23 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     [harnessAccountB.id, HARNESS_PRIVATE_B],
   ]);
   const multisigStore = options.multisigStore ?? memoryMultisigStore();
-  const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+  const storedPreferences = createPreferencesStore({ store: createMemoryStore() });
   const activity = memoryActivityLog();
+  const allowanceStore = memoryAllowanceStore();
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
   let submitCount = 0;
   let deploymentSubmitCount = 0;
+  let submitted = false;
+  const preferencesStore = {
+    ...storedPreferences,
+    async read() {
+      if (options.failPreferencesAfterSubmit && submitted) {
+        throw new Error("preferences unavailable after broadcast");
+      }
+      return storedPreferences.read();
+    },
+  };
   let activeAccountId = harnessAccountA.id;
   const wallet = {
     async addDerivedAccount() {
@@ -146,6 +168,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
       const account = accounts.find((candidate) => candidate.id === accountId);
       if (!privateKey || !account) throw new Error("unknown signer");
       const signed = ec.starkCurve.sign(input.messageHash, privateKey);
+      options.onSigned?.();
       return {
         publicKey: account.publicKeyX,
         r: `0x${signed.r.toString(16)}`,
@@ -164,6 +187,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
   };
   const handler = createMessageHandler(wallet, "extension-id", {
     activity,
+    allowanceStore,
     multisigStore,
     preferencesStore,
     runtimeRpc: {
@@ -185,8 +209,9 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
       async getTokenMetadata() {
         return { decimals: 18, name: "Ether", symbol: "ETH" };
       },
-      async getTransactionStatuses() {
-        return {};
+      async getTransactionStatuses(input) {
+        const transactionHash = input.hashes[0] ?? "";
+        return options.getTransactionStatuses?.(transactionHash) ?? {};
       },
       multisig: {
         async getConfig() {
@@ -211,18 +236,22 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
             input.account,
             input.calls,
             input.config,
-            input.options,
           );
         },
         async submitPreparedInvoke(input) {
+          await options.beforeSubmitPrepared?.();
+          if (!input.isAuthorized?.()) throw new Error("wallet locked");
           submitCount += 1;
+          submitted = true;
           return (
             options.submitPrepared?.(input.prepared.transactionHash) ??
             input.prepared.transactionHash
           );
         },
       },
-      async submitAccountDeployment() {
+      async submitAccountDeployment(input) {
+        await options.beforeAccountDeployment?.();
+        if (!input.isAuthorized?.()) throw new Error("wallet locked");
         deploymentSubmitCount += 1;
         return {
           transactionHash: (await options.submitAccountDeployment?.()) ?? HARNESS_SUBMIT_HASH,
@@ -250,8 +279,10 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     networkId: "SN_MAIN",
   });
   return {
+    activeAccountId: () => activeAccountId,
     deploymentSubmitCount: () => deploymentSubmitCount,
     activity,
+    allowanceStore,
     handler,
     multisigStore,
     session,

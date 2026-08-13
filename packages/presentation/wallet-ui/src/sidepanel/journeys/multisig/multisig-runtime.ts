@@ -138,18 +138,11 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         return "error";
       }
     },
-    async prepareIntent(multisigId: string, calls: readonly ArgentMultisigCall[], summary: string) {
+    async prepareIntent(multisigId: string, calls: readonly ArgentMultisigCall[]) {
       return intentResult(
-        { calls, multisigId, summary, type: "wallet.prepareArgentMultisigIntent" },
+        { calls, multisigId, type: "wallet.prepareArgentMultisigIntent" },
         "prepare Argent multisig intent failed",
       );
-    },
-    async refreshMultisig(multisigId: string): Promise<ArgentMultisigView> {
-      const response = await sendMessage({ multisigId, type: "wallet.refreshMultisig" });
-      if (!isArgentMultisigResponse(response)) {
-        throw responseError(response, "refresh Argent multisig failed");
-      }
-      return response.multisig;
     },
     async removeMultisig(multisigId: string, confirmHistoryRemoval = false): Promise<void> {
       const response = await sendMessage({

@@ -52,7 +52,7 @@ const vault = {
   activeAccountId: account.id,
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 6,
+  schemaVersion: 7,
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
 
@@ -354,7 +354,6 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
           input.account,
           input.calls,
           input.config,
-          input.options,
         );
       },
       async submitPreparedInvoke(input) {

@@ -10,7 +10,7 @@ import {
 import { HARNESS_KEYS, HARNESS_MULTISIG_ID, harnessAccountA } from "../../support/multisig-harness";
 
 describe("Argent multisig message inputs", () => {
-  test("requires explicit network, signer, current config, address, and summary fields", () => {
+  test("requires explicit network, signer, current config, address, and bounded calls", () => {
     const add = {
       address: HARNESS_MULTISIG_ID.split(":")[1],
       networkId: "SN_MAIN",
@@ -22,19 +22,17 @@ describe("Argent multisig message inputs", () => {
     expect(readAddMultisigInput(add)).not.toBeNull();
     expect(readAddMultisigInput({ ...add, extra: true })).toBeNull();
     expect(readAddMultisigInput({ ...add, signerAccountId: undefined })).toBeNull();
-    expect(
-      readPrepareIntentInput({
-        calls: [{ calldata: [], contractAddress: "0x222", entrypoint: "transfer" }],
-        multisigId: HARNESS_MULTISIG_ID,
-        summary: "Send treasury funds",
-        type: "wallet.prepareArgentMultisigIntent",
-      }),
-    ).not.toBeNull();
+    const prepare = {
+      calls: [{ calldata: [], contractAddress: "0x222", entrypoint: "transfer" }],
+      multisigId: HARNESS_MULTISIG_ID,
+      type: "wallet.prepareArgentMultisigIntent",
+    };
+    expect(readPrepareIntentInput(prepare)).not.toBeNull();
+    expect(readPrepareIntentInput({ ...prepare, summary: "untrusted caller prose" })).toBeNull();
     expect(
       readPrepareIntentInput({
         calls: [],
         multisigId: HARNESS_MULTISIG_ID,
-        summary: "",
         type: "wallet.prepareArgentMultisigIntent",
       }),
     ).toBeNull();

@@ -52,9 +52,24 @@ describe("deriveAccountRef", () => {
     expect(account).toMatchObject({
       accountContractType: "argent",
       address: argentAccountAddress("0xabc", "0xabc"),
+      deploymentSalt: "0xabc",
     });
     expect(sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)).toBe(true);
     expect(ozAddressDerived).toBe(false);
+  });
+
+  test("derives an existing Argent account from its exact deployment salt", async () => {
+    const account = await deriveAccountRef(fakeKms(), {
+      accountContractType: "argent",
+      deploymentSalt: "0x777",
+      mnemonic,
+    });
+
+    expect(account).toMatchObject({
+      accountContractType: "argent",
+      address: argentAccountAddress("0xabc", "0x777"),
+      deploymentSalt: "0x777",
+    });
   });
 
   test("rejects a non-pinned class hash for an Argent account", async () => {

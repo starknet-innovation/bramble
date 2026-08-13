@@ -4,12 +4,12 @@
  * is routed to the encrypted vault (never plaintext, never echoed).
  */
 import { describe, expect, test } from "bun:test";
+import { argentAccountAddress } from "@mc-wallet/starknet/account-contracts";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { deriveImportedAccount, nextAccountIndex, sameWalletKey } from "@mc-wallet/vault/accounts";
+import { deriveImportedAccount } from "@mc-wallet/vault/accounts";
 import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
 import { createWalletVaultService } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ec } from "starknet";
 import { readImportAccountInput } from "../../apps/extension/src/background/accounts/import-inputs";
@@ -64,6 +64,23 @@ describe("deriveImportedAccount", () => {
     expect(account.id).toBe(`SN_MAIN:${address}`);
     expect(account).not.toHaveProperty("publicKeyY");
     expect(privateKey).toBe(importedKey);
+    expect(isAccountRef(account)).toBe(true);
+  });
+
+  test("recovers an Argent account at its exact external deployment salt", async () => {
+    const deploymentSalt = "0x777";
+    const { account } = await deriveImportedAccount(importKms(), {
+      accountContractType: "argent",
+      deploymentSalt,
+      networkId: "SN_MAIN",
+      privateKey: importedKey,
+    });
+
+    expect(account).toMatchObject({
+      accountContractType: "argent",
+      address: argentAccountAddress(account.publicKeyX, deploymentSalt),
+      deploymentSalt,
+    });
     expect(isAccountRef(account)).toBe(true);
   });
 
@@ -243,6 +260,32 @@ describe("readImportAccountInput", () => {
     });
   });
 
+  test("accepts an Argent deployment salt and rejects it for OpenZeppelin", () => {
+    expect(
+      readImportAccountInput({
+        accountContractType: "argent",
+        deploymentSalt: " 0x0777 ",
+        networkId: "SN_MAIN",
+        privateKey: importedKey,
+        type: "wallet.importAccount",
+      }),
+    ).toEqual({
+      accountContractType: "argent",
+      deploymentSalt: "0x777",
+      networkId: "SN_MAIN",
+      privateKey: importedKey,
+    });
+    expect(
+      readImportAccountInput({
+        accountContractType: "openzeppelin",
+        deploymentSalt: "0x777",
+        networkId: "SN_MAIN",
+        privateKey: importedKey,
+        type: "wallet.importAccount",
+      }),
+    ).toBeNull();
+  });
+
   test("rejects malformed or out-of-range messages", () => {
     expect(
       readImportAccountInput({
@@ -370,120 +413,5 @@ describe("readImportAccountInput", () => {
         type: "wallet.importAccount",
       }),
     ).toBeNull();
-  });
-});
-
-describe("isAccountRef imported round-trip", () => {
-  const imported = {
-    accountContractType: "openzeppelin",
-    address: "0xabc111111",
-    classHash: "0x111111",
-    derivation: { kind: "imported-raw-key" },
-    id: "SN_MAIN:0xabc111111",
-    networkId: "SN_MAIN",
-    publicKeyX: "0xabc",
-  };
-
-  test("accepts an imported account without publicKeyY", () => {
-    expect(isAccountRef(imported)).toBe(true);
-  });
-
-  test("rejects an imported account carrying publicKeyY", () => {
-    expect(isAccountRef({ ...imported, publicKeyY: "0xdef" })).toBe(false);
-  });
-
-  test("rejects an imported account carrying HD indices", () => {
-    expect(
-      isAccountRef({
-        ...imported,
-        derivation: { accountIndex: 0, addressIndex: 0, kind: "imported-raw-key" },
-      }),
-    ).toBe(false);
-  });
-
-  test("still requires publicKeyY on a derived account", () => {
-    expect(
-      isAccountRef({
-        address: "0xabc111111",
-        classHash: "0x111111",
-        derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-        id: "SN_MAIN:0xabc111111",
-        networkId: "SN_MAIN",
-        publicKeyX: "0xabc",
-      }),
-    ).toBe(false);
-  });
-});
-
-const bip44Account = (
-  publicKeyX: string,
-  accountIndex: number,
-  addressIndex = 0,
-  networkId: "SN_MAIN" | "SN_SEPOLIA" = "SN_MAIN",
-): AccountRef => ({
-  accountContractType: "openzeppelin",
-  address: `0x${publicKeyX.slice(2)}a`,
-  classHash: "0x111111",
-  derivation: { accountIndex, addressIndex, kind: "starknet-bip44" },
-  id: `${networkId}:0x${publicKeyX.slice(2)}a`,
-  networkId,
-  publicKeyX,
-  publicKeyY: "0xdef",
-});
-
-const importedAccount = (
-  publicKeyX: string,
-  networkId: "SN_MAIN" | "SN_SEPOLIA" = "SN_MAIN",
-): AccountRef => ({
-  accountContractType: "openzeppelin",
-  address: `0x${publicKeyX.slice(2)}b`,
-  classHash: "0x111111",
-  derivation: { kind: "imported-raw-key" },
-  id: `${networkId}:0x${publicKeyX.slice(2)}b`,
-  networkId,
-  publicKeyX,
-});
-
-describe("sameWalletKey", () => {
-  test("matches HD accounts only on the same key and derivation position", () => {
-    expect(sameWalletKey(bip44Account("0xabc", 0), bip44Account("0xabc", 0))).toBe(true);
-    // Same key, different account index -> a distinct HD account.
-    expect(sameWalletKey(bip44Account("0xabc", 0), bip44Account("0xabc", 1))).toBe(false);
-    // Same key and account index, different address index -> still distinct.
-    expect(sameWalletKey(bip44Account("0xabc", 0, 0), bip44Account("0xabc", 0, 1))).toBe(false);
-    // Different key.
-    expect(sameWalletKey(bip44Account("0xabc", 0), bip44Account("0xdef", 0))).toBe(false);
-  });
-
-  test("matches imported accounts on the public key alone (no HD position)", () => {
-    expect(sameWalletKey(importedAccount("0xabc"), importedAccount("0xabc"))).toBe(true);
-    expect(sameWalletKey(importedAccount("0xabc"), importedAccount("0xdef"))).toBe(false);
-  });
-
-  test("never conflates an imported account with an HD account of the same key", () => {
-    expect(sameWalletKey(bip44Account("0xabc", 0), importedAccount("0xabc"))).toBe(false);
-    expect(sameWalletKey(importedAccount("0xabc"), bip44Account("0xabc", 0))).toBe(false);
-  });
-});
-
-describe("nextAccountIndex", () => {
-  test("returns the lowest unused HD index, skipping imported accounts", () => {
-    const accounts = [
-      bip44Account("0xa", 0),
-      bip44Account("0xb", 2),
-      // An imported account holds no HD position and must not occupy an index.
-      importedAccount("0xc"),
-    ];
-    expect(nextAccountIndex(accounts, "SN_MAIN")).toBe(1);
-  });
-
-  test("counts only the target network's HD accounts", () => {
-    const accounts = [
-      bip44Account("0xa", 0, 0, "SN_MAIN"),
-      bip44Account("0xb", 1, 0, "SN_SEPOLIA"),
-    ];
-    // Sepolia's index 1 must not push the mainnet next index past 1.
-    expect(nextAccountIndex(accounts, "SN_MAIN")).toBe(1);
-    expect(nextAccountIndex([], "SN_MAIN")).toBe(0);
   });
 });

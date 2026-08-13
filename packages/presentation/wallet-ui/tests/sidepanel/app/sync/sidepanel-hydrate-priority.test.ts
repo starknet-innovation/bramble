@@ -248,6 +248,7 @@ describe("home hydration priority", () => {
     const sharedBalanceReads: string[] = [];
     const sharedActivityReads: (string | undefined)[] = [];
     const sharedNftReads: unknown[][] = [];
+    let multisigReads = 0;
     const record = {
       accountContractType: "argent-multisig" as const,
       address: "0x7123",
@@ -266,20 +267,22 @@ describe("home hydration priority", () => {
           sharedBalanceReads.push(id);
           return sharedBalances;
         },
-        loadMultisigs: async () => ({
-          intents: [],
-          multisigs: [
-            {
-              config: {
-                classHash: ARGENT_MULTISIG_CONTRACT.classHash,
-                signerGuids: ["0x1", "0x2"],
-                threshold: 2,
+        loadMultisigs: async () => {
+          multisigReads += 1;
+          return {
+            intents: [],
+            multisigs: [
+              {
+                config: {
+                  classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+                  signerGuids: ["0x1", "0x2"],
+                  threshold: 2,
+                },
+                record,
               },
-              record,
-            },
-          ],
-        }),
-        refreshMultisig: async () => undefined,
+            ],
+          };
+        },
       },
       paint: () => undefined,
       selectedMultisigId: multisigId,
@@ -320,5 +323,30 @@ describe("home hydration priority", () => {
     expect(sharedNftReads).toEqual([[true, `${status.networkId}:${multisigId}`, multisigId]]);
     expect(cache.multisigNftId).toBe(multisigId);
     expect(cache.multisigNfts).toHaveLength(1);
+    expect(multisigReads).toBe(1);
+  });
+
+  test("loads the complete multisig list once without per-account refresh amplification", async () => {
+    const cache = emptyRenderCache();
+    let reads = 0;
+    await hydrateView({
+      activeView: "multisigs",
+      cache,
+      deployment: {},
+      multisig: {
+        loadMultisigs: async () => {
+          reads += 1;
+          return { intents: [], multisigs: [] };
+        },
+      },
+      paint: () => undefined,
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {},
+    } as never);
+
+    expect(reads).toBe(1);
+    expect(cache.multisigsError).toBe(false);
   });
 });

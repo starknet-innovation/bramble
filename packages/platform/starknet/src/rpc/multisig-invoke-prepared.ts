@@ -41,11 +41,7 @@ const isDenseArray = (value: unknown): value is readonly unknown[] => {
  * Canonicalizes an integer from an RPC or option boundary. It rejects coercive
  * JavaScript inputs and values at or above an optional exclusive limit.
  */
-export const canonicalArgentMultisigInteger = (
-  value: unknown,
-  label: string,
-  limit?: bigint,
-): string => {
+const canonicalArgentMultisigInteger = (value: unknown, label: string, limit?: bigint): string => {
   let numeric: bigint;
   if (typeof value === "bigint") {
     numeric = value;
@@ -336,11 +332,10 @@ export const isPreparedArgentMultisigInvokeV3 = (
     !isCanonicalFelt(value["nonce"]) ||
     !isCanonicalFelt(value["senderAddress"]) ||
     !isNonZeroStarkFieldElement(value["senderAddress"]) ||
-    !isCanonicalFelt(value["tip"]) ||
-    BigInt(value["tip"]) >= RESOURCE_AMOUNT_LIMIT ||
+    value["tip"] !== "0x0" ||
     !isPreparedResourceBounds(value["resourceBounds"]) ||
-    (value["nonceDataAvailabilityMode"] !== "L1" && value["nonceDataAvailabilityMode"] !== "L2") ||
-    (value["feeDataAvailabilityMode"] !== "L1" && value["feeDataAvailabilityMode"] !== "L2") ||
+    value["nonceDataAvailabilityMode"] !== "L1" ||
+    value["feeDataAvailabilityMode"] !== "L1" ||
     !isCanonicalFelt(value["transactionHash"]) ||
     !isNonZeroStarkFieldElement(value["transactionHash"])
   ) {

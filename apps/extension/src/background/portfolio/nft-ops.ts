@@ -20,6 +20,7 @@ import {
   observedAccountContext,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { captureSessionAuthorization } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
@@ -336,6 +337,7 @@ const handleTransferNft = async (
     return { error: prepared.error };
   }
   const { call, context, report, rpcUrls } = prepared;
+  const authorized = captureSessionAuthorization(deps.session);
   // Pre-sign verification through the one shared recipient policy: a recipient
   // that mimics a saved address is refused before anything is signed, in the
   // same words every other send line uses.
@@ -351,6 +353,7 @@ const handleTransferNft = async (
   const result = await deps.runtimeRpc.submitInvokeTransaction({
     account: context.account,
     calls: [call],
+    isAuthorized: authorized.isCurrent,
     ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
     reviewedFee: input.reviewedFee,
     rpcUrls,

@@ -1,5 +1,7 @@
 /** Argent multisig views expose exact frozen authority and fail closed without freshness. */
 import { describe, expect, test } from "bun:test";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
 import { multisigWatchFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
 import {
   multisigDetailFlow,
@@ -47,9 +49,44 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("0 STRK");
     expect(html).toContain("transfer");
     expect(html).toContain("0xdef");
+    expect(html).toContain("Decoded exact calls");
+    expect(html).toContain("Locally decoded summary:");
+    expect(html).not.toContain("Collaborator note");
     expect(html).toContain('data-ms-sign="');
     expect(html).toContain("Copy intent package");
     expect(html).not.toContain('data-ms-submit="');
+  });
+
+  test("shows the local summary with exact calls and every verifier warning", async () => {
+    const preferences = defaultWalletPreferences();
+    const token = preferences.tokens[0];
+    if (!token) throw new Error("default token fixture unavailable");
+    const fixture = await makeArgentMultisigFixture([
+      {
+        calldata: ["0x456789abcdef", `0x${(UINT128_LIMIT - 1n).toString(16)}`, "0x0"],
+        contractAddress: token.address,
+        entrypoint: "approve",
+      },
+      {
+        calldata: [],
+        contractAddress: "0x9876543210abcdef",
+        entrypoint: "opaque_action",
+      },
+    ]);
+    const html = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [{ ...fixture.intent, summary: "Looks harmless" }],
+      false,
+      preferences,
+    );
+
+    expect(html).toContain("Locally decoded summary:</strong> Looks harmless");
+    expect(html).toContain("effectively unlimited spending allowance");
+    expect(html).toContain("0x9876…cdef is not a token or contact this wallet knows");
+    expect(html).toContain("Allow 0x4567…cdef to spend");
+    expect(html).toContain("Call opaque_action on 0x9876…cdef");
   });
 
   test("renders exact signer-management authority before collection", async () => {
@@ -69,6 +106,9 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("Signer authority change");
     expect(html).toContain("Add 1 Argent multisig signer(s) and set threshold to 2");
     expect(html).toContain("Add 0x2");
+    expect(html).toContain("Current signers");
+    expect(html).toContain(fixture.record.currentConfig?.signerPublicKeys[0] ?? "missing");
+    expect(html).toContain("1 of 1 before → 2 of 2 after");
     expect(html).toContain("Resulting threshold · <strong>2 of 2</strong>");
   });
 
@@ -96,6 +136,28 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("Current on-chain signer authority is unavailable");
     expect(html).not.toContain('data-ms-sign="');
     expect(html).toMatch(/data-view="multisig-propose"[^>]*disabled/);
+  });
+
+  test("suppresses every signing action when fresh authority differs from the frozen snapshot", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const html = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      {
+        config: {
+          classHash: fixture.record.classHash,
+          signerGuids: [...(fixture.view.config?.signerGuids ?? []), "0x999"],
+          threshold: fixture.view.config?.threshold ?? 1,
+        },
+        record: fixture.record,
+      },
+      [fixture.readyIntent],
+    );
+
+    expect(html).toContain("does not exactly match this intent snapshot");
+    expect(html).not.toContain('data-ms-sign="');
+    expect(html).not.toContain('data-ms-submit="');
+    expect(html).not.toContain("Import signature fragment");
   });
 });
 

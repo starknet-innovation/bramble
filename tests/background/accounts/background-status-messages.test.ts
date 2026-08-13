@@ -66,7 +66,7 @@ const createStatusWallet = (statusAccount: AccountRef = account) => ({
       activeAccountId: statusAccount.id,
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 6 as const,
+      schemaVersion: 7 as const,
       signingKeys: [{ accountId: statusAccount.id, privateKey: "0x123456" }],
     };
   },

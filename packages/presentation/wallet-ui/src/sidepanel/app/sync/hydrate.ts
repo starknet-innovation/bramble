@@ -31,8 +31,6 @@ export type HydrateDeps = {
 };
 
 const hydrateMultisigs = async (
-  activeView: WalletView,
-  selectedMultisigId: string | null,
   cached: RenderData["multisigs"],
   multisig: MultisigClient,
 ): Promise<Pick<RenderData, "multisigs" | "multisigsError">> => {
@@ -40,36 +38,7 @@ const hydrateMultisigs = async (
   if (loaded === "error") {
     return { multisigs: cached, multisigsError: true };
   }
-  const ids =
-    activeView === "multisigs"
-      ? loaded.multisigs.map((view) => view.record.id)
-      : (activeView === "multisig-home" ||
-            activeView === "multisig-detail" ||
-            activeView === "multisig-signers" ||
-            activeView === "multisig-track" ||
-            activeView === "multisig-receive") &&
-          selectedMultisigId
-        ? [selectedMultisigId]
-        : [];
-  if (
-    activeView !== "multisigs" &&
-    activeView !== "multisig-home" &&
-    activeView !== "multisig-detail" &&
-    activeView !== "multisig-signers" &&
-    activeView !== "multisig-track" &&
-    activeView !== "multisig-receive"
-  ) {
-    return { multisigs: loaded, multisigsError: false };
-  }
-  await Promise.all(ids.map((id) => multisig.refreshMultisig(id).catch(() => null)));
-  const reloaded = await multisig.loadMultisigs();
-  if (reloaded === "error") {
-    return { multisigs: loaded, multisigsError: true };
-  }
-  return {
-    multisigs: reloaded,
-    multisigsError: false,
-  };
+  return { multisigs: loaded, multisigsError: false };
 };
 
 const nftSnapshot = (
@@ -235,7 +204,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     activeView === "multisig-deploy"
   ) {
     primaryJobs.push(
-      hydrateMultisigs(activeView, selectedMultisigId, cache.multisigs, multisig).then((value) => {
+      hydrateMultisigs(cache.multisigs, multisig).then((value) => {
         if (isCurrent()) {
           Object.assign(cache, value);
         }

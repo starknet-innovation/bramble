@@ -363,7 +363,9 @@ export const isArgentMultisigSigningIntent = (
     !isConfigSnapshot(value["configSnapshot"]) ||
     !isPreparedArgentMultisigInvokeV3(value["prepared"]) ||
     typeof value["summary"] !== "string" ||
+    value["summary"].length === 0 ||
     value["summary"].length > MULTISIG_LIMITS.summaryLength ||
+    value["summary"].trim() !== value["summary"] ||
     !["accepted", "collecting", "ready", "rejected", "stale", "submitted"].includes(
       String(value["state"]),
     )
@@ -432,18 +434,40 @@ export const canReplaceArgentMultisigSigningIntent = (
  */
 export const isArgentMultisigOperationRecord = (
   value: unknown,
-): value is ArgentMultisigOperationRecord =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountId", "id", "kind", "signerGuid", "target", "transactionHash"]) &&
-  isAccountId(value["accountId"]) &&
-  (value["kind"] === "deploy" || value["kind"] === "sign" || value["kind"] === "submit") &&
-  canonicalNonZeroFelt(value["target"]) &&
-  (value["transactionHash"] === undefined || canonicalNonZeroFelt(value["transactionHash"])) &&
-  (value["kind"] !== "sign" || value["transactionHash"] === undefined) &&
-  value["id"] ===
+): value is ArgentMultisigOperationRecord => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, [
+      "accountId",
+      "id",
+      "kind",
+      "signerGuid",
+      "target",
+      "transactionHash",
+    ]) ||
+    !isAccountId(value["accountId"]) ||
+    (value["kind"] !== "deploy" && value["kind"] !== "sign" && value["kind"] !== "submit") ||
+    !canonicalNonZeroFelt(value["target"])
+  ) {
+    return false;
+  }
+  if (
+    value["kind"] === "sign"
+      ? !canonicalNonZeroFelt(value["signerGuid"]) || value["transactionHash"] !== undefined
+      : value["signerGuid"] !== undefined ||
+        (value["transactionHash"] !== undefined &&
+          (!canonicalNonZeroFelt(value["transactionHash"]) ||
+            (value["kind"] === "submit" && !sameFelt(value["transactionHash"], value["target"]))))
+  ) {
+    return false;
+  }
+  return (
+    value["id"] ===
     argentMultisigOperationId(
       value["kind"],
       value["accountId"],
       value["target"],
       typeof value["signerGuid"] === "string" ? value["signerGuid"] : undefined,
-    );
+    )
+  );
+};

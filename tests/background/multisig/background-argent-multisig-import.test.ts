@@ -7,6 +7,7 @@ import {
   HARNESS_MULTISIG_ID,
   HARNESS_TARGET,
   harnessAccountA,
+  harnessAccountB,
   harnessExtensionSender,
   makeMultisigHarness,
 } from "../../support/multisig-harness";
@@ -21,7 +22,6 @@ describe("Argent multisig intent import", () => {
       {
         calls: [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
         multisigId: HARNESS_MULTISIG_ID,
-        summary: "Shared package",
         type: "wallet.prepareArgentMultisigIntent",
       },
       harnessExtensionSender,
@@ -57,7 +57,6 @@ describe("Argent multisig intent import", () => {
       {
         calls: [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
         multisigId: HARNESS_MULTISIG_ID,
-        summary: "Pending",
         type: "wallet.prepareArgentMultisigIntent",
       },
       harnessExtensionSender,
@@ -70,13 +69,62 @@ describe("Argent multisig intent import", () => {
     ).resolves.toEqual({ error: "Argent multisig has a pending or unresolved operation" });
   });
 
+  test("derives imported lifecycle locally and discards remote terminal claims", async () => {
+    const source = await makeMultisigHarness();
+    let intent = intentFrom(
+      await source.handler(
+        {
+          calls: [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
+          multisigId: HARNESS_MULTISIG_ID,
+          type: "wallet.prepareArgentMultisigIntent",
+        },
+        harnessExtensionSender,
+      ),
+    );
+    for (const account of [harnessAccountA, harnessAccountB]) {
+      intent = intentFrom(
+        await source.handler(
+          {
+            intentId: intent.id,
+            signerAccountId: account.id,
+            type: "wallet.signArgentMultisigIntent",
+          },
+          harnessExtensionSender,
+        ),
+      );
+    }
+    const remotePackage = {
+      intent: {
+        ...intent,
+        broadcastTransactionHash: intent.prepared.transactionHash,
+        state: "accepted",
+        summary: "Harmless unsigned note",
+      },
+      kind: "mc-wallet.argent-multisig-intent",
+      version: 1,
+    };
+    const target = await makeMultisigHarness();
+    const imported = await target.handler(
+      { package: remotePackage, type: "wallet.importArgentMultisigIntent" },
+      harnessExtensionSender,
+    );
+    expect(imported).toMatchObject({
+      intent: { state: "ready" },
+      intentPackage: {
+        intent: { state: "ready", summary: "Call transfer on 0x222…x222" },
+      },
+      ok: true,
+    });
+    expect(intentFrom(imported).summary).toBe("Call transfer on 0x222…x222");
+    expect(intentFrom(imported).broadcastTransactionHash).toBeUndefined();
+  });
+
   test("removes terminal history after a completed local signing claim", async () => {
     const harness = await makeMultisigHarness();
     const prepared = await harness.handler(
       {
         calls: [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
         multisigId: HARNESS_MULTISIG_ID,
-        summary: "Terminal",
         type: "wallet.prepareArgentMultisigIntent",
       },
       harnessExtensionSender,
@@ -110,7 +158,6 @@ describe("Argent multisig intent import", () => {
       {
         calls: [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
         multisigId: HARNESS_MULTISIG_ID,
-        summary: "Old nonce",
         type: "wallet.prepareArgentMultisigIntent",
       },
       harnessExtensionSender,

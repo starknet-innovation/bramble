@@ -121,7 +121,11 @@ describe("prepared Argent multisig V3 invoke", () => {
     expect(() => preparedArgentMultisigFee({ ...prepared, resourceBounds: {} } as never)).toThrow(
       "Invalid prepared Argent multisig transaction",
     );
-    expect(isPreparedArgentMultisigInvokeV3({ ...prepared, tip: "0x10000000000000000" })).toBe(
+    expect(isPreparedArgentMultisigInvokeV3({ ...prepared, tip: "0x1" })).toBe(false);
+    expect(isPreparedArgentMultisigInvokeV3({ ...prepared, feeDataAvailabilityMode: "L2" })).toBe(
+      false,
+    );
+    expect(isPreparedArgentMultisigInvokeV3({ ...prepared, nonceDataAvailabilityMode: "L2" })).toBe(
       false,
     );
     expect(isPreparedArgentMultisigInvokeV3({ ...prepared, calldata: new Array(1_000_000) })).toBe(
@@ -135,11 +139,6 @@ describe("prepared Argent multisig V3 invoke", () => {
     await expect(
       prepareArgentMultisigInvokeV3WithProvider(fakeProvider(seen), ACCOUNT, sparse, CONFIG),
     ).rejects.toThrow("Invalid Argent multisig calls");
-    await expect(
-      prepareArgentMultisigInvokeV3WithProvider(fakeProvider(seen), ACCOUNT, CALLS, CONFIG, {
-        tip: [] as never,
-      }),
-    ).rejects.toThrow("Invalid Argent multisig tip");
     await expect(
       prepareArgentMultisigInvokeV3WithProvider(
         fakeProvider(seen, { ...BOUNDS, future_gas: { max_amount: 1n, max_price_per_unit: 1n } }),
@@ -218,5 +217,40 @@ describe("prepared Argent multisig V3 invoke", () => {
         () => provider,
       ),
     ).rejects.toThrow("different transaction hash");
+  });
+
+  test("rechecks live authorization at the final provider write boundary", async () => {
+    const seen: Seen = { estimates: [], submissions: [] };
+    const provider = fakeProvider(seen);
+    const prepared = await prepareArgentMultisigInvokeV3WithProvider(
+      provider,
+      ACCOUNT,
+      CALLS,
+      CONFIG,
+    );
+    let authorized = true;
+    const getChainId = provider.getChainId.bind(provider);
+    provider.getChainId = async () => {
+      const chainId = await getChainId();
+      authorized = false;
+      return chainId;
+    };
+
+    await expect(
+      submitPreparedArgentMultisigInvokeV3(
+        {
+          config: CONFIG,
+          isAuthorized: () => authorized,
+          prepared,
+          rpcUrls: ["https://one.invalid"],
+          signatures: [
+            { publicKey: "0x123", r: "0x1", s: "0x2" },
+            { publicKey: "0x456", r: "0x3", s: "0x4" },
+          ],
+        },
+        () => provider,
+      ),
+    ).rejects.toThrow("wallet locked");
+    expect(seen.submissions).toHaveLength(0);
   });
 });

@@ -17,6 +17,9 @@ export const MULTISIG_STYLES = `
   .multisig-portfolio-tabs { min-width: 0; }
   .multisig-portfolio-tabs .tab-set { gap: ${SPACE.lg}; }
   .multisig-portfolio-tabs [data-ms-home-panel] { min-width: 0; }
+  [data-ms-exact-identity] .receipt-row { align-items: flex-start; }
+  [data-ms-exact-identity] .receipt-row dd { max-width: 70%; }
+  [data-ms-exact-identity] .receipt-row dd code { overflow-wrap: anywhere; text-align: left; word-break: break-word; }
   .shared-collectible-card { cursor: default; }
   .drawer-multisig .account-groups-line {
     color: var(--mc-muted);

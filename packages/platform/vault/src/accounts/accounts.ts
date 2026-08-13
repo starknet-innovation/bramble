@@ -47,6 +47,7 @@ export type AccountDerivationInput = {
   readonly accountIndex?: number;
   readonly addressIndex?: number;
   readonly classHash?: string;
+  readonly deploymentSalt?: string;
   readonly mnemonic: string;
   readonly mnemonicPassphrase?: string;
   readonly networkId?: StarknetNetworkId;
@@ -66,6 +67,7 @@ export type AccountDerivationResult = {
 export type ImportedAccountInput = {
   readonly accountContractType: AccountContractType;
   readonly classHash?: string;
+  readonly deploymentSalt?: string;
   readonly networkId?: StarknetNetworkId;
   readonly privateKey: string;
 };
@@ -142,16 +144,21 @@ export const deriveAccount = async (
     ),
   );
 
-  const { address, classHash } = await deriveAccountContractAddress(kms, {
+  const { address, classHash, deploymentSalt } = await deriveAccountContractAddress(kms, {
     classHash: resolvedClassHash,
     accountContractType,
+    ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
     networkId,
     publicKeyX,
   });
+  const contract =
+    accountContractType === "argent"
+      ? { accountContractType, deploymentSalt: deploymentSalt as string }
+      : { accountContractType };
 
   return {
     account: {
-      accountContractType,
+      ...contract,
       address,
       classHash,
       derivation: {
@@ -177,6 +184,7 @@ export const deriveAccount = async (
 export type LedgerAccountInput = LedgerPubKeyEntry & {
   readonly accountContractType: AccountContractType;
   readonly classHash?: string;
+  readonly deploymentSalt?: string;
   readonly eip2645application?: string;
   readonly networkId?: StarknetNetworkId;
 };
@@ -232,15 +240,20 @@ export const deriveLedgerAccount = async (
     input.classHash,
   );
   const publicKeyX = canonicalFelt(input.publicKeyX) as string;
-  const { address, classHash } = await deriveAccountContractAddress(kms, {
+  const { address, classHash, deploymentSalt } = await deriveAccountContractAddress(kms, {
     classHash: resolvedClassHash,
     accountContractType,
+    ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
     networkId,
     publicKeyX,
   });
+  const contract =
+    accountContractType === "argent"
+      ? { accountContractType, deploymentSalt: deploymentSalt as string }
+      : { accountContractType };
 
   return {
-    accountContractType,
+    ...contract,
     address,
     classHash,
     derivation: {
@@ -265,6 +278,7 @@ export const deriveLedgerAccountRefs = async (
   input: {
     readonly accountContractType: AccountContractType;
     readonly classHash?: string;
+    readonly deploymentSalt?: string;
     readonly entries: readonly LedgerPubKeyEntry[];
     readonly networkId?: StarknetNetworkId;
   },
@@ -286,6 +300,7 @@ export const deriveLedgerAccountRefs = async (
         accountContractType,
         accountIndex: entry.accountIndex,
         classHash,
+        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
         networkId,
         publicKeyX: entry.publicKeyX,
       }),
@@ -384,16 +399,21 @@ export const deriveImportedAccount = async (
     throw new WalletError("Krusty KMS public-key probe did not verify");
   }
 
-  const { address, classHash } = await deriveAccountContractAddress(kms, {
+  const { address, classHash, deploymentSalt } = await deriveAccountContractAddress(kms, {
     classHash: resolvedClassHash,
     accountContractType,
+    ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
     networkId,
     publicKeyX,
   });
+  const contract =
+    accountContractType === "argent"
+      ? { accountContractType, deploymentSalt: deploymentSalt as string }
+      : { accountContractType };
 
   return {
     account: {
-      accountContractType,
+      ...contract,
       address,
       classHash,
       derivation: { kind: "imported-raw-key" },

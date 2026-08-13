@@ -61,6 +61,25 @@ export const acceptedRpcWriteHash = (value: unknown): string => {
 };
 
 /**
+ * Accepts a broadcast hash only when it matches the exact hash handed to the
+ * signer. A missing capture or node mismatch is post-broadcast ambiguity, so
+ * callers must not invite an automatic retry.
+ */
+export const matchingAcceptedRpcWriteHash = (value: unknown, signedHash: unknown): string => {
+  const accepted = acceptedRpcWriteHash(value);
+  if (
+    typeof signedHash !== "string" ||
+    !isNonZeroStarkFieldElement(signedHash) ||
+    !sameFelt(accepted, signedHash)
+  ) {
+    throw new IndeterminateRpcWriteError(
+      "RPC accepted a different transaction hash. Check on-chain state before retrying.",
+    );
+  }
+  return accepted;
+};
+
+/**
  * Marker for a JSON-RPC exchange that failed at the transport rather than at
  * the node's application layer: a body past {@link RPC_BODY_LIMIT_BYTES}, a
  * body that stalled past the request's deadline, or one that could not be read

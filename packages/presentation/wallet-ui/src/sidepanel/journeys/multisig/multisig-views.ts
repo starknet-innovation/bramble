@@ -2,6 +2,7 @@
 import { escapeHtml } from "@mc-wallet/core/html";
 import {
   type ArgentMultisigConfigReview,
+  type ArgentMultisigPublicConfig,
   reviewArgentMultisigConfigChange,
 } from "@mc-wallet/multisig/chain";
 import type {
@@ -11,11 +12,13 @@ import type {
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { preparedArgentMultisigFee } from "@mc-wallet/starknet/multisig-invoke";
+import { verificationContext, verifyCalls } from "@mc-wallet/transactions/verify";
 import { emptyState, pill, receipt } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
 import { selectField, textareaField } from "@mc-wallet/ui-kit/fields";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import {
@@ -26,7 +29,12 @@ import {
   noAccountEmpty,
   walletMenuRow,
 } from "../../shared/parts";
-import { formatFeeEstimate } from "../../shared/review-render";
+import {
+  formatFeeEstimate,
+  reviewCallsList,
+  reviewPanel,
+  riskFlagMessages,
+} from "../../shared/review-render";
 import { multisigDisplayName } from "./multisig-model";
 import {
   EMPTY_MULTISIG_PORTFOLIO,
@@ -154,7 +162,10 @@ const configReviewFor = (
   }
 };
 
-const configReviewView = (review: ArgentMultisigConfigReview): string => {
+const configReviewView = (
+  review: ArgentMultisigConfigReview,
+  current: ArgentMultisigPublicConfig,
+): string => {
   const change = review.change;
   const changedSigners =
     change.kind === "replace_signer"
@@ -166,11 +177,31 @@ const configReviewView = (review: ArgentMultisigConfigReview): string => {
           );
   return `<section class="review-panel" aria-label="Signer authority change">
     <p class="review-flag"><strong>${escapeHtml(review.summary)}</strong></p>
+    <p>Threshold · <strong>${current.threshold} of ${current.signerPublicKeys.length} before → ${review.nextConfig.threshold} of ${review.nextConfig.signerPublicKeys.length} after</strong></p>
+    <p>Current signers</p>
+    <ol>${current.signerPublicKeys.map((key) => `<li><code>${escapeHtml(key)}</code></li>`).join("")}</ol>
+    <p>Exact change</p>
     ${changedSigners.map((line) => `<p><code>${escapeHtml(line)}</code></p>`).join("")}
     <p>Resulting threshold · <strong>${review.nextConfig.threshold} of ${review.nextConfig.signerPublicKeys.length}</strong></p>
     <p>Resulting signers</p>
     <ol>${review.nextConfig.signerPublicKeys.map((key) => `<li><code>${escapeHtml(key)}</code></li>`).join("")}</ol>
   </section>`;
+};
+
+const configMatchesIntent = (
+  intent: ArgentMultisigSigningIntent,
+  view: ArgentMultisigView,
+): boolean => {
+  const current = view.config;
+  return (
+    current !== null &&
+    sameFelt(current.classHash, intent.configSnapshot.classHash) &&
+    current.threshold === intent.configSnapshot.threshold &&
+    current.signerGuids.length === intent.configSnapshot.signerGuids.length &&
+    current.signerGuids.every((guid, index) =>
+      sameFelt(guid, intent.configSnapshot.signerGuids[index] ?? ""),
+    )
+  );
 };
 
 const intentCard = (
@@ -180,35 +211,58 @@ const intentCard = (
   preferences: WalletPreferences | null,
 ): string => {
   const options = localSignerOptions(view, status.accounts, preferences);
-  const canCollect = intent.state === "collecting" || intent.state === "ready";
+  const hasFreshAuthority = configMatchesIntent(intent, view);
+  const canCollect =
+    hasFreshAuthority && (intent.state === "collecting" || intent.state === "ready");
   const fee = preparedArgentMultisigFee(intent.prepared);
   const configReview = configReviewFor(intent, view);
+  const transactionReview = verifyCalls(
+    intent.prepared.calls.map((call) => ({ ...call, calldata: [...call.calldata] })),
+    {
+      ...verificationContext(view.record, preferences ?? { addressBook: [], tokens: [] }),
+      ...(configReview ? { knownContracts: [view.record.address] } : {}),
+    },
+  );
   return `<article class="allowance-row" data-ms-intent="${escapeHtml(intent.id)}">
-    <div class="row"><strong>${escapeHtml(intent.summary || "Unsigned transaction")}</strong>${pill(intent.state)}</div>
-    ${receipt([
-      {
-        label: "Transaction hash",
-        action: {
-          attributes: { "data-copy": intent.prepared.transactionHash },
-          icon: "copy",
-          label: "Copy transaction hash",
+    <div class="row"><strong>Exact Starknet transaction</strong>${pill(intent.state)}</div>
+    <p class="hint"><strong>Locally decoded summary:</strong> ${escapeHtml(intent.summary)}</p>
+    <section aria-label="Decoded exact calls">
+      <p><strong>Decoded exact calls</strong></p>
+      ${reviewCallsList(transactionReview.calls.map((call) => call.summary))}
+    </section>
+    ${reviewPanel(riskFlagMessages(transactionReview.flags))}
+    ${receipt(
+      [
+        {
+          label: "Transaction hash",
+          action: {
+            attributes: { "data-copy": intent.prepared.transactionHash },
+            icon: "copy",
+            label: "Copy transaction hash",
+          },
+          value: intent.prepared.transactionHash,
+          valueStyle: "code",
         },
-        value: intent.prepared.transactionHash,
-        valueStyle: "code",
-      },
-      { label: "Sender", value: intent.prepared.senderAddress, valueStyle: "code" },
-      { label: "Chain ID", value: intent.prepared.chainId, valueStyle: "code" },
-      { label: "Nonce", value: intent.prepared.nonce, valueStyle: "code" },
-      { label: "Maximum network fee", value: formatFeeEstimate(fee) },
-      {
-        label: "Signatures",
-        value: `${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
-      },
-      { label: "Calls", value: String(intent.prepared.calls.length) },
-    ])}
-    ${configReview ? configReviewView(configReview) : ""}
+        { label: "Sender", value: intent.prepared.senderAddress, valueStyle: "code" },
+        { label: "Chain ID", value: intent.prepared.chainId, valueStyle: "code" },
+        { label: "Nonce", value: intent.prepared.nonce, valueStyle: "code" },
+        { label: "Maximum network fee", value: formatFeeEstimate(fee) },
+        {
+          label: "Signatures",
+          value: `${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
+        },
+        { label: "Calls", value: String(intent.prepared.calls.length) },
+      ],
+      { "data-ms-exact-identity": "true" },
+    )}
+    ${
+      hasFreshAuthority
+        ? ""
+        : '<div class="review-panel" role="alert"><p class="review-flag">The fresh on-chain signer authority does not exactly match this intent snapshot. Signing and submission are disabled.</p></div>'
+    }
+    ${configReview && view.record.currentConfig ? configReviewView(configReview, view.record.currentConfig) : ""}
     <details><summary>Review exact calls</summary><ol class="allowance-list">${exactCalls(intent)}</ol></details>
-    <p class="hint">The note above is not signed authority. Verify the exact calls, sender, nonce, fee ceiling, and transaction hash.</p>
+    <p class="hint">Verify the locally decoded details against the exact calls, sender, nonce, fee ceiling, and transaction hash.</p>
     ${
       options.length > 0 && canCollect
         ? selectField({
@@ -235,7 +289,7 @@ const intentCard = (
           : ""
       }
       ${
-        intent.state === "ready"
+        intent.state === "ready" && hasFreshAuthority
           ? button({
               attributes: { "data-ms-submit": intent.id },
               label: "Submit",

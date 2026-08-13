@@ -39,7 +39,6 @@ const account: DerivedAccountRef = {
   publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
-
 const eth: TokenConfig = {
   address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
   decimals: 18,
@@ -49,7 +48,11 @@ const eth: TokenConfig = {
   symbol: "ETH",
 };
 
-const signHash = async () => ({ publicKey: account.publicKeyX, r: "0x1", s: "0x2" });
+let latestSignedHash = "0x0";
+const signHash = async (messageHash = "0x0") => {
+  latestSignedHash = messageHash;
+  return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+};
 
 // A provider fake for the read paths that call provider.callContract /
 // provider.getTransactionStatus directly.
@@ -345,7 +348,6 @@ const channelResponses: Record<string, unknown> = {
   getChainId: "0x534e5f4d41494e",
   getEstimateFee: [FEE_ESTIMATE],
   getNonceForAddress: "0x0",
-  invoke: { transaction_hash: "0xdeadbeef" },
   specVersion: "0.8.1",
 };
 
@@ -358,7 +360,8 @@ const accountProvider = (): RpcProvider => {
           return undefined;
         }
         const key = String(prop);
-        return async () => channelResponses[key];
+        return async () =>
+          key === "invoke" ? { transaction_hash: latestSignedHash } : channelResponses[key];
       },
     },
   );
@@ -423,7 +426,7 @@ describe("submitInvokeTransaction", () => {
       },
       accountProvider,
     );
-    expect(result.transactionHash).toBe("0xdeadbeef");
+    expect(latestSignedHash).toBe(result.transactionHash);
     expect(result.calls).toEqual(oneCall);
   });
 
@@ -441,7 +444,7 @@ describe("submitInvokeTransaction", () => {
       },
       accountProvider,
     );
-    expect(result.transactionHash).toBe("0xdeadbeef");
+    expect(latestSignedHash).toBe(result.transactionHash);
   });
 
   test("rejects an empty call list before touching the network", async () => {
@@ -465,7 +468,7 @@ describe("submitErc20Transfer", () => {
       },
       accountProvider,
     );
-    expect(submission.transactionHash).toBe("0xdeadbeef");
+    expect(latestSignedHash).toBe(submission.transactionHash);
     expect(submission.call.entrypoint).toBe("transfer");
     expect(submission.call.contractAddress).toBe(eth.address);
   });

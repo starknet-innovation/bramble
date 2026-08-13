@@ -9,7 +9,6 @@ import {
   ARGENT_MULTISIG_MAX_SIGNERS,
 } from "@mc-wallet/starknet/account-contracts";
 import {
-  ARGENT_MULTISIG_INVOKE_LIMITS,
   type ArgentMultisigCall,
   isArgentMultisigCalls,
 } from "@mc-wallet/starknet/multisig-invoke";
@@ -27,20 +26,12 @@ import { parseArgentMultisigConfigChange } from "./config-change";
  * Shared limits for account configuration and frozen signing intents.
  */
 export const MULTISIG_LIMITS = {
-  /** Maximum calls in one account execution. */
-  calls: ARGENT_MULTISIG_INVOKE_LIMITS.calls,
-  /** Maximum calldata felts in one call. */
-  calldataFelts: ARGENT_MULTISIG_INVOKE_LIMITS.calldataFelts,
-  /** Maximum calldata felts across one execution. */
-  totalCalldataFelts: ARGENT_MULTISIG_INVOKE_LIMITS.totalCalldataFelts,
   /** Maximum user-facing account name length. */
   nameLength: 48,
   /** Maximum signer count enforced by Argent Multisig 0.2. */
   signers: ARGENT_MULTISIG_MAX_SIGNERS,
   /** Maximum user-facing signing-intent summary length. */
   summaryLength: 120,
-  /** Maximum felts in each optional V3 transaction-data array. */
-  transactionDataFelts: ARGENT_MULTISIG_INVOKE_LIMITS.transactionDataFelts,
 } as const;
 
 const MULTISIG_READ_TIMEOUT_MS = 6_000;
