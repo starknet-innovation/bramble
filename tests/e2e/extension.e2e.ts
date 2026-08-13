@@ -73,6 +73,19 @@ test("imports an existing recovery phrase without backup verification", async ({
   await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
 });
 
+// The suite blackholes DNS, so every outbound read here fails fast: the panel
+// must say so rather than render a blank pane.
+test("degrades honestly when network reads fail", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await createWalletFromGeneratedPhrase(sidepanel);
+
+  // Fiat prices are mainnet-only, which a fresh profile selects by default.
+  await expect(sidepanel.getByText("Live prices unavailable right now")).toBeVisible();
+
+  await sidepanel.getByRole("tab", { name: "Activity" }).click();
+  await expect(sidepanel.getByText(/Couldn't load on-chain history/)).toBeVisible();
+});
+
 test("creates a wallet and approves a dapp connection", async ({ extension }) => {
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);
