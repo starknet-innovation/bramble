@@ -72,6 +72,18 @@ export const sameFeeEstimate = (left: FeeEstimate, right: FeeEstimate): boolean 
   left.overallFee === right.overallFee && left.unit === right.unit;
 
 /**
+ * Adds two reviewed fee components without crossing denominations. Returns
+ * null for malformed inputs or unlike units so a displayed total fails closed.
+ */
+export const sumFeeEstimates = (left: FeeEstimate, right: FeeEstimate): FeeEstimate | null =>
+  isFeeEstimate(left) && isFeeEstimate(right) && left.unit === right.unit
+    ? {
+        overallFee: (BigInt(left.overallFee) + BigInt(right.overallFee)).toString(),
+        unit: left.unit,
+      }
+    : null;
+
+/**
  * How far above the reviewed figure a submission-time estimate may land before
  * the wallet refuses to sign, as an exact rational (numerator/denominator) so
  * the comparison stays integer arithmetic on base units.

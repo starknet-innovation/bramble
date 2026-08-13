@@ -258,6 +258,20 @@ describe("submitAccountDeployment", () => {
       ),
     ).rejects.toThrow("Account is already deployed");
   });
+
+  test("treats a malformed successful broadcast response as indeterminate", async () => {
+    await expect(
+      submitAccountDeployment(
+        {
+          account,
+          rpcUrls: ["https://rpc.example"],
+          signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+        },
+        () => makeProvider(false),
+        () => ({ deployAccount: async () => ({}) }) as unknown as Account,
+      ),
+    ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
+  });
 });
 
 /**
@@ -279,7 +293,7 @@ describe("a reviewed deployment fee is a ceiling on the deployment", () => {
       async deployAccount(_payload: unknown, details?: { readonly resourceBounds?: unknown }) {
         seen.deploys += 1;
         seen.bounds = details?.resourceBounds;
-        return { transaction_hash: "0xdeploy" };
+        return { transaction_hash: "0xdeadbeef" };
       },
       async estimateAccountDeployFee() {
         seen.estimates += 1;

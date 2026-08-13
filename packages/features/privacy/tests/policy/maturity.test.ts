@@ -216,7 +216,7 @@ describe("STRK20 proof maturity", () => {
 
     expect(await store.read(scope)).toEqual({ state: "submitting" });
     await expect(runtime.provingBlock(providerWith([30]), scope)).rejects.toThrow(
-      "strk20 services unavailable",
+      "close every browser window and reopen the browser to recover",
     );
   });
 
@@ -392,7 +392,7 @@ describe("STRK20 proof maturity", () => {
     expect(await store.read(scope)).toEqual({ state: "submitting" });
     await expect(
       createStrk20MaturityRuntime({ store }).provingBlock(providerWith([30]), scope),
-    ).rejects.toThrow("strk20 services unavailable");
+    ).rejects.toThrow("close every browser window and reopen the browser to recover");
   });
 
   test("releases the scope when the relay states its own refusal", async () => {

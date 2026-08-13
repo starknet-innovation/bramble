@@ -154,7 +154,8 @@ const driveThrow = async (dappMessage: Record<string, unknown>) => {
   const id = before[0]?.id ?? "";
   const heldBeforeApprove = settled;
   const reviewedFee =
-    dappMessage["type"] === "wallet.addInvokeTransaction"
+    dappMessage["type"] === "wallet.addInvokeTransaction" ||
+    dappMessage["type"] === "wallet.addDeclareTransaction"
       ? await reviewedApprovalFee(handler, page, id)
       : undefined;
 

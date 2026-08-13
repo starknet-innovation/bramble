@@ -14,7 +14,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
-import { latestApprovalId } from "../support/held";
+import { flushHeld, latestApprovalId } from "../support/held";
 import {
   invokeAccount,
   invokeContentSender,
@@ -28,10 +28,14 @@ const declare = {
   compiledClassHash: "0x6def",
   contractClass: { entry_points_by_type: { EXTERNAL: [] }, sierra_program: ["0x1"] },
 };
+const reviewedFee = { overallFee: "1", unit: "FRI" } as const;
 
 const declareHarness = () => {
   const submitted: Parameters<RuntimeRpc["submitDeclareTransaction"]>[0][] = [];
   const harness = makeInvokeHarness([invokeAccount], undefined, {
+    async estimateDeclareFee() {
+      return reviewedFee;
+    },
     async submitDeclareTransaction(input: Parameters<RuntimeRpc["submitDeclareTransaction"]>[0]) {
       submitted.push(input);
       return { classHash: "0x7ce", transactionHash: "0x7cd" };
@@ -49,8 +53,9 @@ describe("approved dapp declare activity (MCW-V09-120)", () => {
       { declare, origin: invokeOrigin, type: "wallet.addDeclareTransaction" },
       invokeContentSender,
     );
+    await flushHeld();
     const id = await latestApprovalId(handler, invokeExtensionSender);
-    await handler({ id, type: "wallet.approveOrigin" }, invokeExtensionSender);
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, invokeExtensionSender);
 
     await expect(held).resolves.toEqual({
       classHash: "0x7ce",
@@ -76,6 +81,9 @@ describe("approved dapp declare activity (MCW-V09-120)", () => {
     // Same production route, but the node refuses the declare: the dapp gets the
     // failure and the journal must stay empty rather than claiming a submission.
     const { activity, handler } = makeInvokeHarness([invokeAccount], undefined, {
+      async estimateDeclareFee() {
+        return reviewedFee;
+      },
       async submitDeclareTransaction(): Promise<never> {
         throw new Error("Class already declared");
       },
@@ -85,8 +93,9 @@ describe("approved dapp declare activity (MCW-V09-120)", () => {
       { declare, origin: invokeOrigin, type: "wallet.addDeclareTransaction" },
       invokeContentSender,
     );
+    await flushHeld();
     const id = await latestApprovalId(handler, invokeExtensionSender);
-    await handler({ id, type: "wallet.approveOrigin" }, invokeExtensionSender);
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, invokeExtensionSender);
 
     await expect(held).resolves.toEqual({
       error: "This contract class is already declared on the selected network.",

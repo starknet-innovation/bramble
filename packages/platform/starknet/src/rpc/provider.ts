@@ -8,6 +8,7 @@ import { readBoundedText } from "@mc-wallet/core/http-json";
 import { isRecord } from "@mc-wallet/core/json";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
+  isNonZeroStarkFieldElement,
   isStarkFieldElement,
   STARKNET_RPC_SPEC_VERSION,
   sameFelt,
@@ -39,6 +40,18 @@ export class IndeterminateRpcWriteError extends WalletError {
  */
 export const INDETERMINATE_RPC_WRITE_MESSAGE =
   "Transaction submission status is unknown. Check activity and on-chain state before retrying.";
+
+/**
+ * Accepts a required hash from a successful broadcast result. A malformed
+ * HTTP-200 result is still ambiguous: the node may have accepted the write, so
+ * callers must not report a determinate failure that invites a blind retry.
+ */
+export const acceptedRpcWriteHash = (value: unknown): string => {
+  if (typeof value !== "string" || !isNonZeroStarkFieldElement(value)) {
+    throw new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE);
+  }
+  return value;
+};
 
 /**
  * Marker for a JSON-RPC exchange that failed at the transport rather than at

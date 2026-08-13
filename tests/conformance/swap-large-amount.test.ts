@@ -101,7 +101,7 @@ const PREPARATION_ID = `sha256:${"a".repeat(64)}`;
 
 // Mounts the swap screen over the REAL swap client, so the assertion runs
 // against the message the side panel actually puts on the wire.
-const mountSwap = (): { readonly sent: unknown[] } => {
+const mountSwap = (prepareGate?: Promise<void>): { readonly sent: unknown[] } => {
   const sent: unknown[] = [];
   const app = document.createElement("div");
   app.id = "app";
@@ -122,6 +122,9 @@ const mountSwap = (): { readonly sent: unknown[] } => {
             sellAmountInUsd: 400,
           },
         };
+      }
+      if (isRecord(message) && message["type"] === "wallet.swapPrepare") {
+        await prepareGate;
       }
       // The fake background applies the REAL privileged reader, so a message
       // the wallet would reject cannot quietly succeed in this suite.
@@ -201,6 +204,32 @@ describe("swap preparation for an amount past the grouping threshold", () => {
     mountSwap();
     await clickReview();
     expect(document.querySelector("#swap-confirm")?.hasAttribute("hidden")).toBe(false);
+  });
+
+  test("editing during preparation cannot reopen a stale confirmation", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mountSwap(held);
+    document.querySelector<HTMLButtonElement>("#swap-back-button")?.click();
+    await flush();
+    document.querySelector<HTMLButtonElement>("#swap-max")?.click();
+    await flush();
+    document.querySelector<HTMLButtonElement>("#swap-review")?.click();
+    await flush();
+
+    const amount = document.querySelector<HTMLInputElement>("#swap-sell-amount");
+    expect(amount).not.toBeNull();
+    if (amount) {
+      amount.value = "0.5";
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    release();
+    await flush();
+
+    expect(document.querySelector("#swap-confirm")?.hasAttribute("hidden")).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 400));
   });
 });
 

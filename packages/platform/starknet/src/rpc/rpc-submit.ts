@@ -15,7 +15,12 @@ import {
   type FeeSpeed,
   scaleFeeBounds,
 } from "./fee-bounds";
-import { krustyAccount, type StarkHashSigner, withRpcWrite } from "./provider";
+import {
+  acceptedRpcWriteHash,
+  krustyAccount,
+  type StarkHashSigner,
+  withRpcWrite,
+} from "./provider";
 
 /**
  * Fee speed control: standard signs the bounds the node's estimate implies,
@@ -147,7 +152,7 @@ export const submitInvokeTransaction = async (
       );
       return {
         calls,
-        transactionHash: result.transaction_hash,
+        transactionHash: acceptedRpcWriteHash(result.transaction_hash),
       };
     },
     makeProvider,

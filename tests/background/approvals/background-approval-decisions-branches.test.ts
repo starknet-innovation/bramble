@@ -159,14 +159,24 @@ describe("handleApprovalDecision missing-payload guards", () => {
               feeEstimateFailed: false,
               feeEstimatePending: false,
             }
-          : {}),
+          : kind === "declare"
+            ? {
+                declaration: {
+                  accountDeployment: "deployed",
+                  deploymentFee: null,
+                  deploymentFeeEstimateFailed: false,
+                  fee: REVIEWED_FEE,
+                  feeEstimateFailed: false,
+                },
+              }
+            : {}),
       } as PendingApproval;
       const deps = baseDeps(doubleQueue(approval, payload));
       await expect(
         handleApprovalDecision(
           deps,
           "wallet.approveOrigin",
-          kind === "invoke" ? approveInvoke(id) : approve(id),
+          kind === "invoke" || kind === "declare" ? approveInvoke(id) : approve(id),
         ),
       ).resolves.toEqual({ error: "approval not found" });
     });
@@ -296,7 +306,11 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
       summaries: ["Declare"],
     });
     await expect(
-      handleApprovalDecision(lockedDeps(approvals), "wallet.approveOrigin", approve(id)),
+      handleApprovalDecision(lockedDeps(approvals), "wallet.approveOrigin", {
+        id,
+        reviewedFee: { overallFee: "1000", unit: "FRI" },
+        type: "wallet.approveOrigin",
+      }),
     ).resolves.toEqual({ error: "wallet locked" });
   });
 });

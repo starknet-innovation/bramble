@@ -20,7 +20,7 @@
 import type { MultisigProposalStatus } from "@mc-wallet/multisig/chain";
 import { memoryMultisigStore } from "@mc-wallet/multisig/repository";
 import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { type FeeEstimate, sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
@@ -73,6 +73,15 @@ export type KeyBoundaryHarness = {
 // unrelated test in the same file.
 const park = (held: Promise<unknown>): void => {
   held.catch(() => undefined);
+};
+
+const declarationReviewedFee = (declaration: {
+  readonly deploymentFee?: FeeEstimate | null;
+  readonly fee?: FeeEstimate | null;
+}): FeeEstimate | null => {
+  const fee = declaration.fee ?? null;
+  const deployment = declaration.deploymentFee ?? null;
+  return fee && deployment ? sumFeeEstimates(fee, deployment) : fee;
 };
 
 /**
@@ -136,7 +145,7 @@ export const makeKeyBoundaryHarness = async (
       }
       for (const approval of approvals.list()) {
         if (!known.has(approval.id)) {
-          let reviewedFee: FeeEstimate | null = null;
+          let reviewedFee: FeeEstimate | null = declarationReviewedFee(approval.declaration ?? {});
           if (approval.kind === "invoke") {
             // This scan also exercises counterfactual deployment data, so the
             // shared chain starts undeployed. Model its deployment before the

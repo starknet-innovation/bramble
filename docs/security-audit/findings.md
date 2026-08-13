@@ -84,6 +84,7 @@ follow the link for what shipped.
 | [EXT-M03](../releases/v0.9-external-review/#ext-m03) | Medium | Resolved | consistency | Merkle-tree receipts collapse every distinct root over one leaf multiset into one card |
 | [EXT-M04](../releases/v0.9-external-review/#ext-m04) | Medium | Resolved | availability | The proposal-id binding blocks the only non-destructive way to withdraw a confirmation from a poisoned proposal |
 | [EXT-M05](../releases/v0.9-external-review/#ext-m05) | Medium | Resolved | consistency | Standard safe and batch NFT transfers bypass the poisoned-recipient refusal |
+| [EXT-M06](../releases/v0.9-external-review/#ext-m06) | Medium | Resolved | origin-trust | Wallet-initiated signing lanes accepted node-quoted fee bounds that no review surface displayed |
 | [EXT-L01](../releases/v0.9-external-review/#ext-l01) | Low | Resolved | origin-trust | The reviewed fee is re-read at approve time, so a retry can raise the enforced ceiling above the figure on screen |
 | [EXT-L02](../releases/v0.9-external-review/#ext-l02) | Low | Resolved | plaintext-lifetime | An explicit lock revokes the signing thunk but not the STRK20 viewing-key thunk |
 | [EXT-L03](../releases/v0.9-external-review/#ext-l03) | Low | Resolved | consistency | The unlimited-approval running total starts at zero, so a top-up on a standing allowance crosses the threshold unflagged |
@@ -91,12 +92,23 @@ follow the link for what shipped.
 | [EXT-L05](../releases/v0.9-external-review/#ext-l05) | Low | Resolved | availability | Multisig operation claims omit the multisig contract, so one proposal id blocks itself across two multisigs |
 | [EXT-L06](../releases/v0.9-external-review/#ext-l06) | Low | Resolved | consistency | Execute and revoke on one proposal can both broadcast, because claims are separated by kind |
 | [EXT-L07](../releases/v0.9-external-review/#ext-l07) | Low | Resolved | availability | A full origin queue is refused only after the typed data has been hashed and the vault read |
+| [REV-L-01](../releases/v0.9-pr234-followup/) | Low | Resolved | RPC submission | A malformed successful broadcast result could hide a possibly-live transaction behind a retryable-looking failure |
+| [REV-L-02](../releases/v0.9-pr234-followup/) | Low | Resolved | privacy availability | A retained STRK20 submission guard did not tell the user how to recover |
+| [REV-L-03](../releases/v0.9-pr234-followup/) | Low | Resolved | swap consent | A late preparation could reopen confirmation beside a newer live quote |
+| [REV-L-04](../releases/v0.9-pr234-followup/) | Low | Resolved | fee consent | A declaration remained approvable after its fee estimate failed |
+| [REV-L-05](../releases/v0.9-pr234-followup/) | Low | Resolved | multisig availability | An accepted local confirmation claim could survive an external revoke forever |
+| [REV-L-06](../releases/v0.9-pr234-followup/) | Low | Resolved | multisig submission | Two wallet surfaces could broadcast the identical proposal concurrently |
+| [REV-L-07](../releases/v0.9-pr234-followup/) | Low | Resolved | CI secrets | The Chromatic token was available to earlier PR-controlled job steps |
+| [REV-L-08](../releases/v0.9-pr234-followup/) | Low | Resolved | multisig review | Valid camel-case Cairo entrypoints fell back to id-only review |
+| [REV-L-09](../releases/v0.9-pr234-followup/) | Low | Closed after reproduction | typed-data availability | A machine-specific worst-case timing claim did not reproduce; admission remains enforced before hashing |
+| [MCW-PR234-001](../releases/v0.9-pr234-followup/#additional-adversarial-finding) | Low | Resolved | multisig submission | Indeterminate broadcasts released their durable claim and reopened blind retry |
+| [MCW-PR234-002](../releases/v0.9-pr234-followup/#additional-adversarial-finding) | Low | Resolved | declare fee consent | An undeployed-account card displayed a combined total but echoed only one component |
 
 ## v0.9.1 external security review
 
 An independent reviewer audited the `v0.9` remediation branch before promotion and returned
-**DO NOT MERGE**, substantiating [fourteen findings](../releases/v0.9-external-review/): two High,
-five Medium, and seven Low. All fourteen are Resolved. Two were regressions introduced by the v0.9
+**DO NOT MERGE**, substantiating [fifteen findings](../releases/v0.9-external-review/): two High,
+six Medium, and seven Low. All fifteen are Resolved. Two were regressions introduced by the v0.9
 remediation itself (`EXT-M03`, `EXT-M04`) and two more were incomplete remediations of v0.9
 findings (`EXT-H01`, `EXT-L04`); the rest pre-dated the branch. The High findings were delivered
 privately — their entries record the defect and the remediation, and the reviewer's reproduction

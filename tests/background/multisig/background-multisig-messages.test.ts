@@ -129,6 +129,36 @@ describe("multisig messages", () => {
     ]);
   });
 
+  test("serializes duplicate proposal submissions across extension surfaces", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { handler, invokeCalls } = makeMultisigHarness({
+      submitInvoke: async () => {
+        await held;
+        return { transactionHash: "0x7cd" };
+      },
+    });
+    const watched = (await watch(handler)) as { multisig: { id: string } };
+
+    const first = propose(handler, watched.multisig.id);
+    for (let turn = 0; turn < 8 && invokeCalls.length === 0; turn += 1) {
+      await Promise.resolve();
+    }
+    try {
+      const second = await Promise.race([
+        propose(handler, watched.multisig.id),
+        Bun.sleep(100).then(() => ({ timeout: true })),
+      ]);
+      expect(second).toMatchObject({ error: expect.stringContaining("already been submitted") });
+      expect(invokeCalls).toHaveLength(1);
+    } finally {
+      release();
+    }
+    await expect(first).resolves.toMatchObject({ ok: true });
+  });
+
   test("returns a submitted proposal hash when activity storage fails", async () => {
     const base = memoryActivityLog();
     const activity: ActivityLog = {

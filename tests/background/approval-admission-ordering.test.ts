@@ -1,8 +1,8 @@
 /**
  * The per-origin approval cap (MCW-V09-116) bounds how much MEMORY one site can
  * hold. It did not bound CPU, because it was applied at the very END of each
- * dapp handler: a `wallet.signTypedData` was fully hashed — hundreds of
- * milliseconds of Pedersen for a legal maximum-size SNIP-12 document — and the
+ * dapp handler: a `wallet.signTypedData` fully consumed the legal SNIP-12
+ * hashing budget in the panel's service worker, and the
  * vault was decrypted to read the origin's grants, and only then did the queue
  * refuse the request and throw all of that away. A connected site could keep the
  * MV3 service worker (which also serves the side panel and background
@@ -26,7 +26,7 @@ import {
 } from "../support/invoke-approval-harness";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
 
-// A legal SNIP-12 document of the shape the finding measured at ~260ms to hash:
+// A legal SNIP-12 document that consumes the current hashing budget:
 // four felt arrays at the JSON budget's maximum length. Nothing here is
 // malformed — the point is that the WORST LEGAL request is cheap to refuse.
 const felts = (count: number): readonly string[] =>
@@ -55,8 +55,8 @@ const signMessage = { origin, type: "wallet.signTypedData", typedData: heavyType
 
 // The same request at its cheapest, for the admitted control: what that case
 // pins is that the grants ARE read when there is room, and hashing the heavy
-// document to learn it would put a quarter-second of Pedersen (much more on CI)
-// into a test that does not need it.
+// document to learn it would put substantial synchronous Pedersen work into a
+// test that does not need it.
 const smallSignMessage = {
   origin,
   type: "wallet.signTypedData",

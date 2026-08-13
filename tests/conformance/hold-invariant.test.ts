@@ -80,7 +80,8 @@ describe("state-change hold invariant", () => {
 
         const id = await latestApprovalId(handler, EXTENSION_SENDER);
         const reviewedFee =
-          entry.method === "wallet_addInvokeTransaction"
+          entry.method === "wallet_addInvokeTransaction" ||
+          entry.method === "wallet_addDeclareTransaction"
             ? await reviewedApprovalFee(handler, EXTENSION_SENDER, id)
             : undefined;
         await handler(

@@ -154,6 +154,9 @@ const strk20Stub = (bump: Bump): Strk20Service => ({
 });
 
 const rpcStub = (bump: Bump): RuntimeRpc => ({
+  async estimateDeclareFee() {
+    return { overallFee: "1", unit: "FRI" };
+  },
   async estimateInvokeFee() {
     return { overallFee: "1", unit: "FRI" };
   },

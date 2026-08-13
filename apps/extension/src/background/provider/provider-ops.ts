@@ -199,7 +199,7 @@ type ProviderOpsHandler = (
   deps: ProviderOpsDeps,
   message: unknown,
   sender: RuntimeSender | undefined,
-) => Promise<RuntimeResponse>;
+) => Promise<RuntimeResponse | null>;
 
 const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) => {
   const input = readGetPermissionsInput(message);
@@ -313,16 +313,16 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   notifyApprovalsChanged();
   // Claimed before the estimate starts, so a retry pressed while this first
   // estimate is still running supersedes it rather than being overwritten by it.
-  const revision = deps.approvals.beginInvokeFeeEstimate(approval.id);
+  const revision = deps.approvals.beginFeeEstimate(approval.id);
   if (revision) {
     void estimateInvokeApprovalFee(deps, feeReviewTarget(deps, resolved, input.calls)).then(
       (fee) => {
-        if (deps.approvals.updateInvokeFee(revision, fee)) {
+        if (deps.approvals.updateFee(revision, { kind: "invoke", review: fee })) {
           notifyApprovalsChanged();
         }
       },
       () => {
-        if (deps.approvals.updateInvokeFee(revision, FAILED_INVOKE_FEE)) {
+        if (deps.approvals.updateFee(revision, { kind: "invoke", review: FAILED_INVOKE_FEE })) {
           notifyApprovalsChanged();
         }
       },
@@ -331,11 +331,7 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   return deps.waiters.register(approval.id);
 };
 
-// Re-estimates the fee for a queued invoke approval on the panel's request
-// (the retry affordance on the approval card). Privileged-sender only — the
-// message type is not dapp-reachable. Re-resolves the origin's account against
-// the approval's pinned context so a network or account switch since queueing
-// fails safely instead of estimating against the wrong account.
+// Re-estimates a queued invoke against its pinned account and network.
 const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
   const input = readRetryApprovalFeeInput(message);
   if (!input) {
@@ -343,6 +339,9 @@ const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
   }
   const approval = deps.approvals.get(input.id);
   const payload = deps.approvals.payload(input.id);
+  if (approval?.kind === "declare") {
+    return null;
+  }
   if (approval?.kind !== "invoke" || !payload?.calls) {
     return { error: "approval not found" };
   }
@@ -350,12 +349,12 @@ const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
   if ("error" in resolved) {
     return resolved;
   }
-  // One claim covers both writes below. A second retry — from this surface or
-  // another open one — takes a later claim, and this one then writes nothing:
-  // the figure the card ends up showing is always the newest estimate, never an
-  // older one that happened to resolve last.
-  const revision = deps.approvals.beginInvokeFeeEstimate(input.id);
-  if (!revision || !deps.approvals.updateInvokeFee(revision, PENDING_INVOKE_FEE)) {
+  // Only the newest concurrent retry may update the card.
+  const revision = deps.approvals.beginFeeEstimate(input.id);
+  if (
+    !revision ||
+    !deps.approvals.updateFee(revision, { kind: "invoke", review: PENDING_INVOKE_FEE })
+  ) {
     return { error: "approval not found" };
   }
   notifyApprovalsChanged();
@@ -363,7 +362,7 @@ const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
     deps,
     feeReviewTarget(deps, resolved, payload.calls),
   ).catch(() => FAILED_INVOKE_FEE);
-  if (!deps.approvals.updateInvokeFee(revision, fee)) {
+  if (!deps.approvals.updateFee(revision, { kind: "invoke", review: fee })) {
     return { error: "a newer fee estimate replaced this one" };
   }
   notifyApprovalsChanged();

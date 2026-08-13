@@ -58,7 +58,7 @@ export const latestApprovalId = async (
 };
 
 /**
- * Waits until an invoke approval has the fee its card may echo into approval.
+ * Waits until an invoke or declare approval has the fee its card may echo.
  * Throws on failure/no fee so a test cannot accidentally bypass fee review.
  */
 export const reviewedApprovalFee = async (
@@ -68,15 +68,17 @@ export const reviewedApprovalFee = async (
 ): Promise<FeeEstimate> => {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     const pending = await waitForPendingApprovals<{
+      readonly declaration?: { readonly fee?: FeeEstimate | null };
       readonly fee?: FeeEstimate | null;
       readonly feeEstimatePending?: boolean;
       readonly id: string;
     }>(handler, extensionSender);
     const approval = pending.find((entry) => entry.id === id);
-    if (approval?.fee && approval.feeEstimatePending !== true) {
-      return approval.fee;
+    const fee = approval?.fee ?? approval?.declaration?.fee;
+    if (fee && approval?.feeEstimatePending !== true) {
+      return fee;
     }
     await flushHeld();
   }
-  throw new Error("invoke approval fee was not reviewed");
+  throw new Error("approval fee was not reviewed");
 };

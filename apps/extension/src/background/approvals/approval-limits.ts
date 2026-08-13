@@ -139,7 +139,7 @@ export const requireApprovalAdmission = (
  * A claim on the fee slot of one queued invoke approval, taken before the
  * estimate that will fill it starts.
  *
- * The fee on an invoke card is the figure the user consents to pay, and the
+ * A fee on an approval card is the figure the user consents to pay, and the
  * writes that fill it race: the first estimate runs while the prompt is already
  * on screen, and the retry affordance can be pressed again — or pressed on a
  * second open wallet surface — while that estimate is still in flight. With no
@@ -149,7 +149,7 @@ export const requireApprovalAdmission = (
  * Only the queue mints one, and only a current claim writes, so a fee cannot be
  * recorded without first claiming the slot it belongs to.
  */
-export type InvokeFeeRevision = {
+export type ApprovalFeeRevision = {
   readonly id: string;
   readonly revision: number;
 };

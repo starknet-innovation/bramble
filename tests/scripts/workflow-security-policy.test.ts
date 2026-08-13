@@ -155,6 +155,15 @@ describe("workflow security policy", () => {
       failure: ".github/workflows/ci.yml must pin Rust toolchain 1.96.1",
     },
     {
+      name: "rejects exposing the Chromatic token to the whole UI job",
+      workflow: "ui-lab.yml",
+      search:
+        "    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+      replacement: `    runs-on: ubuntu-latest\n    env:\n      CHROMATIC_PROJECT_TOKEN: ${GITHUB_EXPRESSION} secrets.CHROMATIC_PROJECT_TOKEN }}\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`,
+      failure:
+        ".github/workflows/ui-lab.yml must reference the Chromatic token only in its scoped step environment",
+    },
+    {
       name: "rejects release builds without the pinned privacy SDK",
       workflow: "release-build.yml",
       search: "- run: bun run vendor:privacy",

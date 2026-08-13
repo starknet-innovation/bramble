@@ -241,9 +241,18 @@ describe("panel polling cannot hold the wallet unlocked", () => {
       readFile(TRANSACTION_ALERTS_SOURCE, "utf8"),
     ]);
 
-    expect(lifecycle).toContain("render(await wallet.loadStatus())");
-    expect(transactionAlerts).toContain("wallet.loadTransactionAlerts()");
-    expect(privacy).toContain("load: () => deps.wallet.loadPrivacyState()");
+    expect(lifecycle.split("\n").filter((line) => line.includes("wallet.loadStatus"))).toEqual([
+      "    refresh: withTransactionAlerts(wallet, async () => render(await wallet.loadStatus())),",
+    ]);
+    expect(
+      transactionAlerts.split("\n").filter((line) => line.includes("wallet.loadTransactionAlerts")),
+    ).toEqual(["    const alerts = await wallet.loadTransactionAlerts().catch(() => []);"]);
+    expect(
+      privacy.split("\n").filter((line) => line.includes("deps.wallet.loadPrivacyState")),
+    ).toEqual([
+      "    const value = await deps.wallet.loadPrivacyState();",
+      "    load: () => deps.wallet.loadPrivacyState(),",
+    ]);
   });
 });
 

@@ -14,7 +14,7 @@
 import type { OriginGuard } from "@mc-wallet/permissions/blocklist";
 import type { OriginHistoryStore } from "@mc-wallet/permissions/origin-history";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { type FeeEstimate, sameFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { type FeeEstimate, sameFeeEstimate, sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
@@ -37,6 +37,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
 import { executeSignApproval, executeSwitchChainApproval } from "../transactions/chain-ops";
 import { executeDeclareApproval } from "../transactions/declare-ops";
+import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { approvalPayloadMatchesContext } from "./approval-context";
 import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
 import type { SignatureWaiters } from "./signature-waiters";
@@ -60,14 +61,8 @@ export type ApprovalDecisionDeps = {
 };
 
 const NOT_FOUND: RuntimeResponse = { error: "approval not found" };
-const FEE_REVIEW_REQUIRED: RuntimeResponse = {
-  error: "retry the fee estimate before approving this transaction",
-};
-
 /**
- * Outcome of applying an already-claimed approve decision. `reject` settles
- * the held request with the failure; `settle` delivers its execution result.
- * The id has already been removed atomically before either branch runs.
+ * Outcome of applying an already-claimed approve decision.
  */
 type ApplyResult =
   | { readonly status: "reject"; readonly response: RuntimeResponse }
@@ -267,9 +262,15 @@ const applyAddChain: ApproveApplier = async (deps, { payload }) => {
   return settleExecutor(result);
 };
 
-const applyDeclare: ApproveApplier = async (deps, { approval, payload }) => {
+const applyDeclare: ApproveApplier = async (deps, { approval, payload }, decision) => {
   if (payload?.declare === undefined) {
     return reject(NOT_FOUND);
+  }
+  const feeRefusal = pendingFeeRefusal(approval, decision.reviewedFee);
+  if (feeRefusal) return reject(feeRefusal);
+  const declaration = approval.declaration;
+  if (!declaration?.fee || !decision.reviewedFee) {
+    return reject(FEE_REVIEW_REQUIRED);
   }
   const result = await executeDeclareApproval(
     {
@@ -284,15 +285,9 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }) => {
       ...(approval.context === undefined ? {} : { context: approval.context }),
       declare: payload.declare,
       origin: approval.origin,
-      // The declaration fee shown on the card. Null (estimate failed) leaves
-      // the submission unbound, which is honest — no fee was reviewed.
-      ...(approval.declaration?.fee ? { reviewedFee: approval.declaration.fee } : {}),
-      // The deployment fee shown on the same card, for an undeployed account.
-      // The card adds the two into an "Estimated total", so both halves of that
-      // total are bound or the total is a number the wallet does not stand by.
-      ...(approval.declaration?.deploymentFee
-        ? { reviewedDeploymentFee: approval.declaration.deploymentFee }
-        : {}),
+      reviewedFee: declaration.fee,
+      // Bind each component of the displayed total at its own submit boundary.
+      ...(declaration.deploymentFee ? { reviewedDeploymentFee: declaration.deploymentFee } : {}),
     },
   );
   return settleExecutor(result);
@@ -377,10 +372,34 @@ const settleClaimError = (
   return response;
 };
 
-const pendingInvokeFeeRefusal = (
-  pending: PendingApproval | null,
+const pendingDeclareFeeRefusal = (
+  pending: PendingApproval,
   reviewedFee: FeeEstimate | undefined,
 ): RuntimeResponse | null => {
+  const declaration = pending.declaration;
+  if (
+    !declaration?.fee ||
+    declaration.feeEstimateFailed ||
+    !reviewedFee ||
+    declaration.accountDeployment === "unknown" ||
+    (declaration.accountDeployment === "undeployed" &&
+      (!declaration.deploymentFee || declaration.deploymentFeeEstimateFailed))
+  ) {
+    return FEE_REVIEW_REQUIRED;
+  }
+  const total = declaration.deploymentFee
+    ? sumFeeEstimates(declaration.fee, declaration.deploymentFee)
+    : declaration.fee;
+  return total && sameFeeEstimate(reviewedFee, total)
+    ? null
+    : { error: "the fee changed since this request was reviewed" };
+};
+
+function pendingFeeRefusal(
+  pending: PendingApproval | null,
+  reviewedFee: FeeEstimate | undefined,
+): RuntimeResponse | null {
+  if (pending?.kind === "declare") return pendingDeclareFeeRefusal(pending, reviewedFee);
   if (pending?.kind !== "invoke") {
     return null;
   }
@@ -395,7 +414,7 @@ const pendingInvokeFeeRefusal = (
   return sameFeeEstimate(reviewedFee, pending.fee)
     ? null
     : { error: "the fee changed since this request was reviewed" };
-};
+}
 
 const applyApproveDecision = async (
   deps: ApprovalDecisionDeps,
@@ -405,10 +424,8 @@ const applyApproveDecision = async (
   if (!input) {
     return { error: "invalid approval request" };
   }
-  // Extension messages are untrusted too. Refuse a missing or stale fee echo
-  // before consuming the queue entry, so the user can repaint and decide the
-  // same request later.
-  const feeRefusal = pendingInvokeFeeRefusal(deps.approvals.get(input.id), input.reviewedFee);
+  // Refuse a missing or stale fee echo before consuming the queue entry.
+  const feeRefusal = pendingFeeRefusal(deps.approvals.get(input.id), input.reviewedFee);
   if (feeRefusal) {
     return feeRefusal;
   }
@@ -455,7 +472,6 @@ const applyDenyDecision = async (
     return { error: "invalid approval request" };
   }
   const denied = deps.approvals.claim(input.id)?.approval ?? null;
-  // Reject the dapp's held request (if any) so it does not hang after a deny.
   if (denied) {
     await deps.originHistory.record(denied.origin).catch(() => undefined);
     deps.waiters.settle(input.id, {
@@ -466,7 +482,7 @@ const applyDenyDecision = async (
 };
 
 /**
- * Handles `wallet.approveOrigin` / `wallet.denyOrigin`; returns null otherwise.
+ * Handles approve/deny decisions; returns null otherwise.
  */
 export const handleApprovalDecision = async (
   deps: ApprovalDecisionDeps,

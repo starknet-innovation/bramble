@@ -23,6 +23,7 @@ import {
   nodeFeeEstimate,
   REVIEWED_FEE_HEADROOM,
   reviewedSpendFor,
+  sumFeeEstimates,
 } from "@mc-wallet/starknet/fee-bounds";
 import { isFeeShape } from "../../packages/presentation/wallet-ui/src/popup/responses/responses-transfer";
 import { REPO_DIR, repoRelative, workspaceSourceFiles } from "../support/workspace-sources";
@@ -88,6 +89,14 @@ describe("isFeeEstimate", () => {
     ]) {
       expect(isFeeShape(candidate)).toBe(isFeeEstimate(candidate));
     }
+  });
+});
+
+describe("sumFeeEstimates", () => {
+  test("adds exact base-unit components and refuses unlike or malformed fees", () => {
+    expect(sumFeeEstimates(fri("2500"), fri("1500"))).toEqual(fri("4000"));
+    expect(sumFeeEstimates(fri("2500"), { overallFee: "1500", unit: "WEI" })).toBeNull();
+    expect(sumFeeEstimates(fri("2500"), fri("1.5"))).toBeNull();
   });
 });
 

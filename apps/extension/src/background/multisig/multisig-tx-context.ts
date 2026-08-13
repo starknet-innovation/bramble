@@ -47,8 +47,7 @@ import {
   claimMultisigProposalOperation,
   type MultisigProposalOperationKind,
   recordClaimedMultisigSubmission,
-  recordSubmittedActivity,
-  releaseMultisigOperation,
+  releaseFailedMultisigOperation,
 } from "./multisig-submission";
 
 /**
@@ -143,37 +142,6 @@ export const refusePoisonedProposalRecipient = async (
 };
 
 /**
- * Submits one or more calls as a single invoke through the shared path and
- * records activity. The caller's descriptive summary is recorded verbatim: the
- * generic call decoder cannot describe multisig entrypoints, and the dedup
- * guards match on these summaries, so they must stay deterministic and specific.
- * Batched calls share one transaction, so they succeed or revert together.
- */
-export const submitAndRecord = async (
-  deps: MultisigOpsDeps,
-  resolved: MultisigContext,
-  calls: readonly Call[],
-  summary: string,
-  reviewedFee: FeeEstimate,
-): Promise<string> => {
-  const result = await deps.runtimeRpc.submitInvokeTransaction({
-    account: resolved.account.account,
-    calls,
-    reviewedFee,
-    rpcUrls: resolved.rpcUrls,
-    signHash: signerForContext(deps, resolved.account),
-  });
-  await recordSubmittedActivity(deps.activity, {
-    accountId: resolved.record.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: resolved.account.networkId,
-    summary,
-  });
-  return result.transactionHash;
-};
-
-/**
  * Submits a claimed proposal action, releasing the claim if the broadcast
  * itself fails so a transient RPC fault cannot wedge the signer's slot.
  *
@@ -206,7 +174,7 @@ export const submitClaimedAndRecord = async (
       signHash: signerForContext(deps, resolved.account),
     });
   } catch (error) {
-    await releaseMultisigOperation(deps, operationId);
+    await releaseFailedMultisigOperation(deps, operationId, error);
     throw error;
   }
   await recordClaimedMultisigSubmission(deps, operationId, {
@@ -376,5 +344,25 @@ export const reserveProposalAction = async (
     multisigId: found.resolved.record.id,
     networkId: found.resolved.account.networkId,
     pendingError: "this signer already has a proposal action in progress — wait for it to settle",
+    releaseAccepted: true,
+    releasePropose: true,
     txId: found.proposal.txId,
+  });
+
+/**
+ * Claims an exact proposal before its submit call broadcasts, so two wallet
+ * surfaces cannot pay to submit the same `(call, salt)` pair concurrently.
+ */
+export const reserveProposalSubmission = async (
+  deps: MultisigOpsDeps,
+  resolved: MultisigContext,
+  txId: string,
+): Promise<{ readonly error: string } | { readonly operationId: string }> =>
+  claimMultisigProposalOperation(deps, {
+    accountId: resolved.account.account.id,
+    kind: "propose",
+    multisigId: resolved.record.id,
+    networkId: resolved.account.networkId,
+    pendingError: "this proposal has already been submitted — wait for it to settle",
+    txId,
   });

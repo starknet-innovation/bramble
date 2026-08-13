@@ -39,6 +39,14 @@ including the residual on the partially remediated `MCW-V09-127`, is in
   reviewed ceiling. An estimate failure refuses signing.
 - Removed `wallet.signHash` (an unapproved arbitrary-hash signing path with no
   production caller) and `wallet.grantOrigin`. Neither was dapp-reachable.
+- Malformed successful RPC broadcast responses now retain indeterminate-write
+  semantics, and multisig claims survive an indeterminate broadcast so a lost
+  response cannot reopen blind duplicate signing.
+- Declare approval binds the exact displayed declaration-plus-deployment total,
+  supports fail-closed fee retries, and enforces each component at submission;
+  duplicate multisig proposals and externally revoked confirmations are
+  reconciled through the durable claim ledger.
+- The Chromatic token is scoped only to its main-branch publish step.
 
 ### Changed
 - SNIP-12 revision 0 remains signable and a numeric `revision: 1` is accepted.

@@ -81,7 +81,7 @@ export type MultisigProposalRecord = {
 export type MultisigOperationRecord = {
   readonly accountId: string;
   readonly id: string;
-  readonly kind: "confirm" | "declare" | "deploy" | "execute" | "revoke";
+  readonly kind: "confirm" | "declare" | "deploy" | "execute" | "propose" | "revoke";
   /**
    * Watched multisig a proposal action belongs to. Absent on declare/deploy
    * claims, whose target is a class hash or an address rather than a proposal
@@ -262,6 +262,7 @@ export const isMultisigOperationRecord = (value: unknown): value is MultisigOper
     value["kind"] === "declare" ||
     value["kind"] === "deploy" ||
     value["kind"] === "execute" ||
+    value["kind"] === "propose" ||
     value["kind"] === "revoke") &&
   isStarknetNetworkId(value["networkId"]) &&
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&

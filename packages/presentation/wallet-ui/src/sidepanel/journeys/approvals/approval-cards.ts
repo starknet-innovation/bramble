@@ -5,6 +5,7 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
+import { sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
 import { button } from "@mc-wallet/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -143,6 +144,14 @@ const strk20LinkageWarnings = (approval: PendingApproval): readonly string[] => 
     : [];
 };
 
+const declarationReviewedFee = (approval: PendingApproval): PendingApproval["fee"] => {
+  const declaration = approval.declaration;
+  if (!declaration?.fee || declaration.accountDeployment === "unknown") return null;
+  return declaration.accountDeployment === "undeployed"
+    ? declaration.deploymentFee && sumFeeEstimates(declaration.fee, declaration.deploymentFee)
+    : declaration.fee;
+};
+
 const declarationDetails = (approval: PendingApproval): string => {
   const declaration = approval.declaration;
   if (!declaration) {
@@ -154,16 +163,8 @@ const declarationDetails = (approval: PendingApproval): string => {
   const deploymentFee = declaration.deploymentFee
     ? formatFee(declaration.deploymentFee)
     : "Unavailable";
-  const estimatedTotal =
-    declaration.fee?.unit === "FRI" &&
-    (declaration.accountDeployment === "deployed" || declaration.deploymentFee?.unit === "FRI")
-      ? formatFri(
-          (
-            BigInt(declaration.fee.overallFee) +
-            BigInt(declaration.deploymentFee?.overallFee ?? "0")
-          ).toString(),
-        )
-      : null;
+  const reviewedFee = declarationReviewedFee(approval);
+  const estimatedTotal = reviewedFee ? formatFee(reviewedFee) : null;
   const deployment =
     declaration.accountDeployment === "undeployed"
       ? "Required before declaration"
@@ -202,6 +203,11 @@ const declarationWarnings = (approval: PendingApproval): readonly string[] => {
       : []),
   ];
 };
+
+const declarationFeeUnavailable = (approval: PendingApproval): boolean =>
+  declarationReviewedFee(approval) === null ||
+  approval.declaration?.feeEstimateFailed === true ||
+  approval.declaration?.deploymentFeeEstimateFailed === true;
 
 const requestIdentity = (origin: string, kind: string): string => {
   let host = origin;
@@ -366,7 +372,13 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
       ${contextDisclosure(approval)}
     </div>
     ${reviewPanel([...declarationWarnings(approval), ...(approval.insights ?? [])])}
-    ${decisionRow(approval, "Declare", status.locked)}
+    ${declarationFeeUnavailable(approval) ? button({ attributes: { "data-approval-retry-fee": approval.id }, disabled: status.locked, icon: "refresh", label: "Retry fee estimate", variant: "secondary" }) : ""}
+    ${decisionRow(
+      approval,
+      "Declare",
+      status.locked || declarationFeeUnavailable(approval),
+      declarationReviewedFee(approval) ?? undefined,
+    )}
   </li>`;
 
 /**

@@ -1,6 +1,8 @@
 /**
  * Sender trust rules for extension pages and content-script provider messages.
  */
+
+import { isOwnDataProperty } from "@mc-wallet/core/json";
 import {
   APPROVAL_RUNTIME_MESSAGE_TYPES,
   DAPP_RUNTIME_MESSAGE_TYPES,
@@ -127,9 +129,7 @@ const readMessageType = (message: unknown): string | null => {
     return null;
   }
   const descriptor = Object.getOwnPropertyDescriptor(message, "type");
-  return descriptor?.enumerable === true &&
-    "value" in descriptor &&
-    typeof descriptor.value === "string"
+  return isOwnDataProperty(descriptor) && typeof descriptor.value === "string"
     ? descriptor.value
     : null;
 };

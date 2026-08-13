@@ -286,6 +286,24 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("additional STRK fee not included");
     expect(html).not.toContain("sierra_program");
     expect(html).toContain(`data-approval-id="${ID}" type="button" disabled`);
+
+    const readyHtml = approvalCard(approval, status);
+    expect(readyHtml).toContain('data-approval-fee="4000000000000000"');
+    expect(readyHtml).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
+
+    const declaration = approval.declaration;
+    if (!declaration) throw new Error("declare fixture missing");
+    const unavailableHtml = approvalCard(
+      {
+        ...approval,
+        declaration: { ...declaration, fee: null, feeEstimateFailed: true },
+      },
+      status,
+    );
+    expect(unavailableHtml).toContain("The declaration fee could not be estimated");
+    expect(unavailableHtml).toContain(`data-approval-retry-fee="${ID}"`);
+    expect(unavailableHtml).not.toContain("data-approval-fee=");
+    expect(unavailableHtml).toContain(`data-approval-id="${ID}" type="button" disabled`);
   });
 
   test("watch-asset request without a token renders nothing", () => {

@@ -22,7 +22,7 @@ import {
   type Strk20DisclosureRequest,
 } from "../privacy/strk20-approval-types";
 import type { ApprovalContext } from "./approval-context";
-import type { InvokeFeeRevision } from "./approval-limits";
+import type { ApprovalFeeRevision } from "./approval-limits";
 import {
   approvalAdmissionRefusal,
   approvalCapacityVictim,
@@ -91,16 +91,15 @@ export type ApprovalClaim = {
   readonly approval: PendingApproval;
   readonly payload: ApprovalPayload | null;
 };
-
 /**
- * In-memory dapp approval queue for connection, watch-asset, and invoke prompts.
+ * In-memory dapp approval queue.
  */
 export type ApprovalQueue = {
   /**
-   * Claims the fee slot of a queued invoke approval, invalidating every claim
-   * outstanding on it; null unless the id is a queued invoke.
+   * Claims the fee slot of a queued invoke or declare approval, invalidating
+   * every claim outstanding on it.
    */
-  readonly beginInvokeFeeEstimate: (id: string) => InvokeFeeRevision | null;
+  readonly beginFeeEstimate: (id: string) => ApprovalFeeRevision | null;
   /**
    * The refusal one more approval for `origin` would fail with, or null when
    * there is room. A probe; dapp surfaces apply `requireApprovalAdmission`.
@@ -169,13 +168,12 @@ export type ApprovalQueue = {
     readonly origin: string;
     readonly token: WatchAssetToken;
   }) => PendingApproval;
-  /**
-   * Writes the reviewed fee of the invoke approval `revision` was claimed for.
-   * Null — nothing written — once that approval is gone or the claim superseded.
-   */
-  readonly updateInvokeFee: (
-    revision: InvokeFeeRevision,
-    fee: InvokeFeeReview,
+  /** Writes a fee review only while its queue revision remains current. */
+  readonly updateFee: (
+    revision: ApprovalFeeRevision,
+    update:
+      | { readonly declaration: DeclarationReview; readonly kind: "declare" }
+      | { readonly kind: "invoke"; readonly review: InvokeFeeReview },
   ) => PendingApproval | null;
 };
 
@@ -282,9 +280,9 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
   };
 
   return {
-    beginInvokeFeeEstimate(id) {
+    beginFeeEstimate(id) {
       const approval = entry(id);
-      if (approval?.kind !== "invoke") {
+      if (approval?.kind !== "invoke" && approval?.kind !== "declare") {
         return null;
       }
       const revision = approval.feeRevision + 1;
@@ -469,20 +467,32 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       }
       return enqueue({ id: crypto.randomUUID(), kind: "watch-asset", origin, token: { ...token } });
     },
-    updateInvokeFee({ id, revision }, fee) {
+    updateFee({ id, revision }, update) {
       const approval = entry(id);
-      // A superseded claim writes nothing at all, marker included.
-      if (approval?.kind !== "invoke" || approval.feeRevision !== revision) {
+      if (!approval || approval.feeRevision !== revision || approval.kind !== update.kind) {
         return null;
       }
-      pending.set(id, {
-        ...approval,
-        fee: fee.fee && { ...fee.fee },
-        feeAffordability: fee.feeAffordability,
-        feeEstimateFailed: fee.feeEstimateFailed,
-        feeEstimatePending: fee.feeEstimatePending,
-        requiresDeployment: fee.requiresDeployment,
-      });
+      if (approval.kind === "declare" && update.kind === "declare") {
+        pending.set(id, {
+          ...approval,
+          declaration: {
+            ...update.declaration,
+            deploymentFee: update.declaration.deploymentFee && {
+              ...update.declaration.deploymentFee,
+            },
+            fee: update.declaration.fee && { ...update.declaration.fee },
+          },
+        });
+      } else if (approval.kind === "invoke" && update.kind === "invoke") {
+        pending.set(id, {
+          ...approval,
+          fee: update.review.fee && { ...update.review.fee },
+          feeAffordability: update.review.feeAffordability,
+          feeEstimateFailed: update.review.feeEstimateFailed,
+          feeEstimatePending: update.review.feeEstimatePending,
+          requiresDeployment: update.review.requiresDeployment,
+        });
+      }
       return get(id);
     },
   };

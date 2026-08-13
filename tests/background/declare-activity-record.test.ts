@@ -42,6 +42,12 @@ const declare = {
   contractClass: { entry_points_by_type: { EXTERNAL: [] }, sierra_program: ["0x1"] },
 };
 
+const reviewedApproval = {
+  declare,
+  origin,
+  reviewedFee: { overallFee: "1", unit: "FRI" },
+} as const;
+
 const walletStub = {
   async getGrantedAccounts() {
     return [account];
@@ -87,7 +93,7 @@ describe("executeDeclareApproval activity", () => {
       activity: recordingActivity((entry) => entries.push(entry)),
     });
 
-    const result = await executeDeclareApproval(deps, { declare, origin });
+    const result = await executeDeclareApproval(deps, reviewedApproval);
 
     expect(result).toEqual({ classHash: "0x7ce", ok: true, transactionHash: "0x7cd" });
     expect(entries).toEqual([
@@ -110,6 +116,7 @@ describe("executeDeclareApproval activity", () => {
     await executeDeclareApproval(deps, {
       declare: { compiledClassHash: declare.compiledClassHash, contractClass: {} },
       origin,
+      reviewedFee: reviewedApproval.reviewedFee,
     });
 
     expect(entries[0]?.summary).toBe("Declare contract class 0x6def");
@@ -124,7 +131,7 @@ describe("executeDeclareApproval activity", () => {
       activity: recordingActivity((entry) => entries.push(entry)),
     });
 
-    await executeDeclareApproval(deps, { declare, origin });
+    await executeDeclareApproval(deps, reviewedApproval);
 
     const summary = entries[0]?.summary ?? "";
     expect(summary).not.toBe("Declare multisig class");
@@ -142,7 +149,7 @@ describe("executeDeclareApproval activity", () => {
       } as unknown as RuntimeRpc,
     });
 
-    await expect(executeDeclareApproval(deps, { declare, origin })).resolves.toEqual({
+    await expect(executeDeclareApproval(deps, reviewedApproval)).resolves.toEqual({
       error: "This contract class is already declared on the selected network.",
     });
     expect(entries).toEqual([]);
@@ -155,7 +162,7 @@ describe("executeDeclareApproval activity", () => {
       activity: recordingActivity(() => undefined, true),
     });
 
-    await expect(executeDeclareApproval(deps, { declare, origin })).resolves.toEqual({
+    await expect(executeDeclareApproval(deps, reviewedApproval)).resolves.toEqual({
       classHash: "0x7ce",
       ok: true,
       transactionHash: "0x7cd",

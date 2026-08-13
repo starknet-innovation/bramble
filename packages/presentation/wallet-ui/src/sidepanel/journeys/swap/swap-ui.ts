@@ -353,6 +353,10 @@ export const bindSwap = (deps: SwapUiDeps): void => {
 
   root.querySelector<HTMLInputElement>("#swap-sell-amount")?.addEventListener("input", (event) => {
     amountText = (event.target as HTMLInputElement).value.trim();
+    quote = null;
+    preparation = null;
+    quoteSeq += 1;
+    applySwapUi(deps, root);
     scheduleQuote(deps, root);
   });
   root.querySelector("#swap-max")?.addEventListener("click", () => {
@@ -388,6 +392,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     buttonBusy(reviewButton, true);
     setResult(root, "Building and validating the executable route…");
     const quoted = quote;
+    const preparationSeq = quoteSeq;
     deps.swap
       .prepare({
         amount: quoted.sellAmount,
@@ -402,6 +407,10 @@ export const bindSwap = (deps: SwapUiDeps): void => {
       })
       .then(
         (prepared) => {
+          if (preparationSeq !== quoteSeq || quote !== quoted) {
+            buttonBusy(reviewButton, false);
+            return;
+          }
           preparation = prepared;
           stage = "confirm";
           setResult(root, "");
@@ -409,6 +418,10 @@ export const bindSwap = (deps: SwapUiDeps): void => {
           applySwapUi(deps, root);
         },
         (error: unknown) => {
+          if (preparationSeq !== quoteSeq || quote !== quoted) {
+            buttonBusy(reviewButton, false);
+            return;
+          }
           setResult(root, errorMessage(error, "Could not prepare a safe swap route."));
           buttonBusy(reviewButton, false);
           applySwapUi(deps, root);

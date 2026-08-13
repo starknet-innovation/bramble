@@ -137,6 +137,27 @@ const baselineFailures = (name: string, source: string, reviewed: boolean): stri
   return failures;
 };
 
+const scopedServiceSecretFailures = (name: string, source: string): string[] => {
+  if (!source.includes("CHROMATIC_PROJECT_TOKEN")) {
+    return [];
+  }
+  const failures: string[] = [];
+  const path = workflowPath(name);
+  requireText(
+    failures,
+    source,
+    `      - name: Publish to Chromatic
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          CHROMATIC_PROJECT_TOKEN: ${GITHUB_EXPRESSION} secrets.CHROMATIC_PROJECT_TOKEN }}`,
+    `${path} must expose the Chromatic token only to the main-push publish step`,
+  );
+  if (source.split("CHROMATIC_PROJECT_TOKEN").length - 1 !== 2) {
+    failures.push(`${path} must reference the Chromatic token only in its scoped step environment`);
+  }
+  return failures;
+};
+
 const ciFailures = (source: string): string[] => {
   const failures: string[] = [];
   const validation = jobBody(source, "release-validation");
@@ -443,6 +464,7 @@ export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string
   for (const [name, source] of Object.entries(sources)) {
     const named = NAMED_POLICIES[name];
     failures.push(...baselineFailures(name, source, named !== undefined));
+    failures.push(...scopedServiceSecretFailures(name, source));
     failures.push(...vendoringFailures(name, source));
     failures.push(...(named?.(source) ?? []));
   }

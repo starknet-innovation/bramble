@@ -129,7 +129,9 @@ export const createStrk20MaturityRuntime = ({
       return undefined;
     }
     if (record.state === "submitting") {
-      throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      throw new WalletError(
+        `${STRK20_SERVICE_UNAVAILABLE}: submission status is unknown; close every browser window and reopen the browser to recover`,
+      );
     }
     if (record.acceptedBlock !== undefined) {
       return record.acceptedBlock;

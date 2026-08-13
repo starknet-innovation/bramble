@@ -49,8 +49,8 @@ import {
   refusePoisonedProposalRecipient,
   requiredMultisigFeeReview,
   reserveProposalAction,
+  reserveProposalSubmission,
   resolveMultisigTarget,
-  submitAndRecord,
   submitClaimedAndRecord,
 } from "./multisig-tx-context";
 
@@ -106,11 +106,13 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
   if (!input.reviewedFee) {
     return requiredMultisigFeeReview(deps, target, calls);
   }
-  const transactionHash = await submitAndRecord(
+  const claim = await reserveProposalSubmission(deps, target, txId);
+  if ("error" in claim) return claim;
+  const transactionHash = await submitClaimedAndRecord(
     deps,
     target,
-    calls,
-    `Propose: ${summary}`,
+    { calls, summary: `Propose: ${summary}` },
+    claim.operationId,
     input.reviewedFee,
   );
   const proposal = buildMultisigProposalRecord({

@@ -114,7 +114,7 @@ export type MultisigTransactionIdInput = {
   readonly salt: string;
 };
 
-const ENTRYPOINT_PATTERN = /^[a-z_][a-z0-9_]{0,63}$/;
+const ENTRYPOINT_PATTERN = /^[a-z_][A-Za-z0-9_]{0,63}$/;
 
 /**
  * Checks a proposal entrypoint name before deriving a selector from it.

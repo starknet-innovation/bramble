@@ -6,6 +6,7 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { ensureAccountDeployed } from "@mc-wallet/starknet/deployment";
 import {
+  acceptedRpcWriteHash,
   krustyAccount,
   type StarkHashSigner,
   withRpcFallback,
@@ -168,8 +169,8 @@ export const submitDeclareTransaction = async (
         bounds as Parameters<Account["declare"]>[1],
       );
       return {
-        classHash: result.class_hash,
-        transactionHash: result.transaction_hash,
+        classHash: acceptedRpcWriteHash(result.class_hash),
+        transactionHash: acceptedRpcWriteHash(result.transaction_hash),
       };
     },
     makeProvider,

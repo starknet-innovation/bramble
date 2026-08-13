@@ -5,6 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@mc-wallet/core/errors";
+import { createRpcProvider } from "@mc-wallet/starknet/provider";
 import { IndeterminateRpcWriteError, submitInvokeTransaction } from "@mc-wallet/starknet/rpc";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { type Call, logger, type RpcProvider } from "starknet";
@@ -59,6 +60,9 @@ const accountProvider = (failAt: string, fetches: string[]): RpcProvider => {
       if (failAt === method) {
         throw new Error(`${method} transport failed with private request body`);
       }
+      if (failAt === "malformedResult") {
+        return {};
+      }
       return responses["invoke"];
     },
     async invoke(this: {
@@ -112,6 +116,13 @@ const submitWithFailure = async (
 };
 
 describe("invoke RPC write boundary", () => {
+  test("the pinned starknet.js channel still exposes the guarded broadcast seam", () => {
+    const channel: unknown = Reflect.get(createRpcProvider("https://rpc.example"), "channel");
+    expect(typeof channel).toBe("object");
+    expect(typeof Reflect.get(channel as object, "fetchEndpoint")).toBe("function");
+    expect(typeof Reflect.get(channel as object, "invoke")).toBe("function");
+  });
+
   test("restores retry safety for deployment checks and fee-estimation failures", async () => {
     for (const failure of ["getClassHashAt", "getEstimateFee", "buildTransaction"]) {
       const { fetches, rejection } = await submitWithFailure(failure);
@@ -127,6 +138,12 @@ describe("invoke RPC write boundary", () => {
     const { fetches, rejection } = await submitWithFailure("starknet_addInvokeTransaction");
     expect(rejection).toBeInstanceOf(IndeterminateRpcWriteError);
     expect((rejection as Error).message).not.toContain("private request body");
+    expect(fetches).toEqual(["starknet_addInvokeTransaction"]);
+  });
+
+  test("treats a malformed successful broadcast response as indeterminate", async () => {
+    const { fetches, rejection } = await submitWithFailure("malformedResult");
+    expect(rejection).toBeInstanceOf(IndeterminateRpcWriteError);
     expect(fetches).toEqual(["starknet_addInvokeTransaction"]);
   });
 });

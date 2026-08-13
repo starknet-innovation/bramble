@@ -75,6 +75,12 @@ const declare = {
   contractClass: { entry_points_by_type: { EXTERNAL: [] }, sierra_program: ["0x1"] },
 };
 
+const reviewedApproval = {
+  declare,
+  origin,
+  reviewedFee: { overallFee: "1", unit: "FRI" },
+} as const;
+
 const message = { declare, origin, type: "wallet.addDeclareTransaction" as const };
 
 const walletStub = (granted: readonly AccountRef[], signed: string[] = []) =>
@@ -190,15 +196,23 @@ describe("executeDeclareApproval", () => {
 
   test("fails closed when the wallet is locked", async () => {
     await expect(
-      executeDeclareApproval(executeDeps({ locked: true }), { declare, origin }),
+      executeDeclareApproval(executeDeps({ locked: true }), reviewedApproval),
     ).resolves.toEqual({ error: "wallet locked" });
   });
 
   test("fails closed when the origin is no longer connected", async () => {
     const deps = executeDeps({ wallet: walletStub([]) });
-    await expect(executeDeclareApproval(deps, { declare, origin })).resolves.toEqual({
+    await expect(executeDeclareApproval(deps, reviewedApproval)).resolves.toEqual({
       error: "origin not connected",
     });
+  });
+
+  test("refuses to sign when no declaration fee was reviewed", async () => {
+    const signed: string[] = [];
+    await expect(
+      executeDeclareApproval(executeDeps({ signed }), { declare, origin }),
+    ).resolves.toEqual({ error: "retry the fee estimate before approving this transaction" });
+    expect(signed).toEqual([]);
   });
 
   // Builds declare-execute deps for the keyless Ledger account: signing routes
@@ -238,7 +252,7 @@ describe("executeDeclareApproval", () => {
       ledgerDeps(deviceQueue(LEDGER_KEY), () => {
         submitted = true;
       }),
-      { declare, origin },
+      reviewedApproval,
     );
     expect(result).toEqual({ classHash: "0x7ce", ok: true, transactionHash: "0x7cd" });
     expect(submitted).toBe(true);
@@ -254,7 +268,7 @@ describe("executeDeclareApproval", () => {
         ledgerDeps(deviceQueue("0xdeadbeef"), () => {
           submitted = true;
         }),
-        { declare, origin },
+        reviewedApproval,
       ),
     ).resolves.toEqual({ error: "Ledger signature verification failed" });
     expect(submitted).toBe(false);
@@ -262,7 +276,7 @@ describe("executeDeclareApproval", () => {
 
   test("signs and submits the declare, returning the node hashes", async () => {
     const signed: string[] = [];
-    const result = await executeDeclareApproval(executeDeps({ signed }), { declare, origin });
+    const result = await executeDeclareApproval(executeDeps({ signed }), reviewedApproval);
 
     expect(result).toEqual({ classHash: "0x7ce", ok: true, transactionHash: "0x7cd" });
     // The signHash closure passed to the RPC layer routed through the wallet.
@@ -278,7 +292,7 @@ describe("executeDeclareApproval", () => {
       } as unknown as RuntimeRpc,
     });
 
-    await expect(executeDeclareApproval(deps, { declare, origin })).resolves.toEqual({
+    await expect(executeDeclareApproval(deps, reviewedApproval)).resolves.toEqual({
       error: "This contract class is already declared on the selected network.",
     });
   });

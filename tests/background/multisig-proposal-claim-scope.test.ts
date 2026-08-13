@@ -252,6 +252,38 @@ describe("multisig proposal claim scope", () => {
     expect(invokeCalls.flat()).toEqual([]);
   });
 
+  test("an accepted confirmation can be retried after a fresh read proves it was revoked", async () => {
+    const activity = memoryActivityLog(() => 1);
+    const { handler, invokeCalls, records } = await seed({
+      activity,
+      addresses: [HARNESS_MULTISIG],
+      confirmedBySigner: false,
+    });
+    const proposalId = multisigProposalId(records[0]?.id ?? "", SHARED_TX_ID) ?? "";
+
+    await expect(
+      handler(
+        { mode: "confirm-only", proposalId, type: "wallet.confirmMultisigProposal" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await activity.updateStatuses(
+      { [HARNESS_SUBMIT_HASH]: { status: "accepted" } },
+      { accountId: records[0]?.id ?? "", networkId: "SN_MAIN" },
+    );
+
+    await expect(
+      handler(
+        { mode: "confirm-only", proposalId, type: "wallet.confirmMultisigProposal" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(invokeCalls.flat()).toMatchObject([
+      { entrypoint: "confirm_transaction" },
+      { entrypoint: "confirm_transaction" },
+    ]);
+  });
+
   test("a settled inverse action does not strand the next action", async () => {
     const activity = memoryActivityLog(() => 1);
     const { handler, invokeCalls, records } = await seed({

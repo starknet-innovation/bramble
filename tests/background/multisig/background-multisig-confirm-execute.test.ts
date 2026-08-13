@@ -15,6 +15,7 @@ import {
   multisigId,
   multisigProposalId,
 } from "@mc-wallet/multisig/repository";
+import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
 import {
   HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,
@@ -46,6 +47,9 @@ const makeHarness = async (options: {
   readonly multisigStore?: MultisigStore;
   readonly quorum?: number;
   readonly storedQuorum?: number;
+  readonly submitInvoke?: (
+    calls: readonly unknown[],
+  ) => Promise<{ readonly transactionHash: string }>;
   readonly withCall?: boolean;
 }) => {
   const quorum = options.quorum ?? 3;
@@ -59,6 +63,7 @@ const makeHarness = async (options: {
       state: "pending",
     }),
     signers,
+    ...(options.submitInvoke ? { submitInvoke: options.submitInvoke } : {}),
   });
   const record: MultisigRecord = {
     address: HARNESS_MULTISIG,
@@ -400,6 +405,28 @@ describe("multisig confirm and execute", () => {
         harnessExtensionSender,
       ),
     ).resolves.toMatchObject({ error: expect.any(String) });
+    expect(invokeCalls).toHaveLength(1);
+  });
+
+  test("retains a hashless claim when the broadcast outcome is indeterminate", async () => {
+    const { handler, invokeCalls, proposal } = await makeHarness({
+      confirmations: 2,
+      submitInvoke: async () => {
+        throw new IndeterminateRpcWriteError("submission status unknown");
+      },
+    });
+    const message = {
+      mode: "confirm-and-execute",
+      proposalId: proposal.id,
+      type: "wallet.confirmMultisigProposal",
+    } as const;
+
+    await expect(handler(message, harnessExtensionSender)).resolves.toEqual({
+      error: "submission status unknown",
+    });
+    await expect(handler(message, harnessExtensionSender)).resolves.toMatchObject({
+      error: expect.stringContaining("proposal action in progress"),
+    });
     expect(invokeCalls).toHaveLength(1);
   });
 });

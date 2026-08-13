@@ -43,7 +43,7 @@ describe("createApprovalQueue invoke fee review", () => {
     expect(queue.get(id)?.fee).toEqual({ overallFee: "1200", unit: "FRI" });
   });
 
-  test("updateInvokeFee replaces the fee review and leaves the payload intact", () => {
+  test("updateFee replaces the invoke review and leaves the payload intact", () => {
     const queue = createApprovalQueue();
     const { id } = queue.requestInvoke({
       calls,
@@ -60,16 +60,19 @@ describe("createApprovalQueue invoke fee review", () => {
       summaries: ["Invoke"],
     });
 
-    const revision = queue.beginInvokeFeeEstimate(id);
+    const revision = queue.beginFeeEstimate(id);
     if (!revision) {
       throw new Error("expected a fee-slot claim for a queued invoke");
     }
-    const updated = queue.updateInvokeFee(revision, {
-      fee: { overallFee: "77", unit: "FRI" },
-      feeAffordability: "unknown",
-      feeEstimateFailed: false,
-      feeEstimatePending: false,
-      requiresDeployment: false,
+    const updated = queue.updateFee(revision, {
+      kind: "invoke",
+      review: {
+        fee: { overallFee: "77", unit: "FRI" },
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
     });
     expect(updated).toMatchObject({ fee: { overallFee: "77", unit: "FRI" } });
     expect(queue.get(id)?.feeEstimateFailed).toBe(false);
@@ -105,22 +108,22 @@ describe("createApprovalQueue invoke fee review", () => {
       summaries: ["Invoke"],
     });
 
-    const older = queue.beginInvokeFeeEstimate(id);
-    const newer = queue.beginInvokeFeeEstimate(id);
+    const older = queue.beginFeeEstimate(id);
+    const newer = queue.beginFeeEstimate(id);
     if (!older || !newer) {
       throw new Error("expected both fee-slot claims for a queued invoke");
     }
-    expect(queue.updateInvokeFee(newer, review("9999999"))).toMatchObject({
+    expect(queue.updateFee(newer, { kind: "invoke", review: review("9999999") })).toMatchObject({
       fee: { overallFee: "9999999", unit: "FRI" },
     });
-    expect(queue.updateInvokeFee(older, review("2000"))).toBeNull();
+    expect(queue.updateFee(older, { kind: "invoke", review: review("2000") })).toBeNull();
     expect(queue.get(id)?.fee).toEqual({ overallFee: "9999999", unit: "FRI" });
     // The superseded write is dropped whole: a stale "still estimating" marker
     // would disable the approve button for an estimate that already landed.
     expect(queue.get(id)?.feeEstimatePending).toBe(false);
   });
 
-  test("updateInvokeFee rejects unknown ids and non-invoke approvals", () => {
+  test("updateFee rejects unknown ids and approvals with another kind", () => {
     const queue = createApprovalQueue();
     const connect = queue.request(ORIGIN);
     const review = {
@@ -131,12 +134,15 @@ describe("createApprovalQueue invoke fee review", () => {
       requiresDeployment: false,
     } as const;
 
-    expect(queue.beginInvokeFeeEstimate("9e107d9d-372b-4b6b-8d0a-df1b6c8f6e01")).toBeNull();
-    expect(queue.beginInvokeFeeEstimate(connect.id)).toBeNull();
+    expect(queue.beginFeeEstimate("9e107d9d-372b-4b6b-8d0a-df1b6c8f6e01")).toBeNull();
+    expect(queue.beginFeeEstimate(connect.id)).toBeNull();
     expect(
-      queue.updateInvokeFee({ id: "9e107d9d-372b-4b6b-8d0a-df1b6c8f6e01", revision: 1 }, review),
+      queue.updateFee(
+        { id: "9e107d9d-372b-4b6b-8d0a-df1b6c8f6e01", revision: 1 },
+        { kind: "invoke", review },
+      ),
     ).toBeNull();
-    expect(queue.updateInvokeFee({ id: connect.id, revision: 1 }, review)).toBeNull();
+    expect(queue.updateFee({ id: connect.id, revision: 1 }, { kind: "invoke", review })).toBeNull();
     expect(queue.get(connect.id)?.fee).toBeUndefined();
   });
 });

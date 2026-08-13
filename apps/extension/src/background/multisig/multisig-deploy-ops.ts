@@ -34,6 +34,7 @@ import {
   claimMultisigOperation,
   clearCompletedMultisigOperation,
   recordClaimedMultisigSubmission,
+  releaseFailedMultisigOperation,
   releaseMultisigOperation,
 } from "./multisig-submission";
 
@@ -156,7 +157,7 @@ const declareMultisigClass: MultisigDeployHandler = async (deps, message) => {
       signHash,
     });
   } catch (error) {
-    await releaseMultisigOperation(deps, claim.operationId);
+    await releaseFailedMultisigOperation(deps, claim.operationId, error);
     throw error;
   }
   await recordClaimedMultisigSubmission(deps, claim.operationId, {
@@ -259,7 +260,7 @@ const deployMultisig: MultisigDeployHandler = async (deps, message) => {
       signHash,
     });
   } catch (error) {
-    await releaseMultisigOperation(deps, claim.operationId);
+    await releaseFailedMultisigOperation(deps, claim.operationId, error);
     throw error;
   }
   await recordClaimedMultisigSubmission(deps, claim.operationId, {

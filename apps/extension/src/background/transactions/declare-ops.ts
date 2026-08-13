@@ -26,11 +26,13 @@ import type { ApprovalQueue } from "../approvals/approvals";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { readRetryApprovalFeeInput } from "../provider/provider-inputs";
 import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { PassiveUnlockSession } from "../runtime/session";
+import { FEE_REVIEW_REQUIRED } from "./fee-review";
 
 /**
  * Dependencies for the dapp declare handler.
@@ -202,6 +204,64 @@ const declarationErrorMessage = (error: unknown): string => {
   return "Starknet rejected the declaration. Check the account's STRK balance, network, and class hashes, then try again.";
 };
 
+const retryDeclarationFee = async (
+  deps: DeclareOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readRetryApprovalFeeInput(message);
+  if (!input) return { error: "invalid fee retry request" };
+  const approval = deps.approvals.get(input.id);
+  const payload = deps.approvals.payload(input.id);
+  if (approval?.kind !== "declare" || !payload?.declare || !approval.context) {
+    return { error: "approval not found" };
+  }
+  const revision = deps.approvals.beginFeeEstimate(input.id);
+  if (!revision) return { error: "approval not found" };
+  if (
+    !approval.declaration ||
+    !deps.approvals.updateFee(revision, {
+      declaration: {
+        ...approval.declaration,
+        accountDeployment: "unknown",
+        deploymentFee: null,
+        deploymentFeeEstimateFailed: false,
+        fee: null,
+        feeEstimateFailed: false,
+      },
+      kind: "declare",
+    })
+  ) {
+    return { error: "approval not found" };
+  }
+  notifyApprovalsChanged();
+  const passphrase = deps.session.peekPassphrase();
+  if (!passphrase) return { error: "wallet locked" };
+  const preferences = await deps.preferencesStore.read();
+  if (preferences.activeNetworkId !== approval.context.networkId) {
+    return { error: "approval context changed" };
+  }
+  const granted = await deps.wallet.getGrantedAccounts(approval.origin, passphrase);
+  const account = granted.find(
+    (stored) =>
+      stored.id === approval.context?.accountId &&
+      stored.networkId === approval.context.networkId &&
+      stored.networkId === preferences.activeNetworkId,
+  );
+  if (!account) return { error: "origin not connected" };
+  const declaration = await declarationReview(
+    deps,
+    account,
+    payload.declare,
+    preferences,
+    passphrase,
+  );
+  if (!deps.approvals.updateFee(revision, { declaration, kind: "declare" })) {
+    return { error: "a newer fee estimate replaced this one" };
+  }
+  notifyApprovalsChanged();
+  return { ok: true };
+};
+
 /**
  * Handles a dapp declare message; returns null for other message types.
  */
@@ -211,6 +271,9 @@ export const handleDeclareOps = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
+  if (messageType === "wallet.retryApprovalFee") {
+    return retryDeclarationFee(deps, message);
+  }
   if (messageType !== "wallet.addDeclareTransaction") {
     return null;
   }
@@ -277,6 +340,9 @@ export const executeDeclareApproval = async (
   },
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, runtimeRpc, session, wallet } = deps;
+  if (!input.reviewedFee) {
+    return FEE_REVIEW_REQUIRED;
+  }
   const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };

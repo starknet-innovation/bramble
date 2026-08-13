@@ -154,8 +154,8 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
     return { error: "origin blocked" };
   }
   // Refuse a flooding origin BEFORE the expensive work, not after it. Hashing a
-  // maximum-size SNIP-12 document is hundreds of milliseconds of Pedersen in the
-  // service worker that also serves the panel, and reading the grants decrypts
+  // maximum-size SNIP-12 document can monopolize synchronous Pedersen work in
+  // the service worker that also serves the panel, and reading the grants decrypts
   // the vault — paying both for a request the queue cap will refuse anyway is
   // how a per-origin cap that bounds memory leaves CPU unbounded.
   requireApprovalAdmission(approvals, input.origin);

@@ -202,7 +202,10 @@ type OperationClaimResult = {
 };
 
 const isProposalOperation = (record: MultisigOperationRecord): boolean =>
-  record.kind === "confirm" || record.kind === "execute" || record.kind === "revoke";
+  record.kind === "confirm" ||
+  record.kind === "execute" ||
+  record.kind === "propose" ||
+  record.kind === "revoke";
 
 const conflictsWithProposalClaim = (
   stored: MultisigOperationRecord,

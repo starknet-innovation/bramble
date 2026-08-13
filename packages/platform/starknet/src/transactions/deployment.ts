@@ -18,6 +18,7 @@ import {
   reviewedSpendFor,
 } from "../rpc/fee-bounds";
 import {
+  acceptedRpcWriteHash,
   IndeterminateRpcWriteError,
   isContractNotFoundError,
   isTransportRpcError,
@@ -123,7 +124,7 @@ const deployAccountContract = async (
     payload,
     bounds as Parameters<Account["deployAccount"]>[1],
   );
-  return { transactionHash: submitted.transaction_hash };
+  return { transactionHash: acceptedRpcWriteHash(submitted.transaction_hash) };
 };
 
 /**
