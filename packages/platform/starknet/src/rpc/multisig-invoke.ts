@@ -37,6 +37,7 @@ import {
  * transaction records. They fail closed without accessing RPC or key material.
  */
 export {
+  argentMultisigTransactionHash,
   isArgentMultisigCall,
   isArgentMultisigCalls,
   isPreparedArgentMultisigInvokeV3,

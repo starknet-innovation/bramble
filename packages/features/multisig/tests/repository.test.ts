@@ -19,7 +19,10 @@ import {
   argentMultisigAddress,
   argentSignerGuid,
 } from "@mc-wallet/starknet/account-contracts";
-import { prepareArgentMultisigInvokeV3 } from "@mc-wallet/starknet/multisig-invoke";
+import {
+  argentMultisigTransactionHash,
+  prepareArgentMultisigInvokeV3,
+} from "@mc-wallet/starknet/multisig-invoke";
 import { ec, RpcProvider } from "starknet";
 
 const PRIVATE_A = "0x123";
@@ -120,6 +123,20 @@ const orderedSignatures = (intent: ArgentMultisigSigningIntent) =>
   [signed(intent, PRIVATE_A, PUBLIC_A), signed(intent, PRIVATE_B, PUBLIC_B)].sort((left, right) =>
     BigInt(argentSignerGuid(left.publicKey)) < BigInt(argentSignerGuid(right.publicKey)) ? -1 : 1,
   );
+
+const intentAtNonce = (
+  intent: ArgentMultisigSigningIntent,
+  nonce: number,
+): ArgentMultisigSigningIntent => {
+  const { transactionHash: _transactionHash, ...current } = intent.prepared;
+  const fields = { ...current, nonce: `0x${nonce.toString(16)}` };
+  const transactionHash = argentMultisigTransactionHash(fields);
+  return {
+    ...intent,
+    id: argentMultisigIntentId(intent.accountId, transactionHash) ?? "",
+    prepared: { ...fields, transactionHash },
+  };
+};
 
 describe("Argent multisig record guards", () => {
   test("accepts only pinned, canonical dedicated account records", () => {
@@ -362,17 +379,14 @@ describe("Argent multisig serialized store", () => {
     expect(await restartedWorker.recoverSigningClaims()).toBe(0);
   });
 
-  test("prunes only observed terminal history at lifetime caps and retains live replay claims", async () => {
+  test("prunes only terminal history at lifetime caps and retains live replay claims", async () => {
     const { data, store } = memoryKv();
     const registry = createMultisigStore({ store });
-    const collecting = await Promise.all(
-      Array.from({ length: 101 }, (_, index) => preparedIntent(`0x${(index + 1).toString(16)}`)),
-    );
+    const seed = await preparedIntent();
+    const collecting = Array.from({ length: 101 }, (_, index) => intentAtNonce(seed, index + 1));
     const terminal = collecting.slice(0, 100).map((intent) => ({
       ...intent,
-      broadcastTransactionHash: intent.prepared.transactionHash,
-      signatures: orderedSignatures(intent),
-      state: "accepted" as const,
+      state: "stale" as const,
     }));
     const operations = terminal.map((intent) => ({
       accountId: ACCOUNT_ID,
@@ -405,7 +419,13 @@ describe("Argent multisig serialized store", () => {
     });
     expect(await registry.upsertIntent(next)).toBe("full");
 
-    const submitted = terminal.map((intent) => ({ ...intent, state: "submitted" as const }));
+    const submittedSeed = {
+      ...seed,
+      broadcastTransactionHash: seed.prepared.transactionHash,
+      signatures: orderedSignatures(seed),
+      state: "submitted" as const,
+    };
+    const submitted = Array.from({ length: 100 }, () => submittedSeed);
     data.set(MULTISIG_STORE_KEY, { intents: submitted, multisigs: [record], operations });
     expect(await registry.upsertIntent(next)).toBe("full");
 
@@ -423,5 +443,5 @@ describe("Argent multisig serialized store", () => {
     expect(
       (await registry.listOperations()).some((operation) => operation.id === signClaim.id),
     ).toBe(true);
-  }, 20_000);
+  });
 });
