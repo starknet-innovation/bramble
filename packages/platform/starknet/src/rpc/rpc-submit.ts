@@ -212,6 +212,7 @@ export const submitInvokeTransaction = async (
       const details = {
         ...(resourceBounds === null ? {} : { resourceBounds }),
         ...(proof ? { proof: proof.data, proofFacts: [...proof.proof_facts] } : {}),
+        tip: "0x0",
       };
       try {
         assertAuthorized(isAuthorized);

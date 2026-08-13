@@ -77,6 +77,16 @@ including the residual on the partially remediated `MCW-V09-127`, is in
 - Recovery-phrase import now flags unknown BIP39 words, offers prefix completions
   while typing, and runs Krusty mnemonic validation on Continue before the vault
   passphrase step.
+- New software and Ledger accounts can use the official Argent or OpenZeppelin
+  account contract. Private-key import can attach an existing Argent Account 0.4
+  only when that key is its pinned Stark owner, no guardian is configured, and
+  the exact deployment salt is supplied.
+
+### Changed
+- Multisig creation, signing, and submission now use the official Argent
+  Multisig 0.2 implementation. The former OpenZeppelin-based proposal
+  flow is removed; references in older release entries describe those releases'
+  historical behavior.
 
 ## [0.9.0] - 2026-08-10
 

@@ -24,6 +24,7 @@ export const estimateExactInvokeFee = async (
   const details = {
     ...(proof ? { proof: proof.data, proofFacts: [...proof.proof_facts] } : {}),
     skipValidate,
+    tip: "0x0",
   } as Parameters<Account["estimateInvokeFee"]>[1];
   if (deployed) {
     return starknetAccount.estimateInvokeFee([...calls], details);

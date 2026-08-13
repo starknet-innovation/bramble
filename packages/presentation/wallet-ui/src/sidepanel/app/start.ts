@@ -13,7 +13,8 @@ import {
   onboardingComplete,
   onboardingLaunch,
 } from "../journeys/onboarding/onboarding-surface";
-import { bindOnboarding, bindUnlock } from "../journeys/onboarding/onboarding-ui";
+import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
+import { bindUnlock } from "../journeys/onboarding/unlock-ui";
 import type { HomeTab } from "../journeys/portfolio/home-tabs";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";

@@ -225,6 +225,9 @@ const resolveLocalSigning = async (
   if (!resolved.config.chain.signerGuids.includes(guid)) {
     return { error: "selected account is not a current Argent multisig signer" };
   }
+  if (intent.signatures.some((existing) => argentSignerGuid(existing.publicKey) === guid)) {
+    return { error: "this Argent multisig signer already signed the intent" };
+  }
   const operationId = argentMultisigOperationId(
     "sign",
     intent.accountId,

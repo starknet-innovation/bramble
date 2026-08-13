@@ -182,6 +182,45 @@ describe("Argent multisig background lifecycle", () => {
     expect(await harness.multisigStore.listOperations()).toEqual([]);
   });
 
+  test("does not sign again after startup recovers an already-persisted signer claim", async () => {
+    let signCount = 0;
+    const harness = await makeMultisigHarness({ onSigned: () => (signCount += 1) });
+    const intent = intentFrom(
+      await harness.handler(
+        {
+          calls: [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
+          multisigId: HARNESS_MULTISIG_ID,
+          type: "wallet.prepareArgentMultisigIntent",
+        },
+        harnessExtensionSender,
+      ),
+    );
+    await expect(
+      harness.handler(
+        {
+          intentId: intent.id,
+          signerAccountId: harnessAccountA.id,
+          type: "wallet.signArgentMultisigIntent",
+        },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(await harness.multisigStore.recoverSigningClaims()).toBe(1);
+
+    await expect(
+      harness.handler(
+        {
+          intentId: intent.id,
+          signerAccountId: harnessAccountA.id,
+          type: "wallet.signArgentMultisigIntent",
+        },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ error: "this Argent multisig signer already signed the intent" });
+    expect(signCount).toBe(1);
+    expect(await harness.multisigStore.listOperations()).toEqual([]);
+  });
+
   test("recovers an indeterminate submit only after the chain recognizes its exact hash", async () => {
     let found = false;
     const harness = await makeMultisigHarness({

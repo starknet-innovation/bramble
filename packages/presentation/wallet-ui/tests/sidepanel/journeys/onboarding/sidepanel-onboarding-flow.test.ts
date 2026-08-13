@@ -4,7 +4,7 @@
  * and persistence happens only after the final Mainnet acknowledgement.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
@@ -42,6 +42,14 @@ const account: AccountRef = {
   publicKeyX: "0x123",
   publicKeyY: "0x456",
 };
+const argentAccount: AccountRef = {
+  ...account,
+  accountContractType: "argent",
+  deploymentSalt: "0x123",
+};
+
+const accountFor = (accountContractType: AccountContractType): AccountRef =>
+  accountContractType === "argent" ? argentAccount : account;
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -86,26 +94,39 @@ const activeStep = (root: ParentNode): string | undefined =>
   )?.dataset["onboardingStep"];
 
 const mount = (options?: {
+  readonly previewAccount?: (
+    mnemonic: string,
+    networkId: string,
+    accountContractType: AccountContractType,
+  ) => Promise<AccountRef>;
   readonly validateMnemonic?: (mnemonic: string) => Promise<boolean>;
 }) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
-  const previews: Array<readonly [string, string]> = [];
-  const creations: Array<readonly [string, string, string]> = [];
+  const previews: Array<readonly [string, string, AccountContractType]> = [];
+  const creations: Array<readonly [string, string, string, AccountContractType]> = [];
   const validations: string[] = [];
   let renders = 0;
   const wallet = {
-    createAccount(mnemonic: string, networkId: string, vaultPassphrase: string) {
-      creations.push([mnemonic, networkId, vaultPassphrase]);
+    createAccount(
+      mnemonic: string,
+      networkId: string,
+      vaultPassphrase: string,
+      accountContractType: AccountContractType,
+    ) {
+      creations.push([mnemonic, networkId, vaultPassphrase, accountContractType]);
       return Promise.resolve();
     },
     generateMnemonic: () => Promise.resolve(MNEMONIC),
     loadStatus: () => Promise.resolve({ ...status, accountCount: 1, hasVault: true }),
-    previewAccount(mnemonic: string, networkId: string) {
-      previews.push([mnemonic, networkId]);
-      return Promise.resolve(account);
+    previewAccount(mnemonic: string, networkId: string, accountContractType: AccountContractType) {
+      previews.push([mnemonic, networkId, accountContractType]);
+      return (
+        options?.previewAccount?.(mnemonic, networkId, accountContractType) ??
+        Promise.resolve(accountFor(accountContractType))
+      );
     },
     validateMnemonic(mnemonic: string) {
       validations.push(mnemonic);
@@ -145,7 +166,7 @@ describe("staged onboarding", () => {
     await tick();
 
     expect(activeStep(flow.app)).toBe("accounts");
-    expect(flow.previews).toEqual([[MNEMONIC, "SN_MAIN"]]);
+    expect(flow.previews).toEqual([[MNEMONIC, "SN_MAIN", "argent"]]);
     expect(flow.app.querySelector("#account-preview")?.getAttribute("aria-pressed")).toBe("false");
     expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
 
@@ -162,8 +183,47 @@ describe("staged onboarding", () => {
     flow.app.querySelector<HTMLFormElement>("#create-form")?.requestSubmit();
     await tick();
 
-    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE]]);
+    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE, "argent"]]);
     expect(flow.renders()).toBe(1);
+  });
+
+  test("discards a delayed preview after the account contract changes", async () => {
+    let release: ((value: AccountRef) => void) | undefined;
+    const flow = mount({
+      previewAccount: (_mnemonic, _networkId, accountContractType) =>
+        accountContractType === "argent"
+          ? new Promise((resolve) => {
+              release = resolve;
+            })
+          : Promise.resolve(accountFor(accountContractType)),
+    });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    await tick();
+    setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#review-account-button");
+
+    const contract = flow.app.querySelector<HTMLSelectElement>(
+      'select[name="accountContractType"]',
+    );
+    if (!contract) throw new Error("missing account contract selector");
+    contract.value = "openzeppelin";
+    contract.dispatchEvent(new window.Event("change", { bubbles: true }));
+    release?.(argentAccount);
+    await tick();
+
+    expect(activeStep(flow.app)).toBe("password");
+    expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
+    click(flow.app, "#review-account-button");
+    await tick();
+    expect(activeStep(flow.app)).toBe("accounts");
+    expect(flow.previews).toEqual([
+      [MNEMONIC, "SN_MAIN", "argent"],
+      [MNEMONIC, "SN_MAIN", "openzeppelin"],
+    ]);
   });
 
   test("requires revealing and confirming a generated backup before password setup", async () => {

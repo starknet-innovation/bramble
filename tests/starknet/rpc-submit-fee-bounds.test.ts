@@ -2,9 +2,9 @@
  * What `submitInvokeTransaction` decides about fees.
  *
  * Speed: a `fast` send signs resource bounds scaled 1.5x from an estimate taken
- * at submission; an unbound standard send hands `execute` no bounds at all and
- * lets starknet.js estimate once internally. Both are pinned here so a change to
- * the scaling or to which speeds re-estimate cannot land silently.
+ * at submission; a standard send signs the estimated bounds unchanged. Both
+ * estimation and execution pin a zero tip so a later provider recommendation
+ * cannot silently change the transaction the user reviewed.
  *
  * Consent (MCW-V09-119): when the caller carries the fee a user reviewed, that
  * figure is a ceiling. The exposure it closes is specific — the gas a call burns
@@ -66,6 +66,8 @@ type Submission = {
   estimateArgs: readonly unknown[];
   estimates: number;
   signedHash?: string;
+  tip: unknown;
+  tipBlockReads: number;
 };
 
 // Drives one submission against a fake channel, recording what reached the
@@ -83,6 +85,8 @@ const submit = async (
     broadcasts: 0,
     estimateArgs: [],
     estimates: 0,
+    tip: undefined,
+    tipBlockReads: 0,
   };
   const implementations = {
     async getEstimateFee(...args: readonly unknown[]) {
@@ -90,14 +94,17 @@ const submit = async (
       seen.estimateArgs = args;
       return [feeEstimate];
     },
-    async invoke(_invocation: unknown, details: { readonly resourceBounds?: unknown }) {
+    async invoke(
+      _invocation: unknown,
+      details: { readonly resourceBounds?: unknown; readonly tip?: unknown },
+    ) {
       seen.broadcasts += 1;
       seen.bounds = details.resourceBounds;
+      seen.tip = details.tip;
       return { transaction_hash: seen.signedHash };
     },
   };
   const responses: Readonly<Record<string, unknown>> = {
-    getBlockWithTxs: { block_number: 100, timestamp: 1_700_000_000, transactions: [] },
     getChainId: "0x534e5f4d41494e",
     getNonceForAddress: "0x0",
     specVersion: "0.8.1",
@@ -111,6 +118,20 @@ const submit = async (
         return undefined;
       }
       const method = String(property);
+      if (method === "getBlockWithTxs") {
+        return async () => {
+          seen.tipBlockReads += 1;
+          return {
+            block_number: 100,
+            timestamp: 1_700_000_000,
+            transactions: Array.from({ length: 10 }, () => ({
+              tip: "0x99",
+              type: "INVOKE",
+              version: "0x3",
+            })),
+          };
+        };
+      }
       return async () => responses[method];
     },
   });
@@ -153,13 +174,23 @@ describe("invoke submission fee bounds", () => {
     });
   });
 
-  test("a standard send adds no bounds of its own and estimates once", async () => {
+  test("a standard send signs the node bounds unchanged and estimates once", async () => {
     const { result, seen } = await submit();
     expect(result).toMatchObject({ transactionHash: seen.signedHash });
     expect(seen.broadcasts).toBe(1);
     expect(seen.estimates).toBe(1);
     // Standard speed signs the same bounds that were compared to the review.
     expect(seen.bounds).toEqual(NODE_BOUNDS);
+  });
+
+  test("pins a zero tip across estimation and the signed invoke", async () => {
+    const { result, seen } = await submit();
+    expect(result).toMatchObject({ transactionHash: seen.signedHash });
+    expect(seen.estimateArgs[0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ tip: "0x0" })]),
+    );
+    expect(seen.tip).toBe("0x0");
+    expect(seen.tipBlockReads).toBe(0);
   });
 
   test("refuses a missing fee before touching the network", async () => {

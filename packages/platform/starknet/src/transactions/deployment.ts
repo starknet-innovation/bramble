@@ -169,7 +169,7 @@ const requireCompatibleArgentSigner = async (
     { calldata: [], contractAddress: account.address, entrypoint: "get_guardian" },
     blockIdentifier,
   );
-  if (guardian.length !== 1 || guardian[0] !== "0x0") {
+  if (guardian.length !== 1 || !sameFelt(guardian[0], "0x0")) {
     throw new WalletError("Deployed Argent account guardian is not supported by this wallet");
   }
 };

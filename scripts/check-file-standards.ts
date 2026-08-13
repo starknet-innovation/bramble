@@ -138,6 +138,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-import-bind.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-word-assist.ts",
+  // Locked-gate UI forwards the passphrase to the privileged background and
+  // neither persists it nor renders it.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/unlock-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
   // Privileged UI message client: credentials transit directly to the

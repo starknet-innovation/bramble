@@ -26,6 +26,7 @@ export * from "./sidepanel/journeys/onboarding/backup-verify";
 export * from "./sidepanel/journeys/onboarding/gate-views";
 export * from "./sidepanel/journeys/onboarding/onboarding-surface";
 export * from "./sidepanel/journeys/onboarding/onboarding-ui";
+export * from "./sidepanel/journeys/onboarding/unlock-ui";
 export * from "./sidepanel/journeys/portfolio/home-tabs";
 export * from "./sidepanel/journeys/portfolio/home-ui";
 export * from "./sidepanel/journeys/portfolio/token-row";

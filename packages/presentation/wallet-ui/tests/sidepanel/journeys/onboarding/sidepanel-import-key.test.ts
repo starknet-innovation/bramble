@@ -160,6 +160,25 @@ describe("Import private key form", () => {
     expect(harness.importCalls).toEqual([["SN_MAIN", PASTED_KEY, "argent", "0x777"]]);
   });
 
+  test("clears and omits the Argent salt when OpenZeppelin is selected", async () => {
+    const harness = mount(() => Promise.resolve(account.id));
+    const contract = harness.container.querySelector<HTMLSelectElement>(
+      'select[name="accountContractType"]',
+    );
+    const salt = harness.container.querySelector<HTMLInputElement>('input[name="deploymentSalt"]');
+    if (!contract || !salt) throw new Error("import contract fields missing");
+    salt.value = "0x777";
+    contract.value = "openzeppelin";
+    contract.dispatchEvent(new window.Event("change", { bubbles: true }));
+
+    expect(salt.value).toBe("");
+    expect(salt.disabled).toBe(true);
+    salt.disabled = false;
+    submitKey(harness.container, PASTED_KEY, "0x999");
+    await tick();
+    expect(harness.importCalls).toEqual([["SN_MAIN", PASTED_KEY, "openzeppelin", undefined]]);
+  });
+
   test("a rejected import surfaces the error and adds no account", async () => {
     const harness = mount(() => Promise.reject(new Error("Account already exists")));
 

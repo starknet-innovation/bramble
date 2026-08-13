@@ -230,3 +230,27 @@ test("Argent operations reject a guardian at the same accepted block", async () 
   }
   expect(privatelySigned).toBe(0);
 });
+
+test("Argent operations accept an equivalent zero guardian encoding", async () => {
+  let signedHash: string | undefined;
+  const input = {
+    account,
+    calls: [{ calldata: [], contractAddress: "0x111", entrypoint: "transfer" }],
+    reviewedFee: { overallFee: "100", unit: "FRI" } as const,
+    rpcUrls: ["https://rpc.invalid"],
+    signHash: async (messageHash: string) => {
+      signedHash = messageHash;
+      return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+    },
+  };
+
+  for (const operation of [estimateInvokeFee, submitInvokeTransaction]) {
+    const { provider } = makeProvider(
+      account.classHash,
+      account.publicKeyX,
+      "0x00",
+      () => signedHash,
+    );
+    await expect(operation(input, () => provider)).resolves.toBeDefined();
+  }
+});
