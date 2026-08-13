@@ -60,6 +60,9 @@ const walletStub = {
   async previewAccount() {
     return account;
   },
+  async validateMnemonic() {
+    return true;
+  },
   async getGrantedAccounts() {
     return [account];
   },

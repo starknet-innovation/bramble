@@ -73,20 +73,28 @@ const OUTBOUND_ONLY = new Set(["wallet.event"]);
  * construction rather than by memory.
  */
 export const handledWalletMessages = async (): Promise<ReadonlySet<string>> => {
-  const dir = "apps/extension/src/background";
+  const root = "apps/extension/src/background";
   const handled = new Set<string>();
-  for (const entry of await readdir(dir)) {
-    if (!entry.endsWith(".ts")) {
-      continue;
-    }
-    const source = await readFile(join(dir, entry), "utf8");
-    for (const match of source.matchAll(/"(wallet\.[a-zA-Z0-9]+)"/g)) {
-      const type = match[1] ?? "";
-      if (type && !OUTBOUND_ONLY.has(type)) {
-        handled.add(type);
+  const walk = async (dir: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(path);
+        continue;
+      }
+      if (!entry.name.endsWith(".ts")) {
+        continue;
+      }
+      const source = await readFile(path, "utf8");
+      for (const match of source.matchAll(/"(wallet\.[a-zA-Z0-9]+)"/g)) {
+        const type = match[1] ?? "";
+        if (type && !OUTBOUND_ONLY.has(type)) {
+          handled.add(type);
+        }
       }
     }
-  }
+  };
+  await walk(root);
   return handled;
 };
 
@@ -229,6 +237,13 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   { message: { type: "wallet.generateMnemonic" }, sender: extensionSender },
+  {
+    message: {
+      mnemonic: SECRET_MNEMONIC,
+      type: "wallet.validateMnemonic",
+    },
+    sender: extensionSender,
+  },
   {
     message: {
       mnemonic: SECRET_MNEMONIC,

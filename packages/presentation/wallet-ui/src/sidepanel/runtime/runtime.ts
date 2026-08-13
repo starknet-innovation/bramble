@@ -4,7 +4,6 @@
 
 import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
 import type { AccountGroupIcon } from "@mc-wallet/settings/groups";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { isOkResponse } from "../../popup/responses/multisig-responses";
 import {
   type ActivityResponse,
@@ -22,7 +21,6 @@ import {
   isDeploymentStatusResponse,
   isDetectTokensResponse,
   isErrorResponse,
-  isGenerateMnemonicResponse,
   isPendingApprovalsResponse,
   isPreferencesResponse,
   isPricesResponse,
@@ -40,6 +38,7 @@ import {
 } from "../../popup/responses/responses";
 import { createNftRuntimeClient } from "../journeys/collectibles/nft-runtime";
 import { createLedgerRuntimeClient } from "../journeys/ledger/runtime-client";
+import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding-runtime";
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
 
 /**
@@ -108,6 +107,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
   return {
     ...createLedgerRuntimeClient(sendMessage),
     ...createNftRuntimeClient(sendMessage),
+    ...createOnboardingRuntimeClient(sendMessage),
     ...createPrivacyRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
@@ -134,34 +134,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return response.account.id;
       }
       throw responseError(response, "import account failed");
-    },
-    async createAccount(
-      mnemonic: string,
-      networkId: string,
-      vaultPassphrase: string,
-    ): Promise<void> {
-      const response = await sendMessage({
-        mnemonic,
-        networkId,
-        type: "wallet.createAccount",
-        vaultPassphrase,
-      });
-      if (isCreateAccountResponse(response)) {
-        return;
-      }
-      throw responseError(response, "wallet unavailable");
-    },
-    async previewAccount(mnemonic: string, networkId: string): Promise<AccountRef> {
-      const response = await sendMessage({
-        accountIndex: 0,
-        mnemonic,
-        networkId,
-        type: "wallet.previewAccount",
-      });
-      if (isCreateAccountResponse(response)) {
-        return response.account;
-      }
-      throw responseError(response, "account preview unavailable");
     },
     async deployAccount(): Promise<string> {
       const response = await sendMessage({ type: "wallet.deployAccount" });
@@ -209,13 +181,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return response.sites;
       }
       throw responseError(response, "revoke failed");
-    },
-    async generateMnemonic(): Promise<string> {
-      const response = await sendMessage({ type: "wallet.generateMnemonic" });
-      if (isGenerateMnemonicResponse(response)) {
-        return response.mnemonic;
-      }
-      throw responseError(response, "wallet unavailable");
     },
     async revealSecrets(vaultPassphrase: string): Promise<RevealSecretsResponse> {
       const response = await sendMessage({ type: "wallet.revealSecrets", vaultPassphrase });

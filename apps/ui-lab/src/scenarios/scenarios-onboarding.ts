@@ -20,7 +20,8 @@ import { emptyWalletStatus, lockedStatus } from "../fixtures/journey-fixtures";
 import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, WalletScenario } from "../runtime/types";
 
-const FIXTURE_WORDS = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu";
+const FIXTURE_WORDS =
+  "habit hope tip crystal because grunt nation idea electric witness alert like";
 const FIXTURE_PASSPHRASE = "fixture vault passphrase";
 
 const onboardingWallet = (context: FrameContext) =>
@@ -30,6 +31,9 @@ const onboardingWallet = (context: FrameContext) =>
       context.emit({ detail: type ?? "invalid request", kind: "action" });
       if (type === "wallet.generateMnemonic") {
         return { mnemonic: FIXTURE_WORDS, ok: true };
+      }
+      if (type === "wallet.validateMnemonic") {
+        return { ok: true, valid: true };
       }
       if (type === "wallet.previewAccount" || type === "wallet.createAccount") {
         return { account: softwareAccount, ok: true };
@@ -70,16 +74,17 @@ const prepareRecovery = (context: FrameContext): void => {
   press(context, "#recovery-method-button");
 };
 
-const preparePassword = (context: FrameContext): void => {
+const preparePassword = async (context: FrameContext): Promise<void> => {
   prepareRecovery(context);
   updateForm(context, 'input[name="import-word-0"]', FIXTURE_WORDS);
   press(context, "#recovery-continue");
+  await nextTurn();
 };
 
 const prepareAccountSelection =
   (selected: boolean) =>
   async (context: FrameContext): Promise<void> => {
-    preparePassword(context);
+    await preparePassword(context);
     updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
     updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
     press(context, "#review-account-button");
@@ -104,9 +109,9 @@ const prepareGenerated =
       return;
     }
     press(context, "#generated-continue");
-    updateForm(context, 'input[name="verify-0"]', "gamma");
-    updateForm(context, 'input[name="verify-1"]', "eta");
-    updateForm(context, 'input[name="verify-2"]', "lambda");
+    updateForm(context, 'input[name="verify-0"]', "tip");
+    updateForm(context, 'input[name="verify-1"]', "nation");
+    updateForm(context, 'input[name="verify-2"]', "alert");
   };
 
 const prepareLedger = (context: FrameContext): void => {

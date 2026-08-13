@@ -228,6 +228,7 @@ export const ONBOARDING_STYLES = `
     gap: ${SPACE.sm};
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  .recovery-fields { position: relative; }
   .recovery-word-cell {
     align-items: center;
     display: flex;
@@ -251,6 +252,35 @@ export const ONBOARDING_STYLES = `
     min-width: 0;
     padding: 0 ${SPACE.xs};
     text-align: center;
+  }
+  .recovery-word.is-invalid {
+    background: color-mix(in srgb, var(--mc-danger) 12%, transparent);
+    color: var(--mc-danger);
+  }
+  .recovery-suggestions {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-elev-md);
+    display: grid;
+    gap: 2px;
+    padding: ${SPACE.xs};
+    position: absolute;
+    z-index: 2;
+  }
+  .recovery-suggestion {
+    background: transparent;
+    border-radius: ${RADIUS.sm};
+    color: var(--mc-text);
+    font-family: var(--mc-font-mono);
+    font-size: ${TYPE.caption.size};
+    justify-content: flex-start;
+    min-height: 32px;
+    padding: 0 ${SPACE.sm};
+    text-align: left;
+  }
+  .recovery-suggestion:hover,
+  .recovery-suggestion:focus-visible {
+    background: var(--mc-elevated);
   }
   .recovery-grid.is-masked .recovery-word {
     filter: blur(6px);

@@ -8,6 +8,13 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
+## [Unreleased]
+
+### Added
+- Recovery-phrase import now flags unknown BIP39 words, offers prefix completions
+  while typing, and runs Krusty mnemonic validation on Continue before the vault
+  passphrase step.
+
 ## [0.9.0] - 2026-08-10
 
 Account-safe upgrades, one coherent public/private Send journey, managed service

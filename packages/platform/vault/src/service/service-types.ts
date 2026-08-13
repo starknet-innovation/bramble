@@ -201,6 +201,11 @@ export type WalletVaultService = {
    * returning key material. Invalid derivation input fails closed.
    */
   readonly previewAccount: (input: AccountDerivationInput) => Promise<DerivedAccountRef>;
+  /**
+   * Checks a recovery phrase through Krusty only. Returns false for an invalid
+   * phrase and never echoes the input; fails closed when KMS is unavailable.
+   */
+  readonly validateMnemonic: (mnemonic: string) => Promise<boolean>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   /**
    * The wallet's active account when the origin's grant covers it, per
