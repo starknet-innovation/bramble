@@ -77,6 +77,7 @@ describe("connected-sites views", () => {
         blocked: false,
         id: approvalId,
         insights: ["Domain closely resembles starknet.io; watch for a spoofed lookalike."],
+        kind: "connect" as const,
         origin: "https://st4rknet.io",
       },
     ];
@@ -92,6 +93,7 @@ describe("connected-sites views", () => {
         blocked: true,
         id: approvalId,
         insights: ["This domain is on the wallet blocklist of known phishing and scam sites."],
+        kind: "connect" as const,
         origin: "https://starknet-airdrop.com",
       },
     ];
@@ -145,6 +147,7 @@ describe("connected-sites response validators", () => {
             blocked: false,
             id: approvalId,
             insights: ["First time seen."],
+            kind: "connect",
             origin: "https://d.example",
           },
         ],

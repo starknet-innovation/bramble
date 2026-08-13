@@ -48,8 +48,8 @@ describe("status read failure", () => {
       hasVault: false,
       locked: true,
       network: "Starknet Mainnet",
-      networkId: "SN_MAIN",
-      networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
+      networkId: "SN_MAIN" as const,
+      networks: [{ id: "SN_MAIN" as const, name: "Starknet Mainnet" }],
       ready: true,
     };
 

@@ -179,6 +179,13 @@ describe("the Krusty build pin", () => {
     expect(source).toContain("RUSTFLAGS: rustflags");
   });
 
+  test("fails closed unless wasm-pack is exactly the workflow-pinned release", async () => {
+    const source = await readFile(vendorScript, "utf8");
+    expect(source).toContain('const KRUSTY_WASM_PACK_VERSION = "0.13.1"');
+    expect(source).toContain('["wasm-pack", "--version"]');
+    expect(source).toContain("wasmPackVersion !== `wasm-pack $" + "{KRUSTY_WASM_PACK_VERSION}`");
+  });
+
   test("every workflow that vendors Krusty installs the pinned toolchain", async () => {
     const source = await readFile(vendorScript, "utf8");
     const toolchain = source.match(/const KRUSTY_KMS_TOOLCHAIN = "([\d.]+)";/)?.[1];

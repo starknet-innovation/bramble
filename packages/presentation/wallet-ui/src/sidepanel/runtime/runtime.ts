@@ -459,11 +459,8 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       throw responseError(response, "network switch failed");
     },
     /**
-     * Sends the reviewed transfer. `reviewedFee` is the fee estimate the review
-     * step displayed: the background treats it as the ceiling this send may
-     * sign under, so passing anything other than the figure actually on screen
-     * would make the guarantee a lie. Null (the review produced no estimate)
-     * sends nothing and leaves the transfer bounded only by the node's quote.
+     * Sends under the exact invoke and optional deployment fees displayed by
+     * the review. A missing required ceiling is refused before signing.
      */
     async submitTransfer(
       accountId: string,
@@ -472,11 +469,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       amount: string,
       speed: "fast" | "standard" = "standard",
       reviewedFee: TransferReviewResponse["review"]["fee"] = null,
+      reviewedDeploymentFee: TransferReviewResponse["review"]["deploymentFee"] = null,
     ): Promise<string> {
       const response = await sendMessage({
         accountId,
         amount,
         recipient,
+        ...(reviewedDeploymentFee == null ? {} : { reviewedDeploymentFee }),
         ...(reviewedFee === null ? {} : { reviewedFee }),
         speed,
         tokenId,

@@ -79,30 +79,13 @@ export {
 import { isWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import { type AllowanceView, isAllowanceView } from "@mc-wallet/transactions/allowance-discovery";
 import { type AccountRef, isAccountId, isAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { NetworkOption, WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
 import { type PendingApprovalsResponse, readPendingApprovals } from "./approvals-responses";
 
 /**
- * Popup wallet status response accepted from the background boundary.
+ * Shared wallet status and network response shapes after runtime validation.
  */
-export type WalletStatus = {
-  readonly accountCount: number;
-  readonly activeAccountId: string | null;
-  readonly accounts: readonly AccountRef[];
-  readonly hasVault: boolean;
-  readonly locked: boolean;
-  readonly network: string;
-  readonly networkId: string;
-  readonly networks: readonly NetworkOption[];
-  readonly ready: boolean;
-};
-
-/**
- * Popup network option accepted from background status.
- */
-export type NetworkOption = {
-  readonly id: string;
-  readonly name: string;
-};
+export type { NetworkOption, WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
 
 /**
  * Popup account-import response accepted from the background boundary.

@@ -1,23 +1,25 @@
 # CODEOWNERS — reviewers auto-requested on PRs, and the set GitHub can *require*
-# once branch protection's "Require review from Code Owners" is enabled
-# (see DEVELOPMENT.md → "Branch protection & repo settings to apply by hand").
+# through the active main ruleset's required code-owner review.
 #
-# Owner derived from git history: @teddyjfpender is the repository maintainer
-# and the sole committer on `main` at the time this file was added.
-#
-# RECOMMENDED: replace the individual handle with a GitHub team once one exists
-# (e.g. `@starknet-innovation/wallet-maintainers`), so ownership survives
-# personnel changes and a single reviewer is never a bottleneck. This file is a
-# no-op for enforcement until the branch-protection rule above is turned on.
+# The existing push-authorized organization team supplies independent review
+# coverage and avoids making the PR author the only possible code owner.
 
 # Default owner for everything in the repo.
-*                       @teddyjfpender
+*                       @starknet-innovation/ent:starknet-innovation
 
 # Security-sensitive boundaries — wallet crypto, encrypted storage, privileged
-# background state, the CI/release pipeline, and the vendoring/standards scripts
+# background and provider ingress, value-moving features, the CI/release
+# pipeline, and the vendoring/standards scripts
 # — always warrant maintainer review, even as the team grows.
-/src/crypto/            @teddyjfpender
-/src/storage/           @teddyjfpender
-/src/background/        @teddyjfpender
-/.github/workflows/     @teddyjfpender
-/scripts/               @teddyjfpender
+/.github/CODEOWNERS      @starknet-innovation/ent:starknet-innovation
+/.github/workflows/     @starknet-innovation/ent:starknet-innovation
+/apps/extension/src/background/ @starknet-innovation/ent:starknet-innovation
+/apps/extension/src/content/    @starknet-innovation/ent:starknet-innovation
+/apps/extension/src/provider/   @starknet-innovation/ent:starknet-innovation
+/contracts/             @starknet-innovation/ent:starknet-innovation
+/packages/features/privacy/     @starknet-innovation/ent:starknet-innovation
+/packages/features/transactions/ @starknet-innovation/ent:starknet-innovation
+/packages/foundation/wallet-protocol/ @starknet-innovation/ent:starknet-innovation
+/packages/platform/kms-krusty/  @starknet-innovation/ent:starknet-innovation
+/packages/platform/vault/       @starknet-innovation/ent:starknet-innovation
+/scripts/               @starknet-innovation/ent:starknet-innovation

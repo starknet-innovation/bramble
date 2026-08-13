@@ -72,6 +72,7 @@ const CLEAN = CLEAN_RECIPIENT;
 const account = poisoningAccount;
 const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
 const passphrase = "correct horse battery staple";
+const reviewedFee = { overallFee: "1", unit: "FRI" } as const;
 const origin = "https://dapp.example";
 const extensionSender: RuntimeSender = {
   id: "extension-id",
@@ -178,6 +179,7 @@ describe("public ERC20 send", () => {
           accountId: account.id,
           amount: "1.5",
           recipient: CLEAN,
+          reviewedFee,
           speed: "standard",
           tokenId: TOKEN_ID,
           type: "wallet.transfer",
@@ -287,6 +289,20 @@ const RELAY_PLAN: Strk20SubmissionPlan = {
 const poolService = (): Strk20Service => ({
   async prepare() {
     return STRK20_CALL_AND_PROOF;
+  },
+  async prepareAccountActions(input) {
+    await input.beforeProof?.();
+    return {
+      allowanceGrants: [],
+      calls: [
+        {
+          calldata: [...STRK20_CALL_AND_PROOF.call.calldata],
+          contractAddress: input.config?.poolAddress ?? STRK20_TOKEN,
+          entrypoint: "apply_actions",
+        },
+      ],
+      proof: STRK20_CALL_AND_PROOF.proof,
+    };
   },
   async privateBalances({ tokens }) {
     return tokens.map((entry) => ({ balance: "0xde0b6b3a7640000", token: entry }));

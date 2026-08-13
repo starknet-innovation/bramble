@@ -29,6 +29,7 @@ const account: AccountRef = {
 };
 const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
 const vaultPassphrase = "correct horse battery staple";
+const reviewedFee = { overallFee: "2500000000000000", unit: "FRI" } as const;
 const sender: RuntimeSender = {
   id: "extension-id",
   url: "chrome-extension://extension-id/sidepanel.html",
@@ -192,6 +193,7 @@ describe("wallet-ops signer closure and activity feed", () => {
         accountId: account.id,
         amount: "1.5",
         recipient: "0x777",
+        reviewedFee,
         speed: "fast",
         tokenId,
         type: "wallet.transfer",

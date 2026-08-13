@@ -10,7 +10,7 @@ import { createMemoryStore } from "@mc-wallet/store/kv";
 import { fakeKms } from "@mc-wallet/testkit/fake-kms";
 import { MAX_LEDGER_STRK20_VIEWING_KEYS } from "@mc-wallet/vault/account-secrets";
 import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { isVaultV4 } from "@mc-wallet/vault/schema";
+import { isVaultV5 } from "@mc-wallet/vault/schema";
 import { createWalletVaultService } from "@mc-wallet/vault/service";
 import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 
@@ -52,7 +52,7 @@ describe("createLedgerVault", () => {
     expect(vault.signingKeys).toEqual([]);
     expect(vault.accounts).toEqual([account]);
     expect(vault.activeAccountId).toBe(account.id);
-    expect(isVaultV4(vault)).toBe(true);
+    expect(isVaultV5(vault)).toBe(true);
     // The passphrase encrypts the registry; it is never persisted in the clear.
     expect(JSON.stringify(await store.get(vaultKey))).not.toContain(vaultPassphrase);
   });
@@ -349,6 +349,6 @@ describe("ensureNetworkAccount for a keyless Ledger account", () => {
     expect(vault.signingKeys).toEqual([]);
     expect(vault.accounts).toEqual([mainnet, sepolia]);
     expect(vault.activeAccountId).toBe(sepolia.id);
-    expect(isVaultV4(vault)).toBe(true);
+    expect(isVaultV5(vault)).toBe(true);
   });
 });

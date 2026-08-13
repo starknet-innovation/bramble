@@ -48,7 +48,10 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
+import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
+import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
+import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
 import { failureNoticeMessage } from "../transactions/tx-observation";
 import { reconcileScope } from "../transactions/tx-reconcile";
 import { submitReviewedAccountDeployment } from "./deployment-ops";
@@ -230,40 +233,32 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
   const call = buildErc20TransferCall(token.address, input.recipient, amountRaw);
   const report = verifyCalls([call], verificationContext(account, preferences));
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
-  const deployed = await deps.runtimeRpc
-    .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
-    .catch(() => true);
-  const estimated = deployed
-    ? await deps.runtimeRpc
-        .estimateInvokeFee({
-          account,
-          calls: [call],
-          rpcUrls,
-          signHash: accountHashSigner(deps, account, vaultPassphrase),
-          // Priced for the speed this send would use, so the reviewed figure is
-          // what the submission is held to, not a cheaper quote a fast send exceeds.
-          speed: input.speed,
-        })
-        .catch(() => null)
-    : null;
-  const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  const fees = await reviewWalletFundedFees(deps.runtimeRpc, {
+    account,
+    calls: [call],
+    rpcUrls,
+    signHash: accountHashSigner(deps, account, vaultPassphrase),
+    speed: input.speed,
+  });
   // Fee-affordability guard (issue 191): compare the estimate against the
   // account's STRK balance, counting the transfer amount itself when the sent
   // token is STRK (the fee competes with the amount). Warn-only and fail-open:
   // an unreadable balance yields "unknown" and no claim is made.
   const feeAffordability = resolveFeeAffordability({
-    balance: fee === null ? null : await readStrkBalance(deps, account, preferences),
-    fee,
+    balance: fees.totalFee === null ? null : await readStrkBalance(deps, account, preferences),
+    fee: fees.totalFee,
     sendAmount: sameFelt(token.address, STRK_TOKEN_ADDRESS) ? amountRaw : null,
   });
   return {
     ok: true,
     review: {
-      fee,
+      deploymentFee: fees.deploymentFee,
+      deploymentFeeEstimateFailed: fees.deploymentFeeEstimateFailed,
+      fee: fees.fee,
       feeAffordability,
-      feeEstimateFailed,
+      feeEstimateFailed: fees.feeEstimateFailed,
       flags: report.flags,
-      requiresDeployment: !deployed,
+      requiresDeployment: fees.requiresDeployment,
       summaries: report.calls.map((decoded) => decoded.summary),
     },
   };
@@ -298,19 +293,23 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
   if (refusal) {
     return refusal;
   }
+  if (!input.reviewedFee) {
+    return FEE_REVIEW_REQUIRED;
+  }
   // The fee the review step showed, echoed back by the panel, is the ceiling this
   // send may sign under (MCW-V09-119); one whose cost ran past it is refused.
   const result = await deps.runtimeRpc.submitErc20Transfer({
     account,
     amount: input.amount,
     recipient: input.recipient,
-    ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
+    ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
+    reviewedFee: input.reviewedFee,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
     signHash: accountHashSigner(deps, account, vaultPassphrase),
     speed: input.speed,
     token,
   });
-  await deps.activity.record({
+  await recordSubmittedActivity(deps.activity, {
     accountId: account.id,
     amount: input.amount,
     counterparty: input.recipient,

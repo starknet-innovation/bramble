@@ -41,16 +41,19 @@ const renderNftTransferReview = (
   key: string,
   setReviewedKey: (value: string | null) => void,
   setRequiresDeployment: (value: boolean) => void,
-  setReviewedFee: (value: TransferReviewResponse["review"]["fee"]) => void,
+  setReviewedFees: (
+    fee: TransferReviewResponse["review"]["fee"],
+    deploymentFee: TransferReviewResponse["review"]["deploymentFee"],
+  ) => void,
 ): void => {
   const { form, result, reviewPanel, submitButton } = elements;
-  const feeFailed = review.feeEstimateFailed;
+  const feeFailed = review.feeEstimateFailed || review.deploymentFeeEstimateFailed === true;
   const recipientBlocked = review.flags.some((flag) => flag.code === "address-poisoning");
   setReviewedKey(feeFailed || recipientBlocked ? null : key);
   setRequiresDeployment(review.requiresDeployment);
   // Kept so the send can echo back the exact figure this panel rendered; the
   // background refuses a send whose fee has outrun it (MCW-V09-119).
-  setReviewedFee(review.fee);
+  setReviewedFees(review.fee, review.deploymentFee);
   form.dataset["stage"] = recipientBlocked ? "blocked" : feeFailed ? "fee-failure" : "review";
   form.removeAttribute("aria-busy");
   if (reviewPanel) {
@@ -121,12 +124,14 @@ const bindSendForm = (deps: NftUiDeps): void => {
   let reviewedKey: string | null = null;
   let requiresDeployment = false;
   let reviewedFee: TransferReviewResponse["review"]["fee"] = null;
+  let reviewedDeploymentFee: TransferReviewResponse["review"]["deploymentFee"] = null;
   form.dataset["stage"] = "recipient";
 
   const resetReview = (): void => {
     reviewedKey = null;
     requiresDeployment = false;
     reviewedFee = null;
+    reviewedDeploymentFee = null;
     form.dataset["stage"] = "recipient";
     form.removeAttribute("aria-busy");
     recipientInput?.setCustomValidity("");
@@ -192,8 +197,9 @@ const bindSendForm = (deps: NftUiDeps): void => {
               (value) => {
                 requiresDeployment = value;
               },
-              (value) => {
-                reviewedFee = value;
+              (fee, deploymentFee) => {
+                reviewedFee = fee;
+                reviewedDeploymentFee = deploymentFee;
               },
             );
           },
@@ -217,7 +223,14 @@ const bindSendForm = (deps: NftUiDeps): void => {
       result.textContent = "Authorizing and submitting the reviewed transfer…";
     }
     void deps.wallet
-      .transferNft(fields.contract, fields.tokenId, fields.networkId, fields.recipient, reviewedFee)
+      .transferNft(
+        fields.contract,
+        fields.tokenId,
+        fields.networkId,
+        fields.recipient,
+        reviewedFee,
+        reviewedDeploymentFee,
+      )
       .then(
         (transactionHash) => {
           showToast("NFT transfer submitted", "success");

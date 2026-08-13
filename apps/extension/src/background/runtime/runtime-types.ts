@@ -13,10 +13,11 @@ import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
 import type { SwapCatalogToken } from "@mc-wallet/transactions/avnu";
 import type { RiskFlag } from "@mc-wallet/transactions/verify";
-import type { ConnectedSite, WalletStatus as VaultStatus } from "@mc-wallet/vault/service";
+import type { ConnectedSite } from "@mc-wallet/vault/service";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
 import type { PendingApproval } from "../approvals/approvals";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
 import type {
@@ -30,22 +31,9 @@ import type {
 import type { SwapPreparationReview } from "../transactions/swap-preparations";
 
 /**
- * Network selector option returned to extension pages.
+ * Shared wallet status and network response shapes returned to extension pages.
  */
-export type NetworkOption = {
-  readonly id: StarknetNetworkId;
-  readonly name: string;
-};
-
-/**
- * Public status returned to extension pages.
- */
-export type WalletStatus = VaultStatus & {
-  readonly accounts: readonly AccountRef[];
-  readonly network: string;
-  readonly networkId: StarknetNetworkId;
-  readonly networks: readonly NetworkOption[];
-};
+export type { NetworkOption, WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
 
 /**
  * Successful account-import response.
@@ -249,6 +237,8 @@ type TransferResponse = {
 type TransferReviewResponse = {
   readonly ok: true;
   readonly review: {
+    readonly deploymentFee?: FeeEstimate | null;
+    readonly deploymentFeeEstimateFailed?: boolean;
     readonly fee: FeeEstimate | null;
     /**
      * Warn-only fee-affordability verdict from the shared predicate (issue

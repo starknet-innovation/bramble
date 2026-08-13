@@ -23,6 +23,8 @@ import { formatFri } from "./parts";
  * cannot drift between them (issue 189).
  */
 export type ReviewFeeState = {
+  readonly deploymentFee?: FeeEstimate | null;
+  readonly deploymentFeeEstimateFailed?: boolean;
   readonly fee: FeeEstimate | null;
   /**
    * Verdict of the shared fee-affordability predicate (issue 191). Only
@@ -64,11 +66,28 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
   if (state.feeEstimatePending === true) {
     return '<p class="review-fee" role="status">Estimating network fee…</p>';
   }
-  if (state.fee) {
-    return `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`;
+  if (state.requiresDeployment === true && state.fee && state.deploymentFee) {
+    return `<div class="review-fee"><p>Estimated transaction fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p><p>Estimated account deployment fee: ${escapeHtml(formatFeeEstimate(state.deploymentFee))}</p></div>${shortfallHtml(state)}`;
+  }
+  if (
+    state.requiresDeployment === true &&
+    state.deploymentFee === undefined &&
+    state.deploymentFeeEstimateFailed === undefined &&
+    state.feeEstimateFailed !== true
+  ) {
+    return '<p class="review-fee">The network fee is estimated once this account is deployed.</p>';
   }
   if (state.requiresDeployment === true) {
-    return '<p class="review-fee">The network fee is estimated once this account is deployed.</p>';
+    return `<p class="review-flag" role="alert">Couldn't estimate both the transaction and account deployment fees. Check your connection and retry before sending.</p>${button(
+      {
+        attributes: retryAttributes,
+        label: "Retry fee estimate",
+        variant: "secondary",
+      },
+    )}`;
+  }
+  if (state.fee) {
+    return `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`;
   }
   if (state.feeEstimateFailed === true) {
     return `<p class="review-flag" role="alert">Couldn't estimate the network fee right now. Check your connection and retry before sending.</p>${button(

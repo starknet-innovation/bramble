@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   hardenLocalAccess,
   hardenSessionAccess,
+  hardenSyncAccess,
   requireTrustedStorageAccess,
 } from "../../apps/extension/src/browser-storage";
 
@@ -62,8 +63,25 @@ describe("hardenSessionAccess", () => {
   });
 });
 
+describe("hardenSyncAccess", () => {
+  test("restricts freshness markers to trusted extension contexts", async () => {
+    const calls: unknown[] = [];
+    globalWithChrome.chrome = {
+      storage: {
+        sync: {
+          async setAccessLevel(options: unknown) {
+            calls.push(options);
+          },
+        },
+      },
+    };
+    expect(await hardenSyncAccess()).toBe(true);
+    expect(calls).toEqual([{ accessLevel: "TRUSTED_CONTEXTS" }]);
+  });
+});
+
 describe("requireTrustedStorageAccess", () => {
-  test("requires both persistent and session lockdowns", async () => {
+  test("requires local, session, and sync lockdowns", async () => {
     const calls: string[] = [];
     const restrictedArea = (area: string) => ({
       async setAccessLevel() {
@@ -74,11 +92,12 @@ describe("requireTrustedStorageAccess", () => {
       storage: {
         local: restrictedArea("local"),
         session: restrictedArea("session"),
+        sync: restrictedArea("sync"),
       },
     };
 
     await expect(requireTrustedStorageAccess()).resolves.toBeUndefined();
-    expect(calls.sort()).toEqual(["local", "session"]);
+    expect(calls.sort()).toEqual(["local", "session", "sync"]);
   });
 
   test("fails closed when either browser area cannot be restricted", async () => {
@@ -86,6 +105,7 @@ describe("requireTrustedStorageAccess", () => {
       storage: {
         local: { async setAccessLevel() {} },
         session: {},
+        sync: { async setAccessLevel() {} },
       },
     };
 
@@ -103,6 +123,7 @@ describe("requireTrustedStorageAccess", () => {
           },
         },
         session: { async setAccessLevel() {} },
+        sync: { async setAccessLevel() {} },
       },
     };
 

@@ -167,6 +167,28 @@ describe("an already-duplicated vault is repaired on read", () => {
     );
   });
 
+  test("canonicalizes legacy account-label and group ids deterministically", () => {
+    const defaults = defaultWalletPreferences();
+    const normalized = normalizeStoredPreferences({
+      ...defaults,
+      accountLabels: { "SN_MAIN:0x0123": "Primary" },
+      groups: [
+        {
+          accountIds: ["SN_MAIN:0x0123", "SN_MAIN:0x123"],
+          icon: "folder",
+          id: "main",
+          name: "Main",
+        },
+      ],
+    });
+
+    expect(normalized).toMatchObject({
+      accountLabels: { "SN_MAIN:0x123": "Primary" },
+      groups: [{ accountIds: ["SN_MAIN:0x123"] }],
+    });
+    expect(isWalletPreferences(normalized)).toBe(true);
+  });
+
   test("a value that is not a preferences record passes through untouched", () => {
     expect(normalizeStoredPreferences(undefined)).toBeUndefined();
     expect(normalizeStoredPreferences("nonsense")).toBe("nonsense");

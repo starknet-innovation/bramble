@@ -9,6 +9,7 @@ import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { requiredFeeReview } from "../transactions/fee-review";
 
 type AccountDeploymentDeps = {
@@ -51,7 +52,7 @@ export const submitReviewedAccountDeployment = async (
     rpcUrls,
     signHash: input.signHash,
   });
-  await deps.activity.record({
+  await recordSubmittedActivity(deps.activity, {
     accountId: input.account.id,
     hash: result.transactionHash,
     kind: "deploy",

@@ -149,10 +149,16 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
     `      - name: Publish to Chromatic
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          CHROMATIC_PROJECT_TOKEN: ${GITHUB_EXPRESSION} secrets.CHROMATIC_PROJECT_TOKEN }}`,
+          CHROMATIC_PROJECT_TOKEN: ${GITHUB_EXPRESSION} secrets.CHROMATIC_PROJECT_TOKEN }}
+        run: |
+          if [ -z "${SHELL_EXPANSION}CHROMATIC_PROJECT_TOKEN:-}" ]; then
+            echo "::notice::Chromatic is not configured; GitHub Pages remains the published UI Lab."
+            exit 0
+          fi
+          bun run --filter @mc-wallet/ui-lab chromatic`,
     `${path} must expose the Chromatic token only to the main-push publish step`,
   );
-  if (source.split("CHROMATIC_PROJECT_TOKEN").length - 1 !== 2) {
+  if (source.split("CHROMATIC_PROJECT_TOKEN").length - 1 !== 3) {
     failures.push(`${path} must reference the Chromatic token only in its scoped step environment`);
   }
   return failures;
@@ -306,7 +312,7 @@ const nightlyFailures = (source: string): string[] => {
   requireText(
     failures,
     resolve,
-    '[[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+$ ]]',
+    '[[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]',
     "nightly must constrain configured refs to canonical release branches",
   );
   requireText(

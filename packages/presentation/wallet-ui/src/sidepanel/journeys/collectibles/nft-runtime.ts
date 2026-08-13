@@ -112,10 +112,8 @@ export const createNftRuntimeClient = (sendMessage: (message: unknown) => Promis
       inFlightLoads.clear();
     },
     /**
-     * Sends the reviewed NFT transfer. `reviewedFee` must be the estimate the
-     * review step displayed: the background makes it the ceiling this send may
-     * sign under, so any other value would make that guarantee a fiction. Null
-     * (no estimate was produced) leaves the send bounded only by the node.
+     * Sends the reviewed NFT under its exact invoke and optional deployment
+     * fee ceilings. A missing required ceiling is refused before signing.
      */
     async transferNft(
       contract: string,
@@ -123,11 +121,13 @@ export const createNftRuntimeClient = (sendMessage: (message: unknown) => Promis
       networkId: string,
       recipient: string,
       reviewedFee: TransferReviewResponse["review"]["fee"] = null,
+      reviewedDeploymentFee: TransferReviewResponse["review"]["deploymentFee"] = null,
     ): Promise<string> {
       const response = await sendMessage({
         contract,
         networkId,
         recipient,
+        ...(reviewedDeploymentFee == null ? {} : { reviewedDeploymentFee }),
         ...(reviewedFee === null ? {} : { reviewedFee }),
         tokenId,
         type: "wallet.transferNft",

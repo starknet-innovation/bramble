@@ -376,14 +376,43 @@ describe("createMessageHandler", () => {
       accounts: [account],
       ok: true,
     });
-    expect(captured[0]).toEqual({
+    expect(captured[0]).toMatchObject({
       origin: "https://example.com",
       vaultPassphrase,
     });
+    expect(captured[0]?.isAuthorized?.()).toBe(true);
     await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toEqual({
       ok: true,
       pending: [],
     });
+  });
+
+  test("fails a connect grant whose unlock generation expires during the vault write", async () => {
+    const approvals = createApprovalQueue();
+    const pending = approvals.request("https://example.com");
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    let checkedBefore = false;
+    let checkedAfter = false;
+    const handler = createMessageHandler(
+      {
+        ...createWallet(),
+        async grantOrigin(input: OriginGrantInput) {
+          checkedBefore = input.isAuthorized?.() === true;
+          session.lock();
+          checkedAfter = input.isAuthorized?.() === true;
+          throw new Error("wallet locked");
+        },
+      },
+      "extension-id",
+      { approvals, session },
+    );
+
+    await expect(
+      handler({ id: pending.id, type: "wallet.approveOrigin" }, sender),
+    ).resolves.toEqual({ error: "approval execution failed" });
+    expect(checkedBefore).toBe(true);
+    expect(checkedAfter).toBe(false);
   });
 
   test("rejects malformed approval ids", async () => {

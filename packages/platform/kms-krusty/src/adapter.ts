@@ -5,10 +5,12 @@ import { WalletError } from "@mc-wallet/core/errors";
 import { isOwnDataProperty } from "@mc-wallet/core/json";
 import type { KmsPort } from "@mc-wallet/vault/kms-port";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarkPrivateKey,
 } from "@mc-wallet/wallet-model/networks";
+import { isMnemonicPassphrase, isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
 
 type Callable = (...args: unknown[]) => unknown;
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
@@ -69,7 +71,7 @@ const requireFieldElementField = (value: unknown, field: string): string => {
   if (!isStarkFieldElement(fieldValue)) {
     throw new WalletError(`Krusty KMS result missing field element: ${field}`);
   }
-  return fieldValue;
+  return canonicalFelt(fieldValue) as string;
 };
 
 // Signing scalars are judged by `isStarkPrivateKey`, never by the wider
@@ -97,8 +99,6 @@ const requireNonZeroFieldElementField = (value: unknown, field: string): string 
 const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
 const isMnemonicWordCount = (value: number): boolean =>
   Number.isSafeInteger(value) && MNEMONIC_WORD_COUNTS.some((count) => count === value);
-const isMnemonicText = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0;
 
 /**
  * Wraps an unknown WASM module and validates required Krusty exports.
@@ -132,7 +132,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       if (typeof result !== "string" || !isStarkFieldElement(result)) {
         throw new WalletError("Krusty KMS returned an invalid account address");
       }
-      return result;
+      return canonicalFelt(result) as string;
     },
     async deriveStrk20ViewingKey(privateKey, chainId, poolAddress) {
       await ready;
@@ -150,12 +150,13 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       if (typeof result !== "string" || !isStarkPrivateKey(result)) {
         throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
       }
-      return result;
+      return canonicalFelt(result) as string;
     },
     async deriveStarknetKeypair(mnemonic, addressIndex, accountIndex, passphrase) {
       await ready;
       if (
         !isMnemonicText(mnemonic) ||
+        !isMnemonicPassphrase(passphrase) ||
         !isDerivationIndex(addressIndex) ||
         !isDerivationIndex(accountIndex)
       ) {
@@ -176,7 +177,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
 
       await ready;
       const result = await generateMnemonic(wordCount);
-      if (typeof result !== "string" || result.trim().length === 0) {
+      if (!isMnemonicText(result)) {
         throw new WalletError("Krusty KMS returned an invalid mnemonic");
       }
       return result;
@@ -198,8 +199,8 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       const result = await signStarkHash(privateKey, messageHash);
       return {
         publicKey: requireNonZeroFieldElementField(result, "publicKey"),
-        r: requireNonZeroFieldElementField(result, "r"),
-        s: requireNonZeroFieldElementField(result, "s"),
+        r: requirePrivateKeyField(result, "r"),
+        s: requirePrivateKeyField(result, "s"),
       };
     },
     async validateMnemonic(mnemonic) {

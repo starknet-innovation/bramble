@@ -186,6 +186,10 @@ describe("readProviderWatchAsset", () => {
     expect(readProviderWatchAsset({ options: { address: "0x0" }, type: "ERC20" })).toBeNull();
     expect(readProviderWatchAsset({ options: { address: "nope" }, type: "ERC20" })).toBeNull();
     expect(
+      readProviderWatchAsset({ options: { address: `0x${"f".repeat(64)}` }, type: "ERC20" }),
+    ).toBeNull();
+    expect(readProviderWatchAsset({ options: { address: "0xABC" }, type: "ERC20" })).toBeNull();
+    expect(
       readProviderWatchAsset({ options: { address: tokenAddress, decimals: 99 }, type: "ERC20" }),
     ).toBeNull();
     expect(
@@ -220,6 +224,13 @@ describe("background provider input readers", () => {
     expect(
       readWatchAssetInput({
         asset: { address: 1 },
+        origin: "https://a.test",
+        type: "wallet.watchAsset",
+      }),
+    ).toBeNull();
+    expect(
+      readWatchAssetInput({
+        asset: { address: `0x${"f".repeat(64)}` },
         origin: "https://a.test",
         type: "wallet.watchAsset",
       }),

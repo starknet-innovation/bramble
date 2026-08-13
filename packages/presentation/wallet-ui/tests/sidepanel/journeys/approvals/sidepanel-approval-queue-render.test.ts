@@ -17,7 +17,7 @@ const HONEST_ORIGIN = "https://honest.example";
 const uuid = (index: number): string =>
   `b81c5dd1-53ff-4b7b-a171-${index.toString(16).padStart(12, "0")}`;
 
-const honestPrompt = { id: uuid(1), origin: HONEST_ORIGIN };
+const honestPrompt = { id: uuid(1), kind: "connect", origin: HONEST_ORIGIN };
 
 const loadQueue = async (pending: unknown): Promise<readonly unknown[]> =>
   await runtimeReturning({ ok: true, pending }).loadPendingApprovals();

@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encrypted-store";
 import { migrateVault } from "@mc-wallet/vault/migrations";
-import { isVaultV4 } from "@mc-wallet/vault/schema";
+import { isVaultV5 } from "@mc-wallet/vault/schema";
 import {
   readMigratedVault,
   VAULT_MIGRATION_STORE_KEY,
@@ -48,7 +48,7 @@ describe("readMigratedVault", () => {
 
     const migrated = await readMigratedVault({ primary, staging }, vaultPassphrase);
 
-    expect(isVaultV4(migrated)).toBe(true);
+    expect(isVaultV5(migrated)).toBe(true);
     expect(migrated.accountSecrets).toEqual([]);
     expect(await primary.read(vaultPassphrase)).toEqual(migrated);
     expect(await staging.exists()).toBe(false);
@@ -161,10 +161,10 @@ describe("readMigratedVault", () => {
       readMigratedVault({ primary: unwritablePrimary, staging }, vaultPassphrase),
     ).rejects.toThrow("injected primary write failure");
     expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
-    expect(isVaultV4(await staging.read(vaultPassphrase))).toBe(true);
+    expect(isVaultV5(await staging.read(vaultPassphrase))).toBe(true);
 
     await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).resolves.toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 5,
     });
     expect(await staging.exists()).toBe(false);
   });

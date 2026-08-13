@@ -21,6 +21,7 @@ import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
 import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import { resolveReviewFee } from "../accounts/wallet-ops";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
@@ -50,6 +51,7 @@ export type InvokeFeeReviewTarget = {
   readonly account: AccountRef;
   readonly calls: readonly Call[];
   readonly preferences: WalletPreferences;
+  readonly proof?: Strk20Proof;
   /**
    * Builds the signer, on demand. A thunk and not a value for two reasons:
    * building one can throw (a keyless Ledger account with no panel queue
@@ -113,6 +115,7 @@ export const estimateInvokeApprovalFee = async (
       estimated = await deps.runtimeRpc.estimateInvokeFee({
         account,
         calls: [...calls],
+        ...(review.proof ? { proof: review.proof } : {}),
         rpcUrls,
         signHash: review.signer(),
       });

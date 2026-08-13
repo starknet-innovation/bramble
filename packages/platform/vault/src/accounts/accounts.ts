@@ -4,6 +4,7 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { isRecord } from "@mc-wallet/core/json";
+import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
 import type {
   AccountRef,
   DerivedAccountRef,
@@ -17,12 +18,15 @@ import {
   ledgerAccountPath,
 } from "@mc-wallet/wallet-model/ledger-path";
 import {
+  canonicalFelt,
   DEFAULT_NETWORK,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   isStarkPrivateKey,
   type StarknetNetworkId,
+  sameFelt,
 } from "@mc-wallet/wallet-model/networks";
+import { isMnemonicPassphrase, isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
 import type { KmsPort } from "../kms-port";
 
 const OZ_ACCOUNT_VERSION = "3.0.0";
@@ -81,6 +85,28 @@ const parseClassHashes = (json: string): unknown => {
 
 const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
 
+const requireDerivationInput = (input: AccountDerivationInput): void => {
+  if (!isMnemonicText(input.mnemonic) || !isMnemonicPassphrase(input.mnemonicPassphrase)) {
+    throw new WalletError("Invalid mnemonic derivation input");
+  }
+};
+
+const canonicalKeypair = (
+  value: Awaited<ReturnType<KmsPort["deriveStarknetKeypair"]>>,
+): { readonly privateKey: string; readonly publicKeyX: string; readonly publicKeyY: string } => {
+  if (
+    !isStarkPrivateKey(value.privateKey) ||
+    ![value.publicKeyX, value.publicKeyY].every(isNonZeroStarkFieldElement)
+  ) {
+    throw new WalletError("Krusty KMS returned invalid account key material");
+  }
+  return {
+    privateKey: canonicalFelt(value.privateKey) as string,
+    publicKeyX: canonicalFelt(value.publicKeyX) as string,
+    publicKeyY: canonicalFelt(value.publicKeyY) as string,
+  };
+};
+
 const ownValue = (record: Record<string, unknown>, field: string): unknown => {
   const descriptor = Object.getOwnPropertyDescriptor(record, field);
   return descriptor?.enumerable === true && "value" in descriptor ? descriptor.value : undefined;
@@ -109,7 +135,7 @@ export const getOzAccountClassHash = async (
   if (!isNonZeroStarkFieldElement(classHash)) {
     throw new WalletError("Krusty KMS returned an invalid class hash");
   }
-  return classHash;
+  return canonicalFelt(classHash) as string;
 };
 
 /**
@@ -119,6 +145,7 @@ export const deriveAccount = async (
   kms: KmsPort,
   input: AccountDerivationInput,
 ): Promise<AccountDerivationResult> => {
+  requireDerivationInput(input);
   if (!(await kms.validateMnemonic(input.mnemonic))) {
     throw new WalletError("Invalid mnemonic");
   }
@@ -134,28 +161,26 @@ export const deriveAccount = async (
     throw new WalletError("Invalid Starknet network");
   }
 
-  const classHash = input.classHash ?? (await getOzAccountClassHash(kms, networkId));
-  if (!isNonZeroStarkFieldElement(classHash)) {
+  const classHashInput = input.classHash ?? (await getOzAccountClassHash(kms, networkId));
+  if (!isNonZeroStarkFieldElement(classHashInput)) {
     throw new WalletError("Invalid account class hash");
   }
+  const classHash = canonicalFelt(classHashInput) as string;
 
-  const { privateKey, publicKeyX, publicKeyY } = await kms.deriveStarknetKeypair(
-    input.mnemonic,
-    addressIndex,
-    accountIndex,
-    input.mnemonicPassphrase,
+  const { privateKey, publicKeyX, publicKeyY } = canonicalKeypair(
+    await kms.deriveStarknetKeypair(
+      input.mnemonic,
+      addressIndex,
+      accountIndex,
+      input.mnemonicPassphrase,
+    ),
   );
-  if (
-    !isNonZeroStarkFieldElement(privateKey) ||
-    ![publicKeyX, publicKeyY].every(isNonZeroStarkFieldElement)
-  ) {
-    throw new WalletError("Krusty KMS returned invalid account key material");
-  }
 
-  const address = await kms.deriveOzAccountAddress(publicKeyX, classHash);
-  if (!isNonZeroStarkFieldElement(address)) {
+  const addressInput = await kms.deriveOzAccountAddress(publicKeyX, classHash);
+  if (!isNonZeroStarkFieldElement(addressInput)) {
     throw new WalletError("Krusty KMS returned invalid account address");
   }
+  const address = canonicalFelt(addressInput) as string;
 
   return {
     account: {
@@ -196,7 +221,7 @@ const validatedNetworkClassHash = async (
   if (!isNonZeroStarkFieldElement(resolved)) {
     throw new WalletError("Invalid account class hash");
   }
-  return resolved;
+  return canonicalFelt(resolved) as string;
 };
 
 /**
@@ -226,10 +251,12 @@ export const deriveLedgerAccount = async (
   }
 
   const classHash = await validatedNetworkClassHash(kms, networkId, input.classHash);
-  const address = await kms.deriveOzAccountAddress(input.publicKeyX, classHash);
-  if (!isNonZeroStarkFieldElement(address)) {
+  const publicKeyX = canonicalFelt(input.publicKeyX) as string;
+  const addressInput = await kms.deriveOzAccountAddress(publicKeyX, classHash);
+  if (!isNonZeroStarkFieldElement(addressInput)) {
     throw new WalletError("Krusty KMS returned invalid account address");
   }
+  const address = canonicalFelt(addressInput) as string;
 
   return {
     address,
@@ -242,7 +269,7 @@ export const deriveLedgerAccount = async (
     },
     id: `${networkId}:${address}`,
     networkId,
-    publicKeyX: input.publicKeyX,
+    publicKeyX,
   };
 };
 
@@ -282,7 +309,10 @@ export const deriveLedgerAccountRefs = async (
  * match on their derivation indices while imported accounts match on the key.
  */
 export const sameWalletKey = (left: AccountRef, right: AccountRef): boolean => {
-  if (left.publicKeyX !== right.publicKeyX || left.derivation.kind !== right.derivation.kind) {
+  if (
+    !sameFelt(left.publicKeyX, right.publicKeyX) ||
+    left.derivation.kind !== right.derivation.kind
+  ) {
     return false;
   }
   return left.derivation.kind === "starknet-bip44" && right.derivation.kind === "starknet-bip44"
@@ -332,30 +362,42 @@ export const deriveImportedAccount = async (
   kms: KmsPort,
   input: ImportedAccountInput,
 ): Promise<ImportedAccountResult> => {
-  const privateKey = input.privateKey;
-  if (!isStarkPrivateKey(privateKey)) {
+  if (!isStarkPrivateKey(input.privateKey)) {
     throw new WalletError("Invalid private key");
   }
+  const privateKey = canonicalFelt(input.privateKey) as string;
 
   const networkId = input.networkId ?? DEFAULT_NETWORK.id;
   if (!isStarknetNetworkId(networkId)) {
     throw new WalletError("Invalid Starknet network");
   }
 
-  const classHash = input.classHash ?? (await getOzAccountClassHash(kms, networkId));
-  if (!isNonZeroStarkFieldElement(classHash)) {
+  const classHashInput = input.classHash ?? (await getOzAccountClassHash(kms, networkId));
+  if (!isNonZeroStarkFieldElement(classHashInput)) {
     throw new WalletError("Invalid account class hash");
   }
+  const classHash = canonicalFelt(classHashInput) as string;
 
-  const { publicKey: publicKeyX } = await kms.signStarkHash(privateKey, PUBLIC_KEY_PROBE_HASH);
-  if (!isNonZeroStarkFieldElement(publicKeyX)) {
+  const probe = await kms.signStarkHash(privateKey, PUBLIC_KEY_PROBE_HASH);
+  if (!isNonZeroStarkFieldElement(probe.publicKey)) {
     throw new WalletError("Krusty KMS returned invalid public key");
   }
+  const publicKeyX = canonicalFelt(probe.publicKey) as string;
+  if (
+    !verifyStarkSignature({
+      hash: PUBLIC_KEY_PROBE_HASH,
+      publicKeyX,
+      signature: probe,
+    })
+  ) {
+    throw new WalletError("Krusty KMS public-key probe did not verify");
+  }
 
-  const address = await kms.deriveOzAccountAddress(publicKeyX, classHash);
-  if (!isNonZeroStarkFieldElement(address)) {
+  const addressInput = await kms.deriveOzAccountAddress(publicKeyX, classHash);
+  if (!isNonZeroStarkFieldElement(addressInput)) {
     throw new WalletError("Krusty KMS returned invalid account address");
   }
+  const address = canonicalFelt(addressInput) as string;
 
   return {
     account: {

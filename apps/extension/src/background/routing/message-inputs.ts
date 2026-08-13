@@ -328,6 +328,7 @@ const readTransferFields = (
    * background turns it into a signing ceiling (MCW-V09-119); absent means the
    * caller reviewed no fee and the send is bounded only by the node's quote.
    */
+  readonly reviewedDeploymentFee?: FeeEstimate;
   readonly reviewedFee?: FeeEstimate;
   readonly speed: "fast" | "standard";
   readonly tokenId: string;
@@ -338,6 +339,7 @@ const readTransferFields = (
       "accountId",
       "amount",
       "recipient",
+      "reviewedDeploymentFee",
       "reviewedFee",
       "speed",
       "tokenId",
@@ -350,6 +352,8 @@ const readTransferFields = (
     !isStarkFieldElement(message["recipient"]) ||
     typeof message["tokenId"] !== "string" ||
     message["tokenId"].length === 0 ||
+    (message["reviewedDeploymentFee"] !== undefined &&
+      !isFeeEstimate(message["reviewedDeploymentFee"])) ||
     (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"])) ||
     (message["speed"] !== undefined &&
       message["speed"] !== "fast" &&
@@ -362,6 +366,9 @@ const readTransferFields = (
     accountId: message["accountId"],
     amount: message["amount"].trim(),
     recipient: message["recipient"],
+    ...(isFeeEstimate(message["reviewedDeploymentFee"])
+      ? { reviewedDeploymentFee: message["reviewedDeploymentFee"] }
+      : {}),
     ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
     speed: message["speed"] === "fast" ? "fast" : "standard",
     tokenId: message["tokenId"],

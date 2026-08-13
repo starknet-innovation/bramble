@@ -150,22 +150,23 @@ export const makeKeyBoundaryHarness = async (
             // This scan also exercises counterfactual deployment data, so the
             // shared chain starts undeployed. Model its deployment before the
             // invoke's explicit retry; only a priced card may be approved.
-            chainState.accountDeployed = true;
-            await handler({ id: approval.id, type: "wallet.retryApprovalFee" }, extensionSender);
-            reviewedFee = await reviewedApprovalFee(handler, extensionSender, approval.id);
+            const wasDeployed = chainState.accountDeployed;
+            try {
+              chainState.accountDeployed = true;
+              await handler({ id: approval.id, type: "wallet.retryApprovalFee" }, extensionSender);
+              reviewedFee = await reviewedApprovalFee(handler, extensionSender, approval.id);
+            } finally {
+              chainState.accountDeployed = wasDeployed;
+            }
           }
-          try {
-            await handler(
-              {
-                id: approval.id,
-                ...(reviewedFee ? { reviewedFee } : {}),
-                type: "wallet.approveOrigin",
-              },
-              extensionSender,
-            );
-          } finally {
-            chainState.accountDeployed = false;
-          }
+          await handler(
+            {
+              id: approval.id,
+              ...(reviewedFee ? { reviewedFee } : {}),
+              type: "wallet.approveOrigin",
+            },
+            extensionSender,
+          );
         }
       }
     }

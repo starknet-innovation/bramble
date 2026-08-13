@@ -92,6 +92,22 @@ describe("wallet_addDeclareTransaction bridge mapping", () => {
     ).toBeNull();
   });
 
+  test("rejects declare hashes outside the canonical Stark-field grammar", () => {
+    for (const compiledClassHash of [`0x${"f".repeat(64)}`, "0xABC"]) {
+      expect(
+        toRuntimeMessage(
+          request("wallet_addDeclareTransaction", {
+            declare_transaction: {
+              compiled_class_hash: compiledClassHash,
+              contract_class: { sierra_program: ["0x1"] },
+            },
+          }),
+          origin,
+        ),
+      ).toBeNull();
+    }
+  });
+
   test("pads the declare transaction and class hashes to spec widths", () => {
     const payload = toProviderPayload(
       { classHash: "0x5abc", ok: true, transactionHash: "0x7cd" },

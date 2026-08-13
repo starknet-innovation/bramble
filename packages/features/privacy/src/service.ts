@@ -7,19 +7,40 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { REVIEWED_FEE_REQUIRED } from "@mc-wallet/starknet/rpc-submit";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt, UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 import type {
   Strk20Action,
   Strk20BalanceEntry,
   Strk20CallAndProof,
-  Strk20InvokeCall,
   Strk20Proof,
 } from "@mc-wallet/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { Strk20NetworkConfig } from "./config";
-import type { PaymasterAuthorizationReview } from "./paymaster/paymaster-typed-data";
+import { canonicalStrk20PoolFee, STRK20_SERVICE_UNAVAILABLE } from "./policy/fee-policy";
+import type { Strk20SubmissionPlan } from "./policy/submission-plan";
+
+export {
+  canonicalStrk20PoolFee,
+  STRK20_MAX_POOL_FEE,
+  STRK20_SERVICE_UNAVAILABLE,
+} from "./policy/fee-policy";
+/**
+ * Frozen account and relay route types, defined beside privacy policy and
+ * re-exported here as the stable service contract.
+ */
+export type {
+  Strk20AccountPlan,
+  Strk20PrivateRelayPlan,
+  Strk20SubmissionPlan,
+} from "./policy/submission-plan";
+export {
+  strk20CallToInvoke,
+  summarizeStrk20Action,
+  summarizeStrk20Plan,
+} from "./policy/summaries";
 
 /**
  * Wallet-API NOT_REGISTERED (118).
@@ -34,37 +55,9 @@ export const STRK20_INSUFFICIENT_BALANCE = "insufficient private balance";
  */
 export const STRK20_PRIVACY_LEAK = "strk20 privacy leak";
 /**
- * Live SDK services or contract routing are incomplete.
- */
-export const STRK20_SERVICE_UNAVAILABLE = "strk20 services unavailable";
-/**
  * No unlinkable broadcast service is configured.
  */
 export const STRK20_SUBMISSION_UNAVAILABLE = "strk20 private submission unavailable";
-/**
- * Maximum pool fee accepted by the wallet and the pool's u128 fee field. The
- * bound is `UINT128_LIMIT` from ../networks, never a local `1n << 128n`, so the
- * fee field and the uint256 limb grammar cannot drift apart by an exponent.
- */
-export const STRK20_MAX_POOL_FEE = UINT128_LIMIT - 1n;
-
-/**
- * Parses a reviewed pool fee into its canonical felt representation. Values
- * outside the pool's u128 fee field fail closed before they can enter a digest.
- */
-export const canonicalStrk20PoolFee = (value: string): string => {
-  let fee: bigint;
-  try {
-    fee = BigInt(value);
-  } catch {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  if (fee < 0n || fee > STRK20_MAX_POOL_FEE) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  return `0x${fee.toString(16)}`;
-};
-
 /**
  * Privileged account context supplied only by the background worker. Viewing
  * keys and signatures are acquired lazily, never persisted, and never cross
@@ -97,7 +90,10 @@ export type Strk20PrepareInput = Strk20AccountContext & {
  * Prepared-proof submission input used by wallet_addInvokeTransaction.
  */
 export type Strk20PreparedSubmissionInput = Strk20AccountContext & {
-  readonly call: Call;
+  /** Exact batch for a wallet-prepared public transaction. */
+  readonly calls?: readonly Call[];
+  /** Backward-compatible single pool call from wallet_strk20PrepareInvoke. */
+  readonly call?: Call;
   readonly proof: Strk20Proof;
   /**
    * The network fee the approval card displayed for this prepared call. Carried
@@ -109,37 +105,14 @@ export type Strk20PreparedSubmissionInput = Strk20AccountContext & {
 };
 
 /**
- * Paymaster fee and optional outside-execution typed data frozen before the
- * approval UI. The user authorizes these exact values before any signature or
- * proof is produced.
+ * Exact public-account calls and proof frozen before network-fee review. The
+ * submitter must preserve the batch byte-for-byte and apply a reviewed ceiling.
  */
-export type Strk20PrivateRelayPlan = {
-  readonly authorization?: PaymasterAuthorizationReview;
-  readonly feeAction: {
-    readonly amount: string;
-    readonly recipient: string;
-    readonly token: string;
-    readonly type: "withdraw";
-  };
-  readonly mode?: "private-relay";
-  readonly typedData?: unknown;
+export type PreparedStrk20AccountSubmission = {
+  readonly allowanceGrants: readonly Call[];
+  readonly calls: readonly Call[];
+  readonly proof: Strk20Proof;
 };
-
-/**
- * Public account submission is permitted only for registration and
- * deposit-only batches. It exists so a fresh account can enter the pool before
- * it owns a private note with which to pay a relay fee.
- */
-export type Strk20AccountPlan = {
-  readonly mode: "account";
-  /** Exact STRK pool fee committed by the review digest. */
-  readonly poolFeeFri: string;
-};
-
-/**
- * Frozen submission route shown before protected proving or authorization.
- */
-export type Strk20SubmissionPlan = Strk20PrivateRelayPlan | Strk20AccountPlan;
 
 /**
  * Outcome of a pool submission: the broadcast transaction, plus the ERC20
@@ -171,6 +144,18 @@ export type Strk20Service = {
   readonly register?: (
     input: Strk20AccountContext & { readonly poolFeeFri: string },
   ) => Promise<Strk20SubmissionResult>;
+  /** Builds registration proof and calls without signing or broadcasting. */
+  readonly prepareRegistration?: (
+    input: Strk20AccountContext & { readonly poolFeeFri: string },
+  ) => Promise<PreparedStrk20AccountSubmission>;
+  /** Builds a deposit-only public-account proof and calls without broadcasting. */
+  readonly prepareAccountActions?: (
+    input: Strk20AccountContext & {
+      readonly actions: readonly Strk20Action[];
+      readonly beforeProof?: () => Promise<void>;
+      readonly poolFeeFri: string;
+    },
+  ) => Promise<PreparedStrk20AccountSubmission>;
   /**
    * Reads the pool's per-`apply_actions` STRK fee so the UI can show it before
    * any quote exists. Absent implementations leave the fee unknown.
@@ -204,6 +189,12 @@ const unavailable = (): never => {
  */
 export const unavailableStrk20Service: Strk20Service = {
   async prepare() {
+    return unavailable();
+  },
+  async prepareAccountActions() {
+    return unavailable();
+  },
+  async prepareRegistration() {
     return unavailable();
   },
   async privateBalances() {
@@ -403,10 +394,34 @@ export const submitStrk20Actions = async (
     throw new WalletError(STRK20_PRIVACY_LEAK);
   }
   if (input.plan.mode === "account") {
+    if (!input.plan.reviewedFee) {
+      throw new WalletError(REVIEWED_FEE_REQUIRED);
+    }
     await assertReviewedPoolFee(service, input, input.plan.poolFeeFri);
   }
   await assertFeeBalance(service, input);
   return service.submitActions(input);
+};
+
+/**
+ * Builds the exact public deposit batch whose network fee must be reviewed.
+ * The returned proof and calls are immutable approval input; no signing or
+ * broadcast occurs at this boundary.
+ */
+export const prepareStrk20AccountActions = async (
+  service: Strk20Service,
+  input: Strk20AccountContext & {
+    readonly actions: readonly Strk20Action[];
+    readonly beforeProof?: () => Promise<void>;
+    readonly poolFeeFri: string;
+  },
+): Promise<PreparedStrk20AccountSubmission> => {
+  if (!service.prepareAccountActions || !isDepositOnly(input.actions)) {
+    throw new WalletError(STRK20_PRIVACY_LEAK);
+  }
+  await assertActionBatch(service, input);
+  await assertReviewedPoolFee(service, input, input.poolFeeFri);
+  return service.prepareAccountActions(input);
 };
 
 /**
@@ -442,49 +457,17 @@ export const registerStrk20Account = async (
   return service.register(input);
 };
 
-const shortAddress = (value: string): string =>
-  value.length <= 13 ? value : `${value.slice(0, 8)}…${value.slice(-4)}`;
-
 /**
- * Builds a review-friendly summary from dapp-supplied public action fields.
+ * Builds the exact public registration batch before network-fee review. Throws
+ * on unavailable preparation or a changed pool fee without broadcasting.
  */
-export const summarizeStrk20Action = (action: Strk20Action): string => {
-  if (action.type === "deposit") {
-    return `Deposit ${action.amount} to private balance (${shortAddress(action.token)})`;
+export const prepareStrk20Registration = async (
+  service: Strk20Service,
+  input: Strk20AccountContext & { readonly poolFeeFri: string },
+): Promise<PreparedStrk20AccountSubmission> => {
+  if (!service.prepareRegistration) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
-  if (action.type === "withdraw") {
-    return `Withdraw ${action.amount} to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
-  }
-  if (action.type === "transfer") {
-    const amount = action.amount === "OPEN" ? "an open note" : action.amount;
-    return `Transfer ${amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
-  }
-  if (action.type === "subaccount_invoke") {
-    return `Private ${action.dapp_name} sub-account invoke (${action.calls.length} calls)`;
-  }
-  return `Private invoke on ${shortAddress(action.contract)}`;
+  await assertReviewedPoolFee(service, input, input.poolFeeFri);
+  return service.prepareRegistration(input);
 };
-
-/**
- * Describes the fee route without exposing a private relay plan's typed data.
- */
-export const summarizeStrk20Plan = (plan: Strk20SubmissionPlan): string =>
-  plan.mode === "account"
-    ? `Public account pool fee ${plan.poolFeeFri} STRK fri — first deposits are linked to this wallet`
-    : [
-        `Private relay fee ${plan.feeAction.amount} (${plan.feeAction.token})`,
-        ...(plan.authorization
-          ? [
-              `outside execution by ${shortAddress(plan.authorization.caller)} from ${plan.authorization.executeAfter} until ${plan.authorization.executeBefore} for ${plan.authorization.publicCallCount} public approval call${plan.authorization.publicCallCount === 1 ? "" : "s"}`,
-            ]
-          : []),
-      ].join(" · ");
-
-/**
- * Converts a wire INVOKE_CALL into the starknet.js call shape.
- */
-export const strk20CallToInvoke = (call: Strk20InvokeCall): Call => ({
-  calldata: [...call.calldata],
-  contractAddress: call.contract_address,
-  entrypoint: call.entry_point,
-});

@@ -22,6 +22,7 @@ import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { InvokeInput, TransferInput } from "@mc-wallet/starknet/rpc";
 import { memoryActivityLog } from "@mc-wallet/transactions/activity";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
 import {
@@ -39,6 +40,7 @@ import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
 // The figure the shared RPC stub's estimator returns, and therefore the exact
 // figure every review in this file displays.
 const REVIEWED = { overallFee: "1", unit: "FRI" } as const;
+const DEPLOYMENT_REVIEWED = { overallFee: "2", unit: "FRI" } as const;
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const RECIPIENT = "0x0511a2b3c4d5e6f7";
 
@@ -249,7 +251,7 @@ const preferences: WalletPreferences = {
 
 // A background wired exactly like the invoke harness, but recording what the
 // ERC20 and NFT submit lanes were handed instead of the generic invoke lane.
-const makeSendHarness = () => {
+const makeSendHarness = (overrides: Partial<RuntimeRpc> = {}) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const transfers: TransferInput[] = [];
@@ -261,6 +263,7 @@ const makeSendHarness = () => {
       async getNftOwner() {
         return account.address;
       },
+      ...overrides,
       async submitErc20Transfer(input: TransferInput) {
         transfers.push(input);
         return {
@@ -310,19 +313,61 @@ describe("panel send journeys echo the reviewed fee back", () => {
     expect(transfers[0]?.reviewedFee).toEqual(REVIEWED);
   });
 
-  test("a send with no reviewed fee stays unbound rather than being refused", async () => {
+  test("an ERC20 send with no reviewed fee is refused before submission", async () => {
     const { handler, transfers } = makeSendHarness();
+    await expect(
+      handler(
+        {
+          accountId: account.id,
+          amount: "1",
+          recipient: RECIPIENT,
+          tokenId: `SN_MAIN:${ETH}`,
+          type: "wallet.transfer",
+        },
+        extensionSender,
+      ),
+    ).resolves.toEqual({ error: "retry the fee estimate before approving this transaction" });
+    expect(transfers).toHaveLength(0);
+  });
+
+  test("an undeployed ERC20 send carries separate invoke and deployment ceilings", async () => {
+    const { handler, transfers } = makeSendHarness({
+      async estimateAccountDeploymentFee() {
+        return DEPLOYMENT_REVIEWED;
+      },
+      async getDeploymentStatus() {
+        return false;
+      },
+    });
+    const request = {
+      accountId: account.id,
+      amount: "1",
+      recipient: RECIPIENT,
+      tokenId: `SN_MAIN:${ETH}`,
+    };
+    const review = (await handler(
+      { ...request, type: "wallet.reviewTransfer" },
+      extensionSender,
+    )) as {
+      readonly review: { readonly deploymentFee: FeeEstimate; readonly fee: FeeEstimate };
+    };
+    expect(review.review).toMatchObject({
+      deploymentFee: DEPLOYMENT_REVIEWED,
+      fee: REVIEWED,
+    });
+
     await handler(
       {
-        accountId: account.id,
-        amount: "1",
-        recipient: RECIPIENT,
-        tokenId: `SN_MAIN:${ETH}`,
+        ...request,
+        reviewedDeploymentFee: review.review.deploymentFee,
+        reviewedFee: review.review.fee,
         type: "wallet.transfer",
       },
       extensionSender,
     );
-    expect(transfers[0]?.reviewedFee).toBeUndefined();
+
+    expect(transfers[0]?.reviewedDeploymentFee).toEqual(DEPLOYMENT_REVIEWED);
+    expect(transfers[0]?.reviewedFee).toEqual(REVIEWED);
   });
 
   test("a send carrying a malformed fee is refused before anything is signed", async () => {
@@ -371,6 +416,55 @@ describe("panel send journeys echo the reviewed fee back", () => {
     );
 
     expect(invoked).toHaveLength(1);
+    expect(invoked[0]?.reviewedFee).toEqual(REVIEWED);
+  });
+
+  test("an NFT send with no reviewed fee is refused before submission", async () => {
+    const { handler, invoked } = makeSendHarness();
+    await expect(
+      handler(
+        {
+          contract: ETH,
+          networkId: "SN_MAIN",
+          recipient: RECIPIENT,
+          tokenId: "1",
+          type: "wallet.transferNft",
+        },
+        extensionSender,
+      ),
+    ).resolves.toEqual({ error: "retry the fee estimate before approving this transaction" });
+    expect(invoked).toHaveLength(0);
+  });
+
+  test("an undeployed NFT send carries separate invoke and deployment ceilings", async () => {
+    const { handler, invoked } = makeSendHarness({
+      async estimateAccountDeploymentFee() {
+        return DEPLOYMENT_REVIEWED;
+      },
+      async getDeploymentStatus() {
+        return false;
+      },
+    });
+    const target = { contract: ETH, networkId: "SN_MAIN", tokenId: "1" };
+    const review = (await handler(
+      { ...target, recipient: RECIPIENT, type: "wallet.reviewNftTransfer" },
+      extensionSender,
+    )) as {
+      readonly review: { readonly deploymentFee: FeeEstimate; readonly fee: FeeEstimate };
+    };
+
+    await handler(
+      {
+        ...target,
+        recipient: RECIPIENT,
+        reviewedDeploymentFee: review.review.deploymentFee,
+        reviewedFee: review.review.fee,
+        type: "wallet.transferNft",
+      },
+      extensionSender,
+    );
+
+    expect(invoked[0]?.reviewedDeploymentFee).toEqual(DEPLOYMENT_REVIEWED);
     expect(invoked[0]?.reviewedFee).toEqual(REVIEWED);
   });
 });

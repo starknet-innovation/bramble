@@ -7,7 +7,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Account, Call, RpcProvider } from "starknet";
-import { ensureAccountDeployed } from "../transactions/deployment";
+import { ensureAccountDeployed, isAccountDeployed } from "../transactions/deployment";
 import {
   authorizedSpendFor,
   exceedsReviewedFee,
@@ -15,6 +15,7 @@ import {
   type FeeSpeed,
   scaleFeeBounds,
 } from "./fee-bounds";
+import { estimateExactInvokeFee } from "./invoke-fee";
 import {
   acceptedRpcWriteHash,
   krustyAccount,
@@ -42,17 +43,16 @@ export type InvokeInput = {
    * The fee estimate this submission was reviewed against — the exact figure a
    * user was shown before consenting, which for a `fast` review is the figure
    * that lane's scaled bounds imply and not the node's headline quote.
-   * Supplying it turns that figure into a ceiling:
+   * This is mandatory and turns that figure into a ceiling:
    * {@link submitInvokeTransaction} re-estimates, refuses when the spend the
    * bounds it is about to sign would authorise has outrun
    * {@link REVIEWED_FEE_HEADROOM}, and then signs exactly those bounds.
    *
-   * Absent means no user reviewed a fee for these calls (an estimate that
-   * failed, or an internal submission with no review step), and the submission
-   * is bounded only by the node's own quote — the pre-existing behaviour, and
-   * why this is optional rather than defaulted to something invented.
+   * If absent, the submit boundary fails closed before touching the network.
    */
   readonly reviewedFee?: FeeEstimate;
+  /** Separately reviewed ceiling for an automatic account deployment. */
+  readonly reviewedDeploymentFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
   readonly signHash: StarkHashSigner;
   readonly speed?: FeeSpeed;
@@ -74,11 +74,15 @@ export type InvokeSubmission = {
 export const REVIEWED_FEE_EXCEEDED =
   "The network fee for this transaction rose above the amount you reviewed. Nothing was submitted — review it again.";
 
-// Settles the resource bounds this submission will sign. Null means "let
-// starknet.js estimate once internally", the behavior of a standard-speed send
-// with nothing to hold it to.
-//
-// When the caller carries a reviewed fee, the estimate is taken HERE and the
+/**
+ * Refusal shared by invoke callers missing an exact user-reviewed fee ceiling;
+ * the submit boundary throws this before signing or broadcasting.
+ */
+export const REVIEWED_FEE_REQUIRED =
+  "The network fee was not reviewed. Nothing was submitted — review the transaction again.";
+
+// Settles the resource bounds this submission will sign. A reviewed fee is
+// mandatory. The estimate is taken HERE and the
 // bounds are passed explicitly even at standard speed. That is the point of the
 // exercise: a ceiling checked against one estimate while starknet.js quietly
 // signs bounds from a second one it took itself would bind nothing. One
@@ -87,19 +91,20 @@ export const REVIEWED_FEE_EXCEEDED =
 // already decided not to sign.
 const settledResourceBounds = async (
   starknetAccount: Account,
+  account: AccountRef,
   calls: readonly Call[],
+  proof: Strk20Proof | undefined,
+  deployed: boolean,
   speed: FeeSpeed,
   reviewedFee: FeeEstimate | undefined,
 ): Promise<unknown> => {
-  if (speed !== "fast" && !reviewedFee) {
-    return null;
+  if (!reviewedFee) {
+    throw new WalletError(REVIEWED_FEE_REQUIRED);
   }
-  const estimate = await starknetAccount.estimateInvokeFee([...calls]);
-  if (reviewedFee) {
-    const authorized = authorizedSpendFor(estimate, speed);
-    if (!authorized || exceedsReviewedFee(reviewedFee, authorized)) {
-      throw new WalletError(REVIEWED_FEE_EXCEEDED);
-    }
+  const estimate = await estimateExactInvokeFee(starknetAccount, account, calls, proof, deployed);
+  const authorized = authorizedSpendFor(estimate, speed);
+  if (!authorized || exceedsReviewedFee(reviewedFee, authorized)) {
+    throw new WalletError(REVIEWED_FEE_EXCEEDED);
   }
   return speed === "fast" ? scaleFeeBounds(estimate.resourceBounds) : estimate.resourceBounds;
 };
@@ -119,41 +124,70 @@ const settledResourceBounds = async (
  * ceiling holds over the transaction that actually goes out and the signed
  * authority never exceeds the reviewed figure by more than the headroom.
  *
- * Without it the submission is bounded only by the node's own quote, so a
- * caller that showed the user a fee and did not pass it back gets no
- * enforcement.
+ * A missing reviewed fee is refused before endpoint selection. If automatic
+ * deployment is needed, invoke bounds are settled first against an ordered
+ * deploy-then-invoke simulation, so no fee refusal can occur after deployment.
+ * Any later failure reports the accepted deployment hash rather than hiding a
+ * durable side effect behind a generic transfer failure.
  */
 export const submitInvokeTransaction = async (
-  { account, calls, proof, reviewedFee, rpcUrls, signHash, speed = "standard" }: InvokeInput,
+  {
+    account,
+    calls,
+    proof,
+    reviewedDeploymentFee,
+    reviewedFee,
+    rpcUrls,
+    signHash,
+    speed = "standard",
+  }: InvokeInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<InvokeSubmission> => {
   if (calls.length === 0) {
     throw new WalletError("No calls to submit");
+  }
+  if (!reviewedFee) {
+    throw new WalletError(REVIEWED_FEE_REQUIRED);
   }
   return withRpcWrite(
     rpcUrls,
     STARKNET_NETWORKS[account.networkId].chainId,
     async (provider) => {
       const starknetAccount = krustyAccount(provider, account, signHash);
-      await ensureAccountDeployed(provider, starknetAccount, account);
+      const deployed = await isAccountDeployed(provider, account.address);
       const resourceBounds = await settledResourceBounds(
         starknetAccount,
+        account,
         calls,
+        proof,
+        deployed,
         speed,
         reviewedFee,
       );
+      const deployment = deployed
+        ? null
+        : await ensureAccountDeployed(provider, starknetAccount, account, reviewedDeploymentFee);
       const details = {
         ...(resourceBounds === null ? {} : { resourceBounds }),
         ...(proof ? { proof: proof.data, proofFacts: [...proof.proof_facts] } : {}),
       };
-      const result = await starknetAccount.execute(
-        [...calls],
-        details as Parameters<Account["execute"]>[1],
-      );
-      return {
-        calls,
-        transactionHash: acceptedRpcWriteHash(result.transaction_hash),
-      };
+      try {
+        const result = await starknetAccount.execute(
+          [...calls],
+          details as Parameters<Account["execute"]>[1],
+        );
+        return {
+          calls,
+          transactionHash: acceptedRpcWriteHash(result.transaction_hash),
+        };
+      } catch (error) {
+        if (deployment) {
+          throw new WalletError(
+            `Account deployment ${deployment.transactionHash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying.`,
+          );
+        }
+        throw error;
+      }
     },
     makeProvider,
   );

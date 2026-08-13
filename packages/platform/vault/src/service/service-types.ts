@@ -6,6 +6,7 @@
  * boundary this module documents).
  */
 
+import type { ConnectedSite } from "@mc-wallet/core/origin";
 import type {
   AccountRef,
   DerivedAccountRef,
@@ -50,6 +51,8 @@ export type SignHashInput = {
  */
 export type OriginGrantInput = {
   readonly accountId?: string;
+  /** Live capability check supplied by the privileged session coordinator. */
+  readonly isAuthorized?: () => boolean;
   readonly origin: string;
   readonly vaultPassphrase: string;
 };
@@ -63,12 +66,9 @@ export type RevokeOriginInput = {
 };
 
 /**
- * A site with a persisted origin grant plus how many accounts it can see.
+ * Connected-site DTO re-exported from the shared runtime protocol boundary.
  */
-export type ConnectedSite = {
-  readonly accountCount: number;
-  readonly origin: string;
-};
+export type { ConnectedSite } from "@mc-wallet/core/origin";
 
 /**
  * Active account selection input.

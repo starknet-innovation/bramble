@@ -16,55 +16,8 @@
  * on-chain. Deterministic; no clock, randomness, or device I/O.
  */
 
-import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
-import type { DeviceSignature } from "@mc-wallet/wallet-model/signing";
-import { ec } from "starknet";
-
-const { starkCurve } = ec;
-
-// The two SEC1 compression prefixes for the two candidate y-parities of a point
-// reconstructed from its x-coordinate.
-const PARITY_PREFIXES = ["02", "03"] as const;
-
-const canonicalX = (publicKeyX: string): string => publicKeyX.replace(/^0x/, "").padStart(64, "0");
-
-// Reconstructs the curve point at one y-parity and verifies there. Any parse or
-// range error (x not on curve at this parity, r/s out of range) fails closed.
-const verifiesAtParity = (
-  publicKeyX: string,
-  prefix: string,
-  signature: InstanceType<typeof starkCurve.Signature>,
-  hash: string,
-): boolean => {
-  try {
-    const pubKey = starkCurve.ProjectivePoint.fromHex(`${prefix}${canonicalX(publicKeyX)}`).toHex(
-      false,
-    );
-    return starkCurve.verify(signature, hash, pubKey);
-  } catch {
-    return false;
-  }
-};
-
 /**
- * True when `(r, s)` is a valid Stark signature of `hash` under `publicKeyX`.
- * Fails closed (returns `false`) on any malformed input or curve error rather
- * than throwing, so the caller has a single boolean gate to abort on.
+ * Re-exports the shared Starknet platform verifier for transaction callers.
+ * It fails closed on malformed values and performs no signing or derivation.
  */
-export const verifyStarkSignature = (input: {
-  readonly hash: string;
-  readonly publicKeyX: string;
-  readonly signature: DeviceSignature;
-}): boolean => {
-  const { hash, publicKeyX, signature } = input;
-  if (![hash, publicKeyX, signature.r, signature.s].every(isStarkFieldElement)) {
-    return false;
-  }
-  let parsed: InstanceType<typeof starkCurve.Signature>;
-  try {
-    parsed = new starkCurve.Signature(BigInt(signature.r), BigInt(signature.s));
-  } catch {
-    return false;
-  }
-  return PARITY_PREFIXES.some((prefix) => verifiesAtParity(publicKeyX, prefix, parsed, hash));
-};
+export { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";

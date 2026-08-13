@@ -33,7 +33,7 @@ const vaultWith = (
   activeAccountId,
   mnemonic: null,
   originGrants: accountIds === null ? [] : [{ accountIds, origin: ORIGIN }],
-  schemaVersion: 4,
+  schemaVersion: 5,
   signingKeys: [],
 });
 

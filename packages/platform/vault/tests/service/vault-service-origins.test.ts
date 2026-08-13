@@ -125,6 +125,30 @@ describe("createWalletVaultService origin grants", () => {
     );
   });
 
+  test("rolls back a grant when its live authorization expires during persistence", async () => {
+    const backend = createMemoryStore();
+    const primary = createEncryptedStore(backend, vaultKey);
+    const service = createWalletVaultService({
+      encryptedStore: primary,
+      kms: fakeKms(),
+      migrationStore: createEncryptedStore(backend, migrationKey),
+    });
+    await service.createAccount({ mnemonic, vaultPassphrase });
+    let checks = 0;
+
+    await expect(
+      service.grantOrigin({
+        isAuthorized: () => {
+          checks += 1;
+          return checks < 3;
+        },
+        origin: "https://example.com",
+        vaultPassphrase,
+      }),
+    ).rejects.toThrow("wallet locked");
+    expect((await service.readVault(vaultPassphrase)).originGrants).toEqual([]);
+  });
+
   test("revokes an origin grant and reports the remaining connected sites", async () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),

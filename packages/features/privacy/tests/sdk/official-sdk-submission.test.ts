@@ -16,6 +16,7 @@ import {
   type OfficialBuilder,
   STRK20_POOL_ADDRESS as poolAddress,
   providerFor,
+  STRK20_REVIEWED_FEE as reviewedFee,
   sdkRuntime as runtime,
   strk20ProviderFor,
   STRK20_SDK_TOKEN as token,
@@ -367,11 +368,19 @@ describe("official STRK20 SDK submission boundary", () => {
     await expect(
       service.submitActions({
         ...context,
+        actions: [{ amount: "0x1", token, type: "deposit" }],
+        plan: { mode: "account", poolFeeFri: "0x1" },
+      }),
+    ).rejects.toThrow("network fee was not reviewed");
+    expect(submitted).toEqual([]);
+    await expect(
+      service.submitActions({
+        ...context,
         actions: [
           { amount: "0x80000000000000000000000000000000", token, type: "deposit" },
           { amount: "0x80000000000000000000000000000000", token, type: "deposit" },
         ],
-        plan: { mode: "account", poolFeeFri: "0x0" },
+        plan: { mode: "account", poolFeeFri: "0x0", reviewedFee },
       }),
     ).resolves.toEqual({
       allowanceGrants: [
@@ -397,7 +406,7 @@ describe("official STRK20 SDK submission boundary", () => {
       service.submitActions({
         ...context,
         actions: [{ amount: "0x1", recipient: "0x999", token, type: "withdraw" }],
-        plan: { mode: "account", poolFeeFri: "0x0" },
+        plan: { mode: "account", poolFeeFri: "0x0", reviewedFee },
       }),
     ).rejects.toThrow("strk20 privacy leak");
   });
@@ -431,7 +440,7 @@ describe("official STRK20 SDK submission boundary", () => {
       service.submitActions({
         ...context,
         actions: [{ amount: "0x1", token, type: "deposit" }],
-        plan: { mode: "account", poolFeeFri: "0x1" },
+        plan: { mode: "account", poolFeeFri: "0x1", reviewedFee },
       }),
     ).rejects.toThrow("Private pool fee changed");
     expect(proofs).toBe(0);

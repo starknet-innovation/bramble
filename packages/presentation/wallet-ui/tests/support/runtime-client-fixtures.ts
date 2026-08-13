@@ -34,8 +34,8 @@ export const walletStatus = {
   hasVault: true,
   locked: false,
   network: "Starknet Sepolia",
-  networkId: "SN_SEPOLIA",
-  networks: [{ id: "SN_SEPOLIA", name: "Starknet Sepolia" }],
+  networkId: "SN_SEPOLIA" as const,
+  networks: [{ id: "SN_SEPOLIA" as const, name: "Starknet Sepolia" }],
   ready: true,
 };
 
@@ -82,7 +82,7 @@ export const connectedSitesResponse = {
 
 export const pendingApprovalsResponse = {
   ok: true as const,
-  pending: [{ id: APPROVAL_ID, origin: "https://example.com" }],
+  pending: [{ id: APPROVAL_ID, kind: "connect" as const, origin: "https://example.com" }],
 };
 
 export const accountsResponse = { accounts: [account], ok: true as const };

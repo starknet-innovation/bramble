@@ -7,17 +7,13 @@ import { WalletError } from "@mc-wallet/core/errors";
 import { bytesToHex } from "@mc-wallet/core/hex";
 import { JSON_BUDGETS, type Json, normalizeFeltBigints } from "@mc-wallet/core/json";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { ApprovalContext } from "@mc-wallet/wallet-protocol/extension-responses";
 
 /**
- * Exact wallet and payload context attached to a security-sensitive approval.
+ * Exact account, network, chain, and payload digest frozen into an approval.
  */
-export type ApprovalContext = {
-  readonly accountId: string;
-  readonly chainId: string;
-  readonly networkId: StarknetNetworkId;
-  readonly payloadDigest: string;
-};
+export type { ApprovalContext } from "@mc-wallet/wallet-protocol/extension-responses";
 
 const canonicalJson = (value: Json): string => {
   if (value === null || typeof value !== "object") {

@@ -65,7 +65,16 @@ export const ozAccountDeployment = (account: AccountRef): AccountDeployment => {
   throw new WalletError("Account deployment parameters do not match the stored address");
 };
 
-const isAccountDeployed = async (provider: RpcProvider, address: string): Promise<boolean> => {
+/**
+ * Reads account deployment status through an already selected provider.
+ * Contract-not-found is the only response interpreted as undeployed; every
+ * other endpoint failure propagates so callers cannot silently act on an
+ * unknown state.
+ */
+export const isAccountDeployed = async (
+  provider: RpcProvider,
+  address: string,
+): Promise<boolean> => {
   try {
     await provider.getClassHashAt(address, "latest");
     return true;
@@ -86,18 +95,23 @@ const isAccountDeployed = async (provider: RpcProvider, address: string): Promis
 export const REVIEWED_DEPLOYMENT_FEE_EXCEEDED =
   "The account deployment fee rose above the amount you reviewed. Nothing was submitted — review it again.";
 
-// The bounds a deployment signs under. Without a reviewed fee this is `{}`,
-// leaving starknet.js to estimate internally — the pre-existing behaviour of a
-// deployment nobody was shown a price for. With one, the estimate is taken
-// here, the spend its bounds authorise is checked against the reviewed figure,
-// and those same bounds are then signed.
+/**
+ * Refusal when an undeployed account has no separately reviewed deployment
+ * ceiling; no deployment is signed or broadcast.
+ */
+export const REVIEWED_DEPLOYMENT_FEE_REQUIRED =
+  "The account deployment fee was not reviewed. Nothing was submitted — deploy the account first.";
+
+// The bounds a deployment signs under. A separately reviewed fee is mandatory:
+// the estimate is taken here, the spend its bounds authorise is checked against
+// the reviewed figure, and those same bounds are then signed.
 const checkedDeploymentBounds = async (
   starknetAccount: Account,
   payload: Parameters<Account["deployAccount"]>[0],
   reviewedFee: FeeEstimate | undefined,
 ): Promise<Record<string, unknown>> => {
   if (!reviewedFee) {
-    return {};
+    throw new WalletError(REVIEWED_DEPLOYMENT_FEE_REQUIRED);
   }
   const estimate = await starknetAccount.estimateAccountDeployFee(payload);
   const authorized = authorizedSpendFor(estimate, "standard");
@@ -130,28 +144,33 @@ const deployAccountContract = async (
 /**
  * Ensures the counterfactual account contract is deployed before invoking.
  *
- * `reviewedFee` is the deployment fee the caller's approval card displayed —
- * the declare card shows one, and includes it in the "Estimated total" the user
- * consents to. When present it binds this transaction the same way a reviewed
- * invoke fee binds the invoke: a deployment whose cost has outrun it is refused
- * before anything is signed, so the total on the card is a figure the wallet
- * holds itself to rather than a figure it merely displayed. Absent means no
- * deployment fee was shown, and the deployment stays bounded only by the node's
- * own quote.
+ * `reviewedFee` is the deployment fee the caller's approval card displayed.
+ * It is mandatory whenever deployment is needed and binds the transaction the
+ * same way a reviewed invoke fee binds the invoke: a deployment whose cost has
+ * outrun it is refused before anything is signed. If the account is already
+ * deployed the ceiling is not consumed. The returned submission identifies the
+ * deployment this call broadcast; `null` means no deployment was necessary.
  */
 export const ensureAccountDeployed = async (
   provider: RpcProvider,
   starknetAccount: Account,
   account: AccountRef,
   reviewedFee?: FeeEstimate,
-): Promise<void> => {
+): Promise<DeploySubmission | null> => {
   if (await isAccountDeployed(provider, account.address)) {
-    return;
+    return null;
   }
+  let submitted: DeploySubmission | null = null;
   try {
-    const submitted = await deployAccountContract(starknetAccount, account, reviewedFee);
+    submitted = await deployAccountContract(starknetAccount, account, reviewedFee);
     await provider.waitForTransaction(submitted.transactionHash);
+    return submitted;
   } catch (error) {
+    if (submitted) {
+      throw new WalletError(
+        `Account deployment was broadcast as ${submitted.transactionHash}, but confirmation is unknown. The following transaction was not submitted; check the deployment on-chain before retrying.`,
+      );
+    }
     if (error instanceof IndeterminateRpcWriteError) {
       // The account deployment may have landed, but the caller's subsequent
       // invoke/declare definitely has not. Remove the inner write marker so a
@@ -188,9 +207,8 @@ export type DeploymentStatusInput = {
 export type DeployAccountInput = {
   readonly account: AccountRef;
   /**
-   * The deployment fee a user reviewed, if one was shown. Supplying it makes
-   * that figure a ceiling — see {@link ensureAccountDeployed}. Absent on the
-   * estimate path and wherever no fee was displayed.
+   * The deployment fee a user reviewed. It is mandatory at every deployment
+   * submit boundary and absent only on read-only estimate inputs.
    */
   readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];

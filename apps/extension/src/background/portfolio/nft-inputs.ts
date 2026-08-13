@@ -72,6 +72,7 @@ type NftTransferMessageType = "wallet.reviewNftTransfer" | "wallet.transferNft";
  */
 export type NftTransferRequest = NftTarget & {
   readonly recipient: string;
+  readonly reviewedDeploymentFee?: FeeEstimate;
   readonly reviewedFee?: FeeEstimate;
 };
 
@@ -85,6 +86,7 @@ const readNftTransferInput = (
       "contract",
       "networkId",
       "recipient",
+      "reviewedDeploymentFee",
       "reviewedFee",
       "tokenId",
       "type",
@@ -92,6 +94,8 @@ const readNftTransferInput = (
     message["type"] !== messageType ||
     typeof message["recipient"] !== "string" ||
     !isNonZeroStarkFieldElement(message["recipient"]) ||
+    (message["reviewedDeploymentFee"] !== undefined &&
+      !isFeeEstimate(message["reviewedDeploymentFee"])) ||
     (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"]))
   ) {
     return null;
@@ -101,6 +105,9 @@ const readNftTransferInput = (
     ? {
         ...target,
         recipient: message["recipient"],
+        ...(isFeeEstimate(message["reviewedDeploymentFee"])
+          ? { reviewedDeploymentFee: message["reviewedDeploymentFee"] }
+          : {}),
         ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
       }
     : null;

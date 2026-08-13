@@ -7,8 +7,11 @@
 
 import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
 import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { withTokenId } from "@mc-wallet/wallet-model/preferences";
+import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+import type { Call } from "starknet";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { type ActiveAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import { strk20AccountContext } from "./strk20-account-context";
@@ -115,6 +118,33 @@ export const assertPublicPoolSpendAffordable = async (
   if (balanceOf(STRK_TOKEN_ADDRESS) < fee) {
     throw new Error("Not enough STRK for the pool fee");
   }
+};
+
+/**
+ * Estimates the exact frozen public privacy batch and refuses undeployed
+ * accounts, whose separate deployment fee has not been reviewed on this card.
+ */
+export const estimatePublicStrk20Fee = async (
+  deps: Pick<Strk20WalletOpsDeps, "runtimeRpc">,
+  context: ActivePrivacyContext,
+  calls: readonly Call[],
+  proof: Strk20Proof,
+): Promise<FeeEstimate> => {
+  if (
+    !(await deps.runtimeRpc.getDeploymentStatus({
+      accountAddress: context.accountContext.account.address,
+      rpcUrls: context.accountContext.rpcUrls,
+    }))
+  ) {
+    throw new Error("Deploy this account before using public privacy transactions");
+  }
+  return deps.runtimeRpc.estimateInvokeFee({
+    account: context.accountContext.account,
+    calls,
+    proof,
+    rpcUrls: context.accountContext.rpcUrls,
+    signHash: context.accountContext.signHash,
+  });
 };
 
 /**

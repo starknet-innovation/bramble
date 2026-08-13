@@ -10,50 +10,20 @@
  * can never ride along, and every nested value is copied so a caller mutating
  * what it received cannot reach back into live queue state.
  */
-import type { DeclareFeeEstimate } from "@mc-wallet/starknet/declare";
 import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
 import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action, Strk20WithdrawAction } from "@mc-wallet/wallet-protocol/strk20";
-import type { ApprovalContext } from "./approval-context";
-import { type ApprovalKind, type ApprovalPayload, cloneApprovalValue } from "./approval-payload";
+import type { PendingApproval } from "@mc-wallet/wallet-protocol/extension-responses";
+import { type ApprovalPayload, cloneApprovalValue } from "./approval-payload";
 
 /**
- * ERC20 token metadata carried by a watch-asset approval, in the shape the
- * preferences store accepts when the request is approved.
+ * Shared display-only approval response shapes exposed to trusted UI surfaces.
  */
-export type WatchAssetToken = {
-  readonly address: string;
-  readonly decimals: number;
-  readonly name: string;
-  readonly networkId: StarknetNetworkId;
-  readonly symbol: string;
-};
-
-/**
- * One decoded, user-facing risk flag surfaced on an invoke approval card.
- */
-export type ApprovalRiskFlag = {
-  readonly code: string;
-  readonly message: string;
-};
-
-/**
- * Safe, display-only facts derived from a private Cairo declaration payload.
- * The contract class itself never crosses to the approval UI.
- */
-export type DeclarationReview = {
-  readonly abiEntryCount: number;
-  readonly accountDeployment: "deployed" | "undeployed" | "unknown";
-  readonly classHash?: string;
-  readonly compiledClassHash: string;
-  readonly deploymentFee: DeclareFeeEstimate | null;
-  readonly deploymentFeeEstimateFailed: boolean;
-  readonly entryPointCount: number;
-  readonly fee: DeclareFeeEstimate | null;
-  readonly feeEstimateFailed: boolean;
-  readonly sierraProgramLength: number;
-};
+export type {
+  ApprovalRiskFlag,
+  DeclarationReview,
+  PendingApproval,
+  WatchAssetToken,
+} from "@mc-wallet/wallet-protocol/extension-responses";
 
 /**
  * Display-only invoke fee state, aligned with Send review classification.
@@ -64,31 +34,6 @@ export type InvokeFeeReview = {
   readonly feeEstimateFailed: boolean;
   readonly feeEstimatePending: boolean;
   readonly requiresDeployment: boolean;
-};
-
-/**
- * Pending dapp approval snapshot. Kind-specific review fields are display-only;
- * reputation fields are attached when listed and are not queue state.
- */
-export type PendingApproval = {
-  readonly actionReviews?: readonly Strk20Action[];
-  readonly blocked?: boolean;
-  readonly context?: ApprovalContext;
-  readonly declaration?: DeclarationReview;
-  readonly fee?: FeeEstimate | null;
-  readonly feeAffordability?: FeeAffordability;
-  readonly feeEstimateFailed?: boolean;
-  readonly feeEstimatePending?: boolean;
-  readonly flags?: readonly ApprovalRiskFlag[];
-  readonly id: string;
-  readonly insights?: readonly string[];
-  readonly kind: ApprovalKind;
-  readonly origin: string;
-  readonly relayFeeAction?: Strk20WithdrawAction;
-  readonly requiresDeployment?: boolean;
-  readonly summaries?: readonly string[];
-  readonly token?: WatchAssetToken;
-  readonly typedData?: unknown;
 };
 
 /**

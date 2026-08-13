@@ -1,18 +1,16 @@
 /**
  * Starknet RPC wallet operations backed by starknet-js and Krusty signatures.
  */
-
 import { WalletError } from "@mc-wallet/core/errors";
 import { isDecimalAmountText, isSafeDecimals } from "@mc-wallet/core/json";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
 import { type Call, CallData, cairo, type RpcProvider, shortString } from "starknet";
-import { type FeeEstimate, reviewedSpendFor } from "./fee-bounds";
+import type { FeeEstimate } from "./fee-bounds";
 import {
   isTransactionNotFoundError,
   isTransportRpcError,
-  krustyAccount,
   type StarkHashSigner,
   withRpcFallback,
 } from "./provider";
@@ -70,6 +68,10 @@ export {
   type NftTokenUriInput,
 } from "./rpc-assets";
 /**
+ * Re-exported exact invoke estimation so callers keep one RPC import path.
+ */
+export { estimateInvokeFee } from "./rpc-estimate";
+/**
  * Re-exported invoke submission types and operation.
  */
 export {
@@ -78,7 +80,6 @@ export {
   type InvokeSubmission,
   submitInvokeTransaction,
 } from "./rpc-submit";
-
 /**
  * Token balance returned to the side panel.
  */
@@ -111,6 +112,8 @@ export type TransferInput = {
   readonly account: AccountRef;
   readonly amount: string;
   readonly recipient: string;
+  /** Separately reviewed ceiling for an automatic account deployment. */
+  readonly reviewedDeploymentFee?: FeeEstimate;
   /** Reviewed fee ceiling; see {@link InvokeInput.reviewedFee}. */
   readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
@@ -120,9 +123,8 @@ export type TransferInput = {
 };
 
 /**
- * Fee estimate returned before signing. Defined in `./fee-bounds` beside the
- * predicate that turns a reviewed one into a signing ceiling, and re-exported
- * here because callers already import the RPC surface — one definition, two doors.
+ * Fee estimate returned before signing; its validator and reviewed ceiling
+ * policy remain single-sourced in `./fee-bounds`.
  */
 export type { FeeEstimate };
 
@@ -371,7 +373,17 @@ export const getTokenMetadata = async (
  * Signs and submits an ERC20 transfer through an account contract.
  */
 export const submitErc20Transfer = async (
-  { account, amount, recipient, reviewedFee, rpcUrls, signHash, speed, token }: TransferInput,
+  {
+    account,
+    amount,
+    recipient,
+    reviewedDeploymentFee,
+    reviewedFee,
+    rpcUrls,
+    signHash,
+    speed,
+    token,
+  }: TransferInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<TransferSubmission> => {
   const amountRaw = parseTokenAmount(amount, token.decimals);
@@ -380,6 +392,7 @@ export const submitErc20Transfer = async (
     {
       account,
       calls: [call],
+      ...(reviewedDeploymentFee === undefined ? {} : { reviewedDeploymentFee }),
       ...(reviewedFee === undefined ? {} : { reviewedFee }),
       rpcUrls,
       signHash,
@@ -391,33 +404,6 @@ export const submitErc20Transfer = async (
     call,
     transactionHash: result.transactionHash,
   };
-};
-
-/**
- * Estimates invoke fees without broadcasting or signing. Validation is skipped
- * so review-time estimation cannot open a Ledger prompt before user approval.
- *
- * The figure returned is what a submission at `speed` would AUTHORISE (see
- * {@link reviewedSpendFor}), not the node's headline quote: a `fast` send signs
- * scaled-up bounds, so quoting the unscaled number would both misprice the
- * review and bind, as a ceiling, a send guaranteed to exceed it.
- */
-export const estimateInvokeFee = async (
-  { account, calls, rpcUrls, signHash, speed = "standard" }: InvokeInput,
-  makeProvider?: (nodeUrl: string) => RpcProvider,
-): Promise<FeeEstimate> => {
-  if (calls.length === 0) {
-    throw new WalletError("No calls to estimate");
-  }
-  return withRpcFallback(
-    rpcUrls,
-    async (provider) => {
-      const starknetAccount = krustyAccount(provider, account, signHash);
-      const estimate = await starknetAccount.estimateInvokeFee([...calls], { skipValidate: true });
-      return reviewedSpendFor(estimate, speed);
-    },
-    makeProvider,
-  );
 };
 
 const FINALITY_TO_STATUS: Readonly<Record<string, TransactionStatus>> = {

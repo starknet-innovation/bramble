@@ -18,7 +18,7 @@ import { grantedAccountIdsFor } from "@mc-wallet/vault/origin-grants";
 import type { Vault } from "@mc-wallet/vault/schema";
 import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { avnuRouteCalldata } from "./avnu-route-fixture";
 import {
@@ -49,7 +49,7 @@ const vault = {
   activeAccountId: account.id,
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 4,
+  schemaVersion: 5,
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
 
@@ -249,7 +249,8 @@ const required = <Method>(method: Method | undefined, name: string): Method => {
  * its transfers client with a `viewingKeyProvider` (see
  * @mc-wallet/privacy's official-sdk-transfers), and `prepare`,
  * `privateBalances`, `registrationStatus`, `register`, `subaccountCommitment`
- * and `submitActions` all go through that client. `poolFee`, `quoteActions` and
+ * `prepareRegistration`, `prepareAccountActions`, `subaccountCommitment` and
+ * `submitActions` all go through that client. `poolFee`, `quoteActions` and
  * `submitPrepared` do not, so they are left unwrapped rather than over-claiming.
  */
 const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
@@ -263,6 +264,14 @@ const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
     async privateBalances(input) {
       await input.viewingKey();
       return base.privateBalances(input);
+    },
+    async prepareAccountActions(input) {
+      await input.viewingKey();
+      return required(base.prepareAccountActions, "prepareAccountActions")(input);
+    },
+    async prepareRegistration(input) {
+      await input.viewingKey();
+      return required(base.prepareRegistration, "prepareRegistration")(input);
     },
     async register(input) {
       await input.viewingKey();
@@ -289,8 +298,12 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
     async estimateAccountDeploymentFee() {
       return { overallFee: "1", unit: "FRI" };
     },
-    async getDeploymentStatus() {
-      return state.accountDeployed;
+    async getDeploymentStatus({ accountAddress }) {
+      return sameFelt(accountAddress, account.address) && state.accountDeployed;
+    },
+    async submitAccountDeployment() {
+      Object.assign(state, { accountDeployed: true });
+      return { transactionHash: "0x7de" };
     },
     async getNftOwner() {
       return account.address;

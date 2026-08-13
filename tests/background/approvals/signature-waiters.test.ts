@@ -46,4 +46,17 @@ describe("createSignatureWaiters", () => {
     waiters.settle("approval-1", { ok: true });
     await expect(first).resolves.toEqual({ ok: true });
   });
+
+  test("moves a held dapp response to a staged exact-call approval", async () => {
+    const waiters = createSignatureWaiters();
+    const held = waiters.register("privacy-consent");
+
+    waiters.move("privacy-consent", "network-fee-consent");
+    waiters.settle("privacy-consent", { error: "stale first card" });
+    expect(waiters.pending()).toBe(1);
+    waiters.settle("network-fee-consent", { ok: true, transactionHash: "0x7cd" });
+
+    await expect(held).resolves.toEqual({ ok: true, transactionHash: "0x7cd" });
+    expect(waiters.pending()).toBe(0);
+  });
 });

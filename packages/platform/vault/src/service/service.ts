@@ -36,8 +36,9 @@ import { deriveVaultStrk20ViewingKey } from "../accounts/strk20-viewing-key";
 import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV4, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV5, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
+import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
 import type { WalletVaultService } from "./service-types";
 
@@ -78,7 +79,7 @@ const writeVault = async (
   vault: Vault,
   vaultPassphrase: string,
 ): Promise<void> => {
-  if (!isVaultV4(vault)) {
+  if (!isVaultV5(vault)) {
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase);
@@ -102,12 +103,7 @@ export const createWalletVaultService = ({
     return readMigratedVault({ primary: encryptedStore, staging: migrationStore }, vaultPassphrase);
   };
 
-  // Serializes vault mutations. Every mutation is a read-modify-write of the
-  // encrypted store and the background dispatches messages concurrently, so
-  // two interleaved mutations would silently lose one write (e.g. a grant
-  // racing an account derivation). Legacy KDF upgrade writes also run here:
-  // passive reads may trigger them, but they must never clobber a queued
-  // mutation. Failures do not poison the queue.
+  // Serialize read-modify-write mutations and legacy envelope upgrades.
   let mutationQueue: Promise<unknown> = Promise.resolve();
   const serialized = <T>(run: () => Promise<T>): Promise<T> => {
     const next = mutationQueue.then(run, run);
@@ -359,6 +355,8 @@ export const createWalletVaultService = ({
       if (!isWalletOrigin(input.origin)) {
         throw new WalletError("Invalid origin");
       }
+      const isAuthorized = input.isAuthorized ?? (() => true);
+      requireGrantAuthorization(isAuthorized);
 
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const accountId = input.accountId ?? vault.activeAccountId;
@@ -370,6 +368,7 @@ export const createWalletVaultService = ({
       const grants = vault.originGrants.filter((grant) => grant.origin !== input.origin);
       const existing = vault.originGrants.find((grant) => grant.origin === input.origin);
       const accountIds = [...new Set([...(existing?.accountIds ?? []), account.id])];
+      requireGrantAuthorization(isAuthorized);
 
       await writeVault(
         encryptedStore,
@@ -378,6 +377,9 @@ export const createWalletVaultService = ({
           originGrants: [...grants, { accountIds, origin: input.origin }],
         },
         input.vaultPassphrase,
+      );
+      await rollbackRevokedGrant(isAuthorized, () =>
+        writeVault(encryptedStore, vault, input.vaultPassphrase),
       );
 
       return [account];

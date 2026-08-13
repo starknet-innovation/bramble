@@ -17,7 +17,7 @@ import {
   UNLIMITED_ALLOWANCE_THRESHOLD,
 } from "@mc-wallet/transactions/allowance-discovery";
 import { decodeAllowanceCall } from "@mc-wallet/transactions/allowances";
-import { isVaultV4 } from "@mc-wallet/vault/schema";
+import { isVaultV5 } from "@mc-wallet/vault/schema";
 import { isCustomNetwork } from "@mc-wallet/wallet-model/custom-network";
 import {
   isStarkFieldElement,
@@ -219,7 +219,7 @@ const vaultWithSigningKey = (privateKey: string) => ({
   activeAccountId: ACCOUNT_ID,
   mnemonic: null,
   originGrants: [],
-  schemaVersion: 4,
+  schemaVersion: 5,
   signingKeys: [{ accountId: ACCOUNT_ID, privateKey }],
 });
 
@@ -260,8 +260,8 @@ describe("the Stark signing-scalar grammar has one definition", () => {
         type: "wallet.importAccount",
       }),
     ).toBeNull();
-    expect(isVaultV4(vaultWithSigningKey(ABOVE_CURVE_ORDER))).toBe(false);
-    expect(isVaultV4(vaultWithSigningKey(VALID_KEY))).toBe(true);
+    expect(isVaultV5(vaultWithSigningKey(ABOVE_CURVE_ORDER))).toBe(false);
+    expect(isVaultV5(vaultWithSigningKey(VALID_KEY))).toBe(true);
   });
 
   test("the KMS boundary refuses one on the way in and on the way out", async () => {

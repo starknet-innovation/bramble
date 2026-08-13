@@ -34,14 +34,14 @@ import {
   type LedgerDeviceSession,
 } from "@mc-wallet/ledger-protocol/session";
 import type { LedgerAccountRef, LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@mc-wallet/wallet-model/ledger-path";
 
 /**
  * Number of account indices read per enumeration page (a page is `start` …
  * `start + LEDGER_PAGE_SIZE - 1`). The device app only needs to be open and
  * unlocked; every read is silent (no per-index on-device button press).
  */
-export const LEDGER_PAGE_SIZE = 5;
+export const LEDGER_PAGE_SIZE = MAX_LEDGER_ACCOUNT_BATCH;
 
 /**
  * Checks the pinned device OS and Starknet app releases unless this exact live

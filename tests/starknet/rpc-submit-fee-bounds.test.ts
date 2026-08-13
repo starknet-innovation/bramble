@@ -60,21 +60,32 @@ const NODE_BOUNDS = {
 };
 
 type Submission = {
-  readonly bounds: unknown;
-  readonly broadcasts: number;
-  readonly estimates: number;
+  bounds: unknown;
+  broadcasts: number;
+  estimateArgs: readonly unknown[];
+  estimates: number;
 };
 
 // Drives one submission against a fake channel, recording what reached the
 // broadcast and how many fee estimates the submission itself asked for.
 const submit = async (
   speed?: "fast" | "standard",
-  reviewedFee?: { readonly overallFee: string; readonly unit: string },
+  reviewedFee: { readonly overallFee: string; readonly unit: string } | null = {
+    overallFee: "9999999",
+    unit: "FRI",
+  },
+  proof = false,
 ): Promise<{ readonly result: unknown; readonly seen: Submission }> => {
-  const seen = { bounds: undefined as unknown, broadcasts: 0, estimates: 0 };
+  const seen: Submission = {
+    bounds: undefined,
+    broadcasts: 0,
+    estimateArgs: [],
+    estimates: 0,
+  };
   const implementations = {
-    async getEstimateFee() {
+    async getEstimateFee(...args: readonly unknown[]) {
       seen.estimates += 1;
+      seen.estimateArgs = args;
       return [feeEstimate];
     },
     async invoke(_invocation: unknown, details: { readonly resourceBounds?: unknown }) {
@@ -114,7 +125,8 @@ const submit = async (
     {
       account,
       calls: [call],
-      ...(reviewedFee === undefined ? {} : { reviewedFee }),
+      ...(proof ? { proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] } } : {}),
+      ...(reviewedFee ? { reviewedFee } : {}),
       rpcUrls: ["https://rpc.example"],
       async signHash() {
         return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
@@ -143,9 +155,23 @@ describe("invoke submission fee bounds", () => {
     expect(result).toMatchObject({ transactionHash: "0xdeadbeef" });
     expect(seen.broadcasts).toBe(1);
     expect(seen.estimates).toBe(1);
-    // No reviewed fee travelled with this call, so these are simply the node's
-    // numbers at submission time and nothing is being enforced.
+    // Standard speed signs the same bounds that were compared to the review.
     expect(seen.bounds).toEqual(NODE_BOUNDS);
+  });
+
+  test("refuses a missing fee before touching the network", async () => {
+    const { result, seen } = await submit("standard", null);
+    expect((result as Error).message).toContain("fee was not reviewed");
+    expect(seen.estimates).toBe(0);
+    expect(seen.broadcasts).toBe(0);
+  });
+
+  test("estimates the exact proof-bearing invocation before signing it", async () => {
+    const { result, seen } = await submit("standard", undefined, true);
+    expect(result).toMatchObject({ transactionHash: "0xdeadbeef" });
+    expect(seen.estimateArgs[0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ proof: "proof", proofFacts: ["0x2"] })]),
+    );
   });
 });
 

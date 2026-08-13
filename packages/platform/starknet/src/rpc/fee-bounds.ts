@@ -22,39 +22,14 @@
  * for the speed those bounds will be built at.
  */
 import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
+import { isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
+import {
+  type FeeEstimate,
+  isFeeEstimate,
+  isFeeUnit,
+} from "@mc-wallet/wallet-protocol/fee-estimate";
 
-/**
- * Fee estimate returned before signing: the overall fee in base units of
- * `unit` (`FRI` for STRK-denominated fees). This is the figure the approval
- * card and the Send review render, and therefore the figure a user consents to.
- */
-export type FeeEstimate = {
-  readonly overallFee: string;
-  readonly unit: string;
-};
-
-// The only denominations a Starknet fee estimate is reported in. An allowlist,
-// not a shape check: a fee whose unit the wallet does not recognise cannot be
-// compared against a balance, a reviewed ceiling, or another estimate, so
-// admitting it would only move the failure somewhere less obvious.
-const FEE_UNITS: readonly string[] = ["FRI", "WEI"];
-
-/**
- * Checks an untrusted value against the fee-estimate shape before it is
- * rendered, compared, or used as a signing ceiling.
- *
- * The one grammar for this shape in the wallet: an extension page validating a
- * background response, and the background validating a fee echoed back from a
- * page, must agree about what a fee is, or one of them accepts something the
- * other would refuse. Returns false for anything else — never a coerced value.
- */
-export const isFeeEstimate = (value: unknown): value is FeeEstimate =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["overallFee", "unit"]) &&
-  isBaseUnitsAmount(value["overallFee"]) &&
-  typeof value["unit"] === "string" &&
-  FEE_UNITS.includes(value["unit"]);
+export { type FeeEstimate, isFeeEstimate } from "@mc-wallet/wallet-protocol/fee-estimate";
 
 /**
  * Reports whether two estimates state the same fee in the same denomination.
@@ -252,7 +227,7 @@ export const feeBoundsMaxSpend = (bounds: unknown): bigint | null => {
  */
 export const nodeFeeEstimate = (estimate: NodeFeeEstimate): FeeEstimate => {
   const unit = typeof estimate.unit === "string" ? estimate.unit : "FRI";
-  if (!FEE_UNITS.includes(unit)) {
+  if (!isFeeUnit(unit)) {
     throw new WalletError("The node quoted this fee in an unrecognised unit.");
   }
   return { overallFee: BigInt(estimate.overall_fee).toString(), unit };

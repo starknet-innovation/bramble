@@ -208,10 +208,12 @@ Trigger: **scheduled** (`cron: 0 3 * * *`) + manual `workflow_dispatch`, against
 the **active release branch**.
 
 Active-branch resolution: use repo variable **`vars.ACTIVE_RELEASE_BRANCH`** if
-set; otherwise the highest-semver `release/vX.Y` branch; if none exists, exit
-cleanly with a note. Manual runs must be dispatched from `main`. Any configured
-branch must match `release/vX.Y` exactly and must already exist in this
-repository before a self-hosted runner is allocated.
+set; otherwise the highest-semver `release/vX.Y` or patch release branch
+`release/vX.Y.Z`; if none exists, exit cleanly with a note. Manual runs must be
+dispatched from `main`. Any configured branch must match one of those exact
+forms and must already exist in this repository before a self-hosted runner is
+allocated. Release promotion branches remain `release/vX.Y`; the patch form is
+accepted here only so the audit suite can keep testing a shipped hotfix line.
 
 Runs the full **E2E (Playwright)** suite, the **dependency audit** (`bun audit`,
 via `bun run check:audit` — also run in the PR CI `release-validation` job;
@@ -282,11 +284,10 @@ model. Two guards are **blocking** (they fail the check); one is **advisory**
   here only; except for authenticated Dependabot, they do not bypass the
   blocking target guard.
 
-> **Blocking in CI ≠ merge-blocked.** A failed guard shows a red check, but it
-> only *prevents a merge* once it is a **required status check** in branch
-> protection. Until an admin turns that on (see below), the guards are advisory
-> in practice even when they fail. This is the gap between what the repo can
-> enforce on its own and what needs an admin.
+> **Blocking in CI is merge-blocking only through the live ruleset.** The active
+> `main` and `release/*` rulesets require the guards described below. Those
+> server-side settings are still mutable by repository administrators, so each
+> release audit reads them back rather than inferring enforcement from YAML.
 
 ---
 
@@ -371,11 +372,16 @@ the following server-side baseline so a red guard is actually merge-blocking.
   so ordinary `chore/`/`docs/` PRs remain mergeable while a release/hotfix
   promotion cannot bypass the heavy gate.
 - **Require ≥ 1 approving review** (and "Require review from Code Owners" — see `.github/CODEOWNERS`).
+- **Dismiss stale approvals on push** and require approval from someone other
+  than the author of the most recent push.
 - **Require all review threads to be resolved.**
-- **Restrict direct pushes** (no pushes that bypass a PR).
+- **Restrict direct pushes and configure no ruleset bypass actor.**
 - **Block force-pushes and deletions** of `main`.
 - **Require signed commits** — recommended if it is the org norm (this repo already
   values verified signatures; `CONTRIBUTING.md` requires GPG-signed commits).
+
+The current owner is the repository's existing push-authorized organization
+team, so a PR author cannot be the only eligible code owner.
 
 ### `release/*` — branch protection / ruleset
 
@@ -385,6 +391,8 @@ the following server-side baseline so a red guard is actually merge-blocking.
   release-branch PRs, so it is not a required check here.
 - **Require ≥ 1 approving review**, Code Owner review, and resolution of every
   review thread.
+- **Dismiss stale approvals on push**, require approval of the latest push, and
+  configure no ruleset bypass actor.
 - **Block force-pushes and deletions** by non-maintainers.
 
 ### Repository settings

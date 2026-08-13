@@ -14,6 +14,7 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
 import { type AccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
@@ -76,6 +77,9 @@ export const accountHashSigner = (
       vaultPassphrase,
     });
     requireLiveSession();
+    if (!sameFelt(signed.publicKey, account.publicKeyX)) {
+      throw new WalletError("Krusty KMS signature key mismatch");
+    }
     return signed;
   };
 };

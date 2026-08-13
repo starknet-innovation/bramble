@@ -61,7 +61,7 @@ const walletStub = (connected: () => readonly AccountRef[], grants: string[] = [
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 4 as const,
+      schemaVersion: 5 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -167,6 +167,34 @@ describe("switchChain grant gate (A-M1)", () => {
     });
     await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
     expect(grants).toEqual([account.id]);
+  });
+
+  test("binds the landed account grant to the approving unlock generation", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const other: AccountRef = { ...account, address: "0x9999", id: "SN_MAIN:0x9999" };
+    let checkedBefore = false;
+    let checkedAfter = false;
+    const wallet = {
+      ...walletStub(() => [other]),
+      async grantOrigin(input: { readonly isAuthorized?: () => boolean }) {
+        checkedBefore = input.isAuthorized?.() === true;
+        session.lock();
+        checkedAfter = input.isAuthorized?.() === true;
+        throw new Error("wallet locked");
+      },
+    };
+    const handler = createMessageHandler(wallet, "extension-id", { session });
+
+    const held = handler(switchMessage, contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
+      error: "approval execution failed",
+    });
+    await expect(held).resolves.toEqual({ error: "approval execution failed" });
+    expect(checkedBefore).toBe(true);
+    expect(checkedAfter).toBe(false);
   });
 
   test("refuses a stale switch card once the origin has been disconnected", async () => {

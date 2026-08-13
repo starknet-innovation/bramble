@@ -14,6 +14,7 @@ const preparation = {
   amount: "1.25",
   id: digest,
   kind: "deposit" as const,
+  networkFee: { overallFee: "1", unit: "FRI" } as const,
   payloadDigest: digest,
   poolAddress: "0x123",
   poolFeeFri: "0x1",
@@ -26,6 +27,7 @@ const preparation = {
 const registration = {
   id: digest,
   kind: "register" as const,
+  networkFee: { overallFee: "1", unit: "FRI" } as const,
   payloadDigest: digest,
   poolAddress: "0x123",
   poolFeeFri: "0x1",
@@ -373,8 +375,9 @@ describe("privacy runtime client", () => {
   });
 
   test("accepts a strict relay review and rejects hidden extra fields", async () => {
+    const { networkFee: _networkFee, poolFeeFri: _poolFeeFri, ...privatePreparation } = preparation;
     const relayPreparation = {
-      ...preparation,
+      ...privatePreparation,
       authorization: {
         caller: "0x99",
         executeAfter: "0x1",
@@ -384,7 +387,6 @@ describe("privacy runtime client", () => {
       relayFee: { amount: "0x2", recipient: "0x3", token: "0x4" },
       route: "private-relay" as const,
     };
-    delete (relayPreparation as { poolFeeFri?: string }).poolFeeFri;
     const valid = createPrivacyRuntimeClient(async () => ({
       ok: true,
       strk20Preparation: relayPreparation,

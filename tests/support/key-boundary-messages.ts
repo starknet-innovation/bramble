@@ -101,6 +101,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.getBalances" }, sender: extensionSender },
   { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
   { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
+  {
+    message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.deploymentData" },
+    sender: contentSender,
+  },
   { message: { type: "wallet.deployAccount" }, sender: extensionSender },
   { message: { type: "wallet.pendingApprovals" }, sender: extensionSender },
   {
@@ -145,6 +149,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
       accountId: account.id,
       amount: "1.0",
       recipient: KEY_BOUNDARY_RECIPIENT,
+      reviewedFee: { overallFee: "1", unit: "FRI" },
       tokenId: ETH_TOKEN_ID,
       type: "wallet.transfer",
     },
@@ -283,6 +288,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
       contract: NFT_CONTRACT,
       networkId: "SN_MAIN",
       recipient: KEY_BOUNDARY_RECIPIENT,
+      reviewedFee: { overallFee: "1", unit: "FRI" },
       tokenId: "1",
       type: "wallet.transferNft",
     },
@@ -388,10 +394,6 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
       origin: KEY_BOUNDARY_ORIGIN,
       type: "wallet.addStarknetChain",
     },
-    sender: contentSender,
-  },
-  {
-    message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.deploymentData" },
     sender: contentSender,
   },
   {

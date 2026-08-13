@@ -9,6 +9,7 @@ import {
   STRK20_SDK_CONTEXT as context,
   executeResult,
   type providerFor,
+  STRK20_REVIEWED_FEE as reviewedFee,
   sdkRuntime as runtime,
   strk20ProviderFor,
   STRK20_SDK_TOKEN as token,
@@ -59,7 +60,7 @@ test("the final wallet gate runs after preflights and before proof creation", as
         expect(poolReads).toBeGreaterThan(0);
         throw new WalletError("The recipient has not activated private balances");
       },
-      plan: { mode: "account", poolFeeFri: "0x0" },
+      plan: { mode: "account", poolFeeFri: "0x0", reviewedFee },
     }),
   ).rejects.toThrow("The recipient has not activated private balances");
   expect(proofs).toBe(0);

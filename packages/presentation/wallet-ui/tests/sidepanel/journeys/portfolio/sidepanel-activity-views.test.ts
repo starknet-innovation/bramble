@@ -28,6 +28,7 @@ const status: WalletStatus = {
 const pending: readonly PendingApproval[] = [
   {
     id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
+    kind: "connect",
     origin: "https://dapp.example",
   },
 ];

@@ -22,7 +22,7 @@ const DAPP_ANONYMIZER = "0x0557890abcdef1234567890abcdef1234567890abcdef12345678
 const FEE_COLLECTOR = "0x0667890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 const OPEN_NOTE_0 = `\${openNoteIds[0]}`;
 
-const context = (marker: string) => ({
+const context = (marker: string): NonNullable<PendingApproval["context"]> => ({
   accountId: softwareAccount.id,
   chainId: "0x534e5f4d41494e",
   networkId: "SN_MAIN",

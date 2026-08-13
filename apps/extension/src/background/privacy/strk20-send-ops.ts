@@ -9,6 +9,7 @@
  */
 
 import {
+  prepareStrk20AccountActions,
   quoteStrk20Actions,
   readStrk20Balances,
   readStrk20RegistrationStatus,
@@ -30,6 +31,7 @@ import {
   type ActivePrivacyContext,
   assertPublicPoolSpendAffordable,
   errorText,
+  estimatePublicStrk20Fee,
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
@@ -356,11 +358,29 @@ const depositPreparation = async (
     if (!config) {
       return { error: "Private balances are not configured for this network" };
     }
+    const prepared = await prepareStrk20AccountActions(service, {
+      ...context.accountContext,
+      actions,
+      beforeProof: async () => {
+        const currentRegistrationError = await depositRegistrationError(
+          service,
+          context,
+          recipient,
+        );
+        if (currentRegistrationError !== null) {
+          throw new Error(currentRegistrationError);
+        }
+      },
+      poolFeeFri: plan.poolFeeFri,
+    });
+    const networkFee = await estimatePublicStrk20Fee(deps, context, prepared.calls, prepared.proof);
     const unsigned = {
+      ...prepared,
       actions,
       amount: input.amount,
       amountRaw: `0x${amountRaw.toString(16)}`,
       kind: "deposit" as const,
+      networkFee,
       plan,
       poolAddress: config.poolAddress,
       recipient,

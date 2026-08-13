@@ -6,8 +6,9 @@
  * snapshot is the only input, nothing here performs I/O or throws, and the
  * results are deterministic (no locale-sensitive ordering).
  */
+
+import type { ConnectedSite } from "@mc-wallet/core/origin";
 import type { Vault } from "../schema/schema";
-import type { ConnectedSite } from "./service-types";
 
 /**
  * Resolves the account ids `origin` is authorised to see right now: at most the

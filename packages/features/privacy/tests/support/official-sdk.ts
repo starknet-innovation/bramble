@@ -8,6 +8,7 @@ import type { Strk20AccountContext } from "@mc-wallet/privacy/service";
 import type { RpcProvider } from "starknet";
 
 export const STRK20_POOL_ADDRESS = "0x123";
+export const STRK20_REVIEWED_FEE = { overallFee: "1000", unit: "FRI" } as const;
 export const STRK20_SDK_TOKEN = "0x456";
 export const STRK20_SDK_ACCOUNT = {
   address: "0xabc",

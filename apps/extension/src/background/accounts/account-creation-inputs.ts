@@ -7,7 +7,11 @@ import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
 import type { CreateVaultAccountInput } from "@mc-wallet/vault/service";
 import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+import {
+  isMnemonicPassphrase,
+  isMnemonicText,
+  isVaultPassphrase,
+} from "@mc-wallet/wallet-model/passphrase";
 
 const readOptionalIndex = (value: unknown): number | null | undefined => {
   if (value === undefined) {
@@ -15,9 +19,6 @@ const readOptionalIndex = (value: unknown): number | null | undefined => {
   }
   return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
 };
-
-const isMnemonicText = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0;
 
 const readDerivationFields = (
   message: Record<string, unknown>,
@@ -27,10 +28,7 @@ const readDerivationFields = (
   if (accountIndex === null || addressIndex === null) {
     return null;
   }
-  if (
-    message["mnemonicPassphrase"] !== undefined &&
-    typeof message["mnemonicPassphrase"] !== "string"
-  ) {
+  if (!isMnemonicPassphrase(message["mnemonicPassphrase"])) {
     return null;
   }
   if (message["networkId"] !== undefined && !isStarknetNetworkId(message["networkId"])) {

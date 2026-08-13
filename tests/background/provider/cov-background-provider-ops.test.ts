@@ -19,6 +19,7 @@ import {
   type InvokeExecuteDeps,
   type ProviderOpsDeps,
 } from "../../../apps/extension/src/background/provider/provider-ops";
+import { createWatchAssetAdmission } from "../../../apps/extension/src/background/provider/watch-asset";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
@@ -77,6 +78,7 @@ const providerDeps = (locked: boolean): ProviderOpsDeps => {
     session,
     waiters: createSignatureWaiters(),
     wallet,
+    watchAssetAdmission: createWatchAssetAdmission(),
   };
 };
 
