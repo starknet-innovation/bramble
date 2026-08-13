@@ -380,8 +380,9 @@ the following server-side baseline so a red guard is actually merge-blocking.
 - **Require signed commits** — recommended if it is the org norm (this repo already
   values verified signatures; `CONTRIBUTING.md` requires GPG-signed commits).
 
-The current owner is the repository's existing push-authorized organization
-team, so a PR author cannot be the only eligible code owner.
+The current owners are existing push-authorized maintainers other than the
+repository's primary author, so a PR author cannot be the only eligible code
+owner.
 
 ### `release/*` — branch protection / ruleset
 

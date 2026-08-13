@@ -1,25 +1,25 @@
 # CODEOWNERS — reviewers auto-requested on PRs, and the set GitHub can *require*
 # through the active main ruleset's required code-owner review.
 #
-# The existing push-authorized organization team supplies independent review
-# coverage and avoids making the PR author the only possible code owner.
+# Existing push-authorized maintainers supply independent review coverage and
+# avoid making the PR author the only possible code owner.
 
 # Default owner for everything in the repo.
-*                       @starknet-innovation/ent:starknet-innovation
+*                       @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
 
 # Security-sensitive boundaries — wallet crypto, encrypted storage, privileged
 # background and provider ingress, value-moving features, the CI/release
 # pipeline, and the vendoring/standards scripts
 # — always warrant maintainer review, even as the team grows.
-/.github/CODEOWNERS      @starknet-innovation/ent:starknet-innovation
-/.github/workflows/     @starknet-innovation/ent:starknet-innovation
-/apps/extension/src/background/ @starknet-innovation/ent:starknet-innovation
-/apps/extension/src/content/    @starknet-innovation/ent:starknet-innovation
-/apps/extension/src/provider/   @starknet-innovation/ent:starknet-innovation
-/contracts/             @starknet-innovation/ent:starknet-innovation
-/packages/features/privacy/     @starknet-innovation/ent:starknet-innovation
-/packages/features/transactions/ @starknet-innovation/ent:starknet-innovation
-/packages/foundation/wallet-protocol/ @starknet-innovation/ent:starknet-innovation
-/packages/platform/kms-krusty/  @starknet-innovation/ent:starknet-innovation
-/packages/platform/vault/       @starknet-innovation/ent:starknet-innovation
-/scripts/               @starknet-innovation/ent:starknet-innovation
+/.github/CODEOWNERS      @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/.github/workflows/     @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/apps/extension/src/background/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/apps/extension/src/content/    @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/apps/extension/src/provider/   @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/contracts/             @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/packages/features/privacy/     @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/packages/features/transactions/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/packages/foundation/wallet-protocol/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/packages/platform/kms-krusty/  @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/packages/platform/vault/       @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/scripts/               @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
