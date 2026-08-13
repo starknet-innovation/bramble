@@ -509,7 +509,7 @@ describe("Tokens screen", () => {
     await screen.findAllByText("Ekubo");
 
     fireEvent.click(screen.getByRole("button", { name: "Select ETH token" }));
-    fireEvent.click(screen.getByRole("option", { name: /USDC USD Coin/ }));
+    fireEvent.click(screen.getByRole("option", { name: /USDC\s*USD Coin/ }));
 
     expect(screen.getByRole("button", { name: "Select USDC token" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Select EKUBO token" })).toBeTruthy();

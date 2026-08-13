@@ -27,7 +27,7 @@
     "starknet": "10.0.2"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.11.1",
+    "@happy-dom/global-registrator": "20.11.2",
     "@mc-wallet/store": "workspace:*",
     "@mc-wallet/testkit": "workspace:*"
   }
