@@ -6,6 +6,7 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   STARKNET_NETWORKS,
   sameFelt,
@@ -75,10 +76,8 @@ const signerOptions = (account: DeployableAccount): AccountSignerOptions =>
     : {};
 
 /**
- * Builds contract-aware DEPLOY_ACCOUNT parameters and proves they reproduce
- * the stored address. Argent Account 0.4 accepts its retained deployment salt;
- * OpenZeppelin accounts retain salt-zero compatibility, and
- * multisig parameters must be explicitly retained by the feature repository.
+ * Reconstructs pinned DEPLOY_ACCOUNT inputs only when they reproduce the stored address.
+ * Throws on invalid class/configuration or an address-commitment mismatch.
  */
 export const accountDeployment = (account: DeployableAccount): AccountDeployment => {
   let constructorCalldata: readonly string[];
@@ -126,10 +125,8 @@ export const accountDeployment = (account: DeployableAccount): AccountDeployment
 };
 
 /**
- * Reads account deployment status through an already selected provider.
- * Contract-not-found is the only response interpreted as undeployed; every
- * other endpoint failure propagates so callers cannot silently act on an
- * unknown state.
+ * Reads status through the selected RPC; only contract-not-found means undeployed.
+ * Propagates every other failure so unknown state cannot be treated as absent.
  */
 export const isAccountDeployed = async (
   provider: RpcProvider,
@@ -149,12 +146,17 @@ export const isAccountDeployed = async (
 const requireCompatibleArgentSigner = async (
   provider: RpcProvider,
   account: Extract<DeployableAccount, { readonly accountContractType: "argent" }>,
-  blockIdentifier: number,
+  blockIdentifier: string,
 ): Promise<void> => {
-  const owner = await provider.callContract(
-    { calldata: [], contractAddress: account.address, entrypoint: "get_owner" },
-    blockIdentifier,
-  );
+  const readSignerState = (entrypoint: "get_guardian" | "get_owner" | "get_owner_type") =>
+    provider.callContract(
+      { calldata: [], contractAddress: account.address, entrypoint },
+      blockIdentifier,
+    );
+  const [owner, ownerType] = await Promise.all([
+    readSignerState("get_owner"),
+    readSignerState("get_owner_type"),
+  ]);
   const [ownerPublicKey] = owner;
   if (
     owner.length !== 1 ||
@@ -164,31 +166,33 @@ const requireCompatibleArgentSigner = async (
   ) {
     throw new WalletError("Deployed Argent account owner does not match the wallet signer");
   }
+  if (ownerType.length !== 1 || !sameFelt(ownerType[0], "0x0")) {
+    throw new WalletError("Deployed Argent account owner type is not supported by this wallet");
+  }
 
-  const guardian = await provider.callContract(
-    { calldata: [], contractAddress: account.address, entrypoint: "get_guardian" },
-    blockIdentifier,
-  );
+  const guardian = await readSignerState("get_guardian");
   if (guardian.length !== 1 || !sameFelt(guardian[0], "0x0")) {
     throw new WalletError("Deployed Argent account guardian is not supported by this wallet");
   }
 };
 
 /**
- * Reads deployment status and fails closed when a deployed Argent account no
- * longer runs its pinned class. Ordinary Argent accounts must also retain the
- * wallet's Stark owner and have no guardian at the same accepted block.
- * OpenZeppelin retains its historical existence-only behavior; incompatible
- * Argent state never reaches a query signature, private signer, or broadcast.
+ * Verifies pinned Argent class and supported signer state at one accepted block.
+ * Rejects malformed/incompatible state before signing or broadcast; OZ is existence-only.
  */
 export const isCompatibleAccountDeployed = async (
   provider: RpcProvider,
   account: DeployableAccount,
 ): Promise<boolean> => {
   let classHash: string;
-  let blockIdentifier: "latest" | number = "latest";
+  let blockIdentifier = "latest";
   if (account.accountContractType === "argent") {
-    blockIdentifier = await provider.getBlockNumber();
+    const latest = await provider.getBlockLatestAccepted();
+    const blockHash = canonicalFelt(latest.block_hash);
+    if (blockHash === null || !isNonZeroStarkFieldElement(blockHash)) {
+      throw new WalletError("RPC returned an invalid accepted Starknet block hash");
+    }
+    blockIdentifier = blockHash;
   }
   try {
     classHash = await provider.getClassHashAt(account.address, blockIdentifier);
@@ -211,7 +215,7 @@ export const isCompatibleAccountDeployed = async (
     throw new WalletError("Deployed Argent account class does not match the pinned release");
   }
   if (account.accountContractType === "argent") {
-    await requireCompatibleArgentSigner(provider, account, blockIdentifier as number);
+    await requireCompatibleArgentSigner(provider, account, blockIdentifier);
   }
   return true;
 };
@@ -232,9 +236,7 @@ export const REVIEWED_DEPLOYMENT_FEE_EXCEEDED =
 export const REVIEWED_DEPLOYMENT_FEE_REQUIRED =
   "The account deployment fee was not reviewed. Nothing was submitted — deploy the account first.";
 
-// The bounds a deployment signs under. A separately reviewed fee is mandatory:
-// the estimate is taken here, the spend its bounds authorise is checked against
-// the reviewed figure, and those same bounds are then signed.
+// Returns only bounds within the separately reviewed deployment fee.
 const checkedDeploymentBounds = async (
   estimatingAccount: Account,
   payload: Parameters<Account["deployAccount"]>[0],

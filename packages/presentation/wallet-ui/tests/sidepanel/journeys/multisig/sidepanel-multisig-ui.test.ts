@@ -4,6 +4,10 @@ import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigIntentPackage,
 } from "../../../../src/popup/responses/multisig-responses";
+import {
+  EMPTY_MULTISIG_PORTFOLIO,
+  multisigPortfolio,
+} from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
 import type { MultisigClient } from "../../../../src/sidepanel/journeys/multisig/multisig-runtime";
 import type { MultisigUiDeps } from "../../../../src/sidepanel/journeys/multisig/multisig-ui";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
@@ -244,5 +248,42 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(form?.querySelector('button[type="submit"]')?.textContent).toContain(
       "Deploy reviewed account",
     );
+  });
+
+  test("links shared-account tabs and supports the standard keyboard order", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const client = await testClient();
+    const app = mount(
+      multisigPortfolio({
+        canSign: true,
+        data: EMPTY_MULTISIG_PORTFOLIO,
+        intents: "<p>Intent panel</p>",
+        openCount: 1,
+        preferences: null,
+        record: fixture.record,
+      }),
+      client,
+      fixture.status,
+    );
+    const tabs = Array.from(app.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]"));
+    const panels = Array.from(app.querySelectorAll<HTMLElement>("[data-ms-home-panel]"));
+    const selectedTab = tabs[1];
+    if (!selectedTab) throw new Error("collectibles tab unavailable");
+    expect(tabs.map((tab) => tab.getAttribute("aria-controls"))).toEqual(
+      panels.map((panel) => panel.id),
+    );
+    expect(panels.map((panel) => panel.getAttribute("aria-labelledby"))).toEqual(
+      tabs.map((tab) => tab.id),
+    );
+    expect(panels.map((panel) => panel.tabIndex)).toEqual([0, 0, 0]);
+
+    tabs[0]?.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight" }));
+    expect(tabs.map((tab) => [tab.getAttribute("aria-selected"), tab.tabIndex])).toEqual([
+      ["false", -1],
+      ["true", 0],
+      ["false", -1],
+    ]);
+    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true]);
+    expect(document.activeElement).toBe(selectedTab);
   });
 });

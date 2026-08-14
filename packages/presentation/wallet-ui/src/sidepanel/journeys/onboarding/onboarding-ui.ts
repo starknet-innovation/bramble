@@ -85,7 +85,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   let accountSelected = false;
   let previewMatchesInput = false;
   let previewGeneration = 0;
-
+  let mnemonicGeneration = 0;
   const accountContractType = (): AccountContractType | null =>
     isAccountContractType(accountContractSelect?.value) ? accountContractSelect.value : null;
 
@@ -101,6 +101,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     const current = steps.find((step) => !step.hidden);
     if (!next || current === next) {
       return;
+    }
+    if (current?.dataset["onboardingStep"] === "welcome" && id !== "generated") {
+      mnemonicGeneration += 1;
     }
     const wasRecovery = current?.dataset["onboardingStep"] === "recovery";
     const nextIsRecovery = id === "recovery";
@@ -314,9 +317,14 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   const createNew = form.querySelector<HTMLButtonElement>("#create-new-button");
   createNew?.addEventListener("click", () => {
+    const generation = ++mnemonicGeneration;
     buttonBusy(createNew, true);
     void wallet.generateMnemonic().then(
       (generated) => {
+        if (generation !== mnemonicGeneration) {
+          buttonBusy(createNew, false);
+          return;
+        }
         mnemonic = generated.trim();
         requiresVerification = true;
         generatedWasRevealed = false;
@@ -335,6 +343,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         buttonBusy(createNew, false);
       },
       (error: unknown) => {
+        if (generation !== mnemonicGeneration) {
+          buttonBusy(createNew, false);
+          return;
+        }
         const message = errorMessage(error, "Recovery phrase failed");
         showToast(message, "error");
         buttonBusy(createNew, false);

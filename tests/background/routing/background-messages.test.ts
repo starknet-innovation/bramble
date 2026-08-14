@@ -10,8 +10,12 @@ import { createPreferencesStore, defaultWalletPreferences } from "@mc-wallet/set
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import type { CreateVaultAccountInput, OriginGrantInput } from "@mc-wallet/vault/service";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
+import { createLedgerSignQueue } from "../../../apps/extension/src/background/ledger/ledger-sign-queue";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
-import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
+import {
+  createActiveStateCoordinator,
+  unavailablePreferencesStore,
+} from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
   account,
@@ -276,7 +280,48 @@ describe("createMessageHandler", () => {
     const locking = handler({ type: "wallet.lock" }, sender);
     release.resolve();
 
-    await expect(unlocking).resolves.toMatchObject({ locked: false });
+    await expect(unlocking).resolves.toEqual({ error: "wallet locked" });
+    await expect(locking).resolves.toMatchObject({ locked: true });
+    expect(session.isUnlocked()).toBe(false);
+  });
+
+  test("a lock revokes a Ledger holder and operations already queued behind it", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const coordinator = createActiveStateCoordinator();
+    const queue = createLedgerSignQueue(
+      () => undefined,
+      undefined,
+      () => (session.isUnlocked() ? session.generation() : null),
+    );
+    const started = Promise.withResolvers<void>();
+    const parked = coordinator
+      .run(async () => {
+        started.resolve();
+        await queue.request({
+          accountId: account.id,
+          messageHash: "0x123",
+          path: "m/2645'/1195502025'/1148870696'/0'/0'/0",
+          publicKeyX: account.publicKeyX,
+        });
+      })
+      .catch((error: unknown) => error);
+    await started.promise;
+    const queuedState = coordinator.run(async () => session.isUnlocked());
+
+    const handler = createMessageHandler(createWallet(), "extension-id", {
+      activeStateCoordinator: coordinator,
+      ledgerSignQueue: queue,
+      session,
+    });
+    const locking = handler({ type: "wallet.lock" }, sender);
+    await Promise.resolve();
+    const pendingAfterLock = queue.pending().length;
+    if (pendingAfterLock > 0) queue.rejectAll("test cleanup");
+
+    expect(pendingAfterLock).toBe(0);
+    expect(await parked).toBeInstanceOf(Error);
+    expect(await queuedState).toBe(false);
     await expect(locking).resolves.toMatchObject({ locked: true });
     expect(session.isUnlocked()).toBe(false);
   });

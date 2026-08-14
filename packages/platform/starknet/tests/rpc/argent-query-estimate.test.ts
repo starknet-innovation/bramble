@@ -26,6 +26,7 @@ const makeProvider = (
   liveOwner = account.publicKeyX,
   liveGuardian = "0x0",
   acceptedHash: () => string | undefined = () => "0xdeadbeef",
+  liveOwnerType = "0x0",
 ) => {
   const calls: { readonly args: readonly unknown[]; readonly method: string }[] = [];
   const stateReads: unknown[] = [];
@@ -70,12 +71,19 @@ const makeProvider = (
   const provider = {
     channel,
     callContract: async (call: { readonly entrypoint?: unknown }, block: unknown) => {
-      const role = call.entrypoint === "get_guardian" ? "guardian" : "owner";
+      const role =
+        call.entrypoint === "get_guardian"
+          ? "guardian"
+          : call.entrypoint === "get_owner_type"
+            ? "owner-type"
+            : "owner";
       stateReads.push([role, block]);
-      return [role === "guardian" ? liveGuardian : liveOwner];
+      return [
+        role === "guardian" ? liveGuardian : role === "owner-type" ? liveOwnerType : liveOwner,
+      ];
     },
     getChainId: async () => "0x534e5f4d41494e",
-    getBlockNumber: async () => 100,
+    getBlockLatestAccepted: async () => ({ block_hash: "0xabc" }),
     getClassHashAt: async (_address: string, block: unknown) => {
       stateReads.push(["class", block]);
       return liveClassHash;
@@ -192,8 +200,9 @@ test("Argent operations reject a changed owner at the same accepted block", asyn
       "owner does not match the wallet signer",
     );
     expect(stateReads).toEqual([
-      ["class", 100],
-      ["owner", 100],
+      ["class", "0xabc"],
+      ["owner", "0xabc"],
+      ["owner-type", "0xabc"],
     ]);
   }
   expect(privatelySigned).toBe(0);
@@ -222,9 +231,44 @@ test("Argent operations reject a guardian at the same accepted block", async () 
       "guardian is not supported by this wallet",
     );
     expect(stateReads).toEqual([
-      ["class", 100],
-      ["owner", 100],
-      ["guardian", 100],
+      ["class", "0xabc"],
+      ["owner", "0xabc"],
+      ["owner-type", "0xabc"],
+      ["guardian", "0xabc"],
+    ]);
+    expect(calls).toHaveLength(0);
+  }
+  expect(privatelySigned).toBe(0);
+});
+
+test("Argent operations reject a non-Starknet owner type before signing", async () => {
+  let privatelySigned = 0;
+  const input = {
+    account,
+    calls: [{ calldata: [], contractAddress: "0x111", entrypoint: "transfer" }],
+    reviewedFee: { overallFee: "100", unit: "FRI" } as const,
+    rpcUrls: ["https://rpc.invalid"],
+    signHash: async () => {
+      privatelySigned += 1;
+      return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+    },
+  };
+
+  for (const operation of [estimateInvokeFee, submitInvokeTransaction]) {
+    const { calls, provider, stateReads } = makeProvider(
+      account.classHash,
+      account.publicKeyX,
+      "0x0",
+      () => "0xdeadbeef",
+      "0x1",
+    );
+    await expect(operation(input, () => provider)).rejects.toThrow(
+      "owner type is not supported by this wallet",
+    );
+    expect(stateReads).toEqual([
+      ["class", "0xabc"],
+      ["owner", "0xabc"],
+      ["owner-type", "0xabc"],
     ]);
     expect(calls).toHaveLength(0);
   }

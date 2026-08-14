@@ -372,8 +372,17 @@ const handleLock: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.lock")) {
     return { error: "invalid lock request" };
   }
+  // A Ledger request may itself hold the active-state coordinator while the
+  // panel/device round-trip is parked. Revoke it before waiting for that
+  // coordinator so an explicit lock cannot be held behind the signature it is
+  // meant to cancel. Later queued operations stay behind the lock mutation and
+  // observe the revoked session.
+  deps.ledgerSignQueue?.rejectAll("wallet locked");
+  deps.session.lock();
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
-    // Revoke parked device signs before clearing the session.
+    // An unlock that was already inside the coordinator may have completed
+    // after the eager revocation. Lock once more at our serialized position so
+    // the later user intent wins deterministically.
     deps.ledgerSignQueue?.rejectAll("wallet locked");
     deps.session.lock();
     // Reporting "locked" is a security claim, so only make it once the

@@ -334,10 +334,20 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
   if (!input) {
     return { error: "invalid unlock request" };
   }
+  const generation = ctx.session.generation();
   try {
     return await ctx.activeStateCoordinator.run(async () => {
+      if (ctx.session.generation() !== generation) {
+        return { error: "wallet locked" };
+      }
       await ctx.wallet.readVault(input.vaultPassphrase);
+      if (ctx.session.generation() !== generation) {
+        return { error: "wallet locked" };
+      }
       await reconcileActiveAccount(ctx.wallet, ctx.preferencesStore, input.vaultPassphrase);
+      if (ctx.session.generation() !== generation) {
+        return { error: "wallet locked" };
+      }
       ctx.session.unlock(input.vaultPassphrase);
       return statusResponse(ctx.wallet, ctx.session, ctx.preferencesStore);
     });

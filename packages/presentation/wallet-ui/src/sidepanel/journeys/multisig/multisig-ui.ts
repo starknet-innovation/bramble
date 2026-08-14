@@ -232,21 +232,42 @@ const bindImport = (deps: MultisigUiDeps): void => {
 
 type MultisigHomeTab = "assets" | "collectibles" | "intents";
 const bindTabs = (deps: MultisigUiDeps): void => {
+  const tabs = Array.from(
+    deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]") ?? [],
+  );
   const apply = (selected: MultisigHomeTab): void => {
-    deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]").forEach((tab) => {
-      tab.setAttribute("aria-selected", String(tab.dataset["msHomeTab"] === selected));
-    });
+    for (const tab of tabs) {
+      const active = tab.dataset["msHomeTab"] === selected;
+      tab.setAttribute("aria-selected", String(active));
+      tab.tabIndex = active ? 0 : -1;
+    }
     deps.app?.querySelectorAll<HTMLElement>("[data-ms-home-panel]").forEach((panel) => {
       const target = panel;
       target.hidden = target.dataset["msHomePanel"] !== selected;
     });
   };
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]").forEach((button) => {
+  for (const [index, button] of tabs.entries()) {
     button.addEventListener("click", () => {
       const value = button.dataset["msHomeTab"];
       if (value === "assets" || value === "collectibles" || value === "intents") apply(value);
     });
-  });
+    button.addEventListener("keydown", (event) => {
+      let next = index;
+      if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+      else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = tabs.length - 1;
+      else return;
+      const nextTab = tabs[next];
+      const value = nextTab?.dataset["msHomeTab"];
+      if (!nextTab || (value !== "assets" && value !== "collectibles" && value !== "intents")) {
+        return;
+      }
+      event.preventDefault();
+      apply(value);
+      nextTab.focus();
+    });
+  }
 };
 
 /**

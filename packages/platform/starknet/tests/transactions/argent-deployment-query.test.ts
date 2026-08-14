@@ -75,8 +75,8 @@ const makeQueryProvider = (liveClassHash: string | null = null) => {
     async getChainId() {
       return "0x534e5f4d41494e";
     },
-    async getBlockNumber() {
-      return 100;
+    async getBlockLatestAccepted() {
+      return { block_hash: "0xabc" };
     },
     async getClassHashAt() {
       if (liveClassHash !== null) return liveClassHash;

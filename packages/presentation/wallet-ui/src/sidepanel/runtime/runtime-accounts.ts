@@ -4,6 +4,15 @@ import type { AccountContractType, AccountRef } from "@mc-wallet/wallet-model/ac
 import { isCreateAccountResponse } from "../../popup/responses/responses";
 import { responseError } from "./runtime-errors";
 
+const isMatchingAccountResponse = (
+  response: unknown,
+  networkId: string,
+  accountContractType: AccountContractType,
+): response is { readonly account: AccountRef; readonly ok: true } =>
+  isCreateAccountResponse(response) &&
+  response.account.networkId === networkId &&
+  response.account.accountContractType === accountContractType;
+
 /**
  * Builds the privileged single-signer account creation and preview client.
  */
@@ -16,7 +25,9 @@ export const createAccountRuntimeClient = (
       networkId,
       type: "wallet.addAccount",
     });
-    if (isCreateAccountResponse(response)) return response.account.id;
+    if (isMatchingAccountResponse(response, networkId, accountContractType)) {
+      return response.account.id;
+    }
     throw responseError(response, "add account failed");
   },
   async createAccount(
@@ -32,7 +43,7 @@ export const createAccountRuntimeClient = (
       type: "wallet.createAccount",
       vaultPassphrase,
     });
-    if (isCreateAccountResponse(response)) return;
+    if (isMatchingAccountResponse(response, networkId, accountContractType)) return;
     throw responseError(response, "wallet unavailable");
   },
   async importAccount(
@@ -48,7 +59,9 @@ export const createAccountRuntimeClient = (
       privateKey,
       type: "wallet.importAccount",
     });
-    if (isCreateAccountResponse(response)) return response.account.id;
+    if (isMatchingAccountResponse(response, networkId, accountContractType)) {
+      return response.account.id;
+    }
     throw responseError(response, "import account failed");
   },
   async previewAccount(
@@ -63,7 +76,9 @@ export const createAccountRuntimeClient = (
       networkId,
       type: "wallet.previewAccount",
     });
-    if (isCreateAccountResponse(response)) return response.account;
+    if (isMatchingAccountResponse(response, networkId, accountContractType)) {
+      return response.account;
+    }
     throw responseError(response, "account preview unavailable");
   },
 });

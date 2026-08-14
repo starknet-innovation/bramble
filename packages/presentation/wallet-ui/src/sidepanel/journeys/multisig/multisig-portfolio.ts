@@ -143,12 +143,12 @@ export const multisigPortfolio = (input: {
   <section class="home-tabs multisig-portfolio-tabs" data-active-tab="assets" aria-label="Shared account">
     <div class="tab-bar">
       <div class="tab-set" role="tablist" aria-label="Shared account sections">
-        <button class="home-tab" data-ms-home-tab="assets" type="button" role="tab" aria-selected="true">Tokens</button>
-        <button class="home-tab" data-ms-home-tab="collectibles" type="button" role="tab" aria-selected="false">Collectibles</button>
-        <button class="home-tab" data-ms-home-tab="intents" type="button" role="tab" aria-selected="false" aria-label="Signing intents, ${input.openCount} open">Intents${input.openCount > 0 ? `<span class="home-tab-count">${input.openCount}</span>` : ""}</button>
+        <button class="home-tab" id="multisig-tab-assets" data-ms-home-tab="assets" type="button" role="tab" aria-controls="multisig-panel-assets" aria-selected="true" tabindex="0">Tokens</button>
+        <button class="home-tab" id="multisig-tab-collectibles" data-ms-home-tab="collectibles" type="button" role="tab" aria-controls="multisig-panel-collectibles" aria-selected="false" tabindex="-1">Collectibles</button>
+        <button class="home-tab" id="multisig-tab-intents" data-ms-home-tab="intents" type="button" role="tab" aria-controls="multisig-panel-intents" aria-selected="false" aria-label="Signing intents, ${input.openCount} open" tabindex="-1">Intents${input.openCount > 0 ? `<span class="home-tab-count">${input.openCount}</span>` : ""}</button>
       </div>
     </div>
-    <div data-ms-home-panel="assets" role="tabpanel">${tokenPanel(input.preferences, input.data)}</div>
-    <div data-ms-home-panel="collectibles" role="tabpanel" hidden>${collectiblesPanel(input.record, input.preferences, input.data)}</div>
-    <div data-ms-home-panel="intents" role="tabpanel" hidden>${input.intents}</div>
+    <div id="multisig-panel-assets" data-ms-home-panel="assets" role="tabpanel" aria-labelledby="multisig-tab-assets" tabindex="0">${tokenPanel(input.preferences, input.data)}</div>
+    <div id="multisig-panel-collectibles" data-ms-home-panel="collectibles" role="tabpanel" aria-labelledby="multisig-tab-collectibles" tabindex="0" hidden>${collectiblesPanel(input.record, input.preferences, input.data)}</div>
+    <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>${input.intents}</div>
   </section>`;

@@ -29,8 +29,8 @@ const estimateCalls: Array<{
 }> = [];
 
 class FakeRpcProvider {
-  public async callContract(): Promise<readonly string[]> {
-    return [argentAccount.publicKeyX];
+  public async callContract(call: { readonly entrypoint?: unknown }): Promise<readonly string[]> {
+    return [call.entrypoint === "get_owner_type" ? "0x0" : argentAccount.publicKeyX];
   }
   public async getChainId(): Promise<string> {
     return "0x534e5f4d41494e";
@@ -41,8 +41,8 @@ class FakeRpcProvider {
     // skipped and the declare proceeds directly.
     return "0x1";
   }
-  public async getBlockNumber(): Promise<number> {
-    return 100;
+  public async getBlockLatestAccepted(): Promise<{ readonly block_hash: string }> {
+    return { block_hash: "0xabc" };
   }
 }
 
@@ -340,8 +340,8 @@ describe("submitDeclareTransaction", () => {
       async getClassHashAt() {
         throw Object.assign(new Error("Contract not found"), { baseError: { code: 20 } });
       },
-      async getBlockNumber() {
-        return 100;
+      async getBlockLatestAccepted() {
+        return { block_hash: "0xabc" };
       },
       async getEstimateFeeBulk(invocations: unknown[]) {
         bulkInvocations.push(invocations);

@@ -95,6 +95,7 @@ const activeStep = (root: ParentNode): string | undefined =>
   )?.dataset["onboardingStep"];
 
 const mount = (options?: {
+  readonly generateMnemonic?: () => Promise<string>;
   readonly previewAccount?: (
     mnemonic: string,
     networkId: string,
@@ -120,7 +121,7 @@ const mount = (options?: {
       creations.push([mnemonic, networkId, vaultPassphrase, accountContractType]);
       return Promise.resolve();
     },
-    generateMnemonic: () => Promise.resolve(MNEMONIC),
+    generateMnemonic: () => options?.generateMnemonic?.() ?? Promise.resolve(MNEMONIC),
     loadStatus: () => Promise.resolve({ ...status, accountCount: 1, hasVault: true }),
     previewAccount(mnemonic: string, networkId: string, accountContractType: AccountContractType) {
       previews.push([mnemonic, networkId, accountContractType]);
@@ -259,6 +260,26 @@ describe("staged onboarding", () => {
     click(flow.app, "#verify-continue");
     expect(activeStep(flow.app)).toBe("password");
     expect(flow.creations).toEqual([]);
+  });
+
+  test("discards a generated phrase after the user chooses an import route", async () => {
+    let release: ((mnemonic: string) => void) | undefined;
+    const flow = mount({
+      generateMnemonic: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    click(flow.app, "#create-new-button");
+    click(flow.app, "#add-existing-button");
+    expect(activeStep(flow.app)).toBe("method");
+    release?.(MNEMONIC);
+    await tick();
+
+    expect(activeStep(flow.app)).toBe("method");
+    click(flow.app, '[data-onboarding-step="method"] [data-onboarding-back]');
+    expect(activeStep(flow.app)).toBe("welcome");
+    expect(flow.app.querySelector<HTMLButtonElement>("#create-new-button")?.disabled).toBe(false);
   });
 
   test("keeps word positions labelled once filled, and cell visibility on the inputs", async () => {

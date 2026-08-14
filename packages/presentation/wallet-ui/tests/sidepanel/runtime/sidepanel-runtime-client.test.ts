@@ -61,10 +61,10 @@ describe("createSidepanelRuntime — emptyStatus and no-runtime fallback", () =>
 describe("account lifecycle wrappers", () => {
   test("addAccount returns the created account id and sends the network", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
-    expect(await wallet.addAccount("SN_MAIN", "openzeppelin")).toBe(account.id);
+    expect(await wallet.addAccount("SN_SEPOLIA", "openzeppelin")).toBe(account.id);
     expect(sent[0]).toEqual({
       accountContractType: "openzeppelin",
-      networkId: "SN_MAIN",
+      networkId: "SN_SEPOLIA",
       type: "wallet.addAccount",
     });
   });
@@ -83,10 +83,10 @@ describe("account lifecycle wrappers", () => {
 
   test("importAccount returns the imported id and carries the raw key only in the request", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
-    expect(await wallet.importAccount("SN_MAIN", "0xdeadbeef", "openzeppelin")).toBe(account.id);
+    expect(await wallet.importAccount("SN_SEPOLIA", "0xdeadbeef", "openzeppelin")).toBe(account.id);
     expect(sent[0]).toEqual({
       accountContractType: "openzeppelin",
-      networkId: "SN_MAIN",
+      networkId: "SN_SEPOLIA",
       privateKey: "0xdeadbeef",
       type: "wallet.importAccount",
     });
@@ -101,12 +101,12 @@ describe("account lifecycle wrappers", () => {
   test("createAccount resolves void on success and forwards the vault passphrase", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
     await expect(
-      wallet.createAccount("seed words", "SN_MAIN", "pass", "openzeppelin"),
+      wallet.createAccount("seed words", "SN_SEPOLIA", "pass", "openzeppelin"),
     ).resolves.toBeUndefined();
     expect(sent[0]).toEqual({
       accountContractType: "openzeppelin",
       mnemonic: "seed words",
-      networkId: "SN_MAIN",
+      networkId: "SN_SEPOLIA",
       type: "wallet.createAccount",
       vaultPassphrase: "pass",
     });
@@ -133,6 +133,22 @@ describe("account lifecycle wrappers", () => {
     await expect(
       runtimeReturning({}).previewAccount("seed", "SN_MAIN", "openzeppelin"),
     ).rejects.toThrow("account preview unavailable");
+  });
+
+  test("rejects account replies outside the requested network or contract", async () => {
+    const wallet = runtimeReturning(createAccountResponse);
+    await expect(wallet.addAccount("SN_MAIN", "openzeppelin")).rejects.toThrow(
+      "add account failed",
+    );
+    await expect(
+      wallet.createAccount("seed words", "SN_SEPOLIA", "pass", "argent"),
+    ).rejects.toThrow("wallet unavailable");
+    await expect(wallet.importAccount("SN_MAIN", "0xdeadbeef", "openzeppelin")).rejects.toThrow(
+      "import account failed",
+    );
+    await expect(wallet.previewAccount("seed words", "SN_SEPOLIA", "argent")).rejects.toThrow(
+      "account preview unavailable",
+    );
   });
 
   test("setActiveAccount resolves on a create-account echo and throws otherwise", async () => {
