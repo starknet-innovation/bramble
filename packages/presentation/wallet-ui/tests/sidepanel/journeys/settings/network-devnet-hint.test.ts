@@ -1,9 +1,7 @@
 /**
- * Devnet is the one network whose node the user runs, and two of its
- * requirements are invisible until a write fails: the endpoint the wallet dials
- * and the chain id the write-path guard checks. The picker must state both while
- * devnet is selected, must state the endpoint actually in use rather than the
- * default, and must not nag on networks the wallet hosts itself.
+ * The picker must state devnet's two invisible requirements — the endpoint the
+ * wallet dials and the chain id the write-path guard checks — using the endpoint
+ * actually in use, and must stay silent on networks the wallet hosts.
  */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
@@ -12,8 +10,7 @@ import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { networkFlow } from "../../../../src/sidepanel/journeys/settings/network-views";
 
 const DEFAULT_DEVNET_RPC = STARKNET_NETWORKS.SN_DEVNET.rpcUrls[0];
-// The hint's own pointer to the recovery path. Asserting on "Advanced" alone is
-// vacuous: the picker renders an "Advanced endpoints" row unconditionally.
+// Asserting on "Advanced" alone is vacuous: that row always renders.
 const ADVANCED_NUDGE = "Set a custom RPC under Advanced";
 
 const status = (networkId: StarknetNetworkId, network: string): WalletStatus => ({

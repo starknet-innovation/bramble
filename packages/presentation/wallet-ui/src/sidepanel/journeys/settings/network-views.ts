@@ -24,11 +24,8 @@ const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | n
     ? (preferences.rpcOverrides?.[status.networkId] ?? "")
     : "";
 
-// Devnet is the one network whose node the user runs themselves, so selecting it
-// is the moment to state what the wallet expects: the endpoint it will actually
-// dial and the chain id the write-path guard checks. The endpoint is read from
-// the network record rather than restated, and an override is reported back
-// instead of nudging the user toward a change they already made.
+// Devnet is the one network the user hosts, so state what the wallet will dial
+// and the chain id the write-path guard checks before a write fails on it.
 const devnetHint = (status: WalletStatus, preferences: WalletPreferences | null): string => {
   if (status.networkId !== "SN_DEVNET") {
     return "";

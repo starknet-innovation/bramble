@@ -21,10 +21,8 @@ describe("friendlyError", () => {
     }
   });
 
-  // The raw guard string names neither the cause nor a remedy, and the chain ids
-  // it compares are opaque felts, so the mapping must supply the actual fix. The
-  // guard fires on every network, so the copy must stay network-agnostic — the
-  // devnet-only `--chain-id` flag belongs on the network screen, not here.
+  // The raw string names neither cause nor remedy, so the mapping supplies the
+  // fix — and stays network-agnostic, since the guard fires on every network.
   test("turns the write-path chain guard into an actionable endpoint hint", () => {
     const result = friendlyError(WRONG_CHAIN_MESSAGE);
     expect(result.copyable).toBe(false);

@@ -202,9 +202,8 @@ describe("starknet RPC helpers", () => {
     expect(writes).toEqual(["https://selected.example"]);
   });
 
-  // A wrong-chain endpoint tells the user what to fix; an unreachable one does
-  // not. Reporting the later transport failure would hide the actual cause, and
-  // the friendly-error mapping keys on this exact message.
+  // A wrong chain is actionable; an unreachable endpoint is not. The later
+  // transport failure must not replace it.
   test("reports a wrong-chain endpoint even when a later endpoint is unreachable", async () => {
     const provider = (nodeUrl: string) =>
       ({

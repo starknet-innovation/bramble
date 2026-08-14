@@ -48,11 +48,8 @@ const EXACT: ReadonlyMap<string, string> = new Map([
     "Blocked for safety: the swap asked to approve the wrong token. Nothing was signed.",
   ],
   ["token list unavailable", "Couldn't load the token list. Check your connection and try again."],
-  // The write-path endpoint guard, which fires on every network — the raw text
-  // names neither cause nor remedy and compares two opaque short-string felts.
-  // The remedy is the endpoint, so the copy points at where endpoints are set;
-  // the devnet-only `--chain-id SN_DEVNET` requirement is stated on that same
-  // screen by the network picker, where it is true rather than guessed at.
+  // Fires on every network, so the copy stays endpoint-generic; the devnet-only
+  // `--chain-id SN_DEVNET` flag is stated by the network picker instead.
   [
     WRONG_CHAIN_MESSAGE.toLowerCase(),
     "That endpoint reports a different Starknet chain, so nothing was submitted. Check the endpoint under Network → Advanced.",

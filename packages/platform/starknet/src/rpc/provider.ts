@@ -24,10 +24,8 @@ export {
 } from "./account-signer";
 
 /**
- * Raw message thrown when every configured endpoint reports a chain other than
- * the caller's. Exported because the UI maps this exact string to user-facing
- * copy: a hand-copied duplicate would turn that mapping into dead code the
- * moment this wording changed, with every gate still green.
+ * Thrown when no endpoint reports the expected chain. The UI maps this exact
+ * string, so read it here rather than copying the wording.
  */
 export const WRONG_CHAIN_MESSAGE = "RPC endpoint returned the wrong Starknet chain";
 
@@ -403,9 +401,8 @@ export const withRpcWrite = async <T>(
 ): Promise<T> => {
   let selected: RpcProvider | null = null;
   let lastError: unknown = new WalletError("No RPC endpoints configured");
-  // A wrong-chain endpoint is strictly more diagnostic than an unreachable one,
-  // so it is kept apart from `lastError` and wins: a later endpoint that simply
-  // fails to answer must not bury the reason the first one was rejected.
+  // Kept out of `lastError` so a later unreachable endpoint cannot bury it: a
+  // wrong chain is the only outcome here the user can act on.
   let chainMismatch: WalletError | null = null;
   for (const nodeUrl of rpcUrls) {
     try {
