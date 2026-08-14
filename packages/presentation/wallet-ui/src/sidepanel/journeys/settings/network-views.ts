@@ -19,6 +19,15 @@ import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { strk20ServicesForm } from "../privacy/privacy-settings-view";
 
+// Devnet is the one network whose node the user runs themselves, so selecting it
+// is the moment to state what the wallet expects: the bundled endpoint and the
+// chain id the write-path guard checks. Both are recoverable through the
+// advanced endpoint editor one row below, which is why the nudge points there.
+const devnetHint = (status: WalletStatus): string =>
+  status.networkId === "SN_DEVNET"
+    ? `<p class="hint">Expects a node on 127.0.0.1:5050 started with --chain-id SN_DEVNET. Running yours elsewhere? Set a custom RPC under Advanced.</p>`
+    : "";
+
 const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   preferences && isStarknetNetworkId(status.networkId)
     ? (preferences.rpcOverrides?.[status.networkId] ?? "")
@@ -107,6 +116,7 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
           .join("")}
       </div>
       <p class="hint">Switching selects or derives an account on the target network.</p>
+      ${devnetHint(status)}
       <p id="picker-result" role="status"></p>
     </section>
     <section class="section">

@@ -20,6 +20,16 @@ describe("friendlyError", () => {
     }
   });
 
+  // The raw guard string names neither the cause nor a remedy, and the chain ids
+  // it compares are opaque felts, so the mapping must supply the actual fix.
+  test("turns the write-path chain guard into an actionable devnet hint", () => {
+    const result = friendlyError("RPC endpoint returned the wrong Starknet chain");
+    expect(result.copyable).toBe(false);
+    expect(result.message).toContain("--chain-id SN_DEVNET");
+    expect(result.message).toContain("Advanced");
+    expect(result.message).toContain("nothing was submitted");
+  });
+
   test("maps 'wallet unavailable' to a friendly, non-copyable message", () => {
     const result = friendlyError("wallet unavailable");
     expect(result).toEqual({

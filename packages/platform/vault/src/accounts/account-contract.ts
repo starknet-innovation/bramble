@@ -33,13 +33,36 @@ const ownValue = (record: Record<string, unknown>, field: string): unknown => {
   return descriptor?.enumerable === true && "value" in descriptor ? descriptor.value : undefined;
 };
 
+// The OpenZeppelin `AccountUpgradeable` class that `starknet-devnet` predeclares
+// (`devnet_getConfig` -> `account_contract_class_hash`). Krusty publishes the
+// preset per chain it is *declared* on and has no devnet entry, and a local
+// devnet declares only its own build — so the mainnet/sepolia hash is absent
+// there and every deployment dies at fee estimation with "Class ... is not
+// declared". This is the same preset with the identical
+// `constructor(public_key: felt252)`, so calldata and address derivation are
+// unchanged; only the hash differs. It is devnet-VERSION specific: if a devnet
+// upgrade changes it, read the new value from `devnet_getConfig` and update
+// here — nothing in CI can pin it, since CI runs no devnet.
+const DEVNET_OZ_ACCOUNT_CLASS_HASH =
+  "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564";
+
 /**
- * Reads the OpenZeppelin account class hash from Krusty for a network.
+ * Reads the OpenZeppelin account class hash for a network: Krusty's declaration
+ * for the real chains, and the devnet node's own predeclared class for devnet.
+ *
+ * Declaredness is per-chain and nothing here or on the deploy path proves it, so
+ * a devnet running a build whose account class differs from
+ * {@link DEVNET_OZ_ACCOUNT_CLASS_HASH} still fails at fee estimation — as does
+ * an Argent account on any devnet that has not declared that class itself.
  */
 export const getOzAccountClassHash = async (
   kms: KmsPort,
   networkId: StarknetNetworkId,
 ): Promise<string> => {
+  if (networkId === "SN_DEVNET") {
+    return canonicalFelt(DEVNET_OZ_ACCOUNT_CLASS_HASH) as string;
+  }
+
   const hashes = parseClassHashes(await kms.getAccountClassHashes());
   const ozHashes = isRecord(hashes) ? ownValue(hashes, "oz") : null;
   if (!isRecord(ozHashes)) {

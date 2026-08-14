@@ -78,7 +78,10 @@ export const STARKNET_NETWORKS = {
     // network above and makes `networkIdForChainId` non-deterministic. We use a
     // distinct sentinel — the short-string encoding of "SN_DEVNET" — so devnet
     // resolves unambiguously and chain switching cannot silently alias Sepolia.
-    // Nothing in the wallet depends on the literal devnet chain id.
+    // The node must agree: start it with `--chain-id SN_DEVNET`, because the
+    // write path checks this value against `starknet_chainId` and a default
+    // devnet (which reports Sepolia's id) fails closed with "RPC endpoint
+    // returned the wrong Starknet chain".
     chainId: "0x534e5f4445564e4554",
     id: "SN_DEVNET",
     name: "Local Devnet",
