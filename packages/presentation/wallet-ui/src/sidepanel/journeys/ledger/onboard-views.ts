@@ -18,7 +18,7 @@ import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import { icon } from "../../shared/icons";
 import { accountLabel } from "../../shared/parts";
-import type { LedgerCandidate, LedgerOnboardAddKind } from "./onboard-session";
+import type { LedgerCandidate, LedgerOnboardAddKind } from "./onboard-types";
 import type { LedgerDeviceChoice } from "./sign-session";
 
 // The dismiss control rendered in every onboarding state so the full-screen

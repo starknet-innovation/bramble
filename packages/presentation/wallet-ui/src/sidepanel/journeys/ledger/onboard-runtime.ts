@@ -16,11 +16,13 @@ import {
   createLedgerOnboardController,
   enumerateLedgerPubKeys,
   LEDGER_PAGE_SIZE,
-  type LedgerCandidateState,
-  type LedgerOnboardAddKind,
-  type LedgerOnboardController,
-  type LedgerOnboardView,
 } from "./onboard-session";
+import type {
+  LedgerCandidateState,
+  LedgerOnboardAddKind,
+  LedgerOnboardController,
+  LedgerOnboardView,
+} from "./onboard-types";
 import {
   addAccountChooser,
   ledgerAccountPicker,

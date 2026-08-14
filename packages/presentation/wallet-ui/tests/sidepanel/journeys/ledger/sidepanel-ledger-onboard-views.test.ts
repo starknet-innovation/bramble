@@ -6,7 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import type { LedgerCandidate } from "../../../../src/sidepanel/journeys/ledger/onboard-session";
+import type { LedgerCandidate } from "../../../../src/sidepanel/journeys/ledger/onboard-types";
 import {
   addAccountChooser,
   ledgerAccountPicker,

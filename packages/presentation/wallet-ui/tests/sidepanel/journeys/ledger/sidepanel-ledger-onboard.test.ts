@@ -1,10 +1,9 @@
 /**
- * Coverage for Ledger onboarding: the silent PAGINATED multi-index enumeration
- * (version gate + serial getPubKey per page) against an injected fake device
- * client and the controller: connect reads the first page, "Show more" appends
- * the next, toggling selects indexes, "Add selected" adds exactly those, and
- * the chooser routes HD/import/ledger. Pure template coverage lives in
- * `sidepanel-ledger-onboard-views.test.ts`.
+ * Coverage for Ledger onboarding: the silent PAGINATED multi-index enumeration (version
+ * gate + serial getPubKey per page) against an injected fake device client and the
+ * controller: connect reads the first page, "Show more" appends the next, toggling selects
+ * indexes, "Add selected" adds exactly those, and the chooser routes each add kind.
+ * Templates: `sidepanel-ledger-onboard-views.test.ts`.
  */
 import { describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
@@ -14,9 +13,11 @@ import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import {
   createLedgerOnboardController,
   enumerateLedgerPubKeys,
-  type LedgerOnboardControllerDeps,
-  type LedgerOnboardView,
 } from "../../../../src/sidepanel/journeys/ledger/onboard-session";
+import type {
+  LedgerOnboardControllerDeps,
+  LedgerOnboardView,
+} from "../../../../src/sidepanel/journeys/ledger/onboard-types";
 import type { LedgerConnector } from "../../../../src/sidepanel/journeys/ledger/sign-session";
 
 const version = (major: number) => ({
