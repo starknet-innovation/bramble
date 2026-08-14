@@ -6,8 +6,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { AccountContractType, AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
-import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
+import { locked, onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
+import { bindUnlock } from "../../../../src/sidepanel/journeys/onboarding/unlock-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
@@ -406,5 +407,61 @@ describe("staged onboarding", () => {
     expect(activeStep(flow.app)).toBe("ledger");
     click(flow.app, '[data-onboarding-step="ledger"] [data-onboarding-back]');
     expect(activeStep(flow.app)).toBe("method");
+  });
+});
+
+describe("locked vault handoff", () => {
+  const unlockedStatus: WalletStatus = {
+    ...status,
+    accountCount: 1,
+    hasVault: true,
+    locked: false,
+  };
+
+  test("forwards the passphrase and renders the unlocked status", async () => {
+    document.body.innerHTML = `<main id="app">${locked({ ...unlockedStatus, locked: true })}</main>`;
+    const passphrases: string[] = [];
+    const rendered: WalletStatus[] = [];
+    bindUnlock({
+      app: document.querySelector("#app"),
+      render: async (next) => {
+        rendered.push(next);
+      },
+      wallet: {
+        unlockVault: async (vaultPassphrase: string) => {
+          passphrases.push(vaultPassphrase);
+          return unlockedStatus;
+        },
+      } as unknown as SidepanelWallet,
+    });
+
+    setValue(document, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    document.querySelector<HTMLFormElement>("#unlock-form")?.requestSubmit();
+    await tick();
+
+    expect(passphrases).toEqual([PASSPHRASE]);
+    expect(rendered).toEqual([unlockedStatus]);
+  });
+
+  test("restores the form and reports a rejected unlock", async () => {
+    document.body.innerHTML = `<main id="app">${locked({ ...unlockedStatus, locked: true })}</main>`;
+    bindUnlock({
+      app: document.querySelector("#app"),
+      render: async () => undefined,
+      wallet: {
+        unlockVault: async () => {
+          throw new Error("Incorrect passphrase");
+        },
+      } as unknown as SidepanelWallet,
+    });
+
+    setValue(document, 'input[name="vaultPassphrase"]', "wrong passphrase");
+    document.querySelector<HTMLFormElement>("#unlock-form")?.requestSubmit();
+    await tick();
+
+    expect(document.querySelector("#form-result")?.textContent).toBe("Incorrect passphrase");
+    expect(
+      document.querySelector<HTMLButtonElement>('#unlock-form button[type="submit"]')?.disabled,
+    ).toBe(false);
   });
 });

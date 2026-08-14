@@ -2,7 +2,15 @@
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import { UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
-import { multisigWatchFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
+import { multisigAccountOptions } from "../../../../src/sidepanel/journeys/multisig/multisig-account-options";
+import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
+import {
+  multisigAddFlow,
+  multisigReceiveFlow,
+  multisigSignersFlow,
+  multisigTrackFlow,
+  multisigWatchFlow,
+} from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
 import {
   multisigDetailFlow,
   multisigProposeFlow,
@@ -187,5 +195,52 @@ describe("Argent frozen-intent composer", () => {
     });
     expect(html).toContain("Current on-chain signer authority is unavailable");
     expect(html).not.toContain('id="multisig-propose-form"');
+  });
+});
+
+describe("Argent multisig management views", () => {
+  test("renders deployment availability and exact constructor inputs", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const account = fixture.status.accounts[0] ?? null;
+
+    expect(multisigDeployFlow(fixture.status, null, true)).toContain("No account on");
+    expect(multisigDeployFlow(fixture.status, account, false)).toContain("not declared");
+    expect(multisigDeployFlow(fixture.status, account, null)).toContain(
+      "Checking the pinned class",
+    );
+    expect(multisigDeployFlow(fixture.status, account, "error")).toContain(
+      "Deployment remains disabled",
+    );
+    const ready = multisigDeployFlow(fixture.status, account, true, defaultWalletPreferences());
+    expect(ready).toContain('id="multisig-deploy-form"');
+    expect(ready).toContain(`value="${account?.publicKeyX}"`);
+    expect(ready).toContain("Review deployment");
+  });
+
+  test("renders setup, live authority, receive, import, and account-picker states", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const account = fixture.status.accounts[0] ?? null;
+
+    expect(multisigAddFlow(fixture.status, account)).toContain("Create a new multisig");
+    expect(multisigAddFlow(fixture.status, null)).toContain("No account on");
+    expect(multisigSignersFlow(fixture.status, account, null)).toContain("no longer watched");
+    expect(multisigSignersFlow(fixture.status, account, fixture.view)).toContain(
+      fixture.view.config?.signerGuids[0] ?? "missing",
+    );
+    expect(
+      multisigSignersFlow(fixture.status, account, { ...fixture.view, config: null }),
+    ).toContain("Signing is disabled");
+    expect(multisigReceiveFlow(fixture.status, null)).toContain("no longer watched");
+    expect(multisigReceiveFlow(fixture.status, fixture.view)).toContain(fixture.record.address);
+    expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched Argent multisig");
+    expect(multisigTrackFlow(fixture.status, fixture.view)).toContain('id="multisig-track-form"');
+
+    const options = multisigAccountOptions(
+      [fixture.view, { ...fixture.view, config: null }],
+      fixture.record.id,
+    );
+    expect(options).toContain('aria-pressed="true"');
+    expect(options).toContain("1 of 1");
+    expect(options).toContain("authority unavailable");
   });
 });
