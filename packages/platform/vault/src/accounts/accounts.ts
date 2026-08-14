@@ -3,9 +3,9 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import { isRecord } from "@mc-wallet/core/json";
 import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
 import type {
+  AccountContractType,
   AccountRef,
   DerivedAccountRef,
   ImportedAccountRef,
@@ -28,8 +28,10 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 import { isMnemonicPassphrase, isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
 import type { KmsPort } from "../kms-port";
+import { deriveAccountContractAddress, resolveAccountClassHash } from "./account-contract";
 
-const OZ_ACCOUNT_VERSION = "3.0.0";
+/** Account-contract class and address helpers exposed through this package subpath. */
+export { deriveAccountContractAddress, getOzAccountClassHash } from "./account-contract";
 
 // Krusty owns the private-key -> public-key mapping; the wallet must never
 // derive it locally. `signStarkHash` is the one KMS export that returns the
@@ -41,9 +43,11 @@ const PUBLIC_KEY_PROBE_HASH = "0x1";
  * Account derivation input accepted by the Krusty-backed wallet boundary.
  */
 export type AccountDerivationInput = {
+  readonly accountContractType: AccountContractType;
   readonly accountIndex?: number;
   readonly addressIndex?: number;
   readonly classHash?: string;
+  readonly deploymentSalt?: string;
   readonly mnemonic: string;
   readonly mnemonicPassphrase?: string;
   readonly networkId?: StarknetNetworkId;
@@ -61,7 +65,9 @@ export type AccountDerivationResult = {
  * Raw-private-key import input accepted by the Krusty-backed wallet boundary.
  */
 export type ImportedAccountInput = {
+  readonly accountContractType: AccountContractType;
   readonly classHash?: string;
+  readonly deploymentSalt?: string;
   readonly networkId?: StarknetNetworkId;
   readonly privateKey: string;
 };
@@ -73,14 +79,6 @@ export type ImportedAccountInput = {
 export type ImportedAccountResult = {
   readonly account: ImportedAccountRef;
   readonly privateKey: string;
-};
-
-const parseClassHashes = (json: string): unknown => {
-  try {
-    return JSON.parse(json) as unknown;
-  } catch {
-    throw new WalletError("Krusty KMS returned invalid class hash JSON");
-  }
 };
 
 const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
@@ -107,37 +105,6 @@ const canonicalKeypair = (
   };
 };
 
-const ownValue = (record: Record<string, unknown>, field: string): unknown => {
-  const descriptor = Object.getOwnPropertyDescriptor(record, field);
-  return descriptor?.enumerable === true && "value" in descriptor ? descriptor.value : undefined;
-};
-
-/**
- * Reads the OpenZeppelin account class hash from Krusty for a network.
- */
-export const getOzAccountClassHash = async (
-  kms: KmsPort,
-  networkId: StarknetNetworkId,
-): Promise<string> => {
-  const hashes = parseClassHashes(await kms.getAccountClassHashes());
-  const ozHashes = isRecord(hashes) ? ownValue(hashes, "oz") : null;
-
-  if (!isRecord(ozHashes)) {
-    throw new WalletError("Krusty KMS class hashes are missing oz accounts");
-  }
-
-  const version = ownValue(ozHashes, OZ_ACCOUNT_VERSION);
-  const classHash = isRecord(version) ? ownValue(version, networkId) : null;
-  if (typeof classHash !== "string") {
-    throw new WalletError(`Krusty KMS class hashes are missing ${networkId}`);
-  }
-
-  if (!isNonZeroStarkFieldElement(classHash)) {
-    throw new WalletError("Krusty KMS returned an invalid class hash");
-  }
-  return canonicalFelt(classHash) as string;
-};
-
 /**
  * Derives account metadata and signing key through Krusty KMS only.
  */
@@ -161,12 +128,13 @@ export const deriveAccount = async (
     throw new WalletError("Invalid Starknet network");
   }
 
-  const classHashInput = input.classHash ?? (await getOzAccountClassHash(kms, networkId));
-  if (!isNonZeroStarkFieldElement(classHashInput)) {
-    throw new WalletError("Invalid account class hash");
-  }
-  const classHash = canonicalFelt(classHashInput) as string;
-
+  const accountContractType = input.accountContractType;
+  const resolvedClassHash = await validatedNetworkClassHash(
+    kms,
+    accountContractType,
+    networkId,
+    input.classHash,
+  );
   const { privateKey, publicKeyX, publicKeyY } = canonicalKeypair(
     await kms.deriveStarknetKeypair(
       input.mnemonic,
@@ -176,14 +144,21 @@ export const deriveAccount = async (
     ),
   );
 
-  const addressInput = await kms.deriveOzAccountAddress(publicKeyX, classHash);
-  if (!isNonZeroStarkFieldElement(addressInput)) {
-    throw new WalletError("Krusty KMS returned invalid account address");
-  }
-  const address = canonicalFelt(addressInput) as string;
+  const { address, classHash, deploymentSalt } = await deriveAccountContractAddress(kms, {
+    classHash: resolvedClassHash,
+    accountContractType,
+    ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+    networkId,
+    publicKeyX,
+  });
+  const contract =
+    accountContractType === "argent"
+      ? { accountContractType, deploymentSalt: deploymentSalt as string }
+      : { accountContractType };
 
   return {
     account: {
+      ...contract,
       address,
       classHash,
       derivation: {
@@ -207,17 +182,24 @@ export const deriveAccount = async (
  * the one used to enumerate and sign.
  */
 export type LedgerAccountInput = LedgerPubKeyEntry & {
+  readonly accountContractType: AccountContractType;
   readonly classHash?: string;
+  readonly deploymentSalt?: string;
   readonly eip2645application?: string;
   readonly networkId?: StarknetNetworkId;
 };
 
 const validatedNetworkClassHash = async (
   kms: KmsPort,
+  accountContractType: AccountContractType,
   networkId: StarknetNetworkId,
   classHash: string | undefined,
 ): Promise<string> => {
-  const resolved = classHash ?? (await getOzAccountClassHash(kms, networkId));
+  const resolved = await resolveAccountClassHash(
+    kms,
+    { accountContractType, ...(classHash ? { classHash } : {}) },
+    networkId,
+  );
   if (!isNonZeroStarkFieldElement(resolved)) {
     throw new WalletError("Invalid account class hash");
   }
@@ -250,15 +232,28 @@ export const deriveLedgerAccount = async (
     throw new WalletError("Invalid Starknet network");
   }
 
-  const classHash = await validatedNetworkClassHash(kms, networkId, input.classHash);
+  const accountContractType = input.accountContractType;
+  const resolvedClassHash = await validatedNetworkClassHash(
+    kms,
+    accountContractType,
+    networkId,
+    input.classHash,
+  );
   const publicKeyX = canonicalFelt(input.publicKeyX) as string;
-  const addressInput = await kms.deriveOzAccountAddress(publicKeyX, classHash);
-  if (!isNonZeroStarkFieldElement(addressInput)) {
-    throw new WalletError("Krusty KMS returned invalid account address");
-  }
-  const address = canonicalFelt(addressInput) as string;
+  const { address, classHash, deploymentSalt } = await deriveAccountContractAddress(kms, {
+    classHash: resolvedClassHash,
+    accountContractType,
+    ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+    networkId,
+    publicKeyX,
+  });
+  const contract =
+    accountContractType === "argent"
+      ? { accountContractType, deploymentSalt: deploymentSalt as string }
+      : { accountContractType };
 
   return {
+    ...contract,
     address,
     classHash,
     derivation: {
@@ -281,7 +276,9 @@ export const deriveLedgerAccount = async (
 export const deriveLedgerAccountRefs = async (
   kms: KmsPort,
   input: {
+    readonly accountContractType: AccountContractType;
     readonly classHash?: string;
+    readonly deploymentSalt?: string;
     readonly entries: readonly LedgerPubKeyEntry[];
     readonly networkId?: StarknetNetworkId;
   },
@@ -290,12 +287,20 @@ export const deriveLedgerAccountRefs = async (
   if (!isStarknetNetworkId(networkId)) {
     throw new WalletError("Invalid Starknet network");
   }
-  const classHash = await validatedNetworkClassHash(kms, networkId, input.classHash);
+  const accountContractType = input.accountContractType;
+  const classHash = await validatedNetworkClassHash(
+    kms,
+    accountContractType,
+    networkId,
+    input.classHash,
+  );
   return Promise.all(
     input.entries.map((entry) =>
       deriveLedgerAccount(kms, {
+        accountContractType,
         accountIndex: entry.accountIndex,
         classHash,
+        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
         networkId,
         publicKeyX: entry.publicKeyX,
       }),
@@ -372,12 +377,13 @@ export const deriveImportedAccount = async (
     throw new WalletError("Invalid Starknet network");
   }
 
-  const classHashInput = input.classHash ?? (await getOzAccountClassHash(kms, networkId));
-  if (!isNonZeroStarkFieldElement(classHashInput)) {
-    throw new WalletError("Invalid account class hash");
-  }
-  const classHash = canonicalFelt(classHashInput) as string;
-
+  const accountContractType = input.accountContractType;
+  const resolvedClassHash = await validatedNetworkClassHash(
+    kms,
+    accountContractType,
+    networkId,
+    input.classHash,
+  );
   const probe = await kms.signStarkHash(privateKey, PUBLIC_KEY_PROBE_HASH);
   if (!isNonZeroStarkFieldElement(probe.publicKey)) {
     throw new WalletError("Krusty KMS returned invalid public key");
@@ -393,14 +399,21 @@ export const deriveImportedAccount = async (
     throw new WalletError("Krusty KMS public-key probe did not verify");
   }
 
-  const addressInput = await kms.deriveOzAccountAddress(publicKeyX, classHash);
-  if (!isNonZeroStarkFieldElement(addressInput)) {
-    throw new WalletError("Krusty KMS returned invalid account address");
-  }
-  const address = canonicalFelt(addressInput) as string;
+  const { address, classHash, deploymentSalt } = await deriveAccountContractAddress(kms, {
+    classHash: resolvedClassHash,
+    accountContractType,
+    ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+    networkId,
+    publicKeyX,
+  });
+  const contract =
+    accountContractType === "argent"
+      ? { accountContractType, deploymentSalt: deploymentSalt as string }
+      : { accountContractType };
 
   return {
     account: {
+      ...contract,
       address,
       classHash,
       derivation: { kind: "imported-raw-key" },

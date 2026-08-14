@@ -87,7 +87,7 @@ const buildStamp = {
 
 await run(["bun", "run", "check:extension"]);
 await run(["bun", "run", "check:krusty"]);
-await run(["bun", "run", "check:multisig"]);
+await run(["bun", "run", "check:argent"]);
 await run(["bun", "run", "check:privacy"]);
 await rm(outdir, { force: true, recursive: true });
 await mkdir(outdir, { recursive: true });
@@ -198,9 +198,4 @@ await mkdir(join(outdir, "vendor/starknet-privacy/sdk"), { recursive: true });
 await cp(
   "vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.min.js",
   join(outdir, "vendor/starknet-privacy/sdk/starknet-sdk.min.js"),
-);
-await mkdir(join(outdir, "vendor/multisig"), { recursive: true });
-await cp(
-  "vendor/multisig/multisig.contract_class.json",
-  join(outdir, "vendor/multisig/multisig.contract_class.json"),
 );

@@ -64,6 +64,9 @@ const RAW_ERROR_BOUNDARY_FILES = new Set([
 const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/ledger/account-hash-signer.ts",
   "apps/extension/src/background/accounts/account-creation-inputs.ts",
+  // Privileged first-run boundary: the phrase is validated through Krusty and
+  // only the boolean verdict returns; the phrase is never logged or persisted.
+  "apps/extension/src/background/onboarding/onboarding-ops.ts",
   // Keeps the unlocked vault credential inside the privileged worker while
   // coordinating fail-closed network/vault commits; never persists or emits it.
   "apps/extension/src/background/runtime/active-network-mutation.ts",
@@ -128,14 +131,40 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-views.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  // English BIP39 word list embeds the token `seed`; assist-only, never crypto.
+  "packages/presentation/wallet-ui/src/recovery/bip39-english.ts",
+  "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-import-bind.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-word-assist.ts",
+  // Locked-gate UI forwards the passphrase to the privileged background and
+  // neither persists it nor renders it.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/unlock-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
+  // Privileged UI message client: credentials transit directly to the
+  // background and are never retained or rendered here.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime-accounts.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-runtime.ts",
+  // Public Argent multisig packages and verified signature fragments cross
+  // these UI boundaries; no private signing material is ever present.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-model.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-runtime.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-views.ts",
   "packages/features/transactions/src/routing/ledger-verify.ts",
   // Pure public-key verification consolidated for Ledger and KMS probe
   // callers; it receives no private key or vault credential.
   "packages/platform/starknet/src/transactions/signature-verify.ts",
+  // Public account ABI serialization and signer façades. These files carry
+  // public keys/signature fragments; private-key operations remain in Krusty.
+  "packages/platform/starknet/src/accounts/account-contracts.ts",
+  "packages/platform/starknet/src/rpc/account-signer.ts",
+  "packages/platform/starknet/src/rpc/multisig-invoke.ts",
+  "packages/platform/starknet/src/rpc/rpc-estimate.ts",
+  "packages/platform/starknet/src/transactions/declare.ts",
+  "packages/platform/starknet/src/transactions/deployment.ts",
   "packages/platform/starknet/src/rpc/provider.ts",
   "packages/platform/starknet/src/rpc/rpc.ts",
   "packages/features/privacy/src/policy/call-set-signer.ts",
@@ -145,6 +174,15 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
   "packages/features/privacy/src/paymaster/paymaster.ts",
   "packages/features/privacy/src/service.ts",
+  // Argent multisig stores public signer identifiers and verified public
+  // signature fragments only. Private signing remains behind Krusty and the
+  // privileged background accountHashSigner boundary.
+  "packages/features/multisig/src/chain.ts",
+  "packages/features/multisig/src/deploy.ts",
+  "packages/features/multisig/src/repository-schema.ts",
+  "apps/extension/src/background/multisig/multisig-deploy-ops.ts",
+  "apps/extension/src/background/multisig/multisig-inputs.ts",
+  "apps/extension/src/background/multisig/multisig-tx-ops.ts",
   "packages/platform/vault/src/accounts/account-secrets.ts",
   "packages/platform/vault/src/encrypted-store.ts",
   "packages/platform/vault/src/kms-port.ts",

@@ -45,6 +45,7 @@ export const CLEAN_RECIPIENT = "0x0777bb7890abcdef1234567890abcdef1234567890abcd
  * The mainnet account the parity suites send from.
  */
 export const poisoningAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

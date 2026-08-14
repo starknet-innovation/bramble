@@ -14,8 +14,9 @@ import {
 } from "@mc-wallet/core/json";
 import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
+  canonicalFelt,
   isHexChainId,
-  isStarkFieldElement,
+  isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
@@ -343,21 +344,24 @@ const okFieldPayload = <T>(
 // `{ ok: true, [flag]: true }` → `{ result: true }` (watchAsset, addStarknetChain).
 const okFlagPayload = (result: unknown, flag: string): ProviderPayload =>
   isRecord(result) && result["ok"] === true && result[flag] === true ? { result: true } : failed();
-// `{ ok: true, signature: { r, s } }` → the spec `[r, s]` felt pair. The halves
-// are checked with the shared field-element grammar, not a local hex regex: a
-// signature component is a felt, so the rule that admits it must be the same one
-// the signer, the verifier, and the storage boundary apply — a private
-// `/^0x[0-9a-f]+$/` copy here would also admit an over-wide or out-of-field
-// string that no other layer considers a felt.
+// `{ ok: true, signature }` carries the account contract's ABI signature:
+// OpenZeppelin `[r,s]`, or Argent Account `[1,0,publicKey,r,s]`. The fixed
+// discriminants and every felt are checked here because the background result
+// still crosses an extension-message boundary before it reaches the page.
 const signaturePayload: ResultMapper = (result) => {
   const signature = isRecord(result) && result["ok"] === true ? result["signature"] : null;
-  return isRecord(signature) &&
-    typeof signature["r"] === "string" &&
-    typeof signature["s"] === "string" &&
-    isStarkFieldElement(signature["r"]) &&
-    isStarkFieldElement(signature["s"])
-    ? { result: [signature["r"], signature["s"]] }
-    : failed();
+  if (!Array.isArray(signature)) {
+    return failed();
+  }
+  const isCanonicalSignatureFelt = (felt: unknown): felt is string =>
+    typeof felt === "string" && isNonZeroStarkFieldElement(felt) && canonicalFelt(felt) === felt;
+  const isOz = signature.length === 2 && signature.every(isCanonicalSignatureFelt);
+  const isArgent =
+    signature.length === 5 &&
+    signature[0] === "1" &&
+    signature[1] === "0" &&
+    signature.slice(2).every(isCanonicalSignatureFelt);
+  return isOz || isArgent ? { result: [...signature] } : failed();
 };
 // Validates the trusted account list (dapps never see indices or public keys).
 const readAccountRefs = (result: unknown) =>

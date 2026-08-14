@@ -65,9 +65,10 @@ export const sumFeeEstimates = (left: FeeEstimate, right: FeeEstimate): FeeEstim
  *
  * It is headroom, not slack. Two legitimate differences live inside it: gas
  * prices genuinely move between the moment the card is drawn and the moment the
- * user clicks, and the reviewed estimate is taken with `skipValidate` (so a
- * review can never open a Ledger prompt) while the signed one includes the
- * account's `__validate__`. Both are bounded, small, and in the same direction.
+ * user clicks, and an OZ/Ledger review estimate is taken with `skipValidate`
+ * (so a review can never open a device prompt) while the signed one includes
+ * the account's `__validate__`. Argent query signatures include validation
+ * without a private signer. Both differences are bounded and one-directional.
  * What the headroom is NOT is a licence for the cost to move without limit,
  * which is the whole of the exposure — 50% over a fee the user saw is a
  * different thing from an arbitrary multiple of it.

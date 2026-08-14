@@ -1,287 +1,473 @@
 /**
- * Record shapes, deterministic ids, and storage-boundary validators for the
- * multisig registry.
- *
- * Split out of ./repository so the persistence layer and the shapes it
- * persists each stay readable and under the file limit. Everything here is
- * pure: the store reads untrusted browser storage and hands each candidate
- * record to these guards, which fail closed rather than repairing anything —
- * an id that does not re-derive from its own fields is not that record.
+ * Pure record shapes and strict browser-storage validators for Argent multisig.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { isArgentMultisigCalls, MULTISIG_LIMITS } from "@mc-wallet/multisig/chain";
 import {
-  isMultisigCallInput,
-  isMultisigEntrypoint,
-  MULTISIG_LIMITS,
-} from "@mc-wallet/multisig/chain";
-import { isAccountId, isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
+  ARGENT_MULTISIG_CONTRACT,
+  argentMultisigAddress,
+  argentSignerGuid,
+  normalizeArgentMultisigConfig,
+} from "@mc-wallet/starknet/account-contracts";
+import {
+  isPreparedArgentMultisigInvokeV3,
+  type PreparedArgentMultisigInvokeV3,
+  samePreparedArgentMultisigInvokeV3,
+} from "@mc-wallet/starknet/multisig-invoke";
+import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
+import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
-  isStarkFieldElement,
   isStarknetNetworkId,
+  STARKNET_NETWORKS,
   type StarknetNetworkId,
+  sameFelt,
 } from "@mc-wallet/wallet-model/networks";
-
-const MAX_NAME_LENGTH = MULTISIG_LIMITS.nameLength;
-const MAX_SUMMARY_LENGTH = MULTISIG_LIMITS.summaryLength;
+import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 
 /**
- * One watched multisig contract. `quorum` and `signers` are the last
- * on-chain snapshot and refresh whenever the detail screen loads.
+ * Counterfactual constructor commitment retained for an account created here.
  */
-export type MultisigRecord = {
+type ArgentMultisigDeployment = {
+  readonly salt: string;
+  readonly signerPublicKeys: readonly string[];
+  readonly threshold: number;
+};
+
+/**
+ * Last chain-observed public signer configuration. This is mutable authority,
+ * kept separate from the immutable counterfactual deployment commitment.
+ */
+export type ArgentMultisigCurrentConfig = {
+  readonly signerPublicKeys: readonly string[];
+  readonly threshold: number;
+};
+
+/**
+ * Pinned shared-account metadata kept outside the single-signer vault.
+ */
+export type ArgentMultisigRecord = {
+  readonly accountContractType: "argent-multisig";
   readonly address: string;
+  readonly classHash: string;
+  readonly currentConfig?: ArgentMultisigCurrentConfig;
+  readonly deployment?: ArgentMultisigDeployment;
   readonly id: string;
   readonly name?: string;
   readonly networkId: StarknetNetworkId;
-  readonly quorum: number;
-  readonly signers: readonly string[];
 };
 
 /**
- * Inner call kept for proposals submitted through this wallet so execution
- * can rebuild the exact (call, salt) pair the id was derived from.
+ * Fresh class and signer authority bound to a frozen signing intent.
  */
-export type MultisigProposalCall = {
-  readonly calldata: readonly string[];
-  readonly contractAddress: string;
-  readonly entrypoint: string;
-  readonly salt: string;
+export type ArgentMultisigConfigSnapshot = {
+  readonly classHash: string;
+  readonly signerGuids: readonly string[];
+  readonly threshold: number;
 };
 
 /**
- * One tracked proposal. `call` is null for proposals tracked from a pasted
- * transaction id. `state` and `confirmations` are last-known snapshots.
- * `submitTransactionHash` is present for proposals submitted by this wallet and
- * links the proposal to the activity row that proves the submit is still
- * unmined.
+ * Lifecycle of one locally collected exact-hash signature set.
  */
-export type MultisigProposalRecord = {
-  readonly call: MultisigProposalCall | null;
-  readonly confirmations: number;
-  readonly confirmedBySigner?: boolean;
-  readonly confirmedBySignerAddress?: string;
-  /** Signers owned by this wallet whose confirmations were individually proved on-chain. */
-  readonly confirmedSignerAddresses?: readonly string[];
+export type ArgentMultisigIntentState =
+  | "accepted"
+  | "collecting"
+  | "ready"
+  | "rejected"
+  | "stale"
+  | "submitted";
+
+/**
+ * One frozen V3 transaction and its verified Starknet-key signature fragments.
+ * The platform guard re-computes `prepared.transactionHash`; this package never
+ * implements Starknet transaction hashing itself.
+ */
+export type ArgentMultisigSigningIntent = {
+  readonly accountId: string;
+  readonly broadcastTransactionHash?: string;
+  readonly configSnapshot: ArgentMultisigConfigSnapshot;
   readonly id: string;
-  readonly multisigId: string;
-  readonly state: "confirmed" | "executed" | "not-found" | "pending";
-  readonly submitTransactionHash?: string;
+  readonly prepared: PreparedArgentMultisigInvokeV3;
+  readonly signatures: readonly StarkSignature[];
+  readonly state: ArgentMultisigIntentState;
   readonly summary: string;
-  readonly txId: string;
 };
 
 /**
- * Durable claim for a fee-paying multisig submission. Claims are public
- * bookkeeping only: they contain no signing material and never authorize a
- * transaction. A claim is written before broadcast so two extension surfaces
- * cannot submit the same fee-paying operation concurrently.
+ * Durable deduplication claim written before signing or network mutation.
  */
-export type MultisigOperationRecord = {
+export type ArgentMultisigOperationRecord = {
   readonly accountId: string;
   readonly id: string;
-  readonly kind: "confirm" | "declare" | "deploy" | "execute" | "propose" | "revoke";
-  /**
-   * Watched multisig a proposal action belongs to. Absent on declare/deploy
-   * claims, whose target is a class hash or an address rather than a proposal
-   * id, and absent on proposal claims written before the namespace existed.
-   */
-  readonly multisigId?: string;
-  readonly networkId: StarknetNetworkId;
+  readonly kind: "deploy" | "sign" | "submit";
+  readonly signerGuid?: string;
   readonly target: string;
   readonly transactionHash?: string;
 };
 
+const ACCOUNT_KEYS = [
+  "accountContractType",
+  "address",
+  "classHash",
+  "currentConfig",
+  "deployment",
+  "id",
+  "name",
+  "networkId",
+] as const;
+
+const canonicalNonZeroFelt = (value: unknown): value is string =>
+  typeof value === "string" && isNonZeroStarkFieldElement(value) && canonicalFelt(value) === value;
+
+const isCanonicalFelt = (value: unknown): value is string =>
+  typeof value === "string" && canonicalFelt(value) === value;
+
 /**
- * Builds the deterministic id for a watched multisig from its network and
- * canonical address. Returns null when the address is not a felt.
+ * Strictly validates canonical ordered public signer configuration.
  */
-export const multisigId = (networkId: StarknetNetworkId, address: string): string | null => {
-  const canonical = canonicalFelt(address);
-  return canonical ? `${networkId}:${canonical}` : null;
+export const isArgentMultisigCurrentConfig = (
+  value: unknown,
+): value is ArgentMultisigCurrentConfig => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, ["signerPublicKeys", "threshold"]) ||
+    !Array.isArray(value["signerPublicKeys"]) ||
+    !value["signerPublicKeys"].every((key) => typeof key === "string") ||
+    !Number.isSafeInteger(value["threshold"])
+  ) {
+    return false;
+  }
+  try {
+    const keys = value["signerPublicKeys"] as string[];
+    const normalized = normalizeArgentMultisigConfig({
+      signerPublicKeys: keys,
+      threshold: Number(value["threshold"]),
+    });
+    return normalized.signerPublicKeys.every((key, index) => key === keys[index]);
+  } catch {
+    return false;
+  }
+};
+
+const isDeployment = (value: unknown): value is ArgentMultisigDeployment =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["salt", "signerPublicKeys", "threshold"]) &&
+  isCanonicalFelt(value["salt"]) &&
+  isArgentMultisigCurrentConfig({
+    signerPublicKeys: value["signerPublicKeys"],
+    threshold: value["threshold"],
+  });
+
+const deploymentMatchesAddress = (
+  deployment: ArgentMultisigDeployment | undefined,
+  address: string,
+): boolean => {
+  if (!deployment) {
+    return true;
+  }
+  try {
+    return sameFelt(
+      argentMultisigAddress(
+        {
+          signerPublicKeys: deployment.signerPublicKeys,
+          threshold: deployment.threshold,
+        },
+        deployment.salt,
+      ),
+      address,
+    );
+  } catch {
+    return false;
+  }
 };
 
 /**
- * Builds the deterministic id for a tracked proposal.
+ * Strictly validates one watched stable Argent multisig account.
  */
-export const multisigProposalId = (ownerId: string, txId: string): string | null => {
-  const canonical = canonicalFelt(txId);
-  return canonical && isAccountId(ownerId) ? `${ownerId}:${canonical}` : null;
+export const isArgentMultisigRecord = (value: unknown): value is ArgentMultisigRecord => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, ACCOUNT_KEYS) ||
+    (value["name"] !== undefined &&
+      (typeof value["name"] !== "string" ||
+        value["name"].length === 0 ||
+        value["name"].length > MULTISIG_LIMITS.nameLength))
+  ) {
+    return false;
+  }
+  return (
+    value["accountContractType"] === "argent-multisig" &&
+    canonicalNonZeroFelt(value["address"]) &&
+    value["classHash"] === ARGENT_MULTISIG_CONTRACT.classHash &&
+    isStarknetNetworkId(value["networkId"]) &&
+    value["id"] === `${value["networkId"]}:${value["address"]}` &&
+    (value["currentConfig"] === undefined ||
+      isArgentMultisigCurrentConfig(value["currentConfig"])) &&
+    (value["deployment"] === undefined || isDeployment(value["deployment"])) &&
+    deploymentMatchesAddress(
+      value["deployment"] as ArgentMultisigDeployment | undefined,
+      value["address"],
+    )
+  );
 };
 
 /**
- * Builds the deterministic key used to serialize one setup or proposal action.
- * Returns null for malformed account ids, owners, or targets.
- *
- * `owningMultisigId` namespaces a proposal action by the contract it runs
- * against. OpenZeppelin transaction ids hash `(call, salt)` and not the
- * contract, so two watched multisigs holding the identical proposal share one
- * id — without this component their claims collide and an action on one wedges
- * the other. Omitted for declare/deploy claims, whose target is already a class
- * hash or an address, and for the legacy proposal claims written before this
- * component existed, which keep their original (unnamespaced) key so an
- * in-flight upgrade does not silently free a live claim.
+ * Builds the deterministic intent id from shared account and prepared hash.
  */
-export const multisigOperationId = (
-  kind: MultisigOperationRecord["kind"],
-  networkId: StarknetNetworkId,
+export const argentMultisigIntentId = (
+  accountId: string,
+  transactionHash: string,
+): string | null => {
+  const hash = canonicalFelt(transactionHash);
+  return isAccountId(accountId) && hash !== null ? `${accountId}:${hash}` : null;
+};
+
+/**
+ * Builds a durable operation id, scoped by signer GUID only for signing.
+ */
+export const argentMultisigOperationId = (
+  kind: ArgentMultisigOperationRecord["kind"],
   accountId: string,
   target: string,
-  owningMultisigId?: string,
+  signerGuid?: string,
 ): string | null => {
-  const canonical = canonicalFelt(target);
-  if (!canonical || !isAccountIdForNetwork(accountId, networkId)) {
+  const canonicalTarget = canonicalFelt(target);
+  if (!isAccountId(accountId) || canonicalTarget === null) {
     return null;
   }
-  if (owningMultisigId === undefined) {
-    return `${kind}:${networkId}:${accountId}:${canonical}`;
+  if (kind === "sign") {
+    const canonicalGuid = canonicalFelt(signerGuid ?? "");
+    return canonicalGuid !== null && BigInt(canonicalGuid) !== 0n
+      ? `${kind}:${accountId}:${canonicalTarget}:${canonicalGuid}`
+      : null;
   }
-  return isAccountIdForNetwork(owningMultisigId, networkId)
-    ? `${kind}:${networkId}:${accountId}:${owningMultisigId}:${canonical}`
-    : null;
+  return signerGuid === undefined ? `${kind}:${accountId}:${canonicalTarget}` : null;
 };
 
-const isName = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0 && value.length <= MAX_NAME_LENGTH;
+const isConfigSnapshot = (value: unknown): value is ArgentMultisigConfigSnapshot => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, ["classHash", "signerGuids", "threshold"]) ||
+    value["classHash"] !== ARGENT_MULTISIG_CONTRACT.classHash ||
+    !Array.isArray(value["signerGuids"]) ||
+    value["signerGuids"].length === 0 ||
+    value["signerGuids"].length > MULTISIG_LIMITS.signers ||
+    !Number.isSafeInteger(value["threshold"]) ||
+    Number(value["threshold"]) < 1 ||
+    Number(value["threshold"]) > value["signerGuids"].length
+  ) {
+    return false;
+  }
+  const guids = value["signerGuids"];
+  return guids.every(
+    (guid, index) =>
+      canonicalNonZeroFelt(guid) &&
+      (index === 0 || BigInt(guids[index - 1] as string) < BigInt(guid)),
+  );
+};
 
-const isSummary = (value: unknown): value is string =>
-  typeof value === "string" && value.length <= MAX_SUMMARY_LENGTH;
+const isSignatureShape = (value: unknown): value is StarkSignature =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["publicKey", "r", "s"]) &&
+  canonicalNonZeroFelt(value["publicKey"]) &&
+  canonicalNonZeroFelt(value["r"]) &&
+  canonicalNonZeroFelt(value["s"]);
+
+const areValidSignatures = (
+  values: unknown,
+  config: ArgentMultisigConfigSnapshot,
+  transactionHash: string,
+): values is readonly StarkSignature[] => {
+  if (
+    !Array.isArray(values) ||
+    values.length > config.threshold ||
+    !values.every(isSignatureShape)
+  ) {
+    return false;
+  }
+  const members = new Set(config.signerGuids);
+  let priorGuid = 0n;
+  for (const signature of values) {
+    const guid = argentSignerGuid(signature.publicKey);
+    if (
+      !members.has(guid) ||
+      BigInt(guid) <= priorGuid ||
+      !verifyStarkSignature({
+        hash: transactionHash,
+        publicKeyX: signature.publicKey,
+        signature: { r: signature.r, s: signature.s },
+      })
+    ) {
+      return false;
+    }
+    priorGuid = BigInt(guid);
+  }
+  return true;
+};
+
+const accountScopeMatchesPrepared = (
+  accountId: string,
+  prepared: PreparedArgentMultisigInvokeV3,
+): boolean => {
+  const [networkId, address] = accountId.split(":");
+  return (
+    isStarknetNetworkId(networkId) &&
+    typeof address === "string" &&
+    sameFelt(address, prepared.senderAddress) &&
+    sameFelt(STARKNET_NETWORKS[networkId].chainId, prepared.chainId) &&
+    isArgentMultisigCalls(prepared.calls)
+  );
+};
+
+const hasStateConsistentAuthority = (intent: ArgentMultisigSigningIntent): boolean => {
+  const count = intent.signatures.length;
+  const threshold = intent.configSnapshot.threshold;
+  const broadcast = intent.broadcastTransactionHash;
+  if (intent.state === "collecting") {
+    return count < threshold && broadcast === undefined;
+  }
+  if (intent.state === "ready") {
+    return count === threshold && broadcast === undefined;
+  }
+  if (intent.state === "stale") {
+    return count <= threshold && broadcast === undefined;
+  }
+  return (
+    count === threshold &&
+    canonicalNonZeroFelt(broadcast) &&
+    sameFelt(broadcast, intent.prepared.transactionHash)
+  );
+};
 
 /**
- * Checks a stored multisig record before trusting it.
+ * Strictly validates a stored intent, including platform hash re-derivation,
+ * account/chain scope, signer membership/order, and every signature.
  */
-export const isMultisigRecord = (value: unknown): value is MultisigRecord =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["address", "id", "name", "networkId", "quorum", "signers"]) &&
-  typeof value["address"] === "string" &&
-  isNonZeroStarkFieldElement(value["address"]) &&
-  (value["name"] === undefined || isName(value["name"])) &&
-  isStarknetNetworkId(value["networkId"]) &&
-  typeof value["quorum"] === "number" &&
-  Number.isSafeInteger(value["quorum"]) &&
-  value["quorum"] >= 1 &&
-  Array.isArray(value["signers"]) &&
-  value["signers"].length >= value["quorum"] &&
-  value["signers"].length <= MULTISIG_LIMITS.signers &&
-  value["signers"].every(
-    (signer) => typeof signer === "string" && isNonZeroStarkFieldElement(signer),
+export const isArgentMultisigSigningIntent = (
+  value: unknown,
+): value is ArgentMultisigSigningIntent => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, [
+      "accountId",
+      "broadcastTransactionHash",
+      "configSnapshot",
+      "id",
+      "prepared",
+      "signatures",
+      "state",
+      "summary",
+    ]) ||
+    !isAccountId(value["accountId"]) ||
+    !isConfigSnapshot(value["configSnapshot"]) ||
+    !isPreparedArgentMultisigInvokeV3(value["prepared"]) ||
+    typeof value["summary"] !== "string" ||
+    value["summary"].length === 0 ||
+    value["summary"].length > MULTISIG_LIMITS.summaryLength ||
+    value["summary"].trim() !== value["summary"] ||
+    !["accepted", "collecting", "ready", "rejected", "stale", "submitted"].includes(
+      String(value["state"]),
+    )
+  ) {
+    return false;
+  }
+  const intent = value as unknown as ArgentMultisigSigningIntent;
+  return (
+    intent.id === argentMultisigIntentId(intent.accountId, intent.prepared.transactionHash) &&
+    accountScopeMatchesPrepared(intent.accountId, intent.prepared) &&
+    areValidSignatures(intent.signatures, intent.configSnapshot, intent.prepared.transactionHash) &&
+    hasStateConsistentAuthority(intent)
+  );
+};
+
+const sameConfigSnapshot = (
+  left: ArgentMultisigConfigSnapshot,
+  right: ArgentMultisigConfigSnapshot,
+): boolean =>
+  left.classHash === right.classHash &&
+  left.threshold === right.threshold &&
+  left.signerGuids.length === right.signerGuids.length &&
+  left.signerGuids.every((guid, index) => guid === right.signerGuids[index]);
+
+const sameSignature = (left: StarkSignature, right: StarkSignature): boolean =>
+  left.publicKey === right.publicKey && left.r === right.r && left.s === right.s;
+
+const validStateTransition = (
+  current: ArgentMultisigIntentState,
+  next: ArgentMultisigIntentState,
+): boolean => {
+  const allowed: Readonly<Record<ArgentMultisigIntentState, readonly ArgentMultisigIntentState[]>> =
+    {
+      accepted: ["accepted"],
+      collecting: ["collecting", "ready", "stale"],
+      ready: ["accepted", "ready", "rejected", "stale", "submitted"],
+      rejected: ["rejected"],
+      stale: ["stale"],
+      submitted: ["accepted", "rejected", "submitted"],
+    };
+  return allowed[current].includes(next);
+};
+
+/**
+ * Allows only monotonic signature collection and lifecycle transitions while
+ * keeping every reviewed/hash-bound field immutable.
+ */
+export const canReplaceArgentMultisigSigningIntent = (
+  current: ArgentMultisigSigningIntent,
+  next: ArgentMultisigSigningIntent,
+): boolean =>
+  isArgentMultisigSigningIntent(current) &&
+  isArgentMultisigSigningIntent(next) &&
+  current.accountId === next.accountId &&
+  current.id === next.id &&
+  current.summary === next.summary &&
+  sameConfigSnapshot(current.configSnapshot, next.configSnapshot) &&
+  samePreparedArgentMultisigInvokeV3(current.prepared, next.prepared) &&
+  current.signatures.every((signature) =>
+    next.signatures.some((candidate) => sameSignature(signature, candidate)),
   ) &&
-  value["id"] === multisigId(value["networkId"], value["address"]);
-
-const isProposalCall = (value: unknown): value is MultisigProposalCall =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["calldata", "contractAddress", "entrypoint", "salt"]) &&
-  Array.isArray(value["calldata"]) &&
-  typeof value["contractAddress"] === "string" &&
-  typeof value["entrypoint"] === "string" &&
-  isMultisigEntrypoint(value["entrypoint"]) &&
-  typeof value["salt"] === "string" &&
-  isStarkFieldElement(value["salt"]) &&
-  isMultisigCallInput({
-    calldata: value["calldata"].filter((felt): felt is string => typeof felt === "string"),
-    contractAddress: value["contractAddress"],
-    entrypoint: value["entrypoint"],
-  }) &&
-  value["calldata"].every((felt) => typeof felt === "string");
+  validStateTransition(current.state, next.state);
 
 /**
- * Checks a stored proposal record before trusting it.
+ * Strictly validates one durable operation claim and its deterministic id.
  */
-export const isMultisigProposalRecord = (value: unknown): value is MultisigProposalRecord =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, [
-    "call",
-    "confirmations",
-    "confirmedBySigner",
-    "confirmedBySignerAddress",
-    "confirmedSignerAddresses",
-    "id",
-    "multisigId",
-    "state",
-    "submitTransactionHash",
-    "summary",
-    "txId",
-  ]) &&
-  (value["call"] === null || isProposalCall(value["call"])) &&
-  typeof value["confirmations"] === "number" &&
-  Number.isSafeInteger(value["confirmations"]) &&
-  value["confirmations"] >= 0 &&
-  (value["confirmedBySigner"] === undefined || typeof value["confirmedBySigner"] === "boolean") &&
-  (value["confirmedBySignerAddress"] === undefined ||
-    (typeof value["confirmedBySignerAddress"] === "string" &&
-      isNonZeroStarkFieldElement(value["confirmedBySignerAddress"]))) &&
-  (value["confirmedSignerAddresses"] === undefined ||
-    (Array.isArray(value["confirmedSignerAddresses"]) &&
-      value["confirmedSignerAddresses"].length <= MULTISIG_LIMITS.signers &&
-      value["confirmedSignerAddresses"].every(
-        (signer) => typeof signer === "string" && isNonZeroStarkFieldElement(signer),
-      ) &&
-      new Set(value["confirmedSignerAddresses"].map(canonicalFelt)).size ===
-        value["confirmedSignerAddresses"].length)) &&
-  (value["confirmedBySigner"] === undefined) ===
-    (value["confirmedBySignerAddress"] === undefined) &&
-  isAccountId(value["multisigId"]) &&
-  (value["state"] === "confirmed" ||
-    value["state"] === "executed" ||
-    value["state"] === "not-found" ||
-    value["state"] === "pending") &&
-  (value["submitTransactionHash"] === undefined ||
-    (typeof value["submitTransactionHash"] === "string" &&
-      isStarkFieldElement(value["submitTransactionHash"]))) &&
-  isSummary(value["summary"]) &&
-  typeof value["txId"] === "string" &&
-  isStarkFieldElement(value["txId"]) &&
-  value["id"] === multisigProposalId(value["multisigId"], value["txId"]);
-
-// Reads the owning multisig for the id re-derivation. Anything that is not a
-// string reads as absent, and the clause in the validator independently rejects
-// such a record, so a malformed owner can never be re-derived into a valid key.
-const storedOwningMultisigId = (value: Record<string, unknown>): string | undefined => {
-  const owner = value["multisigId"];
-  return typeof owner === "string" ? owner : undefined;
-};
-
-/**
- * Checks a stored in-flight operation before using it as a deduplication
- * claim. Unknown fields and malformed hashes are rejected at the storage
- * boundary.
- */
-export const isMultisigOperationRecord = (value: unknown): value is MultisigOperationRecord =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, [
-    "accountId",
-    "id",
-    "kind",
-    "multisigId",
-    "networkId",
-    "target",
-    "transactionHash",
-  ]) &&
-  (value["kind"] === "confirm" ||
-    value["kind"] === "declare" ||
-    value["kind"] === "deploy" ||
-    value["kind"] === "execute" ||
-    value["kind"] === "propose" ||
-    value["kind"] === "revoke") &&
-  isStarknetNetworkId(value["networkId"]) &&
-  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
-  // A declare/deploy target is a class hash or a contract address, so an owning
-  // multisig would be meaningless there; only proposal actions carry one.
-  (value["multisigId"] === undefined ||
-    (value["kind"] !== "declare" &&
-      value["kind"] !== "deploy" &&
-      isAccountIdForNetwork(value["multisigId"], value["networkId"]))) &&
-  typeof value["target"] === "string" &&
-  isStarkFieldElement(value["target"]) &&
-  (value["transactionHash"] === undefined ||
-    (typeof value["transactionHash"] === "string" &&
-      isStarkFieldElement(value["transactionHash"]))) &&
-  value["id"] ===
-    multisigOperationId(
+export const isArgentMultisigOperationRecord = (
+  value: unknown,
+): value is ArgentMultisigOperationRecord => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, [
+      "accountId",
+      "id",
+      "kind",
+      "signerGuid",
+      "target",
+      "transactionHash",
+    ]) ||
+    !isAccountId(value["accountId"]) ||
+    (value["kind"] !== "deploy" && value["kind"] !== "sign" && value["kind"] !== "submit") ||
+    !canonicalNonZeroFelt(value["target"])
+  ) {
+    return false;
+  }
+  if (
+    value["kind"] === "sign"
+      ? !canonicalNonZeroFelt(value["signerGuid"]) || value["transactionHash"] !== undefined
+      : value["signerGuid"] !== undefined ||
+        (value["transactionHash"] !== undefined &&
+          (!canonicalNonZeroFelt(value["transactionHash"]) ||
+            (value["kind"] === "submit" && !sameFelt(value["transactionHash"], value["target"]))))
+  ) {
+    return false;
+  }
+  return (
+    value["id"] ===
+    argentMultisigOperationId(
       value["kind"],
-      value["networkId"],
       value["accountId"],
       value["target"],
-      storedOwningMultisigId(value),
-    );
+      typeof value["signerGuid"] === "string" ? value["signerGuid"] : undefined,
+    )
+  );
+};

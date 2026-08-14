@@ -6,7 +6,7 @@
  * rule is unit-testable.
  *
  * Trust boundary: the calls are untrusted (a dapp request, an aggregator build,
- * or a stored multisig proposal). Every authority-granting selector the wallet
+ * or a frozen multisig intent). Every authority-granting selector the wallet
  * knows about is decoded into its own {@link DecodedCall} kind first, so a rule
  * here never has to infer a grant from a summary string, and an unrecognized
  * call is reported as opaque rather than as safe.
@@ -91,6 +91,22 @@ export const refuseOnPoisonedRecipient = (
   const poisoning = report.flags.find((flag) => flag.code === "address-poisoning");
   return poisoning ? { error: poisoning.message } : null;
 };
+
+/**
+ * Refuses a dapp call directed at the acting account contract itself.
+ *
+ * Account self-calls can change owners, guardians, implementations, or other
+ * signing authority. Until each supported account ABI has an exact privileged
+ * review flow, a generic dapp approval must never authorize one. Felt aliases
+ * compare numerically so leading-zero spellings cannot bypass the boundary.
+ */
+export const refuseOnAccountSelfCall = (
+  calls: readonly Call[],
+  accountAddress: string,
+): { readonly error: string } | null =>
+  calls.some((call) => sameFelt(call.contractAddress, accountAddress))
+    ? { error: "Dapps cannot call the wallet account contract itself" }
+    : null;
 
 /**
  * Detects address poisoning: a candidate that visually mimics a trusted

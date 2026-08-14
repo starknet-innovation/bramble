@@ -10,6 +10,7 @@ import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { standingAllowanceTotals } from "@mc-wallet/transactions/allowances";
 import {
+  refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
@@ -37,7 +38,7 @@ import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { PassiveUnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import {
   readGetPermissionsInput,
@@ -196,7 +197,9 @@ export const queueInvokeApproval = async (
     trusted,
   );
   const report = verifyCalls(input.calls, trusted, standing);
-  const refusal = refuseOnPoisonedRecipient(report);
+  const refusal =
+    refuseOnAccountSelfCall(input.calls, resolved.account.address) ??
+    refuseOnPoisonedRecipient(report);
   if (refusal) {
     return refusal;
   }
@@ -427,6 +430,7 @@ export const executeInvokeApproval = async (
     return resolved;
   }
   const { account, preferences } = resolved;
+  const authorized = captureSessionAuthorization(deps.session);
   // The recipient policy is re-applied to the exact calls that are about to be
   // broadcast, not only to the ones that were queued: the address book can gain
   // a contact while the prompt sits open, and a payee that mimics it becomes a
@@ -434,11 +438,11 @@ export const executeInvokeApproval = async (
   // above and as the post-consent check the STRK20 executor applies, so a
   // decision the user made against one trusted set is never carried out against
   // another. Refusal, not annotation — nothing is submitted.
-  const poisoned = refuseOnPoisonedRecipient(
-    verifyCalls(calls, verificationContext(account, preferences)),
-  );
-  if (poisoned) {
-    return poisoned;
+  const refusal =
+    refuseOnAccountSelfCall(calls, account.address) ??
+    refuseOnPoisonedRecipient(verifyCalls(calls, verificationContext(account, preferences)));
+  if (refusal) {
+    return refusal;
   }
   // A keyless Ledger account signs on the device (verified against publicKeyX),
   // every other account through the vault — the same seam the wallet-initiated
@@ -469,6 +473,7 @@ export const executeInvokeApproval = async (
           account,
           calls,
           ...ceiling,
+          isAuthorized: authorized.isCurrent,
           rpcUrls,
           signHash: context.signHash,
         });

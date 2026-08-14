@@ -5,6 +5,7 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { isJson } from "@mc-wallet/core/json";
+import { serializeAccountSignature } from "@mc-wallet/starknet/account-contracts";
 import { createRpcProvider } from "@mc-wallet/starknet/provider";
 import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@mc-wallet/starknet/rpc-submit";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
@@ -24,6 +25,7 @@ import { strk20RegistrationBuilderFor } from "./official-sdk-builder";
 import { mapStrk20ProtocolError, mapStrk20StageError } from "./official-sdk-errors";
 import { createStrk20MaturityRuntime } from "./official-sdk-maturity";
 import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official-sdk-preparation";
+import { retryStrk20ServiceRead, type ServiceRetryPause } from "./official-sdk-retry";
 import type { PrivacySdkRuntime } from "./official-sdk-runtime";
 import { transfersFor } from "./official-sdk-transfers";
 import {
@@ -46,7 +48,7 @@ type OfficialServiceOptions = {
   readonly maturityStore?: Strk20MaturityStore;
   readonly nowSeconds?: () => number;
   readonly pauseForMaturity?: () => Promise<void>;
-  readonly pauseForServiceRetry?: (attempt: number) => Promise<void>;
+  readonly pauseForServiceRetry?: ServiceRetryPause;
   readonly providerFor?: (nodeUrl: string) => RpcProvider;
   readonly sdk: PrivacySdkRuntime;
   readonly submitInvoke?: typeof submitInvokeTransaction;
@@ -122,7 +124,10 @@ export const createOfficialStrk20Service = ({
     },
     async privateBalances(input) {
       try {
-        const result = await transfersFor(sdk, input).discoverNotes();
+        const result = await retryStrk20ServiceRead(
+          () => transfersFor(sdk, input).discoverNotes(),
+          pauseForServiceRetry,
+        );
         return balancesFrom(result.notes, input.tokens);
       } catch (error) {
         return mapStrk20ProtocolError(error);
@@ -140,14 +145,19 @@ export const createOfficialStrk20Service = ({
             input.rpcUrls,
             config.poolAddress,
             input.subject,
+            pauseForServiceRetry,
           );
           return registered ? "registered" : "unregistered";
         }
         const transfers = transfersFor(sdk, input);
-        if (!transfers.discoverRequirement || !sdk.SetupRequirement) {
+        const discoverRequirement = transfers.discoverRequirement;
+        if (!discoverRequirement || !sdk.SetupRequirement) {
           throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
         }
-        const requirement = await transfers.discoverRequirement(input.account.address, input.token);
+        const requirement = await retryStrk20ServiceRead(
+          () => discoverRequirement(input.account.address, input.token),
+          pauseForServiceRetry,
+        );
         return readSetupRequirement(sdk.SetupRequirement, requirement);
       } catch (error) {
         return mapStrk20ProtocolError(error);
@@ -209,6 +219,7 @@ export const createOfficialStrk20Service = ({
         input.rpcUrls,
         config.poolAddress,
         input.poolFeeFri,
+        pauseForServiceRetry,
       );
       return submission(
         input,
@@ -240,6 +251,7 @@ export const createOfficialStrk20Service = ({
                   entrypoint: "apply_actions",
                 },
               ],
+              isAuthorized: input.isAuthorized,
               proof: callAndProof.proof,
               rpcUrls: input.rpcUrls,
               signHash: async (messageHash) => {
@@ -256,7 +268,14 @@ export const createOfficialStrk20Service = ({
     },
     async poolFee(input) {
       const config = requireStrk20Config(input);
-      return num.toHex(await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress));
+      return num.toHex(
+        await readStrk20PoolFee(
+          providerFor,
+          input.rpcUrls,
+          config.poolAddress,
+          pauseForServiceRetry,
+        ),
+      );
     },
     async quoteActions(input) {
       const config = requireStrk20Config(input);
@@ -279,6 +298,7 @@ export const createOfficialStrk20Service = ({
         providerFor,
         input.rpcUrls,
         config.poolAddress,
+        pauseForServiceRetry,
       );
       return buildStrk20PaymasterPlan({
         accountAddress: input.account.address,
@@ -298,7 +318,7 @@ export const createOfficialStrk20Service = ({
       }
       try {
         const transfers = transfersFor(sdk, input);
-        await transfers.discoverNotes();
+        await retryStrk20ServiceRead(() => transfers.discoverNotes(), pauseForServiceRetry);
         const subaccount = transfers.build().subaccounts(input.dappName);
         const commitment =
           input.nonce === undefined
@@ -328,6 +348,7 @@ export const createOfficialStrk20Service = ({
           input.rpcUrls,
           config.poolAddress,
           accountPlan.poolFeeFri,
+          pauseForServiceRetry,
         );
         return submission(
           input,
@@ -362,6 +383,7 @@ export const createOfficialStrk20Service = ({
                     entrypoint: callAndProof.call.entry_point,
                   },
                 ],
+                isAuthorized: input.isAuthorized,
                 proof: callAndProof.proof,
                 reviewedFee,
                 rpcUrls: input.rpcUrls,
@@ -425,7 +447,7 @@ export const createOfficialStrk20Service = ({
                 input.account.address,
               );
               const signature = await input.signHash(messageHash);
-              return [signature.r, signature.s];
+              return serializeAccountSignature(input.account.accountContractType, signature);
             },
           })),
         }),
@@ -458,6 +480,7 @@ export const createOfficialStrk20Service = ({
           const result = await submitInvoke({
             account: prepared.account,
             calls,
+            isAuthorized: prepared.isAuthorized,
             proof: prepared.proof,
             ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
             rpcUrls: prepared.rpcUrls,

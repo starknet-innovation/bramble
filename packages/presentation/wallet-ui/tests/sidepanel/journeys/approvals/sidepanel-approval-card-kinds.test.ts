@@ -10,6 +10,7 @@ import type { PendingApproval, WalletStatus } from "../../../../src/popup/respon
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
 
 const account = {
+  accountContractType: "openzeppelin" as const,
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },

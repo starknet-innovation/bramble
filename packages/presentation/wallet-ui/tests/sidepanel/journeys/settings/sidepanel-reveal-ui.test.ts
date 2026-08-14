@@ -126,6 +126,7 @@ describe("bindReveal", () => {
 
   test("a Ledger active account shows the device-recovery note, not a reveal form", () => {
     const ledgerAccount = {
+      accountContractType: "openzeppelin" as const,
       address: account.address,
       classHash: account.classHash,
       derivation: {

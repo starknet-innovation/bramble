@@ -6,7 +6,12 @@
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
 import type { CreateVaultAccountInput } from "@mc-wallet/vault/service";
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import {
+  isStarkFieldElement,
+  isStarknetNetworkId,
+  normalizeFeltInput,
+} from "@mc-wallet/wallet-model/networks";
 import {
   isMnemonicPassphrase,
   isMnemonicText,
@@ -20,6 +25,20 @@ const readOptionalIndex = (value: unknown): number | null | undefined => {
   return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
 };
 
+const readDeploymentSalt = (
+  value: unknown,
+  accountContractType: AccountDerivationInput["accountContractType"],
+): string | null | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || accountContractType === "openzeppelin") {
+    return null;
+  }
+  const salt = normalizeFeltInput(value);
+  return isStarkFieldElement(salt) ? salt : null;
+};
+
 const readDerivationFields = (
   message: Record<string, unknown>,
 ): Omit<AccountDerivationInput, "mnemonic"> | null => {
@@ -31,10 +50,20 @@ const readDerivationFields = (
   if (!isMnemonicPassphrase(message["mnemonicPassphrase"])) {
     return null;
   }
+  const accountContractType = message["accountContractType"];
+  if (!isAccountContractType(accountContractType)) {
+    return null;
+  }
+  const deploymentSalt = readDeploymentSalt(message["deploymentSalt"], accountContractType);
+  if (deploymentSalt === null) {
+    return null;
+  }
   if (message["networkId"] !== undefined && !isStarknetNetworkId(message["networkId"])) {
     return null;
   }
   return {
+    accountContractType,
+    ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
     ...(accountIndex === undefined ? {} : { accountIndex }),
     ...(addressIndex === undefined ? {} : { addressIndex }),
     ...(message["mnemonicPassphrase"] === undefined
@@ -53,7 +82,9 @@ export const readCreateAccountInput = (message: unknown): CreateVaultAccountInpu
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "accountIndex",
+      "accountContractType",
       "addressIndex",
+      "deploymentSalt",
       "mnemonic",
       "mnemonicPassphrase",
       "networkId",
@@ -81,7 +112,9 @@ export const readPreviewAccountInput = (message: unknown): AccountDerivationInpu
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "accountIndex",
+      "accountContractType",
       "addressIndex",
+      "deploymentSalt",
       "mnemonic",
       "mnemonicPassphrase",
       "networkId",
@@ -94,4 +127,22 @@ export const readPreviewAccountInput = (message: unknown): AccountDerivationInpu
   }
   const derivation = readDerivationFields(message);
   return derivation ? { ...derivation, mnemonic: message["mnemonic"] } : null;
+};
+
+/**
+ * Parses the privileged mnemonic-validity check. Accepts only the phrase and
+ * type; never a vault passphrase or derivation fields.
+ */
+export const readValidateMnemonicInput = (
+  message: unknown,
+): { readonly mnemonic: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["mnemonic", "type"]) ||
+    message["type"] !== "wallet.validateMnemonic" ||
+    !isMnemonicText(message["mnemonic"])
+  ) {
+    return null;
+  }
+  return { mnemonic: message["mnemonic"] };
 };

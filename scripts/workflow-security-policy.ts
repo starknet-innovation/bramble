@@ -33,7 +33,7 @@ const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.0.0
 // vendors anything.
 const VENDOR_STEPS = [
   { command: "bun run vendor:krusty", failure: "must vendor the pinned Krusty KMS source" },
-  { command: "bun run vendor:multisig", failure: "must vendor the pinned multisig contracts" },
+  { command: "bun run vendor:argent", failure: "must verify the pinned Argent account contracts" },
   { command: "bun run vendor:privacy", failure: "must vendor the pinned privacy SDK" },
 ] as const;
 

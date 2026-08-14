@@ -5,10 +5,11 @@
  * and an unconfigured indexer yields an empty gallery.
  */
 import { describe, expect, test } from "bun:test";
-import { type MultisigRecord, memoryMultisigStore } from "@mc-wallet/multisig/repository";
+import { type ArgentMultisigRecord, memoryMultisigStore } from "@mc-wallet/multisig/repository";
 import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
 import type { NftTokenMetadata } from "@mc-wallet/portfolio/nft-token-metadata";
 import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import type { Vault } from "@mc-wallet/vault/schema";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
@@ -19,6 +20,7 @@ import { createUnlockSession } from "../../../apps/extension/src/background/runt
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -151,12 +153,12 @@ describe("NFT auto-discovery messages", () => {
   });
 
   test("scopes shared-account discovery to a watched multisig address", async () => {
-    const shared: MultisigRecord = {
+    const shared: ArgentMultisigRecord = {
+      accountContractType: "argent-multisig",
       address: "0x456",
+      classHash: ARGENT_MULTISIG_CONTRACT.classHash,
       id: "SN_MAIN:0x456",
       networkId: "SN_MAIN",
-      quorum: 2,
-      signers: [account.address, "0x789"],
     };
     const owned = candidate("5", "0x511a2b3");
     const { handler, indexedAddresses, multisigStore } = makeHandler({

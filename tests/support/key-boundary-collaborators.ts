@@ -11,18 +11,22 @@
  * per-harness state record so one scan cannot leak into the next.
  */
 
-import { type MultisigProposalStatus, multisigTransactionId } from "@mc-wallet/multisig/chain";
 import type { Strk20Service } from "@mc-wallet/privacy/service";
+import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import { prepareArgentMultisigInvokeV3WithProvider } from "@mc-wallet/starknet/multisig-invoke";
 import { avnuRouterAddress, type SwapService } from "@mc-wallet/transactions/avnu";
 import { grantedAccountIdsFor } from "@mc-wallet/vault/origin-grants";
 import type { Vault } from "@mc-wallet/vault/schema";
 import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { ec, RpcProvider } from "starknet";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { avnuRouteCalldata } from "./avnu-route-fixture";
 import {
   account,
+  KEY_BOUNDARY_MULTISIG_CLASS_HASH,
+  KEY_BOUNDARY_MULTISIG_CONFIG,
   KEY_BOUNDARY_ORIGIN,
   KEY_BOUNDARY_TOKENS,
   SECRET_MNEMONIC,
@@ -41,7 +45,6 @@ export const STRK = KEY_BOUNDARY_TOKENS.strk;
 /** Spender named by the seeded allowance record. */
 export const SPENDER = "0x6234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const ROUTER = avnuRouterAddress("SN_MAIN");
-const OTHER_SIGNER = "0x444444444444444444444444444444444444444444444444444444444444444";
 
 const vault = {
   accounts: [account],
@@ -49,7 +52,7 @@ const vault = {
   activeAccountId: account.id,
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 5,
+  schemaVersion: 7,
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
 
@@ -61,6 +64,7 @@ const LEDGER_ACCOUNT_INDEX = 0;
 // EIP-2645 path, so a hand-shaped stub would let the three Ledger entries pass
 // the scan against a response production could never emit.
 const ledgerAccount: LedgerAccountRef = {
+  accountContractType: "openzeppelin",
   address: account.address,
   classHash: account.classHash,
   derivation: {
@@ -115,6 +119,9 @@ export const walletStub = {
   async previewAccount() {
     return account;
   },
+  async validateMnemonic() {
+    return true;
+  },
   // Answered through the real grant policy over the stub vault, so an origin
   // the vault never granted reads as unconnected and its request queues a
   // consent prompt instead of being silently satisfied.
@@ -140,8 +147,13 @@ export const walletStub = {
   async setActiveAccount() {
     return account;
   },
-  async signHash() {
-    return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+  async signHash(input: { readonly messageHash: string }) {
+    const signature = ec.starkCurve.sign(input.messageHash, SECRET_PRIVATE_KEY);
+    return {
+      publicKey: account.publicKeyX,
+      r: `0x${signature.r.toString(16)}`,
+      s: `0x${signature.s.toString(16)}`,
+    };
   },
   async status() {
     return {
@@ -211,10 +223,6 @@ export const swapService: SwapService = {
 export type KeyBoundaryChainState = {
   accountDeployed: boolean;
   multisigClassDeclared: boolean;
-  // Per-transaction-id chain answers, so one seeded proposal can read as
-  // unconfirmed (confirm), confirmed by this signer (revoke), or at quorum
-  // (execute) without three harnesses.
-  readonly proposalStatuses: Map<string, MultisigProposalStatus>;
   strk20Registered: boolean;
 };
 
@@ -225,9 +233,27 @@ const PUBLIC_BALANCE = (100n * 10n ** 18n).toString();
 export const makeChainState = (): KeyBoundaryChainState => ({
   accountDeployed: false,
   multisigClassDeclared: true,
-  proposalStatuses: new Map<string, MultisigProposalStatus>(),
   strk20Registered: true,
 });
+
+const multisigProvider = new RpcProvider({ nodeUrl: "http://127.0.0.1:5050/rpc" });
+multisigProvider.getChainId = async () => STARKNET_NETWORKS.SN_MAIN.chainId as "0x534e5f4d41494e";
+multisigProvider.getNonceForAddress = async () => "0x7";
+multisigProvider.getEstimateFeeBulk = (async () => [
+  {
+    data_gas_consumed: 0n,
+    data_gas_price: 0n,
+    gas_consumed: 0n,
+    gas_price: 0n,
+    overall_fee: 1n,
+    resourceBounds: {
+      l1_data_gas: { max_amount: 1n, max_price_per_unit: 1n },
+      l1_gas: { max_amount: 1n, max_price_per_unit: 1n },
+      l2_gas: { max_amount: 1n, max_price_per_unit: 1n },
+    },
+    unit: "FRI" as const,
+  },
+]) as RpcProvider["getEstimateFeeBulk"];
 
 const required = <Method>(method: Method | undefined, name: string): Method => {
   if (!method) {
@@ -312,23 +338,29 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
       return tokens.map((token) => ({ ...token, balance: PUBLIC_BALANCE, formatted: "100" }));
     },
     multisig: {
-      async computeTransactionId(input) {
-        return multisigTransactionId(input.call, input.salt);
-      },
       async getConfig() {
-        return { quorum: 2, signers: [account.address, OTHER_SIGNER] };
+        return {
+          classHash: KEY_BOUNDARY_MULTISIG_CLASS_HASH,
+          signerGuids: KEY_BOUNDARY_MULTISIG_CONFIG.signerPublicKeys.map(argentSignerGuid),
+          threshold: 1,
+        };
       },
-      async getProposalStatus(input) {
-        return (
-          state.proposalStatuses.get(input.txId) ?? {
-            confirmations: 0,
-            confirmedBySigner: false,
-            state: "pending" as const,
-          }
-        );
+      async getNonce() {
+        return "0x7";
       },
       async isClassDeclared() {
         return state.multisigClassDeclared;
+      },
+      async prepareInvoke(input) {
+        return prepareArgentMultisigInvokeV3WithProvider(
+          multisigProvider,
+          input.account,
+          input.calls,
+          input.config,
+        );
+      },
+      async submitPreparedInvoke(input) {
+        return input.prepared.transactionHash;
       },
     },
     strk20: strk20ServiceFor(state),

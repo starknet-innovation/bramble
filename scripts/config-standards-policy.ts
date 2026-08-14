@@ -59,7 +59,6 @@ export const PINNED_RUNTIME_FILES = [
   "sidepanel/index.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm_bg.wasm",
-  "vendor/multisig/multisig.contract_class.json",
   "vendor/starknet-privacy/sdk/starknet-sdk.min.js",
 ] as const;
 
@@ -71,7 +70,7 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   "playwright-report/",
   "test-results/",
   "vendor/krusty-kms/",
-  "vendor/multisig/",
+  "vendor/argent-contracts/",
   "vendor/starknet-privacy/",
 ] as const;
 
@@ -106,7 +105,7 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run --filter @mc-wallet/extension build",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:multisig && bun run check:privacy && bun run test && bun run check:workspaces",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
   "check:coverage": "bun run scripts/check-coverage.ts",
   "check:cycles": "madge --circular --extensions ts apps/extension/src packages",
@@ -117,7 +116,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:imports": "bun run scripts/check-workspace-architecture.ts",
   "check:krusty": "bun run scripts/check-krusty-adapter.ts",
   "check:lint": "biome check .",
-  "check:multisig": "bun run scripts/check-multisig-class.ts",
+  "check:argent": "bun run scripts/check-argent-contracts.ts",
   "check:privacy": "bun run scripts/check-privacy-sdk.ts",
   "check:release-version": "bun run scripts/release-version.ts",
   "check:types": "tsc --noEmit",
@@ -132,9 +131,8 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",
   "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
-  "test:multisig-contract": "scarb --manifest-path contracts/multisig/Scarb.toml run test",
   "vendor:krusty": "bun run scripts/vendor-krusty.ts",
-  "vendor:multisig": "bun run scripts/vendor-multisig.ts",
+  "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
   "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
 };
 

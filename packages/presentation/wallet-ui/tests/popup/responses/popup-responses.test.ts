@@ -18,6 +18,7 @@ import {
 describe("popup response validators", () => {
   const approvalId = "123e4567-e89b-42d3-a456-426614174000";
   const account = {
+    accountContractType: "openzeppelin" as const,
     address: "0x123",
     classHash: "0xabc",
     derivation: {

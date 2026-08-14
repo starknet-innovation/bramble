@@ -115,6 +115,7 @@ describe("official STRK20 SDK submission boundary", () => {
             entrypoint: "apply_actions",
           },
         ],
+        isAuthorized: context.isAuthorized,
         proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
         rpcUrls: context.rpcUrls,
         signHash: expect.any(Function),

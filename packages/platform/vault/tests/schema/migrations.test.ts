@@ -2,12 +2,14 @@
  * Migration checks prove vault schemas move deterministically or fail closed.
  */
 import { describe, expect, test } from "bun:test";
+import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import {
   CURRENT_SCHEMA_VERSION,
   migrateVault,
   VAULT_MIGRATIONS,
 } from "@mc-wallet/vault/migrations";
-import { isVaultV1, isVaultV5 } from "@mc-wallet/vault/schema";
+import { isVaultV1, isVaultV6, isVaultV7 } from "@mc-wallet/vault/schema";
+import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
 
 const legacyVault = {
   accounts: [
@@ -43,7 +45,16 @@ const legacyVault = {
 
 const legacyV3 = { ...legacyVault, mnemonic: null, schemaVersion: 3 as const };
 const legacyV4 = { ...legacyV3, accountSecrets: [], schemaVersion: 4 as const };
-const currentVault = { ...legacyV4, schemaVersion: 5 as const };
+const legacyV5 = { ...legacyV4, schemaVersion: 5 as const };
+const legacyV6 = {
+  ...legacyV5,
+  accounts: legacyV5.accounts.map((account) => ({
+    accountContractType: "openzeppelin" as const,
+    ...account,
+  })),
+  schemaVersion: 6 as const,
+};
+const currentVault = { ...legacyV6, schemaVersion: CURRENT_SCHEMA_VERSION as 7 };
 
 describe("migrateVault", () => {
   test("declares contiguous migration steps to the current schema", () => {
@@ -74,9 +85,13 @@ describe("migrateVault", () => {
     expect(isVaultV1(legacyVault)).toBe(true);
     const migrated = migrateVault(legacyVault);
 
-    expect(isVaultV5(migrated)).toBe(true);
+    expect(isVaultV7(migrated)).toBe(true);
     expect(migrated).toEqual({
       ...legacyVault,
+      accounts: legacyVault.accounts.map((account) => ({
+        accountContractType: "openzeppelin",
+        ...account,
+      })),
       accountSecrets: [],
       mnemonic: null,
       schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -85,9 +100,19 @@ describe("migrateVault", () => {
   });
 
   test("returns valid current vaults for every supported source shape", () => {
-    for (const source of [undefined, null, {}, legacyVault, legacyV3, legacyV4, currentVault]) {
+    for (const source of [
+      undefined,
+      null,
+      {},
+      legacyVault,
+      legacyV3,
+      legacyV4,
+      legacyV5,
+      legacyV6,
+      currentVault,
+    ]) {
       const migrated = migrateVault(source);
-      expect(isVaultV5(migrated)).toBe(true);
+      expect(isVaultV7(migrated)).toBe(true);
       expect(migrateVault(migrated)).toBe(migrated);
     }
   });
@@ -111,8 +136,9 @@ describe("migrateVault", () => {
       signingKeys: [{ accountId: aliasedId, privateKey: "0x0456" }],
     });
 
-    expect(isVaultV5(migrated)).toBe(true);
+    expect(isVaultV7(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({
+      accountContractType: "openzeppelin",
       address: "0x123",
       classHash: "0xabc",
       id: "SN_SEPOLIA:0x123",
@@ -125,6 +151,23 @@ describe("migrateVault", () => {
       accountId: "SN_SEPOLIA:0x123",
       privateKey: "0x456",
     });
+  });
+
+  test("retains the historical public-key salt when migrating Argent schema-v6 accounts", () => {
+    const argent = {
+      ...legacyV6.accounts[0],
+      accountContractType: "argent" as const,
+      classHash: canonicalFelt(ARGENT_ACCOUNT_CONTRACT.classHash),
+    };
+    const migrated = migrateVault({
+      ...legacyV6,
+      accounts: [argent],
+      activeAccountId: argent.id,
+    });
+
+    expect(isVaultV6({ ...legacyV6, accounts: [argent] })).toBe(true);
+    expect(isVaultV7(migrated)).toBe(true);
+    expect(migrated.accounts[0]).toMatchObject({ deploymentSalt: argent.publicKeyX });
   });
 
   test("ignores inherited schema versions for legacy empty vaults", () => {

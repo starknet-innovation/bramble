@@ -29,6 +29,7 @@ type Flag = { readonly code: string; readonly message: string };
 // 63-hex addresses so they stay inside the Stark field prime that
 // `buildErc20TransferCall` enforces on the recipient.
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

@@ -8,10 +8,14 @@
  * each other.
  */
 
+import {
+  ARGENT_MULTISIG_CONTRACT,
+  argentMultisigAddress,
+} from "@mc-wallet/starknet/account-contracts";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
 import { type TokenConfig, withTokenId } from "@mc-wallet/wallet-model/preferences";
-import { CallData, hash } from "starknet";
+import { CallData, ec, hash } from "starknet";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
 /**
@@ -36,10 +40,10 @@ export const SECRET_MNEMONIC =
   "habit hope tip crystal because grunt nation idea electric witness alert like";
 
 const ACCOUNT_CLASS_HASH = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
-const ACCOUNT_PUBLIC_KEY_X = "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+const ACCOUNT_PUBLIC_KEY_X = `0x${ec.starkCurve.getStarkKey(SECRET_PRIVATE_KEY).replace(/^0x/, "")}`;
 
 // The counterfactual address this key and class really deploy to, at the salt-0
-// derivation `ozAccountDeployment` proves against. An invented address would
+// derivation `accountDeployment` proves against. An invented address would
 // make every deployment-data request answer "deployment data not available"
 // instead of exercising the handler.
 const ACCOUNT_ADDRESS = hash.calculateContractAddressFromHash(
@@ -53,6 +57,7 @@ const ACCOUNT_ADDRESS = hash.calculateContractAddressFromHash(
  * The stub vault's single account.
  */
 export const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: ACCOUNT_ADDRESS,
   classHash: ACCOUNT_CLASS_HASH,
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -102,8 +107,19 @@ export const KEY_BOUNDARY_ORIGIN = "https://dapp.example";
 /**
  * Address of the multisig the harness watches and the catalog acts on.
  */
-export const KEY_BOUNDARY_MULTISIG =
-  "0x111111111111111111111111111111111111111111111111111111111111111";
+export const KEY_BOUNDARY_MULTISIG = argentMultisigAddress(
+  { signerPublicKeys: [account.publicKeyX], threshold: 1 },
+  "0x0",
+);
+
+/** Stable constructor configuration shared by key-boundary multisig fixtures. */
+export const KEY_BOUNDARY_MULTISIG_CONFIG = {
+  signerPublicKeys: [account.publicKeyX],
+  threshold: 1,
+} as const;
+
+/** Stable class hash paired with the derived fixture address. */
+export const KEY_BOUNDARY_MULTISIG_CLASS_HASH = ARGENT_MULTISIG_CONTRACT.classHash;
 
 /**
  * A counterparty that is neither the active account nor a saved contact, so

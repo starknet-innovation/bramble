@@ -11,6 +11,7 @@ import type { RuntimeSender } from "../../../apps/extension/src/background/routi
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabcabcdef",
   classHash: "0xabcdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -65,7 +66,7 @@ const createWallet = (captureAdd?: (input: AddDerivedAccountInput) => void) => (
       activeAccountId: account.id,
       mnemonic,
       originGrants: [],
-      schemaVersion: 5 as const,
+      schemaVersion: 7 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x1234" }],
     };
   },
@@ -97,13 +98,31 @@ describe("account lifecycle messages", () => {
     );
 
     await expect(
-      handler({ networkId: "SN_SEPOLIA", type: "wallet.addAccount" }, sender),
+      handler(
+        {
+          accountContractType: "openzeppelin",
+          networkId: "SN_SEPOLIA",
+          type: "wallet.addAccount",
+        },
+        sender,
+      ),
     ).resolves.toEqual({ error: "wallet locked" });
     await handler({ type: "wallet.unlock", vaultPassphrase }, sender);
     await expect(
-      handler({ networkId: "SN_SEPOLIA", type: "wallet.addAccount" }, sender),
+      handler(
+        {
+          accountContractType: "openzeppelin",
+          networkId: "SN_SEPOLIA",
+          type: "wallet.addAccount",
+        },
+        sender,
+      ),
     ).resolves.toEqual({ account: derived, ok: true });
-    expect(captured.at(-1)).toEqual({ networkId: "SN_SEPOLIA", vaultPassphrase });
+    expect(captured.at(-1)).toEqual({
+      accountContractType: "openzeppelin",
+      networkId: "SN_SEPOLIA",
+      vaultPassphrase,
+    });
   });
 
   test("rejects add-account from content senders and malformed networks", async () => {
@@ -112,7 +131,14 @@ describe("account lifecycle messages", () => {
     const handler = createMessageHandler(createWallet(), "extension-id", { session });
 
     await expect(
-      handler({ networkId: "SN_SEPOLIA", type: "wallet.addAccount" }, contentSender),
+      handler(
+        {
+          accountContractType: "openzeppelin",
+          networkId: "SN_SEPOLIA",
+          type: "wallet.addAccount",
+        },
+        contentSender,
+      ),
     ).resolves.toEqual({ error: "privileged sender required" });
     await expect(
       handler({ networkId: "SN_BAD", type: "wallet.addAccount" }, sender),

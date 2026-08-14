@@ -50,8 +50,8 @@ const SOURCE_LABELS: Readonly<Record<AllowanceView["source"], string>> = {
 // One allowance per row: the spender leads (it is who can move funds), with
 // the token, amount, and provenance as one quiet supporting line — never three
 // stacked label/value pairs fighting for attention. A multisig's allowance is
-// listed but carries no revoke control: zeroing it takes a proposal the
-// multisig's own quorum executes, so offering the button here would be an
+// listed but carries no revoke control: zeroing it takes a separately reviewed
+// multisig intent and threshold authorization, so offering the button here would be an
 // affordance that can only fail. An unconfirmed contract is withheld the
 // control for the opposite reason: the call would not fail, it would grant.
 const allowanceRow = (allowance: AllowanceView): string => `

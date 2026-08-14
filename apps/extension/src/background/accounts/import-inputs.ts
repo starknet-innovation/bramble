@@ -5,7 +5,9 @@
  * message carries only the target network and the private key.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
 import {
+  isStarkFieldElement,
   isStarknetNetworkId,
   isStarkPrivateKey,
   normalizeFeltInput,
@@ -28,11 +30,23 @@ import {
  */
 export const readImportAccountInput = (
   message: unknown,
-): { readonly networkId: StarknetNetworkId; readonly privateKey: string } | null => {
+): {
+  readonly accountContractType: AccountContractType;
+  readonly networkId: StarknetNetworkId;
+  readonly privateKey: string;
+  readonly deploymentSalt?: string;
+} | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["networkId", "privateKey", "type"]) ||
+    !hasOnlyKnownKeys(message, [
+      "accountContractType",
+      "deploymentSalt",
+      "networkId",
+      "privateKey",
+      "type",
+    ]) ||
     message["type"] !== "wallet.importAccount" ||
+    !isAccountContractType(message["accountContractType"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     typeof message["privateKey"] !== "string"
   ) {
@@ -40,9 +54,27 @@ export const readImportAccountInput = (
   }
 
   const privateKey = normalizeFeltInput(message["privateKey"]);
+  if (message["deploymentSalt"] !== undefined && typeof message["deploymentSalt"] !== "string") {
+    return null;
+  }
+  const deploymentSalt =
+    typeof message["deploymentSalt"] === "string"
+      ? normalizeFeltInput(message["deploymentSalt"])
+      : undefined;
   if (!isStarkPrivateKey(privateKey)) {
     return null;
   }
+  if (
+    (message["accountContractType"] === "openzeppelin" && deploymentSalt !== undefined) ||
+    (deploymentSalt !== undefined && !isStarkFieldElement(deploymentSalt))
+  ) {
+    return null;
+  }
 
-  return { networkId: message["networkId"], privateKey };
+  return {
+    accountContractType: message["accountContractType"],
+    ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
+    networkId: message["networkId"],
+    privateKey,
+  };
 };

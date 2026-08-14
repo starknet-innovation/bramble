@@ -3,7 +3,6 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/*.ts", "tests/**/*.test.ts"],
-      "ignoreBinaries": ["scarb"],
       "project": ["scripts/**/*.ts", "tests/**/*.ts"]
     },
     "apps/extension": {
@@ -20,7 +19,6 @@
     },
     "apps/terminal": {
       "entry": ["api/**/*.ts", "scripts/*.ts"],
-      "ignoreDependencies": ["@types/ws", "ws"],
       "project": ["api/**/*.ts", "scripts/**/*.ts", "src/**/*.{ts,tsx}"]
     },
     "apps/ui-lab": {

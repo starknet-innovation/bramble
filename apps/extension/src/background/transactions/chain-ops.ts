@@ -7,6 +7,7 @@
 import { walletErrorMessage } from "@mc-wallet/core/errors";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { serializeAccountSignature } from "@mc-wallet/starknet/account-contracts";
 import { typedDataHash } from "@mc-wallet/starknet/typed-data";
 import {
   networkIdForChainId,
@@ -130,7 +131,10 @@ export const executeSignApproval = async (
   // hang on an unhandled throw. Fails closed — no signature returned on error.
   try {
     const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
-    return { ok: true, signature };
+    return {
+      ok: true,
+      signature: serializeAccountSignature(account.accountContractType, signature),
+    };
   } catch (error) {
     return { error: walletErrorMessage(error, "sign typed data request failed") };
   }

@@ -1,16 +1,16 @@
 /** Focused side-panel task screens opened from the wallet dock. */
 
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
 import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
 import { receipt } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
-import { textareaField, textField } from "@mc-wallet/ui-kit/fields";
+import { selectField, textareaField, textField } from "@mc-wallet/ui-kit/fields";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { ConnectedSite, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { multisigAccountOptions } from "../../journeys/multisig/multisig-account-options";
 import { allowancesFlow } from "../../journeys/portfolio/allowance-views";
@@ -104,6 +104,16 @@ export const importKeyFlow = (status: WalletStatus): string =>
     `<section class="section">
       <p class="review-flag" role="note">Anyone with this key controls the account. Paste it only on a device you trust.</p>
       <form id="import-key-form" class="stack">
+        ${selectField({
+          hint: "Choose the contract that already owns this key. A different choice derives a different address.",
+          label: "Account contract",
+          name: "accountContractType",
+          options: [
+            { label: "Argent Account", value: "argent" },
+            { label: "OpenZeppelin Account", value: "openzeppelin" },
+          ],
+          selected: "argent",
+        })}
         ${textareaField({
           autocomplete: "off",
           hint: "The key is validated and stored inside the encrypted vault, never in plain settings.",
@@ -111,6 +121,14 @@ export const importKeyFlow = (status: WalletStatus): string =>
           name: "rawKey",
           placeholder: "0x…",
           required: true,
+          spellcheck: false,
+        })}
+        ${textField({
+          autocomplete: "off",
+          hint: "Argent only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for MC Wallet's public-key salt.",
+          label: "Argent deployment salt (optional)",
+          name: "deploymentSalt",
+          placeholder: "0x…",
           spellcheck: false,
         })}
         ${button({
@@ -159,11 +177,13 @@ export const accountFlow = (
   preferences: WalletPreferences | null,
   expandedGroupId: string | null = null,
   classHashVerification: ClassHashVerification | null = null,
-  multisigs: readonly MultisigRecord[] = [],
+  multisigs: readonly ArgentMultisigView[] = [],
   selectedMultisigId: string | null = null,
 ): string => {
   const networkAccounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
-  const networkMultisigs = multisigs.filter((stored) => stored.networkId === status.networkId);
+  const networkMultisigs = multisigs.filter(
+    (stored) => stored.record.networkId === status.networkId,
+  );
   const accountType = account ? knownAccountType(account.classHash) : null;
   const groups = preferences?.groups ?? [];
   // One grouped picker owns the whole "which account" task: every account row,
@@ -279,7 +299,7 @@ export const simpleFlowScreen = (
     readonly currency: DisplayCurrency;
     readonly deployment: boolean | null;
     readonly expandedGroupId: string | null;
-    readonly multisigs?: readonly MultisigRecord[];
+    readonly multisigs?: readonly ArgentMultisigView[];
     readonly selectedMultisigId?: string | null;
     readonly preferences: WalletPreferences | null;
     readonly prices: Readonly<Record<string, number>>;
@@ -298,7 +318,7 @@ export const simpleFlowScreen = (
         ctx.prices,
         ctx.changes,
         ctx.currency,
-        ctx.multisigs ?? [],
+        (ctx.multisigs ?? []).map((view) => view.record),
         ctx.sendIntent ?? null,
       );
     case "swap":

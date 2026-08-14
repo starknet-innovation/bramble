@@ -74,7 +74,7 @@ describe("the uint128 limb bound has one definition", () => {
 
 describe("the felt grammar has one definition", () => {
   const signatureResult = (r: string, s: string) =>
-    toProviderPayload({ ok: true, signature: { r, s } }, "wallet_signTypedData");
+    toProviderPayload({ ok: true, signature: [r, s] }, "wallet_signTypedData");
 
   test("the dapp-facing signature reader admits exactly what a felt is", () => {
     // Expectations are literal, not `isStarkFieldElement(candidate)`: comparing
@@ -82,7 +82,7 @@ describe("the felt grammar has one definition", () => {
     // the predicate and so pin only single-sourcing, not the grammar.
     const expected: Readonly<Record<string, boolean>> = {
       "0x1": true,
-      "0x0": true,
+      "0x0": false,
       [`0x${"1".repeat(63)}`]: true,
       // Lexically hex but not a felt: over-wide, out of field, uppercase, or
       // decimal. A private `/^0x[0-9a-f]+$/` copy admitted the first two.
@@ -95,8 +95,9 @@ describe("the felt grammar has one definition", () => {
     for (const [candidate, admitted] of Object.entries(expected)) {
       const payload = signatureResult(candidate, "0x2");
       expect({ candidate, admitted: "result" in payload }).toEqual({ candidate, admitted });
-      // Same answer from the shared predicate: one grammar, two surfaces.
-      expect(isStarkFieldElement(candidate)).toBe(admitted);
+      // The signature boundary adds a non-zero scalar requirement to the
+      // shared field grammar used across the wallet.
+      expect(isStarkFieldElement(candidate)).toBe(admitted || candidate === "0x0");
     }
   });
 });

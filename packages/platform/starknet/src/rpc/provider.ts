@@ -6,15 +6,22 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { readBoundedText } from "@mc-wallet/core/http-json";
 import { isRecord } from "@mc-wallet/core/json";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   isNonZeroStarkFieldElement,
-  isStarkFieldElement,
   STARKNET_RPC_SPEC_VERSION,
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
-import { Account, RpcProvider, type RpcProviderOptions, type Signature, Signer } from "starknet";
+import { RpcProvider, type RpcProviderOptions } from "starknet";
+
+export {
+  type AccountHashSigner,
+  type AccountSignerOptions,
+  type ArgentMultisigAccountDescriptor,
+  argentQueryAccount,
+  krustyAccount,
+  type StarkHashSigner,
+  type StarknetAccountDescriptor,
+} from "./account-signer";
 
 type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
 
@@ -51,6 +58,25 @@ export const acceptedRpcWriteHash = (value: unknown): string => {
     throw new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE);
   }
   return value;
+};
+
+/**
+ * Accepts a broadcast hash only when it matches the exact hash handed to the
+ * signer. A missing capture or node mismatch is post-broadcast ambiguity, so
+ * callers must not invite an automatic retry.
+ */
+export const matchingAcceptedRpcWriteHash = (value: unknown, signedHash: unknown): string => {
+  const accepted = acceptedRpcWriteHash(value);
+  if (
+    typeof signedHash !== "string" ||
+    !isNonZeroStarkFieldElement(signedHash) ||
+    !sameFelt(accepted, signedHash)
+  ) {
+    throw new IndeterminateRpcWriteError(
+      "RPC accepted a different transaction hash. Check on-chain state before retrying.",
+    );
+  }
+  return accepted;
 };
 
 /**
@@ -198,50 +224,6 @@ export const createRpcProvider = (
     ...options,
     nodeUrl,
     specVersion: STARKNET_RPC_SPEC_VERSION,
-  });
-
-/**
- * Function that signs a Stark transaction hash through the vault service.
- */
-export type StarkHashSigner = (messageHash: string) => Promise<StarkSignature>;
-
-class KrustyStarknetSigner extends Signer {
-  public constructor(
-    private readonly publicKey: string,
-    private readonly starkSignHash: StarkHashSigner,
-  ) {
-    super("0x1");
-  }
-
-  public override async getPubKey(): Promise<string> {
-    return this.publicKey;
-  }
-
-  protected override async signRaw(messageHash: string): Promise<Signature> {
-    const hash = messageHash.startsWith("0x")
-      ? messageHash
-      : `0x${BigInt(messageHash).toString(16)}`;
-    if (!isStarkFieldElement(hash)) {
-      throw new WalletError("Invalid transaction hash");
-    }
-    const signed = await this.starkSignHash(hash);
-    return [signed.r, signed.s];
-  }
-}
-
-/**
- * Builds a starknet.js account backed by the Krusty signer.
- */
-export const krustyAccount = (
-  provider: RpcProvider,
-  account: AccountRef,
-  signHash: StarkHashSigner,
-): Account =>
-  new Account({
-    address: account.address,
-    cairoVersion: "1",
-    provider,
-    signer: new KrustyStarknetSigner(account.publicKeyX, signHash),
   });
 
 /**

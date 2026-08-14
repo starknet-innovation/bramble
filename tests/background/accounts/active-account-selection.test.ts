@@ -17,6 +17,7 @@ import { createUnlockSession } from "../../../apps/extension/src/background/runt
 
 const vaultPassphrase = "correct horse battery staple";
 const mainnetAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabc",
   classHash: "0xdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

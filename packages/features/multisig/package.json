@@ -5,11 +5,8 @@
   "type": "module",
   "exports": {
     "./chain": "./src/chain.ts",
-    "./confirmation": "./src/confirmation.ts",
     "./deploy": "./src/deploy.ts",
-    "./discovery": "./src/discovery.ts",
-    "./repository": "./src/repository.ts",
-    "./sync": "./src/sync.ts"
+    "./repository": "./src/repository.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

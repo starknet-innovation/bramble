@@ -179,11 +179,11 @@ describe("workflow security policy", () => {
       failure: ".github/workflows/release-build.yml must vendor the pinned privacy SDK",
     },
     {
-      name: "rejects vendoring Krusty without the multisig contracts",
+      name: "rejects vendoring Krusty without the Argent contracts",
       workflow: "nightly.yml",
-      search: "bun run vendor:krusty && bun run vendor:multisig && bun run vendor:privacy",
+      search: "bun run vendor:krusty && bun run vendor:argent && bun run vendor:privacy",
       replacement: "bun run vendor:krusty && bun run vendor:privacy",
-      failure: ".github/workflows/nightly.yml must vendor the pinned multisig contracts",
+      failure: ".github/workflows/nightly.yml must verify the pinned Argent account contracts",
     },
     {
       name: "rejects a moving privacy SDK build runtime",

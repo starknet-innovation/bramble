@@ -7,7 +7,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Account, Call, RpcProvider } from "starknet";
-import { ensureAccountDeployed, isAccountDeployed } from "../transactions/deployment";
+import { ensureAccountDeployed, isCompatibleAccountDeployed } from "../transactions/deployment";
 import {
   authorizedSpendFor,
   exceedsReviewedFee,
@@ -17,8 +17,9 @@ import {
 } from "./fee-bounds";
 import { estimateExactInvokeFee } from "./invoke-fee";
 import {
-  acceptedRpcWriteHash,
+  argentQueryAccount,
   krustyAccount,
+  matchingAcceptedRpcWriteHash,
   type StarkHashSigner,
   withRpcWrite,
 } from "./provider";
@@ -37,6 +38,8 @@ export type { FeeSpeed };
 export type InvokeInput = {
   readonly account: AccountRef;
   readonly calls: readonly Call[];
+  /** Live authorization checked immediately before each on-chain mutation. */
+  readonly isAuthorized?: () => boolean;
   /** Optional STRK20 proof material attached to a prepared privacy call. */
   readonly proof?: Strk20Proof;
   /**
@@ -90,23 +93,46 @@ export const REVIEWED_FEE_REQUIRED =
 // signed — checking before the scaling would compare a figure this lane has
 // already decided not to sign.
 const settledResourceBounds = async (
-  starknetAccount: Account,
+  estimatingAccount: Account,
   account: AccountRef,
   calls: readonly Call[],
   proof: Strk20Proof | undefined,
   deployed: boolean,
   speed: FeeSpeed,
   reviewedFee: FeeEstimate | undefined,
+  skipValidate: boolean,
 ): Promise<unknown> => {
   if (!reviewedFee) {
     throw new WalletError(REVIEWED_FEE_REQUIRED);
   }
-  const estimate = await estimateExactInvokeFee(starknetAccount, account, calls, proof, deployed);
+  const estimate = await estimateExactInvokeFee(
+    estimatingAccount,
+    account,
+    calls,
+    proof,
+    deployed,
+    skipValidate,
+  );
   const authorized = authorizedSpendFor(estimate, speed);
   if (!authorized || exceedsReviewedFee(reviewedFee, authorized)) {
     throw new WalletError(REVIEWED_FEE_EXCEEDED);
   }
   return speed === "fast" ? scaleFeeBounds(estimate.resourceBounds) : estimate.resourceBounds;
+};
+
+const invokeEstimatingAccount = (
+  provider: RpcProvider,
+  account: AccountRef,
+  submittingAccount: Account,
+): { readonly account: Account; readonly skipValidate: boolean } =>
+  account.accountContractType === "argent"
+    ? { account: argentQueryAccount(provider, account), skipValidate: false }
+    : { account: submittingAccount, skipValidate: true };
+
+const assertAuthorized = (isAuthorized: (() => boolean) | undefined): void => {
+  if (isAuthorized?.() === false) {
+    throw new WalletError("wallet locked");
+  }
 };
 
 /**
@@ -134,6 +160,7 @@ export const submitInvokeTransaction = async (
   {
     account,
     calls,
+    isAuthorized,
     proof,
     reviewedDeploymentFee,
     reviewedFee,
@@ -153,32 +180,52 @@ export const submitInvokeTransaction = async (
     rpcUrls,
     STARKNET_NETWORKS[account.networkId].chainId,
     async (provider) => {
-      const starknetAccount = krustyAccount(provider, account, signHash);
-      const deployed = await isAccountDeployed(provider, account.address);
+      const capturedTransactionHashes: string[] = [];
+      const starknetAccount = krustyAccount(provider, account, async (messageHash) => {
+        const approvalProof = await signHash(messageHash);
+        capturedTransactionHashes.push(messageHash);
+        return approvalProof;
+      });
+      const estimating = invokeEstimatingAccount(provider, account, starknetAccount);
+      const deployed = await isCompatibleAccountDeployed(provider, account);
       const resourceBounds = await settledResourceBounds(
-        starknetAccount,
+        estimating.account,
         account,
         calls,
         proof,
         deployed,
         speed,
         reviewedFee,
+        estimating.skipValidate,
       );
       const deployment = deployed
         ? null
-        : await ensureAccountDeployed(provider, starknetAccount, account, reviewedDeploymentFee);
+        : await ensureAccountDeployed(
+            provider,
+            starknetAccount,
+            account,
+            reviewedDeploymentFee,
+            () => capturedTransactionHashes[0],
+            isAuthorized,
+          );
+      const invokeHashIndex = capturedTransactionHashes.length;
       const details = {
         ...(resourceBounds === null ? {} : { resourceBounds }),
         ...(proof ? { proof: proof.data, proofFacts: [...proof.proof_facts] } : {}),
+        tip: "0x0",
       };
       try {
+        assertAuthorized(isAuthorized);
         const result = await starknetAccount.execute(
           [...calls],
           details as Parameters<Account["execute"]>[1],
         );
         return {
           calls,
-          transactionHash: acceptedRpcWriteHash(result.transaction_hash),
+          transactionHash: matchingAcceptedRpcWriteHash(
+            result.transaction_hash,
+            capturedTransactionHashes[invokeHashIndex],
+          ),
         };
       } catch (error) {
         if (deployment) {

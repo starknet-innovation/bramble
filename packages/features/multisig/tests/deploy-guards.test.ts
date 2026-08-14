@@ -1,23 +1,19 @@
 /**
- * Validation-throw and class-status branches of the multisig deployment
- * builders not covered by tests/starknet/starknet-multisig.test.ts: the invalid-salt
- * guard in requireConfig, and isMultisigClassDeclared's error classification —
- * a class-hash-not-found answer maps to `false`, a malformed compiled class
- * throws, a non-Error thrown value is not treated as class-not-found and
- * propagates, and other errors propagate too. Drives the class reader through
- * an injected `makeProvider` the way the multisig suite already does.
+ * Stable Argent Multisig 0.2 constructor and class-declaration guards.
  */
 import { describe, expect, test } from "bun:test";
 import {
-  buildMultisigDeployCall,
-  isMultisigClassDeclared,
-  predictMultisigAddress,
+  argentMultisigDeployment,
+  canonicalArgentMultisigDeployConfig,
+  isArgentMultisigClassDeclared,
+  predictArgentMultisigAddress,
 } from "@mc-wallet/multisig/deploy";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import type { RpcProvider } from "starknet";
 
-const SIGNER_A = "0x333333333333333333333333333333333333333333333333333333333333333";
-const SIGNER_B = "0x444444444444444444444444444444444444444444444444444444444444444";
-const config = { quorum: 2, salt: "0x0", signers: [SIGNER_A, SIGNER_B] };
+const SIGNER_A = "0x123";
+const SIGNER_B = "0x456";
+const config = { salt: "0x0", signerPublicKeys: [SIGNER_A, SIGNER_B], threshold: 2 };
 
 const makeProvider = (impl: Record<string, () => Promise<unknown>>) => (): RpcProvider =>
   ({
@@ -30,56 +26,77 @@ const makeProvider = (impl: Record<string, () => Promise<unknown>>) => (): RpcPr
     ...impl,
   }) as unknown as RpcProvider;
 
-describe("multisig deploy config validation", () => {
-  test("rejects a non-felt salt", () => {
-    expect(() => buildMultisigDeployCall({ ...config, salt: "not-a-felt" })).toThrow(
-      "Invalid multisig salt",
+describe("Argent multisig deployment", () => {
+  test("normalizes signer input into deterministic GUID order", () => {
+    const expected = [SIGNER_A, SIGNER_B].sort((left, right) =>
+      BigInt(argentSignerGuid(left)) < BigInt(argentSignerGuid(right)) ? -1 : 1,
     );
-    expect(() => predictMultisigAddress({ ...config, salt: "not-a-felt" })).toThrow(
-      "Invalid multisig salt",
-    );
+    expect(canonicalArgentMultisigDeployConfig(config).signerPublicKeys).toEqual(expected);
+    expect(
+      predictArgentMultisigAddress({
+        ...config,
+        signerPublicKeys: [...config.signerPublicKeys].reverse(),
+      }),
+    ).toBe(predictArgentMultisigAddress(config));
+  });
+
+  test("builds address-proven direct DEPLOY_ACCOUNT metadata", () => {
+    const deployment = argentMultisigDeployment(config);
+    expect(deployment).toMatchObject({
+      addressSalt: "0x0",
+      classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+      contractAddress: predictArgentMultisigAddress(config),
+    });
+    expect(deployment.constructorCalldata).toHaveLength(6);
+  });
+
+  test("rejects invalid salts, signer sets, and thresholds", () => {
+    for (const invalid of [
+      { ...config, salt: "not-a-felt" },
+      { ...config, signerPublicKeys: [] },
+      { ...config, signerPublicKeys: [SIGNER_A, SIGNER_A] },
+      { ...config, signerPublicKeys: ["0x0"] },
+      { ...config, threshold: 0 },
+      { ...config, threshold: 3 },
+    ]) {
+      expect(() => argentMultisigDeployment(invalid)).toThrow();
+    }
   });
 });
 
-describe("isMultisigClassDeclared", () => {
-  test("maps a class-hash-not-found answer to false", async () => {
-    const declared = await isMultisigClassDeclared({
-      makeProvider: makeProvider({
-        async getClassByHash() {
-          throw new Error("RPC: starknet_getClass Class hash not found");
-        },
-      }),
-      rpcUrls: ["https://rpc.example"],
-    });
-    expect(declared).toBe(false);
-  });
-
-  test("throws when the declared compiled class is malformed", async () => {
-    // computeCompiledClassHash throws on the empty casm object, so the reader
-    // surfaces the malformed-class error rather than a boolean.
+describe("isArgentMultisigClassDeclared", () => {
+  test("maps only class-hash-not-found to false", async () => {
     await expect(
-      isMultisigClassDeclared({
-        makeProvider: makeProvider({
-          async getCompiledCasm() {
-            return {};
-          },
-        }),
-        rpcUrls: ["https://rpc.example"],
-      }),
-    ).rejects.toThrow("Declared multisig class is malformed");
-  });
-
-  test("propagates a non-Error thrown value (never misread as not-found)", async () => {
-    await expect(
-      isMultisigClassDeclared({
+      isArgentMultisigClassDeclared({
         makeProvider: makeProvider({
           async getClassByHash() {
-            // A thrown non-Error is not class-not-found, so it must propagate.
-            throw "boom";
+            throw new Error("RPC: starknet_getClass Class hash not found");
           },
         }),
         rpcUrls: ["https://rpc.example"],
       }),
-    ).rejects.toBe("boom");
+    ).resolves.toBe(false);
+  });
+
+  test("rejects malformed compiled class data", async () => {
+    await expect(
+      isArgentMultisigClassDeclared({
+        makeProvider: makeProvider({}),
+        rpcUrls: ["https://rpc.example"],
+      }),
+    ).rejects.toThrow("Declared Argent multisig class is malformed");
+  });
+
+  test("propagates non-class-not-found failures", async () => {
+    await expect(
+      isArgentMultisigClassDeclared({
+        makeProvider: makeProvider({
+          async getClassByHash() {
+            throw new Error("transport failed");
+          },
+        }),
+        rpcUrls: ["https://rpc.example"],
+      }),
+    ).rejects.toThrow("transport failed");
   });
 });

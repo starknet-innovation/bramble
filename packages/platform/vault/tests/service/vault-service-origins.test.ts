@@ -15,6 +15,11 @@ const mnemonic = "habit hope tip crystal because grunt nation idea electric witn
 const vaultKey = "mc-wallet:vault";
 const migrationKey = "mc-wallet:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
+const defaultAccountInput = {
+  accountContractType: "openzeppelin",
+  mnemonic,
+  vaultPassphrase,
+} as const;
 
 // KMS whose keypair varies by account index so derived accounts stay distinct.
 const indexedKms = (): KmsPort => ({
@@ -36,7 +41,7 @@ describe("createWalletVaultService origin grants", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    const account = await service.createAccount({ mnemonic, vaultPassphrase });
+    const account = await service.createAccount(defaultAccountInput);
 
     await expect(
       service.grantOrigin({
@@ -65,8 +70,12 @@ describe("createWalletVaultService origin grants", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    const first = await service.createAccount({ mnemonic, vaultPassphrase });
-    const second = await service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase });
+    const first = await service.createAccount(defaultAccountInput);
+    const second = await service.addDerivedAccount({
+      accountContractType: "openzeppelin",
+      networkId: "SN_MAIN",
+      vaultPassphrase,
+    });
     await service.grantOrigin({
       accountId: first.id,
       origin: "https://example.com",
@@ -112,7 +121,7 @@ describe("createWalletVaultService origin grants", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
 
     await expect(
       service.grantOrigin({
@@ -133,7 +142,7 @@ describe("createWalletVaultService origin grants", () => {
       kms: fakeKms(),
       migrationStore: createEncryptedStore(backend, migrationKey),
     });
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
     let checks = 0;
 
     await expect(
@@ -156,7 +165,7 @@ describe("createWalletVaultService origin grants", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
     await service.grantOrigin({ origin: "https://alpha.example", vaultPassphrase });
     await service.grantOrigin({ origin: "https://beta.example", vaultPassphrase });
 
@@ -180,7 +189,7 @@ describe("createWalletVaultService origin grants", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
     await expect(
       service.revokeOrigin({ origin: "http://example.com", vaultPassphrase }),
     ).rejects.toThrow("Invalid origin");

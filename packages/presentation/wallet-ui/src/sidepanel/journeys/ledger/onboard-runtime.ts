@@ -9,7 +9,7 @@
  * happy-dom with fakes. Markup comes from the escaped onboarding templates,
  * inserted through the audited dom.ts fragment sink.
  */
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { renderFragment } from "../../shared/dom";
 import {
@@ -48,7 +48,7 @@ import type { LedgerConnector } from "./sign-session";
  * overlay is dismissed, so a cancelled setup leaves nothing sensitive in memory.
  */
 export type LedgerOnboardRuntimeDeps = {
-  readonly addHd: () => Promise<void>;
+  readonly addHd: (accountContractType: AccountContractType) => Promise<void>;
   readonly connector: LedgerConnector;
   readonly create: (account: LedgerAccountRef) => Promise<void>;
   readonly describe: (address: string, networkId: string) => Promise<LedgerCandidateState>;
@@ -69,12 +69,17 @@ export type LedgerOnboardRuntimeDeps = {
  */
 export type LedgerOnboardRuntime = {
   readonly bindTriggers: (app: Element | null) => void;
-  readonly start: () => void;
+  readonly start: (accountContractType?: AccountContractType) => void;
   readonly startAddAccount: () => void;
 };
 
 const isAddKind = (value: string | undefined): value is LedgerOnboardAddKind =>
-  value === "hd" || value === "import" || value === "ledger" || value === "multisig";
+  value === "argent" ||
+  value === "import" ||
+  value === "ledger-argent" ||
+  value === "ledger-openzeppelin" ||
+  value === "multisig" ||
+  value === "openzeppelin";
 
 /**
  * Creates the DOM-bound Ledger onboarding runtime. The controller persists
@@ -173,10 +178,11 @@ export const createLedgerOnboardRuntime = (
   };
 
   controller = createLedgerOnboardController({
-    addHd: () => deps.addHd(),
+    addHd: (accountContractType) => deps.addHd(accountContractType),
     connector,
     create,
-    derive: (entries) => wallet.deriveLedgerAccounts(networkId(), entries),
+    derive: (entries, accountContractType) =>
+      wallet.deriveLedgerAccounts(networkId(), entries, accountContractType),
     describe: (account) => describe(account.address, networkId()),
     enumerate: (client, startIndex, readiness) =>
       enumerateLedgerPubKeys(client, startIndex, LEDGER_PAGE_SIZE, readiness),
@@ -194,8 +200,8 @@ export const createLedgerOnboardRuntime = (
         ?.querySelector<HTMLButtonElement>("[data-connect-ledger]")
         ?.addEventListener("click", () => controller.start());
     },
-    start() {
-      controller.start();
+    start(accountContractType) {
+      controller.start(accountContractType);
     },
     startAddAccount() {
       controller.showChooser();

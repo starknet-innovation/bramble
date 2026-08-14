@@ -18,6 +18,7 @@ import { createUnlockSession } from "../../apps/extension/src/background/runtime
 import { flushHeld, waitForPendingApprovals } from "../support/held";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -94,16 +95,30 @@ describe("provider bridge typed data", () => {
     });
   });
 
-  test("maps signature responses to a [r, s] felt array", () => {
+  test("maps strict OZ and Argent account signature arrays", () => {
+    expect(
+      toProviderPayload({ ok: true, signature: ["0x1a", "0x2b"] }, "wallet_signTypedData"),
+    ).toEqual({ result: ["0x1a", "0x2b"] });
     expect(
       toProviderPayload(
-        { ok: true, signature: { publicKey: "0x3", r: "0x1a", s: "0x2b" } },
+        { ok: true, signature: ["1", "0", "0x3", "0x1a", "0x2b"] },
         "wallet_signTypedData",
       ),
-    ).toEqual({ result: ["0x1a", "0x2b"] });
-    expect(toProviderPayload({ ok: true, signature: {} }, "wallet_signTypedData")).toEqual({
+    ).toEqual({ result: ["1", "0", "0x3", "0x1a", "0x2b"] });
+    expect(
+      toProviderPayload({ ok: true, signature: ["0", "0x1"] }, "wallet_signTypedData"),
+    ).toEqual({
       error: unknownError(),
     });
+    expect(
+      toProviderPayload(
+        { ok: true, signature: ["1", "0", "0x3", "0", "0x2b"] },
+        "wallet_signTypedData",
+      ),
+    ).toEqual({ error: unknownError() });
+    expect(
+      toProviderPayload({ ok: true, signature: ["0x01a", "0x2b"] }, "wallet_signTypedData"),
+    ).toEqual({ error: unknownError() });
   });
 });
 
@@ -185,7 +200,7 @@ describe("wallet.signTypedData handler", () => {
     await handler({ id: queued[0]?.id, type: "wallet.approveOrigin" }, pageSender);
     expect(await held).toEqual({
       ok: true,
-      signature: { publicKey: account.publicKeyX, r: "0x1a", s: "0x2b" },
+      signature: ["0x1a", "0x2b"],
     });
     expect(signedHashes[0]).toBe(typedDataHash(typedData, account.address));
   });

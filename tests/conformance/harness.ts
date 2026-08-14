@@ -88,7 +88,7 @@ const walletStub = (bump: Bump) => ({
       activeAccountId: ACCOUNT.id,
       mnemonic: null,
       originGrants: [{ accountIds: [ACCOUNT.id], origin: ORIGIN }],
-      schemaVersion: 5 as const,
+      schemaVersion: 7 as const,
       signingKeys: [{ accountId: ACCOUNT.id, privateKey: "0x123456" }],
     };
   },

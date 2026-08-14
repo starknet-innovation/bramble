@@ -25,6 +25,7 @@ export const submitReviewedAccountDeployment = async (
   deps: AccountDeploymentDeps,
   input: {
     readonly account: AccountRef;
+    readonly isAuthorized: () => boolean;
     readonly networkId: StarknetNetworkId;
     readonly reviewedFee?: FeeEstimate;
     readonly signHash: StarkHashSigner;
@@ -48,6 +49,7 @@ export const submitReviewedAccountDeployment = async (
   }
   const result = await deps.runtimeRpc.submitAccountDeployment({
     account: input.account,
+    isAuthorized: input.isAuthorized,
     reviewedFee: input.reviewedFee,
     rpcUrls,
     signHash: input.signHash,

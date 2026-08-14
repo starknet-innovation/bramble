@@ -3,6 +3,7 @@
  * jobs, and stale hydration generations cannot mutate or repaint the cache.
  */
 import { describe, expect, test } from "bun:test";
+import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
 import { hydrateView } from "../../../../src/sidepanel/app/sync/hydrate";
@@ -36,7 +37,7 @@ const flush = async (): Promise<void> => {
 
 const emptyMultisigClient = {
   async loadMultisigs() {
-    return { multisigs: [], proposals: [] };
+    return { intents: [], multisigs: [] };
   },
 };
 
@@ -247,12 +248,14 @@ describe("home hydration priority", () => {
     const sharedBalanceReads: string[] = [];
     const sharedActivityReads: (string | undefined)[] = [];
     const sharedNftReads: unknown[][] = [];
+    let multisigReads = 0;
     const record = {
+      accountContractType: "argent-multisig" as const,
       address: "0x7123",
+      classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+      currentConfig: { signerPublicKeys: ["0x1", "0x2"], threshold: 2 },
       id: multisigId,
       networkId: "SN_MAIN" as const,
-      quorum: 2,
-      signers: ["0x1", "0x2"],
     };
 
     await hydrateView({
@@ -264,8 +267,22 @@ describe("home hydration priority", () => {
           sharedBalanceReads.push(id);
           return sharedBalances;
         },
-        loadMultisigs: async () => ({ multisigs: [record], proposals: [] }),
-        refreshMultisig: async () => undefined,
+        loadMultisigs: async () => {
+          multisigReads += 1;
+          return {
+            intents: [],
+            multisigs: [
+              {
+                config: {
+                  classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+                  signerGuids: ["0x1", "0x2"],
+                  threshold: 2,
+                },
+                record,
+              },
+            ],
+          };
+        },
       },
       paint: () => undefined,
       selectedMultisigId: multisigId,
@@ -306,5 +323,30 @@ describe("home hydration priority", () => {
     expect(sharedNftReads).toEqual([[true, `${status.networkId}:${multisigId}`, multisigId]]);
     expect(cache.multisigNftId).toBe(multisigId);
     expect(cache.multisigNfts).toHaveLength(1);
+    expect(multisigReads).toBe(1);
+  });
+
+  test("loads the complete multisig list once without per-account refresh amplification", async () => {
+    const cache = emptyRenderCache();
+    let reads = 0;
+    await hydrateView({
+      activeView: "multisigs",
+      cache,
+      deployment: {},
+      multisig: {
+        loadMultisigs: async () => {
+          reads += 1;
+          return { intents: [], multisigs: [] };
+        },
+      },
+      paint: () => undefined,
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {},
+    } as never);
+
+    expect(reads).toBe(1);
+    expect(cache.multisigsError).toBe(false);
   });
 });

@@ -6,7 +6,11 @@ import { isUuid } from "@mc-wallet/core/ids";
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@mc-wallet/core/json";
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
 import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+import {
+  type AccountContractType,
+  isAccountContractType,
+  isAccountId,
+} from "@mc-wallet/wallet-model/accounts";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import {
   isHexChainId,
@@ -279,17 +283,22 @@ export const readSetActiveNetworkInput = (
  */
 export const readAddAccountInput = (
   message: unknown,
-): { readonly networkId: StarknetNetworkId } | null => {
+): {
+  readonly accountContractType: AccountContractType;
+  readonly networkId: StarknetNetworkId;
+} | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["networkId", "type"]) ||
+    !hasOnlyKnownKeys(message, ["accountContractType", "networkId", "type"]) ||
     message["type"] !== "wallet.addAccount" ||
+    !isAccountContractType(message["accountContractType"]) ||
     !isStarknetNetworkId(message["networkId"])
   ) {
     return null;
   }
 
   return {
+    accountContractType: message["accountContractType"],
     networkId: message["networkId"],
   };
 };

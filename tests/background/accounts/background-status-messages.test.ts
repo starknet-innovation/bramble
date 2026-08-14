@@ -11,6 +11,7 @@ import { unavailablePreferencesStore } from "../../../apps/extension/src/backgro
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabcabcdef",
   classHash: "0xabcdef",
   derivation: {
@@ -65,7 +66,7 @@ const createStatusWallet = (statusAccount: AccountRef = account) => ({
       activeAccountId: statusAccount.id,
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 5 as const,
+      schemaVersion: 7 as const,
       signingKeys: [{ accountId: statusAccount.id, privateKey: "0x123456" }],
     };
   },

@@ -22,6 +22,7 @@ import {
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1",
   classHash: "0x2",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -33,6 +34,7 @@ const account: AccountRef = {
 const context: Strk20AccountContext = {
   account,
   config: null,
+  isAuthorized: () => true,
   rpcUrls: ["https://rpc.example"],
   async signHash() {
     return { publicKey: "0x3", r: "0x1", s: "0x2" };

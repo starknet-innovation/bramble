@@ -15,12 +15,14 @@ import {
 } from "@mc-wallet/starknet/deployment";
 import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
 import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { type Account, CallData, hash, type RpcProvider } from "starknet";
+import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { type Account, CallData, hash, logger, type RpcProvider } from "starknet";
+
+logger.setLogLevel("FATAL");
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const CLASS_HASH = "0x2b31e19e45c06f29234e06e2ee98a9966479ba3067f8785ed972794fdb0065c";
-// Krusty (salt 0) counterfactual address, so ozAccountDeployment resolves.
+// Krusty (salt 0) counterfactual address, so accountDeployment resolves.
 const DEPLOY_ADDRESS = hash.calculateContractAddressFromHash(
   "0x0",
   CLASS_HASH,
@@ -28,7 +30,8 @@ const DEPLOY_ADDRESS = hash.calculateContractAddressFromHash(
   0,
 );
 
-const account: AccountRef = {
+const account: DerivedAccountRef = {
+  accountContractType: "openzeppelin",
   address: DEPLOY_ADDRESS,
   classHash: CLASS_HASH,
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -37,7 +40,6 @@ const account: AccountRef = {
   publicKeyX: PUBLIC_KEY,
   publicKeyY: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
-
 // A "contract not found" RPC error the way starknet.js surfaces code 20.
 const notFoundError = (): Error =>
   Object.assign(new Error("Contract not found"), { baseError: { code: 20 } });
@@ -85,6 +87,7 @@ describe("ensureAccountDeployed", () => {
       }),
       account,
       REVIEWED_DEPLOYMENT,
+      () => undefined,
     );
     expect(deployed).toBe(false);
   });
@@ -107,9 +110,51 @@ describe("ensureAccountDeployed", () => {
       }),
       account,
       REVIEWED_DEPLOYMENT,
+      () => "0xdeadbeef",
     );
     expect(deployed).toBe(true);
     expect(waited).toBe(true);
+  });
+
+  test("checks live authorization after fee settlement and before automatic deployment", async () => {
+    let authorized = true;
+    let deployed = false;
+    let waited = false;
+    const accountWithRevokingEstimate = {
+      async deployAccount() {
+        deployed = true;
+        return { transaction_hash: "0xdeadbeef" };
+      },
+      async estimateAccountDeployFee() {
+        authorized = false;
+        return {
+          overall_fee: 1n,
+          resourceBounds: { l1_gas: { max_amount: 1n, max_price_per_unit: 1n } },
+          unit: "FRI",
+        };
+      },
+    } as unknown as Account;
+
+    await expect(
+      ensureAccountDeployed(
+        provider({
+          async getClassHashAt() {
+            throw notFoundError();
+          },
+          async waitForTransaction() {
+            waited = true;
+          },
+        }),
+        accountWithRevokingEstimate,
+        account,
+        REVIEWED_DEPLOYMENT,
+        () => undefined,
+        () => authorized,
+      ),
+    ).rejects.toThrow("wallet locked");
+
+    expect(deployed).toBe(false);
+    expect(waited).toBe(false);
   });
 
   test("wraps a submission failure with the funding guidance", async () => {
@@ -127,6 +172,7 @@ describe("ensureAccountDeployed", () => {
         }),
         account,
         REVIEWED_DEPLOYMENT,
+        () => undefined,
       ),
     ).rejects.toThrow("automatic deployment failed");
   });
@@ -143,14 +189,15 @@ describe("ensureAccountDeployed", () => {
       }),
       account,
       REVIEWED_DEPLOYMENT,
+      () => undefined,
     ).catch((error: unknown) => error);
 
-    expect(rejection).not.toBeInstanceOf(IndeterminateRpcWriteError);
+    expect(rejection).toBeInstanceOf(IndeterminateRpcWriteError);
     expect((rejection as Error).message).toContain("Account deployment status is unknown");
   });
 
   test("re-throws a WalletError from deployment as-is (address mismatch)", async () => {
-    const mismatched: AccountRef = { ...account, address: "0xdead" };
+    const mismatched: DerivedAccountRef = { ...account, address: "0xdead" };
     await expect(
       ensureAccountDeployed(
         provider({
@@ -160,6 +207,8 @@ describe("ensureAccountDeployed", () => {
         }),
         starknetAccount(async () => ({ transaction_hash: "0x1" })),
         mismatched,
+        undefined,
+        () => undefined,
       ),
     ).rejects.toThrow("do not match the stored address");
   });
@@ -174,6 +223,8 @@ describe("ensureAccountDeployed", () => {
         }),
         starknetAccount(async () => ({ transaction_hash: "0x1" })),
         account,
+        undefined,
+        () => undefined,
       ),
     ).rejects.toThrow("fetch failed");
   });
@@ -256,7 +307,7 @@ describe("estimateAccountDeploymentFee", () => {
         constructorCalldata: [BigInt(PUBLIC_KEY).toString()],
         contractAddress: DEPLOY_ADDRESS,
       },
-      { skipValidate: true },
+      { skipValidate: true, tip: "0x0" },
     ]);
   });
 });
@@ -286,9 +337,12 @@ describe("submitAccountDeployment", () => {
           signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
         },
         () => makeProvider(false),
-        () =>
+        (_provider, _stored, guardedSignHash) =>
           ({
-            deployAccount: async () => ({}),
+            async deployAccount() {
+              await guardedSignHash("0x123");
+              return {};
+            },
             estimateAccountDeployFee: async () => ({
               overall_fee: 1n,
               resourceBounds: { l1_gas: { max_amount: 1n, max_price_per_unit: 1n } },
@@ -297,6 +351,66 @@ describe("submitAccountDeployment", () => {
           }) as unknown as Account,
       ),
     ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
+  });
+
+  test("treats a node hash different from the signed deployment hash as indeterminate", async () => {
+    await expect(
+      submitAccountDeployment(
+        {
+          account,
+          reviewedFee: REVIEWED_DEPLOYMENT,
+          rpcUrls: ["https://rpc.example"],
+          signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+        },
+        () => makeProvider(false),
+        (_provider, _stored, guardedSignHash) =>
+          ({
+            async deployAccount() {
+              await guardedSignHash("0x123");
+              return { transaction_hash: "0x456" };
+            },
+            estimateAccountDeployFee: async () => ({
+              overall_fee: 1n,
+              resourceBounds: { l1_gas: { max_amount: 1n, max_price_per_unit: 1n } },
+              unit: "FRI",
+            }),
+          }) as unknown as Account,
+      ),
+    ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
+  });
+
+  test("revocation after signing prevents the provider mutation", async () => {
+    let authorized = true;
+    let writes = 0;
+    await expect(
+      submitAccountDeployment(
+        {
+          account,
+          isAuthorized: () => authorized,
+          reviewedFee: REVIEWED_DEPLOYMENT,
+          rpcUrls: ["https://rpc.example"],
+          signHash: async () => {
+            authorized = false;
+            return { publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
+          },
+        },
+        () => makeProvider(false),
+        (_provider, _stored, guardedSignHash) =>
+          ({
+            async deployAccount() {
+              await guardedSignHash("0x123");
+              writes += 1;
+              return { transaction_hash: "0x123" };
+            },
+            estimateAccountDeployFee: async () => ({
+              overall_fee: 1n,
+              resourceBounds: { l1_gas: { max_amount: 1n, max_price_per_unit: 1n } },
+              unit: "FRI",
+            }),
+          }) as unknown as Account,
+      ),
+    ).rejects.toThrow("wallet locked");
+    expect(writes).toBe(0);
   });
 });
 
@@ -335,6 +449,7 @@ describe("a reviewed deployment fee is a ceiling on the deployment", () => {
       deploying,
       account,
       reviewedFee,
+      () => "0xdeadbeef",
     ).then(
       () => null,
       (thrown: unknown) => thrown,

@@ -16,6 +16,7 @@ import { createUnlockSession } from "../../../apps/extension/src/background/runt
 import { flushHeld, latestApprovalId } from "../../support/held";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -64,7 +65,7 @@ const walletStub = () => ({
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 5 as const,
+      schemaVersion: 7 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

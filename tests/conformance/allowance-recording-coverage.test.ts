@@ -38,6 +38,7 @@ const SUBMIT_SEAMS = [
   "submitDeclareTransaction",
   "submitErc20Transfer",
   "submitInvokeTransaction",
+  "submitPreparedInvoke",
   "submitStrk20Actions",
   "registerStrk20Account",
 ] as const;
@@ -54,7 +55,7 @@ const NO_GRANT_POSSIBLE: Readonly<Record<string, string>> = {
   "deployment-ops.ts":
     "deploys the selected account contract; a deployment carries no calls, so no allowance can be granted",
   "multisig-deploy-ops.ts":
-    "submits only the UDC deployment and class declaration the wallet builds from pinned constants",
+    "deploys the pinned Argent multisig account contract; a deployment carries no calls, so no allowance can be granted",
   "nft-ops.ts":
     "submits only the ERC721/ERC1155 transfer the wallet builds; an NFT approval's second argument is a token id, not an amount, and must never be filed as an ERC20 allowance",
   "runtime-rpc.ts": "defines the seams; it wires the RPC functions and submits nothing itself",

@@ -30,6 +30,7 @@ const publicKeyX = starkCurve.getStarkKey(PRIVATE_KEY);
 const DEPLOY_HASH = "0x1e240";
 
 const ledgerAccount: LedgerAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabc111111",
   classHash: "0x111111",
   derivation: {
@@ -141,7 +142,9 @@ const handlerWith = (ledgerSignQueue: LedgerSignQueue) => {
       async submitAccountDeployment(input) {
         // Stand in for the real deploy-hash signing: hand the signer the hash and
         // capture the verified signature it returns before "broadcasting".
-        signHashResults.push(await input.signHash(DEPLOY_HASH));
+        const signature = await input.signHash(DEPLOY_HASH);
+        if (!("r" in signature)) throw new Error("unexpected multisig deployment signature");
+        signHashResults.push(signature);
         return { transactionHash: "0xdeploy" };
       },
     }),
@@ -221,7 +224,13 @@ describe("privileged Ledger messages", () => {
   test("creates a keyless Ledger account", async () => {
     const { handler } = handlerWith(deviceQueue(PRIVATE_KEY));
     const response = await handler(
-      { accountIndex: 2, networkId: "SN_MAIN", publicKeyX, type: "wallet.addLedgerAccount" },
+      {
+        accountContractType: "openzeppelin",
+        accountIndex: 2,
+        networkId: "SN_MAIN",
+        publicKeyX,
+        type: "wallet.addLedgerAccount",
+      },
       extensionSender,
     );
     expect(response).toEqual({ account: ledgerAccount, ok: true });
@@ -231,6 +240,7 @@ describe("privileged Ledger messages", () => {
     const { handler } = handlerWith(deviceQueue(PRIVATE_KEY));
     const response = await handler(
       {
+        accountContractType: "openzeppelin",
         accountIndex: 2,
         networkId: "SN_MAIN",
         publicKeyX,
@@ -315,6 +325,7 @@ describe("privileged Ledger messages", () => {
     const { handler } = handlerWith(deviceQueue(PRIVATE_KEY));
     const response = await handler(
       {
+        accountContractType: "openzeppelin",
         entries: [{ accountIndex: 2, publicKeyX }],
         networkId: "SN_MAIN",
         type: "wallet.deriveLedgerAccounts",

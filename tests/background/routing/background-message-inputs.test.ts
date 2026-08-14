@@ -2,7 +2,10 @@
  * Background message parser checks reject ambiguous runtime command shapes.
  */
 import { describe, expect, test } from "bun:test";
-import { readPreviewAccountInput } from "../../../apps/extension/src/background/accounts/account-creation-inputs";
+import {
+  readPreviewAccountInput,
+  readValidateMnemonicInput,
+} from "../../../apps/extension/src/background/accounts/account-creation-inputs";
 import {
   readAddAccountInput,
   readAddInvokeTransactionInput,
@@ -253,7 +256,14 @@ describe("background message parsers", () => {
   });
 
   test("reads add-account messages carrying only a network", () => {
-    expect(readAddAccountInput({ networkId: "SN_MAIN", type: "wallet.addAccount" })).toEqual({
+    expect(
+      readAddAccountInput({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        type: "wallet.addAccount",
+      }),
+    ).toEqual({
+      accountContractType: "openzeppelin",
       networkId: "SN_MAIN",
     });
     expect(readAddAccountInput({ networkId: "SN_BAD", type: "wallet.addAccount" })).toBeNull();
@@ -314,12 +324,18 @@ describe("background message parsers", () => {
     const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
     expect(
       readPreviewAccountInput({
+        accountContractType: "openzeppelin",
         accountIndex: 0,
         mnemonic,
         networkId: "SN_SEPOLIA",
         type: "wallet.previewAccount",
       }),
-    ).toEqual({ accountIndex: 0, mnemonic, networkId: "SN_SEPOLIA" });
+    ).toEqual({
+      accountContractType: "openzeppelin",
+      accountIndex: 0,
+      mnemonic,
+      networkId: "SN_SEPOLIA",
+    });
     expect(
       readPreviewAccountInput({
         mnemonic,
@@ -336,6 +352,24 @@ describe("background message parsers", () => {
       }),
     ).toBeNull();
     expect(readPreviewAccountInput({ mnemonic: "  ", type: "wallet.previewAccount" })).toBeNull();
+  });
+
+  test("reads exact mnemonic validation without accepting extra fields", () => {
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+    expect(readValidateMnemonicInput({ mnemonic, type: "wallet.validateMnemonic" })).toEqual({
+      mnemonic,
+    });
+    expect(
+      readValidateMnemonicInput({
+        mnemonic,
+        type: "wallet.validateMnemonic",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
+    expect(
+      readValidateMnemonicInput({ mnemonic: "  ", type: "wallet.validateMnemonic" }),
+    ).toBeNull();
+    expect(readValidateMnemonicInput({ mnemonic, type: "wallet.previewAccount" })).toBeNull();
   });
 
   test("reads and rejects origin-revocation messages", () => {

@@ -82,9 +82,34 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
 
 const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...buildOpsDeps(ctx),
-  loadMultisigClass: ctx.loadMultisigClass,
+  multisigDeploymentReviews: ctx.multisigDeploymentReviews,
   multisigStore: ctx.multisigStore,
 });
+
+const MULTISIG_ACTIVE_STATE_MESSAGES = new Set([
+  "wallet.addMultisig",
+  "wallet.deployArgentMultisig",
+  "wallet.importArgentMultisigIntent",
+  "wallet.importArgentMultisigSignature",
+  "wallet.prepareArgentMultisigIntent",
+  "wallet.removeMultisig",
+  "wallet.reviewArgentMultisigDeployment",
+  "wallet.signArgentMultisigIntent",
+  "wallet.submitArgentMultisigIntent",
+]);
+
+const handleMultisig: RouterHandler = async (ctx, messageType, message) => {
+  const handle = async (): Promise<RuntimeResponse | null> => {
+    const deps = buildMultisigDeps(ctx);
+    return (
+      (await handleMultisigOps(deps, messageType, message)) ??
+      handleMultisigTxOps(deps, messageType, message)
+    );
+  };
+  return MULTISIG_ACTIVE_STATE_MESSAGES.has(messageType)
+    ? ctx.activeStateCoordinator.run(handle)
+    : handle();
+};
 
 const handleCreateAccount: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.createAccount") {
@@ -121,7 +146,11 @@ const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
       ctx.preferencesStore,
       input.networkId,
       (vaultPassphrase) =>
-        ctx.wallet.addDerivedAccount({ networkId: input.networkId, vaultPassphrase }),
+        ctx.wallet.addDerivedAccount({
+          accountContractType: input.accountContractType,
+          networkId: input.networkId,
+          vaultPassphrase,
+        }),
     );
     return account ? { account, ok: true } : { error: "wallet locked" };
   });
@@ -305,10 +334,20 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
   if (!input) {
     return { error: "invalid unlock request" };
   }
+  const generation = ctx.session.generation();
   try {
     return await ctx.activeStateCoordinator.run(async () => {
+      if (ctx.session.generation() !== generation) {
+        return { error: "wallet locked" };
+      }
       await ctx.wallet.readVault(input.vaultPassphrase);
+      if (ctx.session.generation() !== generation) {
+        return { error: "wallet locked" };
+      }
       await reconcileActiveAccount(ctx.wallet, ctx.preferencesStore, input.vaultPassphrase);
+      if (ctx.session.generation() !== generation) {
+        return { error: "wallet locked" };
+      }
       ctx.session.unlock(input.vaultPassphrase);
       return statusResponse(ctx.wallet, ctx.session, ctx.preferencesStore);
     });
@@ -354,8 +393,7 @@ const HANDLERS: readonly RouterHandler[] = [
     ),
   (ctx, messageType, message) => handleAllowanceOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleNftOps(buildOpsDeps(ctx), messageType, message),
-  (ctx, messageType, message) => handleMultisigOps(buildMultisigDeps(ctx), messageType, message),
-  (ctx, messageType, message) => handleMultisigTxOps(buildMultisigDeps(ctx), messageType, message),
+  handleMultisig,
   handlePreferences,
   (ctx, messageType, message, sender) => handleChainOps(ctx, messageType, message, sender),
   (ctx, messageType, message, sender) => handleProviderOps(ctx, messageType, message, sender),

@@ -7,10 +7,8 @@
 
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { MultisigClassState } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
-import type { MultisigSyncState } from "../../journeys/multisig/multisig-sync";
 import { emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
 
 // The price snapshot as the runtime client returns it; the cache's price fields
@@ -33,8 +31,7 @@ export type RenderData = {
   allowances: Awaited<ReturnType<SidepanelWallet["loadAllowances"]>>;
   multisigs: LoadedMultisigs;
   multisigsError: boolean;
-  multisigSync: MultisigSyncState;
-  multisigClassDeclared: MultisigClassState | "error" | null;
+  multisigClassDeclared: boolean | "error" | null;
   multisigBalanceId: string | null;
   multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
   multisigNftId: string | null;
@@ -102,7 +99,6 @@ export const updateRenderScope = (
           multisigClassDeclared: null,
           multisigNftId: null,
           multisigNfts: [],
-          multisigSync: null,
           multisigsError: false,
         }
       : {}),
@@ -118,9 +114,8 @@ export const updateRenderScope = (
  */
 export const emptyRenderCache = (): RenderData => ({
   allowances: [],
-  multisigs: { multisigs: [], proposals: [] },
+  multisigs: { intents: [], multisigs: [] },
   multisigsError: false,
-  multisigSync: null,
   multisigClassDeclared: null,
   multisigBalanceId: null,
   multisigBalances: { error: "multisig balances unavailable" },

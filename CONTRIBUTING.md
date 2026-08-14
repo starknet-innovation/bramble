@@ -16,12 +16,12 @@ sandboxes:
 
 - `bun run vendor:krusty` needs network access, `wasm-pack 0.13.1`, and a Rust
   toolchain (build Krusty KMS).
-- `bun run vendor:multisig` needs `scarb 2.18.0` exactly (the multisig class
-  hash pin is only reproducible on that version).
+- `bun run vendor:argent` needs network access to fetch the exact production
+  Argent account-contract release and verify its official artifacts.
 - `bun run vendor:privacy` needs network access plus Node.js 24 and npm. It
   builds the exact pinned official Privacy SDK browser bundle and verifies its digest.
 
-Without the vendored outputs, `check:krusty`, `check:multisig`, `check:privacy`, and `build` fail;
+Without the vendored outputs, `check:krusty`, `check:argent`, `check:privacy`, and `build` fail;
 that is expected offline. Run the rest of the gates and say so.
 
 Contributors can enable the local pre-push hook to run the offline-fast checks
@@ -40,7 +40,7 @@ Run this before opening a pull request:
 
 ```bash
 bun run vendor:krusty
-bun run vendor:multisig
+bun run vendor:argent
 bun run vendor:privacy
 bun run check
 bun run test:e2e:install

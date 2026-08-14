@@ -127,6 +127,7 @@ if (!(await kms.validateMnemonic(mnemonic))) {
 }
 
 const { account, privateKey } = await deriveAccount(kms, {
+  accountContractType: "openzeppelin",
   mnemonic,
   networkId: DEFAULT_NETWORK.id,
 });
@@ -156,6 +157,7 @@ if (
 // fail closed on the likely accident — a revision or toolchain bump that moves
 // derivation, signing, or viewing-key output — not on a targeted substitution.
 const { account: knownAccount, privateKey: knownPrivateKey } = await deriveAccount(kms, {
+  accountContractType: "openzeppelin",
   mnemonic: referenceMnemonic,
   networkId: DEFAULT_NETWORK.id,
 });

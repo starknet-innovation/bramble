@@ -63,7 +63,12 @@ describe("per-command invalid-input guards", () => {
   test("a valid importAccount on a locked wallet reports wallet locked", async () => {
     await expect(
       handlerLocked()(
-        { networkId: "SN_SEPOLIA", privateKey: "0x1", type: "wallet.importAccount" },
+        {
+          accountContractType: "openzeppelin",
+          networkId: "SN_SEPOLIA",
+          privateKey: "0x1",
+          type: "wallet.importAccount",
+        },
         sender,
       ),
     ).resolves.toEqual({ error: "wallet locked" });

@@ -14,34 +14,32 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
 import { type AccountGroups, accountGroup } from "@mc-wallet/settings/groups";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { ArgentMultisigView } from "../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { groupFilterChips, groupPickerPanel } from "../journeys/settings/group-controls";
 import { icon } from "../shared/icons";
 import { accountAvatar, accountDisplayName, accountLabel, hardwareBadge } from "../shared/parts";
 
 const drawerMultisigRow = (
-  record: MultisigRecord,
-  proposals: readonly MultisigProposalRecord[],
+  view: ArgentMultisigView,
+  open: number,
   selectedId: string | null,
 ): string => {
-  const open = proposals.filter(
-    (proposal) => proposal.multisigId === record.id && proposal.state !== "executed",
-  ).length;
+  const { record } = view;
   return `<li class="drawer-account-item">
     <button class="drawer-account drawer-multisig" data-multisig-select="${escapeHtml(record.id)}" type="button" aria-pressed="${record.id === selectedId}">
       <span class="option-avatar">${accountAvatar(record.address)}</span>
       <span class="drawer-copy">
         <strong>${escapeHtml(record.name ?? "Multisig account")}</strong>
         <code>${escapeHtml(accountLabel(record.address))}</code>
-        <span class="account-groups-line">Multisig · ${record.quorum} of ${record.signers.length} signers required${open > 0 ? ` · ${open} open` : ""}</span>
+        <span class="account-groups-line">Argent Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}` : "authority unavailable"}${open > 0 ? ` · ${open} open` : ""}</span>
       </span>
       <span class="option-mark">${icon(record.id === selectedId ? "check" : "chevronRight")}</span>
     </button>
@@ -55,7 +53,7 @@ const drawerAccountRow = (
   preferences: WalletPreferences | null,
   groups: AccountGroups,
   openAssignId: string | null,
-  selectedMultisig: MultisigRecord | null,
+  selectedMultisig: ArgentMultisigView | null,
 ): string => {
   const folder = accountGroup(groups, stored.id);
   const assignOpen = stored.id === openAssignId;
@@ -65,7 +63,7 @@ const drawerAccountRow = (
   const pickerLabel = folder ? `Folder: ${folder.name}` : "No folder — choose one";
   const name = accountDisplayName(stored, preferences);
   const selectedMultisigSigner =
-    selectedMultisig?.signers.some((signer) => sameFelt(signer, stored.address)) ?? false;
+    selectedMultisig?.config?.signerGuids.includes(argentSignerGuid(stored.publicKeyX)) ?? false;
   return `
   <li class="drawer-account-item">
     <div class="drawer-account-row">
@@ -74,7 +72,7 @@ const drawerAccountRow = (
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
           <code>${accountLabel(stored.address)}</code>
-          ${selectedMultisigSigner ? `<span class="account-groups-line">Signer for ${escapeHtml(selectedMultisig?.name ?? "selected multisig")}</span>` : ""}
+          ${selectedMultisigSigner ? `<span class="account-groups-line">Signer for ${escapeHtml(selectedMultisig?.record.name ?? "selected multisig")}</span>` : ""}
         </span>
         ${singleSignerSelected && stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>
@@ -108,8 +106,8 @@ export const accountDrawer = (
   preferences: WalletPreferences | null,
   groupFilter: string | null = null,
   openAssignId: string | null = null,
-  multisigs: readonly MultisigRecord[] = [],
-  proposals: readonly MultisigProposalRecord[] = [],
+  multisigs: readonly ArgentMultisigView[] = [],
+  intents: readonly { readonly accountId: string; readonly state: string }[] = [],
   selectedMultisigId: string | null = null,
 ): string => {
   const groups = preferences?.groups ?? [];
@@ -120,8 +118,8 @@ export const accountDrawer = (
     : accounts;
   const shared = groupFilter
     ? []
-    : multisigs.filter((record) => record.networkId === status.networkId);
-  const selectedMultisig = shared.find((record) => record.id === selectedMultisigId) ?? null;
+    : multisigs.filter((view) => view.record.networkId === status.networkId);
+  const selectedMultisig = shared.find((view) => view.record.id === selectedMultisigId) ?? null;
   const hasVisibleAccounts = visible.length > 0 || shared.length > 0;
   return `
   <div class="drawer-root" data-open="false">
@@ -161,7 +159,17 @@ export const accountDrawer = (
                 ),
               )
               .join("")}${shared
-              .map((record) => drawerMultisigRow(record, proposals, selectedMultisigId))
+              .map((view) =>
+                drawerMultisigRow(
+                  view,
+                  intents.filter(
+                    (intent) =>
+                      intent.accountId === view.record.id &&
+                      (intent.state === "collecting" || intent.state === "ready"),
+                  ).length,
+                  selectedMultisigId,
+                ),
+              )
               .join("")}</ul>`
       }
       <div class="drawer-foot">

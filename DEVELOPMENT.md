@@ -167,9 +167,9 @@ Trigger: **`pull_request` targeting `main` or `release/**`** (plus `push` to
   floor (`check:coverage`). Runs on `ubuntu-latest` — **no** crypto/contract
   toolchain, **no** build, **no** E2E — so PR feedback is fast. It deliberately
   does **not** run the aggregate `bun run check` (which chains the vendored
-  `check:krusty`/`check:multisig`) or any heavy step.
+  `check:krusty`/`check:argent`) or any heavy step.
 - **`release-validation`** — the **full heavy pipeline**: cargo/wasm-pack,
-  `vendor:krusty`, `vendor:multisig`, `bun run check`, coverage floor, `build`,
+  `vendor:krusty`, `vendor:argent`, `bun run check`, coverage floor, `build`,
   `test:e2e`, `package:extension`, the `apps/terminal` typecheck+build, and the
   `bun audit` dependency gate (`check:audit`), on the self-hosted CodeBuild
   runner. It is **gated by a job-level `if:`** so it runs **only on same-repository
@@ -193,9 +193,9 @@ again post-merge and nightly (below).
 
 Trigger: **`push` to `release/**`** (i.e. after a PR merges into the release branch).
 
-Runs the heavier steps: vendors the Krusty KMS WASM core and the multisig
-contract class, builds the extension, and produces the reproducible package +
-checksum. These need the private Krusty repo and a Rust/Scarb toolchain, so they
+Runs the heavier steps: vendors the Krusty KMS WASM core and verifies the pinned
+Argent account-contract release, builds the extension, and produces the reproducible package +
+checksum. These need the private Krusty repo, network access, and a Rust toolchain, so they
 run on the same self-hosted CodeBuild runner CI uses. If a vendor step can't
 complete (missing private-repo access or toolchain drift) it writes a clear
 explanation to the run summary and **fails honestly** — it never fakes success.
@@ -245,7 +245,7 @@ read-only self-hosted job; a separate hosted job receives the narrow
 | --- | :---: | :---: | :---: | :---: |
 | Lint, typecheck, file/config + manifest standards, import/cycle, unit/conformance tests, coverage | ✅ | ✅ | | |
 | Scope & naming guards (`pr-guards`) | ✅ | | | |
-| Vendor krusty/multisig, extension build, reproducible package | | ✅ | ✅ | ✅ (build) |
+| Vendor Krusty/Argent, extension build, reproducible package | | ✅ | ✅ | ✅ (build) |
 | Full E2E (Playwright) | | ✅ | | ✅ |
 | Dependency audit (`bun audit`) | | ✅ | | ✅ (live DB) |
 | Perf / regression | | | | ⚠️ placeholder (no suite exists yet) |

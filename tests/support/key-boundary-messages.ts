@@ -181,9 +181,17 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { preparationId: "", type: "wallet.swapExecute" },
     sender: extensionSender,
   },
-  { message: { networkId: "SN_MAIN", type: "wallet.addAccount" }, sender: extensionSender },
   {
     message: {
+      accountContractType: "openzeppelin",
+      networkId: "SN_MAIN",
+      type: "wallet.addAccount",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: account.publicKeyX,
@@ -193,6 +201,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   {
     message: {
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: account.publicKeyX,
@@ -203,6 +212,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   {
     message: {
+      accountContractType: "openzeppelin",
       entries: [{ accountIndex: 0, publicKeyX: account.publicKeyX }],
       networkId: "SN_MAIN",
       type: "wallet.deriveLedgerAccounts",
@@ -221,6 +231,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   {
     message: {
+      accountContractType: "openzeppelin",
       networkId: "SN_MAIN",
       privateKey: SECRET_PRIVATE_KEY,
       type: "wallet.importAccount",
@@ -229,6 +240,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   {
     message: {
+      accountContractType: "openzeppelin",
       mnemonic: SECRET_MNEMONIC,
       type: "wallet.createAccount",
       vaultPassphrase: SECRET_PASSPHRASE,
@@ -238,6 +250,14 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.generateMnemonic" }, sender: extensionSender },
   {
     message: {
+      mnemonic: SECRET_MNEMONIC,
+      type: "wallet.validateMnemonic",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      accountContractType: "openzeppelin",
       mnemonic: SECRET_MNEMONIC,
       networkId: "SN_MAIN",
       type: "wallet.previewAccount",

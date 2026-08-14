@@ -33,12 +33,12 @@ export {
 export {
   type AccountDeployment,
   type AccountDeploymentFeeEstimate,
+  accountDeployment,
   type DeployAccountInput,
   type DeploymentStatusInput,
   type DeploySubmission,
   estimateAccountDeploymentFee,
   getDeploymentStatus,
-  ozAccountDeployment,
   submitAccountDeployment,
 } from "../transactions/deployment";
 /**
@@ -111,6 +111,8 @@ export type BalanceInput = {
 export type TransferInput = {
   readonly account: AccountRef;
   readonly amount: string;
+  /** Live authorization checked immediately before each on-chain mutation. */
+  readonly isAuthorized?: () => boolean;
   readonly recipient: string;
   /** Separately reviewed ceiling for an automatic account deployment. */
   readonly reviewedDeploymentFee?: FeeEstimate;
@@ -376,6 +378,7 @@ export const submitErc20Transfer = async (
   {
     account,
     amount,
+    isAuthorized,
     recipient,
     reviewedDeploymentFee,
     reviewedFee,
@@ -392,6 +395,7 @@ export const submitErc20Transfer = async (
     {
       account,
       calls: [call],
+      ...(isAuthorized === undefined ? {} : { isAuthorized }),
       ...(reviewedDeploymentFee === undefined ? {} : { reviewedDeploymentFee }),
       ...(reviewedFee === undefined ? {} : { reviewedFee }),
       rpcUrls,

@@ -59,6 +59,7 @@ export const strk20AccountContext = (
   return {
     account: resolved.account,
     config,
+    isAuthorized: authorized.isCurrent,
     rpcUrls: resolved.rpcUrls,
     signHash: accountHashSigner(deps, resolved.account, resolved.passphrase),
     viewingKey: async () => {

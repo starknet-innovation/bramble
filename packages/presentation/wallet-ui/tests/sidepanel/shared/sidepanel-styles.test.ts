@@ -277,9 +277,6 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /\.send-token-trigger:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
     );
-    expect(SIDEPANEL_STYLES).toMatch(
-      /\.multisig-signer-option:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
-    );
   });
 
   test("home action tiles are four equal width-filling tools", () => {

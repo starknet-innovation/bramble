@@ -30,6 +30,7 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { currentArgentSignerRecords } from "../multisig/multisig-membership";
 import {
   readActivityInput,
   readFeeReviewInput,
@@ -47,7 +48,7 @@ import {
   statusResponse,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { UnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
@@ -148,8 +149,10 @@ const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
   if (!input) return { error: "invalid deploy account request" };
   const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) return { error: context.error };
+  const authorized = captureSessionAuthorization(deps.session);
   return submitReviewedAccountDeployment(deps, {
     account: context.account,
+    isAuthorized: authorized.isCurrent,
     networkId: context.networkId,
     ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
     signHash: accountHashSigner(deps, context.account, context.vaultPassphrase),
@@ -274,6 +277,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     return { error: context.error };
   }
   const { account, preferences, token, vaultPassphrase } = context;
+  const authorized = captureSessionAuthorization(deps.session);
   // Verified BEFORE anything is broadcast. This call is built exactly as
   // `submitErc20Transfer` builds it (same parse, same encoder), so the report is
   // about the transaction that would actually go out, and running it first makes
@@ -301,6 +305,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
   const result = await deps.runtimeRpc.submitErc20Transfer({
     account,
     amount: input.amount,
+    isAuthorized: authorized.isCurrent,
     recipient: input.recipient,
     ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
     reviewedFee: input.reviewedFee,
@@ -367,8 +372,17 @@ const handleLock: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.lock")) {
     return { error: "invalid lock request" };
   }
+  // A Ledger request may itself hold the active-state coordinator while the
+  // panel/device round-trip is parked. Revoke it before waiting for that
+  // coordinator so an explicit lock cannot be held behind the signature it is
+  // meant to cancel. Later queued operations stay behind the lock mutation and
+  // observe the revoked session.
+  deps.ledgerSignQueue?.rejectAll("wallet locked");
+  deps.session.lock();
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
-    // Revoke parked device signs before clearing the session.
+    // An unlock that was already inside the coordinator may have completed
+    // after the eager revocation. Lock once more at our serialized position so
+    // the later user intent wins deterministically.
     deps.ledgerSignQueue?.rejectAll("wallet locked");
     deps.session.lock();
     // Reporting "locked" is a security claim, so only make it once the
@@ -471,11 +485,8 @@ const activityTarget = async (
       scope: { accountId: context.account.id, networkId: context.networkId },
     };
   }
-  const record = (await deps.multisigStore?.listMultisigs())?.find(
-    (stored) =>
-      stored.id === requestedAccountId &&
-      stored.networkId === context.networkId &&
-      stored.signers.some((signer) => sameFelt(signer, context.account.address)),
+  const record = (await currentArgentSignerRecords(deps, context.account, context.networkId)).find(
+    (stored) => stored.id === requestedAccountId,
   );
   return record
     ? {

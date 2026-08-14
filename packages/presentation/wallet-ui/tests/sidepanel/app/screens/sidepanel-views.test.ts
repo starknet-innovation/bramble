@@ -439,9 +439,9 @@ describe("sidepanel views", () => {
 
   test("reveal flow warns that the recovery phrase does not restore an imported active account", () => {
     // A raw-key-imported account is not derived from the wallet phrase; the
-    // screen must say so, using only the provenance already in status (never a
-    // secret), so a user does not wrongly trust the phrase as its backup.
+    // screen must use only public provenance so users trust the right backup.
     const imported = {
+      accountContractType: "openzeppelin" as const,
       address: "0xa11ceded",
       classHash: account.classHash,
       derivation: { kind: "imported-raw-key" as const },

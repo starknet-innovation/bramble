@@ -43,9 +43,9 @@ export const APPROVAL_EVENT_KEY = hash.getSelectorFromName("Approval");
 /**
  * Where a listed allowance came from: `wallet` for approvals the active account
  * submitted through this wallet (tracked locally), `multisig` for ones a
- * watched multisig granted when this account executed a proposal (tracked
- * locally under the multisig's own scope, and revokable only by proposing from
- * that multisig), and `external` for ones discovered on-chain.
+ * watched multisig granted through a frozen intent (tracked locally under the
+ * multisig's own scope, and revokable only through another intent), and
+ * `external` for ones discovered on-chain.
  */
 export type AllowanceSource = "external" | "multisig" | "wallet";
 

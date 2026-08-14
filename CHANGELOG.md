@@ -9,6 +9,40 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 is cut. Older entries are kept in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
 See DEVELOPMENT.md and RELEASING.md.
 
+## [Unreleased]
+
+## [0.9.2] - 2026-08-14
+
+Official Argent account contracts, true M-of-N multisig, safer account recovery,
+and the complete remediation of the v0.9.1 comprehensive security audit.
+
+### Added
+- New software and Ledger accounts can use the official Argent Account 0.4 or
+  OpenZeppelin account contract. Private-key import can attach an existing
+  Argent account only when the key is its pinned Stark owner, no guardian is
+  configured, and the exact deployment salt is supplied.
+- Recovery-phrase import numbers words, flags unknown BIP39 words, offers prefix
+  completions while typing, and runs Krusty mnemonic validation before the
+  vault passphrase step.
+
+### Changed
+- Multisig creation, signing, configuration review, and submission now use the
+  official Argent Multisig 0.2 implementation. The former OpenZeppelin-based
+  proposal flow is removed; older release entries describe historical behavior.
+- STRK20 service reads use bounded retries without multiplying retries across
+  nested service layers.
+
+### Security
+- Remediated the comprehensive v0.9.1 audit across encrypted-store freshness
+  and rollback protection, session and origin-grant races, provider admission
+  and event ordering, reviewed fee binding, canonical account identities, KMS
+  key verification, and post-broadcast outcome integrity. Full evidence is in
+  `docs/security-audit/releases/v0.9.1-comprehensive.md`.
+- Argent deployment and signing bind the pinned class, owner, guardian state,
+  deployment salt, chain, nonce, calls, fees, and returned transaction hash.
+  Multisig intent signatures are validated against the exact fresh signer set
+  and threshold before submission.
+
 ## [0.9.1] - 2026-08-12
 
 Response to the 31 findings raised by the post-release deep adversarial audit of

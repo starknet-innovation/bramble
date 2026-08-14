@@ -1,95 +1,88 @@
-/**
- * Multisig requests for the exhaustive background key-boundary scan.
- *
- * Every signer-gated entry takes its proposal id from the harness rather than
- * naming one inline: a hand-written id fails the registry lookup, and a
- * response that never reached the signing path proves nothing about what the
- * signing path returns.
- */
-import { account, extensionSender, KEY_BOUNDARY_MULTISIG } from "./key-boundary-fixtures";
+/** Argent multisig requests for the exhaustive background key-boundary scan. */
+import {
+  account,
+  extensionSender,
+  KEY_BOUNDARY_MULTISIG,
+  KEY_BOUNDARY_MULTISIG_CONFIG,
+} from "./key-boundary-fixtures";
 import type { KeyBoundaryMessage } from "./key-boundary-types";
 
-const signer = account.address;
-
-/** The multisig portion of the key-boundary message catalog. */
+/** Every privileged Argent multisig runtime message, with live durable ids. */
 export const MULTISIG_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.multisigs" }, sender: extensionSender },
   {
-    live: async (ids) => ({ id: ids.multisigId }),
-    message: { id: "", type: "wallet.multisigBalances" },
+    live: async (ids) => ({ multisigId: ids.multisigId }),
+    message: { multisigId: "", type: "wallet.multisigBalances" },
     sender: extensionSender,
   },
   {
-    message: { address: KEY_BOUNDARY_MULTISIG, name: "Treasury", type: "wallet.addMultisig" },
+    message: {
+      address: KEY_BOUNDARY_MULTISIG,
+      networkId: "SN_MAIN",
+      signerAccountId: account.id,
+      ...KEY_BOUNDARY_MULTISIG_CONFIG,
+      type: "wallet.addMultisig",
+    },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ multisigId: ids.multisigId }),
+    message: { multisigId: "", type: "wallet.refreshMultisig" },
     sender: extensionSender,
   },
   {
     live: async (ids) => ({ multisigId: ids.multisigId }),
     message: {
-      calldata: ["0x9", "0x0"],
-      entrypoint: "transfer",
+      calls: [{ calldata: ["0x9"], contractAddress: account.address, entrypoint: "transfer" }],
       multisigId: "",
-      to: signer,
-      type: "wallet.proposeMultisigTx",
+      type: "wallet.prepareArgentMultisigIntent",
     },
     sender: extensionSender,
   },
   {
-    live: async (ids) => ({ proposalId: ids.proposalId("confirm") }),
-    message: { mode: "confirm-only", proposalId: "", type: "wallet.confirmMultisigProposal" },
+    live: async (ids) => ({ package: ids.multisigIntentPackage }),
+    message: { package: {}, type: "wallet.importArgentMultisigIntent" },
     sender: extensionSender,
   },
   {
-    live: async (ids) => ({ proposalId: ids.proposalId("prepare") }),
-    message: { mode: "confirm-only", proposalId: "", type: "wallet.prepareMultisigConfirmation" },
-    sender: extensionSender,
-  },
-  {
-    live: async (ids) => ({ proposalId: ids.proposalId("revoke") }),
-    message: { proposalId: "", type: "wallet.revokeMultisigConfirmation" },
-    sender: extensionSender,
-  },
-  {
-    live: async (ids) => ({ proposalId: ids.proposalId("execute") }),
-    message: { proposalId: "", type: "wallet.executeMultisigProposal" },
-    sender: extensionSender,
-  },
-  {
-    live: async (ids) => ({ multisigId: ids.multisigId, txId: ids.proposalTxId }),
-    message: { multisigId: "", txId: "", type: "wallet.trackMultisigProposal" },
-    sender: extensionSender,
-  },
-  {
-    live: async (ids) => ({ id: ids.multisigId }),
-    message: { id: "", type: "wallet.refreshMultisig" },
-    sender: extensionSender,
-  },
-  { message: { type: "wallet.multisigClassStatus" }, sender: extensionSender },
-  {
-    message: { quorum: 1, signers: [signer], type: "wallet.deployMultisig" },
-    sender: extensionSender,
-  },
-  // Ordered after every entry that needs the class on-chain: the flip below
-  // puts the network in the only state a declare is reachable from, which is
-  // how the request gets past the "already declared" gate and reaches the
-  // artifact check the scan actually inspects.
-  {
-    live: async (ids) => {
-      ids.undeclareMultisigClass();
-      return {};
+    live: async (ids) => ({ intentId: ids.multisigSignIntentId }),
+    message: {
+      intentId: "",
+      signerAccountId: account.id,
+      type: "wallet.signArgentMultisigIntent",
     },
-    message: { type: "wallet.declareMultisigClass" },
-    negative:
-      "a live declare needs the vendored Sierra artifact to hash to the pinned " +
-      "multisig class, which no unit-test double can forge; the fail-closed " +
-      "refusal is the response under scan",
     sender: extensionSender,
   },
-  // Last of the multisig entries on purpose: it drops the watched record every
-  // entry above reads back.
   {
-    live: async (ids) => ({ id: ids.multisigId }),
-    message: { id: "", type: "wallet.removeMultisig" },
+    live: async (ids) => ids.multisigSignatureImport,
+    message: { intentId: "", signature: {}, type: "wallet.importArgentMultisigSignature" },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ intentId: ids.multisigSubmitIntentId }),
+    message: { intentId: "", type: "wallet.submitArgentMultisigIntent" },
+    sender: extensionSender,
+  },
+  { message: { type: "wallet.argentMultisigClassStatus" }, sender: extensionSender },
+  {
+    message: {
+      networkId: "SN_MAIN",
+      salt: "0x9",
+      signerAccountId: account.id,
+      ...KEY_BOUNDARY_MULTISIG_CONFIG,
+      type: "wallet.reviewArgentMultisigDeployment",
+    },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ review: await ids.multisigDeploymentReview() }),
+    message: { review: {}, type: "wallet.deployArgentMultisig" },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ multisigId: ids.multisigId }),
+    message: { multisigId: "", type: "wallet.removeMultisig" },
+    negative: "pending frozen intents deliberately make destructive removal fail closed",
     sender: extensionSender,
   },
 ];

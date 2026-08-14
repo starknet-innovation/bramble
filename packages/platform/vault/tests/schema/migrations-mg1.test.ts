@@ -7,10 +7,10 @@ import { describe, expect, test } from "bun:test";
 import { CURRENT_SCHEMA_VERSION, migrateVault } from "@mc-wallet/vault/migrations";
 import {
   isVaultV1,
-  isVaultV5,
+  isVaultV7,
   type VaultV1,
   type VaultV2,
-  type VaultV5,
+  type VaultV7,
 } from "@mc-wallet/vault/schema";
 
 const accountA = {
@@ -53,10 +53,15 @@ describe("MG1 migration chain", () => {
 
     const migrated = migrateVault(multiAccountV1);
 
-    expect(isVaultV5(migrated)).toBe(true);
+    expect(isVaultV7(migrated)).toBe(true);
     expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(migrated.mnemonic).toBeNull();
-    expect(migrated.accounts).toEqual(multiAccountV1.accounts);
+    expect(migrated.accounts).toEqual(
+      multiAccountV1.accounts.map((account) => ({
+        accountContractType: "openzeppelin",
+        ...account,
+      })),
+    );
     expect(migrated.signingKeys).toEqual(multiAccountV1.signingKeys);
     expect(migrated.originGrants).toEqual(multiAccountV1.originGrants);
     expect(migrated.activeAccountId).toBe(multiAccountV1.activeAccountId);
@@ -64,7 +69,7 @@ describe("MG1 migration chain", () => {
   });
 
   test("v0 sources migrate through the full chain to an empty current vault", () => {
-    const expected: VaultV5 = {
+    const expected: VaultV7 = {
       accounts: [],
       accountSecrets: [],
       activeAccountId: null,
@@ -75,7 +80,7 @@ describe("MG1 migration chain", () => {
     };
     for (const source of [null, undefined, {}]) {
       const migrated = migrateVault(source);
-      expect(isVaultV5(migrated)).toBe(true);
+      expect(isVaultV7(migrated)).toBe(true);
       expect(migrated).toEqual(expected);
     }
   });
@@ -85,9 +90,13 @@ describe("MG1 migration chain", () => {
 
     const once = migrateVault(nullMnemonic);
     expect(once).not.toBe(nullMnemonic);
-    expect(isVaultV5(once)).toBe(true);
+    expect(isVaultV7(once)).toBe(true);
     expect(once).toEqual({
       ...nullMnemonic,
+      accounts: nullMnemonic.accounts.map((account) => ({
+        accountContractType: "openzeppelin",
+        ...account,
+      })),
       accountSecrets: [],
       schemaVersion: CURRENT_SCHEMA_VERSION,
     });
@@ -102,17 +111,21 @@ describe("MG1 migration chain", () => {
     };
 
     const migrated = migrateVault(withMnemonic);
-    expect(isVaultV5(migrated)).toBe(true);
+    expect(isVaultV7(migrated)).toBe(true);
     expect(migrated.mnemonic).toBe("correct horse battery staple");
     expect(migrated).toEqual({
       ...withMnemonic,
+      accounts: withMnemonic.accounts.map((account) => ({
+        accountContractType: "openzeppelin",
+        ...account,
+      })),
       accountSecrets: [],
       schemaVersion: CURRENT_SCHEMA_VERSION,
     });
   });
 
   test("rejects unsupported and newer schema versions instead of accepting them", () => {
-    for (const schemaVersion of [-1, 1.5, 6, 999, Number.MAX_SAFE_INTEGER]) {
+    for (const schemaVersion of [-1, 1.5, 8, 999, Number.MAX_SAFE_INTEGER]) {
       expect(() => migrateVault({ ...multiAccountV1, mnemonic: null, schemaVersion })).toThrow(
         "Unsupported vault schema",
       );
@@ -121,7 +134,7 @@ describe("MG1 migration chain", () => {
 
   test("rejects a well-formed current shell carrying a future schema version", () => {
     const future = { ...multiAccountV1, mnemonic: null, schemaVersion: CURRENT_SCHEMA_VERSION + 1 };
-    expect(isVaultV5(future)).toBe(false);
+    expect(isVaultV7(future)).toBe(false);
     expect(() => migrateVault(future)).toThrow("Unsupported vault schema");
   });
 });

@@ -79,11 +79,18 @@ software recovery phrase.
 
 ### Send, receive, and deploy
 
-Accounts are OpenZeppelin accounts backed by the encrypted software vault or a
-Ledger. A newly created account first exists as a *counterfactual* address; **on
--chain deployment is a separate action** you take from the dashboard when you are
+Choose either a stable Argent Account or an OpenZeppelin compatibility account,
+backed by the encrypted software vault or a Ledger. A newly created account
+first exists as a *counterfactual* address; **on-chain deployment is a separate
+action** you take from the dashboard when you are
 ready. Use the dashboard to send transfers, receive (share your address), switch
 networks, and deploy.
+
+To attach an existing Argent Account 0.4 from a private key, enter its original
+deployment salt during import. Before signing, MC Wallet verifies the pinned
+account class, Stark owner, and absence of a guardian at one accepted block.
+Accounts using another signer type or a guardian are not supported and fail
+closed.
 
 ### Connect to a dApp
 
@@ -107,11 +114,17 @@ reads the name, image, description, and attributes from the token's `token_uri`
 
 ### Multisig
 
-For OpenZeppelin multisig accounts you can create and deploy a new account or
-watch an existing address. The wallet reads its signer and quorum rules from
-chain, identifies signers held by this wallet, and lets an eligible local or
-Ledger account **propose**, **confirm**, and **execute** transactions through a
-review flow. Execution is available only after the on-chain threshold is met.
+MC Wallet supports the pinned Argent Multisig account contract. You can deploy
+a new account or add an existing account by its address and current signer
+authority. The wallet verifies the live signer GUIDs and threshold, freezes the
+exact Starknet transaction and fee ceiling, and collects signatures from
+eligible local or Ledger accounts. Every signer reviews decoded actions, risk
+warnings, the full sender, chain ID, nonce, fee ceiling, and transaction hash;
+the collaborator note is unsigned context only. Independent signers exchange
+the versioned intent package or individual signature fragments; signing and
+submission remain disabled unless the fresh on-chain authority exactly matches
+the intent and the exact threshold is met. There is no separate on-chain
+proposal or confirmation state.
 
 ### Allowance manager
 
@@ -121,7 +134,7 @@ Wallet — from a dApp, a swap, a privacy-pool deposit, or a multisig you sign f
 setting that spender's allowance to zero. For every approval it tracks, the
 wallet re-reads the live on-chain amount, so a listed figure reflects the chain
 rather than only what this wallet saw. An allowance a multisig granted is shown
-but not revokable here: that takes a proposal the multisig executes.
+but not revokable here: revocation needs a separately reviewed multisig intent.
 
 An amount shown as **"at least N"** is one the wallet can only bound from below:
 part of the allowance was granted somewhere else (or has aged out of the log) and

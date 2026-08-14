@@ -27,6 +27,7 @@ import { createUnlockSession } from "../../../apps/extension/src/background/runt
 import { flushHeld } from "../../support/held";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -113,6 +114,16 @@ const codes = (flags: readonly { readonly code: string }[]): readonly string[] =
   [...flags.map((flag) => flag.code)].sort();
 
 describe("Send vs dApp invoke decode-risk CONTEXT parity (#19)", () => {
+  test("builds the same trusted set for a non-signing watched-account projection", () => {
+    const context = verificationContext(
+      { address: account.address, networkId: account.networkId },
+      preferences,
+    );
+    expect(context.account).toEqual({ address: account.address, networkId: account.networkId });
+    expect(context.tokens).toEqual(preferences.tokens);
+    expect(context.addressBook).toEqual([]);
+  });
+
   test("the cross-network scenario genuinely distinguishes a filtered from an unfiltered context", () => {
     // Unfiltered (the old provider-ops behaviour) would flag address-poisoning…
     const unfiltered = verifyCalls([transferCall], {

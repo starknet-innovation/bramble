@@ -66,6 +66,11 @@ export type WalletStatusReader = {
   readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
+  /**
+   * Krusty mnemonic check for onboarding. Optional only for partial test stubs;
+   * production fails closed when absent.
+   */
+  readonly validateMnemonic?: (mnemonic: string) => Promise<boolean>;
   readonly getGrantedAccounts: (
     origin: string,
     vaultPassphrase: string,
@@ -128,6 +133,9 @@ export const createWalletReader = (
     },
     async previewAccount(input) {
       return (await required()).previewAccount(input);
+    },
+    async validateMnemonic(mnemonic) {
+      return (await required()).validateMnemonic(mnemonic);
     },
     async readVault(vaultPassphrase) {
       return (await required()).readVault(vaultPassphrase);

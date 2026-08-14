@@ -5,6 +5,13 @@
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@mc-wallet/core/errors";
 import {
+  ARGENT_ACCOUNT_CONTRACT,
+  ARGENT_MULTISIG_CONTRACT,
+  argentAccountAddress,
+  argentMultisigAddress,
+} from "@mc-wallet/starknet/account-contracts";
+import {
+  accountDeployment,
   buildErc20TransferCall,
   decodeErc20String,
   formatTokenAmount,
@@ -12,18 +19,18 @@ import {
   isContractNotFoundError,
   isTransactionNotFoundError,
   isTransportRpcError,
-  ozAccountDeployment,
   parseTokenAmount,
   withRpcFallback,
   withRpcWrite,
 } from "@mc-wallet/starknet/rpc";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { CallData, hash, shortString } from "starknet";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const CLASS_HASH = "0x2b31e19e45c06f29234e06e2ee98a9966479ba3067f8785ed972794fdb0065c";
 
-const ozAccount = (address: string): AccountRef => ({
+const ozAccount = (address: string): DerivedAccountRef => ({
+  accountContractType: "openzeppelin",
   address,
   classHash: CLASS_HASH,
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -57,7 +64,7 @@ describe("starknet RPC helpers", () => {
       CallData.compile([PUBLIC_KEY]),
       0,
     );
-    const krustyDeployment = ozAccountDeployment(ozAccount(krustyAddress));
+    const krustyDeployment = accountDeployment(ozAccount(krustyAddress));
     expect(krustyDeployment.addressSalt).toBe("0x0");
     expect(krustyDeployment.classHash).toBe(CLASS_HASH);
     expect(krustyDeployment.constructorCalldata).toEqual(CallData.compile([PUBLIC_KEY]));
@@ -69,16 +76,60 @@ describe("starknet RPC helpers", () => {
       CallData.compile([PUBLIC_KEY]),
       0,
     );
-    const importedDeployment = ozAccountDeployment(ozAccount(importedAddress));
+    const importedDeployment = accountDeployment(ozAccount(importedAddress));
     expect(importedDeployment.addressSalt).toBe(PUBLIC_KEY);
     expect(importedDeployment.contractAddress).toBe(importedAddress);
   });
 
   test("refuses deployment parameters that would land at a different address", () => {
     const wrongAddress = "0x6c16710431efd3962d3c6f55faf00d8c855188029acb42781b9ac77c438ade5";
-    expect(() => ozAccountDeployment(ozAccount(wrongAddress))).toThrow(
+    expect(() => accountDeployment(ozAccount(wrongAddress))).toThrow(
       "do not match the stored address",
     );
+  });
+
+  test("builds pinned Argent account and multisig deployment parameters", () => {
+    const argent = {
+      ...ozAccount(argentAccountAddress(PUBLIC_KEY)),
+      accountContractType: "argent" as const,
+      classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+      deploymentSalt: PUBLIC_KEY,
+    };
+    expect(accountDeployment(argent)).toMatchObject({
+      addressSalt: PUBLIC_KEY,
+      classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+      constructorCalldata: ["0", PUBLIC_KEY, "1"],
+    });
+
+    const config = { signerPublicKeys: ["0x456", "0x123"], threshold: 2 } as const;
+    const salt = "0xabc";
+    const address = argentMultisigAddress(config, salt);
+    expect(
+      accountDeployment({
+        accountContractType: "argent-multisig",
+        address,
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+        deployment: { salt, ...config },
+        networkId: "SN_MAIN",
+      }),
+    ).toEqual({
+      addressSalt: salt,
+      classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+      constructorCalldata: ["2", "2", "0", "0x123", "0", "0x456"],
+      contractAddress: address,
+    });
+  });
+
+  test("never reconstructs imported multisig deployment parameters", () => {
+    expect(() =>
+      accountDeployment({
+        accountContractType: "argent-multisig",
+        address: "0x123",
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+        deployment: null,
+        networkId: "SN_MAIN",
+      }),
+    ).toThrow("no counterfactual deployment parameters");
   });
 
   test("fails over to the next RPC endpoint only on transport errors", async () => {

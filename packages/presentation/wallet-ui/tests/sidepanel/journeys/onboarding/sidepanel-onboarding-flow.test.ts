@@ -4,17 +4,18 @@
  * and persistence happens only after the final Mainnet acknowledgement.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
-import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
+import { locked, onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
+import { bindUnlock } from "../../../../src/sidepanel/journeys/onboarding/unlock-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
 
-const MNEMONIC = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu";
+const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const PASSPHRASE = "fixture vault passphrase";
 
 const status: WalletStatus = {
@@ -33,6 +34,7 @@ const status: WalletStatus = {
 };
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   classHash: "0x023456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -41,6 +43,14 @@ const account: AccountRef = {
   publicKeyX: "0x123",
   publicKeyY: "0x456",
 };
+const argentAccount: AccountRef = {
+  ...account,
+  accountContractType: "argent",
+  deploymentSalt: "0x123",
+};
+
+const accountFor = (accountContractType: AccountContractType): AccountRef =>
+  accountContractType === "argent" ? argentAccount : account;
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -61,29 +71,68 @@ const click = (root: ParentNode, selector: string): void => {
   button.click();
 };
 
+const cellsOf = (root: ParentNode, kind: "generated" | "import"): readonly HTMLElement[] =>
+  Array.from(
+    root.querySelectorAll<HTMLElement>(`[data-recovery-grid="${kind}"] .recovery-word-cell`),
+  );
+
+const inputOf = (cell: HTMLElement): HTMLInputElement => {
+  const input = cell.querySelector<HTMLInputElement>("input.recovery-word");
+  if (!input) {
+    throw new Error("missing recovery word input");
+  }
+  return input;
+};
+
+const positionOf = (cell: HTMLElement): number =>
+  Number(cell.querySelector("span")?.textContent ?? Number.NaN);
+
+const wordOf = (cell: HTMLElement): string => inputOf(cell).value;
+
 const activeStep = (root: ParentNode): string | undefined =>
   Array.from(root.querySelectorAll<HTMLElement>("[data-onboarding-step]")).find(
     (step) => !step.hidden,
   )?.dataset["onboardingStep"];
 
-const mount = () => {
+const mount = (options?: {
+  readonly generateMnemonic?: () => Promise<string>;
+  readonly previewAccount?: (
+    mnemonic: string,
+    networkId: string,
+    accountContractType: AccountContractType,
+  ) => Promise<AccountRef>;
+  readonly validateMnemonic?: (mnemonic: string) => Promise<boolean>;
+}) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
-  const previews: Array<readonly [string, string]> = [];
-  const creations: Array<readonly [string, string, string]> = [];
+  const previews: Array<readonly [string, string, AccountContractType]> = [];
+  const creations: Array<readonly [string, string, string, AccountContractType]> = [];
+  const validations: string[] = [];
   let renders = 0;
   const wallet = {
-    createAccount(mnemonic: string, networkId: string, vaultPassphrase: string) {
-      creations.push([mnemonic, networkId, vaultPassphrase]);
+    createAccount(
+      mnemonic: string,
+      networkId: string,
+      vaultPassphrase: string,
+      accountContractType: AccountContractType,
+    ) {
+      creations.push([mnemonic, networkId, vaultPassphrase, accountContractType]);
       return Promise.resolve();
     },
-    generateMnemonic: () => Promise.resolve(MNEMONIC),
+    generateMnemonic: () => options?.generateMnemonic?.() ?? Promise.resolve(MNEMONIC),
     loadStatus: () => Promise.resolve({ ...status, accountCount: 1, hasVault: true }),
-    previewAccount(mnemonic: string, networkId: string) {
-      previews.push([mnemonic, networkId]);
-      return Promise.resolve(account);
+    previewAccount(mnemonic: string, networkId: string, accountContractType: AccountContractType) {
+      previews.push([mnemonic, networkId, accountContractType]);
+      return (
+        options?.previewAccount?.(mnemonic, networkId, accountContractType) ??
+        Promise.resolve(accountFor(accountContractType))
+      );
+    },
+    validateMnemonic(mnemonic: string) {
+      validations.push(mnemonic);
+      return options?.validateMnemonic?.(mnemonic) ?? Promise.resolve(true);
     },
   } as unknown as SidepanelWallet;
   bindOnboarding({
@@ -93,7 +142,7 @@ const mount = () => {
     },
     wallet,
   });
-  return { app, creations, previews, renders: () => renders };
+  return { app, creations, previews, renders: () => renders, validations };
 };
 
 describe("staged onboarding", () => {
@@ -109,7 +158,9 @@ describe("staged onboarding", () => {
     setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
     expect(flow.app.querySelector<HTMLButtonElement>("#recovery-continue")?.disabled).toBe(false);
     click(flow.app, "#recovery-continue");
+    await tick();
 
+    expect(flow.validations).toEqual([MNEMONIC]);
     expect(activeStep(flow.app)).toBe("password");
     setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
     setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
@@ -117,7 +168,7 @@ describe("staged onboarding", () => {
     await tick();
 
     expect(activeStep(flow.app)).toBe("accounts");
-    expect(flow.previews).toEqual([[MNEMONIC, "SN_MAIN"]]);
+    expect(flow.previews).toEqual([[MNEMONIC, "SN_MAIN", "argent"]]);
     expect(flow.app.querySelector("#account-preview")?.getAttribute("aria-pressed")).toBe("false");
     expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
 
@@ -134,8 +185,47 @@ describe("staged onboarding", () => {
     flow.app.querySelector<HTMLFormElement>("#create-form")?.requestSubmit();
     await tick();
 
-    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE]]);
+    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE, "argent"]]);
     expect(flow.renders()).toBe(1);
+  });
+
+  test("discards a delayed preview after the account contract changes", async () => {
+    let release: ((value: AccountRef) => void) | undefined;
+    const flow = mount({
+      previewAccount: (_mnemonic, _networkId, accountContractType) =>
+        accountContractType === "argent"
+          ? new Promise((resolve) => {
+              release = resolve;
+            })
+          : Promise.resolve(accountFor(accountContractType)),
+    });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    await tick();
+    setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#review-account-button");
+
+    const contract = flow.app.querySelector<HTMLSelectElement>(
+      'select[name="accountContractType"]',
+    );
+    if (!contract) throw new Error("missing account contract selector");
+    contract.value = "openzeppelin";
+    contract.dispatchEvent(new window.Event("change", { bubbles: true }));
+    release?.(argentAccount);
+    await tick();
+
+    expect(activeStep(flow.app)).toBe("password");
+    expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
+    click(flow.app, "#review-account-button");
+    await tick();
+    expect(activeStep(flow.app)).toBe("accounts");
+    expect(flow.previews).toEqual([
+      [MNEMONIC, "SN_MAIN", "argent"],
+      [MNEMONIC, "SN_MAIN", "openzeppelin"],
+    ]);
   });
 
   test("requires revealing and confirming a generated backup before password setup", async () => {
@@ -163,13 +253,172 @@ describe("staged onboarding", () => {
     click(flow.app, "#generated-continue");
 
     expect(activeStep(flow.app)).toBe("verify");
-    setValue(flow.app, 'input[name="verify-0"]', "gamma");
-    setValue(flow.app, 'input[name="verify-1"]', "eta");
-    setValue(flow.app, 'input[name="verify-2"]', "lambda");
+    setValue(flow.app, 'input[name="verify-0"]', "tip");
+    setValue(flow.app, 'input[name="verify-1"]', "nation");
+    setValue(flow.app, 'input[name="verify-2"]', "alert");
     expect(flow.app.querySelector<HTMLButtonElement>("#verify-continue")?.disabled).toBe(false);
     click(flow.app, "#verify-continue");
     expect(activeStep(flow.app)).toBe("password");
     expect(flow.creations).toEqual([]);
+  });
+
+  test("discards a generated phrase after the user chooses an import route", async () => {
+    let release: ((mnemonic: string) => void) | undefined;
+    const flow = mount({
+      generateMnemonic: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    click(flow.app, "#create-new-button");
+    click(flow.app, "#add-existing-button");
+    expect(activeStep(flow.app)).toBe("method");
+    release?.(MNEMONIC);
+    await tick();
+
+    expect(activeStep(flow.app)).toBe("method");
+    click(flow.app, '[data-onboarding-step="method"] [data-onboarding-back]');
+    expect(activeStep(flow.app)).toBe("welcome");
+    expect(flow.app.querySelector<HTMLButtonElement>("#create-new-button")?.disabled).toBe(false);
+  });
+
+  test("keeps word positions labelled once filled, and cell visibility on the inputs", async () => {
+    const flow = mount();
+    click(flow.app, "#create-new-button");
+    await tick();
+
+    const generated = cellsOf(flow.app, "generated");
+    expect(generated.length).toBe(24);
+    expect(generated.slice(0, 12).map(wordOf)).toEqual(MNEMONIC.split(" "));
+    expect(generated.map(positionOf)).toEqual(Array.from({ length: 24 }, (_, index) => index + 1));
+
+    // The toggle drives `hidden` on the inputs only; a cell carrying it could
+    // never be revealed again (see recoveryWordInputs).
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    const imported = cellsOf(flow.app, "import");
+    const hiddenFlags = () => imported.map((cell) => inputOf(cell).hidden);
+    expect(hiddenFlags().filter(Boolean).length).toBe(12);
+    click(flow.app, "#phrase-length-toggle");
+    expect(hiddenFlags().filter(Boolean).length).toBe(0);
+    click(flow.app, "#phrase-length-toggle");
+    expect(hiddenFlags().filter(Boolean).length).toBe(12);
+    expect(imported.map(positionOf)).toEqual(Array.from({ length: 24 }, (_, index) => index + 1));
+    expect(imported.some((cell) => cell.hasAttribute("hidden"))).toBe(false);
+  });
+
+  test("keeps BIP39 membership advisory without blocking Continue", async () => {
+    const flow = mount({ validateMnemonic: async () => false });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    const words = MNEMONIC.split(" ");
+    words[0] = "notaword";
+    const phrase = words.join(" ");
+    setValue(flow.app, 'input[name="import-word-0"]', phrase);
+    expect(flow.app.querySelector<HTMLButtonElement>("#recovery-continue")?.disabled).toBe(false);
+    expect(
+      flow.app.querySelector('input[name="import-word-0"]')?.classList.contains("is-invalid"),
+    ).toBe(true);
+    expect(flow.app.querySelector("#recovery-result")?.textContent).toBe(
+      "Highlighted words are not in the BIP39 English list.",
+    );
+    click(flow.app, "#recovery-continue");
+    await tick();
+    expect(flow.validations).toEqual([phrase]);
+    expect(activeStep(flow.app)).toBe("recovery");
+  });
+
+  test("discards a stale validation after the phrase changes", async () => {
+    let release: ((valid: boolean) => void) | undefined;
+    const flow = mount({
+      validateMnemonic: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    const edited = MNEMONIC.replace("habit", "hope");
+    setValue(flow.app, 'input[name="import-word-0"]', edited);
+    release?.(true);
+    await tick();
+    expect(activeStep(flow.app)).toBe("recovery");
+    expect(flow.validations).toEqual([MNEMONIC]);
+  });
+
+  test("discards a stale validation after the phrase length changes", async () => {
+    let release: ((valid: boolean) => void) | undefined;
+    const flow = mount({
+      validateMnemonic: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    click(flow.app, "#phrase-length-toggle");
+    release?.(true);
+    await tick();
+    expect(activeStep(flow.app)).toBe("recovery");
+    expect(flow.app.querySelector<HTMLButtonElement>("#recovery-continue")?.disabled).toBe(true);
+    expect(flow.validations).toEqual([MNEMONIC]);
+  });
+
+  test("discards a stale validation after leaving and re-entering recovery", async () => {
+    let release: ((valid: boolean) => void) | undefined;
+    const flow = mount({
+      validateMnemonic: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    click(flow.app, '[data-onboarding-step="recovery"] [data-onboarding-back]');
+    expect(activeStep(flow.app)).toBe("method");
+    click(flow.app, "#recovery-method-button");
+    expect(activeStep(flow.app)).toBe("recovery");
+    release?.(true);
+    await tick();
+    expect(activeStep(flow.app)).toBe("recovery");
+    expect(flow.validations).toEqual([MNEMONIC]);
+  });
+
+  test("normalizes capitalized recovery words before Krusty validation", async () => {
+    const flow = mount();
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    const capitalized = MNEMONIC.split(" ")
+      .map((word) => word[0]?.toUpperCase() + word.slice(1))
+      .join(" ");
+    setValue(flow.app, 'input[name="import-word-0"]', capitalized);
+    expect(
+      flow.app.querySelector('input[name="import-word-0"]')?.getAttribute("autocapitalize"),
+    ).toBe("off");
+    click(flow.app, "#recovery-continue");
+    await tick();
+    expect(flow.validations).toEqual([MNEMONIC]);
+    expect(activeStep(flow.app)).toBe("password");
+  });
+
+  test("keeps an invalid checksum phrase on the recovery step", async () => {
+    const flow = mount({ validateMnemonic: async () => false });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    await tick();
+    expect(activeStep(flow.app)).toBe("recovery");
+    expect(flow.app.querySelector("#recovery-result")?.textContent).toBe(
+      "This recovery phrase is not valid.",
+    );
+    expect(flow.validations).toEqual([MNEMONIC]);
   });
 
   test("keeps the Ledger route distinct and reversible", () => {
@@ -179,5 +428,61 @@ describe("staged onboarding", () => {
     expect(activeStep(flow.app)).toBe("ledger");
     click(flow.app, '[data-onboarding-step="ledger"] [data-onboarding-back]');
     expect(activeStep(flow.app)).toBe("method");
+  });
+});
+
+describe("locked vault handoff", () => {
+  const unlockedStatus: WalletStatus = {
+    ...status,
+    accountCount: 1,
+    hasVault: true,
+    locked: false,
+  };
+
+  test("forwards the passphrase and renders the unlocked status", async () => {
+    document.body.innerHTML = `<main id="app">${locked({ ...unlockedStatus, locked: true })}</main>`;
+    const passphrases: string[] = [];
+    const rendered: WalletStatus[] = [];
+    bindUnlock({
+      app: document.querySelector("#app"),
+      render: async (next) => {
+        rendered.push(next);
+      },
+      wallet: {
+        unlockVault: async (vaultPassphrase: string) => {
+          passphrases.push(vaultPassphrase);
+          return unlockedStatus;
+        },
+      } as unknown as SidepanelWallet,
+    });
+
+    setValue(document, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    document.querySelector<HTMLFormElement>("#unlock-form")?.requestSubmit();
+    await tick();
+
+    expect(passphrases).toEqual([PASSPHRASE]);
+    expect(rendered).toEqual([unlockedStatus]);
+  });
+
+  test("restores the form and reports a rejected unlock", async () => {
+    document.body.innerHTML = `<main id="app">${locked({ ...unlockedStatus, locked: true })}</main>`;
+    bindUnlock({
+      app: document.querySelector("#app"),
+      render: async () => undefined,
+      wallet: {
+        unlockVault: async () => {
+          throw new Error("Incorrect passphrase");
+        },
+      } as unknown as SidepanelWallet,
+    });
+
+    setValue(document, 'input[name="vaultPassphrase"]', "wrong passphrase");
+    document.querySelector<HTMLFormElement>("#unlock-form")?.requestSubmit();
+    await tick();
+
+    expect(document.querySelector("#form-result")?.textContent).toBe("Incorrect passphrase");
+    expect(
+      document.querySelector<HTMLButtonElement>('#unlock-form button[type="submit"]')?.disabled,
+    ).toBe(false);
   });
 });

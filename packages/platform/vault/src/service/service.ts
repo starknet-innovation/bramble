@@ -36,7 +36,7 @@ import { deriveVaultStrk20ViewingKey } from "../accounts/strk20-viewing-key";
 import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV5, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV7, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
@@ -79,7 +79,7 @@ const writeVault = async (
   vault: Vault,
   vaultPassphrase: string,
 ): Promise<void> => {
-  if (!isVaultV5(vault)) {
+  if (!isVaultV7(vault)) {
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase);
@@ -126,6 +126,7 @@ export const createWalletVaultService = ({
       }
 
       const { account, privateKey } = await deriveAccount(kms, {
+        accountContractType: input.accountContractType,
         accountIndex: nextAccountIndex(vault.accounts, input.networkId),
         mnemonic: vault.mnemonic,
         networkId: input.networkId,
@@ -149,10 +150,7 @@ export const createWalletVaultService = ({
     },
     async createAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
-      // First-run or same-phrase only, mirroring `createLedgerVault`: a second,
-      // different phrase would displace the one the user backed up, and any
-      // phrase written over a keyless (Ledger) vault leaves its accounts
-      // unrecoverable from the phrase the vault would then claim to hold.
+      // Never displace the one recovery phrase the user backed up.
       const displacesStoredSeed =
         vault.mnemonic === null ? vault.accounts.length > 0 : vault.mnemonic !== input.mnemonic;
       if (displacesStoredSeed) {
@@ -182,6 +180,8 @@ export const createWalletVaultService = ({
     async importRawKeyAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const { account, privateKey } = await deriveImportedAccount(kms, {
+        accountContractType: input.accountContractType,
+        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
         networkId: input.networkId,
         privateKey: input.privateKey,
       });
@@ -205,7 +205,9 @@ export const createWalletVaultService = ({
     async addLedgerAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const account = await deriveLedgerAccount(kms, {
+        accountContractType: input.accountContractType,
         accountIndex: input.accountIndex,
+        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
         networkId: input.networkId,
         publicKeyX: input.publicKeyX,
         ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
@@ -214,8 +216,7 @@ export const createWalletVaultService = ({
         throw new WalletError("Account already exists");
       }
 
-      // A Ledger account is keyless: it is added to `accounts` with no matching
-      // `signingKeys` entry, which the relaxed vault bijection allows.
+      // Ledger accounts have no matching signing-key entry.
       await writeVault(
         encryptedStore,
         { ...vault, accounts: [...vault.accounts, account], activeAccountId: account.id },
@@ -226,22 +227,20 @@ export const createWalletVaultService = ({
     },
     async createLedgerVault(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
-      // First-run only: a mnemonic-less Ledger vault is created over a fresh
-      // store. Refuse if any account or a recovery phrase already exists so this
-      // can never quietly drop an existing seeded wallet's key material.
+      // A mnemonic-less Ledger vault can only be created over a fresh store.
       if (vault.accounts.length > 0 || vault.mnemonic !== null) {
         throw new WalletError("Wallet already exists");
       }
       const account = await deriveLedgerAccount(kms, {
+        accountContractType: input.accountContractType,
         accountIndex: input.accountIndex,
+        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
         networkId: input.networkId,
         publicKeyX: input.publicKeyX,
         ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
       });
 
-      // The vault holds no seed and no signing key: the account is keyless, so
-      // the mnemonic stays null and signingKeys stays empty. The relaxed
-      // account↔signingKey bijection admits exactly this shape.
+      // Ledger stays keyless: no mnemonic and no signing-key entry.
       await writeVault(
         encryptedStore,
         {
@@ -259,7 +258,12 @@ export const createWalletVaultService = ({
       return account;
     },
     deriveLedgerAccounts(input) {
-      return deriveLedgerAccountRefs(kms, { entries: input.entries, networkId: input.networkId });
+      return deriveLedgerAccountRefs(kms, {
+        accountContractType: input.accountContractType,
+        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+        entries: input.entries,
+        networkId: input.networkId,
+      });
     },
     async deriveStrk20ViewingKey(input) {
       const vault = await readVault(input.vaultPassphrase);
@@ -287,10 +291,7 @@ export const createWalletVaultService = ({
         return existing;
       }
 
-      // A keyless Ledger source derives a keyless Ledger account on the target
-      // network (no signing key required); every keyed account clones its
-      // retained key onto the derived address. Both fail closed inside the
-      // helper if their required material is absent.
+      // Missing projection key material fails closed in the helper.
       const { account, signingKeys } = await deriveNetworkAccount(
         kms,
         vault,
@@ -351,6 +352,7 @@ export const createWalletVaultService = ({
       return kms.generateMnemonic();
     },
     previewAccount: (input) => deriveAccountRef(kms, input),
+    validateMnemonic: (mnemonic) => kms.validateMnemonic(mnemonic),
     async grantOrigin(input) {
       if (!isWalletOrigin(input.origin)) {
         throw new WalletError("Invalid origin");

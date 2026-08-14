@@ -63,6 +63,7 @@ export const API_VERSION = SUPPORTED_WALLET_API[0];
 
 /** The connected account the background resolves for gated methods. */
 export const ACCOUNT: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabcabcdef",
   classHash: "0xabcdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

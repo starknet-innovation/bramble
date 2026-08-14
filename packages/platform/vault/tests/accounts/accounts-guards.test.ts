@@ -23,25 +23,25 @@ const withClassHashes = (getAccountClassHashes: () => Promise<string>): KmsPort 
 describe("getOzAccountClassHash via deriveAccountRef", () => {
   test("throws when Krusty returns invalid class-hash JSON", async () => {
     const kms = withClassHashes(async () => "{not json");
-    await expect(deriveAccountRef(kms, { mnemonic })).rejects.toThrow(
-      "Krusty KMS returned invalid class hash JSON",
-    );
+    await expect(
+      deriveAccountRef(kms, { accountContractType: "openzeppelin", mnemonic }),
+    ).rejects.toThrow("Krusty KMS returned invalid class hash JSON");
   });
 
   test("throws when the class-hash map has no oz accounts", async () => {
     const kms = withClassHashes(async () => JSON.stringify({ argent: {} }));
-    await expect(deriveAccountRef(kms, { mnemonic })).rejects.toThrow(
-      "Krusty KMS class hashes are missing oz accounts",
-    );
+    await expect(
+      deriveAccountRef(kms, { accountContractType: "openzeppelin", mnemonic }),
+    ).rejects.toThrow("Krusty KMS class hashes are missing oz accounts");
   });
 
   test("throws when the oz map lacks the requested network", async () => {
     const kms = withClassHashes(async () =>
       JSON.stringify({ oz: { "3.0.0": { SN_SEPOLIA: "0x111" } } }),
     );
-    await expect(deriveAccountRef(kms, { mnemonic })).rejects.toThrow(
-      "Krusty KMS class hashes are missing SN_MAIN",
-    );
+    await expect(
+      deriveAccountRef(kms, { accountContractType: "openzeppelin", mnemonic }),
+    ).rejects.toThrow("Krusty KMS class hashes are missing SN_MAIN");
   });
 });
 
@@ -49,6 +49,7 @@ describe("deriveImportedAccount", () => {
   test("rejects an invalid Starknet network before any KMS derivation", async () => {
     await expect(
       deriveImportedAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
         classHash: "0xabcdef",
         networkId: "SN_BAD" as never,
         privateKey: PRIVATE_KEY,
@@ -59,12 +60,14 @@ describe("deriveImportedAccount", () => {
   test("rejects an invalid explicit class hash", async () => {
     await expect(
       deriveImportedAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
         classHash: "not-hex",
         privateKey: PRIVATE_KEY,
       }),
     ).rejects.toThrow("Invalid account class hash");
     await expect(
       deriveImportedAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
         classHash: "0x0",
         privateKey: PRIVATE_KEY,
       }),
@@ -72,8 +75,11 @@ describe("deriveImportedAccount", () => {
   });
 
   test("rejects an invalid private key up front", async () => {
-    await expect(deriveImportedAccount(fakeKms(), { privateKey: "0x0" })).rejects.toThrow(
-      "Invalid private key",
-    );
+    await expect(
+      deriveImportedAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
+        privateKey: "0x0",
+      }),
+    ).rejects.toThrow("Invalid private key");
   });
 });

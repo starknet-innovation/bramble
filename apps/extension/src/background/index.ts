@@ -4,7 +4,6 @@
 
 import { untrustedFetch } from "@mc-wallet/core/http-json";
 import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { MULTISIG_CLASS_ARTIFACT } from "@mc-wallet/multisig/deploy";
 import { createMultisigStore } from "@mc-wallet/multisig/repository";
 import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
 import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
@@ -212,13 +211,10 @@ const swapService = (() => {
     return unavailableSwapService;
   }
 })();
-const multisigLog = (() => {
-  try {
-    return createMultisigStore({ store: createBrowserLocalStore() });
-  } catch {
-    return undefined;
-  }
-})();
+// Durable intent and operation claims are part of the signing safety model.
+// If local storage is unavailable, fail background initialization rather than
+// silently accepting signatures or broadcasts into a volatile registry.
+const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
 // Live phishing feed: fetched from the configured source under an explicit host
 // permission, cached in local storage, and refreshed on the first worker wake
 // after its TTL. The guard reads the feed's in-memory snapshot on every check,
@@ -234,20 +230,6 @@ const phishingFeed = (() => {
 })();
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
 void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
-// Loads the bundled multisig Sierra class for the explicit declare flow. The
-// artifact ships inside the extension package, so this fetch never leaves the
-// extension origin; the ops handler re-verifies its class hash before use.
-const loadMultisigClass = async (): Promise<unknown> => {
-  const url = runtime?.getURL?.(MULTISIG_CLASS_ARTIFACT);
-  if (!url) {
-    throw new Error("multisig class artifact unavailable");
-  }
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("multisig class artifact unavailable");
-  }
-  return response.json();
-};
 const strk20MaturityStore = (() => {
   try {
     return createStrk20MaturityStore(createBrowserSessionStore());
@@ -271,6 +253,7 @@ const runtimeRpc = {
 const walletReader = createWalletReader(wallet);
 const activeStateCoordinator = createActiveStateCoordinator();
 const runtimeReady = sessionReady.then(async () => {
+  await multisigLog.recoverSigningClaims();
   const store = await preferences;
   if (store) {
     await reconcileUnlockedActiveAccount(walletReader, session, store, activeStateCoordinator);
@@ -288,8 +271,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   prices: priceService,
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
-  ...(multisigLog ? { multisigStore: multisigLog } : {}),
-  loadMultisigClass,
+  multisigStore: multisigLog,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm

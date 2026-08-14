@@ -2,9 +2,11 @@
  * Shared background runtime response and service types.
  */
 
-import type { MultisigConfirmationMode } from "@mc-wallet/multisig/confirmation";
-import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
-import type { MultisigSyncWarning } from "@mc-wallet/multisig/sync";
+import type { ArgentMultisigConfig } from "@mc-wallet/multisig/chain";
+import type {
+  ArgentMultisigRecord,
+  ArgentMultisigSigningIntent,
+} from "@mc-wallet/multisig/repository";
 import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
@@ -16,10 +18,13 @@ import type { RiskFlag } from "@mc-wallet/transactions/verify";
 import type { ConnectedSite } from "@mc-wallet/vault/service";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 import type { WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
 import type { PendingApproval } from "../approvals/approvals";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
+import type {
+  ArgentMultisigDeploymentReview,
+  ArgentMultisigIntentPackage,
+} from "../multisig/multisig-inputs";
 import type {
   Strk20BalancesResponse,
   Strk20PrepareResponse,
@@ -52,6 +57,14 @@ type GenerateMnemonicResponse = {
 };
 
 /**
+ * Successful mnemonic-validity response. Carries only the boolean verdict.
+ */
+type ValidateMnemonicResponse = {
+  readonly ok: true;
+  readonly valid: boolean;
+};
+
+/**
  * Re-authenticated secret reveal returned only to the extension reveal flow.
  */
 type RevealSecretsResponse = {
@@ -73,7 +86,7 @@ type AccountsResponse = {
  */
 type SignHashResponse = {
   readonly ok: true;
-  readonly signature: StarkSignature;
+  readonly signature: readonly string[];
 };
 
 /**
@@ -259,20 +272,6 @@ type FeeReviewResponse = {
 };
 
 /**
- * Pre-sign fee review for one exact multisig confirmation operation.
- */
-type MultisigConfirmationReviewResponse = {
-  readonly confirmationReview: {
-    readonly fee: FeeEstimate | null;
-    readonly feeEstimateFailed: boolean;
-    readonly mode: MultisigConfirmationMode;
-    readonly proposalId: string;
-    readonly signerAccountId: string;
-  };
-  readonly ok: true;
-};
-
-/**
  * Activity feed returned to extension pages.
  */
 type ActivityResponse = {
@@ -353,30 +352,33 @@ type RequestAccountsResponse =
     };
 
 /**
- * Watched multisigs and their tracked proposals for the active network.
+ * Fresh chain view paired with immutable Argent account provenance.
  */
-type MultisigsResponse = {
-  readonly multisigs: readonly MultisigRecord[];
-  readonly ok: true;
-  readonly proposals: readonly MultisigProposalRecord[];
-};
-/**
- * One watched multisig after an add or config refresh.
- */
-type MultisigResponse = {
-  readonly multisig: MultisigRecord;
-  readonly ok: true;
-  readonly proposals?: readonly MultisigProposalRecord[];
-  readonly warnings?: readonly MultisigSyncWarning[];
+type ArgentMultisigView = {
+  readonly config: ArgentMultisigConfig | null;
+  readonly record: ArgentMultisigRecord;
 };
 
-/**
- * One tracked proposal after a submit or track-by-id, with the submission
- * hash when a transaction was broadcast.
- */
-type MultisigProposalResponse = {
+/** Watched Argent accounts and frozen intents for the active network. */
+type MultisigsResponse = {
+  readonly intents: readonly ArgentMultisigSigningIntent[];
+  readonly multisigs: readonly ArgentMultisigView[];
   readonly ok: true;
-  readonly proposal: MultisigProposalRecord;
+};
+
+/** One watched Argent account after add or config refresh. */
+type MultisigResponse = {
+  readonly intents?: readonly ArgentMultisigSigningIntent[];
+  readonly multisig: ArgentMultisigView;
+  readonly ok: true;
+};
+
+/** One exact frozen intent after preparation, import, or signature collection. */
+type ArgentMultisigIntentResponse = {
+  readonly feeReview?: FeeEstimate;
+  readonly intent: ArgentMultisigSigningIntent;
+  readonly intentPackage?: ArgentMultisigIntentPackage;
+  readonly ok: true;
   readonly transactionHash?: string;
 };
 
@@ -385,18 +387,29 @@ type MultisigProposalResponse = {
  */
 type MultisigClassStatusResponse = {
   readonly declared: boolean;
-  readonly declarationPending: boolean;
   readonly ok: true;
-  readonly transactionHash?: string;
 };
-/**
- * Deploy-multisig submission outcome with the predicted contract address.
- */
+
+/** Exact constructor, signer, network, address, and fee bound for deployment. */
+type ArgentMultisigDeploymentReviewResponse = {
+  readonly deploymentReview: ArgentMultisigDeploymentReview;
+  readonly ok: true;
+};
+
+/** Stable Argent deployment submission outcome. */
 type MultisigDeployResponse = {
   readonly address: string;
+  readonly multisig: ArgentMultisigView;
   readonly ok: true;
-  readonly tracked: boolean;
   readonly transactionHash: string;
+};
+
+/** Token balances scoped to a watched shared account. */
+type MultisigBalancesResponse = {
+  readonly accountId: string;
+  readonly balances: readonly TokenBalance[];
+  readonly networkId: StarknetNetworkId;
+  readonly ok: true;
 };
 
 /**
@@ -440,10 +453,11 @@ export type RuntimeResponse =
   | GenerateMnemonicResponse
   | LedgerAccountStatusResponse
   | LedgerSignPendingResponse
+  | ArgentMultisigDeploymentReviewResponse
+  | ArgentMultisigIntentResponse
+  | MultisigBalancesResponse
   | MultisigClassStatusResponse
-  | MultisigConfirmationReviewResponse
   | MultisigDeployResponse
-  | MultisigProposalResponse
   | MultisigResponse
   | MultisigsResponse
   | { readonly ok: true }
@@ -466,6 +480,7 @@ export type RuntimeResponse =
   | TokenChartResponse
   | TransactionAlertsResponse
   | TransferResponse
+  | ValidateMnemonicResponse
   | WalletStatus
   | WatchAssetResponse
   | { readonly error: string };

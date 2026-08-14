@@ -35,6 +35,7 @@ import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { captureSessionAuthorization } from "../runtime/session";
 import { recordSubmittedActivity } from "./activity-recording";
 import { buildPolicy } from "./swap-build-policy";
 import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
@@ -254,6 +255,7 @@ const swapExecuteResponse = async (
   if (context.error !== undefined) {
     return { error: context.error };
   }
+  const authorized = captureSessionAuthorization(deps.session);
   const preferences = await deps.preferencesStore.read();
   if (
     context.account.id !== preparation.context.accountId ||
@@ -286,6 +288,7 @@ const swapExecuteResponse = async (
     const result = await deps.runtimeRpc.submitInvokeTransaction({
       account: context.account,
       calls: preparation.calls,
+      isAuthorized: authorized.isCurrent,
       reviewedFee: preparation.reviewedFee,
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
       signHash: signerForContext(deps, context),

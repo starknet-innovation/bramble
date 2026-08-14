@@ -15,12 +15,12 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 
 ## Features
 
-- **Accounts & transfers** — OpenZeppelin accounts backed by either the encrypted software vault or a Ledger hardware wallet, with deploy/send/receive and network switching.
+- **Accounts & transfers** — choose an OpenZeppelin or Argent account backed by either the encrypted software vault or a Ledger hardware wallet, with deploy/send/receive and network switching.
 - **Onboarding & recovery** — a dedicated full-page first-install flow for creating, importing, or connecting a Ledger; seed-phrase backup includes on-screen verification, while Ledger accounts stay keyless.
 - **dApp connect** — injects `window.starknet_mcWallet` (get-starknet compatible), with per-origin grants so connected sites never see each other.
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
 - **NFT gallery** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`.
-- **Multisig** — watch, propose, confirm, and execute on OpenZeppelin multisig accounts.
+- **Multisig** — create or import true Argent M-of-N account contracts, collect exact-hash signatures from local owners, and submit from the shared account.
 - **STRK20 privacy** — explicitly activate private balances, shield tracked ERC-20 assets through a
   reviewed public deposit, read private note totals on demand, submit private action batches, and
   derive chain/pool-scoped viewing identities and dapp-scoped sub-account commitments through the
@@ -42,13 +42,13 @@ Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also ava
 | [Bun](https://bun.sh) | 1.3.3 | [bun.sh](https://bun.sh/) | all |
 | Rust (stable) | 1.96+ | [rustup](https://rustup.rs) | `vendor:krusty` |
 | [wasm-pack](https://github.com/rustwasm/wasm-pack) | 0.13.1 | `cargo install wasm-pack --locked --version 0.13.1` | `vendor:krusty` |
-| [Scarb](https://docs.swmansion.com/scarb/) | 2.18.0 **exactly** | `asdf install scarb 2.18.0` (pinned in `.tool-versions`) | `vendor:multisig` |
-| [Starknet Foundry](https://foundry-rs.github.io/starknet-foundry/getting-started/installation.html) | 0.59.0 **exactly** | `asdf install starknet-foundry 0.59.0` | `test:multisig-contract` |
+| [Scarb](https://docs.swmansion.com/scarb/) | 2.18.0 **exactly** | `asdf install scarb 2.18.0` (pinned in `.tool-versions`) | Terminal contract |
+| [Starknet Foundry](https://foundry-rs.github.io/starknet-foundry/getting-started/installation.html) | 0.59.0 **exactly** | `asdf install starknet-foundry 0.59.0` | Terminal contract tests |
 
 ```bash
 bun install --frozen-lockfile
 bun run vendor:krusty     # Krusty KMS crypto core (WASM) — needs Rust + wasm-pack
-bun run vendor:multisig   # pinned multisig contract artifacts — needs Scarb 2.18.0 exactly
+bun run vendor:argent     # pinned official Argent release and artifact verification
 bun run vendor:privacy    # pinned official Starknet Privacy SDK browser bundle
 bun run build             # -> dist/
 ```
@@ -61,23 +61,22 @@ Day to day:
 ```bash
 bun run check     # types, lint, standards, unit tests
 bun run format    # Biome autofix
-bun run test:multisig-contract # Cairo atomic confirm/execute + rollback invariants
 bun run test:e2e  # Playwright end-to-end (run test:e2e:install once first)
 ```
 
 ### Offline checks
 
 After `bun install --frozen-lockfile`, the fast PR gates below need only Bun and the checked-out
-repository. They do not clone Krusty, invoke Rust/wasm-pack or Scarb, build the extension, or
+repository. They do not clone Krusty or Argent, invoke Rust/wasm-pack, build the extension, or
 launch Chromium:
 
 ```bash
 bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun test ./tests && bun run check:coverage
 ```
 
-The full `bun run check` additionally verifies the vendored Krusty, multisig, and official Privacy
+The full `bun run check` additionally verifies the vendored Krusty, official Argent release, and Privacy
 SDK outputs. Generate those first with `bun run vendor:krusty` (network, Rust, and
-`wasm-pack 0.13.1`), `bun run vendor:multisig` (`scarb 2.18.0`), and
+`wasm-pack 0.13.1`), `bun run vendor:argent` (network), and
 `bun run vendor:privacy` (Node.js 24 + npm). `build`, packaging, and browser E2E also require those
 vendored outputs; Playwright needs its Chromium install once per machine.
 
@@ -97,7 +96,6 @@ packages/platform          store, encrypted vault, Krusty, Starknet, and Ledger 
 packages/features          permissions, portfolio, transactions, multisig, privacy, settings
 packages/presentation      UI Kit and production wallet UI shared with UI Lab
 packages/testing/testkit   deterministic test doubles excluded from production bundles
-contracts/multisig         pinned OpenZeppelin multisig shell (Cairo)
 ```
 
 `apps/extension/src/background` remains the sole privileged authority and composition root for
