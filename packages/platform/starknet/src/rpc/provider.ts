@@ -23,6 +23,14 @@ export {
   type StarknetAccountDescriptor,
 } from "./account-signer";
 
+/**
+ * Raw message thrown when every configured endpoint reports a chain other than
+ * the caller's. Exported because the UI maps this exact string to user-facing
+ * copy: a hand-copied duplicate would turn that mapping into dead code the
+ * moment this wording changed, with every gate still green.
+ */
+export const WRONG_CHAIN_MESSAGE = "RPC endpoint returned the wrong Starknet chain";
+
 type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
 
 const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(options);
@@ -404,7 +412,7 @@ export const withRpcWrite = async <T>(
       const provider = makeProvider(nodeUrl);
       const chainId = await provider.getChainId();
       if (!sameFelt(chainId, expectedChainId)) {
-        chainMismatch = new WalletError("RPC endpoint returned the wrong Starknet chain");
+        chainMismatch = new WalletError(WRONG_CHAIN_MESSAGE);
         continue;
       }
       selected = provider;

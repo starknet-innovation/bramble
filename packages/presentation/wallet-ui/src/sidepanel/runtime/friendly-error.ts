@@ -5,6 +5,8 @@
  * no DOM, clock, or network access so it can be unit-tested in isolation.
  */
 
+import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
+
 /**
  * The result of classifying a raw error string for display.
  */
@@ -52,7 +54,7 @@ const EXACT: ReadonlyMap<string, string> = new Map([
   // the devnet-only `--chain-id SN_DEVNET` requirement is stated on that same
   // screen by the network picker, where it is true rather than guessed at.
   [
-    "rpc endpoint returned the wrong starknet chain",
+    WRONG_CHAIN_MESSAGE.toLowerCase(),
     "That endpoint reports a different Starknet chain, so nothing was submitted. Check the endpoint under Network → Advanced.",
   ],
 ]);

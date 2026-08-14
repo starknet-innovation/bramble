@@ -10,6 +10,7 @@ import {
   argentAccountAddress,
   argentMultisigAddress,
 } from "@mc-wallet/starknet/account-contracts";
+import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
 import {
   accountDeployment,
   buildErc20TransferCall,
@@ -223,7 +224,7 @@ describe("starknet RPC helpers", () => {
     ).catch((error: unknown) => error);
 
     expect(rejection).toBeInstanceOf(WalletError);
-    expect((rejection as Error).message).toBe("RPC endpoint returned the wrong Starknet chain");
+    expect((rejection as Error).message).toBe(WRONG_CHAIN_MESSAGE);
   });
 
   test("marks only add-transaction fetches as status unknown", async () => {

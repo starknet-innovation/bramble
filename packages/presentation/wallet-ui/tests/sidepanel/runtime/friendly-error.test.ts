@@ -3,6 +3,7 @@
  * toasts and their copy-to-clipboard affordance.
  */
 import { describe, expect, test } from "bun:test";
+import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
 
 import { friendlyError } from "../../../src/sidepanel/runtime/friendly-error";
 
@@ -25,7 +26,7 @@ describe("friendlyError", () => {
   // guard fires on every network, so the copy must stay network-agnostic — the
   // devnet-only `--chain-id` flag belongs on the network screen, not here.
   test("turns the write-path chain guard into an actionable endpoint hint", () => {
-    const result = friendlyError("RPC endpoint returned the wrong Starknet chain");
+    const result = friendlyError(WRONG_CHAIN_MESSAGE);
     expect(result.copyable).toBe(false);
     expect(result.message).toContain("nothing was submitted");
     expect(result.message).toContain("Advanced");
