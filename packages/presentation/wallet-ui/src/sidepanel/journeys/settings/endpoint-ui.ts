@@ -115,13 +115,46 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
   });
 };
 
+// The explorer-fallback choice is a privacy decision, not an endpoint: it says
+// whether a public block explorer may be asked for balances and history once
+// every configured RPC has failed, and answering "yes" discloses the account
+// address to that explorer. Submitted explicitly rather than on toggle so an
+// accidental tap never records consent, and re-rendered from the stored
+// preferences so the box reflects what the background actually holds.
+const bindExplorerFallback = (deps: EndpointUiDeps): void => {
+  const form = deps.app?.querySelector<HTMLFormElement>("#explorer-fallback-form");
+  const result = deps.app?.querySelector<HTMLElement>("#explorer-fallback-result");
+  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const enabled = new FormData(form).get("explorerFallback") === "on";
+    buttonBusy(submitButton, true);
+    void deps.wallet.setExplorerFallback(deps.networkId(), enabled).then(
+      async () => {
+        showToast(`Explorer fallback ${enabled ? "allowed" : "turned off"}`, "success");
+        await deps.render(await deps.wallet.loadStatus());
+      },
+      (error: unknown) => {
+        const message = errorMessage(error, "Explorer fallback update failed");
+        showToast(message, "error");
+        if (result) {
+          result.textContent = message;
+        }
+        buttonBusy(submitButton, false);
+      },
+    );
+  });
+};
+
 /**
- * Binds the RPC-override, STRK20-prover, and NFT-indexer endpoint forms.
+ * Binds the RPC-override, explorer-fallback, STRK20-prover, and NFT-indexer
+ * forms on the advanced-endpoints screen.
  */
 export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
   bindEndpointForm(deps, "#rpc-form", "rpcUrl", "RPC endpoint", (rpcUrl) =>
     deps.wallet.setRpcOverride(deps.networkId(), rpcUrl),
   );
+  bindExplorerFallback(deps);
   bindStrk20Services(deps);
   bindEndpointForm(deps, "#nft-indexer-form", "indexerUrl", "Indexer endpoint", (indexerUrl) =>
     deps.wallet.setNftIndexerUrl(indexerUrl),

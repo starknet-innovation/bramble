@@ -1,7 +1,7 @@
 /**
  * Shared JSON guards used at storage and extension message trust boundaries.
  */
-export type JsonPrimitive = boolean | null | number | string;
+type JsonPrimitive = boolean | null | number | string;
 /**
  * JSON-compatible value accepted by storage boundaries.
  */
@@ -18,23 +18,6 @@ export const isRecord = (value: unknown): value is Record<string, unknown> => {
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 };
-
-/**
- * Checks that a parsed object contains only keys its boundary understands.
- */
-export const hasOnlyKnownKeys = (
-  value: Record<string, unknown>,
-  keys: readonly string[],
-): boolean =>
-  Reflect.ownKeys(value).every((key) => {
-    if (typeof key !== "string" || !keys.includes(key)) {
-      return false;
-    }
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return (
-      descriptor?.enumerable === true && "value" in descriptor && descriptor.value !== undefined
-    );
-  });
 
 const isArrayIndexKey = (key: string, length: number): boolean => {
   const index = Number(key);
@@ -121,31 +104,10 @@ const isJsonValue = (value: unknown, ancestors: WeakSet<object>): value is Json 
 /**
  * Checks that a runtime value can be serialized as JSON without lossy numeric coercion.
  */
-export const isJson = (value: unknown): value is Json => isJsonValue(value, new WeakSet<object>());
+const isJson = (value: unknown): value is Json => isJsonValue(value, new WeakSet<object>());
 
 /**
  * Checks for arrays containing only strings.
  */
 export const isStringArray = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && isJson(value) && value.every((item) => typeof item === "string");
-
-/**
- * Deep-coerces felt-shaped bigints to their canonical `0x`-hex string so a value
- * a dapp passes with bigint felts (get-starknet forwards `request` args
- * unserialized) survives the isJson gate instead of being dropped. A negative
- * bigint is not a felt, so it is left untouched and still fails isJson.
- */
-export const normalizeFeltBigints = (value: unknown): unknown => {
-  if (typeof value === "bigint") {
-    return value >= 0n ? `0x${value.toString(16)}` : value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(normalizeFeltBigints);
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, normalizeFeltBigints(item)]),
-    );
-  }
-  return value;
-};

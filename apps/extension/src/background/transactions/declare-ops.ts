@@ -11,23 +11,28 @@
 import { walletErrorMessage } from "@mc-wallet/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
+import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import { isProviderDeclare, type ProviderDeclare } from "@mc-wallet/wallet-protocol/declare";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { accountHashSigner } from "../ledger/account-hash-signer";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
+import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
+import type { SignatureWaiters } from "../approvals/signature-waiters";
+import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { readRetryApprovalFeeInput } from "../provider/provider-inputs";
+import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
-import type { UnlockSession } from "../runtime/session";
-import type { SignatureWaiters } from "../approvals/signature-waiters";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
+import { FEE_REVIEW_REQUIRED } from "./fee-review";
 
 /**
  * Dependencies for the dapp declare handler.
@@ -38,7 +43,12 @@ export type DeclareOpsDeps = {
   readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
-  readonly session: UnlockSession;
+  /**
+   * Non-renewing session view: a page can issue this request on its own
+   * cadence, so reading the passphrase here must never extend the unlock
+   * lifetime.
+   */
+  readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
   readonly waiters: SignatureWaiters;
 };
@@ -48,13 +58,25 @@ export type DeclareOpsDeps = {
  */
 export type DeclareExecuteDeps = {
   /**
+   * Activity log a submitted declare is journalled in, so an approved,
+   * fee-paying declare is auditable and followed to acceptance or revert like
+   * every other submitted transaction. Required, deliberately: making it
+   * optional is exactly how the journal was silently dropped by the one
+   * production caller while the executor's own test kept passing.
+   */
+  readonly activity: ActivityLog;
+  /**
    * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
    * stubs stay valid; a Ledger declare with no queue wired fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
-  readonly session: UnlockSession;
+  /**
+   * Non-renewing session view: the user's approval click already renewed the
+   * window, so submitting the held declare must not renew it for the dapp.
+   */
+  readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
 };
 
@@ -81,6 +103,15 @@ const declareSummaries = (declare: ProviderDeclare): readonly string[] => [
   `Compiled class hash ${declare.compiledClassHash}`,
   ...(declare.classHash === undefined ? [] : [`Class hash ${declare.classHash}`]),
 ];
+
+// The activity line for a submitted declare. Deterministic and built only from
+// the already-validated request felts, never from node output: activity
+// summaries are load-bearing (multisig dedup guards match on them exactly — see
+// multisig-deploy-ops.ts, which keys off "Declare multisig class" and a
+// " at 0x…" deploy marker), so this wording is deliberately distinct from both
+// and identifies the class the dapp asked to declare.
+const declareActivitySummary = (declare: ProviderDeclare): string =>
+  `Declare contract class ${declare.classHash ?? declare.compiledClassHash}`;
 
 const countArray = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
@@ -173,6 +204,64 @@ const declarationErrorMessage = (error: unknown): string => {
   return "Starknet rejected the declaration. Check the account's STRK balance, network, and class hashes, then try again.";
 };
 
+const retryDeclarationFee = async (
+  deps: DeclareOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readRetryApprovalFeeInput(message);
+  if (!input) return { error: "invalid fee retry request" };
+  const approval = deps.approvals.get(input.id);
+  const payload = deps.approvals.payload(input.id);
+  if (approval?.kind !== "declare" || !payload?.declare || !approval.context) {
+    return { error: "approval not found" };
+  }
+  const revision = deps.approvals.beginFeeEstimate(input.id);
+  if (!revision) return { error: "approval not found" };
+  if (
+    !approval.declaration ||
+    !deps.approvals.updateFee(revision, {
+      declaration: {
+        ...approval.declaration,
+        accountDeployment: "unknown",
+        deploymentFee: null,
+        deploymentFeeEstimateFailed: false,
+        fee: null,
+        feeEstimateFailed: false,
+      },
+      kind: "declare",
+    })
+  ) {
+    return { error: "approval not found" };
+  }
+  notifyApprovalsChanged();
+  const passphrase = deps.session.peekPassphrase();
+  if (!passphrase) return { error: "wallet locked" };
+  const preferences = await deps.preferencesStore.read();
+  if (preferences.activeNetworkId !== approval.context.networkId) {
+    return { error: "approval context changed" };
+  }
+  const granted = await deps.wallet.getGrantedAccounts(approval.origin, passphrase);
+  const account = granted.find(
+    (stored) =>
+      stored.id === approval.context?.accountId &&
+      stored.networkId === approval.context.networkId &&
+      stored.networkId === preferences.activeNetworkId,
+  );
+  if (!account) return { error: "origin not connected" };
+  const declaration = await declarationReview(
+    deps,
+    account,
+    payload.declare,
+    preferences,
+    passphrase,
+  );
+  if (!deps.approvals.updateFee(revision, { declaration, kind: "declare" })) {
+    return { error: "a newer fee estimate replaced this one" };
+  }
+  notifyApprovalsChanged();
+  return { ok: true };
+};
+
 /**
  * Handles a dapp declare message; returns null for other message types.
  */
@@ -182,6 +271,9 @@ export const handleDeclareOps = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
+  if (messageType === "wallet.retryApprovalFee") {
+    return retryDeclarationFee(deps, message);
+  }
   if (messageType !== "wallet.addDeclareTransaction") {
     return null;
   }
@@ -197,7 +289,12 @@ export const handleDeclareOps = async (
   if (guard.isBlocked(input.origin)) {
     return { error: "origin blocked" };
   }
-  const passphrase = session.getPassphrase();
+  // A declare prompt never deduplicates, and everything below it is expensive:
+  // a vault read, then a declaration review that hashes the contract class and
+  // estimates two fees. An origin already holding its share of the queue is
+  // refused at admission regardless, so it is refused here instead of after.
+  requireApprovalAdmission(approvals, input.origin);
+  const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
@@ -224,6 +321,13 @@ export const handleDeclareOps = async (
  * declare, and returns the node's transaction and class hashes. Returns an
  * actionable error response instead of throwing so the claimed request and
  * held dapp promise settle together without leaving stale approval controls.
+ *
+ * `reviewedFee` is the declaration fee the approval card was showing when the
+ * user approved; it travels into the submit boundary as a signing ceiling, so a
+ * declaration that has grown more expensive since the review is refused rather
+ * than signed. `reviewedDeploymentFee` does the same for the account deployment
+ * an undeployed account submits first — the card totals the two, so binding
+ * only one of them would leave the larger half of that total unenforced.
  */
 export const executeDeclareApproval = async (
   deps: DeclareExecuteDeps,
@@ -231,13 +335,19 @@ export const executeDeclareApproval = async (
     readonly context?: ApprovalContext;
     readonly declare: ProviderDeclare;
     readonly origin: string;
+    readonly reviewedDeploymentFee?: FeeEstimate;
+    readonly reviewedFee?: FeeEstimate;
   },
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, runtimeRpc, session, wallet } = deps;
-  const passphrase = session.getPassphrase();
+  if (!input.reviewedFee) {
+    return FEE_REVIEW_REQUIRED;
+  }
+  const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
+  const authorized = captureSessionAuthorization(session);
   const preferences = await preferencesStore.read();
   if (input.context && preferences.activeNetworkId !== input.context.networkId) {
     return { error: "approval context changed" };
@@ -261,17 +371,40 @@ export const executeDeclareApproval = async (
   // `{ error }` (mirroring executeStrk20InvokeApproval) so the applier settles
   // the held dapp request with the real reason instead of leaving it to hang on
   // an unhandled throw. Fails closed — nothing is submitted on error.
+  let result: { readonly classHash: string; readonly transactionHash: string };
   try {
-    const result = await runtimeRpc.submitDeclareTransaction({
+    result = await runtimeRpc.submitDeclareTransaction({
       account,
       compiledClassHash: input.declare.compiledClassHash,
       contractClass: input.declare.contractClass,
+      isAuthorized: authorized.isCurrent,
+      // The declaration fee the approval card showed becomes the ceiling this
+      // submission may sign under (MCW-V09-119), and the deployment fee it
+      // showed alongside becomes the ceiling on the deployment submitted first.
+      ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
+      ...(input.reviewedDeploymentFee
+        ? { reviewedDeploymentFee: input.reviewedDeploymentFee }
+        : {}),
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
       signHash: accountHashSigner(deps, account, passphrase),
       ...(input.declare.classHash === undefined ? {} : { classHash: input.declare.classHash }),
     });
-    return { classHash: result.classHash, ok: true, transactionHash: result.transactionHash };
   } catch (error) {
     return { error: declarationErrorMessage(error) };
   }
+  // Journal the submitted declare like every other submitted transaction, so it
+  // appears in the activity feed and CSV export and background reconciliation
+  // follows it to acceptance or revert. The transaction is already on chain by
+  // this point, so a storage failure must not be reported to the dapp as a
+  // failed declare.
+  await deps.activity
+    .record({
+      accountId: account.id,
+      hash: result.transactionHash,
+      kind: "declare",
+      networkId: account.networkId,
+      summary: declareActivitySummary(input.declare),
+    })
+    .catch(() => undefined);
+  return { classHash: result.classHash, ok: true, transactionHash: result.transactionHash };
 };

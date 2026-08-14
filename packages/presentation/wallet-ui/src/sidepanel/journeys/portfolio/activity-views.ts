@@ -5,7 +5,7 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { iconButton } from "@mc-wallet/ui-kit/controls";
@@ -25,7 +25,7 @@ export const activityScreen = (
   status: WalletStatus,
   transactions: readonly ActivityEntry[],
   historyUnavailable: boolean,
-  multisig: MultisigRecord | null = null,
+  multisig: ArgentMultisigRecord | null = null,
 ): string =>
   dockScreen(
     "activity",

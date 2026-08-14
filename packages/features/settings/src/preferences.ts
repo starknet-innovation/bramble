@@ -2,12 +2,12 @@
  * Plain wallet preferences kept outside the encrypted vault.
  */
 import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
+import { isJson } from "@mc-wallet/core/json";
 import { isWatchedNft, withNftId } from "@mc-wallet/portfolio/watched-nft";
+
 import {
   DEFAULT_STRK20_NETWORKS,
   isStrk20NetworkConfig,
-  isStrk20NetworkConfigs,
   STRK20_MAINNET_POOL,
   type Strk20NetworkConfig,
 } from "@mc-wallet/privacy/config";
@@ -26,14 +26,12 @@ import {
   isStarknetNetworkId,
   STRK_TOKEN_ADDRESS,
 } from "@mc-wallet/wallet-model/networks";
+
 import {
-  isAccountLabels,
   isAddressBookEntry,
   isApprovalSurfacePreference,
   isDisplayCurrency,
-  isHiddenTokens,
   isLabel,
-  isRpcOverrides,
   isThemeChoice,
   isTokenConfig,
   isTokenId,
@@ -42,13 +40,17 @@ import {
 } from "@mc-wallet/wallet-model/preferences";
 import {
   createGroup as createGroupPure,
-  isAccountGroups,
   normalizeAccountGroups,
   removeGroup as removeGroupPure,
   renameGroup as renameGroupPure,
   setAccountInGroup as setAccountInGroupPure,
   setGroupIcon as setGroupIconPure,
 } from "./groups";
+import {
+  isWalletPreferences,
+  normalizeStoredPreferences,
+  pickImportablePreferences,
+} from "./preferences-stored";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /**
@@ -59,10 +61,17 @@ export type {
   AddressBookEntry,
   ApprovalSurfacePreference,
   DisplayCurrency,
+  ExplorerFallback,
+  ExplorerLanePreferences,
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
 } from "@mc-wallet/wallet-model/preferences";
+/**
+ * Re-exported explorer-lane resolver so background and Starknet read wiring
+ * reach it through the same entry point as the preferences it reads.
+ */
+export { explorerFallbackAllowed } from "@mc-wallet/wallet-model/preferences";
 /**
  * Re-exported store schema and capability types.
  */
@@ -81,68 +90,11 @@ type WalletPreferencesStoreOptions = {
   readonly store: KeyValueStore;
 };
 
-const PREFERENCE_KEYS: readonly string[] = [
-  "accountLabels",
-  "activeNetworkId",
-  "approvalSurface",
-  "addressBook",
-  "customNetworks",
-  "displayCurrency",
-  "groups",
-  "hiddenTokens",
-  "nftIndexerUrl",
-  "nfts",
-  "rpcOverrides",
-  "schemaVersion",
-  "strk20Networks",
-  "strk20ProverUrl",
-  "theme",
-  "tokens",
-];
-// Optional-section guards, each pure, keeping the main guard a single `&&` chain.
-const hasValidCustomNetworks = (value: Record<string, unknown>): boolean =>
-  value["customNetworks"] === undefined ||
-  (Array.isArray(value["customNetworks"]) &&
-    value["customNetworks"].every(isCustomNetwork) &&
-    hasUniqueStrings(value["customNetworks"].map((network) => normalizeChainId(network.chainId))));
-const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
-  (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
-  (value["approvalSurface"] === undefined ||
-    isApprovalSurfacePreference(value["approvalSurface"])) &&
-  (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
-  (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
-  (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
-  (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
-  (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
-const hasValidUrlAndNftFields = (value: Record<string, unknown>): boolean =>
-  (value["strk20ProverUrl"] === undefined ||
-    (typeof value["strk20ProverUrl"] === "string" && isCustomRpcUrl(value["strk20ProverUrl"]))) &&
-  (value["strk20Networks"] === undefined || isStrk20NetworkConfigs(value["strk20Networks"])) &&
-  (value["nftIndexerUrl"] === undefined ||
-    (typeof value["nftIndexerUrl"] === "string" && isCustomRpcUrl(value["nftIndexerUrl"]))) &&
-  (value["nfts"] === undefined ||
-    (Array.isArray(value["nfts"]) &&
-      value["nfts"].every(isWatchedNft) &&
-      hasUniqueStrings(value["nfts"].map((nft) => nft.id))));
-
 /**
- * Checks stored plain preferences before use.
+ * Stored-shape guard, re-exported so existing importers keep one entry point
+ * for the store and the record it validates.
  */
-export const isWalletPreferences = (value: unknown): value is WalletPreferences =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, PREFERENCE_KEYS) &&
-  hasValidCustomNetworks(value) &&
-  hasValidOptionalEntries(value) &&
-  hasValidUrlAndNftFields(value) &&
-  value["schemaVersion"] === 1 &&
-  isStarknetNetworkId(value["activeNetworkId"]) &&
-  Array.isArray(value["addressBook"]) &&
-  value["addressBook"].every(isAddressBookEntry) &&
-  hasUniqueStrings(value["addressBook"].map((entry) => entry.id)) &&
-  Array.isArray(value["tokens"]) &&
-  value["tokens"].every(isTokenConfig) &&
-  hasUniqueStrings(value["tokens"].map((token) => token.id));
+export { isWalletPreferences } from "./preferences-stored";
 
 /**
  * Creates default non-secret wallet preferences.
@@ -154,6 +106,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   addressBook: [],
   customNetworks: [],
   displayCurrency: "usd",
+  explorerFallback: {},
   groups: [],
   hiddenTokens: [],
   nfts: [],
@@ -212,7 +165,10 @@ export const createPreferencesStore = ({
   assertStoreAccess("preferences", actor);
 
   const read = async (): Promise<WalletPreferences> => {
-    const stored = await store.get(PREFERENCES_STORE_KEY);
+    // Normalized before it is validated, never after: a record an earlier build
+    // wrote with a second spelling of one address is repaired here rather than
+    // failing the strict entry guards and locking the user out of preferences.
+    const stored = normalizeStoredPreferences(await store.get(PREFERENCES_STORE_KEY));
     if (stored === undefined) {
       return defaultWalletPreferences();
     }
@@ -231,6 +187,14 @@ export const createPreferencesStore = ({
       ? withPrivacyDefaults
       : { ...withPrivacyDefaults, groups };
   };
+
+  // Merge base for a restore, the recovery path out of a record this build
+  // cannot read (future key, schema bump, corrupt blob): an unreadable record
+  // falls back to defaults rather than propagating. `get` faults still surface.
+  const readImportBase = async (): Promise<WalletPreferences> =>
+    isWalletPreferences(normalizeStoredPreferences(await store.get(PREFERENCES_STORE_KEY)))
+      ? await read()
+      : defaultWalletPreferences();
 
   return serializeStoreMutations<WalletPreferencesStore>(
     {
@@ -268,11 +232,19 @@ export const createPreferencesStore = ({
         return next;
       },
       async importPreferences(candidate) {
-        if (!isWalletPreferences(candidate)) {
+        // A backup written by an older build carries the old entry spelling, so
+        // it is normalized before validation exactly like a stored record.
+        const backup = normalizeStoredPreferences(candidate);
+        if (!isWalletPreferences(backup)) {
           throw new WalletError("Invalid preferences backup");
         }
-        await writePreferences(store, candidate);
-        return candidate;
+        // A backup file is untrusted input, so a restore may only reapply the
+        // organisational fields; every trust-bearing setting the review layer
+        // reads — including the contacts the address-poisoning guard compares
+        // against — keeps its stored value (see `pickImportablePreferences`).
+        const next = { ...(await readImportBase()), ...pickImportablePreferences(backup) };
+        await writePreferences(store, next);
+        return next;
       },
       read,
       async removeAddress(id) {
@@ -319,6 +291,18 @@ export const createPreferencesStore = ({
         const next = {
           ...preferences,
           groups: setAccountInGroupPure(preferences.groups ?? [], groupId, accountId, member),
+        };
+        await writePreferences(store, next);
+        return next;
+      },
+      async setExplorerFallback({ enabled, networkId }) {
+        if (!isStarknetNetworkId(networkId)) {
+          throw new WalletError("Invalid Starknet network");
+        }
+        const preferences = await read();
+        const next = {
+          ...preferences,
+          explorerFallback: { ...preferences.explorerFallback, [networkId]: enabled },
         };
         await writePreferences(store, next);
         return next;

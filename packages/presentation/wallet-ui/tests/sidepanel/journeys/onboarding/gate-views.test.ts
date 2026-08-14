@@ -89,6 +89,8 @@ describe("onboarding gate view", () => {
     };
     const ackRow = onboarding(sepolia).match(/id="ledger-mainnet-ack"[^>]*/)?.[0] ?? "";
     expect(ackRow).not.toContain("hidden");
-    expect(onboarding(sepolia)).not.toContain("<select");
+    expect(onboarding(sepolia)).toContain('name="accountContractType"');
+    expect(onboarding(sepolia)).toContain('name="ledgerAccountContractType"');
+    expect(onboarding(sepolia)).not.toContain('name="networkId"');
   });
 });

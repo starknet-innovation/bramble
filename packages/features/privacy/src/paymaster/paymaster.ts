@@ -8,6 +8,10 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import {
+  INDETERMINATE_RPC_WRITE_MESSAGE,
+  IndeterminateRpcWriteError,
+} from "@mc-wallet/starknet/provider";
+import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
@@ -19,6 +23,7 @@ import { CallData, hash } from "starknet";
 import type { Strk20PaymasterConfig } from "../config";
 import { sanitizeStrk20Detail } from "../sdk/official-sdk-errors";
 import { STRK20_SUBMISSION_UNAVAILABLE, type Strk20PrivateRelayPlan } from "../service";
+
 import { bindPaymasterTypedData, isPaymasterAuthorizationLive } from "./paymaster-typed-data";
 
 type PaymasterCall = {
@@ -31,6 +36,10 @@ type PaymasterHttp = (input: RequestInfo | URL, init?: RequestInit) => Promise<R
 const PARAMETERS = { version: "0x1" } as const;
 const PAYMASTER_TIMEOUT_MS = 30_000;
 const MAX_PAYMASTER_RESPONSE_BYTES = 1024 * 1024;
+// The one relay method that puts a transaction on the wire, mirroring
+// `BROADCAST_RPC_METHODS` in `../provider`: only a broadcast-capable call can
+// leave a write in flight, so only it may mint the ambiguity marker.
+const BROADCAST_PAYMASTER_METHOD = "paymaster_executeTransaction";
 
 const requirePaymasterFelt = (value: string, allowZero: boolean): string => {
   const canonical = canonicalFelt(value);
@@ -89,7 +98,7 @@ const relayReportedError = (method: string, reported: unknown): WalletError => {
   // be short, so no pattern sanitizer can distinguish them reliably from a
   // useful reason. Keep that post-proof boundary generic; quote failures carry
   // no proof and may retain a bounded, sanitized diagnostic.
-  if (method === "paymaster_executeTransaction") {
+  if (method === BROADCAST_PAYMASTER_METHOD) {
     return new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   const detail = sanitizeStrk20Detail(
@@ -217,6 +226,33 @@ const readBoundedResponse = async (response: Response): Promise<string | null> =
   return new TextDecoder().decode(bytes);
 };
 
+// A relay answer the wallet could not read is not the same thing as a relay
+// refusal. Once `paymaster_executeTransaction` has left the wallet, the relay
+// may already have forwarded the transaction while its reply was truncated,
+// oversized, unparseable, or ended by this client's own deadline — so that case
+// carries the same ambiguity marker `runRpcBroadcast` mints on the JSON-RPC
+// lane, and every layer above (the maturity scope in particular) holds its
+// state closed instead of releasing it for a retry over a possibly-live write.
+//
+// Quote calls never broadcast, so their failures stay determinate; so does a
+// refusal the relay states for itself, whether as a JSON-RPC error object or an
+// HTTP status of its own choosing. This closes the lossy-channel case, not a
+// relay that lies about having rejected a transaction it forwarded — no
+// classification at this boundary can, and the relay URL is wallet-configured
+// rather than dapp-supplied for exactly that reason.
+const lostAnswer = (method: string): WalletError =>
+  method === BROADCAST_PAYMASTER_METHOD
+    ? new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE)
+    : new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+
+// An expired request deadline is the one send-side failure that is ambiguous:
+// the request was written and this client stopped waiting for the answer. Every
+// other rejection here (DNS, refused connection, a refused redirect) means no
+// exchange took place. `AbortSignal.timeout` surfaces as this exact
+// `DOMException`, and the transport is wallet-chosen, never remote-controlled.
+const isDeadlineExpiry = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === "TimeoutError";
+
 const rpc = async (
   http: PaymasterHttp,
   url: string,
@@ -231,8 +267,10 @@ const rpc = async (
       method: "POST",
       signal: AbortSignal.timeout(PAYMASTER_TIMEOUT_MS),
     });
-  } catch {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  } catch (error) {
+    throw isDeadlineExpiry(error)
+      ? lostAnswer(method)
+      : new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   if (!response.ok) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
@@ -245,7 +283,7 @@ const rpc = async (
     }
     body = JSON.parse(text);
   } catch {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+    throw lostAnswer(method);
   }
   if (
     !isRecord(body) ||
@@ -253,14 +291,14 @@ const rpc = async (
     body["jsonrpc"] !== "2.0" ||
     body["id"] !== "mc-wallet-strk20"
   ) {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+    throw lostAnswer(method);
   }
   const reported = body["error"];
   if (reported !== undefined) {
     throw relayReportedError(method, reported);
   }
   if (!Object.hasOwn(body, "result")) {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+    throw lostAnswer(method);
   }
   return body["result"];
 };
@@ -372,6 +410,16 @@ export const buildStrk20PaymasterPlan = async (input: {
  * Submits the frozen proof and paymaster plan. The returned transaction hash is
  * strictly validated before it reaches wallet activity state. Public typed
  * data and its reviewed authorization are an inseparable, fail-closed pair.
+ *
+ * Failure behaviour, which callers must distinguish: everything refused before
+ * the request goes out, every refusal the relay states for itself, and every
+ * `paymaster_buildTransaction` failure throws a plain {@link WalletError} —
+ * nothing is in flight and the caller may release its state. An answer to the
+ * broadcast that the wallet could not read (oversized, unparseable,
+ * uninterpretable, ended by this client's deadline, or a result with no usable
+ * hash in it) throws an {@link IndeterminateRpcWriteError} instead: the relay
+ * may already have forwarded the transaction, so the caller must hold its state
+ * closed rather than retry.
  */
 export const submitStrk20PaymasterPlan = async (input: {
   readonly accountAddress: string;
@@ -405,7 +453,7 @@ export const submitStrk20PaymasterPlan = async (input: {
       user_address: requirePaymasterFelt(input.accountAddress, false),
     };
   }
-  const result = await rpc(input.http ?? fetch, input.config.url, "paymaster_executeTransaction", {
+  const result = await rpc(input.http ?? fetch, input.config.url, BROADCAST_PAYMASTER_METHOD, {
     parameters: { ...PARAMETERS, fee_mode: feeMode(input.config) },
     transaction: {
       apply_action: {
@@ -421,12 +469,17 @@ export const submitStrk20PaymasterPlan = async (input: {
   // are tolerated here: by this point the transaction is already broadcast, and
   // discarding a valid hash over an unrecognized sibling key would lose the only
   // handle the wallet has on a live submission.
+  //
+  // A result with no usable hash in it is the worst case rather than a refusal:
+  // the relay answered with a JSON-RPC *result*, so it accepted the submission
+  // and the wallet simply has no handle on it. That is an ambiguous write, not a
+  // rejected quote, so callers must hold their state closed rather than retry.
   if (
     !isRecord(result) ||
     typeof result["transaction_hash"] !== "string" ||
     !isNonZeroStarkFieldElement(result["transaction_hash"])
   ) {
-    throw quoteRejected("the relay accepted the submission without a usable transaction hash");
+    throw new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE);
   }
   return { transactionHash: result["transaction_hash"] };
 };

@@ -3,6 +3,7 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { actionReferences, isPinnedActionReference, WORKFLOW_DIR } from "./workflow-inventory";
 
 const MAX_LINES = 500;
 const EXCLUDED = new Set([
@@ -10,7 +11,6 @@ const EXCLUDED = new Set([
   ".git",
   ".impeccable",
   ".playwright-cli",
-  "apps",
   "artifacts",
   "bun.lock",
   "dist",
@@ -21,6 +21,15 @@ const EXCLUDED = new Set([
   "test-results",
   "vendor",
 ]);
+/**
+ * Directories skipped by full path rather than by name. `apps/` now holds the
+ * shipped extension next to two projects this gate has never covered (the
+ * hosted terminal and the Storybook UI lab), so excluding the whole tree by
+ * name — as this list did while `src/` was the extension root — would silently
+ * disable every `apps/extension/src` rule below, including the secret-material
+ * and browser-global boundaries. Skipping by path keeps the extension scanned.
+ */
+const EXCLUDED_PATHS = new Set(["apps/terminal", "apps/ui-lab"]);
 const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/background/index.ts",
   "apps/extension/src/content/index.ts",
@@ -55,6 +64,9 @@ const RAW_ERROR_BOUNDARY_FILES = new Set([
 const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/ledger/account-hash-signer.ts",
   "apps/extension/src/background/accounts/account-creation-inputs.ts",
+  // Privileged first-run boundary: the phrase is validated through Krusty and
+  // only the boolean verdict returns; the phrase is never logged or persisted.
+  "apps/extension/src/background/onboarding/onboarding-ops.ts",
   // Keeps the unlocked vault credential inside the privileged worker while
   // coordinating fail-closed network/vault commits; never persists or emits it.
   "apps/extension/src/background/runtime/active-network-mutation.ts",
@@ -77,6 +89,13 @@ const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/provider/provider-ops.ts",
   "apps/extension/src/background/settings/origins-ops.ts",
   "apps/extension/src/background/privacy/strk20-account-context.ts",
+  // Approved-request execution split out of strk20-ops.ts: it re-resolves the
+  // granted account behind a non-renewing session peek and hands the unlocked
+  // vault credential straight to the protected signer wiring. Same boundary,
+  // same rule — never logged, persisted, or returned across a message.
+  "apps/extension/src/background/privacy/strk20-approval-execution.ts",
+  // Queues approvals only. Since the execution half moved out, its sole match
+  // is the `./signature-waiters` import path; no secret material transits here.
   "apps/extension/src/background/privacy/strk20-ops.ts",
   // Active-account context split from strk20-wallet-ops; the vault passphrase
   // only transits into the protected signer wiring, never logged or stored.
@@ -119,10 +138,33 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-import-bind.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-word-assist.ts",
+  // Locked-gate UI forwards the passphrase to the privileged background and
+  // neither persists it nor renders it.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/unlock-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
+  // Privileged UI message client: credentials transit directly to the
+  // background and are never retained or rendered here.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime-accounts.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-runtime.ts",
+  // Public Argent multisig packages and verified signature fragments cross
+  // these UI boundaries; no private signing material is ever present.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-model.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-runtime.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-views.ts",
   "packages/features/transactions/src/routing/ledger-verify.ts",
+  // Pure public-key verification consolidated for Ledger and KMS probe
+  // callers; it receives no private key or vault credential.
+  "packages/platform/starknet/src/transactions/signature-verify.ts",
+  // Public account ABI serialization and signer façades. These files carry
+  // public keys/signature fragments; private-key operations remain in Krusty.
+  "packages/platform/starknet/src/accounts/account-contracts.ts",
+  "packages/platform/starknet/src/rpc/account-signer.ts",
+  "packages/platform/starknet/src/rpc/multisig-invoke.ts",
+  "packages/platform/starknet/src/rpc/rpc-estimate.ts",
+  "packages/platform/starknet/src/transactions/declare.ts",
+  "packages/platform/starknet/src/transactions/deployment.ts",
   "packages/platform/starknet/src/rpc/provider.ts",
   "packages/platform/starknet/src/rpc/rpc.ts",
   "packages/features/privacy/src/policy/call-set-signer.ts",
@@ -132,6 +174,15 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
   "packages/features/privacy/src/paymaster/paymaster.ts",
   "packages/features/privacy/src/service.ts",
+  // Argent multisig stores public signer identifiers and verified public
+  // signature fragments only. Private signing remains behind Krusty and the
+  // privileged background accountHashSigner boundary.
+  "packages/features/multisig/src/chain.ts",
+  "packages/features/multisig/src/deploy.ts",
+  "packages/features/multisig/src/repository-schema.ts",
+  "apps/extension/src/background/multisig/multisig-deploy-ops.ts",
+  "apps/extension/src/background/multisig/multisig-inputs.ts",
+  "apps/extension/src/background/multisig/multisig-tx-ops.ts",
   "packages/platform/vault/src/accounts/account-secrets.ts",
   "packages/platform/vault/src/encrypted-store.ts",
   "packages/platform/vault/src/kms-port.ts",
@@ -170,7 +221,6 @@ const hasControlByte = (text: string): boolean => {
 };
 const DYNAMIC_CODE_PATTERN =
   /\b(?:eval|importScripts)\s*\(|\bnew Function\b|\b(?:setTimeout|setInterval)\s*\(\s*["']|import\s*\(\s*["']https?:\/\//;
-const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
 const HTML_SINK_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
@@ -222,11 +272,11 @@ const walk = async (dir: string): Promise<string[]> => {
   const files: string[] = [];
 
   for (const entry of entries) {
-    if (EXCLUDED.has(entry.name)) {
+    const path = join(dir, entry.name);
+    if (EXCLUDED.has(entry.name) || EXCLUDED_PATHS.has(path)) {
       continue;
     }
 
-    const path = join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await walk(path)));
     } else if (entry.isFile()) {
@@ -277,13 +327,14 @@ for (const file of await walk(".")) {
     failures.push(`${file} must live under its primary module directory`);
   }
 
-  if (file.startsWith(".github/workflows/")) {
-    lines.forEach((line, index) => {
-      const actionRef = line.match(/^\s*-\s+uses:\s*(\S+)/)?.[1];
-      if (actionRef && !GITHUB_ACTION_REF_PATTERN.test(actionRef)) {
-        failures.push(`${file}:${index + 1} GitHub Actions must be pinned to commit SHAs`);
+  if (file.startsWith(`${WORKFLOW_DIR}/`)) {
+    // Extraction and the pin rule are shared with the workflow security policy
+    // (./workflow-inventory), so neither gate can be the looser of the two.
+    for (const { line, reference } of actionReferences(text)) {
+      if (!isPinnedActionReference(reference)) {
+        failures.push(`${file}:${line} GitHub Actions must be pinned to commit SHAs`);
       }
-    });
+    }
   }
 
   if (file.endsWith(".ts") && /\.postMessage\([\s\S]{0,400},\s*["']\*["']/.test(text)) {

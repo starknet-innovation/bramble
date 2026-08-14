@@ -1,14 +1,13 @@
-import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
 import type {
+  ArgentMultisigView,
   BalanceState,
   ConnectedSite,
   DiscoveredNft,
-  MultisigClassState,
-  MultisigSyncState,
   PendingApproval,
   PrivacyDisclosureState,
   PrivacyJourneyState,
@@ -36,11 +35,10 @@ export type DashboardOptions = {
   readonly discoveredNfts?: readonly DiscoveredNft[];
   readonly expandedGroupId?: string | null;
   readonly historyUnavailable?: boolean;
-  readonly multisigClassDeclared?: MultisigClassState | "error" | null;
-  readonly multisigProposals?: readonly MultisigProposalRecord[];
-  readonly multisigSync?: MultisigSyncState;
+  readonly multisigClassDeclared?: boolean | "error" | null;
+  readonly multisigIntents?: readonly ArgentMultisigSigningIntent[];
   readonly multisigNfts?: readonly DiscoveredNft[];
-  readonly multisigs?: readonly MultisigRecord[];
+  readonly multisigs?: readonly ArgentMultisigView[];
   readonly multisigsError?: boolean;
   readonly openAssignId?: string | null;
   readonly pending?: readonly PendingApproval[];
@@ -80,7 +78,7 @@ export const walletDashboard = (options: DashboardOptions = {}): string =>
     options.selectedNftId ?? null,
     options.changes ?? {},
     options.multisigs ?? [],
-    options.multisigProposals ?? [],
+    options.multisigIntents ?? [],
     options.selectedMultisigId ?? null,
     options.multisigClassDeclared ?? null,
     null,
@@ -93,7 +91,6 @@ export const walletDashboard = (options: DashboardOptions = {}): string =>
     options.historyUnavailable ?? false,
     options.snoozed ?? [],
     options.multisigsError ?? false,
-    options.multisigSync ?? null,
     options.balanceState ?? { balances },
     options.selectedMultisigId ?? null,
     options.multisigNfts ?? [],

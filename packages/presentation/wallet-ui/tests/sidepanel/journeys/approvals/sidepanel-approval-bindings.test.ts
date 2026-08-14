@@ -3,8 +3,11 @@
  * Review later lock together immediately; an executor error repaints from
  * background state so the consumed approval id cannot be decided a second time.
  */
+
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { PendingApproval } from "../../../../src/popup/responses/approvals-responses";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { bindApprovals } from "../../../../src/sidepanel/shell/dashboard-bindings";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -130,6 +133,66 @@ describe("bindApprovals", () => {
     expect(host.querySelector("#approval-live-copy")?.textContent).toContain("returning control");
     expect(host.querySelector("#approval-result")?.textContent).toBe("Rejecting request…");
     expect(renders).toBe(1);
+  });
+});
+
+// A transaction card's decision must report the fee THAT PAINT displayed, not
+// whatever the queue holds when the click arrives: a re-estimate fired from a
+// second open wallet surface replaces the queue's copy while this card sits
+// unrepainted, and approving it would then consent to a figure nobody read.
+// Renderer and binding are exercised together here because the echo only holds
+// if the same paint that showed the figure is the one that reports it.
+describe("bindApprovals echoes the fee the card painted", () => {
+  const INVOKE_ID = "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";
+  const REVIEWED = { overallFee: "1000", unit: "FRI" } as const;
+
+  const invokeApproval = (fee?: PendingApproval["fee"]): PendingApproval => ({
+    ...(fee === undefined ? { feeEstimateFailed: true } : { fee }),
+    id: INVOKE_ID,
+    kind: "invoke",
+    origin: "https://dapp.example",
+    summaries: ["Send 1 ETH to 0x0511…e6f7"],
+  });
+
+  const clickApprove = async (
+    approval: PendingApproval,
+  ): Promise<readonly { readonly approved: boolean; readonly reviewedFee: unknown }[]> => {
+    const host = document.createElement("div");
+    host.innerHTML = `<ul>${approvalCard(approval, STATUS)}</ul><p id="approval-result"></p>`;
+    document.body.replaceChildren(host);
+    const decided: { readonly approved: boolean; readonly reviewedFee: unknown }[] = [];
+    bindApprovals({
+      app: host,
+      render: async () => undefined,
+      wallet: {
+        decideApproval: async (_id: string, approved: boolean, reviewedFee?: unknown) => {
+          decided.push({ approved, reviewedFee });
+        },
+        loadStatus: async () => STATUS,
+      } as unknown as SidepanelWallet,
+    });
+    host.querySelector<HTMLButtonElement>('[data-approval-action="approve"]')?.click();
+    await flush();
+    return decided;
+  };
+
+  test("an approve click reports the figure the card rendered", async () => {
+    const html = approvalCard(invokeApproval(REVIEWED), STATUS);
+    expect(html).toContain('data-approval-fee="1000"');
+    expect(html).toContain('data-approval-fee-unit="FRI"');
+
+    expect(await clickApprove(invokeApproval(REVIEWED))).toEqual([
+      { approved: true, reviewedFee: REVIEWED },
+    ]);
+  });
+
+  test("a card that priced nothing cannot dispatch an approval", async () => {
+    const html = approvalCard(invokeApproval(), STATUS);
+    expect(html).not.toContain("data-approval-fee");
+    expect(html).toContain('data-approval-action="approve"');
+    expect(html).toContain('type="button" disabled');
+
+    expect(await clickApprove(invokeApproval())).toEqual([]);
   });
 });
 

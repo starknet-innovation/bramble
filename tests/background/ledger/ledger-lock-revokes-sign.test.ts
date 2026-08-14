@@ -23,7 +23,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeResponse } from "../../../apps/extension/src/background/runtime/runtime-types";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
-import { waitForPendingApprovals } from "../../support/held";
+import { reviewedApprovalFee, waitForPendingApprovals } from "../../support/held";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const { starkCurve } = ec;
@@ -34,6 +34,7 @@ const publicKeyX = starkCurve.getStarkKey(LEDGER_KEY);
 const INVOKE_HASH = "0x1e240";
 
 const ledgerAccount: LedgerAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabc111111",
   classHash: "0x111111",
   derivation: {
@@ -148,7 +149,11 @@ const parkInvokeSign = async (handler: ReturnType<typeof createMessageHandler>) 
   const held = handler(invokeMessage, content);
   const listed = await waitForPendingApprovals<{ id: string }>(handler, page);
   const approvalId = listed[0]?.id ?? "";
-  const approvePromise = handler({ id: approvalId, type: "wallet.approveOrigin" }, page);
+  const reviewedFee = await reviewedApprovalFee(handler, page, approvalId);
+  const approvePromise = handler(
+    { id: approvalId, reviewedFee, type: "wallet.approveOrigin" },
+    page,
+  );
   const signId = await waitForParkedSign(handler);
   return { approvePromise, held, signId };
 };

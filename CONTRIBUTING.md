@@ -16,12 +16,12 @@ sandboxes:
 
 - `bun run vendor:krusty` needs network access, `wasm-pack 0.13.1`, and a Rust
   toolchain (build Krusty KMS).
-- `bun run vendor:multisig` needs `scarb 2.18.0` exactly (the multisig class
-  hash pin is only reproducible on that version).
+- `bun run vendor:argent` needs network access to fetch the exact production
+  Argent account-contract release and verify its official artifacts.
 - `bun run vendor:privacy` needs network access plus Node.js 24 and npm. It
   builds the exact pinned official Privacy SDK browser bundle and verifies its digest.
 
-Without the vendored outputs, `check:krusty`, `check:multisig`, `check:privacy`, and `build` fail;
+Without the vendored outputs, `check:krusty`, `check:argent`, `check:privacy`, and `build` fail;
 that is expected offline. Run the rest of the gates and say so.
 
 Contributors can enable the local pre-push hook to run the offline-fast checks
@@ -40,7 +40,7 @@ Run this before opening a pull request:
 
 ```bash
 bun run vendor:krusty
-bun run vendor:multisig
+bun run vendor:argent
 bun run vendor:privacy
 bun run check
 bun run test:e2e:install
@@ -111,11 +111,21 @@ history.
   popup boundary modules enforced by `bun run check`.
 - Krusty KMS owns wallet cryptography. Do not add fallback signing, key derivation, or mnemonic
   validation code.
-- Krusty KMS source must stay pinned in `scripts/vendor-krusty.ts`; update the pin only with the
-  full required gates.
-- The official Privacy SDK source and browser bundle digest stay pinned in
-  `scripts/vendor-privacy-sdk.ts` and `scripts/check-privacy-sdk.ts`. Do not replace its proving,
+- Krusty KMS source must stay pinned in `scripts/vendor-krusty.ts` — the revision, the rustc
+  release, and the build-path remapping that keeps two builds of that revision comparable. The
+  wasm-bindgen glue is digest-pinned in `scripts/check-krusty-adapter.ts`; the compiled
+  `krusty_kms_wasm_bg.wasm` is deliberately not, because `vendor:krusty` builds it on the
+  contributor's own toolchain and no digest literal survives a second machine. That gate's header
+  states exactly what the remaining pins prove, what byte provenance is still missing, and the
+  closure path (issue #235). Update any pin only together with the others, and only with the full
+  required gates.
+- The official Privacy SDK source is pinned in `scripts/vendor-privacy-sdk.ts`; the browser bundle
+  and its source map are digest-pinned in `scripts/check-privacy-sdk.ts`, which reads the revision
+  back out of the vendor script rather than keeping a second copy. Do not replace its proving,
   note-discovery, or sub-account cryptography with local implementations.
+- Every vendored checkout is verified through `scripts/vendor-pin-policy.ts`: pinned revision,
+  clean worktree, and a reviewed digest for every artifact that ships. Add a new vendored source
+  through those helpers, never with a private copy of the checks.
 - No fallback signing implementation. If Krusty KMS is unavailable, fail closed.
 - Encrypted stores must validate decrypted data before use.
 - Stored data access must go through permission checks. Do not read browser storage directly from UI

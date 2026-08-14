@@ -179,6 +179,7 @@ describe("WalletProvider", () => {
     await waitFor(() => expect(screen.getByTestId("address").textContent).toBe("0x1234"));
     expect(wallet.request).toHaveBeenCalledWith({ type: "wallet_requestAccounts" });
     expect(screen.getByTestId("chain").textContent).toBe("SN_MAIN");
+    await waitFor(() => expect(wallet.listeners.has("accountsChanged")).toBe(true));
 
     await act(async () => {
       wallet.listeners.get("accountsChanged")?.(["0xabcd"] as never);

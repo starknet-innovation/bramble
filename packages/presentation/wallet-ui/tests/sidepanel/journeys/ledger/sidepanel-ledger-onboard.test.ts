@@ -75,6 +75,7 @@ describe("enumerateLedgerPubKeys", () => {
 });
 
 const candidateAccount = (index: number): LedgerAccountRef => ({
+  accountContractType: "openzeppelin",
   address: `0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
   derivation: {
@@ -443,12 +444,12 @@ describe("Ledger onboard controller", () => {
 });
 
 describe("add-account chooser routing", () => {
-  test("showChooser renders the chooser and choose('ledger') opens connect", () => {
+  test("showChooser renders the chooser and a Ledger choice opens connect", () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
     expect(h.views.at(-1)).toEqual({ kind: "chooser", selected: null });
-    controller.choose("ledger");
+    controller.choose("ledger-openzeppelin");
     expect(h.views.at(-1)?.kind).toBe("connect");
   });
 
@@ -474,22 +475,22 @@ describe("add-account chooser routing", () => {
     expect(h.imports()).toBe(1);
   });
 
-  test("choose('hd') derives an HD account, dismisses, and refreshes", async () => {
+  test("an OpenZeppelin choice derives an HD account, dismisses, and refreshes", async () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
-    controller.choose("hd");
+    controller.choose("openzeppelin");
     await tick();
     expect(h.hdAdds()).toBe(1);
     expect(h.views.at(-1)).toBeNull();
     expect(h.refreshed()).toBe(1);
   });
 
-  test("choose('hd') surfaces the wallet error when the derive fails", async () => {
+  test("an OpenZeppelin choice surfaces the wallet error when derivation fails", async () => {
     const h = onboardHarness({ addHd: () => Promise.reject(new Error("wallet locked")) });
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
-    controller.choose("hd");
+    controller.choose("openzeppelin");
     await tick();
     const final = h.views.at(-1);
     expect(final?.kind === "error" && final.message).toBe("wallet locked");

@@ -10,7 +10,7 @@ import { createMemoryStore } from "@mc-wallet/store/kv";
 import { fakeKms } from "@mc-wallet/testkit/fake-kms";
 import { MAX_LEDGER_STRK20_VIEWING_KEYS } from "@mc-wallet/vault/account-secrets";
 import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { isVaultV4 } from "@mc-wallet/vault/schema";
+import { isVaultV7 } from "@mc-wallet/vault/schema";
 import { createWalletVaultService } from "@mc-wallet/vault/service";
 import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 
@@ -33,6 +33,7 @@ describe("createLedgerVault", () => {
     const { service, store } = makeService();
 
     const account = await service.createLedgerVault({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef123",
@@ -52,7 +53,7 @@ describe("createLedgerVault", () => {
     expect(vault.signingKeys).toEqual([]);
     expect(vault.accounts).toEqual([account]);
     expect(vault.activeAccountId).toBe(account.id);
-    expect(isVaultV4(vault)).toBe(true);
+    expect(isVaultV7(vault)).toBe(true);
     // The passphrase encrypts the registry; it is never persisted in the clear.
     expect(JSON.stringify(await store.get(vaultKey))).not.toContain(vaultPassphrase);
   });
@@ -60,9 +61,14 @@ describe("createLedgerVault", () => {
   test("refuses to create a Ledger vault over an existing seeded wallet", async () => {
     const { service } = makeService();
 
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount({
+      accountContractType: "openzeppelin",
+      mnemonic,
+      vaultPassphrase,
+    });
     await expect(
       service.createLedgerVault({
+        accountContractType: "openzeppelin",
         accountIndex: 0,
         networkId: "SN_MAIN",
         publicKeyX: "0xdef123",
@@ -75,6 +81,7 @@ describe("createLedgerVault", () => {
     const { service } = makeService();
 
     await service.createLedgerVault({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef123",
@@ -82,6 +89,7 @@ describe("createLedgerVault", () => {
     });
     await expect(
       service.createLedgerVault({
+        accountContractType: "openzeppelin",
         accountIndex: 1,
         networkId: "SN_MAIN",
         publicKeyX: "0xdef456",
@@ -94,6 +102,7 @@ describe("createLedgerVault", () => {
     const { service } = makeService();
 
     await service.createLedgerVault({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef123",
@@ -103,13 +112,18 @@ describe("createLedgerVault", () => {
     // Fail-closed edge: adding an HD account needs a phrase this vault does not
     // hold, and none is fabricated behind the user's back.
     await expect(
-      service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase }),
+      service.addDerivedAccount({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        vaultPassphrase,
+      }),
     ).rejects.toThrow("No recovery phrase stored for this wallet");
   });
 
   test("a Ledger account fails closed until its scoped STRK20 viewing key is retained", async () => {
     const { service } = makeService();
     const account = await service.createLedgerVault({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef123",
@@ -129,6 +143,7 @@ describe("createLedgerVault", () => {
   test("retains a Ledger viewing key only in encrypted account secrets", async () => {
     const { service, store } = makeService();
     const account = await service.createLedgerVault({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef123",
@@ -173,12 +188,14 @@ describe("createLedgerVault", () => {
   test("isolates retained keys by account, chain, and pool and supports forgetting", async () => {
     const { service } = makeService();
     const first = await service.createLedgerVault({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef123",
       vaultPassphrase,
     });
     const second = await service.addLedgerAccount({
+      accountContractType: "openzeppelin",
       accountIndex: 1,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef456",
@@ -231,6 +248,7 @@ describe("createLedgerVault", () => {
   test("replaces one scope atomically and rejects capacity overflow without eviction", async () => {
     const { service } = makeService();
     const account = await service.createLedgerVault({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef123",
@@ -269,6 +287,7 @@ describe("createLedgerVault", () => {
   test("rejects wrong-network, malformed, and software-account key retention", async () => {
     const { service } = makeService();
     const ledger = await service.createLedgerVault({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef123",
@@ -294,7 +313,11 @@ describe("createLedgerVault", () => {
     ).rejects.toThrow("Invalid Ledger STRK20 viewing key");
 
     const softwareService = makeService().service;
-    const software = await softwareService.createAccount({ mnemonic, vaultPassphrase });
+    const software = await softwareService.createAccount({
+      accountContractType: "openzeppelin",
+      mnemonic,
+      vaultPassphrase,
+    });
     await expect(
       softwareService.storeLedgerStrk20ViewingKey({
         accountId: software.id,
@@ -311,6 +334,7 @@ describe("ensureNetworkAccount for a keyless Ledger account", () => {
   test("derives a new keyless Ledger account on a fresh network with no signing key", async () => {
     const { service } = makeService();
     const mainnet = await service.createLedgerVault({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef123",
@@ -331,6 +355,7 @@ describe("ensureNetworkAccount for a keyless Ledger account", () => {
     // network's class hash, not mainnet's. The device derivation metadata (index,
     // application, path) is rebuilt deterministically for the same device slot.
     expect(sepolia).toEqual({
+      accountContractType: "openzeppelin",
       address: "0xdef123abcdef",
       classHash: "0xabcdef",
       derivation: {
@@ -349,6 +374,6 @@ describe("ensureNetworkAccount for a keyless Ledger account", () => {
     expect(vault.signingKeys).toEqual([]);
     expect(vault.accounts).toEqual([mainnet, sepolia]);
     expect(vault.activeAccountId).toBe(sepolia.id);
-    expect(isVaultV4(vault)).toBe(true);
+    expect(isVaultV7(vault)).toBe(true);
   });
 });

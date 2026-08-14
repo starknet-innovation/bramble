@@ -56,7 +56,7 @@ import type {
   WalletContextValue,
 } from "./wallet-context-types";
 
-export type { ContractDeclaration, DeclarationResult, WalletContextValue };
+export type { WalletContextValue };
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
@@ -160,27 +160,27 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
 
   const clearError = useCallback(() => setError(null), []);
 
-  const executeWalletRequest = useCallback(async (
-    pending: PendingWalletRequest,
-    preview: WalletRequestPreview,
-  ): Promise<void> => {
-    try {
-      const result = await pending.perform();
-      const transactionHash = walletTransactionHash(result);
-      if (transactionHash === null) {
-        throw new Error("Wallet returned an invalid transaction hash.");
+  const executeWalletRequest = useCallback(
+    async (pending: PendingWalletRequest, preview: WalletRequestPreview): Promise<void> => {
+      try {
+        const result = await pending.perform();
+        const transactionHash = walletTransactionHash(result);
+        if (transactionHash === null) {
+          throw new Error("Wallet returned an invalid transaction hash.");
+        }
+        pendingRequestRef.current = null;
+        setRequestView({ phase: "submitted", preview, transactionHash });
+        pending.resolve(result);
+      } catch (cause) {
+        setRequestView({
+          phase: "failed",
+          preview,
+          message: walletRequestError(cause),
+        });
       }
-      pendingRequestRef.current = null;
-      setRequestView({ phase: "submitted", preview, transactionHash });
-      pending.resolve(result);
-    } catch (cause) {
-      setRequestView({
-        phase: "failed",
-        preview,
-        message: walletRequestError(cause),
-      });
-    }
-  }, []);
+    },
+    [],
+  );
 
   const performWalletRequest = useCallback(async (): Promise<void> => {
     const pending = pendingRequestRef.current;

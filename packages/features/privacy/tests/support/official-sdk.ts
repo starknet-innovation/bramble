@@ -8,8 +8,10 @@ import type { Strk20AccountContext } from "@mc-wallet/privacy/service";
 import type { RpcProvider } from "starknet";
 
 export const STRK20_POOL_ADDRESS = "0x123";
+export const STRK20_REVIEWED_FEE = { overallFee: "1000", unit: "FRI" } as const;
 export const STRK20_SDK_TOKEN = "0x456";
 export const STRK20_SDK_ACCOUNT = {
+  accountContractType: "openzeppelin" as const,
   address: "0xabc",
   classHash: "0xdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },
@@ -27,6 +29,7 @@ export const STRK20_SDK_CONTEXT: Strk20AccountContext = {
     proverUrl: "https://prover.example",
     subaccountAnonymizerAddress: "0x789",
   },
+  isAuthorized: () => true,
   rpcUrls: ["https://rpc.example"],
   signHash: async () => ({ publicKey: "0x1", r: "0x2", s: "0x3" }),
   viewingKey: async () => "0x55",

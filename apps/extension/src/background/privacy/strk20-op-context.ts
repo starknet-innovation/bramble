@@ -5,13 +5,17 @@
  * missing network configuration, Ledger accounts, and untracked tokens.
  */
 
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
 import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { withTokenId } from "@mc-wallet/wallet-model/preferences";
+import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+import type { Call } from "starknet";
+import type { WalletOpsDeps } from "../accounts/wallet-ops";
+import { type ActiveAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import { strk20AccountContext } from "./strk20-account-context";
 import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations";
-import type { WalletOpsDeps } from "../accounts/wallet-ops";
 
 /**
  * Extension-owned privacy dependencies, including the one-time preparation
@@ -62,14 +66,17 @@ const strkTokenFor = (context: ActivePrivacyContext): TokenConfig =>
     (token) =>
       token.networkId === context.accountContext.account.networkId &&
       sameFelt(token.address, STRK_TOKEN_ADDRESS),
-  ) ?? {
+  ) ??
+  // Through the shared id builder, never a local interpolation of the same
+  // three fields: a fallback whose id drifted from a stored token's would be
+  // compared against it and silently miss.
+  withTokenId({
     address: STRK_TOKEN_ADDRESS,
     decimals: 18,
-    id: `${context.accountContext.account.networkId}:STRK:${STRK_TOKEN_ADDRESS}`,
     name: "Starknet Token",
     networkId: context.accountContext.account.networkId,
     symbol: "STRK",
-  };
+  });
 
 /**
  * Re-checks every public token the pool can pull immediately before a review
@@ -114,15 +121,50 @@ export const assertPublicPoolSpendAffordable = async (
 };
 
 /**
+ * Estimates the exact frozen public privacy batch and refuses undeployed
+ * accounts, whose separate deployment fee has not been reviewed on this card.
+ */
+export const estimatePublicStrk20Fee = async (
+  deps: Pick<Strk20WalletOpsDeps, "runtimeRpc">,
+  context: ActivePrivacyContext,
+  calls: readonly Call[],
+  proof: Strk20Proof,
+): Promise<FeeEstimate> => {
+  if (
+    !(await deps.runtimeRpc.getDeploymentStatus({
+      accountAddress: context.accountContext.account.address,
+      rpcUrls: context.accountContext.rpcUrls,
+    }))
+  ) {
+    throw new Error("Deploy this account before using public privacy transactions");
+  }
+  return deps.runtimeRpc.estimateInvokeFee({
+    account: context.accountContext.account,
+    calls,
+    proof,
+    rpcUrls: context.accountContext.rpcUrls,
+    signHash: context.accountContext.signHash,
+  });
+};
+
+/**
  * Builds the protected account context for one privacy operation, selecting
  * `tokenId` or the network's first tracked token. Returns a displayable error
  * instead of throwing so handlers stay single-shape.
+ *
+ * The account context is an argument rather than something resolved here
+ * because resolving it is what decides whether the unlock window is renewed.
+ * The disclosure read the privacy screen polls passes
+ * `observedAccountContext`; the preparation and execution routes the user just
+ * triggered pass `activeAccountContext`. Keeping that choice at the
+ * call site is what stops one shared builder from silently renewing the
+ * inactivity window for ambient traffic (MCW-V09-105).
  */
 export const resolvePrivacyContext = async (
   deps: Strk20WalletOpsDeps,
-  tokenId?: string,
+  input: { readonly active: ActiveAccountContext; readonly tokenId?: string },
 ): Promise<ActivePrivacyContext | { readonly error: string }> => {
-  const active = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  const { active, tokenId } = input;
   if (active.error !== undefined) {
     return { error: active.error };
   }
@@ -146,6 +188,10 @@ export const resolvePrivacyContext = async (
     accountContext: strk20AccountContext(
       {
         ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+        // The extension-owned privacy flows bind their vault signer to the same
+        // unlock every public path uses, so an explicit lock revokes a private
+        // transfer in flight instead of letting it complete.
+        session: deps.session,
         wallet: deps.wallet,
       },
       {

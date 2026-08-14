@@ -1,157 +1,179 @@
 /**
- * Shared multisig message-test harness: a full wallet/RPC stub wired through
- * createMessageHandler with controllable multisig chain reads, so lifecycle
- * tests do not each re-declare ~140 lines of stubbing.
+ * Shared deterministic harness for privileged Argent multisig messages.
  */
-
-import type { MultisigProposalStatus } from "@mc-wallet/multisig/chain";
-import { MULTISIG_CLASS_HASH } from "@mc-wallet/multisig/deploy";
-import type { MultisigProposalDiscovery } from "@mc-wallet/multisig/discovery";
 import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
-import type { ActivityLog, ActivityStatus } from "@mc-wallet/transactions/activity";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import {
+  ARGENT_ACCOUNT_CONTRACT,
+  ARGENT_MULTISIG_CONTRACT,
+  argentAccountAddress,
+  argentMultisigAddress,
+  argentSignerGuid,
+} from "@mc-wallet/starknet/account-contracts";
+import { prepareArgentMultisigInvokeV3WithProvider } from "@mc-wallet/starknet/multisig-invoke";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import type { Vault } from "@mc-wallet/vault/schema";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { ec, RpcProvider } from "starknet";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 
-/**
- * Address of the multisig contract the harness watches.
- */
-export const HARNESS_MULTISIG = "0x111111111111111111111111111111111111111111111111111111111111111";
+const HARNESS_PRIVATE_A = "0x123";
+const HARNESS_PRIVATE_B = "0x456";
+const HARNESS_PUBLIC_A = `0x${ec.starkCurve.getStarkKey(HARNESS_PRIVATE_A).replace(/^0x/, "")}`;
+const HARNESS_PUBLIC_B = `0x${ec.starkCurve.getStarkKey(HARNESS_PRIVATE_B).replace(/^0x/, "")}`;
+export const HARNESS_KEYS = [HARNESS_PUBLIC_A, HARNESS_PUBLIC_B].sort((left, right) =>
+  BigInt(argentSignerGuid(left)) < BigInt(argentSignerGuid(right)) ? -1 : 1,
+);
+const HARNESS_CONFIG = { signerPublicKeys: HARNESS_KEYS, threshold: 2 } as const;
+const HARNESS_MULTISIG = argentMultisigAddress(HARNESS_CONFIG, "0x0");
+export const HARNESS_MULTISIG_ID = `SN_MAIN:${HARNESS_MULTISIG}`;
+export const HARNESS_TARGET = "0x222";
+const HARNESS_SUBMIT_HASH = "0x7cd";
 
-/**
- * Target contract used by harness proposals.
- */
-export const HARNESS_TARGET = "0x222222222222222222222222222222222222222222222222222222222222222";
-
-/**
- * Second signer alongside the active account.
- */
-export const HARNESS_OTHER_SIGNER =
-  "0x444444444444444444444444444444444444444444444444444444444444444";
-
-/**
- * Full-length transaction id so composed proposal ids exercise their real
- * ~139-character length (a short stub once masked an id-length cap).
- */
-export const HARNESS_TX_ID = `0x7${"a".repeat(62)}`;
-
-/**
- * Transaction hash returned by submitted invoke calls.
- */
-export const HARNESS_SUBMIT_HASH = "0x7cd";
-
-/**
- * Active harness account.
- */
-export const harnessAccount: AccountRef = {
-  address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  networkId: "SN_MAIN",
-  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+const accountFor = (publicKeyX: string): AccountRef => {
+  const address = argentAccountAddress(publicKeyX);
+  return {
+    accountContractType: "argent",
+    address,
+    classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+    derivation: { kind: "imported-raw-key" },
+    deploymentSalt: publicKeyX,
+    id: `SN_MAIN:${address}`,
+    networkId: "SN_MAIN",
+    publicKeyX,
+  };
 };
 
-/**
- * Extension-page sender accepted for privileged messages.
- */
+export const harnessAccountA = accountFor(HARNESS_PUBLIC_A);
+export const harnessAccountB = accountFor(HARNESS_PUBLIC_B);
+
 export const harnessExtensionSender: RuntimeSender = {
   id: "extension-id",
   url: "chrome-extension://extension-id/sidepanel.html",
 };
 
-/**
- * Content-script sender that must be rejected for privileged messages.
- */
 export const harnessContentSender: RuntimeSender = {
   id: "extension-id",
   url: "https://dapp.example/app",
 };
 
+const provider = new RpcProvider({ nodeUrl: "http://127.0.0.1:5050/rpc" });
+provider.getChainId = async () => "0x534e5f4d41494e";
+provider.getNonceForAddress = async () => "0x7";
+provider.getEstimateFeeBulk = (async () => [
+  {
+    data_gas_consumed: 0n,
+    data_gas_price: 0n,
+    gas_consumed: 0n,
+    gas_price: 0n,
+    overall_fee: 44n,
+    resourceBounds: {
+      l1_data_gas: { max_amount: 1n, max_price_per_unit: 2n },
+      l1_gas: { max_amount: 3n, max_price_per_unit: 4n },
+      l2_gas: { max_amount: 5n, max_price_per_unit: 6n },
+    },
+    unit: "FRI" as const,
+  },
+]) as RpcProvider["getEstimateFeeBulk"];
+
 /**
- * Harness knobs. `proposalStatus` and `deploymentStatus` are consulted on
- * every chain read so tests can change the reported state (or start
- * throwing) between calls; `loadClass` supplies the bundled Sierra artifact
- * for the declare flow.
+ * Harness controls for fresh-chain and response-loss branches.
  */
 export type MultisigHarnessOptions = {
-  readonly accounts?: readonly AccountRef[];
-  readonly activeAccountId?: string;
-  readonly activity?: ActivityLog;
-  readonly classDeclared?: boolean;
-  readonly contractAt?: boolean;
-  readonly deploymentStatus?: () => boolean;
-  readonly getTokenBalances?: (input: {
-    readonly accountAddress: string;
-  }) => Promise<readonly never[]>;
-  readonly loadClass?: () => Promise<unknown>;
-  readonly multisigStore?: MultisigStore;
-  readonly multisigConfig?: () => {
-    readonly quorum: number;
-    readonly signers: readonly string[];
+  readonly beforeAccountDeployment?: () => Promise<void> | void;
+  readonly beforeSubmitPrepared?: () => Promise<void> | void;
+  readonly failPreferencesAfterSubmit?: boolean;
+  readonly getConfig?: () => {
+    readonly classHash: string;
+    readonly signerGuids: readonly string[];
+    readonly threshold: number;
   };
-  readonly proposalDiscovery?: () => MultisigProposalDiscovery;
-  readonly proposalStatus?: (signer: string) => MultisigProposalStatus;
-  readonly signers?: readonly string[];
-  readonly submitInvoke?: (
-    calls: readonly unknown[],
-  ) => Promise<{ readonly transactionHash: string }>;
-  readonly transactionStatuses?: () => Readonly<Record<string, ActivityStatus>>;
+  readonly multisigStore?: MultisigStore;
+  readonly getNonce?: () => string;
+  readonly getTransactionStatuses?: (
+    transactionHash: string,
+  ) => Promise<
+    Readonly<Record<string, { finalizedOnL1: boolean; found: boolean; status: "pending" }>>
+  >;
+  readonly nonce?: string;
+  readonly onSigned?: () => void;
+  readonly submitAccountDeployment?: () => Promise<string>;
+  readonly submitPrepared?: (transactionHash: string) => Promise<string>;
 };
 
 /**
- * Builds a message handler with an unlocked session, an in-memory multisig
- * store, and capture arrays for submitted invokes and declares.
+ * Creates a fully unlocked router with real signature and prepared-hash math.
  */
-export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
+export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) => {
+  const accounts = [harnessAccountA, harnessAccountB];
+  const privateKeys = new Map([
+    [harnessAccountA.id, HARNESS_PRIVATE_A],
+    [harnessAccountB.id, HARNESS_PRIVATE_B],
+  ]);
+  const multisigStore = options.multisigStore ?? memoryMultisigStore();
+  const storedPreferences = createPreferencesStore({ store: createMemoryStore() });
+  const activity = memoryActivityLog();
+  const allowanceStore = memoryAllowanceStore();
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
-  const multisigStore = options.multisigStore ?? memoryMultisigStore();
-  const invokeCalls: (readonly unknown[])[] = [];
-  const estimatedCalls: (readonly unknown[])[] = [];
-  const submittedAccounts: string[] = [];
-  const balanceReads: string[] = [];
-  const declared: unknown[] = [];
-  const accounts = options.accounts ?? [harnessAccount];
-  let activeAccountId = options.activeAccountId ?? accounts[0]?.id ?? harnessAccount.id;
-  const activeAccount = (): AccountRef =>
-    accounts.find((account) => account.id === activeAccountId) ?? harnessAccount;
-  const walletStub = {
+  let submitCount = 0;
+  let deploymentSubmitCount = 0;
+  let submitted = false;
+  const preferencesStore = {
+    ...storedPreferences,
+    async read() {
+      if (options.failPreferencesAfterSubmit && submitted) {
+        throw new Error("preferences unavailable after broadcast");
+      }
+      return storedPreferences.read();
+    },
+  };
+  let activeAccountId = harnessAccountA.id;
+  const wallet = {
     async addDerivedAccount() {
-      return activeAccount();
+      return harnessAccountA;
     },
     async createAccount() {
-      return activeAccount();
+      return harnessAccountA;
     },
     async ensureNetworkAccount() {
-      return activeAccount();
-    },
-    async importRawKeyAccount() {
-      return activeAccount();
-    },
-    async getGrantedAccounts() {
-      return accounts;
+      return harnessAccountA;
     },
     async generateMnemonic() {
       return "unused";
     },
+    async getGrantedAccounts() {
+      return accounts;
+    },
     async grantOrigin() {
       return accounts;
+    },
+    async importRawKeyAccount() {
+      return harnessAccountA;
     },
     async readVault() {
       return { accounts, activeAccountId } as unknown as Vault;
     },
     async setActiveAccount(input: { readonly accountId: string }) {
-      const selected = accounts.find((account) => account.id === input.accountId);
-      if (!selected) throw new Error("account not found");
-      activeAccountId = selected.id;
-      return selected;
+      activeAccountId = input.accountId;
+      return accounts.find((account) => account.id === input.accountId) ?? harnessAccountA;
     },
-    async signHash() {
-      return { publicKey: activeAccount().publicKeyX, r: "0x1", s: "0x2" };
+    async signHash(input: { readonly accountId?: string; readonly messageHash: string }) {
+      const accountId = input.accountId ?? activeAccountId;
+      const privateKey = privateKeys.get(accountId);
+      const account = accounts.find((candidate) => candidate.id === accountId);
+      if (!privateKey || !account) throw new Error("unknown signer");
+      const signed = ec.starkCurve.sign(input.messageHash, privateKey);
+      options.onSigned?.();
+      return {
+        publicKey: account.publicKeyX,
+        r: `0x${signed.r.toString(16)}`,
+        s: `0x${signed.s.toString(16)}`,
+      };
     },
     async status() {
       return {
@@ -163,109 +185,107 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
       };
     },
   };
-  const handler = createMessageHandler(walletStub, "extension-id", {
-    ...(options.activity ? { activity: options.activity } : {}),
-    ...(options.loadClass ? { loadMultisigClass: options.loadClass } : {}),
+  const handler = createMessageHandler(wallet, "extension-id", {
+    activity,
+    allowanceStore,
     multisigStore,
-    // The default in-memory activity log stamps entries at epoch 0, so the
-    // reconciliation clock must agree or every harness transaction reads as
-    // long past its observation window.
-    now: () => 0,
+    preferencesStore,
     runtimeRpc: {
-      async estimateInvokeFee(input) {
-        estimatedCalls.push(input.calls);
-        return { overallFee: "1", unit: "FRI" };
+      async estimateAccountDeploymentFee() {
+        return { overallFee: "44", unit: "FRI" };
+      },
+      async estimateInvokeFee() {
+        return { overallFee: "44", unit: "FRI" };
       },
       async getDeploymentStatus() {
-        return options.deploymentStatus?.() ?? options.contractAt ?? false;
+        return true;
       },
       async getNftOwner() {
-        return harnessAccount.address;
+        return harnessAccountA.address;
       },
-      async getTokenBalances(input) {
-        balanceReads.push(input.accountAddress);
-        return options.getTokenBalances?.(input) ?? [];
+      async getTokenBalances() {
+        return [];
       },
       async getTokenMetadata() {
         return { decimals: 18, name: "Ether", symbol: "ETH" };
       },
-      async getTransactionStatuses() {
-        return Object.fromEntries(
-          Object.entries(options.transactionStatuses?.() ?? {}).map(([hash, status]) => [
-            hash,
-            { finalizedOnL1: false, found: true, status },
-          ]),
-        );
+      async getTransactionStatuses(input) {
+        const transactionHash = input.hashes[0] ?? "";
+        return options.getTransactionStatuses?.(transactionHash) ?? {};
       },
       multisig: {
-        async computeTransactionId() {
-          return HARNESS_TX_ID;
-        },
-        ...(options.proposalDiscovery
-          ? {
-              async discoverProposalIds() {
-                return options.proposalDiscovery?.() ?? { complete: true, ids: [] };
-              },
-            }
-          : {}),
         async getConfig() {
           return (
-            options.multisigConfig?.() ?? {
-              quorum: 2,
-              signers: options.signers ?? [harnessAccount.address, HARNESS_OTHER_SIGNER],
+            options.getConfig?.() ?? {
+              classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+              signerGuids: HARNESS_KEYS.map(argentSignerGuid),
+              threshold: 2,
             }
           );
         },
-        async getProposalStatus(input: { readonly signer: string; readonly txId: string }) {
-          if (options.proposalStatus) {
-            return options.proposalStatus(input.signer);
-          }
-          // Default chain behavior: a signer counts as having confirmed once
-          // this harness recorded a confirm_transaction invoke for the id, so
-          // confirm-then-revoke sequences pass their status gates like the
-          // real component would report.
-          const confirmedBySigner = invokeCalls.flat().some((entry) => {
-            const call = entry as { calldata?: readonly string[]; entrypoint?: string };
-            return call.entrypoint === "confirm_transaction" && call.calldata?.[0] === input.txId;
-          });
-          return { confirmations: 1, confirmedBySigner, state: "pending" as const };
+        async getNonce() {
+          return options.getNonce?.() ?? options.nonce ?? "0x7";
         },
         async isClassDeclared() {
-          return options.classDeclared ?? true;
+          return true;
+        },
+        async prepareInvoke(input) {
+          provider.getNonceForAddress = async () => options.getNonce?.() ?? options.nonce ?? "0x7";
+          return prepareArgentMultisigInvokeV3WithProvider(
+            provider,
+            input.account,
+            input.calls,
+            input.config,
+          );
+        },
+        async submitPreparedInvoke(input) {
+          await options.beforeSubmitPrepared?.();
+          if (!input.isAuthorized?.()) throw new Error("wallet locked");
+          submitCount += 1;
+          submitted = true;
+          return (
+            options.submitPrepared?.(input.prepared.transactionHash) ??
+            input.prepared.transactionHash
+          );
         },
       },
-      async submitDeclareTransaction(input) {
-        declared.push(input);
-        return { classHash: MULTISIG_CLASS_HASH, transactionHash: "0xdec" };
-      },
-      async submitAccountDeployment() {
-        return { transactionHash: "0x7de" };
-      },
-      async submitErc20Transfer() {
+      async submitAccountDeployment(input) {
+        await options.beforeAccountDeployment?.();
+        if (!input.isAuthorized?.()) throw new Error("wallet locked");
+        deploymentSubmitCount += 1;
         return {
-          call: { calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" },
-          transactionHash: "0x7ab",
+          transactionHash: (await options.submitAccountDeployment?.()) ?? HARNESS_SUBMIT_HASH,
         };
       },
-      async submitInvokeTransaction(input) {
-        invokeCalls.push(input.calls);
-        submittedAccounts.push(input.account.id);
-        if (options.submitInvoke) {
-          const result = await options.submitInvoke(input.calls);
-          return { calls: input.calls, transactionHash: result.transactionHash };
-        }
-        return { calls: input.calls, transactionHash: HARNESS_SUBMIT_HASH };
+      async submitDeclareTransaction() {
+        throw new Error("declare is not part of Argent multisig");
+      },
+      async submitErc20Transfer() {
+        throw new Error("unused");
+      },
+      async submitInvokeTransaction() {
+        throw new Error("old invoke path must not be used");
       },
     },
     session,
   });
+  await multisigStore.upsertMultisig({
+    accountContractType: "argent-multisig",
+    address: HARNESS_MULTISIG,
+    classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+    currentConfig: { signerPublicKeys: HARNESS_KEYS, threshold: 2 },
+    deployment: { salt: "0x0", signerPublicKeys: HARNESS_KEYS, threshold: 2 },
+    id: HARNESS_MULTISIG_ID,
+    networkId: "SN_MAIN",
+  });
   return {
-    balanceReads,
-    declared,
-    estimatedCalls,
+    activeAccountId: () => activeAccountId,
+    deploymentSubmitCount: () => deploymentSubmitCount,
+    activity,
+    allowanceStore,
     handler,
-    invokeCalls,
     multisigStore,
-    submittedAccounts,
+    session,
+    submitCount: () => submitCount,
   };
 };

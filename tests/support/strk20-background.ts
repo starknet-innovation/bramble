@@ -4,7 +4,11 @@
  */
 import { expect } from "bun:test";
 import { WalletError } from "@mc-wallet/core/errors";
-import { STRK20_NOT_REGISTERED, type Strk20Service } from "@mc-wallet/privacy/service";
+import {
+  STRK20_NOT_REGISTERED,
+  type Strk20PreparedSubmissionInput,
+  type Strk20Service,
+} from "@mc-wallet/privacy/service";
 import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { InvokeInput } from "@mc-wallet/starknet/rpc";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
@@ -18,7 +22,7 @@ import {
   extensionSender,
   vaultPassphrase,
 } from "./background-wallet-stub";
-import { flushHeld, latestApprovalId, waitForPendingApprovals } from "./held";
+import { flushHeld, latestApprovalId, reviewedApprovalFee, waitForPendingApprovals } from "./held";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
 
 export const STRK20_TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -47,6 +51,13 @@ export type Strk20HarnessOptions = {
   /** Wall clock used to age the pending-registration window. */
   readonly now?: () => number;
   readonly preferences?: WalletPreferences;
+  /**
+   * Re-read on every access, for suites that change the trusted set (a contact
+   * saved between consent and submission) while a request is in flight. Takes
+   * precedence over `preferences`.
+   */
+  readonly preferencesRead?: () => WalletPreferences;
+  readonly preparedSubmissions?: Strk20PreparedSubmissionInput[];
   readonly proveCalls?: { value: number };
   readonly publicBalance?: string;
   readonly registerCalls?: { value: number };
@@ -56,31 +67,54 @@ export type Strk20HarnessOptions = {
 };
 
 /**
- * Builds the real background handler around an instrumented STRK20 service.
+ * Builds the instrumented STRK20 service the harness runs against: a registered
+ * account, a fixed private balance, and a prepared call-and-proof pair, with
+ * optional counters so a suite can assert how often the pool was touched.
+ *
+ * Exported because the key-boundary scan wires the same service into its own
+ * handler — a second hand-written double would let the two drift into
+ * disagreeing about what a live privacy response looks like.
  */
-export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
-  const session = createUnlockSession();
-  session.unlock(vaultPassphrase);
-  const defaults = defaultWalletPreferences();
-  const mainnetStrk20 = defaults.strk20Networks?.SN_MAIN;
-  if (!mainnetStrk20) {
-    throw new Error("missing default STRK20 test config");
-  }
-  const preferences = options.preferences ?? {
-    ...defaults,
-    activeNetworkId: "SN_SEPOLIA" as const,
-    strk20Networks: {
-      ...defaults.strk20Networks,
-      SN_SEPOLIA: mainnetStrk20,
-    },
-  };
+export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Service => {
   const { balanceCalls, proveCalls, registerCalls, subaccountCalls } = options;
-  const strk20: Strk20Service = options.strk20 ?? {
+  return {
     async prepare() {
       if (proveCalls) {
         proveCalls.value += 1;
       }
       return STRK20_CALL_AND_PROOF;
+    },
+    async prepareAccountActions() {
+      if (proveCalls) {
+        proveCalls.value += 1;
+      }
+      return {
+        allowanceGrants: [],
+        calls: [
+          {
+            calldata: [...STRK20_CALL_AND_PROOF.call.calldata],
+            contractAddress: STRK20_TOKEN,
+            entrypoint: "apply_actions",
+          },
+        ],
+        proof: STRK20_CALL_AND_PROOF.proof,
+      };
+    },
+    async prepareRegistration() {
+      if (proveCalls) {
+        proveCalls.value += 1;
+      }
+      return {
+        allowanceGrants: [],
+        calls: [
+          {
+            calldata: [...STRK20_CALL_AND_PROOF.call.calldata],
+            contractAddress: STRK20_TOKEN,
+            entrypoint: "apply_actions",
+          },
+        ],
+        proof: STRK20_CALL_AND_PROOF.proof,
+      };
     },
     async privateBalances({ tokens }) {
       if (balanceCalls) {
@@ -126,17 +160,43 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       }
       return { transactionHash: "0x123" };
     },
-    async submitPrepared() {
+    async submitPrepared(input) {
+      options.preparedSubmissions?.push(input);
+      if (registerCalls) {
+        registerCalls.value += 1;
+      }
       return { transactionHash: "0x123" };
     },
   };
+};
+
+/**
+ * Builds the real background handler around an instrumented STRK20 service.
+ */
+export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
+  const session = createUnlockSession();
+  session.unlock(vaultPassphrase);
+  const defaults = defaultWalletPreferences();
+  const mainnetStrk20 = defaults.strk20Networks?.SN_MAIN;
+  if (!mainnetStrk20) {
+    throw new Error("missing default STRK20 test config");
+  }
+  const preferences = options.preferences ?? {
+    ...defaults,
+    activeNetworkId: "SN_SEPOLIA" as const,
+    strk20Networks: {
+      ...defaults.strk20Networks,
+      SN_SEPOLIA: mainnetStrk20,
+    },
+  };
+  const strk20: Strk20Service = options.strk20 ?? makeStrk20Service(options);
   return createMessageHandler(createWallet(), "extension-id", {
     ...(options.activity ? { activity: options.activity } : {}),
     ...(options.now ? { now: options.now } : {}),
     preferencesStore: {
       ...unavailablePreferencesStore,
       async read() {
-        return preferences;
+        return options.preferencesRead?.() ?? preferences;
       },
     },
     runtimeRpc: makeRuntimeRpc({
@@ -185,5 +245,20 @@ export const approveHeldStrk20 = async (
   beforeApprove?.();
   const id = await latestApprovalId(handler, STRK20_EXTENSION_SENDER);
   await handler({ id, type: "wallet.approveOrigin" }, STRK20_EXTENSION_SENDER);
+  if (kind === "strk20-register") {
+    const next = await waitForPendingApprovals<{ readonly id: string; readonly kind?: string }>(
+      handler,
+      STRK20_EXTENSION_SENDER,
+    );
+    const invoke = next.find((approval) => approval.kind === "invoke");
+    if (!invoke) {
+      throw new Error("registration fee approval missing");
+    }
+    const reviewedFee = await reviewedApprovalFee(handler, STRK20_EXTENSION_SENDER, invoke.id);
+    await handler(
+      { id: invoke.id, reviewedFee, type: "wallet.approveOrigin" },
+      STRK20_EXTENSION_SENDER,
+    );
+  }
   return held;
 };

@@ -5,14 +5,19 @@
  * vault signer is ever consulted.
  */
 import { describe, expect, test } from "bun:test";
-import { krustyAccount } from "@mc-wallet/starknet/provider";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import {
+  ARGENT_ACCOUNT_CONTRACT,
+  ARGENT_MULTISIG_CONTRACT,
+} from "@mc-wallet/starknet/account-contracts";
+import { argentQueryAccount, krustyAccount } from "@mc-wallet/starknet/provider";
+import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
-import { RpcProvider, type Signature } from "starknet";
+import { EDataAvailabilityMode, ETransactionVersion3, RpcProvider, type Signature } from "starknet";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 
-const account: AccountRef = {
+const account: DerivedAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -73,5 +78,151 @@ describe("krustyAccount signer", () => {
 
     await expect(signer.signRaw(overPrime)).rejects.toThrow("Invalid transaction hash");
     expect(signed).toEqual([]);
+  });
+
+  test("emits the standard Argent Account signature shape", async () => {
+    const argentAccount = {
+      ...account,
+      accountContractType: "argent",
+      classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+      deploymentSalt: PUBLIC_KEY,
+    } as const;
+    const { signHash } = recordingSignHash();
+    const signer = krustyAccount(provider, argentAccount, signHash).signer as unknown as RawSigner;
+
+    await expect(signer.signRaw("0xabc")).resolves.toEqual(["1", "0", PUBLIC_KEY, "0x1", "0x2"]);
+  });
+
+  test("rejects an ordinary Argent discriminator with another class", () => {
+    expect(() =>
+      krustyAccount(
+        provider,
+        {
+          ...account,
+          accountContractType: "argent",
+          deploymentSalt: PUBLIC_KEY,
+        },
+        recordingSignHash().signHash,
+      ),
+    ).toThrow("class hash does not match");
+  });
+
+  test("emits exact GUID-sorted Argent multisig aggregates", async () => {
+    const multisig = {
+      accountContractType: "argent-multisig" as const,
+      address: account.address,
+      classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+      networkId: account.networkId,
+    };
+    const config = { signerPublicKeys: ["0x456", "0x123"], threshold: 2 } as const;
+    const signer = krustyAccount(
+      provider,
+      multisig,
+      async () => [
+        { publicKey: "0x456", r: "0x3", s: "0x4" },
+        { publicKey: "0x123", r: "0x1", s: "0x2" },
+      ],
+      { multisig: config },
+    ).signer as unknown as RawSigner;
+
+    await expect(signer.signRaw("0xabc")).resolves.toEqual([
+      "2",
+      "0",
+      "0x123",
+      "0x1",
+      "0x2",
+      "0",
+      "0x456",
+      "0x3",
+      "0x4",
+    ]);
+  });
+
+  test("rejects an Argent multisig discriminator with another class", () => {
+    expect(() =>
+      krustyAccount(
+        provider,
+        {
+          accountContractType: "argent-multisig",
+          address: account.address,
+          classHash: account.classHash,
+          networkId: account.networkId,
+        },
+        async () => ({ publicKey: "0x123", r: "0x1", s: "0x2" }),
+        { multisig: { signerPublicKeys: ["0x123"], threshold: 1 } },
+      ),
+    ).toThrow("class hash does not match");
+  });
+
+  test("builds threshold-shaped query signatures without calling Krusty", async () => {
+    const multisig = {
+      accountContractType: "argent-multisig" as const,
+      address: account.address,
+      classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+      networkId: account.networkId,
+    };
+    const signer = argentQueryAccount(provider, multisig, {
+      multisig: { signerPublicKeys: ["0x456", "0x123"], threshold: 2 },
+    }).signer as unknown as RawSigner;
+
+    await expect(signer.signRaw("0xabc")).resolves.toEqual([
+      "2",
+      "0",
+      "0x123",
+      "0x1",
+      "0x1",
+      "0",
+      "0x456",
+      "0x1",
+      "0x1",
+    ]);
+  });
+
+  test("builds a standard ordinary Argent query signature without Krusty", async () => {
+    const signer = argentQueryAccount(provider, {
+      ...account,
+      accountContractType: "argent",
+      classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+      deploymentSalt: PUBLIC_KEY,
+    }).signer as unknown as RawSigner;
+
+    await expect(signer.signRaw("0xabc")).resolves.toEqual(["1", "0", PUBLIC_KEY, "0x1", "0x1"]);
+  });
+
+  test("uses exactly one configured member signature for multisig deployment", async () => {
+    const multisig = {
+      accountContractType: "argent-multisig" as const,
+      address: account.address,
+      classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+      networkId: account.networkId,
+    };
+    const starknetAccount = krustyAccount(
+      provider,
+      multisig,
+      async () => ({ publicKey: "0x456", r: "0x3", s: "0x4" }),
+      { multisig: { signerPublicKeys: ["0x456", "0x123"], threshold: 2 } },
+    );
+
+    await expect(
+      starknetAccount.signer.signDeployAccountTransaction({
+        accountDeploymentData: [],
+        addressSalt: "0x0",
+        chainId: "0x534e5f4d41494e",
+        classHash: account.classHash,
+        constructorCalldata: [],
+        contractAddress: account.address,
+        feeDataAvailabilityMode: EDataAvailabilityMode.L1,
+        nonce: "0x0",
+        nonceDataAvailabilityMode: EDataAvailabilityMode.L1,
+        paymasterData: [],
+        resourceBounds: {
+          l1_data_gas: { max_amount: 1n, max_price_per_unit: 1n },
+          l1_gas: { max_amount: 1n, max_price_per_unit: 1n },
+          l2_gas: { max_amount: 1n, max_price_per_unit: 1n },
+        },
+        tip: "0x0",
+        version: ETransactionVersion3.V3,
+      }),
+    ).resolves.toEqual(["1", "0", "0x456", "0x3", "0x4"]);
   });
 });

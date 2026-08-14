@@ -1,19 +1,12 @@
-/**
- * RPC-heavy wallet operations dispatched from the background message handler:
- * balances, deployment, transfer review and submission, and the activity feed.
- */
+/** RPC-backed wallet operations dispatched from the background message handler. */
 
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { MultisigStore } from "@mc-wallet/multisig/repository";
+import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import {
-  STARKNET_NETWORKS,
-  STRK_TOKEN_ADDRESS,
-  type StarknetNetworkId,
-  sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "@mc-wallet/starknet/rpc";
-import { mergeActivity } from "@mc-wallet/transactions/tx-history";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
+  buildErc20TransferCall,
+  type FeeEstimate,
+  parseTokenAmount,
+} from "@mc-wallet/starknet/rpc";
 import {
   type ActivityEntry,
   type ActivityLog,
@@ -21,13 +14,26 @@ import {
   systemClock,
 } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { MultisigStore } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
+import { mergeActivity } from "@mc-wallet/transactions/tx-history";
+import {
+  refuseOnPoisonedRecipient,
+  verificationContext,
+  verifyCalls,
+} from "@mc-wallet/transactions/verify";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import {
+  STARKNET_NETWORKS,
+  STRK_TOKEN_ADDRESS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
 import { accountHashSigner } from "../ledger/account-hash-signer";
-import { readStrkBalance } from "../transactions/fee-guard";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { currentArgentSignerRecords } from "../multisig/multisig-membership";
 import {
   readActivityInput,
+  readFeeReviewInput,
   readReviewTransferInput,
   readTransferInput,
   readTypeOnlyInput,
@@ -37,13 +43,19 @@ import {
   type ActiveStateCoordinator,
   activeAccountContext,
   networkRpcUrls,
+  observedAccountContext,
   runActiveStateMutation,
   statusResponse,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { UnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
+import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { readStrkBalance } from "../transactions/fee-guard";
+import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
+import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
 import { failureNoticeMessage } from "../transactions/tx-observation";
 import { reconcileScope } from "../transactions/tx-reconcile";
+import { submitReviewedAccountDeployment } from "./deployment-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 
 /**
@@ -77,14 +89,12 @@ export type WalletOpsDeps = {
 };
 
 /**
- * Builds the wallet context the verifier checks calls against, scoped to the
- * account's network. Shared by the transfer, allowance, and NFT flows.
+ * Shared verifier scoping helper, re-exported from its home beside the verifier
+ * so background modules keep one import path. Re-exporting rather than
+ * re-deriving is the point: every caller resolves to the one network-filtered
+ * implementation, so no path reviews against a wider context than another.
  */
-export const verificationContext = (account: AccountRef, preferences: WalletPreferences) => ({
-  account,
-  addressBook: preferences.addressBook.filter((entry) => entry.networkId === account.networkId),
-  tokens: preferences.tokens.filter((token) => token.networkId === account.networkId),
-});
+export { verificationContext } from "@mc-wallet/transactions/verify";
 
 /**
  * Builds a hash signer for a resolved active-account context without exposing
@@ -134,11 +144,31 @@ export const resolveReviewFee = (input: {
 
 type WalletOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
+const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
+  const input = readFeeReviewInput(message, "wallet.deployAccount");
+  if (!input) return { error: "invalid deploy account request" };
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) return { error: context.error };
+  const authorized = captureSessionAuthorization(deps.session);
+  return submitReviewedAccountDeployment(deps, {
+    account: context.account,
+    isAuthorized: authorized.isCurrent,
+    networkId: context.networkId,
+    ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
+    signHash: accountHashSigner(deps, context.account, context.vaultPassphrase),
+  });
+};
+
+// Side-panel reads use the non-renewing session so ambient polling cannot hold
+// the wallet unlocked. User actions keep the renewing account-context path.
+const passiveAccountContext = (deps: WalletOpsDeps) =>
+  observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+
 const handleGetBalances: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.getBalances")) {
     return { error: "invalid balances request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  const context = await passiveAccountContext(deps);
   if (context.error !== undefined) {
     return { error: context.error };
   }
@@ -156,7 +186,7 @@ const handleDeploymentStatus: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.deploymentStatus")) {
     return { error: "invalid deployment status request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  const context = await passiveAccountContext(deps);
   if (context.error !== undefined) {
     return { error: context.error };
   }
@@ -174,7 +204,7 @@ const handleVerifyClassHash: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.verifyClassHash")) {
     return { error: "invalid class hash verification request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  const context = await passiveAccountContext(deps);
   if (context.error !== undefined) {
     return { error: context.error };
   }
@@ -192,30 +222,6 @@ const handleVerifyClassHash: WalletOpsHandler = async (deps, message) => {
   return { accountId: context.account.id, ok: true, verification };
 };
 
-const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
-  if (!readTypeOnlyInput(message, "wallet.deployAccount")) {
-    return { error: "invalid deploy account request" };
-  }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) {
-    return { error: context.error };
-  }
-  const { account, networkId, vaultPassphrase } = context;
-  const result = await deps.runtimeRpc.submitAccountDeployment({
-    account,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], await deps.preferencesStore.read()),
-    signHash: accountHashSigner(deps, account, vaultPassphrase),
-  });
-  await deps.activity.record({
-    accountId: account.id,
-    hash: result.transactionHash,
-    kind: "deploy",
-    networkId,
-    summary: "Deploy account contract",
-  });
-  return { ok: true, transactionHash: result.transactionHash };
-};
-
 const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
   const input = readReviewTransferInput(message);
   if (!input) {
@@ -230,37 +236,32 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
   const call = buildErc20TransferCall(token.address, input.recipient, amountRaw);
   const report = verifyCalls([call], verificationContext(account, preferences));
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
-  const deployed = await deps.runtimeRpc
-    .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
-    .catch(() => true);
-  const estimated = deployed
-    ? await deps.runtimeRpc
-        .estimateInvokeFee({
-          account,
-          calls: [call],
-          rpcUrls,
-          signHash: accountHashSigner(deps, account, vaultPassphrase),
-        })
-        .catch(() => null)
-    : null;
-  const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  const fees = await reviewWalletFundedFees(deps.runtimeRpc, {
+    account,
+    calls: [call],
+    rpcUrls,
+    signHash: accountHashSigner(deps, account, vaultPassphrase),
+    speed: input.speed,
+  });
   // Fee-affordability guard (issue 191): compare the estimate against the
   // account's STRK balance, counting the transfer amount itself when the sent
   // token is STRK (the fee competes with the amount). Warn-only and fail-open:
   // an unreadable balance yields "unknown" and no claim is made.
   const feeAffordability = resolveFeeAffordability({
-    balance: fee === null ? null : await readStrkBalance(deps, account, preferences),
-    fee,
+    balance: fees.totalFee === null ? null : await readStrkBalance(deps, account, preferences),
+    fee: fees.totalFee,
     sendAmount: sameFelt(token.address, STRK_TOKEN_ADDRESS) ? amountRaw : null,
   });
   return {
     ok: true,
     review: {
-      fee,
+      deploymentFee: fees.deploymentFee,
+      deploymentFeeEstimateFailed: fees.deploymentFeeEstimateFailed,
+      fee: fees.fee,
       feeAffordability,
-      feeEstimateFailed,
+      feeEstimateFailed: fees.feeEstimateFailed,
       flags: report.flags,
-      requiresDeployment: !deployed,
+      requiresDeployment: fees.requiresDeployment,
       summaries: report.calls.map((decoded) => decoded.summary),
     },
   };
@@ -276,17 +277,44 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     return { error: context.error };
   }
   const { account, preferences, token, vaultPassphrase } = context;
+  const authorized = captureSessionAuthorization(deps.session);
+  // Verified BEFORE anything is broadcast. This call is built exactly as
+  // `submitErc20Transfer` builds it (same parse, same encoder), so the report is
+  // about the transaction that would actually go out, and running it first makes
+  // the public send REFUSE a poisoned recipient (as the NFT send, the swap, and
+  // the dapp invoke do) rather than annotate one after the fact.
+  const report = verifyCalls(
+    [
+      buildErc20TransferCall(
+        token.address,
+        input.recipient,
+        parseTokenAmount(input.amount, token.decimals),
+      ),
+    ],
+    verificationContext(account, preferences),
+  );
+  const refusal = refuseOnPoisonedRecipient(report);
+  if (refusal) {
+    return refusal;
+  }
+  if (!input.reviewedFee) {
+    return FEE_REVIEW_REQUIRED;
+  }
+  // The fee the review step showed, echoed back by the panel, is the ceiling this
+  // send may sign under (MCW-V09-119); one whose cost ran past it is refused.
   const result = await deps.runtimeRpc.submitErc20Transfer({
     account,
     amount: input.amount,
+    isAuthorized: authorized.isCurrent,
     recipient: input.recipient,
+    ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
+    reviewedFee: input.reviewedFee,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
     signHash: accountHashSigner(deps, account, vaultPassphrase),
     speed: input.speed,
     token,
   });
-  const report = verifyCalls([result.call], verificationContext(account, preferences));
-  await deps.activity.record({
+  await recordSubmittedActivity(deps.activity, {
     accountId: account.id,
     amount: input.amount,
     counterparty: input.recipient,
@@ -304,7 +332,7 @@ const handleActivity: WalletOpsHandler = async (deps, message) => {
   if (!input) {
     return { error: "invalid activity request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  const context = await passiveAccountContext(deps);
   if (context.error !== undefined) {
     return { activity: [], ok: true };
   }
@@ -330,7 +358,7 @@ const handleTransactionAlerts: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.transactionAlerts")) {
     return { error: "invalid transaction alerts request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  const context = await passiveAccountContext(deps);
   if (context.error !== undefined) {
     return { alerts: [], ok: true };
   }
@@ -344,10 +372,28 @@ const handleLock: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.lock")) {
     return { error: "invalid lock request" };
   }
+  // A Ledger request may itself hold the active-state coordinator while the
+  // panel/device round-trip is parked. Revoke it before waiting for that
+  // coordinator so an explicit lock cannot be held behind the signature it is
+  // meant to cancel. Later queued operations stay behind the lock mutation and
+  // observe the revoked session.
+  deps.ledgerSignQueue?.rejectAll("wallet locked");
+  deps.session.lock();
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
-    // Revoke parked device signs before clearing the session.
+    // An unlock that was already inside the coordinator may have completed
+    // after the eager revocation. Lock once more at our serialized position so
+    // the later user intent wins deterministically.
     deps.ledgerSignQueue?.rejectAll("wallet locked");
     deps.session.lock();
+    // Reporting "locked" is a security claim, so only make it once the
+    // plaintext session mirror is confirmed erased. A mirror that survived the
+    // lock fails closed with an error instead of a locked status the user would
+    // read as "the passphrase is gone".
+    try {
+      await deps.session.mirrorCleared();
+    } catch {
+      return { error: "wallet lock incomplete" };
+    }
     return statusResponse(deps.wallet, deps.session, deps.preferencesStore);
   });
 };
@@ -376,7 +422,9 @@ export const handleWalletOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = WALLET_OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(WALLET_OPS_HANDLERS, messageType)
+    ? WALLET_OPS_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message) : null;
 };
 
@@ -437,11 +485,8 @@ const activityTarget = async (
       scope: { accountId: context.account.id, networkId: context.networkId },
     };
   }
-  const record = (await deps.multisigStore?.listMultisigs())?.find(
-    (stored) =>
-      stored.id === requestedAccountId &&
-      stored.networkId === context.networkId &&
-      stored.signers.some((signer) => sameFelt(signer, context.account.address)),
+  const record = (await currentArgentSignerRecords(deps, context.account, context.networkId)).find(
+    (stored) => stored.id === requestedAccountId,
   );
   return record
     ? {

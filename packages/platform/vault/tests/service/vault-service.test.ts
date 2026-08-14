@@ -12,6 +12,16 @@ const mnemonic = "habit hope tip crystal because grunt nation idea electric witn
 const vaultKey = "mc-wallet:vault";
 const migrationKey = "mc-wallet:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
+const defaultAccountInput = {
+  accountContractType: "openzeppelin",
+  mnemonic,
+  vaultPassphrase,
+} as const;
+const defaultAddInput = {
+  accountContractType: "openzeppelin",
+  networkId: "SN_MAIN",
+  vaultPassphrase,
+} as const;
 
 // KMS whose keypair varies by account index so derived accounts stay distinct.
 const indexedKms = (): KmsPort => ({
@@ -35,7 +45,7 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(store, migrationKey),
     });
 
-    const account = await service.createAccount({ mnemonic, vaultPassphrase });
+    const account = await service.createAccount(defaultAccountInput);
     const raw = JSON.stringify(await store.get(vaultKey));
     const vault = await service.readVault(vaultPassphrase);
 
@@ -57,7 +67,7 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(store, migrationKey),
     });
 
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
     const vault = await service.readVault(vaultPassphrase);
 
     expect(vault.mnemonic).toBe(mnemonic);
@@ -73,7 +83,11 @@ describe("createWalletVaultService", () => {
     });
 
     await expect(
-      service.previewAccount({ mnemonic, networkId: "SN_SEPOLIA" }),
+      service.previewAccount({
+        accountContractType: "openzeppelin",
+        mnemonic,
+        networkId: "SN_SEPOLIA",
+      }),
     ).resolves.toMatchObject({
       derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
       networkId: "SN_SEPOLIA",
@@ -89,9 +103,9 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    const first = await service.createAccount({ mnemonic, vaultPassphrase });
-    const second = await service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase });
-    const third = await service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase });
+    const first = await service.createAccount(defaultAccountInput);
+    const second = await service.addDerivedAccount(defaultAddInput);
+    const third = await service.addDerivedAccount(defaultAddInput);
 
     expect(second.derivation.accountIndex).toBe(1);
     expect(third.derivation.accountIndex).toBe(2);
@@ -110,8 +124,17 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await service.createAccount({ mnemonic, networkId: "SN_MAIN", vaultPassphrase });
-    const sepolia = await service.addDerivedAccount({ networkId: "SN_SEPOLIA", vaultPassphrase });
+    await service.createAccount({
+      accountContractType: "openzeppelin",
+      mnemonic,
+      networkId: "SN_MAIN",
+      vaultPassphrase,
+    });
+    const sepolia = await service.addDerivedAccount({
+      accountContractType: "openzeppelin",
+      networkId: "SN_SEPOLIA",
+      vaultPassphrase,
+    });
 
     expect(sepolia.derivation.accountIndex).toBe(0);
     expect(sepolia.networkId).toBe("SN_SEPOLIA");
@@ -129,9 +152,9 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await expect(
-      service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase }),
-    ).rejects.toThrow("No recovery phrase stored for this wallet");
+    await expect(service.addDerivedAccount(defaultAddInput)).rejects.toThrow(
+      "No recovery phrase stored for this wallet",
+    );
   });
 
   test("exposes the active account key and phrase to the reveal flow", async () => {
@@ -141,7 +164,7 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
     const secrets = activeAccountSecrets(await service.readVault(vaultPassphrase));
 
     expect(secrets).toEqual({ mnemonic, privateKey: "0x123456" });
@@ -160,7 +183,7 @@ describe("createWalletVaultService", () => {
       },
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
-    const account = await service.createAccount({ mnemonic, vaultPassphrase });
+    const account = await service.createAccount(defaultAccountInput);
     await expect(
       service.deriveStrk20ViewingKey({
         accountId: account.id,
@@ -178,7 +201,7 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    const account = await service.createAccount({ mnemonic, vaultPassphrase });
+    const account = await service.createAccount(defaultAccountInput);
 
     await expect(
       service.grantOrigin({
@@ -207,7 +230,7 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
 
     await expect(
       service.grantOrigin({
@@ -227,7 +250,7 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
 
     await expect(
       service.grantOrigin({
@@ -261,21 +284,12 @@ describe("createWalletVaultService", () => {
 
     await expect(
       service.createAccount({
+        accountContractType: "openzeppelin",
         mnemonic,
         vaultPassphrase: "too short",
       }),
     ).rejects.toThrow("Passphrase must be at least 12 characters");
     expect(derived).toBe(false);
-  });
-
-  test("generates mnemonics through KMS", async () => {
-    const service = createWalletVaultService({
-      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
-      kms: fakeKms(),
-      migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
-    });
-
-    await expect(service.generateMnemonic()).resolves.toBe(mnemonic);
   });
 
   test("sets the active account in the encrypted vault", async () => {
@@ -286,11 +300,13 @@ describe("createWalletVaultService", () => {
     });
 
     const sepolia = await service.createAccount({
+      accountContractType: "openzeppelin",
       mnemonic,
       networkId: "SN_SEPOLIA",
       vaultPassphrase,
     });
     const mainnet = await service.createAccount({
+      accountContractType: "openzeppelin",
       mnemonic,
       networkId: "SN_MAIN",
       vaultPassphrase,
@@ -312,7 +328,7 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    const mainnet = await service.createAccount({ mnemonic, vaultPassphrase });
+    const mainnet = await service.createAccount(defaultAccountInput);
     const sepolia = await service.ensureNetworkAccount({
       networkId: "SN_SEPOLIA",
       vaultPassphrase,
@@ -343,7 +359,7 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    const account = await service.createAccount({ mnemonic, vaultPassphrase });
+    const account = await service.createAccount(defaultAccountInput);
 
     await expect(
       service.signHash({
@@ -365,7 +381,7 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    const account = await service.createAccount({ mnemonic, vaultPassphrase });
+    const account = await service.createAccount(defaultAccountInput);
 
     await expect(
       service.signHash({
@@ -374,19 +390,6 @@ describe("createWalletVaultService", () => {
         vaultPassphrase,
       }),
     ).rejects.toThrow("Invalid message hash");
-  });
-
-  test("fails closed for direct popup vault access", () => {
-    const encryptedStore = createEncryptedStore(createMemoryStore(), vaultKey);
-
-    expect(() =>
-      createWalletVaultService({
-        actor: "popup",
-        encryptedStore,
-        kms: fakeKms(),
-        migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
-      }),
-    ).toThrow("Storage access denied");
   });
 
   test("serializes concurrent mutations so neither write is lost", async () => {
@@ -421,10 +424,10 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
     await Promise.all([
       service.grantOrigin({ origin: "https://alpha.example", vaultPassphrase }),
-      service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase }),
+      service.addDerivedAccount(defaultAddInput),
     ]);
 
     const vault = await service.readVault(vaultPassphrase);
@@ -476,7 +479,7 @@ describe("createWalletVaultService", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
     legacyEnvelope = true;
     const passiveRead = service.readVault(vaultPassphrase);
     await upgradeStarted;

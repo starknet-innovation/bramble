@@ -1,6 +1,6 @@
 /**
  * Approval-card rendering per kind: exercises every renderer reached through
- * `approvalCard` — connection (default), sign-typed-data, strk20-invoke,
+ * `approvalCard` — connection, sign-typed-data, strk20-invoke,
  * switch-chain, add-chain, declare — plus the watch-asset empty-token guard.
  * Complements sidepanel-approval-card.test.ts, which covers invoke and
  * watch-asset (with token) only.
@@ -10,6 +10,7 @@ import type { PendingApproval, WalletStatus } from "../../../../src/popup/respon
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
 
 const account = {
+  accountContractType: "openzeppelin" as const,
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },
@@ -37,7 +38,7 @@ const ID = "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";
 const ORIGIN = "https://dapp.example";
 
 describe("approvalCard renders each approval kind", () => {
-  test("connection request (default kind) shows the connect copy and enabled Approve", () => {
+  test("connection request shows the connect copy and enabled Approve", () => {
     const approval: PendingApproval = { id: ID, kind: "connect", origin: ORIGIN };
     const html = approvalCard(approval, status);
 
@@ -47,16 +48,6 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain(`data-approval-action="approve" data-approval-id="${ID}"`);
     // Not locked, not blocked: the approve button is enabled.
     expect(html).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
-  });
-
-  test("connection request falls through to connect copy when kind is absent", () => {
-    const approval: PendingApproval = { id: ID, origin: ORIGIN };
-    const html = approvalCard(approval, lockedStatus);
-
-    expect(html).toContain("Connection request");
-    expect(html).toContain("Unlock the wallet to approve this site.");
-    // Locked: the approve button is disabled.
-    expect(html).toContain(`data-approval-id="${ID}" type="button" disabled`);
   });
 
   test("sign-typed-data request decodes the SNIP-12 payload", () => {
@@ -72,6 +63,14 @@ describe("approvalCard renders each approval kind", () => {
           Mail: [
             { name: "from", type: "felt" },
             { name: "contents", type: "felt" },
+          ],
+          // The revision 0 domain struct: without it the payload identifies no
+          // revision, nothing in it reaches a hash, and the card is required to
+          // withhold the approve control rather than describe it as signed.
+          StarkNetDomain: [
+            { name: "name", type: "felt" },
+            { name: "version", type: "felt" },
+            { name: "chainId", type: "felt" },
           ],
         },
       },
@@ -133,6 +132,10 @@ describe("approvalCard renders each approval kind", () => {
 
     expect(html).toContain("Private transaction request");
     expect(html).toContain("Review each private action and the frozen execution call.");
+    expect(html).toContain(
+      "Wallet-funded public routes get a second exact-call network-fee review",
+    );
+    expect(html).toContain("sponsored private-relay routes submit after this approval");
     expect(html).toContain("Withdraw 10 to 0x0471…938d");
     expect(html).toContain("Exact action parameters");
     expect(html).toContain("Collect policy");
@@ -161,7 +164,7 @@ describe("approvalCard renders each approval kind", () => {
     },
     {
       action: "Activate",
-      hint: "publishes a viewing-key commitment",
+      hint: "separate exact-call network-fee approval follows",
       kind: "strk20-register",
       title: "Activate private balances",
     },
@@ -278,6 +281,24 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("additional STRK fee not included");
     expect(html).not.toContain("sierra_program");
     expect(html).toContain(`data-approval-id="${ID}" type="button" disabled`);
+
+    const readyHtml = approvalCard(approval, status);
+    expect(readyHtml).toContain('data-approval-fee="4000000000000000"');
+    expect(readyHtml).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
+
+    const declaration = approval.declaration;
+    if (!declaration) throw new Error("declare fixture missing");
+    const unavailableHtml = approvalCard(
+      {
+        ...approval,
+        declaration: { ...declaration, fee: null, feeEstimateFailed: true },
+      },
+      status,
+    );
+    expect(unavailableHtml).toContain("The declaration fee could not be estimated");
+    expect(unavailableHtml).toContain(`data-approval-retry-fee="${ID}"`);
+    expect(unavailableHtml).not.toContain("data-approval-fee=");
+    expect(unavailableHtml).toContain(`data-approval-id="${ID}" type="button" disabled`);
   });
 
   test("watch-asset request without a token renders nothing", () => {

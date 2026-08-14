@@ -20,6 +20,7 @@ const ORIGIN_B = "https://b.test";
 const CHAIN_ID = "0x534e5f4d41494e";
 
 const accountA: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x0a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
   classHash: "0xabcdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -29,6 +30,7 @@ const accountA: AccountRef = {
   publicKeyY: "0xa2",
 };
 const accountB: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x0b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
   classHash: "0xabcdef",
   derivation: { accountIndex: 1, addressIndex: 0, kind: "starknet-bip44" },

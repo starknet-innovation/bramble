@@ -7,7 +7,7 @@
  * account index, a derivation path, and a public `(r, s)` signature pair.
  */
 
-import type { LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
 import {
   isCreateAccountResponse,
   isErrorResponse,
@@ -23,7 +23,7 @@ import {
  * One Ledger candidate's best-effort on-chain state as the panel consumes it:
  * deployed status and balance display string, each null when the RPC degraded.
  */
-export type LedgerAccountStatus = {
+type LedgerAccountStatus = {
   readonly balance: string | null;
   readonly deployed: boolean | null;
 };
@@ -46,6 +46,7 @@ export type LedgerRuntimeClient = {
     networkId: string,
     accountIndex: number,
     publicKeyX: string,
+    accountContractType: AccountContractType,
   ) => Promise<string>;
   readonly completeLedgerSign: (outcome: LedgerSignOutcome) => Promise<void>;
   readonly createLedgerVault: (
@@ -53,10 +54,12 @@ export type LedgerRuntimeClient = {
     accountIndex: number,
     publicKeyX: string,
     vaultPassphrase: string,
+    accountContractType: AccountContractType,
   ) => Promise<string>;
   readonly deriveLedgerAccounts: (
     networkId: string,
     entries: readonly LedgerPubKeyEntry[],
+    accountContractType: AccountContractType,
   ) => Promise<LedgerAccountsResponse["accounts"]>;
   readonly ledgerAccountStatus: (
     address: string,
@@ -75,8 +78,9 @@ const failure = (response: unknown, fallback: string): Error =>
 export const createLedgerRuntimeClient = (
   sendMessage: (message: unknown) => Promise<unknown>,
 ): LedgerRuntimeClient => ({
-  async addLedgerAccount(networkId, accountIndex, publicKeyX) {
+  async addLedgerAccount(networkId, accountIndex, publicKeyX, accountContractType) {
     const response = await sendMessage({
+      accountContractType,
       accountIndex,
       networkId,
       publicKeyX,
@@ -96,8 +100,15 @@ export const createLedgerRuntimeClient = (
     }
     throw failure(response, "complete Ledger sign failed");
   },
-  async createLedgerVault(networkId, accountIndex, publicKeyX, vaultPassphrase) {
+  async createLedgerVault(
+    networkId,
+    accountIndex,
+    publicKeyX,
+    vaultPassphrase,
+    accountContractType,
+  ) {
     const response = await sendMessage({
+      accountContractType,
       accountIndex,
       networkId,
       publicKeyX,
@@ -112,8 +123,13 @@ export const createLedgerRuntimeClient = (
     }
     throw failure(response, "create Ledger wallet failed");
   },
-  async deriveLedgerAccounts(networkId, entries) {
-    const response = await sendMessage({ entries, networkId, type: "wallet.deriveLedgerAccounts" });
+  async deriveLedgerAccounts(networkId, entries, accountContractType) {
+    const response = await sendMessage({
+      accountContractType,
+      entries,
+      networkId,
+      type: "wallet.deriveLedgerAccounts",
+    });
     if (isLedgerAccountsResponse(response)) {
       return response.accounts;
     }

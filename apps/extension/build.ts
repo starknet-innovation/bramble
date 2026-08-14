@@ -87,7 +87,7 @@ const buildStamp = {
 
 await run(["bun", "run", "check:extension"]);
 await run(["bun", "run", "check:krusty"]);
-await run(["bun", "run", "check:multisig"]);
+await run(["bun", "run", "check:argent"]);
 await run(["bun", "run", "check:privacy"]);
 await rm(outdir, { force: true, recursive: true });
 await mkdir(outdir, { recursive: true });
@@ -162,10 +162,9 @@ requireBuild(
 // `version` when present) so a side-by-side load is unambiguous. `version` stays
 // the numeric manifest value Chrome requires, and released builds — main, or a
 // detached tag checkout — are copied through untouched.
-const manifestJson = JSON.parse(await readFile(join(publicRoot, "manifest.json"), "utf8")) as Record<
-  string,
-  unknown
->;
+const manifestJson = JSON.parse(
+  await readFile(join(publicRoot, "manifest.json"), "utf8"),
+) as Record<string, unknown>;
 await writeFile(
   join(outdir, "manifest.json"),
   `${JSON.stringify(
@@ -199,9 +198,4 @@ await mkdir(join(outdir, "vendor/starknet-privacy/sdk"), { recursive: true });
 await cp(
   "vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.min.js",
   join(outdir, "vendor/starknet-privacy/sdk/starknet-sdk.min.js"),
-);
-await mkdir(join(outdir, "vendor/multisig"), { recursive: true });
-await cp(
-  "vendor/multisig/multisig.contract_class.json",
-  join(outdir, "vendor/multisig/multisig.contract_class.json"),
 );

@@ -19,6 +19,7 @@ import {
   type InvokeExecuteDeps,
   type ProviderOpsDeps,
 } from "../../../apps/extension/src/background/provider/provider-ops";
+import { createWatchAssetAdmission } from "../../../apps/extension/src/background/provider/watch-asset";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
@@ -29,6 +30,7 @@ const ORIGIN = "https://a.test";
 const vaultPassphrase = "correct horse battery staple";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -69,6 +71,7 @@ const providerDeps = (locked: boolean): ProviderOpsDeps => {
     session.unlock(vaultPassphrase);
   }
   return {
+    allowanceStore: memoryAllowanceStore(),
     approvals: createApprovalQueue(),
     extensionId: EXTENSION_ID,
     preferencesStore: unavailablePreferencesStore,
@@ -76,6 +79,7 @@ const providerDeps = (locked: boolean): ProviderOpsDeps => {
     session,
     waiters: createSignatureWaiters(),
     wallet,
+    watchAssetAdmission: createWatchAssetAdmission(),
   };
 };
 
@@ -138,6 +142,30 @@ describe("handleProviderOps guards", () => {
       ),
     ).resolves.toEqual({ error: "wallet locked" });
   });
+
+  test("refuses dapp account self-calls before queuing an approval", async () => {
+    const deps = providerDeps(false);
+    const connectedWallet = {
+      ...wallet,
+      async getGrantedAccounts() {
+        return [account];
+      },
+    } as unknown as ProviderOpsDeps["wallet"];
+
+    await expect(
+      handleProviderOps(
+        { ...deps, wallet: connectedWallet },
+        "wallet.addInvokeTransaction",
+        {
+          calls: [{ calldata: ["0x1"], contractAddress: account.address, entrypoint: "upgrade" }],
+          origin: ORIGIN,
+          type: "wallet.addInvokeTransaction",
+        },
+        contentSender,
+      ),
+    ).resolves.toEqual({ error: "Dapps cannot call the wallet account contract itself" });
+    expect(deps.approvals.list()).toEqual([]);
+  });
 });
 
 describe("handleProviderOps dispatch", () => {
@@ -177,6 +205,7 @@ const LEDGER_KEY = "0x1234567890abcdef";
 const LEDGER_SIGN_HASH = "0x1e240";
 
 const ledgerAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: {
@@ -220,7 +249,10 @@ const ledgerExecuteDeps = (
     ...(queue ? { ledgerSignQueue: queue } : {}),
     preferencesStore: {
       async read() {
-        return { activeNetworkId: "SN_MAIN" };
+        // Complete enough for the shared trusted-set builder every submit path
+        // runs (verificationContext): a stub missing these lists would fail the
+        // bookkeeping rather than the behaviour under test.
+        return { activeNetworkId: "SN_MAIN", addressBook: [], nfts: [], tokens: [] };
       },
     } as unknown as InvokeExecuteDeps["preferencesStore"],
     runtimeRpc: {
@@ -326,7 +358,10 @@ describe("executeInvokeApproval failure branches", () => {
       allowanceStore: memoryAllowanceStore(),
       preferencesStore: {
         async read() {
-          return { activeNetworkId: "SN_MAIN" };
+          // Complete enough for the shared trusted-set builder every submit path
+          // runs (verificationContext): a stub missing these lists would fail the
+          // bookkeeping rather than the behaviour under test.
+          return { activeNetworkId: "SN_MAIN", addressBook: [], nfts: [], tokens: [] };
         },
       } as unknown as InvokeExecuteDeps["preferencesStore"],
       runtimeRpc: {

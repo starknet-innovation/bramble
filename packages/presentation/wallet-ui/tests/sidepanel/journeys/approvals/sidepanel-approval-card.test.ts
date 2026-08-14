@@ -80,8 +80,8 @@ describe("watch-asset approval card insights (A-L1)", () => {
 
 // The fee review renders on the invoke card in every wallet state: a locked
 // wallet still shows the fee estimated at queue time (no passphrase is ever
-// needed merely to display a fee), and a failed estimate offers a retry
-// without disabling Approve (#189).
+// needed merely to display a fee), and a failed estimate offers a retry while
+// approval stays disabled (#189).
 describe("invoke approval card fee review (#189)", () => {
   const withFee: PendingApproval = {
     fee: { overallFee: "2500000000000000", unit: "FRI" },
@@ -105,13 +105,13 @@ describe("invoke approval card fee review (#189)", () => {
     expect(locked).toContain(`data-approval-id="${INVOKE_ID}" type="button" disabled`);
   });
 
-  test("a failed estimate offers retry and keeps Approve enabled", () => {
+  test("a failed estimate offers retry and keeps Approve disabled", () => {
     const failed: PendingApproval = { ...withFee, fee: null, feeEstimateFailed: true };
     const html = activity([failed]);
 
     expect(html).toContain("Couldn't estimate the network fee right now.");
     expect(html).toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
-    expect(html).not.toContain(
+    expect(html).toContain(
       `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
     );
   });

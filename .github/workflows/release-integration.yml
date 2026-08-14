@@ -34,6 +34,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: 1.96.1
+          # scripts/vendor-krusty.ts requires this exact rustc release and
+          # builds the crypto core for this target; it refuses to run on any
+          # other toolchain, so two builds stay comparable.
+          targets: wasm32-unknown-unknown
       # Same cargo/wasm-pack cache key as ci.yml so the integration build reuses
       # the exact toolchain the vendored krusty artifacts are built with.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -48,9 +52,6 @@ jobs:
           key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
           restore-keys: |
             cargo-${{ runner.os }}-
-      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
-        with:
-          scarb-version: 2.18.0
       - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
       # Vendor the Krusty KMS WASM core. On failure, explain the likely cause in
@@ -70,18 +71,18 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-      # Vendor the pinned multisig contract class (needs scarb 2.18.0 exactly).
-      - name: Vendor multisig contract
+      # Verify the pinned production Argent release and official artifacts.
+      - name: Vendor Argent account contracts
         run: |
           set -o pipefail
-          if ! bun run vendor:multisig; then
+          if ! bun run vendor:argent; then
             {
-              echo "### Release integration: \`vendor:multisig\` FAILED"
+              echo "### Release integration: \`vendor:argent\` FAILED"
               echo ""
-              echo "This step needs \`scarb 2.18.0\` exactly (the multisig class-hash"
-              echo "pin is only reproducible on that version). A failure here is a"
-              echo "toolchain/vendoring issue, not a wallet source-code failure."
-              echo "See scripts/vendor-multisig.ts."
+              echo "This step needs network access to the pinned official Argent"
+              echo "release. A failure is a provenance/vendoring issue, not a"
+              echo "wallet source-code failure."
+              echo "See scripts/vendor-argent-contracts.ts."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi

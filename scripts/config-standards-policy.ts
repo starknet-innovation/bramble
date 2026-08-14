@@ -15,11 +15,11 @@ export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@mc-wallet/testkit": "workspace:*",
-  "@biomejs/biome": "2.5.6",
+  "@biomejs/biome": "2.5.7",
   "@playwright/test": "1.62.1",
   "@types/bun": "1.3.14",
-  "@types/node": "26.1.2",
-  knip: "6.31.0",
+  "@types/node": "26.2.0",
+  knip: "6.32.1",
   madge: "8.0.0",
   typescript: "6.0.3",
 };
@@ -27,6 +27,7 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@mc-wallet/core": "workspace:*",
   "@mc-wallet/kms-krusty": "workspace:*",
+  "@mc-wallet/ledger-protocol": "workspace:*",
   "@mc-wallet/multisig": "workspace:*",
   "@mc-wallet/permissions": "workspace:*",
   "@mc-wallet/privacy": "workspace:*",
@@ -58,7 +59,6 @@ export const PINNED_RUNTIME_FILES = [
   "sidepanel/index.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm_bg.wasm",
-  "vendor/multisig/multisig.contract_class.json",
   "vendor/starknet-privacy/sdk/starknet-sdk.min.js",
 ] as const;
 
@@ -70,7 +70,7 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   "playwright-report/",
   "test-results/",
   "vendor/krusty-kms/",
-  "vendor/multisig/",
+  "vendor/argent-contracts/",
   "vendor/starknet-privacy/",
 ] as const;
 
@@ -105,23 +105,23 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run --filter @mc-wallet/extension build",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun run check:privacy && bun run test && bun run check:workspaces",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
   "check:coverage": "bun run scripts/check-coverage.ts",
   "check:cycles": "madge --circular --extensions ts apps/extension/src packages",
-  "check:deadcode": "knip --no-exit-code",
+  "check:deadcode": "knip",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
   "check:imports": "bun run scripts/check-workspace-architecture.ts",
   "check:krusty": "bun run scripts/check-krusty-adapter.ts",
   "check:lint": "biome check .",
-  "check:multisig": "bun run scripts/check-multisig-class.ts",
+  "check:argent": "bun run scripts/check-argent-contracts.ts",
   "check:privacy": "bun run scripts/check-privacy-sdk.ts",
   "check:release-version": "bun run scripts/release-version.ts",
   "check:types": "tsc --noEmit",
   "check:workspaces":
-    "bun run --filter './packages/**' check && bun run --filter @mc-wallet/extension check && bun run --filter @mc-wallet/terminal check && bun run --filter @mc-wallet/ui-lab check:static",
+    "bun run --filter './packages/foundation/**' check && bun run --filter './packages/platform/**' check && bun run --filter './packages/features/**' check && bun run --filter './packages/presentation/**' check && bun run --filter './packages/testing/**' check && bun run --filter @mc-wallet/extension check && bun run --filter @mc-wallet/terminal check && bun run --filter @mc-wallet/ui-lab check:static",
   changelog: "bun run scripts/generate-changelog.ts",
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
@@ -131,9 +131,8 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",
   "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
-  "test:multisig-contract": "scarb --manifest-path contracts/multisig/Scarb.toml run test",
   "vendor:krusty": "bun run scripts/vendor-krusty.ts",
-  "vendor:multisig": "bun run scripts/vendor-multisig.ts",
+  "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
   "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
 };
 

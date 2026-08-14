@@ -7,7 +7,7 @@ permalink: /wallet-store/
 # Wallet store architecture and update safety
 
 This document is the reviewed persistence contract for MC Wallet. It covers the store layout at
-the v4 encrypted-vault schema, account identity and scoping, mutation rules, Chrome extension
+the v6 encrypted-vault schema, account identity and scoping, mutation rules, Chrome extension
 updates, and the custody boundary for a future Ledger-derived STRK20 viewing key.
 
 Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implementation tracked by
@@ -22,7 +22,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 - Watched multisigs are durable first-class contract accounts in their own public on-chain registry.
   They deliberately do not masquerade as signer accounts: every mutation resolves an owned signer
   and re-checks the multisig on chain. Their ids use the same `networkId:canonical-address` identity
-  convention, and proposals reference the multisig id.
+  convention, and frozen signing intents reference the multisig id.
 - Every authoritative read-modify-write store is mutation-serialized. Account/network identifiers
   remain explicit at consumer boundaries, and validators prove the account id's embedded network
   agrees with that explicit scope.
@@ -32,7 +32,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 - Chrome persistent and session storage are restricted to `TRUSTED_CONTEXTS` before unlock-session
   restoration or request handling can begin. Missing or failed lockdown support stops privileged
   startup; extension messages remain the validated capability boundary.
-- Vault v3 to v4 migration is adjacent, deterministic, staged, verified, restart-recoverable, and
+- Vault migrations are adjacent, deterministic, staged, verified, restart-recoverable, and
   performed only after unlock. Invalid source data is rejected before the primary ciphertext is
   touched.
 - A Ledger STRK20 viewing key can be retained only as a canonical, bounded, account/chain/pool/
@@ -43,12 +43,12 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 
 | Key / state | Area | Sensitivity | Identity and bounds | Failure policy |
 | --- | --- | --- | --- | --- |
-| `mc-wallet:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, optional viewing keys, grants | schema v4; account ids unique; strict cross-references | fail closed |
+| `mc-wallet:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v7; account ids unique; strict cross-references | fail closed |
 | `mc-wallet:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
 | `mc-wallet:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
 | `mc-wallet:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |
 | `mc-wallet:allowances` | `storage.local`, plain | public ERC20 approvals | account + network + token + spender; 200 total | discard invalid rows |
-| `mc-wallet:multisigs` | `storage.local`, plain | public contracts, calldata, proposal state | network + canonical contract; 20 multisigs / 100 proposals / 100 operations | discard invalid or orphaned rows |
+| `mc-wallet:argent-multisigs:v2` | `storage.local`, plain, trusted contexts only | public contracts, frozen transaction intents, exact-hash authorization fragments | network + canonical contract; 20 multisigs / 100 intents / 100 operations | discard invalid or orphaned rows; never silently evict active authority |
 | `mc-wallet:origin-history` | `storage.local`, plain | first-seen dapp origins | valid HTTPS/localhost origin; 500 origins | discard invalid entries |
 | `mc-wallet:prices`, `mc-wallet:charts` | `storage.local`, plain | recoverable market cache | TTL and cache-size bounded | cached-or-empty |
 | `mc-wallet:phishing-feed` | `storage.local`, plain | signed/validated blocklist cache | TTL and response bounds | bundled baseline remains active |
@@ -70,15 +70,24 @@ until extension removal, while session data is cleared when an extension is upda
 - `ledger`: EIP-2645 account index/path, `LedgerW` application marker, and public x-coordinate; no
   signing-key reference.
 
-All three use `networkId:address` as the stable account id. Network projection intentionally creates
-a new account id because class hash/address and every account-scoped cache are network-specific.
+All three carry an explicit `argent` or `openzeppelin` account-contract type and use
+`networkId:address` as the stable account id. Network projection intentionally creates a new
+account id because contract type, class hash/address, and every account-scoped cache are network-specific.
 `sameWalletKey` is the only cross-network identity comparator.
 
 A watched multisig is public contract state rather than a signing authority. Its stable id has the
 same network/address form, but it remains in `MultisigStore` so code cannot accidentally call a
 single-signer signing method with a multisig. UI and background code combine the two typed sets into
-an account drawer/portfolio projection. Multisig operations always carry both the multisig id and
-the chosen signer account id. This separation is a safety type boundary, not second-class storage.
+an account drawer/portfolio projection. Multisig operations bind the multisig id and an exact frozen
+V3 transaction hash. Each imported or locally produced signature is verified against current Argent
+membership before storage. This separation is a safety type boundary, not second-class storage.
+
+An unbroadcast signature fragment is a narrow authorization capability even though it contains no
+secret key. The store is therefore reachable only through the privileged background after Chrome
+storage access is restricted to trusted extension contexts. A fragment authorizes only its frozen
+hash and nonce; importing or submitting it revalidates the complete intent and fresh on-chain signer
+configuration. It never enters the encrypted single-signer vault, account metadata, preferences,
+activity summaries, logs, provider messages, or dapp-reachable routes.
 
 Cross-store references follow these rules:
 
@@ -246,7 +255,7 @@ Deliberately deferred:
   remain split between preferences and vault for schema compatibility; serialized preference-first
   mutations, startup/unlock/import reconciliation, and network-scoped status projection cover
   interrupted writes, but a future schema may remove the cross-store transaction entirely.
-- Persisting the currently open multisig portfolio. The durable multisig and proposal state already
+- Persisting the currently open multisig portfolio. The durable multisig and intent state already
   survives restarts; the selected screen is presentation state and safely returns to the active
   signer after a browser/update restart.
 - A destructive account-removal feature. When introduced, it must atomically remove signing keys,

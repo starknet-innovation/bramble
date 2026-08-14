@@ -28,6 +28,7 @@ const deployAddress = hash.calculateContractAddressFromHash(
 );
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: deployAddress,
   classHash: CLASS_HASH,
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

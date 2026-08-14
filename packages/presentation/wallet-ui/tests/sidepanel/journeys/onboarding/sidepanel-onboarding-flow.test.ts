@@ -4,10 +4,11 @@
  * and persistence happens only after the final Mainnet acknowledgement.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
-import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
+import { locked, onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
+import { bindUnlock } from "../../../../src/sidepanel/journeys/onboarding/unlock-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
@@ -33,6 +34,7 @@ const status: WalletStatus = {
 };
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   classHash: "0x023456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -41,6 +43,14 @@ const account: AccountRef = {
   publicKeyX: "0x123",
   publicKeyY: "0x456",
 };
+const argentAccount: AccountRef = {
+  ...account,
+  accountContractType: "argent",
+  deploymentSalt: "0x123",
+};
+
+const accountFor = (accountContractType: AccountContractType): AccountRef =>
+  accountContractType === "argent" ? argentAccount : account;
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -85,26 +95,40 @@ const activeStep = (root: ParentNode): string | undefined =>
   )?.dataset["onboardingStep"];
 
 const mount = (options?: {
+  readonly generateMnemonic?: () => Promise<string>;
+  readonly previewAccount?: (
+    mnemonic: string,
+    networkId: string,
+    accountContractType: AccountContractType,
+  ) => Promise<AccountRef>;
   readonly validateMnemonic?: (mnemonic: string) => Promise<boolean>;
 }) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
-  const previews: Array<readonly [string, string]> = [];
-  const creations: Array<readonly [string, string, string]> = [];
+  const previews: Array<readonly [string, string, AccountContractType]> = [];
+  const creations: Array<readonly [string, string, string, AccountContractType]> = [];
   const validations: string[] = [];
   let renders = 0;
   const wallet = {
-    createAccount(mnemonic: string, networkId: string, vaultPassphrase: string) {
-      creations.push([mnemonic, networkId, vaultPassphrase]);
+    createAccount(
+      mnemonic: string,
+      networkId: string,
+      vaultPassphrase: string,
+      accountContractType: AccountContractType,
+    ) {
+      creations.push([mnemonic, networkId, vaultPassphrase, accountContractType]);
       return Promise.resolve();
     },
-    generateMnemonic: () => Promise.resolve(MNEMONIC),
+    generateMnemonic: () => options?.generateMnemonic?.() ?? Promise.resolve(MNEMONIC),
     loadStatus: () => Promise.resolve({ ...status, accountCount: 1, hasVault: true }),
-    previewAccount(mnemonic: string, networkId: string) {
-      previews.push([mnemonic, networkId]);
-      return Promise.resolve(account);
+    previewAccount(mnemonic: string, networkId: string, accountContractType: AccountContractType) {
+      previews.push([mnemonic, networkId, accountContractType]);
+      return (
+        options?.previewAccount?.(mnemonic, networkId, accountContractType) ??
+        Promise.resolve(accountFor(accountContractType))
+      );
     },
     validateMnemonic(mnemonic: string) {
       validations.push(mnemonic);
@@ -144,7 +168,7 @@ describe("staged onboarding", () => {
     await tick();
 
     expect(activeStep(flow.app)).toBe("accounts");
-    expect(flow.previews).toEqual([[MNEMONIC, "SN_MAIN"]]);
+    expect(flow.previews).toEqual([[MNEMONIC, "SN_MAIN", "argent"]]);
     expect(flow.app.querySelector("#account-preview")?.getAttribute("aria-pressed")).toBe("false");
     expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
 
@@ -161,8 +185,47 @@ describe("staged onboarding", () => {
     flow.app.querySelector<HTMLFormElement>("#create-form")?.requestSubmit();
     await tick();
 
-    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE]]);
+    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE, "argent"]]);
     expect(flow.renders()).toBe(1);
+  });
+
+  test("discards a delayed preview after the account contract changes", async () => {
+    let release: ((value: AccountRef) => void) | undefined;
+    const flow = mount({
+      previewAccount: (_mnemonic, _networkId, accountContractType) =>
+        accountContractType === "argent"
+          ? new Promise((resolve) => {
+              release = resolve;
+            })
+          : Promise.resolve(accountFor(accountContractType)),
+    });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    await tick();
+    setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#review-account-button");
+
+    const contract = flow.app.querySelector<HTMLSelectElement>(
+      'select[name="accountContractType"]',
+    );
+    if (!contract) throw new Error("missing account contract selector");
+    contract.value = "openzeppelin";
+    contract.dispatchEvent(new window.Event("change", { bubbles: true }));
+    release?.(argentAccount);
+    await tick();
+
+    expect(activeStep(flow.app)).toBe("password");
+    expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
+    click(flow.app, "#review-account-button");
+    await tick();
+    expect(activeStep(flow.app)).toBe("accounts");
+    expect(flow.previews).toEqual([
+      [MNEMONIC, "SN_MAIN", "argent"],
+      [MNEMONIC, "SN_MAIN", "openzeppelin"],
+    ]);
   });
 
   test("requires revealing and confirming a generated backup before password setup", async () => {
@@ -197,6 +260,26 @@ describe("staged onboarding", () => {
     click(flow.app, "#verify-continue");
     expect(activeStep(flow.app)).toBe("password");
     expect(flow.creations).toEqual([]);
+  });
+
+  test("discards a generated phrase after the user chooses an import route", async () => {
+    let release: ((mnemonic: string) => void) | undefined;
+    const flow = mount({
+      generateMnemonic: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    click(flow.app, "#create-new-button");
+    click(flow.app, "#add-existing-button");
+    expect(activeStep(flow.app)).toBe("method");
+    release?.(MNEMONIC);
+    await tick();
+
+    expect(activeStep(flow.app)).toBe("method");
+    click(flow.app, '[data-onboarding-step="method"] [data-onboarding-back]');
+    expect(activeStep(flow.app)).toBe("welcome");
+    expect(flow.app.querySelector<HTMLButtonElement>("#create-new-button")?.disabled).toBe(false);
   });
 
   test("keeps word positions labelled once filled, and cell visibility on the inputs", async () => {
@@ -345,5 +428,61 @@ describe("staged onboarding", () => {
     expect(activeStep(flow.app)).toBe("ledger");
     click(flow.app, '[data-onboarding-step="ledger"] [data-onboarding-back]');
     expect(activeStep(flow.app)).toBe("method");
+  });
+});
+
+describe("locked vault handoff", () => {
+  const unlockedStatus: WalletStatus = {
+    ...status,
+    accountCount: 1,
+    hasVault: true,
+    locked: false,
+  };
+
+  test("forwards the passphrase and renders the unlocked status", async () => {
+    document.body.innerHTML = `<main id="app">${locked({ ...unlockedStatus, locked: true })}</main>`;
+    const passphrases: string[] = [];
+    const rendered: WalletStatus[] = [];
+    bindUnlock({
+      app: document.querySelector("#app"),
+      render: async (next) => {
+        rendered.push(next);
+      },
+      wallet: {
+        unlockVault: async (vaultPassphrase: string) => {
+          passphrases.push(vaultPassphrase);
+          return unlockedStatus;
+        },
+      } as unknown as SidepanelWallet,
+    });
+
+    setValue(document, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    document.querySelector<HTMLFormElement>("#unlock-form")?.requestSubmit();
+    await tick();
+
+    expect(passphrases).toEqual([PASSPHRASE]);
+    expect(rendered).toEqual([unlockedStatus]);
+  });
+
+  test("restores the form and reports a rejected unlock", async () => {
+    document.body.innerHTML = `<main id="app">${locked({ ...unlockedStatus, locked: true })}</main>`;
+    bindUnlock({
+      app: document.querySelector("#app"),
+      render: async () => undefined,
+      wallet: {
+        unlockVault: async () => {
+          throw new Error("Incorrect passphrase");
+        },
+      } as unknown as SidepanelWallet,
+    });
+
+    setValue(document, 'input[name="vaultPassphrase"]', "wrong passphrase");
+    document.querySelector<HTMLFormElement>("#unlock-form")?.requestSubmit();
+    await tick();
+
+    expect(document.querySelector("#form-result")?.textContent).toBe("Incorrect passphrase");
+    expect(
+      document.querySelector<HTMLButtonElement>('#unlock-form button[type="submit"]')?.disabled,
+    ).toBe(false);
   });
 });

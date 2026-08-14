@@ -90,9 +90,6 @@ const currentWsOrigin = (): string => {
 // Resolved bases the data layer imports.
 // -----------------------------------------------------------------------------
 
-/** AVNU quote/build API. */
-export const AVNU_BASE = override("AVNU") ?? AVNU_DIRECT_BASE;
-
 /** AVNU market-data API used by token lists, prices, and charts. */
 export const AVNU_MARKETS_BASE = USE_DEV_PROXY
   ? "/proxy/avnu-markets"
@@ -123,8 +120,3 @@ export const EXTENDED_WS_BASE = USE_DEV_PROXY
 export const STARKSCAN_BASE = USE_DEV_PROXY
   ? "/proxy/starkscan/v1/SN_MAIN"
   : (override("STARKSCAN") ?? STARKSCAN_DIRECT_BASE);
-
-/**
- * RPC failover list. Cartridge permits browser origins, so no proxy is needed.
- */
-export const RPC_URLS: readonly [string, ...string[]] = RPC_DIRECT_URLS;

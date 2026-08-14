@@ -6,7 +6,7 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
@@ -97,7 +97,7 @@ const addressBookRow = (entry: NonNullable<WalletPreferences["addressBook"]>[num
     ${icon("chevronRight")}
   </button>`;
 
-const multisigRecipientRow = (record: MultisigRecord): string => {
+const multisigRecipientRow = (record: ArgentMultisigRecord): string => {
   const name = multisigDisplayName(record);
   return `
   <button class="send-recipient-row" type="button"
@@ -108,7 +108,7 @@ const multisigRecipientRow = (record: MultisigRecord): string => {
     <span class="send-recipient-copy">
       <strong>${escapeHtml(name)}</strong>
       <code>${escapeHtml(accountLabel(record.address))}</code>
-      <small>Multisig · ${record.quorum} of ${record.signers.length} signers required</small>
+      <small>Argent Multisig account</small>
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -118,7 +118,7 @@ const recipientStage = (
   status: WalletStatus,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
-  multisigs: readonly MultisigRecord[],
+  multisigs: readonly ArgentMultisigRecord[],
 ): string => {
   const accounts = sendRecipientAccounts(status.accounts, status.networkId);
   const sharedAccounts = multisigs.filter((record) => record.networkId === status.networkId);
@@ -373,7 +373,7 @@ export const sendFlow = (
   prices: Readonly<Record<string, number>> = {},
   changes: Readonly<Record<string, number>> = {},
   currency: DisplayCurrency = preferences?.displayCurrency ?? "usd",
-  multisigs: readonly MultisigRecord[] = [],
+  multisigs: readonly ArgentMultisigRecord[] = [],
   intent: SendIntent | null = null,
 ): string => {
   const assets = sendAssets(status.networkId, preferences, balances, prices, changes);

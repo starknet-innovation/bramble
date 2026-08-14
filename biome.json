@@ -1,14 +1,14 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
   "files": {
     "includes": [
       "**",
       "!.claude",
       "!.impeccable",
       "!.playwright-cli",
-      "!apps",
+      "!apps/terminal",
+      "!apps/ui-lab",
       "!bun.lock",
-      "!contracts/multisig/target",
       "!dist",
       "!node_modules",
       "!output",

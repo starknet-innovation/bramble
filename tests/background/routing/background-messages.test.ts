@@ -1,6 +1,8 @@
 /**
  * Background message checks prove typed wallet command dispatch: account
- * creation, mnemonic generation, grants, approvals, and session locking.
+ * creation, mnemonic generation, approvals, and session locking. Origin grants
+ * are minted only by the approval path (see MCW-V09-124), so they are covered
+ * through wallet.approveOrigin rather than a direct grant message.
  * Sender trust gates live in background-sender-gates.test.ts.
  */
 import { describe, expect, test } from "bun:test";
@@ -8,8 +10,12 @@ import { createPreferencesStore, defaultWalletPreferences } from "@mc-wallet/set
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import type { CreateVaultAccountInput, OriginGrantInput } from "@mc-wallet/vault/service";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
+import { createLedgerSignQueue } from "../../../apps/extension/src/background/ledger/ledger-sign-queue";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
-import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
+import {
+  createActiveStateCoordinator,
+  unavailablePreferencesStore,
+} from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
   account,
@@ -45,6 +51,7 @@ describe("createMessageHandler", () => {
     await expect(
       handler(
         {
+          accountContractType: "openzeppelin",
           accountIndex: 0,
           mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
           networkId: "SN_SEPOLIA",
@@ -77,6 +84,7 @@ describe("createMessageHandler", () => {
   test("previews only public account metadata for extension pages", async () => {
     const handler = createMessageHandler(createWallet(), "extension-id");
     const message = {
+      accountContractType: "openzeppelin",
       mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
       networkId: "SN_SEPOLIA",
       type: "wallet.previewAccount",
@@ -128,46 +136,6 @@ describe("createMessageHandler", () => {
         { id: "extension-id", url: "https://other.example/app" },
       ),
     ).resolves.toEqual({ error: "origin not connected" });
-  });
-
-  test("validates origin grant messages", async () => {
-    const captured: OriginGrantInput[] = [];
-    const handler = createMessageHandler(
-      createWallet({ captureGrant: (input) => captured.push(input) }),
-      "extension-id",
-    );
-
-    await expect(
-      handler(
-        {
-          origin: "not-a-url",
-          type: "wallet.grantOrigin",
-          vaultPassphrase,
-        },
-        sender,
-      ),
-    ).resolves.toEqual({ error: "invalid grant origin request" });
-    expect(captured).toEqual([]);
-  });
-
-  test("grants normalized origins through the wallet service only", async () => {
-    const captured: OriginGrantInput[] = [];
-    const handler = createMessageHandler(
-      createWallet({ captureGrant: (input) => captured.push(input) }),
-      "extension-id",
-    );
-
-    await expect(
-      handler(
-        {
-          origin: "https://example.com/path",
-          type: "wallet.grantOrigin",
-          vaultPassphrase,
-        },
-        sender,
-      ),
-    ).resolves.toEqual({ accounts: [account], ok: true });
-    expect(captured[0]?.origin).toBe("https://example.com");
   });
 
   test("reads only origin-granted accounts", async () => {
@@ -312,7 +280,48 @@ describe("createMessageHandler", () => {
     const locking = handler({ type: "wallet.lock" }, sender);
     release.resolve();
 
-    await expect(unlocking).resolves.toMatchObject({ locked: false });
+    await expect(unlocking).resolves.toEqual({ error: "wallet locked" });
+    await expect(locking).resolves.toMatchObject({ locked: true });
+    expect(session.isUnlocked()).toBe(false);
+  });
+
+  test("a lock revokes a Ledger holder and operations already queued behind it", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const coordinator = createActiveStateCoordinator();
+    const queue = createLedgerSignQueue(
+      () => undefined,
+      undefined,
+      () => (session.isUnlocked() ? session.generation() : null),
+    );
+    const started = Promise.withResolvers<void>();
+    const parked = coordinator
+      .run(async () => {
+        started.resolve();
+        await queue.request({
+          accountId: account.id,
+          messageHash: "0x123",
+          path: "m/2645'/1195502025'/1148870696'/0'/0'/0",
+          publicKeyX: account.publicKeyX,
+        });
+      })
+      .catch((error: unknown) => error);
+    await started.promise;
+    const queuedState = coordinator.run(async () => session.isUnlocked());
+
+    const handler = createMessageHandler(createWallet(), "extension-id", {
+      activeStateCoordinator: coordinator,
+      ledgerSignQueue: queue,
+      session,
+    });
+    const locking = handler({ type: "wallet.lock" }, sender);
+    await Promise.resolve();
+    const pendingAfterLock = queue.pending().length;
+    if (pendingAfterLock > 0) queue.rejectAll("test cleanup");
+
+    expect(pendingAfterLock).toBe(0);
+    expect(await parked).toBeInstanceOf(Error);
+    expect(await queuedState).toBe(false);
     await expect(locking).resolves.toMatchObject({ locked: true });
     expect(session.isUnlocked()).toBe(false);
   });
@@ -430,14 +439,43 @@ describe("createMessageHandler", () => {
       accounts: [account],
       ok: true,
     });
-    expect(captured[0]).toEqual({
+    expect(captured[0]).toMatchObject({
       origin: "https://example.com",
       vaultPassphrase,
     });
+    expect(captured[0]?.isAuthorized?.()).toBe(true);
     await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toEqual({
       ok: true,
       pending: [],
     });
+  });
+
+  test("fails a connect grant whose unlock generation expires during the vault write", async () => {
+    const approvals = createApprovalQueue();
+    const pending = approvals.request("https://example.com");
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    let checkedBefore = false;
+    let checkedAfter = false;
+    const handler = createMessageHandler(
+      {
+        ...createWallet(),
+        async grantOrigin(input: OriginGrantInput) {
+          checkedBefore = input.isAuthorized?.() === true;
+          session.lock();
+          checkedAfter = input.isAuthorized?.() === true;
+          throw new Error("wallet locked");
+        },
+      },
+      "extension-id",
+      { approvals, session },
+    );
+
+    await expect(
+      handler({ id: pending.id, type: "wallet.approveOrigin" }, sender),
+    ).resolves.toEqual({ error: "approval execution failed" });
+    expect(checkedBefore).toBe(true);
+    expect(checkedAfter).toBe(false);
   });
 
   test("rejects malformed approval ids", async () => {

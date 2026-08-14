@@ -1,7 +1,7 @@
 import { type Call, CallData } from "starknet";
 
 /** A concise fact shown before the terminal hands a request to the wallet. */
-export type WalletRequestDetail = {
+type WalletRequestDetail = {
   readonly label: string;
   readonly value: string;
 };

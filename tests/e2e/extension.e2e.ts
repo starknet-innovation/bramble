@@ -150,9 +150,9 @@ test("signs SNIP-12 typed data through the injected provider approval", async ({
     await resolvePendingApproval(sidepanel, "Sign request", dappServer.origin, "approve");
 
     await expect(dapp.getByTestId("sign-result")).toContainText('"status":"resolved"');
-    // A SNIP-12 signature is returned to the dapp as an [r, s] felt array.
+    // The default Argent account returns its Stark signer envelope.
     await expect(dapp.getByTestId("sign-result")).toContainText(
-      /"signature":\["0x[0-9a-f]+","0x[0-9a-f]+"\]/,
+      /"signature":\["1","0","0x[0-9a-f]+","0x[0-9a-f]+","0x[0-9a-f]+"\]/,
     );
   } finally {
     await dappServer.close();

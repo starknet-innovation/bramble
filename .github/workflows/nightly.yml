@@ -9,7 +9,7 @@ name: Nightly
 #
 # Active-branch resolution order:
 #   1. repo variable `vars.ACTIVE_RELEASE_BRANCH` if set;
-#   2. otherwise the highest-semver `release/vX.Y` branch;
+#   2. otherwise the highest-semver `release/vX.Y[.Z]` branch;
 #   3. if neither exists, exit cleanly with a note (nothing to run).
 on:
   schedule:
@@ -57,7 +57,7 @@ jobs:
             candidate="$ACTIVE_RELEASE_BRANCH"
           else
             echo "Auto-resolving the highest-semver release/* branch ..."
-            branches="$(printf '%s\n' "$available" | grep -E '^release/v[0-9]+\.[0-9]+$' || true)"
+            branches="$(printf '%s\n' "$available" | grep -E '^release/v[0-9]+\.[0-9]+(\.[0-9]+)?$' || true)"
             if [ -z "$branches" ]; then
               echo "No release/* branch found and vars.ACTIVE_RELEASE_BRANCH is unset — nothing to run."
               {
@@ -69,15 +69,15 @@ jobs:
               echo "branch=" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            best="$(printf '%s\n' "$branches" | sed 's#^release/v##' | sort -t. -k1,1n -k2,2n | tail -1)"
+            best="$(printf '%s\n' "$branches" | sed 's#^release/v##' | sort -V | tail -1)"
             candidate="release/v$best"
           fi
 
           # A workflow input or repo variable is untrusted configuration. Permit
           # only the canonical release namespace and require an exact branch in
           # this repository before any self-hosted runner checks it out.
-          if [[ ! "$candidate" =~ ^release/v[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Nightly branch must match release/vX.Y exactly."
+          if [[ ! "$candidate" =~ ^release/v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Nightly branch must match release/vX.Y or release/vX.Y.Z exactly."
             exit 1
           fi
           if ! grep -Fxq -- "$candidate" <<< "$available"; then
@@ -133,6 +133,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: 1.96.1
+          # scripts/vendor-krusty.ts requires this exact rustc release and
+          # builds the crypto core for this target; it refuses to run on any
+          # other toolchain, so two builds stay comparable.
+          targets: wasm32-unknown-unknown
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -145,9 +149,6 @@ jobs:
           key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
           restore-keys: |
             cargo-${{ runner.os }}-
-      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
-        with:
-          scarb-version: 2.18.0
       - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
 
@@ -156,7 +157,7 @@ jobs:
       - name: Vendor crypto, privacy, and contract toolchain
         id: vendor
         continue-on-error: true
-        run: bun run vendor:krusty && bun run vendor:multisig && bun run vendor:privacy
+        run: bun run vendor:krusty && bun run vendor:argent && bun run vendor:privacy
       - name: Build extension
         id: build
         continue-on-error: true
@@ -193,7 +194,7 @@ jobs:
         run: |
           set -euo pipefail
           declare -A GATES=(
-            ["Vendor toolchain (krusty+multisig)"]="$VENDOR"
+            ["Vendor toolchain (krusty+argent)"]="$VENDOR"
             ["Extension build"]="$BUILD"
             ["Dependency audit (bun audit)"]="$AUDIT"
             ["E2E browser install"]="$E2E_INSTALL"
@@ -287,7 +288,7 @@ jobs:
             const { owner, repo } = context.repo;
             const branch = process.env.BRANCH;
             const gates = [
-              ["Vendor toolchain (krusty+multisig)", process.env.VENDOR],
+              ["Vendor toolchain (krusty+argent)", process.env.VENDOR],
               ["Extension build", process.env.BUILD],
               ["Dependency audit (bun audit)", process.env.AUDIT],
               ["E2E browser install", process.env.E2E_INSTALL],

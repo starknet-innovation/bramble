@@ -1,47 +1,64 @@
 /**
  * STRK20 requests for the exhaustive background key-boundary scan.
+ *
+ * These are the entries the scan most needs to be live: every one of them but
+ * the network-config write really derives the account-scoped viewing key on its
+ * way through the STRK20 service double, exactly where the official SDK adapter
+ * would, so a response that never got past its input validator would leave the
+ * one secret this module exists to guard completely unscanned. That set is
+ * pinned in tests/background/key-boundary.test.ts, so this comment cannot drift
+ * away from what the entries actually do.
  */
-import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
-
-/** One request and the runtime sender that is allowed to issue it. */
-export type KeyBoundaryMessage = {
-  readonly message: Record<string, unknown>;
-  readonly sender: RuntimeSender;
-};
-
-type Strk20MessageFixtures = {
-  readonly contentSender: RuntimeSender;
-  readonly extensionSender: RuntimeSender;
-  readonly origin: string;
-};
-
-/** Builds the STRK20 portion of the key-boundary message catalog. */
-export const strk20KeyBoundaryMessages = ({
+import {
   contentSender,
   extensionSender,
-  origin,
-}: Strk20MessageFixtures): readonly KeyBoundaryMessage[] => [
+  KEY_BOUNDARY_ORIGIN,
+  KEY_BOUNDARY_RECIPIENT,
+  KEY_BOUNDARY_TOKENS,
+} from "./key-boundary-fixtures";
+import type { KeyBoundaryMessage } from "./key-boundary-types";
+
+const origin = KEY_BOUNDARY_ORIGIN;
+const recipient = KEY_BOUNDARY_RECIPIENT;
+const token = KEY_BOUNDARY_TOKENS.eth.address;
+
+/** The STRK20 portion of the key-boundary message catalog. */
+export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   {
+    // Routed at SN_SEPOLIA so the active network keeps the bundled Mainnet
+    // routing every other STRK20 entry below is exercised against.
     message: {
       config: {
         discoveryUrl: "https://discovery.example",
+        ohttpEnabled: false,
         poolAddress: "0x1",
         proverUrl: "https://prover.example",
         subaccountAnonymizerAddress: "0x2",
       },
-      networkId: "SN_MAIN",
+      networkId: "SN_SEPOLIA",
       type: "wallet.setStrk20NetworkConfig",
     },
     sender: extensionSender,
   },
-  { message: { origin, type: "wallet.strk20Balances" }, sender: contentSender },
-  { message: { origin, type: "wallet.strk20Register" }, sender: contentSender },
   {
-    message: { origin, params: {}, type: "wallet.strk20InvokeTransaction" },
+    message: { origin, tokens: [token], type: "wallet.strk20Balances" },
     sender: contentSender,
   },
   {
-    message: { origin, params: {}, type: "wallet.strk20PrepareInvoke" },
+    message: {
+      actions: [{ amount: "0x1", recipient, token, type: "transfer" }],
+      origin,
+      type: "wallet.strk20InvokeTransaction",
+    },
+    sender: contentSender,
+  },
+  {
+    message: {
+      actions: [{ amount: "0x1", recipient, token, type: "transfer" }],
+      origin,
+      simulate: false,
+      type: "wallet.strk20PrepareInvoke",
+    },
     sender: contentSender,
   },
   {
@@ -53,43 +70,56 @@ export const strk20KeyBoundaryMessages = ({
     sender: contentSender,
   },
   { message: { type: "wallet.strk20State" }, sender: extensionSender },
-  { message: { type: "wallet.strk20PrepareRegistration" }, sender: extensionSender },
   {
+    live: async (ids) => ({ tokenId: ids.tokenId }),
     message: {
       amount: "1",
-      recipient: "0x123",
-      tokenId: "SN_MAIN:0x1",
+      recipient,
+      tokenId: "",
       type: "wallet.strk20PrepareDeposit",
     },
     sender: extensionSender,
   },
   {
+    live: async (ids) => ({ tokenId: ids.tokenId }),
     message: {
       amount: "1",
-      recipient: "0x123",
-      tokenId: "SN_MAIN:0x1",
+      recipient,
+      tokenId: "",
       type: "wallet.strk20PrepareTransfer",
     },
     sender: extensionSender,
   },
   {
+    live: async (ids) => ({ tokenId: ids.tokenId }),
     message: {
       amount: "1",
-      recipient: "0x123",
-      tokenId: "SN_MAIN:0x1",
+      recipient,
+      tokenId: "",
       type: "wallet.strk20PrepareWithdraw",
     },
     sender: extensionSender,
   },
   {
-    message: { address: "0x123", tokenId: "SN_MAIN:0x1", type: "wallet.strk20RecipientStatus" },
+    live: async (ids) => ({ tokenId: ids.tokenId }),
+    message: { address: recipient, tokenId: "", type: "wallet.strk20RecipientStatus" },
     sender: extensionSender,
   },
   {
-    message: {
-      preparationId: `sha256:${"0".repeat(64)}`,
-      type: "wallet.strk20Execute",
-    },
+    live: async (ids) => ({ preparationId: await ids.strk20PreparationId() }),
+    message: { preparationId: "", type: "wallet.strk20Execute" },
     sender: extensionSender,
   },
+  // The two registration journeys come last: they are the only STRK20 entries
+  // that require an account the pool has never seen, and the flip that puts the
+  // account in that state is deliberately one-way.
+  {
+    live: async (ids) => {
+      ids.unregisterStrk20Account();
+      return {};
+    },
+    message: { type: "wallet.strk20PrepareRegistration" },
+    sender: extensionSender,
+  },
+  { message: { origin, type: "wallet.strk20Register" }, sender: contentSender },
 ];

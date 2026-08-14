@@ -6,7 +6,9 @@
  * boundary this module documents).
  */
 
+import type { ConnectedSite } from "@mc-wallet/core/origin";
 import type {
+  AccountContractType,
   AccountRef,
   DerivedAccountRef,
   ImportedAccountRef,
@@ -50,6 +52,8 @@ export type SignHashInput = {
  */
 export type OriginGrantInput = {
   readonly accountId?: string;
+  /** Live capability check supplied by the privileged session coordinator. */
+  readonly isAuthorized?: () => boolean;
   readonly origin: string;
   readonly vaultPassphrase: string;
 };
@@ -63,12 +67,9 @@ export type RevokeOriginInput = {
 };
 
 /**
- * A site with a persisted origin grant plus how many accounts it can see.
+ * Connected-site DTO re-exported from the shared runtime protocol boundary.
  */
-export type ConnectedSite = {
-  readonly accountCount: number;
-  readonly origin: string;
-};
+export type { ConnectedSite } from "@mc-wallet/core/origin";
 
 /**
  * Active account selection input.
@@ -91,6 +92,7 @@ export type EnsureNetworkAccountInput = {
  * retained recovery phrase.
  */
 export type AddDerivedAccountInput = {
+  readonly accountContractType: AccountContractType;
   readonly networkId: StarknetNetworkId;
   readonly vaultPassphrase: string;
 };
@@ -101,6 +103,8 @@ export type AddDerivedAccountInput = {
  * plain preferences or logged.
  */
 export type ImportRawKeyAccountInput = {
+  readonly accountContractType: AccountContractType;
+  readonly deploymentSalt?: string;
   readonly networkId: StarknetNetworkId;
   readonly privateKey: string;
   readonly vaultPassphrase: string;
@@ -111,7 +115,9 @@ export type ImportRawKeyAccountInput = {
  * No key material is accepted or retained; the device signs every transaction.
  */
 export type AddLedgerAccountInput = {
+  readonly accountContractType: AccountContractType;
   readonly accountIndex: number;
+  readonly deploymentSalt?: string;
   readonly eip2645application?: string;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
@@ -153,6 +159,8 @@ export type ForgetLedgerStrk20ViewingKeyInput = Omit<
  * reads no secrets and writes nothing to the vault.
  */
 export type DeriveLedgerAccountsInput = {
+  readonly accountContractType: AccountContractType;
+  readonly deploymentSalt?: string;
   readonly entries: readonly LedgerPubKeyEntry[];
   readonly networkId: StarknetNetworkId;
 };

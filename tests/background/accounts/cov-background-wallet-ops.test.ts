@@ -19,6 +19,7 @@ const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
 const tokenId = `SN_MAIN:ETH:${ETH}`;
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -29,6 +30,7 @@ const account: AccountRef = {
 };
 const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
 const vaultPassphrase = "correct horse battery staple";
+const reviewedFee = { overallFee: "2500000000000000", unit: "FRI" } as const;
 const sender: RuntimeSender = {
   id: "extension-id",
   url: "chrome-extension://extension-id/sidepanel.html",
@@ -192,6 +194,7 @@ describe("wallet-ops signer closure and activity feed", () => {
         accountId: account.id,
         amount: "1.5",
         recipient: "0x777",
+        reviewedFee,
         speed: "fast",
         tokenId,
         type: "wallet.transfer",

@@ -37,8 +37,10 @@ vi.mock("../../protocols/index", async () => {
   const actual = await vi.importActual<typeof import("../../protocols/index")>("../../protocols/index");
   return {
     ...actual,
-    avnu: { ...actual.avnu, buildSwapCalls: swaps.avnuBuild, quoteSwap: swaps.avnuQuote },
-    ekubo: { ...actual.ekubo, buildSwapCalls: swaps.ekuboBuild, quoteSwap: swaps.ekuboQuote },
+    buildAvnuSwapCalls: swaps.avnuBuild,
+    buildEkuboSwapCalls: swaps.ekuboBuild,
+    quoteAvnuSwap: swaps.avnuQuote,
+    quoteEkuboSwap: swaps.ekuboQuote,
   };
 });
 
@@ -507,7 +509,7 @@ describe("Tokens screen", () => {
     await screen.findAllByText("Ekubo");
 
     fireEvent.click(screen.getByRole("button", { name: "Select ETH token" }));
-    fireEvent.click(screen.getByRole("option", { name: /USDC USD Coin/ }));
+    fireEvent.click(screen.getByRole("option", { name: /USDC\s*USD Coin/ }));
 
     expect(screen.getByRole("button", { name: "Select USDC token" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Select EKUBO token" })).toBeTruthy();

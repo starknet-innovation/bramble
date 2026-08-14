@@ -1,6 +1,8 @@
 /**
  * Sender trust rules for extension pages and content-script provider messages.
  */
+
+import { isOwnDataProperty } from "@mc-wallet/core/json";
 import {
   APPROVAL_RUNTIME_MESSAGE_TYPES,
   DAPP_RUNTIME_MESSAGE_TYPES,
@@ -24,7 +26,15 @@ const extensionOrigins = (extensionId: string): readonly string[] => [
   `moz-extension://${extensionId}`,
 ];
 
-const senderOrigins = (sender: RuntimeSender | undefined): readonly string[] =>
+/**
+ * Every browser-supplied origin signal present on a runtime sender
+ * (`sender.origin` and the origin of `sender.url`), with missing ones dropped.
+ * These come from the browser, never from the message body, so they are the only
+ * origin evidence a gate may trust. Returns an empty list when the sender
+ * carries no origin at all, which every caller must treat as untrusted rather
+ * than as a match.
+ */
+export const senderOrigins = (sender: RuntimeSender | undefined): readonly string[] =>
   [sender?.origin, senderUrlOrigin(sender)].filter((origin): origin is string => !!origin);
 
 /**
@@ -119,9 +129,7 @@ const readMessageType = (message: unknown): string | null => {
     return null;
   }
   const descriptor = Object.getOwnPropertyDescriptor(message, "type");
-  return descriptor?.enumerable === true &&
-    "value" in descriptor &&
-    typeof descriptor.value === "string"
+  return isOwnDataProperty(descriptor) && typeof descriptor.value === "string"
     ? descriptor.value
     : null;
 };

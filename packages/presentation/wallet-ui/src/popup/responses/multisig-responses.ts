@@ -1,204 +1,252 @@
-/**
- * Pure multisig response validators for background runtime data, kept out of
- * responses.ts so that file stays within the size budget.
- */
+/** Strict response validators for privileged Argent multisig messages. */
 import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
+import type { ArgentMultisigConfig } from "@mc-wallet/multisig/chain";
+import { MULTISIG_LIMITS } from "@mc-wallet/multisig/chain";
 import {
-  isMultisigConfirmationMode,
-  type MultisigConfirmationMode,
-} from "@mc-wallet/multisig/confirmation";
-import {
-  isMultisigProposalRecord,
-  isMultisigRecord,
-  type MultisigProposalRecord,
-  type MultisigRecord,
+  type ArgentMultisigRecord,
+  type ArgentMultisigSigningIntent,
+  canReplaceArgentMultisigSigningIntent,
+  isArgentMultisigRecord,
+  isArgentMultisigSigningIntent,
 } from "@mc-wallet/multisig/repository";
-import { isMultisigSyncWarning, type MultisigSyncWarning } from "@mc-wallet/multisig/sync";
+import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
-import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
-import { isFeeShape } from "./responses-transfer";
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  isStarknetNetworkId,
+  type StarknetNetworkId,
+} from "@mc-wallet/wallet-model/networks";
 
 /**
- * Fee review for one exact signer, proposal, and confirmation mode.
+ * Fresh untrusted chain authority paired with one watched account.
  */
-export type MultisigConfirmationReviewResponse = {
-  readonly confirmationReview: {
-    readonly fee: { readonly overallFee: string; readonly unit: string } | null;
-    readonly feeEstimateFailed: boolean;
-    readonly mode: MultisigConfirmationMode;
-    readonly proposalId: string;
-    readonly signerAccountId: string;
-  };
+export type ArgentMultisigView = {
+  readonly config: ArgentMultisigConfig | null;
+  readonly record: ArgentMultisigRecord;
+};
+
+/**
+ * Versioned immutable package exchanged between independent signers.
+ */
+export type ArgentMultisigIntentPackage = {
+  readonly intent: ArgentMultisigSigningIntent;
+  readonly kind: "mc-wallet.argent-multisig-intent";
+  readonly version: 1;
+};
+
+/**
+ * Exact constructor and fee authority reviewed before deployment.
+ */
+export type ArgentMultisigDeploymentReview = {
+  readonly address: string;
+  readonly fee: FeeEstimate;
+  readonly name?: string;
+  readonly networkId: StarknetNetworkId;
+  readonly salt: string;
+  readonly signerAccountId: string;
+  readonly signerPublicKeys: readonly string[];
+  readonly threshold: number;
+};
+
+/**
+ * Complete watched-account snapshot returned by the background.
+ */
+export type ArgentMultisigsResponse = {
+  readonly intents: readonly ArgentMultisigSigningIntent[];
+  readonly multisigs: readonly ArgentMultisigView[];
   readonly ok: true;
 };
 
 /**
- * Checks a pre-sign multisig fee review returned by the background.
+ * One frozen intent and its deterministic exchange package.
  */
-export const isMultisigConfirmationReviewResponse = (
+export type ArgentMultisigIntentResponse = {
+  readonly feeReview?: FeeEstimate;
+  readonly intent: ArgentMultisigSigningIntent;
+  readonly intentPackage?: ArgentMultisigIntentPackage;
+  readonly ok: true;
+  readonly transactionHash?: string;
+};
+
+/**
+ * Successful Argent multisig deployment response.
+ */
+export type ArgentMultisigDeployResponse = {
+  readonly address: string;
+  readonly multisig: ArgentMultisigView;
+  readonly ok: true;
+  readonly transactionHash: string;
+};
+
+const canonicalNonZeroFelt = (value: unknown): value is string =>
+  typeof value === "string" && isNonZeroStarkFieldElement(value) && canonicalFelt(value) === value;
+
+const isConfig = (value: unknown): value is ArgentMultisigConfig => {
+  if (!isRecord(value) || !Array.isArray(value["signerGuids"])) return false;
+  const signerGuids = value["signerGuids"];
+  return (
+    hasOnlyKnownKeys(value, ["classHash", "signerGuids", "threshold"]) &&
+    value["classHash"] === ARGENT_MULTISIG_CONTRACT.classHash &&
+    signerGuids.length > 0 &&
+    signerGuids.length <= MULTISIG_LIMITS.signers &&
+    signerGuids.every(
+      (guid, index) =>
+        canonicalNonZeroFelt(guid) &&
+        (index === 0 || BigInt(signerGuids[index - 1] as string) < BigInt(guid)),
+    ) &&
+    Number.isSafeInteger(value["threshold"]) &&
+    Number(value["threshold"]) > 0 &&
+    Number(value["threshold"]) <= signerGuids.length
+  );
+};
+
+const isView = (value: unknown): value is ArgentMultisigView =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["config", "record"]) &&
+  isArgentMultisigRecord(value["record"]) &&
+  (value["config"] === null || isConfig(value["config"]));
+
+const isIntentPackage = (value: unknown): value is ArgentMultisigIntentPackage =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["intent", "kind", "version"]) &&
+  value["kind"] === "mc-wallet.argent-multisig-intent" &&
+  value["version"] === 1 &&
+  isArgentMultisigSigningIntent(value["intent"]);
+
+/**
+ * Validates watched accounts and frozen intents before the UI renders them.
+ */
+export const isArgentMultisigsResponse = (value: unknown): value is ArgentMultisigsResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["intents", "multisigs", "ok"]) &&
+  value["ok"] === true &&
+  Array.isArray(value["multisigs"]) &&
+  value["multisigs"].every(isView) &&
+  Array.isArray(value["intents"]) &&
+  value["intents"].every(isArgentMultisigSigningIntent);
+
+/**
+ * Validates one add or refresh result and rejects unknown fields.
+ */
+export const isArgentMultisigResponse = (
   value: unknown,
-): value is MultisigConfirmationReviewResponse => {
+): value is {
+  readonly intents: readonly ArgentMultisigSigningIntent[];
+  readonly multisig: ArgentMultisigView;
+  readonly ok: true;
+} =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["intents", "multisig", "ok"]) &&
+  value["ok"] === true &&
+  isView(value["multisig"]) &&
+  Array.isArray(value["intents"]) &&
+  value["intents"].every(isArgentMultisigSigningIntent);
+
+/**
+ * Validates prepare/import/sign/submit results and exact exchange packages.
+ */
+export const isArgentMultisigIntentResponse = (
+  value: unknown,
+): value is ArgentMultisigIntentResponse => {
   if (
     !isRecord(value) ||
     !isJson(value) ||
-    !hasOnlyKnownKeys(value, ["confirmationReview", "ok"]) ||
+    !hasOnlyKnownKeys(value, ["feeReview", "intent", "intentPackage", "ok", "transactionHash"]) ||
     value["ok"] !== true ||
-    !isRecord(value["confirmationReview"]) ||
-    !hasOnlyKnownKeys(value["confirmationReview"], [
-      "fee",
-      "feeEstimateFailed",
-      "mode",
-      "proposalId",
-      "signerAccountId",
-    ])
+    !isArgentMultisigSigningIntent(value["intent"]) ||
+    (value["feeReview"] !== undefined && !isFeeEstimate(value["feeReview"])) ||
+    (value["intentPackage"] !== undefined && !isIntentPackage(value["intentPackage"])) ||
+    (value["transactionHash"] !== undefined && !canonicalNonZeroFelt(value["transactionHash"]))
   ) {
     return false;
   }
-  const review = value["confirmationReview"];
   return (
-    (review["fee"] === null || isFeeShape(review["fee"])) &&
-    typeof review["feeEstimateFailed"] === "boolean" &&
-    isMultisigConfirmationMode(review["mode"]) &&
-    typeof review["proposalId"] === "string" &&
-    review["proposalId"].length > 0 &&
-    review["proposalId"].length <= 200 &&
-    isAccountId(review["signerAccountId"])
+    value["intentPackage"] === undefined ||
+    (canReplaceArgentMultisigSigningIntent(value["intent"], value["intentPackage"].intent) &&
+      canReplaceArgentMultisigSigningIntent(value["intentPackage"].intent, value["intent"]))
   );
 };
 
 /**
- * Watched multisigs and proposals accepted from the background boundary.
+ * Validates a deployment fee review without normalizing any echoed field.
  */
-export type MultisigsResponse = {
-  readonly multisigs: readonly MultisigRecord[];
-  readonly ok: true;
-  readonly proposals: readonly MultisigProposalRecord[];
-};
-
-/**
- * Checks multisig list responses before rendering.
- */
-export const isMultisigsResponse = (value: unknown): value is MultisigsResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["multisigs", "ok", "proposals"]) &&
-  value["ok"] === true &&
-  Array.isArray(value["multisigs"]) &&
-  value["multisigs"].every(isMultisigRecord) &&
-  Array.isArray(value["proposals"]) &&
-  value["proposals"].every(isMultisigProposalRecord);
-
-/**
- * One watched multisig accepted from the background boundary after an add or
- * refresh, optionally carrying refreshed proposals.
- */
-export type MultisigResponse = {
-  readonly multisig: MultisigRecord;
-  readonly ok: true;
-  readonly proposals?: readonly MultisigProposalRecord[];
-  readonly warnings?: readonly MultisigSyncWarning[];
-};
-
-/**
- * Checks single-multisig responses before rendering.
- */
-export const isMultisigResponse = (value: unknown): value is MultisigResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["multisig", "ok", "proposals", "warnings"]) &&
-  value["ok"] === true &&
-  isMultisigRecord(value["multisig"]) &&
-  (value["proposals"] === undefined ||
-    (Array.isArray(value["proposals"]) && value["proposals"].every(isMultisigProposalRecord))) &&
-  (value["warnings"] === undefined ||
-    (Array.isArray(value["warnings"]) &&
-      value["warnings"].length <= 2 &&
-      value["warnings"].every(isMultisigSyncWarning)));
-
-/**
- * One tracked proposal accepted from the background boundary, with the
- * submission hash when a transaction was broadcast.
- */
-export type MultisigProposalResponse = {
-  readonly ok: true;
-  readonly proposal: MultisigProposalRecord;
-  readonly transactionHash?: string;
-};
-
-/**
- * Checks proposal responses before rendering.
- */
-export const isMultisigProposalResponse = (value: unknown): value is MultisigProposalResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["ok", "proposal", "transactionHash"]) &&
-  value["ok"] === true &&
-  isMultisigProposalRecord(value["proposal"]) &&
-  (value["transactionHash"] === undefined ||
-    (typeof value["transactionHash"] === "string" &&
-      isStarkFieldElement(value["transactionHash"])));
-
-/**
- * Pinned-class declaration status accepted from the background boundary.
- */
-export type MultisigClassStatusResponse = {
-  readonly declared: boolean;
-  readonly declarationPending: boolean;
-  readonly ok: true;
-  readonly transactionHash?: string;
-};
-
-/**
- * Public declaration state rendered by the deploy flow after the response
- * envelope has been validated.
- */
-export type MultisigClassState = Omit<MultisigClassStatusResponse, "ok">;
-
-/**
- * Checks class-status responses before rendering the deploy screen.
- */
-export const isMultisigClassStatusResponse = (
+export const isArgentMultisigDeploymentReviewResponse = (
   value: unknown,
-): value is MultisigClassStatusResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["declarationPending", "declared", "ok", "transactionHash"]) &&
-  value["ok"] === true &&
-  typeof value["declared"] === "boolean" &&
-  typeof value["declarationPending"] === "boolean" &&
-  (value["transactionHash"] === undefined ||
-    (value["declarationPending"] === true &&
-      typeof value["transactionHash"] === "string" &&
-      isStarkFieldElement(value["transactionHash"]))) &&
-  !(value["declared"] && value["declarationPending"]);
-
-/**
- * Deploy submission accepted from the background boundary with the predicted
- * multisig address.
- */
-export type MultisigDeployResponse = {
-  readonly address: string;
-  readonly ok: true;
-  readonly tracked: boolean;
-  readonly transactionHash: string;
+): value is { readonly deploymentReview: ArgentMultisigDeploymentReview; readonly ok: true } => {
+  if (
+    !isRecord(value) ||
+    !isJson(value) ||
+    !hasOnlyKnownKeys(value, ["deploymentReview", "ok"]) ||
+    value["ok"] !== true ||
+    !isRecord(value["deploymentReview"])
+  ) {
+    return false;
+  }
+  const review = value["deploymentReview"];
+  return (
+    hasOnlyKnownKeys(review, [
+      "address",
+      "fee",
+      "name",
+      "networkId",
+      "salt",
+      "signerAccountId",
+      "signerPublicKeys",
+      "threshold",
+    ]) &&
+    canonicalNonZeroFelt(review["address"]) &&
+    isFeeEstimate(review["fee"]) &&
+    (review["name"] === undefined ||
+      (typeof review["name"] === "string" &&
+        review["name"].length > 0 &&
+        review["name"].length <= MULTISIG_LIMITS.nameLength)) &&
+    isStarknetNetworkId(review["networkId"]) &&
+    typeof review["salt"] === "string" &&
+    canonicalFelt(review["salt"]) === review["salt"] &&
+    isAccountId(review["signerAccountId"]) &&
+    Array.isArray(review["signerPublicKeys"]) &&
+    review["signerPublicKeys"].length > 0 &&
+    review["signerPublicKeys"].length <= MULTISIG_LIMITS.signers &&
+    review["signerPublicKeys"].every(canonicalNonZeroFelt) &&
+    Number.isSafeInteger(review["threshold"]) &&
+    Number(review["threshold"]) > 0 &&
+    Number(review["threshold"]) <= review["signerPublicKeys"].length
+  );
 };
 
 /**
- * Checks deploy responses before rendering.
+ * Validates deployment submission and the freshly read account view.
  */
-export const isMultisigDeployResponse = (value: unknown): value is MultisigDeployResponse =>
+export const isArgentMultisigDeployResponse = (
+  value: unknown,
+): value is ArgentMultisigDeployResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["address", "ok", "tracked", "transactionHash"]) &&
+  hasOnlyKnownKeys(value, ["address", "multisig", "ok", "transactionHash"]) &&
   value["ok"] === true &&
-  typeof value["address"] === "string" &&
-  isStarkFieldElement(value["address"]) &&
-  typeof value["tracked"] === "boolean" &&
-  typeof value["transactionHash"] === "string" &&
-  isStarkFieldElement(value["transactionHash"]);
+  canonicalNonZeroFelt(value["address"]) &&
+  canonicalNonZeroFelt(value["transactionHash"]) &&
+  isView(value["multisig"]) &&
+  value["address"] === value["multisig"].record.address;
 
 /**
- * Bare acknowledgement accepted from the background boundary.
+ * Validates pinned class availability for the active network.
+ */
+export const isArgentMultisigClassStatusResponse = (
+  value: unknown,
+): value is { readonly declared: boolean; readonly ok: true } =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["declared", "ok"]) &&
+  value["ok"] === true &&
+  typeof value["declared"] === "boolean";
+
+/**
+ * Validates the exact acknowledgement returned by removal.
  */
 export const isOkResponse = (value: unknown): value is { readonly ok: true } =>
   isRecord(value) && isJson(value) && hasOnlyKnownKeys(value, ["ok"]) && value["ok"] === true;

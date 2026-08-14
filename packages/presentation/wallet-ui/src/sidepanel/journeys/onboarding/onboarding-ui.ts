@@ -8,6 +8,7 @@
  * accepts the real-funds acknowledgement.
  */
 
+import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
 import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -69,6 +70,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const reviewAccount = form.querySelector<HTMLButtonElement>("#review-account-button");
   const submitButton = form.querySelector<HTMLButtonElement>("#create-wallet-button");
   const accountButton = form.querySelector<HTMLButtonElement>("#account-preview");
+  const accountContractSelect = form.querySelector<HTMLSelectElement>(
+    'select[name="accountContractType"]',
+  );
   const previewAddress = form.querySelector<HTMLElement>("[data-preview-address]");
   const phraseToggle = form.querySelector<HTMLButtonElement>("#phrase-toggle");
   const generatedGrid = form.querySelector<HTMLElement>('[data-recovery-grid="generated"]');
@@ -80,6 +84,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   let requiresVerification = false;
   let accountSelected = false;
   let previewMatchesInput = false;
+  let previewGeneration = 0;
+  let mnemonicGeneration = 0;
+  const accountContractType = (): AccountContractType | null =>
+    isAccountContractType(accountContractSelect?.value) ? accountContractSelect.value : null;
 
   const stepFor = (id: string): HTMLElement | undefined =>
     steps.find((step) => step.dataset["onboardingStep"] === id);
@@ -93,6 +101,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     const current = steps.find((step) => !step.hidden);
     if (!next || current === next) {
       return;
+    }
+    if (current?.dataset["onboardingStep"] === "welcome" && id !== "generated") {
+      mnemonicGeneration += 1;
     }
     const wasRecovery = current?.dataset["onboardingStep"] === "recovery";
     const nextIsRecovery = id === "recovery";
@@ -110,6 +121,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   const goBack = (): void => {
     if (history.length > 1) {
+      invalidatePreview();
       history.pop();
       showStep(history.at(-1) ?? "welcome", "back", false);
     }
@@ -185,12 +197,21 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           ? "Highlighted words are not in the BIP39 English list."
           : "";
     }
-    previewMatchesInput = false;
+    invalidatePreview();
   };
 
   const passwordOk = (): boolean => {
     const value = passphraseInput?.value ?? "";
     return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "");
+  };
+
+  const invalidatePreview = (): void => {
+    previewGeneration += 1;
+    previewMatchesInput = false;
+    buttonBusy(reviewAccount, false);
+    if (reviewAccount) {
+      reviewAccount.disabled = !passwordOk();
+    }
   };
 
   const refreshPassword = (): void => {
@@ -213,7 +234,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       passphraseResult.textContent =
         confirmation.length > 0 && !matches ? "Enter the same passphrase in both fields." : "";
     }
-    previewMatchesInput = false;
+    invalidatePreview();
   };
 
   const verificationSatisfied = (): boolean =>
@@ -296,9 +317,14 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   const createNew = form.querySelector<HTMLButtonElement>("#create-new-button");
   createNew?.addEventListener("click", () => {
+    const generation = ++mnemonicGeneration;
     buttonBusy(createNew, true);
     void wallet.generateMnemonic().then(
       (generated) => {
+        if (generation !== mnemonicGeneration) {
+          buttonBusy(createNew, false);
+          return;
+        }
         mnemonic = generated.trim();
         requiresVerification = true;
         generatedWasRevealed = false;
@@ -317,6 +343,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         buttonBusy(createNew, false);
       },
       (error: unknown) => {
+        if (generation !== mnemonicGeneration) {
+          buttonBusy(createNew, false);
+          return;
+        }
         const message = errorMessage(error, "Recovery phrase failed");
         showToast(message, "error");
         buttonBusy(createNew, false);
@@ -358,6 +388,12 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     accountButton.setAttribute("aria-pressed", String(accountSelected));
     refreshAccountGate();
   });
+  accountContractSelect?.addEventListener("change", () => {
+    invalidatePreview();
+    accountSelected = false;
+    accountButton?.setAttribute("aria-pressed", "false");
+    refreshAccountGate();
+  });
 
   reviewAccount?.addEventListener("click", () => {
     if (!passwordOk()) {
@@ -372,9 +408,22 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     if (passphraseResult) {
       passphraseResult.textContent = "Deriving the public account address…";
     }
-    void wallet.previewAccount(mnemonic, selectedNetworkId()).then(
+    const contractType = accountContractType();
+    if (!contractType) {
+      showToast("Choose a supported account contract", "error");
+      buttonBusy(reviewAccount, false);
+      return;
+    }
+    const generation = ++previewGeneration;
+    void wallet.previewAccount(mnemonic, selectedNetworkId(), contractType).then(
       (account) => {
-        previewMatchesInput = true;
+        if (generation !== previewGeneration) {
+          return;
+        }
+        if (contractType !== accountContractType()) {
+          invalidatePreview();
+          return;
+        }
         accountSelected = false;
         accountButton?.setAttribute("aria-pressed", "false");
         if (previewAddress) {
@@ -391,6 +440,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         buttonBusy(reviewAccount, false);
       },
       (error: unknown) => {
+        if (generation !== previewGeneration) {
+          return;
+        }
         const message = errorMessage(error, "Could not derive this account");
         if (passphraseResult) {
           passphraseResult.textContent = message;
@@ -417,56 +469,31 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       return;
     }
     buttonBusy(submitButton, true);
-    void wallet.createAccount(mnemonic, selectedNetworkId(), passphraseInput?.value ?? "").then(
-      async () => {
-        showToast("Wallet created", "success");
-        await deps.render(await wallet.loadStatus());
-      },
-      (error: unknown) => {
-        const message = errorMessage(error, "Account import failed");
-        showToast(message, "error");
-        if (result) {
-          result.textContent = message;
-        }
-        buttonBusy(submitButton, false);
-      },
-    );
+    const contractType = accountContractType();
+    if (!contractType) {
+      showToast("Choose a supported account contract", "error");
+      buttonBusy(submitButton, false);
+      return;
+    }
+    void wallet
+      .createAccount(mnemonic, selectedNetworkId(), passphraseInput?.value ?? "", contractType)
+      .then(
+        async () => {
+          showToast("Wallet created", "success");
+          await deps.render(await wallet.loadStatus());
+        },
+        (error: unknown) => {
+          const message = errorMessage(error, "Account import failed");
+          showToast(message, "error");
+          if (result) {
+            result.textContent = message;
+          }
+          buttonBusy(submitButton, false);
+        },
+      );
   });
 
   syncNetworkGate();
   refreshRecovery();
   refreshPassword();
-};
-
-/**
- * Binds the unlock form on the locked gate screen: submits the passphrase,
- * lands on Home on success, and surfaces failures inline plus as a toast.
- */
-export const bindUnlock = (
-  deps: OnboardingUiDeps,
-  onUnlocked: () => void = () => undefined,
-): void => {
-  const form = deps.app?.querySelector<HTMLFormElement>("#unlock-form");
-  const result = deps.app?.querySelector<HTMLElement>("#form-result");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const vaultPassphrase = String(new FormData(form).get("vaultPassphrase") ?? "");
-    buttonBusy(submitButton, true);
-    void deps.wallet.unlockVault(vaultPassphrase).then(
-      async (status) => {
-        onUnlocked();
-        showToast("Vault unlocked", "success");
-        await deps.render(status);
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Unlock failed"), "error");
-        if (result) {
-          result.textContent = errorMessage(error, "Unlock failed");
-        }
-        buttonBusy(submitButton, false);
-      },
-    );
-  });
 };

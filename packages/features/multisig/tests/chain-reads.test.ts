@@ -1,159 +1,307 @@
 /**
- * On-chain multisig reads: quorum + signer set, per-proposal lifecycle state,
- * and the contract-derived transaction id. Each read is driven through the real
- * withRpcFallback path with RpcProvider.callContract stubbed per entrypoint, so
- * both the happy decode and every malformed-response throw are exercised.
+ * Argent Multisig 0.2 config and signer-membership read boundaries.
  */
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
-  computeMultisigTransactionId,
-  getMultisigConfig,
-  getMultisigProposalStatus,
+  getArgentMultisigConfig,
+  isArgentMultisigCall,
+  isArgentMultisigCalls,
+  isArgentMultisigSignerGuid,
+  nextArgentMultisigPublicConfig,
+  parseArgentMultisigConfigChange,
+  requireSafeArgentMultisigCalls,
+  reviewArgentMultisigConfigChange,
 } from "@mc-wallet/multisig/chain";
-import { RpcProvider } from "starknet";
+import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import type { RpcProvider } from "starknet";
 
-const MULTISIG = "0x111111111111111111111111111111111111111111111111111111111111111";
-const TARGET = "0x222222222222222222222222222222222222222222222222222222222222222";
-const SIGNER_A = "0x333333333333333333333333333333333333333333333333333333333333333";
-const SIGNER_B = "0x444444444444444444444444444444444444444444444444444444444444444";
-const RPC = ["https://rpc.example"];
-const call = { calldata: ["0x5", "0x0"], contractAddress: TARGET, entrypoint: "transfer" };
+const ADDRESS = "0x111";
+const GUID_A = "0x123";
+const GUID_B = "0x456";
+const BLOCK_HASH = "0xabc";
+const RPC_URLS = ["https://rpc.example"];
 
-// Stubs RpcProvider.callContract, dispatching each on-chain view by entrypoint.
-// A missing entrypoint throws so an unexpected call fails loudly.
-const stubContract = (responses: Record<string, readonly string[]>) =>
-  spyOn(RpcProvider.prototype, "callContract").mockImplementation(
-    async (request: { entrypoint: string }) => {
-      const response = responses[request.entrypoint];
-      if (!response) {
-        throw new Error(`unexpected entrypoint ${request.entrypoint}`);
-      }
-      return response as string[];
+const makeProvider =
+  (input: {
+    readonly classHash?: string;
+    readonly readBlocks?: string[];
+    readonly responses?: Readonly<Record<string, readonly string[]>>;
+    readonly thrown?: unknown;
+  }) =>
+  (): RpcProvider =>
+    ({
+      async callContract(request: { readonly entrypoint: string }, blockIdentifier?: string) {
+        if (input.thrown !== undefined) {
+          throw input.thrown;
+        }
+        if (blockIdentifier !== undefined) input.readBlocks?.push(blockIdentifier);
+        const response = input.responses?.[request.entrypoint];
+        if (!response) {
+          throw new Error(`unexpected entrypoint ${request.entrypoint}`);
+        }
+        return [...response];
+      },
+      async getBlockLatestAccepted() {
+        if (input.thrown !== undefined) {
+          throw input.thrown;
+        }
+        return { block_hash: BLOCK_HASH, block_number: 123 };
+      },
+      async getClassHashAt(_address: string, blockIdentifier?: string) {
+        if (input.thrown !== undefined) {
+          throw input.thrown;
+        }
+        if (blockIdentifier !== undefined) input.readBlocks?.push(blockIdentifier);
+        return input.classHash ?? ARGENT_MULTISIG_CONTRACT.classHash;
+      },
+    }) as unknown as RpcProvider;
+
+const validProvider = (overrides: Readonly<Record<string, readonly string[]>> = {}) =>
+  makeProvider({
+    responses: {
+      get_signer_guids: ["0x2", GUID_A, GUID_B],
+      get_threshold: ["0x2"],
+      is_signer_guid: ["0x1"],
+      ...overrides,
     },
-  );
+  });
 
-afterEach(() => {
-  spyOn(RpcProvider.prototype, "callContract").mockRestore();
+describe("Argent multisig call validation", () => {
+  test("accepts only canonical, bounded calls", () => {
+    const call = { calldata: ["0x0", "0x1"], contractAddress: "0xabc", entrypoint: "transfer" };
+    expect(isArgentMultisigCall(call)).toBe(true);
+    expect(isArgentMultisigCall({ ...call, contractAddress: "0x0abc" })).toBe(false);
+    expect(isArgentMultisigCall({ ...call, extra: true })).toBe(false);
+    expect(isArgentMultisigCalls([call])).toBe(true);
+    expect(isArgentMultisigCalls([])).toBe(false);
+    expect(isArgentMultisigCalls(Array.from({ length: 17 }, () => call))).toBe(false);
+  });
+
+  test("mirrors stable 0.2 self-call restrictions", () => {
+    const external = { calldata: [], contractAddress: "0xabc", entrypoint: "transfer" };
+    expect(() => requireSafeArgentMultisigCalls(ADDRESS, [external])).not.toThrow();
+    expect(() =>
+      requireSafeArgentMultisigCalls(ADDRESS, [
+        external,
+        { calldata: [], contractAddress: ADDRESS, entrypoint: "change_threshold" },
+      ]),
+    ).toThrow("batches cannot contain account self-calls");
+    for (const entrypoint of ["execute_after_upgrade", "perform_upgrade"]) {
+      expect(() =>
+        requireSafeArgentMultisigCalls(ADDRESS, [
+          { calldata: [], contractAddress: ADDRESS, entrypoint },
+        ]),
+      ).toThrow("internal upgrade callbacks");
+    }
+    expect(() =>
+      requireSafeArgentMultisigCalls(ADDRESS, [
+        { calldata: ["0x2"], contractAddress: ADDRESS, entrypoint: "change_threshold" },
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      requireSafeArgentMultisigCalls(ADDRESS, [
+        { calldata: ["0x2"], contractAddress: ADDRESS, entrypoint: "set_threshold" },
+      ]),
+    ).toThrow("Unsupported Argent multisig self-call");
+  });
+
+  test("strictly parses and applies all four stable signer-management ABIs", () => {
+    const initial = { signerPublicKeys: ["0x123", "0x456"], threshold: 2 } as const;
+    const add = parseArgentMultisigConfigChange(ADDRESS, {
+      calldata: ["0x2", "0x1", "0x0", "0x789"],
+      contractAddress: ADDRESS,
+      entrypoint: "add_signers",
+    });
+    expect(add).toEqual({ kind: "add_signers", signerPublicKeys: ["0x789"], threshold: 2 });
+    const afterAdd = nextArgentMultisigPublicConfig(initial, add);
+    expect(afterAdd).toEqual({ signerPublicKeys: ["0x789", "0x123", "0x456"], threshold: 2 });
+
+    const threshold = parseArgentMultisigConfigChange(ADDRESS, {
+      calldata: ["0x1"],
+      contractAddress: ADDRESS,
+      entrypoint: "change_threshold",
+    });
+    expect(nextArgentMultisigPublicConfig(afterAdd, threshold)).toEqual({
+      signerPublicKeys: ["0x789", "0x123", "0x456"],
+      threshold: 1,
+    });
+
+    const replace = parseArgentMultisigConfigChange(ADDRESS, {
+      calldata: ["0x0", "0x456", "0x0", "0xabc"],
+      contractAddress: ADDRESS,
+      entrypoint: "replace_signer",
+    });
+    const afterReplace = nextArgentMultisigPublicConfig(afterAdd, replace);
+    expect(afterReplace.signerPublicKeys).toEqual(["0x789", "0xabc", "0x123"]);
+    expect(afterReplace.threshold).toBe(2);
+
+    const remove = parseArgentMultisigConfigChange(ADDRESS, {
+      calldata: ["0x1", "0x1", "0x0", "0x789"],
+      contractAddress: ADDRESS,
+      entrypoint: "remove_signers",
+    });
+    expect(nextArgentMultisigPublicConfig(afterReplace, remove)).toEqual({
+      signerPublicKeys: ["0xabc", "0x123"],
+      threshold: 1,
+    });
+    expect(
+      reviewArgentMultisigConfigChange(ADDRESS, initial, {
+        calldata: ["0x1"],
+        contractAddress: ADDRESS,
+        entrypoint: "change_threshold",
+      }),
+    ).toEqual({
+      change: { kind: "change_threshold", threshold: 1 },
+      nextConfig: { signerPublicKeys: ["0x123", "0x456"], threshold: 1 },
+      summary: "Change Argent multisig threshold to 1",
+    });
+  });
+
+  test("rejects malformed or semantically impossible management transitions", () => {
+    const initial = { signerPublicKeys: ["0x123", "0x456"], threshold: 2 } as const;
+    for (const call of [
+      { calldata: ["0x2"], contractAddress: "0x999", entrypoint: "change_threshold" },
+      {
+        calldata: ["0x2", "0x1", "0x1", "0x789"],
+        contractAddress: ADDRESS,
+        entrypoint: "add_signers",
+      },
+      {
+        calldata: ["0x2", "0x2", "0x0", "0x789"],
+        contractAddress: ADDRESS,
+        entrypoint: "add_signers",
+      },
+      { calldata: ["0x2", "0x0"], contractAddress: ADDRESS, entrypoint: "change_threshold" },
+      {
+        calldata: ["0x0", "0x123", "0x0", "0x789", "0x0"],
+        contractAddress: ADDRESS,
+        entrypoint: "replace_signer",
+      },
+    ]) {
+      expect(() => parseArgentMultisigConfigChange(ADDRESS, call)).toThrow();
+    }
+    expect(() =>
+      nextArgentMultisigPublicConfig(initial, {
+        kind: "remove_signers",
+        signerPublicKeys: ["0x123", "0x123"],
+        threshold: 1,
+      }),
+    ).toThrow("must be unique");
+    expect(() =>
+      nextArgentMultisigPublicConfig(initial, {
+        kind: "replace_signer",
+        removeSignerPublicKey: "0x789",
+        addSignerPublicKey: "0xabc",
+      }),
+    ).toThrow("not configured");
+  });
 });
 
-describe("getMultisigConfig", () => {
-  test("reads quorum and canonical signer set from the component views", async () => {
-    stubContract({ get_quorum: ["0x2"], get_signers: ["0x2", SIGNER_A, SIGNER_B] });
-
-    const config = await getMultisigConfig({ address: MULTISIG, rpcUrls: RPC });
-
-    expect(config.quorum).toBe(2);
-    expect(config.signers).toEqual([
-      `0x${BigInt(SIGNER_A).toString(16)}`,
-      `0x${BigInt(SIGNER_B).toString(16)}`,
-    ]);
+describe("getArgentMultisigConfig", () => {
+  test("reads the pinned class, threshold, and ordered signer GUIDs", async () => {
+    const readBlocks: string[] = [];
+    await expect(
+      getArgentMultisigConfig({
+        address: ADDRESS,
+        makeProvider: makeProvider({
+          readBlocks,
+          responses: {
+            get_signer_guids: ["0x2", GUID_A, GUID_B],
+            get_threshold: ["0x2"],
+          },
+        }),
+        rpcUrls: RPC_URLS,
+      }),
+    ).resolves.toEqual({
+      classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+      signerGuids: [GUID_A, GUID_B],
+      threshold: 2,
+    });
+    expect(readBlocks).toEqual([BLOCK_HASH, BLOCK_HASH, BLOCK_HASH]);
   });
 
-  test("throws when a view returns a non-felt where a number is expected", async () => {
-    stubContract({ get_quorum: [], get_signers: ["0x2", SIGNER_A, SIGNER_B] });
-    await expect(getMultisigConfig({ address: MULTISIG, rpcUrls: RPC })).rejects.toThrow(
-      "Invalid multisig quorum response",
-    );
+  test("rejects a contract whose class is not the stable pin", async () => {
+    await expect(
+      getArgentMultisigConfig({
+        address: ADDRESS,
+        makeProvider: makeProvider({
+          classHash: "0x123",
+          responses: {
+            get_signer_guids: ["0x2", GUID_A, GUID_B],
+            get_threshold: ["0x2"],
+          },
+        }),
+        rpcUrls: RPC_URLS,
+      }),
+    ).rejects.toThrow("not the pinned Argent Multisig 0.2 class");
   });
 
-  test("throws when a count exceeds the 32-bit small-number bound", async () => {
-    stubContract({ get_quorum: ["0x100000000"], get_signers: ["0x1", SIGNER_A] });
-    await expect(getMultisigConfig({ address: MULTISIG, rpcUrls: RPC })).rejects.toThrow(
-      "Invalid multisig quorum response",
-    );
+  test("rejects malformed threshold and signer responses", async () => {
+    for (const responses of [
+      { get_threshold: [] },
+      { get_threshold: ["0x0"] },
+      { get_signer_guids: ["0x2", GUID_A] },
+      { get_signer_guids: ["0x2", GUID_A, GUID_A] },
+      { get_signer_guids: ["0x1", "0x0"], get_threshold: ["0x1"] },
+    ]) {
+      await expect(
+        getArgentMultisigConfig({
+          address: ADDRESS,
+          makeProvider: validProvider(responses),
+          rpcUrls: RPC_URLS,
+        }),
+      ).rejects.toThrow("Invalid Argent multisig");
+    }
   });
 
-  test("throws when the signer array length disagrees with its count prefix", async () => {
-    stubContract({ get_quorum: ["0x2"], get_signers: ["0x3", SIGNER_A, SIGNER_B] });
-    await expect(getMultisigConfig({ address: MULTISIG, rpcUrls: RPC })).rejects.toThrow(
-      "Invalid multisig signers response",
-    );
+  test("canonicalizes valid on-chain linked-list order after config changes", async () => {
+    await expect(
+      getArgentMultisigConfig({
+        address: ADDRESS,
+        makeProvider: validProvider({ get_signer_guids: ["0x2", GUID_B, GUID_A] }),
+        rpcUrls: RPC_URLS,
+      }),
+    ).resolves.toMatchObject({ signerGuids: [GUID_A, GUID_B] });
   });
 
-  test("throws when quorum is zero", async () => {
-    stubContract({ get_quorum: ["0x0"], get_signers: ["0x1", SIGNER_A] });
-    await expect(getMultisigConfig({ address: MULTISIG, rpcUrls: RPC })).rejects.toThrow(
-      "Invalid multisig signers response",
-    );
-  });
-
-  test("turns an aborted RPC read into an actionable verification error", async () => {
-    const timeout = new Error("The operation was aborted due to timeout");
+  test("turns a timeout into an actionable read failure", async () => {
+    const timeout = new Error("aborted due to timeout");
     timeout.name = "TimeoutError";
-    spyOn(RpcProvider.prototype, "callContract").mockRejectedValue(timeout);
-
-    await expect(getMultisigConfig({ address: MULTISIG, rpcUrls: RPC })).rejects.toThrow(
-      "Multisig verification took too long. Check the RPC endpoint and retry.",
-    );
+    await expect(
+      getArgentMultisigConfig({
+        address: ADDRESS,
+        makeProvider: makeProvider({ thrown: timeout }),
+        rpcUrls: RPC_URLS,
+      }),
+    ).rejects.toThrow("verification took too long");
   });
 });
 
-describe("getMultisigProposalStatus", () => {
-  const input = { address: MULTISIG, rpcUrls: RPC, signer: SIGNER_A, txId: "0xabc" };
-
-  test("decodes state, confirmation count, and this signer's confirmation flag", async () => {
-    stubContract({
-      get_transaction_state: ["0x1"],
-      get_transaction_confirmations: ["0x2"],
-      is_confirmed_by: ["0x1"],
-    });
-
-    await expect(getMultisigProposalStatus(input)).resolves.toEqual({
-      confirmations: 2,
-      confirmedBySigner: true,
-      state: "pending",
-    });
+describe("isArgentMultisigSignerGuid", () => {
+  test("returns the contract's exact membership bit", async () => {
+    for (const [felt, expected] of [
+      ["0x0", false],
+      ["0x1", true],
+    ] as const) {
+      await expect(
+        isArgentMultisigSignerGuid({
+          address: ADDRESS,
+          makeProvider: validProvider({ is_signer_guid: [felt] }),
+          rpcUrls: RPC_URLS,
+          signerGuid: GUID_A,
+        }),
+      ).resolves.toBe(expected);
+    }
   });
 
-  test("reports a signer that has not confirmed as false", async () => {
-    stubContract({
-      get_transaction_state: ["0x2"],
-      get_transaction_confirmations: ["0x3"],
-      is_confirmed_by: ["0x0"],
-    });
-
-    await expect(getMultisigProposalStatus(input)).resolves.toMatchObject({
-      confirmedBySigner: false,
-      state: "confirmed",
-    });
-  });
-
-  test("throws on an out-of-range TransactionState variant", async () => {
-    stubContract({
-      get_transaction_state: ["0x9"],
-      get_transaction_confirmations: ["0x1"],
-      is_confirmed_by: ["0x0"],
-    });
-    await expect(getMultisigProposalStatus(input)).rejects.toThrow(
-      "Invalid multisig state response",
-    );
-  });
-
-  test("throws when the confirmation count is not a felt", async () => {
-    stubContract({
-      get_transaction_state: ["0x1"],
-      get_transaction_confirmations: ["not-a-felt"],
-      is_confirmed_by: ["0x0"],
-    });
-    await expect(getMultisigProposalStatus(input)).rejects.toThrow(
-      "Invalid multisig confirmations response",
-    );
-  });
-});
-
-describe("computeMultisigTransactionId", () => {
-  test("returns the contract-derived id as a canonical hex string", async () => {
-    stubContract({ hash_transaction: ["0xdead"] });
-
+  test("rejects a malformed membership result", async () => {
     await expect(
-      computeMultisigTransactionId({ address: MULTISIG, call, rpcUrls: RPC, salt: "0x7" }),
-    ).resolves.toBe("0xdead");
-  });
-
-  test("throws when the hash view returns no felt", async () => {
-    stubContract({ hash_transaction: [] });
-    await expect(
-      computeMultisigTransactionId({ address: MULTISIG, call, rpcUrls: RPC, salt: "0x7" }),
-    ).rejects.toThrow("Invalid multisig transaction id response");
+      isArgentMultisigSignerGuid({
+        address: ADDRESS,
+        makeProvider: validProvider({ is_signer_guid: ["0x2"] }),
+        rpcUrls: RPC_URLS,
+        signerGuid: GUID_A,
+      }),
+    ).rejects.toThrow("Invalid Argent multisig signer membership response");
   });
 });

@@ -4,161 +4,79 @@
  * secrets; every handled message's serialized response is scanned for them,
  * and the scanned catalog is proven exhaustive against the message types the
  * background sources actually handle.
+ *
+ * The scan is also proven live. A handler that answered `{ error }` — because
+ * its payload was malformed, its collaborator was missing, or the wallet had
+ * locked — would pass a secret grep without having run at all, so each entry
+ * must produce a success response unless it carries an explicit `negative`
+ * reason for refusing.
  */
+
 import { describe, expect, test } from "bun:test";
-import type { Vault } from "@mc-wallet/vault/schema";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
-import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { isCreateAccountResponse } from "../../../packages/presentation/wallet-ui/src/popup/responses/responses";
+import { isLedgerAccountsResponse } from "../../../packages/presentation/wallet-ui/src/popup/responses/responses-ledger";
+import { viewingKeyDerivations } from "../../support/key-boundary-collaborators";
 import {
-  account,
   contentSender,
   extensionSender,
-  handledWalletMessages,
-  KEY_BOUNDARY_MESSAGES,
   SECRET_MNEMONIC,
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
   SECRET_VIEWING_KEY,
-} from "../../support/key-boundary-messages";
+} from "../../support/key-boundary-fixtures";
+import { makeKeyBoundaryHarness } from "../../support/key-boundary-harness";
+import { handledWalletMessages, KEY_BOUNDARY_MESSAGES } from "../../support/key-boundary-messages";
+import type { KeyBoundaryLiveIds, KeyBoundaryMessage } from "../../support/key-boundary-types";
 
-const vault = {
-  accounts: [account],
-  accountSecrets: [
-    {
-      accountId: account.id,
-      ledgerStrk20ViewingKeys: [
-        {
-          chainId: "0x534e5f4d41494e",
-          poolAddress: "0x123",
-          scheme: "ledger-strk20-typed-data-v1",
-          viewingKey: SECRET_VIEWING_KEY,
-        },
-      ],
-    },
-  ],
-  activeAccountId: account.id,
-  mnemonic: SECRET_MNEMONIC,
-  originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 4,
-  signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
-} as unknown as Vault;
+const typeOf = (message: Record<string, unknown>): string => String(message["type"] ?? "");
 
-const walletStub = {
-  async addDerivedAccount() {
-    return account;
-  },
-  async createAccount() {
-    return account;
-  },
-  async ensureNetworkAccount() {
-    return account;
-  },
-  async importRawKeyAccount() {
-    return account;
-  },
-  async previewAccount() {
-    return account;
-  },
-  async validateMnemonic() {
-    return true;
-  },
-  async getGrantedAccounts() {
-    return [account];
-  },
-  async generateMnemonic() {
-    return SECRET_MNEMONIC;
-  },
-  async grantOrigin() {
-    return [account];
-  },
-  async readVault(passphrase: string) {
-    if (passphrase !== SECRET_PASSPHRASE) {
-      throw new Error("bad passphrase");
-    }
-    return vault;
-  },
-  async revokeOrigin() {
-    return [];
-  },
-  async setActiveAccount() {
-    return account;
-  },
-  async signHash() {
-    return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
-  },
-  async status() {
-    return {
-      accountCount: 1,
-      activeAccountId: account.id,
-      hasVault: true,
-      locked: false,
-      ready: true,
-    };
-  },
+// Merges the ids only the running background can mint into the declared
+// payload. The type is re-checked so a `live` block can never quietly point an
+// entry at a different handler than the one it claims to cover, and every
+// string it supplies must be a real minted value: an entry whose id came back
+// empty would still reach a handler, but the lookup behind it would fail and
+// the response the scan greps would be that failure rather than the record.
+const requestFor = async (
+  entry: KeyBoundaryMessage,
+  liveIds: KeyBoundaryLiveIds,
+): Promise<Record<string, unknown>> => {
+  if (!entry.live) {
+    return entry.message;
+  }
+  const minted = await entry.live(liveIds);
+  const unminted = Object.entries(minted)
+    .filter(([field, value]) => typeof value === "string" && value === (entry.message[field] ?? ""))
+    .map(([field]) => `${typeOf(entry.message)}.${field}`);
+  expect(unminted).toEqual([]);
+  const request = { ...entry.message, ...minted };
+  expect(typeOf(request)).toBe(typeOf(entry.message));
+  return request;
 };
 
-const runtimeRpcStub = {
-  async estimateInvokeFee() {
-    return { overallFee: "1", unit: "FRI" };
-  },
-  async getDeploymentStatus() {
-    return false;
-  },
-  async getNftOwner() {
-    return "0x0";
-  },
-  async getTokenBalances() {
-    return [];
-  },
-  async getTokenMetadata() {
-    return { decimals: 18, name: "Token", symbol: "TKN" };
-  },
-  async getTransactionStatuses() {
-    return {};
-  },
-  async submitDeclareTransaction() {
-    return { classHash: "0x1", transactionHash: "0x1" };
-  },
-  async submitAccountDeployment() {
-    return { transactionHash: "0x7abc" };
-  },
-  async submitErc20Transfer() {
-    return {
-      call: { calldata: [], contractAddress: "0x1", entrypoint: "transfer" },
-      transactionHash: "0x7abc",
-    };
-  },
-  async submitInvokeTransaction() {
-    return { calls: [], transactionHash: "0x7abc" };
-  },
-  multisig: {
-    async computeTransactionId() {
-      return "0xabc";
-    },
-    async getConfig() {
-      return { quorum: 1, signers: [account.address] };
-    },
-    async getProposalStatus() {
-      return { confirmations: 0, confirmedBySigner: false, state: "pending" as const };
-    },
-    async isClassDeclared() {
-      return true;
-    },
-  },
+// Reads one declared entry back out of the catalog, so a test that needs a
+// specific request still exercises the payload the scan itself sends.
+const entryFor = (type: string): KeyBoundaryMessage => {
+  const entry = KEY_BOUNDARY_MESSAGES.find((candidate) => typeOf(candidate.message) === type);
+  if (!entry) {
+    throw new Error(`no key-boundary catalog entry for ${type}`);
+  }
+  return entry;
 };
 
-const flush = (): Promise<void> =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, 0);
-  });
+const errorOf = (response: unknown): string | null => {
+  if (typeof response !== "object" || response === null) {
+    return null;
+  }
+  const error = (response as { readonly error?: unknown }).error;
+  return typeof error === "string" ? error : null;
+};
 
 describe("key boundary", () => {
   test("the scan catalog covers every message type the background handles", async () => {
     const handled = await handledWalletMessages();
-    const scanned = new Set(
-      KEY_BOUNDARY_MESSAGES.map((entry) => String(entry.message["type"] ?? "")),
-    );
+    const scanned = new Set(KEY_BOUNDARY_MESSAGES.map((entry) => typeOf(entry.message)));
     const missing = [...handled].filter((type) => !scanned.has(type)).sort();
     // A non-empty list means a message type was added to the background
     // without a key-boundary scan entry: add a payload for it to
@@ -166,55 +84,108 @@ describe("key boundary", () => {
     expect(missing).toEqual([]);
   });
 
-  test("no handled message response ever carries key material", async () => {
-    const session = createUnlockSession();
-    session.unlock(SECRET_PASSPHRASE);
-    const handler = createMessageHandler(walletStub, "extension-id", {
-      runtimeRpc: runtimeRpcStub,
-      session,
-    });
+  test("only the reviewed entries are allowed to answer with an error", () => {
+    const excused = KEY_BOUNDARY_MESSAGES.filter((entry) => entry.negative !== undefined);
+    for (const entry of excused) {
+      expect((entry.negative ?? "").length).toBeGreaterThan(20);
+    }
+    // Pinned so excusing a new entry from the liveness rule is a deliberate,
+    // reviewed edit rather than the quiet way to make this suite green again.
+    expect(excused.map((entry) => typeOf(entry.message)).sort()).toEqual([
+      "wallet.removeMultisig",
+      "wallet.status",
+      "wallet.unlock",
+    ]);
+  });
 
-    // State-changing dapp methods (invoke, switchChain, signTypedData) hold their
-    // response until approved. Fire the request, approve any approval it queues,
-    // then scan the settled response — the held result must also carry no secret.
-    const settle = async (
-      message: Record<string, unknown>,
-      sender: RuntimeSender,
-    ): Promise<unknown> => {
-      const held = handler(message, sender);
-      const outcome = held.then(
-        (value) => ({ ok: true as const, value }),
-        (cause: unknown) => ({ cause, ok: false as const }),
-      );
-      for (let attempt = 0; attempt < 50; attempt += 1) {
-        const settled = await Promise.race([outcome, flush().then(() => null)]);
-        if (settled !== null) {
-          if (!settled.ok) {
-            throw settled.cause;
-          }
-          return settled.value;
-        }
-        const listed = (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
-          readonly pending?: readonly { readonly id: string }[];
-        };
-        const pending = listed.pending ?? [];
-        for (const approval of pending) {
-          await handler({ id: approval.id, type: "wallet.approveOrigin" }, extensionSender);
-        }
+  test("every catalog entry reaches a live handler", async () => {
+    const harness = await makeKeyBoundaryHarness();
+    const inert: string[] = [];
+    for (const entry of KEY_BOUNDARY_MESSAGES) {
+      // Each entry starts from an unlocked session so one entry that locks the
+      // wallet cannot silently turn every entry after it into a "wallet locked"
+      // error that the secret scan would then wave through.
+      harness.unlock();
+      const request = await requestFor(entry, harness.liveIds);
+      const error = errorOf(await harness.settle(request, entry.sender));
+      if (entry.negative === undefined && error !== null) {
+        inert.push(`${typeOf(request)}: ${error}`);
       }
-      throw new Error(`wallet message did not settle: ${String(message["type"] ?? "unknown")}`);
-    };
+      if (entry.negative !== undefined) {
+        expect(error).not.toBeNull();
+      }
+    }
+    // A non-empty list means the scan is grepping error strings instead of
+    // handler output: repair the payload (or mark the entry `negative` with the
+    // reason refusal is the response under test).
+    expect(inert).toEqual([]);
+  });
 
-    for (const { message, sender } of KEY_BOUNDARY_MESSAGES) {
-      const response = await settle(message, sender);
+  test("the STRK20 entries really hold the derived viewing key", async () => {
+    const harness = await makeKeyBoundaryHarness();
+    const derived: string[] = [];
+    for (const entry of KEY_BOUNDARY_MESSAGES) {
+      harness.unlock();
+      const request = await requestFor(entry, harness.liveIds);
+      const before = viewingKeyDerivations.value;
+      await harness.settle(request, entry.sender);
+      if (viewingKeyDerivations.value > before) {
+        derived.push(typeOf(request));
+      }
+    }
+    // Without a derivation, the SECRET_VIEWING_KEY grep below is unarmed for
+    // that entry: the handler answers without the background ever producing the
+    // account-scoped key, so a build that started echoing it would still pass.
+    // Pinned exactly — every STRK20 entry but the network-config write reaches
+    // the key today, and no non-STRK20 handler has any business deriving one.
+    expect(derived.sort()).toEqual([
+      "wallet.strk20Balances",
+      "wallet.strk20Execute",
+      "wallet.strk20InvokeTransaction",
+      "wallet.strk20PrepareDeposit",
+      "wallet.strk20PrepareInvoke",
+      "wallet.strk20PrepareRegistration",
+      "wallet.strk20PrepareTransfer",
+      "wallet.strk20PrepareWithdraw",
+      "wallet.strk20RecipientStatus",
+      "wallet.strk20Register",
+      "wallet.strk20State",
+      "wallet.strk20SubaccountCommitment",
+    ]);
+  });
+
+  test("the Ledger entries answer with accounts the popup would accept", async () => {
+    const harness = await makeKeyBoundaryHarness();
+    const settleEntry = async (type: string): Promise<unknown> => {
+      const entry = entryFor(type);
+      harness.unlock();
+      return harness.settle(await requestFor(entry, harness.liveIds), entry.sender);
+    };
+    // `isLedgerAccountsResponse` rejects any candidate that is not a keyless
+    // Ledger account, and the vault schema pins the application segment and the
+    // canonical EIP-2645 path. Without this, the stub could answer with a shape
+    // production can never emit and the three Ledger entries would still count
+    // as live — the scan would be grepping a fiction.
+    expect(isLedgerAccountsResponse(await settleEntry("wallet.deriveLedgerAccounts"))).toBe(true);
+    expect(isCreateAccountResponse(await settleEntry("wallet.addLedgerAccount"))).toBe(true);
+    expect(isCreateAccountResponse(await settleEntry("wallet.createLedgerVault"))).toBe(true);
+  });
+
+  test("no handled message response ever carries key material", async () => {
+    const harness = await makeKeyBoundaryHarness();
+    for (const entry of KEY_BOUNDARY_MESSAGES) {
+      harness.unlock();
+      const request = await requestFor(entry, harness.liveIds);
+      const response = await harness.settle(request, entry.sender);
       const serialized = JSON.stringify(response);
+      const messageType = typeOf(request);
       const sanctionedReveal =
-        message["type"] === "wallet.generateMnemonic" || message["type"] === "wallet.revealSecrets";
+        messageType === "wallet.generateMnemonic" || messageType === "wallet.revealSecrets";
       expect(serialized).not.toContain(SECRET_PASSPHRASE);
       expect(serialized).not.toContain("signingKeys");
       expect(serialized).not.toContain("accountSecrets");
       expect(serialized).not.toContain(SECRET_VIEWING_KEY);
-      if (message["type"] !== "wallet.revealSecrets") {
+      if (messageType !== "wallet.revealSecrets") {
         expect(serialized).not.toContain(SECRET_PRIVATE_KEY);
       }
       if (!sanctionedReveal) {
@@ -224,11 +195,7 @@ describe("key boundary", () => {
   });
 
   test("mnemonic generation reveals only to extension pages", async () => {
-    const session = createUnlockSession();
-    const handler = createMessageHandler(walletStub, "extension-id", {
-      runtimeRpc: runtimeRpcStub,
-      session,
-    });
+    const { handler } = await makeKeyBoundaryHarness({ unlocked: false });
 
     expect(await handler({ type: "wallet.generateMnemonic" }, contentSender)).toEqual({
       error: "privileged sender required",
@@ -240,11 +207,7 @@ describe("key boundary", () => {
   });
 
   test("reveal secrets require an extension page and the re-entered passphrase", async () => {
-    const session = createUnlockSession();
-    const handler = createMessageHandler(walletStub, "extension-id", {
-      runtimeRpc: runtimeRpcStub,
-      session,
-    });
+    const { handler } = await makeKeyBoundaryHarness({ unlocked: false });
 
     expect(
       await handler(
@@ -264,5 +227,58 @@ describe("key boundary", () => {
         extensionSender,
       ),
     ).toEqual({ mnemonic: SECRET_MNEMONIC, ok: true, privateKey: SECRET_PRIVATE_KEY });
+  });
+
+  test("an unwired dispatcher still refuses secret-bearing traffic", async () => {
+    // The default router context resolves absent collaborators to explicitly
+    // unavailable stubs; that path must fail closed rather than answer.
+    const session = createUnlockSession();
+    const handler = createMessageHandler(
+      {
+        async addDerivedAccount() {
+          throw new Error("wallet unavailable");
+        },
+        async createAccount() {
+          throw new Error("wallet unavailable");
+        },
+        async ensureNetworkAccount() {
+          throw new Error("wallet unavailable");
+        },
+        async getGrantedAccounts() {
+          return [];
+        },
+        async generateMnemonic() {
+          throw new Error("wallet unavailable");
+        },
+        async grantOrigin() {
+          return [];
+        },
+        async readVault() {
+          throw new Error("wallet unavailable");
+        },
+        async setActiveAccount() {
+          throw new Error("wallet unavailable");
+        },
+        async signHash() {
+          throw new Error("wallet unavailable");
+        },
+        async status() {
+          return {
+            accountCount: 0,
+            activeAccountId: null,
+            hasVault: false,
+            locked: true,
+            ready: false,
+          };
+        },
+      },
+      "extension-id",
+      { session },
+    );
+    const response = await handler(
+      { type: "wallet.revealSecrets", vaultPassphrase: SECRET_PASSPHRASE },
+      extensionSender,
+    );
+    expect(response).toEqual({ error: "wallet unavailable" });
   });
 });

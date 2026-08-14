@@ -14,6 +14,9 @@ import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/run
  * per-test method overrides last.
  */
 export const makeRuntimeRpc = (overrides: Partial<RuntimeRpc> = {}): RuntimeRpc => ({
+  async estimateDeclareFee() {
+    return { overallFee: "1", unit: "FRI" };
+  },
   async estimateInvokeFee() {
     return { overallFee: "1", unit: "FRI" };
   },

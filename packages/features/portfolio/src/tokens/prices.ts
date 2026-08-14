@@ -1,19 +1,35 @@
 /**
- * CoinGecko price feed for tracked Starknet tokens, with an in-storage cache.
+ * Cached fiat price service for tracked Starknet tokens.
  *
- * Network access is injected (`http`) so this module stays pure at its edges
- * and testable without a real network; the background worker wires the real
- * `fetch`. Prices are cached under `mc-wallet:prices` and 7-day charts under
- * `mc-wallet:charts` with a TTL clock injected the way the activity store
- * takes one. Every failure degrades to cached-or-empty: when the host is
- * unreachable the last-known-good prices are still served, flagged `stale`
- * with the `asOf` capture time so the UI can present them as saved values (or
- * an explicit "unavailable" hint when nothing is cached) instead of vanishing.
+ * The outward CoinGecko conversation — request URLs and untrusted body parsing,
+ * under a size cap and a deadline — lives in `./prices-feed`; this module owns
+ * what the wallet keeps and what it serves. Network access is injected (`http`)
+ * so this module stays pure at its edges and testable without a real network;
+ * the background worker wires the real `fetch`. Prices are cached under
+ * `mc-wallet:prices` and 7-day charts under `mc-wallet:charts` with a TTL clock
+ * injected the way the activity store takes one. Every failure degrades to
+ * cached-or-empty: when the host is unreachable the last-known-good prices are
+ * still served, flagged `stale` with the `asOf` capture time so the UI can
+ * present them as saved values (or an explicit "unavailable" hint when nothing
+ * is cached) instead of vanishing.
  */
+import type { BoundedHttpFetch, BoundedHttpResponse } from "@mc-wallet/core/http-json";
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import type { KeyValueStore } from "@mc-wallet/store/kv";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { DisplayCurrency } from "@mc-wallet/wallet-model/preferences";
+import {
+  fetchAddressPrices,
+  fetchChartPoints,
+  isFinitePriceNumber,
+  normalizePriceAddress,
+  PRICE_CHART_POINT_LIMIT,
+  type PriceEntry,
+  type PriceOutcome,
+  priceFeedPlatform,
+} from "./prices-feed";
+
+export { PRICE_CHART_POINT_LIMIT } from "./prices-feed";
 
 /**
  * Browser storage key for the fiat price cache.
@@ -27,30 +43,25 @@ export const CHARTS_STORE_KEY = "mc-wallet:charts";
 
 const PRICE_TTL_MS = 5 * 60 * 1000;
 const CHART_TTL_MS = 30 * 60 * 1000;
-const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const MAX_ADDRESSES = 50;
-const CHART_DAYS = 7;
 // Bounds the persisted chart cache so a churn of one-off token views cannot grow
 // storage without limit; the oldest-fetched entries are evicted first.
 const MAX_CHART_ENTRIES = 50;
 
-// CoinGecko platform id; only Starknet mainnet has fiat coverage.
-const PLATFORM_FOR_NETWORK: Readonly<Partial<Record<StarknetNetworkId, string>>> = {
-  SN_MAIN: "starknet",
-};
+/**
+ * Minimal HTTP response subset consumed from the injected fetch: the shared
+ * bounded-read shape, so an oversized price body is cut off at the transport
+ * rather than parsed into the worker.
+ */
+export type HttpResponse = BoundedHttpResponse;
 
 /**
- * Minimal HTTP response subset consumed from the injected fetch.
+ * Injectable network fetch used only by the background worker. It receives the
+ * request options the boundary chose (no cookies, no referrer, redirects
+ * refused) and the deadline signal, and must forward both to the real `fetch`
+ * so a hung host releases its socket as well as its caller.
  */
-export type HttpResponse = {
-  readonly json: () => Promise<unknown>;
-  readonly ok: boolean;
-};
-
-/**
- * Injectable network fetch used only by the background worker.
- */
-export type HttpFetch = (url: string) => Promise<HttpResponse>;
+export type HttpFetch = BoundedHttpFetch;
 
 /**
  * Inputs for reading fiat prices for tracked token contracts.
@@ -101,7 +112,6 @@ export type PriceService = {
   readonly getTokenChart: (input: TokenChartInput) => Promise<TokenChart>;
 };
 
-type PriceEntry = Readonly<Record<DisplayCurrency, number>>;
 // `checked` records every address queried at `fetchedAt`, priced or not, so an
 // address CoinGecko never prices (custom/spam tokens) still counts as covered
 // until the TTL lapses instead of forcing a refetch on every call.
@@ -116,79 +126,25 @@ type ChartCache = Readonly<Record<string, ChartEntry>>;
 
 const CURRENCIES: readonly DisplayCurrency[] = ["eur", "gbp", "usd"];
 
-// Canonical padded lowercase Starknet address, matching how contract indexes
-// (and CoinGecko's Starknet platform) key tokens.
-const normalizeAddress = (address: string): string => {
-  try {
-    return `0x${BigInt(address).toString(16).padStart(64, "0")}`;
-  } catch {
-    return address.toLowerCase();
-  }
-};
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
 // The epoch a cached snapshot was captured, or null when nothing has ever been
 // stored (a zero clock means "never fetched", so there is no last-known time).
 const snapshotAsOf = (fetchedAt: number): number | null => (fetchedAt > 0 ? fetchedAt : null);
 
 const isPriceEntry = (value: unknown): value is PriceEntry =>
-  isRecord(value) && CURRENCIES.every((currency) => isFiniteNumber(value[currency]));
+  isRecord(value) && CURRENCIES.every((currency) => isFinitePriceNumber(value[currency]));
 
-const isStringArray = (value: unknown): value is readonly string[] =>
+const isCheckedList = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === "string");
 
 const isPriceCache = (value: unknown): value is PriceCache =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["changes", "checked", "fetchedAt", "prices"]) &&
-  isFiniteNumber(value["fetchedAt"]) &&
-  (value["checked"] === undefined || isStringArray(value["checked"])) &&
+  isFinitePriceNumber(value["fetchedAt"]) &&
+  (value["checked"] === undefined || isCheckedList(value["checked"])) &&
   (value["changes"] === undefined ||
-    (isRecord(value["changes"]) && Object.values(value["changes"]).every(isFiniteNumber))) &&
+    (isRecord(value["changes"]) && Object.values(value["changes"]).every(isFinitePriceNumber))) &&
   isRecord(value["prices"]) &&
   Object.values(value["prices"]).every(isPriceEntry);
-
-const readJsonRecord = async (http: HttpFetch, url: string): Promise<Record<string, unknown>> => {
-  const response = await http(url);
-  if (!response.ok) {
-    throw new Error("price request failed");
-  }
-  const body = await response.json();
-  return isRecord(body) ? body : {};
-};
-
-// Parses the CoinGecko simple/token_price body into address -> currency prices.
-const parsePriceBody = (body: Record<string, unknown>): Record<string, PriceEntry> => {
-  const parsed: Record<string, PriceEntry> = {};
-  for (const [key, value] of Object.entries(body)) {
-    if (!isRecord(value)) {
-      continue;
-    }
-    const usd = value["usd"];
-    const eur = value["eur"];
-    const gbp = value["gbp"];
-    if (isFiniteNumber(usd) && isFiniteNumber(eur) && isFiniteNumber(gbp)) {
-      parsed[normalizeAddress(key)] = { eur, gbp, usd };
-    }
-  }
-  return parsed;
-};
-
-// Extracts the price column from a CoinGecko market_chart response.
-const parseChartBody = (body: Record<string, unknown>): readonly number[] => {
-  const series = body["prices"];
-  if (!Array.isArray(series)) {
-    return [];
-  }
-  const points: number[] = [];
-  for (const pair of series) {
-    if (Array.isArray(pair) && isFiniteNumber(pair[1])) {
-      points.push(pair[1]);
-    }
-  }
-  return points;
-};
 
 const sliceCurrency = (
   prices: Readonly<Record<string, PriceEntry>>,
@@ -197,24 +153,12 @@ const sliceCurrency = (
 ): Record<string, number> => {
   const slice: Record<string, number> = {};
   for (const address of addresses) {
-    const entry = prices[normalizeAddress(address)];
+    const entry = prices[normalizePriceAddress(address)];
     if (entry) {
       slice[address] = entry[currency];
     }
   }
   return slice;
-};
-
-// Extracts the 24h percent change per address from a CoinGecko body carrying
-// include_24hr_change=true (usd_24h_change).
-const parseChanges = (body: Record<string, unknown>): Record<string, number> => {
-  const parsed: Record<string, number> = {};
-  for (const [key, value] of Object.entries(body)) {
-    if (isRecord(value) && isFiniteNumber(value["usd_24h_change"])) {
-      parsed[normalizeAddress(key)] = value["usd_24h_change"];
-    }
-  }
-  return parsed;
 };
 
 // Maps cached 24h changes back onto the caller's original address keys.
@@ -224,41 +168,13 @@ const sliceChanges = (
 ): Record<string, number> => {
   const slice: Record<string, number> = {};
   for (const address of addresses) {
-    const change = changes[normalizeAddress(address)];
+    const change = changes[normalizePriceAddress(address)];
     if (change !== undefined) {
       slice[address] = change;
     }
   }
   return slice;
 };
-
-// One address's price-request result: parsed prices/changes when the request
-// answered (ok), or just the address on failure so it stays uncovered.
-type PriceOutcome =
-  | {
-      readonly address: string;
-      readonly changes: Record<string, number>;
-      readonly ok: true;
-      readonly prices: Record<string, PriceEntry>;
-    }
-  | { readonly address: string; readonly ok: false };
-
-const priceRequestUrl = (platform: string, address: string): string =>
-  `${COINGECKO_BASE}/simple/token_price/${platform}?contract_addresses=${encodeURIComponent(address)}&vs_currencies=usd,eur,gbp&include_24hr_change=true`;
-
-// Fetches and parses one address on its own request. Never throws: a network
-// failure resolves to an `ok: false` outcome.
-const fetchAddressPrices = (
-  http: HttpFetch,
-  platform: string,
-  address: string,
-): Promise<PriceOutcome> =>
-  readJsonRecord(http, priceRequestUrl(platform, address))
-    .then(
-      (body) =>
-        ({ address, changes: parseChanges(body), ok: true, prices: parsePriceBody(body) }) as const,
-    )
-    .catch(() => ({ address, ok: false }) as const);
 
 const isCacheFresh = (cache: PriceCache, nowMs: number): boolean =>
   nowMs - cache.fetchedAt < PRICE_TTL_MS;
@@ -339,10 +255,14 @@ export const createPriceService = ({
     }
     const entries: Record<string, ChartEntry> = {};
     for (const [key, value] of Object.entries(stored)) {
-      if (isRecord(value) && isFiniteNumber(value["fetchedAt"]) && Array.isArray(value["points"])) {
+      if (
+        isRecord(value) &&
+        isFinitePriceNumber(value["fetchedAt"]) &&
+        Array.isArray(value["points"])
+      ) {
         entries[key] = {
           fetchedAt: value["fetchedAt"],
-          points: value["points"].filter(isFiniteNumber),
+          points: value["points"].filter(isFinitePriceNumber).slice(0, PRICE_CHART_POINT_LIMIT),
         };
       }
     }
@@ -429,8 +349,8 @@ export const createPriceService = ({
 
   return {
     async getPrices({ addresses, currency, networkId }) {
-      const platform = PLATFORM_FOR_NETWORK[networkId];
-      const wanted = [...new Set(addresses.map(normalizeAddress))].slice(0, MAX_ADDRESSES);
+      const platform = priceFeedPlatform(networkId);
+      const wanted = [...new Set(addresses.map(normalizePriceAddress))].slice(0, MAX_ADDRESSES);
       const cache = await readPriceCache();
       // Off mainnet and empty requests carry no fiat by design (not "stale").
       if (!platform || wanted.length === 0) {
@@ -457,8 +377,8 @@ export const createPriceService = ({
       return fetchAndStorePrices(cache, platform, wanted, addresses, currency);
     },
     async getTokenChart({ address, currency, networkId }) {
-      const platform = PLATFORM_FOR_NETWORK[networkId];
-      const key = `${normalizeAddress(address)}:${currency}`;
+      const platform = priceFeedPlatform(networkId);
+      const key = `${normalizePriceAddress(address)}:${currency}`;
       const cache = await readChartCache();
       const cached = cache[key];
       if (!platform) {
@@ -468,8 +388,7 @@ export const createPriceService = ({
         return { currency, points: cached.points };
       }
       try {
-        const url = `${COINGECKO_BASE}/coins/${platform}/contract/${normalizeAddress(address)}/market_chart?vs_currency=${currency}&days=${CHART_DAYS}`;
-        const points = parseChartBody(await readJsonRecord(http, url));
+        const points = await fetchChartPoints(http, platform, address, currency);
         // Never cache an empty series: caching [] would suppress retries until
         // the TTL and hide a chart that a transient failure merely omitted.
         if (points.length === 0) {

@@ -11,6 +11,7 @@
     "./allowance-store": "./src/allowances/allowance-store.ts",
     "./allowances": "./src/allowances/allowances.ts",
     "./avnu": "./src/swap/avnu.ts",
+    "./avnu-route": "./src/swap/avnu-route.ts",
     "./fee-funds": "./src/routing/fee-funds.ts",
     "./ledger-verify": "./src/routing/ledger-verify.ts",
     "./send-routes": "./src/routing/send-routes.ts",
@@ -20,7 +21,9 @@
     "./starkscan-wallet": "./src/history/starkscan-wallet.ts",
     "./tx-history": "./src/history/tx-history.ts",
     "./tx-history-scan": "./src/history/tx-history-scan.ts",
-    "./verify": "./src/routing/verify.ts"
+    "./verify": "./src/routing/verify.ts",
+    "./verify-decode": "./src/routing/verify-decode.ts",
+    "./verify-selectors": "./src/routing/verify-selectors.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

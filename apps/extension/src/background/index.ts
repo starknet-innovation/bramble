@@ -1,57 +1,64 @@
 /**
  * MV3 background entrypoint. All privileged wallet state stays behind this worker.
  */
-import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
-import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
+
+import { untrustedFetch } from "@mc-wallet/core/http-json";
 import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+import { createMultisigStore } from "@mc-wallet/multisig/repository";
 import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
+import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
 import { createPhishingFeed } from "@mc-wallet/permissions/phishing-feed";
-import { createSwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
-import { MULTISIG_CLASS_ARTIFACT } from "@mc-wallet/multisig/deploy";
 import { createPriceService, unavailablePriceService } from "@mc-wallet/portfolio/prices";
+import { createStrk20MaturityStore } from "@mc-wallet/privacy/maturity-store";
 import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
 } from "@mc-wallet/privacy/official-sdk-service";
 import { unavailableStrk20Service } from "@mc-wallet/privacy/service";
-import { createActivityLog, systemClock } from "@mc-wallet/transactions/activity";
-import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import {
-  createBrowserLocalStore,
-  createBrowserSessionStore,
-  requireTrustedStorageAccess,
-} from "../browser-storage";
-import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { createMultisigStore } from "@mc-wallet/multisig/repository";
-import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
 import {
   type ApprovalSurfacePreference,
   createPreferencesStore,
+  type WalletPreferences,
 } from "@mc-wallet/settings/preferences";
-import { createStrk20MaturityStore } from "@mc-wallet/privacy/maturity-store";
-import {
-  VAULT_MIGRATION_STORE_KEY,
-  VAULT_STORE_KEY,
-} from "@mc-wallet/vault/store-migration";
+import { createActivityLog, systemClock } from "@mc-wallet/transactions/activity";
+import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+import { createSwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
+import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encrypted-store";
 import { createWalletVaultService } from "@mc-wallet/vault/service";
+import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@mc-wallet/vault/store-migration";
+import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
+import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
+import {
+  createBrowserLocalStore,
+  createBrowserSessionStore,
+  createBrowserSyncStore,
+  requireTrustedStorageAccess,
+} from "../browser-storage";
+import { createWalletReader } from "./accounts/wallet-reader";
 import { setApprovalNotifier } from "./approvals/approval-notifier";
 import {
   type ApprovalSurfaceBrowser,
   configureApprovalSurface,
-  requestApprovalSurface,
+  createApprovalSurfaceOpener,
 } from "./approvals/approval-surface";
 import { createApprovalQueue } from "./approvals/approvals";
-import { walletEventBroadcasts } from "./runtime/events";
+import {
+  type OnboardingSurfaceBrowser,
+  openOnboardingOnInstall,
+} from "./onboarding/onboarding-surface";
 import { createMessageHandler } from "./routing/messages";
-import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboarding/onboarding-surface";
-import { defaultRuntimeRpc } from "./runtime/runtime-rpc";
-import { createActiveStateCoordinator, reconcileUnlockedActiveAccount } from "./runtime/runtime-state";
 import type { RuntimeSender } from "./routing/senders";
-import { createUnlockSession, type UnlockSessionStore } from "./runtime/session";
-import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
-import { createWalletReader } from "./accounts/wallet-reader";
+import { walletEventBroadcasts } from "./runtime/events";
+import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
+import {
+  createActiveStateCoordinator,
+  reconcileUnlockedActiveAccount,
+} from "./runtime/runtime-state";
+import type { SessionAlarmsApi } from "./runtime/session-expiry-alarm";
+import { createBackgroundUnlockSession } from "./runtime/unlock-session-boot";
 import { createBackgroundPreferences } from "./settings/preferences-adapter";
+import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
 
 type RuntimeApi = {
   readonly getURL?: (path: string) => string;
@@ -71,7 +78,10 @@ type RuntimeApi = {
   readonly sendMessage?: (message: unknown) => Promise<unknown>;
 };
 
-type AlarmsGlobal = { readonly alarms?: AlarmsApi };
+// Two alarm consumers, one API: recurring reconciliation cadences
+// (./transactions/tx-monitor) and the one-shot unlock deadline
+// (./privacy/session-expiry-alarm).
+type AlarmsGlobal = { readonly alarms?: AlarmsApi & SessionAlarmsApi };
 
 type TabsApi = {
   readonly query: (
@@ -89,8 +99,6 @@ type ExtensionGlobal = typeof globalThis & {
     };
 };
 
-const SESSION_STORE_KEY = "mc-wallet:session";
-
 const extensionApi = (globalThis as ExtensionGlobal).chrome;
 const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
@@ -100,20 +108,9 @@ const updateApprovalSurface = (preference: ApprovalSurfacePreference): void => {
   void configureApprovalSurface(extensionApi, preference).catch(() => undefined);
 };
 const approvals = createApprovalQueue();
-const sessionStore: UnlockSessionStore | undefined = (() => {
+const sessionStore = (() => {
   try {
-    const store = createBrowserSessionStore();
-    return {
-      async clear() {
-        await store.remove(SESSION_STORE_KEY);
-      },
-      async load() {
-        return store.get(SESSION_STORE_KEY);
-      },
-      async save(state) {
-        await store.set(SESSION_STORE_KEY, state);
-      },
-    };
+    return createBrowserSessionStore();
   } catch {
     return undefined;
   }
@@ -125,18 +122,23 @@ const vaultStores: { readonly primary: EncryptedStore; readonly staging: Encrypt
   (() => {
     try {
       const store = createBrowserLocalStore();
+      const freshnessStore = createBrowserSyncStore();
       return {
-        primary: createEncryptedStore(store, VAULT_STORE_KEY),
-        staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY),
+        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore),
+        staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY, freshnessStore),
       };
     } catch {
       return null;
     }
   })();
-const session = createUnlockSession(undefined, undefined, sessionStore, () => {
-  for (const store of [vaultStores?.primary, vaultStores?.staging]) {
-    store?.clearKeys();
-  }
+const session = createBackgroundUnlockSession({
+  alarms: extensionApi?.alarms,
+  sessionStore,
+  clearKeyCaches: () => {
+    for (const store of [vaultStores?.primary, vaultStores?.staging]) {
+      store?.clearKeys();
+    }
+  },
 });
 // Storage lockdown is a startup prerequisite, not a best-effort side effect.
 // Requests remain fail-closed if Chrome cannot remove content-script access.
@@ -165,6 +167,13 @@ void preferences
     updateApprovalSurface((await store?.read())?.approvalSurface ?? "side-panel");
   })
   .catch(() => undefined);
+// The read-only slice of the fail-closed adapter above, handed to collaborators
+// that must never mutate preferences. It inherits the adapter's single
+// "preferences unavailable" refusal, so a storage lockdown failure rejects here
+// instead of silently answering from a half-built store — the explorer read
+// lane (MCW-V09-129) treats that rejection as "not permitted", narrowing
+// disclosure rather than widening it.
+const readPreferences = (): Promise<WalletPreferences> => preferenceStore.read();
 const activityLog = (() => {
   try {
     return createActivityLog({ store: createBrowserLocalStore() });
@@ -188,7 +197,7 @@ const allowanceLog = (() => {
 })();
 const priceService = (() => {
   try {
-    return createPriceService({ http: (url) => fetch(url), store: createBrowserLocalStore() });
+    return createPriceService({ http: untrustedFetch, store: createBrowserLocalStore() });
   } catch {
     return unavailablePriceService;
   }
@@ -197,18 +206,15 @@ const priceService = (() => {
 // fetch is unavailable in this runtime.
 const swapService = (() => {
   try {
-    return createSwapService({ http: (url, init) => fetch(url, init) });
+    return createSwapService({ http: untrustedFetch });
   } catch {
     return unavailableSwapService;
   }
 })();
-const multisigLog = (() => {
-  try {
-    return createMultisigStore({ store: createBrowserLocalStore() });
-  } catch {
-    return undefined;
-  }
-})();
+// Durable intent and operation claims are part of the signing safety model.
+// If local storage is unavailable, fail background initialization rather than
+// silently accepting signatures or broadcasts into a volatile registry.
+const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
 // Live phishing feed: fetched from the configured source under an explicit host
 // permission, cached in local storage, and refreshed on the first worker wake
 // after its TTL. The guard reads the feed's in-memory snapshot on every check,
@@ -217,27 +223,13 @@ const multisigLog = (() => {
 // even before the first fetch or when the source is unreachable.
 const phishingFeed = (() => {
   try {
-    return createPhishingFeed({ fetch: (url) => fetch(url), store: createBrowserLocalStore() });
+    return createPhishingFeed({ fetch: untrustedFetch, store: createBrowserLocalStore() });
   } catch {
     return null;
   }
 })();
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
 void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
-// Loads the bundled multisig Sierra class for the explicit declare flow. The
-// artifact ships inside the extension package, so this fetch never leaves the
-// extension origin; the ops handler re-verifies its class hash before use.
-const loadMultisigClass = async (): Promise<unknown> => {
-  const url = runtime?.getURL?.(MULTISIG_CLASS_ARTIFACT);
-  if (!url) {
-    throw new Error("multisig class artifact unavailable");
-  }
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("multisig class artifact unavailable");
-  }
-  return response.json();
-};
 const strk20MaturityStore = (() => {
   try {
     return createStrk20MaturityStore(createBrowserSessionStore());
@@ -245,8 +237,11 @@ const strk20MaturityStore = (() => {
     return undefined;
   }
 })();
+// Built from the real preferences reader, not the preference-free default, so
+// the third-party explorer read lane obeys the user's per-network choice
+// (MCW-V09-129) instead of the built-in-RPC default.
 const runtimeRpc = {
-  ...defaultRuntimeRpc,
+  ...createDefaultRuntimeRpc({ readPreferences }),
   strk20: strk20MaturityStore
     ? createOfficialStrk20Service({
         maturityStore: strk20MaturityStore,
@@ -258,6 +253,7 @@ const runtimeRpc = {
 const walletReader = createWalletReader(wallet);
 const activeStateCoordinator = createActiveStateCoordinator();
 const runtimeReady = sessionReady.then(async () => {
+  await multisigLog.recoverSigningClaims();
   const store = await preferences;
   if (store) {
     await reconcileUnlockedActiveAccount(walletReader, session, store, activeStateCoordinator);
@@ -275,8 +271,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   prices: priceService,
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
-  ...(multisigLog ? { multisigStore: multisigLog } : {}),
-  loadMultisigClass,
+  multisigStore: multisigLog,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm
@@ -288,26 +283,33 @@ if (activityLog) {
     browser: extensionApi,
     deps: {
       activity: activityLog,
-      preferencesStore: preferenceStore,
-      runtimeRpc: defaultRuntimeRpc,
+      // The read-only preferences slice plus the preference-bound RPC wiring:
+      // the monitor must reach the same explorer-lane decision the user chose
+      // (MCW-V09-129), which `defaultRuntimeRpc` cannot answer.
+      preferencesStore: { read: readPreferences },
+      runtimeRpc,
     },
     now: systemClock,
     ready: storageReady,
   });
 }
 
+let broadcastQueue: Promise<void> = Promise.resolve();
 const broadcastEvent = (event: WalletEventMessage): void => {
-  void runtime?.sendMessage?.(event).catch(() => undefined);
-  void tabs
-    ?.query({})
-    .then((openTabs) => {
-      for (const tab of openTabs) {
-        if (typeof tab.id === "number") {
-          void tabs.sendMessage(tab.id, event).catch(() => undefined);
-        }
-      }
-    })
-    .catch(() => undefined);
+  broadcastQueue = broadcastQueue.then(async () => {
+    await runtime?.sendMessage?.(event).catch(() => undefined);
+    const openTabs = await tabs?.query({}).catch(() => []);
+    await Promise.all(
+      (openTabs ?? []).map((tab) =>
+        typeof tab.id === "number"
+          ? tabs?.sendMessage(tab.id, event).then(
+              () => undefined,
+              () => undefined,
+            )
+          : undefined,
+      ),
+    );
+  });
 };
 
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {
@@ -323,8 +325,18 @@ setApprovalNotifier(() => broadcastEvent({ event: "approvalsChanged", type: "wal
 runtime?.onInstalled.addListener((details) => {
   void openOnboardingOnInstall(extensionApi, details.reason);
 });
+// Runs synchronously ahead of the async gating below so Chrome still counts the
+// page's transient user activation; blocklisted origins and repeat opens from a
+// single tab are filtered inside the opener.
+const openApprovalSurface = createApprovalSurfaceOpener({
+  browser: extensionApi,
+  extensionId: runtime?.id ?? "",
+  guard: originGuard,
+  now: systemClock,
+  preference: () => approvalSurfacePreference,
+});
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
-  requestApprovalSurface(extensionApi, approvalSurfacePreference, runtime.id, message, sender);
+  openApprovalSurface(message, sender);
   void runtimeReady
     .then(() => handleMessage(message, sender))
     .then(

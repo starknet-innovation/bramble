@@ -11,8 +11,15 @@
  */
 
 import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
-import type { ActivityEntry, ActivityOutcome, ActivityStatus } from "@mc-wallet/transactions/activity";
-import { isUnresolvedActivityStatus, monotonicActivityStatus } from "@mc-wallet/transactions/activity";
+import type {
+  ActivityEntry,
+  ActivityOutcome,
+  ActivityStatus,
+} from "@mc-wallet/transactions/activity";
+import {
+  isUnresolvedActivityStatus,
+  monotonicActivityStatus,
+} from "@mc-wallet/transactions/activity";
 
 /**
  * Consecutive `TXN_HASH_NOT_FOUND` answers required before a transaction the

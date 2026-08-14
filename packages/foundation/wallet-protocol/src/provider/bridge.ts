@@ -251,10 +251,9 @@ const readErrorEnvelope = (id: string, error: WalletRpcError): ProviderResponse 
   id,
   target: PAGE_TARGET,
 });
-// A `false` result is rejected here (as the original did), unlike providerResponse.
 const readResultEnvelope = (id: string, rawResult: unknown): ProviderResponse | null => {
   const result = parseProviderResult(rawResult);
-  return result ? { id, result, target: PAGE_TARGET } : null;
+  return result !== null ? { id, result, target: PAGE_TARGET } : null;
 };
 /**
  * Parses content-script responses before resolving in-page provider requests.

@@ -3,8 +3,8 @@ import {
   readPreviewAccountInput,
   readValidateMnemonicInput,
 } from "../accounts/account-creation-inputs";
-import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import type { RuntimeResponse } from "../runtime/runtime-types";
 
 /**
  * Handles read-only public account preview and Krusty mnemonic validation.

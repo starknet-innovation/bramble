@@ -4,13 +4,20 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./account-contracts": "./src/accounts/account-contracts.ts",
     "./class-hash-verify": "./src/transactions/class-hash-verify.ts",
     "./declare": "./src/transactions/declare.ts",
     "./deployment": "./src/transactions/deployment.ts",
+    "./fee-bounds": "./src/rpc/fee-bounds.ts",
+    "./multisig-invoke": "./src/rpc/multisig-invoke.ts",
     "./provider": "./src/rpc/provider.ts",
     "./rpc": "./src/rpc/rpc.ts",
     "./rpc-assets": "./src/rpc/rpc-assets.ts",
     "./rpc-submit": "./src/rpc/rpc-submit.ts",
+    "./signature-verify": "./src/transactions/signature-verify.ts",
+    "./snip12-merkle": "./src/transactions/snip12-merkle.ts",
+    "./snip12-scalars": "./src/transactions/snip12-scalars.ts",
+    "./snip12-vocabulary": "./src/transactions/snip12-vocabulary.ts",
     "./typed-data": "./src/transactions/typed-data.ts"
   },
   "scripts": {

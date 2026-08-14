@@ -9,7 +9,7 @@ rules and `README.md` the feature-level docs. Treat every change as security-sen
 ```bash
 bun install --frozen-lockfile
 bun run vendor:krusty        # required once before check/build (clones + wasm-pack builds Krusty KMS)
-bun run vendor:multisig      # required once before check/build (scarb-builds contracts/multisig)
+bun run vendor:argent        # required once before check/build (verifies pinned official contracts)
 bun run vendor:privacy       # required once before check/build (builds pinned official privacy SDK)
 bun run check                # types + lint + standards + manifest + vendored pins + tests
 bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI image)
@@ -19,10 +19,9 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 ```
 
 - `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain;
-  `bun run vendor:multisig` needs `scarb 2.18.0` exactly (the multisig class hash pin in
-  `packages/features/multisig/src/deploy.ts` is only reproducible on that version); and
+  `bun run vendor:argent` needs network access to the pinned official Argent release; and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,
-  `check:krusty`/`check:multisig`/`check:privacy` and `build` fail — that is expected in offline
+  `check:krusty`/`check:argent`/`check:privacy` and `build` fail — that is expected in offline
   sandboxes; run the rest of the gates and say so.
 - Narrower loops while iterating: `bun test tests/<module>/<name>.test.ts`, `bun run check:types`,
   `bun run check:lint`, `bun run test:e2e:build` (build + extension E2E). Always finish with the
@@ -113,6 +112,19 @@ exists, use or extend it in place rather than adding a sibling.
 - Activity summaries are load-bearing: dedup guards match on them (see
   `apps/extension/src/background/multisig/multisig-tx-ops.ts`). Record deterministic, specific summaries, and never
   change one without checking what greps for it.
+- Numeric and lexical constants that more than one layer reads are single-sourced too:
+  `UINT128_LIMIT` in `src/starknet/networks.ts` (the uint256 limb bound, the unlimited-allowance
+  cut-off, and the STRK20 pool-fee ceiling all derive from it — never write `1n << 128n`), the
+  lowercase-hex grammar behind `isStarkFieldElement`/`isHexChainId`, and `isNetworkLabel` in
+  `src/shared/json.ts` for chain ids and names (bounded on the raw string, since the background
+  re-validates untrimmed message text), and `isServiceUrlList` in `src/shared/service-url.ts` for a
+  chain's endpoint arrays. `tests/conformance/shared-helper-single-source.test.ts` and its
+  `shared-grammar-single-source` sibling fail when a private copy reappears.
+- Workflow gates read `.github/workflows` from disk (`scripts/workflow-inventory.ts`), both `.yml`
+  and `.yaml` since GitHub runs either; do not add a hand-maintained workflow list. A new workflow
+  is checked automatically, and takes the self-hosted runner or a privileged trigger only by gaining
+  a reviewed policy in `scripts/workflow-security-policy.ts`. The same module owns the `uses:`
+  extraction, which fails closed: a reference it cannot resolve is reported as unpinned.
 
 ## Cursor Cloud specific instructions
 

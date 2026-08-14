@@ -236,12 +236,14 @@ export const mapStrk20ProtocolError = (error: unknown): never => {
  * proofs, authorizing secrets, vault data, and service endpoints never survive
  * `sanitizeStrk20Detail`.
  *
- * Indeterminacy is recognised here, never minted: only `withRpcWrite` knows
- * whether a write was actually in flight, and the marker it throws for that case
- * is an `IndeterminateRpcWriteError` — a `WalletError`, so it reaches maturity
- * unchanged through the passthrough below. A raw transport error arriving at
- * `stage === "submission"` means the opposite: endpoint selection failed the
- * chain-id probe, so nothing was broadcast and the scope must be released.
+ * Indeterminacy is recognised here, never minted: only the two lanes that carry
+ * a write to a node know whether one was actually in flight — `withRpcWrite` on
+ * the JSON-RPC lane and the paymaster client on the private-relay one — and the
+ * marker either throws for that case is an `IndeterminateRpcWriteError`, a
+ * `WalletError`, so it reaches maturity unchanged through the passthrough below.
+ * A raw transport error arriving at `stage === "submission"` means the opposite:
+ * endpoint selection failed the chain-id probe, so nothing was broadcast and the
+ * scope must be released.
  */
 export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): never => {
   if (error instanceof WalletError) {

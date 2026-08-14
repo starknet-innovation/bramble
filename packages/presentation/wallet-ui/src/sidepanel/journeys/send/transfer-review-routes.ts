@@ -81,7 +81,8 @@ const relayCut = (total: string, poolFeeFri: string): bigint | null => {
 // the calldata being estimated, is built at submission.
 const networkFeeHtml = (route: SendRoute, state: RouteFeeState): string => {
   if (route.submission === "relay") {
-    const total = state.preparation?.relayFee?.amount;
+    const relayFee = state.preparation?.relayFee;
+    const total = relayFee?.amount;
     const cut =
       total !== undefined && state.poolFeeFri !== undefined
         ? relayCut(total, state.poolFeeFri)
@@ -89,12 +90,12 @@ const networkFeeHtml = (route: SendRoute, state: RouteFeeState): string => {
     if (total !== undefined && cut === null) {
       // The withdrawal does not decompose against the known pool fee, so it is
       // reported whole rather than split into parts that were guessed.
-      return feeLine("Fee taken from your private balance", formatFri(total));
+      return `${feeLine("Fee taken from your private balance", formatFri(total))}${relayFee ? feeLine("Relay fee recipient", `${relayFee.recipient} (${relayFee.token})`) : ""}`;
     }
-    return feeLine(
+    return `${feeLine(
       "Estimated fee",
       cut === null || cut === 0n ? "Sponsored" : formatFri(`0x${cut.toString(16)}`),
-    );
+    )}${relayFee ? feeLine("Relay fee recipient", `${relayFee.recipient} (${relayFee.token})`) : ""}`;
   }
   const estimate = state.review ? reviewFeeSection(state.review, { id: "review-retry-fee" }) : "";
   return estimate || feeLine("Estimated fee", "charged at submission");

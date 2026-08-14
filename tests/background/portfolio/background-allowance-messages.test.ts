@@ -10,7 +10,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
-import { flushHeld, latestApprovalId } from "../../support/held";
+import { flushHeld, latestApprovalId, reviewedApprovalFee } from "../../support/held";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -19,6 +19,7 @@ const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc
 // revoking most genuine allowances.
 const SPENDER = `0x7${"5".repeat(62)}`;
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -105,7 +106,8 @@ const submitApprove = async (handler: ReturnType<typeof makeHarness>["handler"])
   );
   await flushHeld();
   const id = await latestApprovalId(handler, extensionSender);
-  await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+  const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+  await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
   return held;
 };
 
@@ -137,7 +139,12 @@ describe("allowance manager messages", () => {
     };
     const id = listed.allowances[0]?.id ?? "";
 
-    const revoke = await handler({ id, type: "wallet.revokeAllowance" }, extensionSender);
+    const review = await handler({ id, type: "wallet.revokeAllowance" }, extensionSender);
+    expect(review).toEqual({ feeReview: { overallFee: "1", unit: "FRI" }, ok: true });
+    const revoke = await handler(
+      { id, reviewedFee: { overallFee: "1", unit: "FRI" }, type: "wallet.revokeAllowance" },
+      extensionSender,
+    );
     expect(revoke).toEqual({ ok: true, transactionHash: "0x7cd" });
 
     const revokeCall = invokeCalls.at(-1)?.[0] as { calldata: string[]; entrypoint: string };

@@ -25,7 +25,7 @@ const mainnetToken = (symbol: "ETH" | "STRK") => {
 
 export const ETH_TOKEN = mainnetToken("ETH");
 export const STRK_TOKEN = mainnetToken("STRK");
-export const SPAM_TOKEN = withTokenId({
+const SPAM_TOKEN = withTokenId({
   address: "0x099999",
   decimals: 6,
   name: "USD Coin reward",
@@ -38,7 +38,7 @@ if (!usdcToken) {
   throw new Error("Missing production USDC fixture");
 }
 
-export const groups: AccountGroups = [
+const groups: AccountGroups = [
   {
     accountIds: [softwareAccount.id, ledgerAccount.id],
     icon: "briefcase",
@@ -155,7 +155,8 @@ export const emptyNetworkStatus: WalletStatus = {
   networkId: "SN_SEPOLIA",
 };
 
-export const importedAccount: AccountRef = {
+const importedAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x6234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
   classHash: "0x111",
   derivation: { kind: "imported-raw-key" },
@@ -176,7 +177,7 @@ const approvalContext = {
   chainId: "0x534e5f4d41494e",
   networkId: "SN_MAIN",
   payloadDigest: `sha256:${"c".repeat(64)}`,
-};
+} satisfies NonNullable<PendingApproval["context"]>;
 
 const approvalId = (suffix: string): string => `00000000-0000-4000-8000-000000000${suffix}`;
 

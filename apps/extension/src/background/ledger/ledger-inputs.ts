@@ -7,14 +7,21 @@
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isLedgerAccountIndex } from "@mc-wallet/wallet-model/ledger-path";
+import {
+  type AccountContractType,
+  isAccountContractType,
+  type LedgerPubKeyEntry,
+} from "@mc-wallet/wallet-model/accounts";
+import {
+  isLedgerAccountIndex,
+  MAX_LEDGER_ACCOUNT_BATCH,
+} from "@mc-wallet/wallet-model/ledger-path";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
-import type { LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
 
 const isFeltString = (value: unknown): value is string =>
   typeof value === "string" && isStarkFieldElement(value);
@@ -26,6 +33,7 @@ const isNonZeroFeltString = (value: unknown): value is string =>
  * Parsed request to store a keyless Ledger account from a device public key.
  */
 export type AddLedgerAccountRequest = {
+  readonly accountContractType: AccountContractType;
   readonly accountIndex: number;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
@@ -37,8 +45,15 @@ export type AddLedgerAccountRequest = {
 export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountRequest | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountIndex", "networkId", "publicKeyX", "type"]) ||
+    !hasOnlyKnownKeys(message, [
+      "accountContractType",
+      "accountIndex",
+      "networkId",
+      "publicKeyX",
+      "type",
+    ]) ||
     message["type"] !== "wallet.addLedgerAccount" ||
+    !isAccountContractType(message["accountContractType"]) ||
     !isLedgerAccountIndex(message["accountIndex"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !isNonZeroFeltString(message["publicKeyX"])
@@ -46,6 +61,7 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
     return null;
   }
   return {
+    accountContractType: message["accountContractType"],
     accountIndex: message["accountIndex"],
     networkId: message["networkId"],
     publicKeyX: message["publicKeyX"],
@@ -58,6 +74,7 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
  * account registry) plus the device public key and index; no seed is generated.
  */
 export type CreateLedgerVaultRequest = {
+  readonly accountContractType: AccountContractType;
   readonly accountIndex: number;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
@@ -72,12 +89,14 @@ export const readCreateLedgerVaultInput = (message: unknown): CreateLedgerVaultR
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "accountIndex",
+      "accountContractType",
       "networkId",
       "publicKeyX",
       "type",
       "vaultPassphrase",
     ]) ||
     message["type"] !== "wallet.createLedgerVault" ||
+    !isAccountContractType(message["accountContractType"]) ||
     !isLedgerAccountIndex(message["accountIndex"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !isNonZeroFeltString(message["publicKeyX"]) ||
@@ -86,6 +105,7 @@ export const readCreateLedgerVaultInput = (message: unknown): CreateLedgerVaultR
     return null;
   }
   return {
+    accountContractType: message["accountContractType"],
     accountIndex: message["accountIndex"],
     networkId: message["networkId"],
     publicKeyX: message["publicKeyX"],
@@ -131,6 +151,7 @@ const isPubKeyEntry = (value: unknown): value is LedgerPubKeyEntry =>
  * Parsed request to derive addresses for a batch of enumerated Ledger pairs.
  */
 export type DeriveLedgerAccountsRequest = {
+  readonly accountContractType: AccountContractType;
   readonly entries: readonly LedgerPubKeyEntry[];
   readonly networkId: StarknetNetworkId;
 };
@@ -143,15 +164,18 @@ export const readDeriveLedgerAccountsInput = (
 ): DeriveLedgerAccountsRequest | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["entries", "networkId", "type"]) ||
+    !hasOnlyKnownKeys(message, ["accountContractType", "entries", "networkId", "type"]) ||
     message["type"] !== "wallet.deriveLedgerAccounts" ||
+    !isAccountContractType(message["accountContractType"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !Array.isArray(message["entries"]) ||
+    message["entries"].length > MAX_LEDGER_ACCOUNT_BATCH ||
     !message["entries"].every(isPubKeyEntry)
   ) {
     return null;
   }
   return {
+    accountContractType: message["accountContractType"],
     entries: message["entries"].map((entry) => ({
       accountIndex: entry.accountIndex,
       publicKeyX: entry.publicKeyX,
@@ -168,6 +192,10 @@ export type CompleteLedgerSignRequest =
   | { readonly id: string; readonly r: string; readonly s: string }
   | { readonly error: string; readonly id: string };
 
+// Deliberately not `isNetworkLabel` (shared/json): these are a queue id the
+// wallet itself minted and a rejection code, matched exactly by the queue, not
+// free text a user reads. Trimming or capping them would change which callbacks
+// resolve a pending device signature, so this rule stays local and literal.
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 

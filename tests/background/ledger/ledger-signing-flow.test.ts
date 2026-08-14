@@ -30,6 +30,7 @@ const publicKeyX = starkCurve.getStarkKey(PRIVATE_KEY);
 const DEPLOY_HASH = "0x1e240";
 
 const ledgerAccount: LedgerAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabc111111",
   classHash: "0x111111",
   derivation: {
@@ -45,12 +46,12 @@ const ledgerAccount: LedgerAccountRef = {
 
 // A well-formed SNIP-12 typed message that hashes cleanly for the ledger account.
 const TYPED_DATA = {
-  domain: { chainId: "0x534e5f4d41494e", name: "Example", version: "1" },
+  domain: { chainId: "0x534e5f4d41494e", name: "Example", revision: "1", version: "1" },
   message: { contents: "hello" },
   primaryType: "Mail",
   types: {
     Mail: [{ name: "contents", type: "felt" }],
-    StarkNetDomain: [
+    StarknetDomain: [
       { name: "name", type: "felt" },
       { name: "version", type: "felt" },
       { name: "chainId", type: "felt" },
@@ -141,7 +142,9 @@ const handlerWith = (ledgerSignQueue: LedgerSignQueue) => {
       async submitAccountDeployment(input) {
         // Stand in for the real deploy-hash signing: hand the signer the hash and
         // capture the verified signature it returns before "broadcasting".
-        signHashResults.push(await input.signHash(DEPLOY_HASH));
+        const signature = await input.signHash(DEPLOY_HASH);
+        if (!("r" in signature)) throw new Error("unexpected multisig deployment signature");
+        signHashResults.push(signature);
         return { transactionHash: "0xdeploy" };
       },
     }),
@@ -154,7 +157,10 @@ describe("Ledger signing flow through the dispatcher", () => {
   test("signerFor routes a Ledger account to the device queue and verifies", async () => {
     const { handler, signHashResults } = handlerWith(deviceQueue(PRIVATE_KEY));
 
-    const response = await handler({ type: "wallet.deployAccount" }, extensionSender);
+    const response = await handler(
+      { reviewedFee: { overallFee: "1", unit: "FRI" }, type: "wallet.deployAccount" },
+      extensionSender,
+    );
 
     expect(response).toEqual({ ok: true, transactionHash: "0xdeploy" });
     expect(signHashResults).toHaveLength(1);
@@ -174,7 +180,10 @@ describe("Ledger signing flow through the dispatcher", () => {
   test("fails closed when the device returns a signature that does not verify", async () => {
     const { handler, signHashResults } = handlerWith(deviceQueue("0xdeadbeef"));
 
-    const response = await handler({ type: "wallet.deployAccount" }, extensionSender);
+    const response = await handler(
+      { reviewedFee: { overallFee: "1", unit: "FRI" }, type: "wallet.deployAccount" },
+      extensionSender,
+    );
 
     expect(response).toEqual({ error: "Ledger signature verification failed" });
     expect(signHashResults).toHaveLength(0);
@@ -203,7 +212,10 @@ describe("Ledger signing flow through the dispatcher", () => {
       }),
       session,
     });
-    const response = await handler({ type: "wallet.deployAccount" }, extensionSender);
+    const response = await handler(
+      { reviewedFee: { overallFee: "1", unit: "FRI" }, type: "wallet.deployAccount" },
+      extensionSender,
+    );
     expect(response).toEqual({ error: "unreachable" });
   });
 });
@@ -212,7 +224,13 @@ describe("privileged Ledger messages", () => {
   test("creates a keyless Ledger account", async () => {
     const { handler } = handlerWith(deviceQueue(PRIVATE_KEY));
     const response = await handler(
-      { accountIndex: 2, networkId: "SN_MAIN", publicKeyX, type: "wallet.addLedgerAccount" },
+      {
+        accountContractType: "openzeppelin",
+        accountIndex: 2,
+        networkId: "SN_MAIN",
+        publicKeyX,
+        type: "wallet.addLedgerAccount",
+      },
       extensionSender,
     );
     expect(response).toEqual({ account: ledgerAccount, ok: true });
@@ -222,6 +240,7 @@ describe("privileged Ledger messages", () => {
     const { handler } = handlerWith(deviceQueue(PRIVATE_KEY));
     const response = await handler(
       {
+        accountContractType: "openzeppelin",
         accountIndex: 2,
         networkId: "SN_MAIN",
         publicKeyX,
@@ -306,6 +325,7 @@ describe("privileged Ledger messages", () => {
     const { handler } = handlerWith(deviceQueue(PRIVATE_KEY));
     const response = await handler(
       {
+        accountContractType: "openzeppelin",
         entries: [{ accountIndex: 2, publicKeyX }],
         networkId: "SN_MAIN",
         type: "wallet.deriveLedgerAccounts",

@@ -53,11 +53,16 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
   "@mc-wallet/core": [],
   "@mc-wallet/kms-krusty": ["@mc-wallet/core", "@mc-wallet/vault", "@mc-wallet/wallet-model"],
   "@mc-wallet/ledger-browser": [
+    "@mc-wallet/core",
     "@mc-wallet/ledger-protocol",
     "@mc-wallet/testkit",
     "@mc-wallet/wallet-model",
   ],
-  "@mc-wallet/ledger-protocol": ["@mc-wallet/testkit", "@mc-wallet/wallet-model"],
+  "@mc-wallet/ledger-protocol": [
+    "@mc-wallet/core",
+    "@mc-wallet/testkit",
+    "@mc-wallet/wallet-model",
+  ],
   "@mc-wallet/multisig": [
     "@mc-wallet/core",
     "@mc-wallet/starknet",
@@ -96,6 +101,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
   "@mc-wallet/ui-kit": ["@mc-wallet/core", "@mc-wallet/wallet-model"],
   "@mc-wallet/vault": [
     "@mc-wallet/core",
+    "@mc-wallet/starknet",
     "@mc-wallet/store",
     "@mc-wallet/testkit",
     "@mc-wallet/wallet-model",

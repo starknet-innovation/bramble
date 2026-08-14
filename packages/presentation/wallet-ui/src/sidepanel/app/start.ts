@@ -5,7 +5,7 @@ import { bindLedgerFirstRun } from "../journeys/ledger/first-run";
 import { createLedgerOnboardEntry } from "../journeys/ledger/onboard-entry";
 import { createLedgerSignRuntime } from "../journeys/ledger/sign-runtime";
 import { createMultisigClient } from "../journeys/multisig/multisig-runtime";
-import { shouldPreserveMultisigProposalSurface } from "../journeys/multisig/multisig-surface";
+import { shouldPreserveMultisigIntentSurface } from "../journeys/multisig/multisig-surface";
 import { bindMultisigs } from "../journeys/multisig/multisig-ui";
 import { locked, onboarding } from "../journeys/onboarding/gate-views";
 import {
@@ -13,7 +13,8 @@ import {
   onboardingComplete,
   onboardingLaunch,
 } from "../journeys/onboarding/onboarding-surface";
-import { bindOnboarding, bindUnlock } from "../journeys/onboarding/onboarding-ui";
+import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
+import { bindUnlock } from "../journeys/onboarding/unlock-ui";
 import type { HomeTab } from "../journeys/portfolio/home-tabs";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";
@@ -110,8 +111,8 @@ export const startWalletUi = async (
   ledgerOnboardMount.hidden = true;
   document.body.append(ledgerOnboardMount);
   const ledgerOnboard = createLedgerOnboardEntry({
-    addHd: async () => {
-      await wallet.addAccount(lastNetworkId);
+    addHd: async (accountContractType) => {
+      await wallet.addAccount(lastNetworkId, accountContractType);
       showToast("Account added", "success");
     },
     cache,
@@ -326,7 +327,7 @@ export const startWalletUi = async (
     );
     if (transfer.preserveSend(app, activeView, status, cache.pending, snoozedApprovalIds)) return;
     if (
-      shouldPreserveMultisigProposalSurface(
+      shouldPreserveMultisigIntentSurface(
         app,
         activeView,
         selectedMultisigId,
@@ -361,7 +362,7 @@ export const startWalletUi = async (
                 selectedNftId,
                 cache.changes,
                 cache.multisigs.multisigs,
-                cache.multisigs.proposals,
+                cache.multisigs.intents,
                 selectedMultisigId,
                 cache.multisigClassDeclared,
                 drawerGroupFilter,
@@ -374,7 +375,6 @@ export const startWalletUi = async (
                 cache.historyUnavailable,
                 snoozedApprovalIds,
                 cache.multisigsError,
-                cache.multisigSync,
                 cache.multisigBalances,
                 cache.multisigBalanceId,
                 cache.multisigNfts,

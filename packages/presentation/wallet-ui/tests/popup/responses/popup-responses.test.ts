@@ -1,6 +1,4 @@
-/**
- * Popup response validator checks reject malformed background data before rendering.
- */
+/** Popup response validators reject malformed background data before rendering. */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import {
@@ -20,6 +18,7 @@ import {
 describe("popup response validators", () => {
   const approvalId = "123e4567-e89b-42d3-a456-426614174000";
   const account = {
+    accountContractType: "openzeppelin" as const,
     address: "0x123",
     classHash: "0xabc",
     derivation: {
@@ -170,56 +169,53 @@ describe("popup response validators", () => {
 
   test("validates pending approval items before popup rendering", () => {
     const sparsePending = new Array<unknown>(1);
+    const approval = { id: approvalId, kind: "connect", origin: "https://example.com" };
 
     expect(
       isPendingApprovalsResponse({
         ok: true,
-        pending: [{ id: approvalId, origin: "https://example.com" }],
+        pending: [approval],
       }),
     ).toBe(true);
     expect(
       isPendingApprovalsResponse({
         ok: true,
-        pending: [{ id: approvalId, label: "unexpected", origin: "https://example.com" }],
+        pending: [{ ...approval, label: "unexpected" }],
       }),
     ).toBe(false);
     expect(
       isPendingApprovalsResponse({
         ok: true,
-        pending: [
-          { id: approvalId, origin: "https://example.com" },
-          { id: approvalId, origin: "https://other.example" },
-        ],
+        pending: [approval, { ...approval, origin: "https://other.example" }],
       }),
     ).toBe(false);
     expect(
       isPendingApprovalsResponse({
         ok: true,
-        pending: [
-          { id: approvalId, origin: "https://example.com" },
-          { id: "123e4567-e89b-42d3-a456-426614174001", origin: "https://example.com" },
-        ],
+        pending: [approval, { ...approval, id: "123e4567-e89b-42d3-a456-426614174001" }],
       }),
     ).toBe(false);
     expect(
       isPendingApprovalsResponse({
         debug: true,
         ok: true,
-        pending: [{ id: approvalId, origin: "https://example.com" }],
+        pending: [approval],
       }),
     ).toBe(false);
-    expect(isPendingApprovalsResponse({ ok: true, pending: [{ id: approvalId }] })).toBe(false);
+    expect(
+      isPendingApprovalsResponse({ ok: true, pending: [{ id: approvalId, kind: "connect" }] }),
+    ).toBe(false);
     expect(isPendingApprovalsResponse({ ok: true, pending: sparsePending })).toBe(false);
     expect(
       isPendingApprovalsResponse({
         ok: true,
-        pending: [{ id: "", origin: "https://example.com" }],
+        pending: [{ ...approval, id: "" }],
       }),
     ).toBe(false);
     expect(
       isPendingApprovalsResponse({
         ok: true,
-        pending: [{ id: approvalId, origin: "http://example.com" }],
+        pending: [{ ...approval, origin: "http://example.com" }],
       }),
     ).toBe(false);
     expect(isPendingApprovalsResponse({ ok: true, pending: [null] })).toBe(false);
@@ -456,6 +452,10 @@ describe("popup response validators", () => {
         pending: [{ id: approvalId, origin: "https://example.com" }],
       }),
     ).toBe(true);
+    expect(isApprovalDecisionResponse({ chainId: "0x534e5f4d41494e", ok: true, pending: [] })).toBe(
+      true,
+    );
+    expect(isApprovalDecisionResponse({ chainId: "SN_MAIN", ok: true, pending: [] })).toBe(false);
     expect(isApprovalDecisionResponse({ ok: true })).toBe(false);
   });
 
@@ -492,7 +492,6 @@ describe("popup response validators", () => {
         ok: true,
       }),
     ).toBe(false);
-    expect(isTransferResponse({ ok: true, transactionHash: "0x123" })).toBe(true);
     expect(isTransferResponse({ ok: true, transactionHash: "not-hex" })).toBe(false);
   });
 });

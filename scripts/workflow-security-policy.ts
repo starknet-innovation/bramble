@@ -4,9 +4,17 @@
  * These checks intentionally inspect workflow text rather than executing YAML:
  * the protected properties are exact, reviewable policy statements (runner
  * class, token scope, immutable refs, and event guards), not general YAML shape.
+ *
+ * The set of workflows is read from the directory (./workflow-inventory), never
+ * from a table here. Every workflow found gets the baseline below; the named
+ * policies add per-workflow rules on top, and the vendoring rules select
+ * themselves from workflow content. A workflow added tomorrow is therefore
+ * checked without anyone remembering to list it — which is the whole point: the
+ * previous hand-maintained list had already fallen three workflows behind.
  */
-import { readFile } from "node:fs/promises";
 import { escapeRegExp } from "./regexp";
+import { dynamicExecutionFailures } from "./vendor-pin-policy";
+import { readWorkflowSources, WORKFLOW_DIR, type WorkflowSources } from "./workflow-inventory";
 
 const RUST_TOOLCHAIN_ACTION = "dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30";
 const NODE_SETUP_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
@@ -19,17 +27,17 @@ const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.0.0
         with:
           node-version: 24`;
 
-const WORKFLOW_PATHS = {
-  ci: ".github/workflows/ci.yml",
-  nightly: ".github/workflows/nightly.yml",
-  releaseBuild: ".github/workflows/release-build.yml",
-  releaseIntegration: ".github/workflows/release-integration.yml",
-  release: ".github/workflows/release.yml",
-  roadmap: ".github/workflows/roadmap-project-sync.yml",
-} as const;
+// Vendoring is all-or-nothing: a workflow that builds one pinned source against
+// a stale or unverified other one is not running the reviewed artifact set. The
+// rule selects itself from content, so it reaches any future workflow that
+// vendors anything.
+const VENDOR_STEPS = [
+  { command: "bun run vendor:krusty", failure: "must vendor the pinned Krusty KMS source" },
+  { command: "bun run vendor:argent", failure: "must verify the pinned Argent account contracts" },
+  { command: "bun run vendor:privacy", failure: "must vendor the pinned privacy SDK" },
+] as const;
 
-type WorkflowName = keyof typeof WORKFLOW_PATHS;
-type WorkflowSources = Readonly<Record<WorkflowName, string>>;
+const workflowPath = (name: string): string => `${WORKFLOW_DIR}/${name}`;
 
 const jobBody = (workflow: string, job: string): string => {
   const bounded = `${workflow}\n  __workflow_policy_end__:\n`;
@@ -62,38 +70,96 @@ const forbidText = (
   }
 };
 
-const rustToolchainFailures = (sources: WorkflowSources): string[] => {
+// Applies to any workflow that vendors a pinned source, selected by content.
+// The reproducibility of both vendored artifacts depends on these exact
+// toolchains, so the pins travel with the vendoring step rather than with a
+// list of workflow names.
+const vendoringFailures = (name: string, source: string): string[] => {
   const failures: string[] = [];
-  for (const name of ["ci", "nightly", "releaseBuild", "releaseIntegration"] as const) {
-    requireText(
+  if (!VENDOR_STEPS.some((step) => source.includes(step.command))) {
+    return failures;
+  }
+  const path = workflowPath(name);
+  for (const step of VENDOR_STEPS) {
+    requireText(failures, source, step.command, `${path} ${step.failure}`);
+  }
+  requireText(failures, source, RUST_TOOLCHAIN_BLOCK, `${path} must pin Rust toolchain 1.96.1`);
+  if (source.split(RUST_TOOLCHAIN_ACTION).length - 1 !== 1) {
+    failures.push(`${path} must use the pinned Rust action exactly once`);
+  }
+  requireText(
+    failures,
+    source,
+    NODE_SETUP_BLOCK,
+    `${path} must pin Node.js 24 for privacy SDK vendoring`,
+  );
+  // A workflow that vendors pinned sources is on the path that produces the
+  // release artifact. Every executable it runs must come from a pin or a
+  // lockfile: a package resolved by name at run time executes with the
+  // workspace's write access before any digest, manifest, or package check
+  // exists to notice what it changed.
+  failures.push(...dynamicExecutionFailures(source, path));
+  return failures;
+};
+
+// What every workflow owes regardless of what it does, plus the privileged
+// capabilities a workflow may not take without a reviewed policy of its own.
+// A new workflow can still be added freely — it just cannot quietly claim the
+// self-hosted runner or a base-repository-privileged trigger while doing so.
+const baselineFailures = (name: string, source: string, reviewed: boolean): string[] => {
+  const failures: string[] = [];
+  const path = workflowPath(name);
+  requireText(
+    failures,
+    source,
+    "\npermissions:\n  contents: read\n",
+    `${path} must declare a read-only default permissions block`,
+  );
+  forbidText(failures, source, "write-all", `${path} must not request every token permission`);
+  if (reviewed) {
+    return failures;
+  }
+  const hosted = source
+    .split("\n")
+    .filter((line) => /^\s*runs-on:/.test(line))
+    .every((line) => line.trim() === "runs-on: ubuntu-latest");
+  if (!hosted) {
+    failures.push(`${path} must use a hosted runner or declare a reviewed workflow policy`);
+  }
+  for (const trigger of ["pull_request_target:", "workflow_run:"]) {
+    forbidText(
       failures,
-      sources[name],
-      RUST_TOOLCHAIN_BLOCK,
-      `${WORKFLOW_PATHS[name]} must pin Rust toolchain 1.96.1`,
+      source,
+      trigger,
+      `${path} must declare a reviewed workflow policy before using ${trigger}`,
     );
-    const occurrences = sources[name].split(RUST_TOOLCHAIN_ACTION).length - 1;
-    if (occurrences !== 1) {
-      failures.push(`${WORKFLOW_PATHS[name]} must use the pinned Rust action exactly once`);
-    }
   }
   return failures;
 };
 
-const privacySdkWorkflowFailures = (sources: WorkflowSources): string[] => {
+const scopedServiceSecretFailures = (name: string, source: string): string[] => {
+  if (!source.includes("CHROMATIC_PROJECT_TOKEN")) {
+    return [];
+  }
   const failures: string[] = [];
-  for (const name of ["ci", "nightly", "releaseBuild", "releaseIntegration"] as const) {
-    requireText(
-      failures,
-      sources[name],
-      NODE_SETUP_BLOCK,
-      `${WORKFLOW_PATHS[name]} must pin Node.js 24 for privacy SDK vendoring`,
-    );
-    requireText(
-      failures,
-      sources[name],
-      "bun run vendor:privacy",
-      `${WORKFLOW_PATHS[name]} must vendor the pinned privacy SDK`,
-    );
+  const path = workflowPath(name);
+  requireText(
+    failures,
+    source,
+    `      - name: Publish to Chromatic
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          CHROMATIC_PROJECT_TOKEN: ${GITHUB_EXPRESSION} secrets.CHROMATIC_PROJECT_TOKEN }}
+        run: |
+          if [ -z "${SHELL_EXPANSION}CHROMATIC_PROJECT_TOKEN:-}" ]; then
+            echo "::notice::Chromatic is not configured; GitHub Pages remains the published UI Lab."
+            exit 0
+          fi
+          bun run --filter @mc-wallet/ui-lab chromatic`,
+    `${path} must expose the Chromatic token only to the main-push publish step`,
+  );
+  if (source.split("CHROMATIC_PROJECT_TOKEN").length - 1 !== 3) {
+    failures.push(`${path} must reference the Chromatic token only in its scoped step environment`);
   }
   return failures;
 };
@@ -246,7 +312,7 @@ const nightlyFailures = (source: string): string[] => {
   requireText(
     failures,
     resolve,
-    '[[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+$ ]]',
+    '[[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]',
     "nightly must constrain configured refs to canonical release branches",
   );
   requireText(
@@ -318,6 +384,40 @@ const nightlyFailures = (source: string): string[] => {
   return failures;
 };
 
+// Post-merge integration on the self-hosted runner. Its whole safety argument is
+// that nothing outside the base repository can choose what it executes: the only
+// trigger is a push to a release branch, no caller-supplied ref reaches checkout,
+// and the job holds no write scope.
+const releaseIntegrationFailures = (source: string): string[] => {
+  const failures: string[] = [];
+  const integration = jobBody(source, "integration");
+  requireText(
+    failures,
+    source,
+    'push:\n    branches: ["release/**"]',
+    "release integration must run only on pushes to release branches",
+  );
+  forbidText(
+    failures,
+    source,
+    "pull_request",
+    "release integration must not execute pull-request revisions on the self-hosted runner",
+  );
+  forbidText(
+    failures,
+    integration,
+    "contents: write",
+    "self-hosted release integration must not receive repository write permission",
+  );
+  forbidText(
+    failures,
+    integration,
+    "\n          ref:",
+    "self-hosted release integration must not pass caller-controlled refs to checkout",
+  );
+  return failures;
+};
+
 const roadmapFailures = (source: string): string[] => {
   const failures: string[] = [];
   const verify = jobBody(source, "verify");
@@ -342,29 +442,45 @@ const roadmapFailures = (source: string): string[] => {
   return failures;
 };
 
-/**
- * Returns every privileged-workflow policy violation found in supplied sources.
- * It performs no I/O so tests can mutate one control at a time.
- */
-export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string[] => [
-  ...rustToolchainFailures(sources),
-  ...privacySdkWorkflowFailures(sources),
-  ...ciFailures(sources.ci),
-  ...releaseBuildFailures(sources.releaseBuild),
-  ...releaseFailures(sources.release),
-  ...nightlyFailures(sources.nightly),
-  ...roadmapFailures(sources.roadmap),
-];
-
-/** Loads repository workflows and returns all privileged-workflow policy violations. */
-export const workflowSecurityFailures = async (): Promise<string[]> => {
-  const entries = await Promise.all(
-    Object.entries(WORKFLOW_PATHS).map(async ([name, path]) => [
-      name,
-      await readFile(path, "utf8"),
-    ]),
-  );
-  return workflowSecurityPolicyFailures(
-    Object.fromEntries(entries) as Record<WorkflowName, string>,
-  );
+// Per-workflow policies, keyed by file name. Membership here means "this
+// workflow's privileged behaviour has been reviewed and is pinned below", which
+// is also what lets it hold a self-hosted runner or a privileged trigger.
+const NAMED_POLICIES: Readonly<Record<string, (source: string) => string[]>> = {
+  "ci.yml": ciFailures,
+  "nightly.yml": nightlyFailures,
+  "release-build.yml": releaseBuildFailures,
+  "release-integration.yml": releaseIntegrationFailures,
+  "release.yml": releaseFailures,
+  "roadmap-project-sync.yml": roadmapFailures,
 };
+
+/**
+ * Returns every privileged-workflow policy violation found in supplied sources,
+ * which are keyed by workflow file name. It performs no I/O so tests can mutate
+ * one control at a time. A reviewed workflow that is absent from the supplied
+ * inventory is itself a failure: its rules would otherwise vanish with it.
+ */
+export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string[] => {
+  const failures: string[] = [];
+  for (const name of Object.keys(NAMED_POLICIES)) {
+    if (!Object.hasOwn(sources, name)) {
+      failures.push(`${workflowPath(name)} is missing; its reviewed policy cannot be enforced`);
+    }
+  }
+  for (const [name, source] of Object.entries(sources)) {
+    const named = NAMED_POLICIES[name];
+    failures.push(...baselineFailures(name, source, named !== undefined));
+    failures.push(...scopedServiceSecretFailures(name, source));
+    failures.push(...vendoringFailures(name, source));
+    failures.push(...(named?.(source) ?? []));
+  }
+  return failures;
+};
+
+/**
+ * Loads every workflow in the repository and returns all privileged-workflow
+ * policy violations. Fails closed: an unreadable workflow directory throws
+ * rather than reporting an empty violation list.
+ */
+export const workflowSecurityFailures = async (): Promise<string[]> =>
+  workflowSecurityPolicyFailures(await readWorkflowSources());

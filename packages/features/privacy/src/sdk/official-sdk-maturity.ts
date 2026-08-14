@@ -129,7 +129,9 @@ export const createStrk20MaturityRuntime = ({
       return undefined;
     }
     if (record.state === "submitting") {
-      throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      throw new WalletError(
+        `${STRK20_SERVICE_UNAVAILABLE}: submission status is unknown; close every browser window and reopen the browser to recover`,
+      );
     }
     if (record.acceptedBlock !== undefined) {
       return record.acceptedBlock;
@@ -206,7 +208,11 @@ export const createStrk20MaturityRuntime = ({
         }
         throw error;
       });
-      await recordSubmission(provider, scope, result.transactionHash);
+      // The pre-broadcast `submitting` claim is already durable. Once the RPC
+      // returned an accepted hash, a later journal/receipt failure may leave
+      // the scope conservatively closed, but it must not rewrite the broadcast
+      // into a retryable failure and risk a duplicate economic action.
+      await recordSubmission(provider, scope, result.transactionHash).catch(() => undefined);
       return result;
     });
 

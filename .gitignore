@@ -9,9 +9,8 @@ target/
 test-results/
 output/
 vendor/krusty-kms/
-vendor/multisig/
+vendor/argent-contracts/
 vendor/starknet-privacy/
-contracts/multisig/target/
 *.log
 .env*.local
 .DS_Store

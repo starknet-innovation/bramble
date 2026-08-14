@@ -3,6 +3,7 @@
  * shared by the provider bridge before a request reaches the background.
  */
 import { hasOnlyKnownKeys, isRecord, isSafeDecimals, type Json } from "@mc-wallet/core/json";
+import { isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 
 /**
  * Dapp-provided ERC20 watch-asset options after bridge validation.
@@ -15,6 +16,20 @@ export type ProviderWatchAsset = {
 };
 
 /**
+ * Re-validates the internal watch-asset options after they cross the runtime
+ * message boundary. The address grammar is the wallet model's canonical Stark
+ * field grammar, so the page bridge and background cannot drift apart.
+ */
+export const isProviderWatchAsset = (value: unknown): value is ProviderWatchAsset =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["address", "decimals", "name", "symbol"]) &&
+  typeof value["address"] === "string" &&
+  isNonZeroStarkFieldElement(value["address"]) &&
+  (value["decimals"] === undefined || isSafeDecimals(value["decimals"])) &&
+  (value["name"] === undefined || typeof value["name"] === "string") &&
+  (value["symbol"] === undefined || typeof value["symbol"] === "string");
+
+/**
  * Parses a `{ type: "ERC20", options: { address, ... } }` watch-asset payload,
  * accepting only an ERC20 token with a non-zero hex address.
  */
@@ -23,22 +38,11 @@ export const readProviderWatchAsset = (params: Json | undefined): ProviderWatchA
     !isRecord(params) ||
     !hasOnlyKnownKeys(params, ["options", "type"]) ||
     params["type"] !== "ERC20" ||
-    !isRecord(params["options"]) ||
-    !hasOnlyKnownKeys(params["options"], ["address", "decimals", "name", "symbol"])
+    !isProviderWatchAsset(params["options"])
   ) {
     return null;
   }
   const options = params["options"];
-  if (
-    typeof options["address"] !== "string" ||
-    !/^0x[0-9a-fA-F]+$/.test(options["address"]) ||
-    BigInt(options["address"]) <= 0n ||
-    (options["decimals"] !== undefined && !isSafeDecimals(options["decimals"])) ||
-    (options["name"] !== undefined && typeof options["name"] !== "string") ||
-    (options["symbol"] !== undefined && typeof options["symbol"] !== "string")
-  ) {
-    return null;
-  }
   return {
     address: options["address"],
     ...(options["decimals"] === undefined ? {} : { decimals: options["decimals"] }),

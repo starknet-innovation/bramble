@@ -103,7 +103,7 @@ version **must be strictly greater** than the currently published one.
 ```sh
 bun install --frozen-lockfile
 bun run vendor:krusty      # checks out the pinned Krusty KMS commit and builds wasm
-bun run vendor:multisig    # vendors the multisig contract class
+bun run vendor:argent      # verifies the pinned official Argent release
 bun run build              # writes dist/
 bun run package:extension  # writes artifacts/mc-wallet-<version>.zip (+ .sha256)
 ```
@@ -121,7 +121,7 @@ cd artifacts && sha256sum -c ./*.zip.sha256
 
 ### Offline quality-gate subset
 
-Run before tagging (these need no network/Rust/Scarb):
+Run before tagging (these need no network/Rust):
 
 ```sh
 bun run check:types
@@ -131,8 +131,8 @@ bun run check:extension
 bun test
 ```
 
-The full `bun run check` (plus `vendor:krusty`, `vendor:multisig`, `build`,
-`test:e2e`) runs in CI, which needs network + the Rust/Scarb toolchain.
+The full `bun run check` (plus `vendor:krusty`, `vendor:argent`, `build`,
+`test:e2e`) runs in CI, which needs network plus the Rust toolchain for Krusty.
 
 ## 3. Cutting a release (automatic on merge)
 
@@ -148,7 +148,7 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
    idempotent, so a re-run never double-cuts);
 4. calls the reusable `release-build.yml`, which installs the toolchain exactly
    as CI does (including Rust `1.96.1`), runs
-   `vendor:krusty`/`vendor:multisig`/`build`/`package:extension`, re-asserts the
+   `vendor:krusty`/`vendor:argent`/`build`/`package:extension`, re-asserts the
    tag ↔ version gate, verifies the `.zip` matches its `.sha256`, and uploads the
    `mc-wallet-release` artifact. A separate hosted job that never checks out
    wallet source creates the **GitHub Release** with the zip + `.sha256`

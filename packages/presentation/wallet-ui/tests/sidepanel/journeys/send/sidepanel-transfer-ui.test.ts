@@ -259,6 +259,8 @@ describe("bindTransfer", () => {
     const { app, calls, deps } = mount({
       async reviewTransfer() {
         return {
+          deploymentFee: { overallFee: "2000", unit: "FRI" },
+          deploymentFeeEstimateFailed: false,
           fee: { overallFee: "1000", unit: "FRI" },
           feeEstimateFailed: false,
           flags: [],
@@ -274,7 +276,8 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(reviewText(app)).toContain("not deployed yet");
-    expect(feeText(app)).toContain("Estimated fee");
+    expect(feeText(app)).toContain("Estimated transaction fee");
+    expect(feeText(app)).toContain("Estimated account deployment fee");
 
     submit(app);
     await flush();
@@ -284,12 +287,14 @@ describe("bindTransfer", () => {
     expect(calls.loadDeploymentStatus).toBeGreaterThan(0);
   });
 
-  test("shows the pending-deployment fee wording on the confirm face when no estimate exists", async () => {
-    const { app, deps } = mount({
+  test("refuses confirmation when either undeployed-account fee is unavailable", async () => {
+    const { app, calls, deps } = mount({
       async reviewTransfer() {
         return {
+          deploymentFee: null,
+          deploymentFeeEstimateFailed: true,
           fee: null,
-          feeEstimateFailed: false,
+          feeEstimateFailed: true,
           flags: [],
           requiresDeployment: true,
           summaries: ["Deploy + transfer"],
@@ -302,10 +307,10 @@ describe("bindTransfer", () => {
 
     submit(app);
     await flush();
-    // The not-yet-deployed fee wording is visible without opening the
-    // disclosure (#190).
-    expect(feeText(app)).toContain("estimated once this account is deployed");
-    expect(reviewText(app)).not.toContain("estimated once this account is deployed");
+    expect(feeText(app)).toContain("Couldn't estimate both");
+    submit(app);
+    await flush();
+    expect(calls.submitTransfer).toHaveLength(0);
   });
 
   test("keeps the review pending and offers a retry when the fee estimate fails", async () => {

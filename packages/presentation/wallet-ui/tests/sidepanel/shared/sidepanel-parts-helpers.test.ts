@@ -13,6 +13,7 @@ import {
 } from "../../../src/sidepanel/shared/parts";
 
 const account = (address: string): AccountRef => ({
+  accountContractType: "openzeppelin",
   address,
   classHash: "0x2",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

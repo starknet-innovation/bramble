@@ -12,14 +12,12 @@ import {
   readApprovalIdInput,
   readCreateAccountInput,
   readGetGrantedAccountsInput,
-  readGrantOriginInput,
   readRequestAccountsInput,
   readRevealSecretsInput,
   readRevokeOriginInput,
   readSaveAddressInput,
   readSetActiveAccountInput,
   readSetActiveNetworkInput,
-  readSignHashInput,
   readSwitchChainInput,
   readTransferInput,
   readTypeOnlyInput,
@@ -47,14 +45,6 @@ describe("background message parsers", () => {
       }),
     ).toBeNull();
     expect(
-      readGrantOriginInput({
-        debug: true,
-        origin: "https://example.com",
-        type: "wallet.grantOrigin",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
-    expect(
       readGetGrantedAccountsInput({
         debug: true,
         origin: "https://example.com",
@@ -64,6 +54,26 @@ describe("background message parsers", () => {
     expect(
       readApprovalIdInput({ debug: true, id: approvalId, type: "wallet.denyOrigin" }),
     ).toBeNull();
+    // The reviewed-fee echo is optional, validated by the shared fee grammar,
+    // and refuses the whole decision when malformed — a dropped ceiling would be
+    // an unbound submission that looks bound.
+    expect(
+      readApprovalIdInput({
+        id: approvalId,
+        reviewedFee: { overallFee: "1000", unit: "FRI" },
+        type: "wallet.approveOrigin",
+      }),
+    ).toEqual({ id: approvalId, reviewedFee: { overallFee: "1000", unit: "FRI" } });
+    expect(
+      readApprovalIdInput({
+        id: approvalId,
+        reviewedFee: { overallFee: "1000", unit: "DOGE" },
+        type: "wallet.approveOrigin",
+      }),
+    ).toBeNull();
+    expect(readApprovalIdInput({ id: approvalId, type: "wallet.approveOrigin" })).toEqual({
+      id: approvalId,
+    });
     expect(
       readRequestAccountsInput({
         debug: true,
@@ -78,14 +88,6 @@ describe("background message parsers", () => {
         type: "wallet.requestAccounts",
       }),
     ).toEqual({ origin: "https://example.com", silent: true });
-    expect(
-      readSignHashInput({
-        debug: true,
-        messageHash: "0x1234",
-        type: "wallet.signHash",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
     expect(
       readSetActiveAccountInput({
         accountId,
@@ -135,22 +137,6 @@ describe("background message parsers", () => {
         mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
         networkId: "toString",
         type: "wallet.createAccount",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
-    expect(
-      readGrantOriginInput({
-        accountId: "not-an-account",
-        origin: "https://example.com",
-        type: "wallet.grantOrigin",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
-    expect(
-      readSignHashInput({
-        accountId: "not-an-account",
-        messageHash: "0x1234",
-        type: "wallet.signHash",
         vaultPassphrase,
       }),
     ).toBeNull();
@@ -237,14 +223,6 @@ describe("background message parsers", () => {
         type: "wallet.transfer",
       }),
     ).toBeNull();
-    expect(
-      readSignHashInput({
-        accountId,
-        messageHash: "0x1234",
-        type: "wallet.signHash",
-        vaultPassphrase,
-      }),
-    ).toEqual({ accountId, messageHash: "0x1234", vaultPassphrase });
   });
 
   test("reject short vault passphrases before service calls", () => {
@@ -258,23 +236,9 @@ describe("background message parsers", () => {
       }),
     ).toBeNull();
     expect(
-      readGrantOriginInput({
-        origin: "https://example.com",
-        type: "wallet.grantOrigin",
-        vaultPassphrase: shortPassphrase,
-      }),
-    ).toBeNull();
-    expect(
       readGetGrantedAccountsInput({
         origin: "https://example.com",
         type: "wallet.getGrantedAccounts",
-        vaultPassphrase: shortPassphrase,
-      }),
-    ).toBeNull();
-    expect(
-      readSignHashInput({
-        messageHash: "0x1234",
-        type: "wallet.signHash",
         vaultPassphrase: shortPassphrase,
       }),
     ).toBeNull();
@@ -292,7 +256,14 @@ describe("background message parsers", () => {
   });
 
   test("reads add-account messages carrying only a network", () => {
-    expect(readAddAccountInput({ networkId: "SN_MAIN", type: "wallet.addAccount" })).toEqual({
+    expect(
+      readAddAccountInput({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        type: "wallet.addAccount",
+      }),
+    ).toEqual({
+      accountContractType: "openzeppelin",
       networkId: "SN_MAIN",
     });
     expect(readAddAccountInput({ networkId: "SN_BAD", type: "wallet.addAccount" })).toBeNull();
@@ -332,18 +303,39 @@ describe("background message parsers", () => {
         vaultPassphrase,
       }),
     ).toBeNull();
+    expect(
+      readCreateAccountInput({
+        mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+        mnemonicPassphrase: "x".repeat(1_025),
+        type: "wallet.createAccount",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
+    expect(
+      readCreateAccountInput({
+        mnemonic: "x".repeat(513),
+        type: "wallet.createAccount",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
   });
 
   test("reads exact account previews without accepting a vault passphrase", () => {
     const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
     expect(
       readPreviewAccountInput({
+        accountContractType: "openzeppelin",
         accountIndex: 0,
         mnemonic,
         networkId: "SN_SEPOLIA",
         type: "wallet.previewAccount",
       }),
-    ).toEqual({ accountIndex: 0, mnemonic, networkId: "SN_SEPOLIA" });
+    ).toEqual({
+      accountContractType: "openzeppelin",
+      accountIndex: 0,
+      mnemonic,
+      networkId: "SN_SEPOLIA",
+    });
     expect(
       readPreviewAccountInput({
         mnemonic,

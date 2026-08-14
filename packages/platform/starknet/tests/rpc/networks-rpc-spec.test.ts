@@ -45,10 +45,17 @@ test("passes the reviewed spec pin directly to the RPC provider", () => {
     return {} as RpcProvider;
   });
 
-  expect(capturedProviderOptions).toEqual({
+  // The bounded transport is asserted separately in rpc-provider-timeout.test.ts
+  // (MCW-V09-121); here it is only required to be present alongside the pin.
+  expect(capturedProviderOptions).toMatchObject({
     nodeUrl: "https://rpc.invalid",
     specVersion: STARKNET_RPC_SPEC_VERSION,
   });
+  expect(Object.keys(capturedProviderOptions as object).sort()).toEqual([
+    "baseFetch",
+    "nodeUrl",
+    "specVersion",
+  ]);
 });
 
 test("leaves only third-party and local endpoints unpinned", () => {

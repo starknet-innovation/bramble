@@ -20,6 +20,7 @@ const DAI = "0x03e85bfbb8e2a42b7bead9e88e9a1b19dbccf661471061807292120462396ec9"
 const origin = "https://dapp.example";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabcabcdef",
   classHash: "0xabcdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -132,6 +133,52 @@ const pendingId = (handler: ReturnType<typeof makeHandler>["handler"]): Promise<
   latestApprovalId(handler, extensionSender);
 
 describe("watch-asset approval lifecycle", () => {
+  test("bounds and deduplicates metadata before approval insertion", async () => {
+    let release: (() => void) | undefined;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
+    const { handler } = makeHandler(async (input) => {
+      calls += 1;
+      await blocked;
+      return usdcMetadata(input);
+    });
+
+    const same = Array.from({ length: 8 }, () =>
+      handler({ asset: { address: USDC }, origin, type: "wallet.watchAsset" }, contentSender),
+    );
+    await flushHeld();
+    expect(calls).toBe(1);
+
+    const distinct = [1, 2, 3, 4, 5, 6].map((index) =>
+      handler(
+        {
+          asset: { address: `0x${index}`, decimals: 18, symbol: `T${index}` },
+          origin,
+          type: "wallet.watchAsset",
+        },
+        contentSender,
+      ),
+    );
+    await flushHeld();
+    expect(calls).toBe(5);
+    await expect(distinct[4]).resolves.toEqual({ error: "wallet request failed" });
+    await expect(distinct[5]).resolves.toEqual({ error: "wallet request failed" });
+
+    release?.();
+    await flushHeld();
+    const pending = (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
+      readonly pending: readonly { readonly id: string }[];
+    };
+    expect(pending.pending).toHaveLength(5);
+    for (const approval of pending.pending) {
+      await handler({ id: approval.id, type: "wallet.denyOrigin" }, extensionSender);
+    }
+    await Promise.all(same);
+    await Promise.all(distinct.slice(0, 4));
+  });
+
   test("queues a watch-asset prompt with on-chain metadata", async () => {
     metadataCalls.length = 0;
     const { handler } = makeHandler(usdcMetadata);

@@ -3,6 +3,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
+import { STARK_CURVE_ORDER } from "@mc-wallet/wallet-model/networks";
 
 const createModule = (signatureR = "0x1") => ({
   deriveOzAccountAddress() {
@@ -162,6 +163,35 @@ describe("createKrustyKms", () => {
     });
   });
 
+  test("canonicalizes accepted KMS outputs", async () => {
+    const module = {
+      ...createModule("0x01"),
+      deriveOzAccountAddress() {
+        return "0x0abc";
+      },
+      signStarkHash() {
+        return { publicKey: "0x0abc", r: "0x01", s: "0x02" };
+      },
+    };
+    await expect(createKrustyKms(module).signStarkHash("0x123", "0x1")).resolves.toEqual({
+      publicKey: "0xabc",
+      r: "0x1",
+      s: "0x2",
+    });
+    await expect(createKrustyKms(module).deriveOzAccountAddress("0xabc", "0x123")).resolves.toBe(
+      "0xabc",
+    );
+  });
+
+  test("rejects signature scalars at the Stark curve order", async () => {
+    await expect(
+      createKrustyKms(createModule(`0x${STARK_CURVE_ORDER.toString(16)}`)).signStarkHash(
+        "0x123",
+        "0x1",
+      ),
+    ).rejects.toThrow("Krusty KMS result missing non-zero private key: r");
+  });
+
   test("rejects non-hex signature fields", async () => {
     await expect(
       createKrustyKms(createModule("not-hex")).signStarkHash("0x123", "0x1"),
@@ -176,7 +206,7 @@ describe("createKrustyKms", () => {
   test("rejects zero signature fields", async () => {
     await expect(
       createKrustyKms(createModule("0x0")).signStarkHash("0x123", "0x1"),
-    ).rejects.toThrow("Krusty KMS result missing non-zero field element: r");
+    ).rejects.toThrow("Krusty KMS result missing non-zero private key: r");
   });
 
   test("rejects inherited Krusty result fields", async () => {

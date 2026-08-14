@@ -5,10 +5,14 @@
  * budget; each binder is safe to call after every render and closes over the
  * shared state accessors passed in `ShellBindingDeps`.
  */
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { WalletView } from "../app/screens/views";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { buttonBusy, errorMessage, scopedStatus, showToast } from "../shared/dom";
+import { formatFeeEstimate } from "../shared/review-render";
+
+const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
 
 /**
  * Services and state setters the shell bindings close over. State lives in the
@@ -163,17 +167,31 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   button?.addEventListener("click", () => {
     const scope = deps.deploymentScope?.() ?? null;
     buttonBusy(button, true);
-    scopedStatus(button, "Submitting deployment...");
-    void deps.wallet.deployAccount().then(
-      (transactionHash) => {
+    scopedStatus(
+      button,
+      DEPLOYMENT_FEES.has(button) ? "Submitting deployment..." : "Estimating fee...",
+    );
+    const reviewedFee = DEPLOYMENT_FEES.get(button);
+    if (reviewedFee) DEPLOYMENT_FEES.delete(button);
+    void deps.wallet.deployAccount(reviewedFee).then(
+      (response) => {
+        if (typeof response !== "string") {
+          DEPLOYMENT_FEES.set(button, response);
+          const fee = formatFeeEstimate(response);
+          scopedStatus(button, `Maximum network fee: ${fee}`);
+          button.lastChild?.replaceWith(`Confirm deployment · ${fee}`);
+          buttonBusy(button, false);
+          return;
+        }
         showToast("Deployment submitted", "success");
-        scopedStatus(button, `Deployment submitted: ${transactionHash}`);
+        scopedStatus(button, `Deployment submitted: ${response}`);
         buttonBusy(button, false);
         // Nothing else re-renders after a deploy submit, so watch for the
         // account going live and clear the "deploy now" banner when it does.
         if (scope) void watchDeployment(deps, scope);
       },
       (error: unknown) => {
+        DEPLOYMENT_FEES.delete(button);
         showToast(errorMessage(error, "Deployment failed"), "error");
         scopedStatus(button, errorMessage(error, "Deployment failed"));
         buttonBusy(button, false);

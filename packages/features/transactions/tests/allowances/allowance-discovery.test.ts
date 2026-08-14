@@ -90,18 +90,22 @@ describe("parseAllowanceAmount", () => {
   });
 });
 
+const merge = (
+  inWallet: readonly AllowanceRecord[],
+  external: readonly ExternalAllowance[],
+  multisig: readonly AllowanceRecord[] = [],
+) => mergeAllowanceViews({ account: ACCOUNT, external, inWallet, multisig, networkId: "SN_MAIN" });
+
 describe("mergeAllowanceViews", () => {
   test("labels tracked entries as wallet-sourced and passes an empty external list through", () => {
-    expect(mergeAllowanceViews([walletRecord], [], ACCOUNT, "SN_MAIN")).toEqual([
-      { ...walletRecord, source: "wallet" },
-    ]);
+    expect(merge([walletRecord], [])).toEqual([{ ...walletRecord, source: "wallet" }]);
   });
 
   test("appends externally discovered allowances labelled as external", () => {
     const external: readonly ExternalAllowance[] = [
       { amount: UNLIMITED, spender: OTHER_SPENDER, token: TOKEN },
     ];
-    const merged = mergeAllowanceViews([walletRecord], external, ACCOUNT, "SN_MAIN");
+    const merged = merge([walletRecord], external);
     expect(merged).toHaveLength(2);
     expect(merged[1]).toMatchObject({
       amount: UNLIMITED,
@@ -115,9 +119,66 @@ describe("mergeAllowanceViews", () => {
     const external: readonly ExternalAllowance[] = [
       { amount: "999", spender: SPENDER, token: TOKEN },
     ];
-    const merged = mergeAllowanceViews([walletRecord], external, ACCOUNT, "SN_MAIN");
+    const merged = merge([walletRecord], external);
     expect(merged).toHaveLength(1);
     expect(merged[0]?.source).toBe("wallet");
+  });
+
+  // MCW-V09-108: the tracked amount is a LOWER bound — it cannot see an
+  // approval granted outside this wallet that a later `increase_allowance`
+  // added to. Reporting the tracked amount over a larger on-chain reading
+  // understated a standing allowance the manager used to report correctly, and
+  // dropped the side panel's "Unlimited" badge with it.
+  test("keeps the larger on-chain amount for a tracked (token, spender)", () => {
+    const merged = merge([walletRecord], [{ amount: UNLIMITED, spender: SPENDER, token: TOKEN }]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ amount: UNLIMITED, source: "wallet" });
+    expect(isUnlimitedAllowance(merged[0]?.amount ?? "")).toBe(true);
+    expect(merged.every(isAllowanceView)).toBe(true);
+  });
+
+  // The other direction is a claim a hostile or lagging node must not be able
+  // to make: an approval this wallet just broadcast is not yet mined, and a
+  // node that answers "0" (or with an unreadable amount) must not be able to
+  // shrink a tracked grant out of the manager.
+  test("never lets a smaller or malformed on-chain amount shrink a tracked grant", () => {
+    for (const amount of ["0", "1", "not-a-number", ""]) {
+      const merged = merge([walletRecord], [{ amount, spender: SPENDER, token: TOKEN }]);
+      expect(merged).toHaveLength(1);
+      expect(merged[0]?.amount).toBe(walletRecord.amount);
+    }
+  });
+
+  test("labels a multisig-owned record as such and never merges it with another owner's reading", () => {
+    const multisigRecord: AllowanceRecord = {
+      ...walletRecord,
+      accountId: "SN_MAIN:0xabc",
+      id: `SN_MAIN:0xabc:${walletRecord.token}:${SPENDER}`,
+    };
+    const merged = merge(
+      [],
+      [{ amount: UNLIMITED, spender: SPENDER, token: TOKEN }],
+      [multisigRecord],
+    );
+    expect(merged[0]).toMatchObject({ amount: "1000", source: "multisig" });
+    // The scan reads the ACTIVE account's address, so its answer is a fact
+    // about that account — the multisig's own entry keeps its tracked amount
+    // and the reading is still listed under the account it belongs to.
+    expect(merged[1]).toMatchObject({ amount: UNLIMITED, source: "external" });
+    expect(merged.every(isAllowanceView)).toBe(true);
+  });
+
+  // MCW-V09-108(c): the manager marks a row whose contract it cannot call a
+  // token. That marking is what withholds the amount claim and the revoke
+  // control, so it has to survive the message boundary the panel parses
+  // responses through — and only in its one legal spelling.
+  test("carries the unconfirmed-token marking across the message boundary", () => {
+    expect(isAllowanceView({ ...walletRecord, source: "wallet", unconfirmedToken: true })).toBe(
+      true,
+    );
+    for (const unconfirmedToken of [false, "true", 1, null]) {
+      expect(isAllowanceView({ ...walletRecord, source: "wallet", unconfirmedToken })).toBe(false);
+    }
   });
 
   test("omits zero-amount and malformed external allowances", () => {
@@ -125,6 +186,6 @@ describe("mergeAllowanceViews", () => {
       { amount: "0", spender: OTHER_SPENDER, token: TOKEN },
       { amount: "5", spender: "0xnot-a-felt", token: TOKEN },
     ];
-    expect(mergeAllowanceViews([], external, ACCOUNT, "SN_MAIN")).toEqual([]);
+    expect(merge([], external)).toEqual([]);
   });
 });

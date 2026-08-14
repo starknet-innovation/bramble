@@ -3,7 +3,7 @@
  * registration/deposit details before their one-time submission.
  */
 import { describe, expect, test } from "bun:test";
-import type { Strk20Service, Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
+import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
 import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import {
   type ActivityLog,
@@ -17,12 +17,12 @@ import { STRK20_REGISTRATION_SUMMARY } from "../../../apps/extension/src/backgro
 import { account } from "../../support/background-wallet-stub";
 import {
   buildStrk20Handler,
-  STRK20_CALL_AND_PROOF,
   STRK20_CONTENT_SENDER,
   STRK20_EXTENSION_SENDER,
   STRK20_RECIPIENT,
   STRK20_TOKEN,
 } from "../../support/strk20-background";
+import { makeStrk20WalletService } from "../../support/strk20-wallet-service";
 
 const preferences = (): WalletPreferences => ({
   ...defaultWalletPreferences(),
@@ -71,53 +71,6 @@ if (!token) {
   throw new Error("Sepolia token fixture missing");
 }
 
-const service = (capture: {
-  readonly recipientRegistered?: { value: boolean };
-  readonly registered: { value: boolean };
-  readonly registrations: { value: number };
-  readonly submissions: {
-    actions: readonly Strk20Action[];
-    plan: Strk20SubmissionPlan;
-  }[];
-}): Strk20Service => {
-  const { recipientRegistered, registered, registrations, submissions } = capture;
-  return {
-    async prepare() {
-      return STRK20_CALL_AND_PROOF;
-    },
-    async privateBalances({ tokens }) {
-      return tokens.map((entry) => ({ balance: "0xde0b6b3a7640000", token: entry }));
-    },
-    async poolFee() {
-      return "0x1";
-    },
-    async quoteActions() {
-      return { mode: "account", poolFeeFri: "0x1" };
-    },
-    async register() {
-      registrations.value += 1;
-      registered.value = true;
-      return { transactionHash: "0x111" };
-    },
-    async registrationStatus(input) {
-      if (input.subject !== undefined) {
-        return recipientRegistered?.value === false ? "unregistered" : "registered";
-      }
-      return registered.value ? "registered" : "unregistered";
-    },
-    async subaccountCommitment() {
-      return STRK20_RECIPIENT;
-    },
-    async submitActions({ actions, beforeProof, plan }) {
-      if (beforeProof) await beforeProof();
-      submissions.push({ actions, plan });
-      return { transactionHash: "0x222" };
-    },
-    async submitPrepared() {
-      return { transactionHash: "0x333" };
-    },
-  };
-};
 describe("background wallet STRK20 operations", () => {
   test("keeps private discovery privileged and returns account-scoped registration state", async () => {
     const capture = {
@@ -127,7 +80,7 @@ describe("background wallet STRK20 operations", () => {
     };
     const handler = buildStrk20Handler({
       preferences: preferences(),
-      strk20: service(capture),
+      strk20: makeStrk20WalletService(capture),
     });
 
     await expect(handler({ type: "wallet.strk20State" }, STRK20_CONTENT_SENDER)).resolves.toEqual({
@@ -170,7 +123,7 @@ describe("background wallet STRK20 operations", () => {
     const handler = buildStrk20Handler({
       preferences: preferences(),
       strk20: {
-        ...service(capture),
+        ...makeStrk20WalletService(capture),
         async poolFee() {
           throw new Error("could not read the pool fee (node unavailable)");
         },
@@ -190,7 +143,7 @@ describe("background wallet STRK20 operations", () => {
     };
     const handler = buildStrk20Handler({
       preferences: preferences(),
-      strk20: service(capture),
+      strk20: makeStrk20WalletService(capture),
     });
     const prepared = (await handler(
       { type: "wallet.strk20PrepareRegistration" },
@@ -238,7 +191,7 @@ describe("background wallet STRK20 operations", () => {
       activity: await activityWithRegistration(),
       now: () => SUBMITTED_AT + 5_000,
       preferences: preferences(),
-      strk20: service(capture),
+      strk20: makeStrk20WalletService(capture),
     });
 
     const response = (await handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)) as {
@@ -267,7 +220,7 @@ describe("background wallet STRK20 operations", () => {
       activity: await activityWithRegistration(),
       now: () => SUBMITTED_AT + 31 * 60_000,
       preferences: preferences(),
-      strk20: service(capture),
+      strk20: makeStrk20WalletService(capture),
     });
 
     const response = (await handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)) as {
@@ -293,7 +246,7 @@ describe("background wallet STRK20 operations", () => {
       activity: await activityWithRegistration("rejected"),
       now: () => SUBMITTED_AT + 5_000,
       preferences: preferences(),
-      strk20: service(capture),
+      strk20: makeStrk20WalletService(capture),
     });
 
     const response = (await handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)) as {
@@ -314,7 +267,7 @@ describe("background wallet STRK20 operations", () => {
     const handler = buildStrk20Handler({
       preferences: preferences(),
       publicBalance: "2000000000000000000",
-      strk20: service(capture),
+      strk20: makeStrk20WalletService(capture),
     });
     const prepared = (await handler(
       {
@@ -372,7 +325,7 @@ describe("background wallet STRK20 operations", () => {
     const handler = buildStrk20Handler({
       preferences: preferences(),
       publicBalance: "2000000000000000000",
-      strk20: service(capture),
+      strk20: makeStrk20WalletService(capture),
     });
     const prepared = (await handler(
       {
@@ -427,7 +380,7 @@ describe("background wallet STRK20 operations", () => {
     const handler = buildStrk20Handler({
       preferences: preferences(),
       publicBalance: "2000000000000000000",
-      strk20: service(capture),
+      strk20: makeStrk20WalletService(capture),
     });
 
     await expect(
@@ -453,7 +406,7 @@ describe("background wallet STRK20 operations", () => {
     const handler = buildStrk20Handler({
       preferences: preferences(),
       publicBalance: "2000000000000000000",
-      strk20: service(capture),
+      strk20: makeStrk20WalletService(capture),
     });
 
     await expect(

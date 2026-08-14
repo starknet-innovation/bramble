@@ -2,7 +2,6 @@
  * Content-script bridge between untrusted pages and the extension background worker.
  */
 
-import { invalidRequestPayload, unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
 import {
   isTrustedPageMessage,
   providerResponse,
@@ -10,7 +9,10 @@ import {
   toProviderPayload,
   toRuntimeMessage,
 } from "@mc-wallet/wallet-protocol/bridge";
-import { addressesFromPayload, isWalletEventMessage, pageEventsFor } from "@mc-wallet/wallet-protocol/events";
+import { addressesFromPayload, isWalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+import { invalidRequestPayload, unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
+import { createProviderEventRefresh } from "./provider-event-refresh";
+import { createProviderRequestAdmission } from "./provider-request-admission";
 
 type RuntimeApi = {
   readonly getURL: (path: string) => string;
@@ -27,7 +29,18 @@ type ExtensionGlobal = typeof globalThis & {
 };
 
 const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
-let lastAddresses: readonly string[] | null = null;
+const pageRequests = createProviderRequestAdmission();
+const eventRefresh = createProviderEventRefresh({
+  post: (event) => window.postMessage(event, window.location.origin),
+  readAddresses: async () => {
+    if (!runtime) return [];
+    const result = await runtime.sendMessage({
+      origin: window.location.origin,
+      type: "wallet.getGrantedAccounts",
+    });
+    return addressesFromPayload(toProviderPayload(result, "wallet_requestAccounts")) ?? [];
+  },
+});
 
 const injectProvider = (): void => {
   if (!runtime || document.documentElement.dataset["mcWalletInjected"] === "true") {
@@ -55,21 +68,35 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
   const postToPage = (payload: Parameters<typeof providerResponse>[1]): void => {
     const known = addressesFromPayload(payload);
     if (known) {
-      lastAddresses = known;
+      eventRefresh.observeAddresses(known);
     }
     window.postMessage(providerResponse(request, payload), pageOrigin);
   };
 
+  if (!pageRequests.acquire(request.id)) {
+    postToPage({ error: invalidRequestPayload("too many pending provider requests") });
+    return;
+  }
+
   const runtimeMessage = toRuntimeMessage(request, window.location.origin);
   if (!runtimeMessage) {
+    pageRequests.release(request.id);
     postToPage({ error: invalidRequestPayload() });
     return;
   }
 
-  void runtime.sendMessage(runtimeMessage).then(
-    (result) => postToPage(toProviderPayload(result, request.method)),
-    () => postToPage({ error: unknownError() }),
-  );
+  void Promise.resolve()
+    .then(() => runtime.sendMessage(runtimeMessage))
+    .then(
+      (result) => {
+        pageRequests.release(request.id);
+        postToPage(toProviderPayload(result, request.method));
+      },
+      () => {
+        pageRequests.release(request.id);
+        postToPage({ error: unknownError() });
+      },
+    );
 });
 
 runtime?.onMessage?.addListener((message) => {
@@ -77,21 +104,7 @@ runtime?.onMessage?.addListener((message) => {
     return;
   }
 
-  const pageOrigin = window.location.origin;
-  void runtime
-    .sendMessage({ origin: pageOrigin, type: "wallet.getGrantedAccounts" })
-    .then(
-      (result) => toProviderPayload(result, "wallet_requestAccounts"),
-      () => toProviderPayload({ error: "provider request failed" }),
-    )
-    .then((payload) => {
-      const addresses = addressesFromPayload(payload) ?? [];
-      const forwards = pageEventsFor({ addresses, lastAddresses, message });
-      lastAddresses = addresses;
-      for (const forward of forwards) {
-        window.postMessage(forward, pageOrigin);
-      }
-    });
+  eventRefresh.enqueue(message);
 });
 
 injectProvider();

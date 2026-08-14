@@ -38,11 +38,6 @@ const assertLendingEnabled = (): void => {
   }
 };
 
-/**
- * Vesu protocol id for tagging quotes and routing.
- */
-export const VESU_PROTOCOL_ID = "vesu" as const;
-
 // Fetches and parses the Vesu pool config over HTTP, mapping any transport or
 // shape failure to a stable WalletError.
 const fetchVesuPool = async (poolId: string) => {

@@ -10,8 +10,8 @@ import type { RuntimeSender } from "../../../apps/extension/src/background/routi
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
-
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -26,6 +26,8 @@ const extensionSender: RuntimeSender = {
   url: "chrome-extension://extension-id/sidepanel.html",
 };
 const vaultPassphrase = "correct horse battery staple";
+const reviewedFee = { overallFee: "2500000000000000", unit: "FRI" } as const;
+const reviewedDeploymentFee = { overallFee: "1000000000000000", unit: "FRI" } as const;
 const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
 const tokenId = `SN_MAIN:ETH:${ETH}`;
 const OTHER_ACCOUNT_ID =
@@ -104,11 +106,11 @@ const makeHarness = (options?: {
   const statusRequests: string[][] = [];
   const handler = createMessageHandler(walletStub, "extension-id", {
     activity,
-    // The activity log stamps entries on its own monotonic test clock, so the
-    // reconciliation clock reads from the same tick counter — otherwise every
-    // recorded transaction looks older than its observation window.
     now: () => tick,
     runtimeRpc: {
+      async estimateAccountDeploymentFee() {
+        return reviewedDeploymentFee;
+      },
       async estimateInvokeFee() {
         if (options?.estimateFails) {
           throw new Error("rpc unavailable");
@@ -201,7 +203,7 @@ describe("wallet operations", () => {
     expect(review.flags.map((flag) => flag.code)).toContain("self-transfer");
   });
 
-  test("review reports required deployment instead of a fee when undeployed", async () => {
+  test("review reports separate invoke and deployment fees when undeployed", async () => {
     const { handler } = makeHarness({ deployed: false });
     const response = await handler(
       {
@@ -216,7 +218,13 @@ describe("wallet operations", () => {
 
     expect(response).toMatchObject({
       ok: true,
-      review: { fee: null, feeEstimateFailed: false, requiresDeployment: true },
+      review: {
+        deploymentFee: reviewedDeploymentFee,
+        deploymentFeeEstimateFailed: false,
+        fee: reviewedFee,
+        feeEstimateFailed: false,
+        requiresDeployment: true,
+      },
     });
   });
 
@@ -239,9 +247,6 @@ describe("wallet operations", () => {
     });
   });
 
-  // Fee-affordability guard (issue 191): the review compares the estimate
-  // against the account's STRK balance via the shared predicate. Warn-only —
-  // nothing here changes what is submittable — and fail-open on missing data.
   const reviewMessage = (overrides?: { amount?: string; tokenId?: string }) => ({
     accountId: account.id,
     amount: overrides?.amount ?? "1.5",
@@ -316,6 +321,7 @@ describe("wallet operations", () => {
         accountId: account.id,
         amount: "1.5",
         recipient: "0x777",
+        reviewedFee,
         speed: "fast",
         tokenId,
         type: "wallet.transfer",
@@ -338,8 +344,6 @@ describe("wallet operations", () => {
     expect(stored.find((entry) => entry.hash === "0x9ab")?.status).toBe("pending");
   });
 
-  // A pre-confirmed transaction reaches the feed as its own provisional status
-  // rather than being flattened into accepted or left reading as pending.
   test("surfaces a pre-confirmed transaction as provisional in the feed", async () => {
     const { handler } = makeHarness({
       statusReport: { finalizedOnL1: false, found: true, status: "preconfirmed" },
@@ -349,6 +353,7 @@ describe("wallet operations", () => {
         accountId: account.id,
         amount: "1.5",
         recipient: "0x777",
+        reviewedFee,
         speed: "fast",
         tokenId,
         type: "wallet.transfer",
@@ -360,8 +365,6 @@ describe("wallet operations", () => {
     expect(activity[0]?.status).toBe("preconfirmed");
   });
 
-  // The late-failure channel: a transaction that was pre-confirmed and then
-  // reverted owes the user one notice, delivered on the panel's next poll.
   test("drains a late-failure notice exactly once through wallet.transactionAlerts", async () => {
     const { activity: activityLog, handler } = makeHarness({
       statusReport: { finalizedOnL1: false, found: true, status: "reverted" },
@@ -456,6 +459,7 @@ describe("wallet operations", () => {
         accountId: account.id,
         amount: "1.5",
         recipient: "0x777",
+        reviewedFee,
         tokenId,
         type: "wallet.transfer",
       },
@@ -466,8 +470,6 @@ describe("wallet operations", () => {
       activity: readonly ActivityEntry[];
       historyUnavailable?: boolean;
     };
-    // Chain history (newest) appears above the locally-submitted transfer, and
-    // there is no duplicate or degraded indicator.
     expect(response.activity.map((entry) => entry.hash)).toEqual(["0xc4a1", "0x7ab"]);
     expect(response.historyUnavailable).toBeUndefined();
   });
@@ -479,6 +481,7 @@ describe("wallet operations", () => {
         accountId: account.id,
         amount: "1.5",
         recipient: "0x777",
+        reviewedFee,
         tokenId,
         type: "wallet.transfer",
       },

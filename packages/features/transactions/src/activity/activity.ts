@@ -92,7 +92,13 @@ export type ActivityEntry = {
    */
   readonly finalizedOnL1?: boolean;
   readonly hash: string;
-  readonly kind: "deploy" | "invoke" | "transfer";
+  /**
+   * What the account submitted. `"declare"` is its own kind rather than being
+   * folded into `"invoke"` so the feed and the CSV export can tell a class
+   * declaration apart from a call — they are different transaction types on
+   * chain and carry different meaning in an audit.
+   */
+  readonly kind: "declare" | "deploy" | "invoke" | "transfer";
   readonly networkId: StarknetNetworkId;
   /**
    * Consecutive `TXN_HASH_NOT_FOUND` observations. Reset by any answer that
@@ -165,7 +171,7 @@ const isNotFoundCount = (value: unknown): value is number | undefined =>
   value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
 
 const isActivityKind = (value: unknown): value is ActivityEntry["kind"] =>
-  value === "deploy" || value === "invoke" || value === "transfer";
+  value === "declare" || value === "deploy" || value === "invoke" || value === "transfer";
 
 const isOptionalDetail = (value: unknown): value is string | undefined =>
   value === undefined || (typeof value === "string" && value.length > 0 && value.length <= 200);
@@ -376,8 +382,38 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
 const CSV_HEADER =
   "datetime,networkId,accountId,kind,status,amount,token,counterparty,hash,summary";
 
-const csvField = (value: string): string =>
-  /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+// Leading characters a spreadsheet treats as the start of a formula, plus the
+// whitespace (tab, carriage return) some importers strip before deciding.
+const CSV_FORMULA_LEAD = /^[\t\r=+@-]/;
+
+// Padding an importer may skip before it decides whether a cell opens a formula:
+// Unicode whitespace — which `trimStart` covers, including the no-break space
+// and the byte-order mark — plus the C0 and DEL control characters, tested by
+// code point because a regex class may not carry control characters.
+const isPaddingCode = (code: number): boolean => code <= 0x20 || code === 0x7f;
+
+const withoutLeadPadding = (value: string): string => {
+  let current = value.trimStart();
+  while (current.length > 0 && isPaddingCode(current.charCodeAt(0))) {
+    current = current.slice(1).trimStart();
+  }
+  return current;
+};
+
+// Reports whether a cell would open a formula, judged both on the raw value (so
+// a leading tab or carriage return still counts as a lead in its own right) and
+// on the value with importer-skippable padding removed, so ` =1+1` and a
+// NUL-prefixed payload are neutralized exactly like the bare `=1+1`.
+const opensFormula = (value: string): boolean =>
+  CSV_FORMULA_LEAD.test(value) || CSV_FORMULA_LEAD.test(withoutLeadPadding(value));
+
+// Renders one cell. Every field is quoted so no value can break the row, and a
+// value that would otherwise open a formula is prefixed with an apostrophe so
+// the spreadsheet imports it as literal text.
+const csvField = (value: string): string => {
+  const literal = opensFormula(value) ? `'${value}` : value;
+  return `"${literal.replaceAll('"', '""')}"`;
+};
 
 const pad = (value: number, width: number): string => value.toString().padStart(width, "0");
 
@@ -420,6 +456,13 @@ const toIsoDate = (submittedAt: number): string => {
  * Serializes activity entries as CSV for export. The timestamp is rendered as
  * ISO-8601 and the amount, token, and counterparty are split into their own
  * columns; entries missing those optional fields export blank cells.
+ *
+ * Cells carry text this wallet never controls (a dapp-supplied token symbol or
+ * origin reaches the summary and counterparty), so every field is quoted and any
+ * value opening with a formula lead (`=`, `+`, `-`, `@`, tab, carriage return) —
+ * on its own or behind whitespace or control-character padding an importer would
+ * skip — is prefixed with an apostrophe. A spreadsheet opening the export
+ * therefore shows the recorded text instead of evaluating it.
  */
 export const activityToCsv = (entries: readonly ActivityEntry[]): string =>
   [
@@ -431,11 +474,13 @@ export const activityToCsv = (entries: readonly ActivityEntry[]): string =>
         entry.accountId,
         entry.kind,
         entry.status,
-        csvField(entry.amount ?? ""),
-        csvField(entry.token ?? ""),
-        csvField(entry.counterparty ?? ""),
+        entry.amount ?? "",
+        entry.token ?? "",
+        entry.counterparty ?? "",
         entry.hash,
-        csvField(entry.summary),
-      ].join(","),
+        entry.summary,
+      ]
+        .map(csvField)
+        .join(","),
     ),
   ].join("\n");

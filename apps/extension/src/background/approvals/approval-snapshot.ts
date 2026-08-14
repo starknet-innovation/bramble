@@ -1,0 +1,98 @@
+/**
+ * Display-only shape of a queued dapp approval and the deep copy that produces
+ * it. Kept beside the queue rather than inside it so the queue module stays the
+ * admission/lifetime boundary and this module stays the "what may the UI and
+ * the dapp see" boundary.
+ *
+ * Trust boundary: a snapshot is the only view of an approval that leaves the
+ * queue. It is rebuilt field by field, so private execution payload
+ * (`./approval-payload`) and internal bookkeeping such as the queued-at stamp
+ * can never ride along, and every nested value is copied so a caller mutating
+ * what it received cannot reach back into live queue state.
+ */
+import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
+import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
+import type { PendingApproval } from "@mc-wallet/wallet-protocol/extension-responses";
+import { type ApprovalPayload, cloneApprovalValue } from "./approval-payload";
+
+/**
+ * Shared display-only approval response shapes exposed to trusted UI surfaces.
+ */
+export type {
+  ApprovalRiskFlag,
+  DeclarationReview,
+  PendingApproval,
+  WatchAssetToken,
+} from "@mc-wallet/wallet-protocol/extension-responses";
+
+/**
+ * Display-only invoke fee state, aligned with Send review classification.
+ */
+export type InvokeFeeReview = {
+  readonly fee: FeeEstimate | null;
+  readonly feeAffordability: FeeAffordability;
+  readonly feeEstimateFailed: boolean;
+  readonly feeEstimatePending: boolean;
+  readonly requiresDeployment: boolean;
+};
+
+/**
+ * One approval as its requester supplies it: the display fields plus the
+ * private execution payload, before the queue admits it and stamps the arrival
+ * time its TTL is measured from.
+ */
+export type ApprovalRequest = PendingApproval & ApprovalPayload;
+
+// Copies an invoke entry's fee review onto its snapshot without materializing
+// absent fields, so non-invoke snapshots stay byte-identical to before.
+const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
+  ...(approval.fee === undefined ? {} : { fee: approval.fee && { ...approval.fee } }),
+  ...(approval.feeAffordability === undefined
+    ? {}
+    : { feeAffordability: approval.feeAffordability }),
+  ...(approval.feeEstimateFailed === undefined
+    ? {}
+    : { feeEstimateFailed: approval.feeEstimateFailed }),
+  ...(approval.feeEstimatePending === undefined
+    ? {}
+    : { feeEstimatePending: approval.feeEstimatePending }),
+  ...(approval.requiresDeployment === undefined
+    ? {}
+    : { requiresDeployment: approval.requiresDeployment }),
+});
+
+/**
+ * Deep-copies the display-only view of a queued approval. Fields are listed
+ * explicitly, so any field added to the stored entry stays invisible to callers
+ * until it is named here.
+ */
+export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => ({
+  ...(approval.actionReviews === undefined
+    ? {}
+    : { actionReviews: cloneApprovalValue(approval.actionReviews) }),
+  ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
+  ...feeReviewSnapshot(approval),
+  ...(approval.declaration === undefined
+    ? {}
+    : {
+        declaration: {
+          ...approval.declaration,
+          deploymentFee: approval.declaration.deploymentFee && {
+            ...approval.declaration.deploymentFee,
+          },
+          fee: approval.declaration.fee && { ...approval.declaration.fee },
+        },
+      }),
+  id: approval.id,
+  kind: approval.kind,
+  origin: approval.origin,
+  ...(approval.relayFeeAction === undefined
+    ? {}
+    : { relayFeeAction: cloneApprovalValue(approval.relayFeeAction) }),
+  ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
+  ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
+  ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
+  ...(approval.typedData === undefined
+    ? {}
+    : { typedData: cloneApprovalValue(approval.typedData) }),
+});

@@ -7,14 +7,10 @@
  * already holds and rebuilds each EIP-2645 path deterministically from its
  * index (one source of truth with sign-time), so a stored path always matches
  * the one used to enumerate and sign.
- *
  * Enumeration is paginated: each device round reads one PAGE of indices and the
  * controller accumulates pages, exposing `loadMore` to fetch the next page
- * (append, never refetch). The picker is multi-select — the user toggles the
- * indices they want and adds them all at once through the injected `create`
- * path. HD/import routing is injected too (`addHd`/`openImport`), so the one
- * controller can back the whole "add an account" entry, not just the device
- * subflow.
+ * (append, never refetch). The account-contract-aware routes let this one
+ * controller back the complete add-account entry.
  */
 
 import {
@@ -33,15 +29,19 @@ import {
   type LedgerDeviceChoice,
   type LedgerDeviceSession,
 } from "@mc-wallet/ledger-protocol/session";
-import type { LedgerAccountRef, LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type {
+  AccountContractType,
+  LedgerAccountRef,
+  LedgerPubKeyEntry,
+} from "@mc-wallet/wallet-model/accounts";
+import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@mc-wallet/wallet-model/ledger-path";
 
 /**
  * Number of account indices read per enumeration page (a page is `start` …
  * `start + LEDGER_PAGE_SIZE - 1`). The device app only needs to be open and
  * unlocked; every read is silent (no per-index on-device button press).
  */
-export const LEDGER_PAGE_SIZE = 5;
+export const LEDGER_PAGE_SIZE = MAX_LEDGER_ACCOUNT_BATCH;
 
 /**
  * Checks the pinned device OS and Starknet app releases unless this exact live
@@ -85,10 +85,15 @@ export type LedgerCandidate = {
 };
 
 /**
- * Routes the add-account chooser can dispatch: derive the next HD account,
- * import a raw key, open the Ledger subflow, or enter guided Multisig setup.
+ * Account-contract-aware routes dispatched by the add-account chooser.
  */
-export type LedgerOnboardAddKind = "hd" | "import" | "ledger" | "multisig";
+export type LedgerOnboardAddKind =
+  | "argent"
+  | "import"
+  | "ledger-argent"
+  | "ledger-openzeppelin"
+  | "multisig"
+  | "openzeppelin";
 
 /**
  * The onboarding device-prompt view the binder renders: the add-account
@@ -109,8 +114,7 @@ export type LedgerOnboardView =
   | { readonly kind: "error"; readonly message: string };
 
 /**
- * The on-chain state of one candidate address, fetched best-effort in parallel.
- * A `null` field degrades gracefully (checking/unavailable) rather than blocking.
+ * Best-effort on-chain state; `null` degrades to unavailable without blocking.
  */
 export type LedgerCandidateState = {
   readonly balance: string | null;
@@ -118,23 +122,18 @@ export type LedgerCandidateState = {
 };
 
 /**
- * Collaborators the onboarding controller drives, all injected so the chooser →
- * connect → enumerate → derive → describe → create flow runs without hardware or
- * a live background: the device connector, the paginated enumeration reader
- * (page start injected), the address derivation (background
- * `deriveLedgerAccounts`), the per-candidate on-chain `describe`, the set of ids
- * already in the vault (duplicate detection), the `create` call (background
- * `addLedgerAccount`/`createLedgerVault`, given the whole account so its target
- * network is unambiguous even mid-batch), a `render` sink, a `refresh` run after
- * a successful add, the HD-derive route `addHd`, the import route `openImport`,
- * and an `onCancel` hook run when the user dismisses the flow (the first-run
- * entry uses it to clear the captured setup secret).
+ * Injected collaborators keep chooser, enumeration, contract-aware derivation,
+ * creation, refresh, and cancellation testable without hardware or a live
+ * background.
  */
 export type LedgerOnboardControllerDeps = {
-  readonly addHd: () => Promise<void>;
+  readonly addHd: (accountContractType: AccountContractType) => Promise<void>;
   readonly connector: LedgerConnector;
   readonly create: (account: LedgerAccountRef) => Promise<void>;
-  readonly derive: (entries: readonly LedgerPubKeyEntry[]) => Promise<readonly LedgerAccountRef[]>;
+  readonly derive: (
+    entries: readonly LedgerPubKeyEntry[],
+    accountContractType: AccountContractType,
+  ) => Promise<readonly LedgerAccountRef[]>;
   readonly describe: (account: LedgerAccountRef) => Promise<LedgerCandidateState>;
   readonly enumerate: (
     client: LedgerDeviceClient,
@@ -163,7 +162,7 @@ export type LedgerOnboardController = {
   readonly loadMore: () => void;
   readonly select: (kind: LedgerOnboardAddKind) => void;
   readonly showChooser: () => void;
-  readonly start: () => void;
+  readonly start: (accountContractType?: AccountContractType) => void;
   readonly toggle: (accountIndex: number) => void;
 };
 
@@ -187,6 +186,7 @@ export const createLedgerOnboardController = (
   deps: LedgerOnboardControllerDeps,
 ): LedgerOnboardController => {
   let candidates: readonly LedgerCandidate[] = [];
+  let accountContractType: AccountContractType = "argent";
   const createdIds = new Set<string>();
   let devices: readonly LedgerDeviceChoice[] = [];
   let selectedDeviceId: string | null = null;
@@ -278,7 +278,7 @@ export const createLedgerOnboardController = (
       const entries = await deps.enumerate(session.client, startIndex, session.readiness);
       await closeLedgerSessionQuietly(session);
       session = null;
-      const accounts = await deps.derive(entries);
+      const accounts = await deps.derive(entries, accountContractType);
       if (epoch !== flowEpoch) {
         return;
       }
@@ -418,14 +418,14 @@ export const createLedgerOnboardController = (
     }
   };
 
-  const runChooseHd = async (): Promise<void> => {
+  const runChooseHd = async (contractType: AccountContractType): Promise<void> => {
     if (busy) {
       return;
     }
     const epoch = flowEpoch;
     busy = true;
     try {
-      await deps.addHd();
+      await deps.addHd(contractType);
       if (epoch !== flowEpoch) {
         await deps.refresh();
         return;
@@ -442,11 +442,12 @@ export const createLedgerOnboardController = (
   };
 
   const choose = (kind: LedgerOnboardAddKind): void => {
-    if (kind === "ledger") {
+    if (kind === "ledger-argent" || kind === "ledger-openzeppelin") {
+      accountContractType = kind === "ledger-argent" ? "argent" : "openzeppelin";
       resetState();
       deps.render({ kind: "connect" });
-    } else if (kind === "hd") {
-      void runChooseHd();
+    } else if (kind === "argent" || kind === "openzeppelin") {
+      void runChooseHd(kind);
     } else if (kind === "import") {
       deps.render(null);
       deps.openImport();
@@ -486,8 +487,9 @@ export const createLedgerOnboardController = (
       resetState();
       deps.render({ kind: "chooser", selected: null });
     },
-    start() {
+    start(contractType = "argent") {
       resetState();
+      accountContractType = contractType;
       deps.render({ kind: "connect" });
     },
     toggle(accountIndex) {

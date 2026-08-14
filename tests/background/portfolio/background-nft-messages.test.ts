@@ -14,7 +14,9 @@ import { createUnlockSession } from "../../../apps/extension/src/background/runt
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const CONTRACT = "0x0511a2b3";
+const reviewedFee = { overallFee: "1", unit: "FRI" } as const;
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -140,6 +142,7 @@ describe("NFT gallery messages", () => {
         contract: CONTRACT,
         networkId: "SN_MAIN",
         recipient: "0x777",
+        reviewedFee,
         tokenId: "5",
         type: "wallet.transferNft",
       },
@@ -203,6 +206,7 @@ describe("NFT gallery messages", () => {
           contract: CONTRACT,
           networkId: "SN_MAIN",
           recipient: "0x777",
+          reviewedFee,
           tokenId: "342",
           type: "wallet.transferNft",
         },

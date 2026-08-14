@@ -12,6 +12,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createSidepanelRuntime, emptyStatus } from "../../../src/sidepanel/runtime/runtime";
+import { unavailableStatus } from "../../../src/sidepanel/runtime/runtime-status";
 import {
   APPROVAL_ID,
   account,
@@ -43,11 +44,14 @@ describe("createSidepanelRuntime — emptyStatus and no-runtime fallback", () =>
     expect(status.network).toBe("Unavailable");
   });
 
-  test("loadStatus falls back to emptyStatus when no runtime is injected", async () => {
+  test("loadStatus falls back to the unavailable status when no runtime is injected", async () => {
     // sendMessage resolves undefined (runtime?.sendMessage short-circuits), so
-    // every guard fails and the fallbacks fire.
+    // every guard fails and the fallbacks fire. An unanswered status read is a
+    // fault, not evidence of a fresh browser: it must not paint the first-run
+    // screen (MCW-V09-126).
     const wallet = createSidepanelRuntime();
-    expect(await wallet.loadStatus()).toEqual(emptyStatus());
+    expect(await wallet.loadStatus()).toEqual(unavailableStatus());
+    expect((await wallet.loadStatus()).hasVault).toBe(true);
     expect(await wallet.loadBalances()).toEqual({ error: "balances unavailable" });
     expect(await wallet.connectedSites()).toEqual([]);
     await expect(wallet.generateMnemonic()).rejects.toThrow("wallet unavailable");
@@ -57,63 +61,92 @@ describe("createSidepanelRuntime — emptyStatus and no-runtime fallback", () =>
 describe("account lifecycle wrappers", () => {
   test("addAccount returns the created account id and sends the network", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
-    expect(await wallet.addAccount("SN_MAIN")).toBe(account.id);
-    expect(sent[0]).toEqual({ networkId: "SN_MAIN", type: "wallet.addAccount" });
+    expect(await wallet.addAccount("SN_SEPOLIA", "openzeppelin")).toBe(account.id);
+    expect(sent[0]).toEqual({
+      accountContractType: "openzeppelin",
+      networkId: "SN_SEPOLIA",
+      type: "wallet.addAccount",
+    });
   });
 
   test("addAccount throws on an error envelope", async () => {
-    await expect(runtimeReturning(errorEnvelope).addAccount("SN_MAIN")).rejects.toThrow("boom");
+    await expect(
+      runtimeReturning(errorEnvelope).addAccount("SN_MAIN", "openzeppelin"),
+    ).rejects.toThrow("boom");
   });
 
   test("addAccount throws its fallback when the reply is unrecognised", async () => {
-    await expect(runtimeReturning({ ok: true }).addAccount("SN_MAIN")).rejects.toThrow(
-      "add account failed",
-    );
+    await expect(
+      runtimeReturning({ ok: true }).addAccount("SN_MAIN", "openzeppelin"),
+    ).rejects.toThrow("add account failed");
   });
 
   test("importAccount returns the imported id and carries the raw key only in the request", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
-    expect(await wallet.importAccount("SN_MAIN", "0xdeadbeef")).toBe(account.id);
+    expect(await wallet.importAccount("SN_SEPOLIA", "0xdeadbeef", "openzeppelin")).toBe(account.id);
     expect(sent[0]).toEqual({
-      networkId: "SN_MAIN",
+      accountContractType: "openzeppelin",
+      networkId: "SN_SEPOLIA",
       privateKey: "0xdeadbeef",
       type: "wallet.importAccount",
     });
   });
 
   test("importAccount throws on failure", async () => {
-    await expect(runtimeReturning(errorEnvelope).importAccount("SN_MAIN", "0x1")).rejects.toThrow(
-      "boom",
-    );
+    await expect(
+      runtimeReturning(errorEnvelope).importAccount("SN_MAIN", "0x1", "openzeppelin"),
+    ).rejects.toThrow("boom");
   });
 
   test("createAccount resolves void on success and forwards the vault passphrase", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
-    await expect(wallet.createAccount("seed words", "SN_MAIN", "pass")).resolves.toBeUndefined();
+    await expect(
+      wallet.createAccount("seed words", "SN_SEPOLIA", "pass", "openzeppelin"),
+    ).resolves.toBeUndefined();
     expect(sent[0]).toEqual({
+      accountContractType: "openzeppelin",
       mnemonic: "seed words",
-      networkId: "SN_MAIN",
+      networkId: "SN_SEPOLIA",
       type: "wallet.createAccount",
       vaultPassphrase: "pass",
     });
   });
 
   test("createAccount throws 'wallet unavailable' when the reply fails the guard", async () => {
-    await expect(runtimeReturning({}).createAccount("s", "SN_MAIN", "p")).rejects.toThrow(
-      "wallet unavailable",
-    );
+    await expect(
+      runtimeReturning({}).createAccount("s", "SN_MAIN", "p", "openzeppelin"),
+    ).rejects.toThrow("wallet unavailable");
   });
 
   test("previewAccount returns public metadata and pins the first derivation index", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
-    await expect(wallet.previewAccount("seed words", "SN_SEPOLIA")).resolves.toEqual(account);
+    await expect(
+      wallet.previewAccount("seed words", "SN_SEPOLIA", "openzeppelin"),
+    ).resolves.toEqual(account);
     expect(sent[0]).toEqual({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       mnemonic: "seed words",
       networkId: "SN_SEPOLIA",
       type: "wallet.previewAccount",
     });
-    await expect(runtimeReturning({}).previewAccount("seed", "SN_MAIN")).rejects.toThrow(
+    await expect(
+      runtimeReturning({}).previewAccount("seed", "SN_MAIN", "openzeppelin"),
+    ).rejects.toThrow("account preview unavailable");
+  });
+
+  test("rejects account replies outside the requested network or contract", async () => {
+    const wallet = runtimeReturning(createAccountResponse);
+    await expect(wallet.addAccount("SN_MAIN", "openzeppelin")).rejects.toThrow(
+      "add account failed",
+    );
+    await expect(
+      wallet.createAccount("seed words", "SN_SEPOLIA", "pass", "argent"),
+    ).rejects.toThrow("wallet unavailable");
+    await expect(wallet.importAccount("SN_MAIN", "0xdeadbeef", "openzeppelin")).rejects.toThrow(
+      "import account failed",
+    );
+    await expect(wallet.previewAccount("seed words", "SN_SEPOLIA", "argent")).rejects.toThrow(
       "account preview unavailable",
     );
   });
@@ -166,6 +199,28 @@ describe("approvals and connected sites", () => {
     const { sent, wallet } = captureRuntime(accountsResponse);
     await expect(wallet.decideApproval(APPROVAL_ID, true)).resolves.toBeUndefined();
     expect(sent[0]).toEqual({ id: APPROVAL_ID, type: "wallet.approveOrigin" });
+  });
+
+  // The reviewed figure the card was painting travels with the approval, so the
+  // background can hold the submission to it and refuse if its own copy moved
+  // after the paint. A denial commits to no fee, so it carries none.
+  test("decideApproval carries the card's reviewed fee on an approval only", async () => {
+    const reviewedFee = { overallFee: "1000", unit: "FRI" } as const;
+    const approving = captureRuntime(accountsResponse);
+    await expect(
+      approving.wallet.decideApproval(APPROVAL_ID, true, reviewedFee),
+    ).resolves.toBeUndefined();
+    expect(approving.sent[0]).toEqual({
+      id: APPROVAL_ID,
+      reviewedFee,
+      type: "wallet.approveOrigin",
+    });
+
+    const denying = captureRuntime(pendingApprovalsResponse);
+    await expect(
+      denying.wallet.decideApproval(APPROVAL_ID, false, reviewedFee),
+    ).resolves.toBeUndefined();
+    expect(denying.sent[0]).toEqual({ id: APPROVAL_ID, type: "wallet.denyOrigin" });
   });
 
   test("decideApproval denies via denyOrigin and accepts a pending-list echo", async () => {

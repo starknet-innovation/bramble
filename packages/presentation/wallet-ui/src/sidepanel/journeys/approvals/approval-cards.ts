@@ -5,6 +5,7 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
+import { sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
 import { button } from "@mc-wallet/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -15,23 +16,51 @@ import {
   reviewPanel,
   riskFlagMessages,
 } from "../../shared/review-render";
-import { signRequestDetails } from "../../shared/sign-request";
+import { SIGN_REQUEST_UNCLASSIFIED_WARNING, signRequestView } from "../../shared/sign-request";
 
-// Shared approve/deny controls (one long template line so it is not re-wrapped);
-// `approve` is disabled when the wallet is locked or the origin is blocked.
-const decisionRow = (approval: PendingApproval, label: string, locked: boolean): string =>
-  `<div class="button-row">${button({
-    attributes: { "data-approval-action": "approve", "data-approval-id": approval.id },
-    disabled: locked || approval.blocked === true,
-    icon: "check",
-    label,
-  })}${button({
+const denyButton = (approval: PendingApproval): string =>
+  button({
     attributes: { "data-approval-action": "deny", "data-approval-id": approval.id },
     icon: "x",
     label: "Deny",
     tone: "danger",
     variant: "secondary",
-  })}</div>`;
+  });
+
+// Shared approve/deny controls (one long template line so it is not re-wrapped);
+// `approve` is disabled when the wallet is locked or the origin is blocked.
+// `reviewedFee`, when the card priced the request, is stamped onto the approve
+// control so the click reports the figure THIS paint showed. The background
+// binds the submission to that echo and refuses if its own copy has moved
+// since, which is how a card left open behind a re-estimate on another wallet
+// surface cannot approve a ceiling the user never read.
+const decisionRow = (
+  approval: PendingApproval,
+  label: string,
+  locked: boolean,
+  reviewedFee?: PendingApproval["fee"],
+): string =>
+  `<div class="button-row">${button({
+    attributes: {
+      "data-approval-action": "approve",
+      ...(reviewedFee
+        ? {
+            "data-approval-fee": reviewedFee.overallFee,
+            "data-approval-fee-unit": reviewedFee.unit,
+          }
+        : {}),
+      "data-approval-id": approval.id,
+    },
+    disabled: locked || approval.blocked === true,
+    icon: "check",
+    label,
+  })}${denyButton(approval)}</div>`;
+
+// Used when the card cannot describe what approving would commit to: the
+// approve control is absent rather than merely disabled, so a partial view can
+// never be approved by mistake.
+const denyOnlyRow = (approval: PendingApproval): string =>
+  `<div class="button-row">${denyButton(approval)}</div>`;
 
 const contextDetails = (approval: PendingApproval): string => {
   const context = approval.context;
@@ -115,6 +144,14 @@ const strk20LinkageWarnings = (approval: PendingApproval): readonly string[] => 
     : [];
 };
 
+const declarationReviewedFee = (approval: PendingApproval): PendingApproval["fee"] => {
+  const declaration = approval.declaration;
+  if (!declaration?.fee || declaration.accountDeployment === "unknown") return null;
+  return declaration.accountDeployment === "undeployed"
+    ? declaration.deploymentFee && sumFeeEstimates(declaration.fee, declaration.deploymentFee)
+    : declaration.fee;
+};
+
 const declarationDetails = (approval: PendingApproval): string => {
   const declaration = approval.declaration;
   if (!declaration) {
@@ -126,16 +163,8 @@ const declarationDetails = (approval: PendingApproval): string => {
   const deploymentFee = declaration.deploymentFee
     ? formatFee(declaration.deploymentFee)
     : "Unavailable";
-  const estimatedTotal =
-    declaration.fee?.unit === "FRI" &&
-    (declaration.accountDeployment === "deployed" || declaration.deploymentFee?.unit === "FRI")
-      ? formatFri(
-          (
-            BigInt(declaration.fee.overallFee) +
-            BigInt(declaration.deploymentFee?.overallFee ?? "0")
-          ).toString(),
-        )
-      : null;
+  const reviewedFee = declarationReviewedFee(approval);
+  const estimatedTotal = reviewedFee ? formatFee(reviewedFee) : null;
   const deployment =
     declaration.accountDeployment === "undeployed"
       ? "Required before declaration"
@@ -174,6 +203,11 @@ const declarationWarnings = (approval: PendingApproval): readonly string[] => {
       : []),
   ];
 };
+
+const declarationFeeUnavailable = (approval: PendingApproval): boolean =>
+  declarationReviewedFee(approval) === null ||
+  approval.declaration?.feeEstimateFailed === true ||
+  approval.declaration?.deploymentFeeEstimateFailed === true;
 
 const requestIdentity = (origin: string, kind: string): string => {
   let host = origin;
@@ -217,9 +251,9 @@ const watchAssetCard = (approval: PendingApproval): string => {
 // so the decoded calls and combined risk-flag/insight warnings stay compact.
 // The fee section renders through the shared `reviewFeeSection` — the same
 // renderer the Send review uses — so the two surfaces cannot drift (issue 189). The
-// retry button targets this approval by data attribute; a failed estimate
-// never disables Approve (deliberate divergence from Send, so a flaky RPC
-// cannot block dApp transactions).
+// retry button targets this approval by data attribute. A failed or absent fee
+// estimate disables Approve exactly as Send does: without a displayed amount
+// there is no fee ceiling for the user's consent to bind.
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -239,26 +273,44 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       ${contextDisclosure(approval)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
-    ${decisionRow(approval, "Approve", status.locked || approval.feeEstimatePending === true)}
+    ${decisionRow(
+      approval,
+      "Approve",
+      status.locked ||
+        approval.feeEstimatePending === true ||
+        approval.feeEstimateFailed === true ||
+        approval.fee == null,
+      approval.fee ?? undefined,
+    )}
   </li>`;
 
-const signCard = (approval: PendingApproval, status: WalletStatus): string => `
+// A sign card only offers to sign what the decoder could place on one side of
+// the signed hash or the other; an unclassified payload gets the warning and a
+// Deny-only row instead, because a partial view of a message is exactly what a
+// hostile payload wants the user to trust.
+const signCard = (approval: PendingApproval, status: WalletStatus): string => {
+  const view = signRequestView(approval.typedData);
+  return `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Sign request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Review exactly what this site asks you to sign. Signing does not move funds — only sign messages you understand."}</p>
       ${contextDisclosure(approval)}
     </div>
-    ${signRequestDetails(approval.typedData)}
-    ${reviewPanel(approval.insights ?? [])}
-    ${decisionRow(approval, "Sign", status.locked)}
+    ${view.html}
+    ${reviewPanel([
+      ...(view.classified ? [] : [SIGN_REQUEST_UNCLASSIFIED_WARNING]),
+      ...(approval.insights ?? []),
+    ])}
+    ${view.classified ? decisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
   </li>`;
+};
 
 const strk20Card = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Private transaction request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review this private transaction." : "Review each private action and the frozen execution call. The prover cannot change it after approval."}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review this private transaction." : "Review each private action and the frozen execution call. The prover cannot change it after approval. Wallet-funded public routes get a second exact-call network-fee review; sponsored private-relay routes submit after this approval."}</p>
       ${reviewCallsList(approval.summaries ?? [])}
       ${strk20ActionReview(approval)}
       ${contextDisclosure(approval)}
@@ -320,7 +372,13 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
       ${contextDisclosure(approval)}
     </div>
     ${reviewPanel([...declarationWarnings(approval), ...(approval.insights ?? [])])}
-    ${decisionRow(approval, "Declare", status.locked)}
+    ${declarationFeeUnavailable(approval) ? button({ attributes: { "data-approval-retry-fee": approval.id }, disabled: status.locked, icon: "refresh", label: "Retry fee estimate", variant: "secondary" }) : ""}
+    ${decisionRow(
+      approval,
+      "Declare",
+      status.locked || declarationFeeUnavailable(approval),
+      declarationReviewedFee(approval) ?? undefined,
+    )}
   </li>`;
 
 /**
@@ -356,7 +414,7 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
     case "strk20-register":
       return strk20DisclosureCard(approval, status, {
         action: "Activate",
-        hint: "This submits a public, one-time registration transaction. It publishes a viewing-key commitment, never the viewing key or private notes.",
+        hint: "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
         lockedHint: "Unlock the wallet to review this private-balance activation.",
         title: "Activate private balances",
       });
@@ -373,7 +431,7 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
       return addChainCard(approval);
     case "declare":
       return declareCard(approval, status);
-    default:
+    case "connect":
       return connectCard(approval, status);
   }
 };

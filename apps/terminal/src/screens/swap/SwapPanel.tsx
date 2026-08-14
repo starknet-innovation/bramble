@@ -8,7 +8,14 @@ import { ArrowDownUp, ChevronDown, LoaderCircle, ShieldCheck } from "lucide-reac
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Call } from "starknet";
 import { usePortfolio, type TokenRow } from "../../data/index";
-import { avnu, ekubo, MAINNET_TOKEN_ADDRESSES, MAINNET_TOKEN_DECIMALS } from "../../protocols/index";
+import {
+  buildAvnuSwapCalls,
+  buildEkuboSwapCalls,
+  MAINNET_TOKEN_ADDRESSES,
+  MAINNET_TOKEN_DECIMALS,
+  quoteAvnuSwap,
+  quoteEkuboSwap,
+} from "../../protocols/index";
 import { sameAddress } from "../../protocols/support/networks";
 import { useWallet } from "../../wallet/connection/WalletProvider";
 import { SwapSettings } from "./SwapSettings";
@@ -138,7 +145,7 @@ export const SwapPanel = ({
     const handle = window.setTimeout(() => {
       void (async () => {
         try {
-          const quote = await (venue === "avnu" ? avnu : ekubo).quoteSwap({
+          const quote = await (venue === "avnu" ? quoteAvnuSwap : quoteEkuboSwap)({
             buyToken: receive.address,
             sellAmount,
             sellToken: spend.address,
@@ -243,8 +250,9 @@ export const SwapPanel = ({
     }
     let calls: readonly Call[];
     try {
-      const protocol = quoteState.quote.protocol === "avnu" ? avnu : ekubo;
-      calls = protocol.buildSwapCalls({
+      const buildCalls =
+        quoteState.quote.protocol === "avnu" ? buildAvnuSwapCalls : buildEkuboSwapCalls;
+      calls = buildCalls({
         quote: quoteState.quote,
         slippageBps,
         takerAddress: address,

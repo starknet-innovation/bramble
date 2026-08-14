@@ -1,16 +1,16 @@
 /**
  * Starknet RPC wallet operations backed by starknet-js and Krusty signatures.
  */
-
 import { WalletError } from "@mc-wallet/core/errors";
+import { isDecimalAmountText, isSafeDecimals } from "@mc-wallet/core/json";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
 import { type Call, CallData, cairo, type RpcProvider, shortString } from "starknet";
+import type { FeeEstimate } from "./fee-bounds";
 import {
   isTransactionNotFoundError,
   isTransportRpcError,
-  krustyAccount,
   type StarkHashSigner,
   withRpcFallback,
 } from "./provider";
@@ -33,12 +33,12 @@ export {
 export {
   type AccountDeployment,
   type AccountDeploymentFeeEstimate,
+  accountDeployment,
   type DeployAccountInput,
   type DeploymentStatusInput,
   type DeploySubmission,
   estimateAccountDeploymentFee,
   getDeploymentStatus,
-  ozAccountDeployment,
   submitAccountDeployment,
 } from "../transactions/deployment";
 /**
@@ -68,6 +68,10 @@ export {
   type NftTokenUriInput,
 } from "./rpc-assets";
 /**
+ * Re-exported exact invoke estimation so callers keep one RPC import path.
+ */
+export { estimateInvokeFee } from "./rpc-estimate";
+/**
  * Re-exported invoke submission types and operation.
  */
 export {
@@ -76,7 +80,6 @@ export {
   type InvokeSubmission,
   submitInvokeTransaction,
 } from "./rpc-submit";
-
 /**
  * Token balance returned to the side panel.
  */
@@ -108,7 +111,13 @@ export type BalanceInput = {
 export type TransferInput = {
   readonly account: AccountRef;
   readonly amount: string;
+  /** Live authorization checked immediately before each on-chain mutation. */
+  readonly isAuthorized?: () => boolean;
   readonly recipient: string;
+  /** Separately reviewed ceiling for an automatic account deployment. */
+  readonly reviewedDeploymentFee?: FeeEstimate;
+  /** Reviewed fee ceiling; see {@link InvokeInput.reviewedFee}. */
+  readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
   readonly signHash: StarkHashSigner;
   readonly speed?: FeeSpeed;
@@ -116,12 +125,10 @@ export type TransferInput = {
 };
 
 /**
- * Fee estimate returned before signing.
+ * Fee estimate returned before signing; its validator and reviewed ceiling
+ * policy remain single-sourced in `./fee-bounds`.
  */
-export type FeeEstimate = {
-  readonly overallFee: string;
-  readonly unit: string;
-};
+export type { FeeEstimate };
 
 /**
  * Inputs for reading transaction statuses.
@@ -164,16 +171,15 @@ export type TransactionStatusReport = {
 const pow10 = (decimals: number): bigint => 10n ** BigInt(decimals);
 
 /**
- * Parses a decimal token amount into raw integer ERC20 units.
+ * Parses a decimal token amount into raw integer ERC20 units. The terminal
+ * consumer of every amount the reader boundaries admit, so it applies their
+ * grammars (`isDecimalAmountText`, `isSafeDecimals`) rather than its own copies.
+ * Throws {@link WalletError} on a value either rule rejects, on more fraction
+ * digits than the token has, and on a non-positive result.
  */
 export const parseTokenAmount = (amount: string, decimals: number): bigint => {
   const trimmed = amount.trim();
-  if (
-    !Number.isSafeInteger(decimals) ||
-    decimals < 0 ||
-    decimals > 36 ||
-    !/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(trimmed)
-  ) {
+  if (!isSafeDecimals(decimals) || !isDecimalAmountText(trimmed)) {
     throw new WalletError("Invalid transfer amount");
   }
 
@@ -352,7 +358,7 @@ export const getTokenMetadata = async (
         throw new WalletError("Invalid token decimals");
       }
       const decimals = Number(BigInt(rawDecimals));
-      if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 36) {
+      if (!isSafeDecimals(decimals)) {
         throw new WalletError("Invalid token decimals");
       }
       return {
@@ -369,7 +375,18 @@ export const getTokenMetadata = async (
  * Signs and submits an ERC20 transfer through an account contract.
  */
 export const submitErc20Transfer = async (
-  { account, amount, recipient, rpcUrls, signHash, speed, token }: TransferInput,
+  {
+    account,
+    amount,
+    isAuthorized,
+    recipient,
+    reviewedDeploymentFee,
+    reviewedFee,
+    rpcUrls,
+    signHash,
+    speed,
+    token,
+  }: TransferInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<TransferSubmission> => {
   const amountRaw = parseTokenAmount(amount, token.decimals);
@@ -378,6 +395,9 @@ export const submitErc20Transfer = async (
     {
       account,
       calls: [call],
+      ...(isAuthorized === undefined ? {} : { isAuthorized }),
+      ...(reviewedDeploymentFee === undefined ? {} : { reviewedDeploymentFee }),
+      ...(reviewedFee === undefined ? {} : { reviewedFee }),
       rpcUrls,
       signHash,
       ...(speed === undefined ? {} : { speed }),
@@ -388,31 +408,6 @@ export const submitErc20Transfer = async (
     call,
     transactionHash: result.transactionHash,
   };
-};
-
-/**
- * Estimates invoke fees without broadcasting or signing. Validation is skipped
- * so review-time estimation cannot open a Ledger prompt before user approval.
- */
-export const estimateInvokeFee = async (
-  { account, calls, rpcUrls, signHash }: InvokeInput,
-  makeProvider?: (nodeUrl: string) => RpcProvider,
-): Promise<FeeEstimate> => {
-  if (calls.length === 0) {
-    throw new WalletError("No calls to estimate");
-  }
-  return withRpcFallback(
-    rpcUrls,
-    async (provider) => {
-      const starknetAccount = krustyAccount(provider, account, signHash);
-      const estimate = await starknetAccount.estimateInvokeFee([...calls], { skipValidate: true });
-      return {
-        overallFee: BigInt(estimate.overall_fee).toString(),
-        unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",
-      };
-    },
-    makeProvider,
-  );
 };
 
 const FINALITY_TO_STATUS: Readonly<Record<string, TransactionStatus>> = {

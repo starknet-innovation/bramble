@@ -144,7 +144,11 @@ describe("sidepanel views", () => {
 
   test("lets the activity screen approve or deny each request by id", () => {
     const pending = [
-      { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", origin: "https://dapp.example" },
+      {
+        id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
+        kind: "connect" as const,
+        origin: "https://dapp.example",
+      },
     ];
     const html = dashboard("activity", status, pending, preferences, { balances: [] });
 
@@ -161,8 +165,6 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="swap-sell-amount"');
     expect(html).toContain('id="swap-flip"');
     expect(html).toContain('id="swap-review"');
-    // Confirm and success stages ship hidden; the bindings stage them. The
-    // success moment carries the drawn ring + check marks.
     expect(html).toMatch(/id="swap-confirm" hidden/);
     // The quote-sanity warning slot ships hidden; the bindings surface it when
     // a route returns materially less value than it costs.
@@ -219,8 +221,6 @@ describe("sidepanel views", () => {
     const html = dashboard("send", status, [], preferences, { balances: [] });
 
     expect(html).toContain('id="review-panel"');
-    // No speed choice is offered and none is submitted: every send used the
-    // node's standard fee anyway, so the control said nothing.
     expect(html).not.toContain('name="speed"');
     expect(html).not.toContain(">Speed<");
     expect(html).toContain("Review send");
@@ -399,7 +399,7 @@ describe("sidepanel views", () => {
     expect(backupExport).toContain('id="backup-export"');
     const backupRestore = dashboard("backup-restore", status, [], preferences, { balances: [] });
     expect(backupRestore).toContain('id="backup-import"');
-    expect(backupRestore).toContain('id="backup-file"');
+    expect(backupRestore).toContain("Saved contacts and tracked assets");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain('class="wallet-dock"');
   });
@@ -439,9 +439,9 @@ describe("sidepanel views", () => {
 
   test("reveal flow warns that the recovery phrase does not restore an imported active account", () => {
     // A raw-key-imported account is not derived from the wallet phrase; the
-    // screen must say so, using only the provenance already in status (never a
-    // secret), so a user does not wrongly trust the phrase as its backup.
+    // screen must use only public provenance so users trust the right backup.
     const imported = {
+      accountContractType: "openzeppelin" as const,
       address: "0xa11ceded",
       classHash: account.classHash,
       derivation: { kind: "imported-raw-key" as const },

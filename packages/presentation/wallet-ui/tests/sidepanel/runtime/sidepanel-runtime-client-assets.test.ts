@@ -10,7 +10,8 @@
  * sidepanel-runtime-client.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { createSidepanelRuntime, emptyStatus } from "../../../src/sidepanel/runtime/runtime";
+import { createSidepanelRuntime } from "../../../src/sidepanel/runtime/runtime";
+import { unavailableStatus } from "../../../src/sidepanel/runtime/runtime-status";
 import {
   account,
   allowanceView,
@@ -235,12 +236,24 @@ describe("transfers and review", () => {
       accountId: account.id,
       amount: "1000",
       recipient: "0xabc",
+      speed: "standard",
       tokenId: "SN_MAIN:0x1",
       type: "wallet.reviewTransfer",
     });
     await expect(runtimeReturning({}).reviewTransfer(account.id, "t", "0x1", "1")).rejects.toThrow(
       "transfer review failed",
     );
+  });
+
+  test("reviewTransfer prices the speed the send will use", async () => {
+    // A fast send signs bounds scaled above the node's estimate, so the fee it
+    // authorises is not the fee a standard review would have shown. The review
+    // has to be asked for the same speed or the figure the user reads is one
+    // the submission is guaranteed to exceed — and that figure is the ceiling
+    // the submission is then held to.
+    const { sent, wallet } = captureRuntime(transferReviewResponse);
+    await wallet.reviewTransfer(account.id, "SN_MAIN:0x1", "0xabc", "1000", "fast");
+    expect((sent[0] as { speed: string }).speed).toBe("fast");
   });
 
   test("submitTransfer defaults the speed to standard and returns the tx hash", async () => {
@@ -323,9 +336,11 @@ describe("prices and charts", () => {
 });
 
 describe("status, lock and network", () => {
-  test("loadStatus returns the parsed status or emptyStatus", async () => {
+  test("loadStatus returns the parsed status or the unavailable status", async () => {
     expect(await runtimeReturning(walletStatus).loadStatus()).toEqual(walletStatus);
-    expect(await runtimeReturning(errorEnvelope).loadStatus()).toEqual(emptyStatus());
+    // An error envelope means the background could not answer; that must not be
+    // rendered as "this browser has no wallet" (MCW-V09-126).
+    expect(await runtimeReturning(errorEnvelope).loadStatus()).toEqual(unavailableStatus());
   });
 
   test("lockVault returns the status and throws when unavailable", async () => {

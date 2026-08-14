@@ -4,10 +4,13 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { WalletError } from "@mc-wallet/core/errors";
 import { memoryStrk20MaturityStore } from "@mc-wallet/privacy/maturity";
 import { createStrk20MaturityRuntime } from "@mc-wallet/privacy/official-sdk-maturity";
 import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
 import type { RpcProvider } from "starknet";
+import { submitStrk20PaymasterPlan } from "../../src/paymaster/paymaster";
+import { paymasterCall, paymasterConfig } from "../support/paymaster";
 
 const scope = {
   accountId: "SN_SEPOLIA:0xabc",
@@ -213,7 +216,7 @@ describe("STRK20 proof maturity", () => {
 
     expect(await store.read(scope)).toEqual({ state: "submitting" });
     await expect(runtime.provingBlock(providerWith([30]), scope)).rejects.toThrow(
-      "strk20 services unavailable",
+      "close every browser window and reopen the browser to recover",
     );
   });
 
@@ -341,5 +344,77 @@ describe("STRK20 proof maturity", () => {
       state: "submitted",
       transactionHash: "0x456",
     });
+  });
+
+  /**
+   * EXT-M2, composed end to end. The scope's release rule is written against
+   * error classes, and the private-relay broadcast is the one submission lane
+   * that does not reach its node through `withRpcWrite` — so whether the rule
+   * holds depends entirely on what that lane raises. These drive the real
+   * paymaster client as the broadcast rather than a stand-in error.
+   */
+  const submitThroughRelay = async (
+    store: ReturnType<typeof memoryStrk20MaturityStore>,
+    http: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+  ): Promise<unknown> =>
+    createStrk20MaturityRuntime({ store })
+      .submitAccepted(
+        providerWith([]),
+        scope,
+        async () => "prepared",
+        async () =>
+          submitStrk20PaymasterPlan({
+            accountAddress: "0x1",
+            call: paymasterCall,
+            config: paymasterConfig,
+            http,
+            nowSeconds: 2,
+            plan: {
+              feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+            },
+            proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+            signTypedData: async () => [],
+          }),
+      )
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+  test("holds the scope when the relay's answer to a broadcast is lost", async () => {
+    const store = memoryStrk20MaturityStore();
+    const rejected = await submitThroughRelay(store, async () => new Response("not json"));
+
+    expect(rejected).toBeInstanceOf(IndeterminateRpcWriteError);
+    // The relay may have forwarded the transaction, so the guard stays closed
+    // and the next private action refuses rather than proving against note
+    // state a landed write would have invalidated.
+    expect(await store.read(scope)).toEqual({ state: "submitting" });
+    await expect(
+      createStrk20MaturityRuntime({ store }).provingBlock(providerWith([30]), scope),
+    ).rejects.toThrow("close every browser window and reopen the browser to recover");
+  });
+
+  test("releases the scope when the relay states its own refusal", async () => {
+    const store = memoryStrk20MaturityStore();
+    const rejected = await submitThroughRelay(
+      store,
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: { code: -32_000, message: "failed" },
+            id: "mc-wallet-strk20",
+            jsonrpc: "2.0",
+          }),
+        ),
+    );
+
+    expect(rejected).toBeInstanceOf(WalletError);
+    expect(rejected).not.toBeInstanceOf(IndeterminateRpcWriteError);
+    // Nothing is in flight, so a stale guard would only block every later retry.
+    expect(await store.read(scope)).toBeNull();
+    await expect(
+      createStrk20MaturityRuntime({ store }).provingBlock(providerWith([30]), scope),
+    ).resolves.toBe(20);
   });
 });

@@ -7,6 +7,7 @@
  * predicate maps to "unknown" — a missing balance never blocks a transaction.
  */
 
+import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   STARKNET_NETWORKS,
@@ -14,7 +15,7 @@ import {
   type StarknetNetworkId,
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
+import { tokenConfigId } from "@mc-wallet/wallet-model/preferences";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 
@@ -27,7 +28,7 @@ const strkToken = (networkId: StarknetNetworkId, preferences: WalletPreferences)
   ) ?? {
     address: STRK_TOKEN_ADDRESS,
     decimals: 18,
-    id: `${networkId}:STRK:${STRK_TOKEN_ADDRESS}`,
+    id: tokenConfigId(networkId, "STRK", STRK_TOKEN_ADDRESS),
     name: "Starknet Token",
     networkId,
     symbol: "STRK",

@@ -161,10 +161,10 @@ jobs:
   # Fast, offline-capable gates. Runs on EVERY PR (into main or release/**) and
   # on push to main. No crypto/contract toolchain, no build, no E2E — so PR
   # feedback stays fast. All steps below are verified to pass without the
-  # vendored krusty/multisig artifacts. (`check:config` is not a separate npm
+  # vendored Krusty/Argent artifacts. (`check:config` is not a separate npm
   # script — `check:files` already runs both file- and config-standards. The
   # aggregate `bun run check` is intentionally NOT used here because it chains
-  # check:krusty/check:multisig, which require the vendored artifacts.)
+  # check:krusty/check:argent, which require the vendored artifacts.)
   fast-checks:
     runs-on: ubuntu-latest
     steps:
@@ -188,6 +188,7 @@ jobs:
       - run: bun run check:extension
       - run: bun run check:imports
       - run: bun run check:cycles
+      - run: bun run check:deadcode
       # The leading `./` prevents Bun from matching tests inside ignored vendor checkouts.
       - run: bun test ./tests
       - run: bun run check:workspaces
@@ -220,6 +221,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: 1.96.1
+          # scripts/vendor-krusty.ts requires this exact rustc release and
+          # builds the crypto core for this target; it refuses to run on any
+          # other toolchain, so two builds stay comparable.
+          targets: wasm32-unknown-unknown
       # Cache the wasm-pack binary and the cargo download/registry so each run
       # skips recompiling wasm-pack from source and re-fetching crates. Keyed on
       # the pinned krusty revision (vendor-krusty.ts) plus the wasm-pack version;
@@ -236,9 +241,6 @@ jobs:
           key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
           restore-keys: |
             cargo-${{ runner.os }}-
-      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
-        with:
-          scarb-version: 2.18.0
       - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
       # Fail the build on known high/critical advisories in the dependency tree.
@@ -252,7 +254,7 @@ jobs:
       - run: bun run test:e2e:install
       - run: bun run check:files
       - run: bun run vendor:krusty
-      - run: bun run vendor:multisig
+      - run: bun run vendor:argent
       - run: bun run vendor:privacy
       - run: bun run check
       # Enforce the global unit-test coverage floor (scripts/check-coverage.ts).

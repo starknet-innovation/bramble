@@ -4,7 +4,7 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { callout } from "@mc-wallet/ui-kit/content";
 import { button, iconButton, iconLink } from "@mc-wallet/ui-kit/controls";
@@ -22,7 +22,7 @@ export const walletHeader = (
   status: WalletStatus,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
-  multisig: MultisigRecord | null = null,
+  multisig: ArgentMultisigRecord | null = null,
 ): string => {
   const name = multisig
     ? (multisig.name ?? "Multisig account")
@@ -39,7 +39,7 @@ export const walletHeader = (
       <span class="brand-mark">${address ? accountAvatar(address) : icon("wallet")}</span>
       <span class="account-meta">
         <span class="account-name"><strong>${escapeHtml(name)}</strong>${icon("chevronDown")}</span>
-        <span class="account-net"><span class="dot"></span>${escapeHtml(network)}${multisig ? ` · Multisig ${multisig.quorum} of ${multisig.signers.length}` : ""}</span>
+        <span class="account-net"><span class="dot"></span>${escapeHtml(network)}${multisig ? " · Argent Multisig" : ""}</span>
       </span>
     </button>
     <div class="header-actions">

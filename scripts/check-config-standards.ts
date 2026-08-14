@@ -127,8 +127,8 @@ if (
   failures.push("package.json must stay private ESM mc-wallet package metadata");
 }
 
-if (biomeJson["$schema"] !== "https://biomejs.dev/schemas/2.5.6/schema.json") {
-  failures.push("biome.json schema must stay pinned to 2.5.6");
+if (biomeJson["$schema"] !== "https://biomejs.dev/schemas/2.5.7/schema.json") {
+  failures.push("biome.json schema must stay pinned to 2.5.7");
 }
 
 const biomeVcs = isRecord(biomeJson["vcs"]) ? biomeJson["vcs"] : null;
@@ -145,9 +145,9 @@ if (
     "!.claude",
     "!.impeccable",
     "!.playwright-cli",
-    "!apps",
+    "!apps/terminal",
+    "!apps/ui-lab",
     "!bun.lock",
-    "!contracts/multisig/target",
     "!dist",
     "!node_modules",
     "!output",
@@ -398,7 +398,7 @@ const ciCommands = [
   "bun run test:e2e:install",
   "bun run check:files",
   "bun run vendor:krusty",
-  "bun run vendor:multisig",
+  "bun run vendor:argent",
   "bun run vendor:privacy",
   "bun run check",
   "bun run check:coverage",
@@ -415,6 +415,9 @@ for (const command of ciCommands) {
   }
   previousCiCommand = index;
 }
+// Release-artifact policy lives in ./artifact-policy, which locates the upload
+// step through the shared pin grammar in ./workflow-inventory rather than
+// re-deriving it.
 failures.push(...artifactPolicyFailures(buildScript, ciWorkflow, packageScript));
 
 if (failures.length > 0) {

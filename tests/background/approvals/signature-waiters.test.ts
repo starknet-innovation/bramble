@@ -25,7 +25,9 @@ describe("createSignatureWaiters", () => {
     // the first approval id, and both held responses must settle.
     const firstTab = waiters.register("approval-1");
     const secondTab = waiters.register("approval-1");
-    expect(waiters.pending()).toBe(1);
+    // pending() counts held responses, not approval ids: both tabs are memory
+    // this registry is holding.
+    expect(waiters.pending()).toBe(2);
 
     waiters.settle("approval-1", { accounts: [], ok: true });
     await expect(firstTab).resolves.toEqual({ accounts: [], ok: true });
@@ -43,5 +45,18 @@ describe("createSignatureWaiters", () => {
 
     waiters.settle("approval-1", { ok: true });
     await expect(first).resolves.toEqual({ ok: true });
+  });
+
+  test("moves a held dapp response to a staged exact-call approval", async () => {
+    const waiters = createSignatureWaiters();
+    const held = waiters.register("privacy-consent");
+
+    waiters.move("privacy-consent", "network-fee-consent");
+    waiters.settle("privacy-consent", { error: "stale first card" });
+    expect(waiters.pending()).toBe(1);
+    waiters.settle("network-fee-consent", { ok: true, transactionHash: "0x7cd" });
+
+    await expect(held).resolves.toEqual({ ok: true, transactionHash: "0x7cd" });
+    expect(waiters.pending()).toBe(0);
   });
 });

@@ -179,7 +179,7 @@ export const backupHubFlow = (status: WalletStatus): string => {
           ${walletMenuRow("backup-export", "Download wallet backup", "receive")}
           ${walletMenuRow("backup-restore", "Restore from a backup", "refresh")}
         </div>
-        <p class="hint">Backups include preferences, labels, contacts, and tracked assets. They never include your recovery phrase or private keys.</p>
+        <p class="hint">Backup files include wallet preferences for reference. Restore applies only organization and display choices; saved contacts, tracked assets, and trust settings stay unchanged.</p>
         ${
           hasLedgerAccount
             ? '<p class="review-flag" role="note">Ledger accounts are not restored by this backup or by MC Wallet’s recovery phrase. Recover them with the Ledger device and its Ledger recovery phrase.</p>'
@@ -217,7 +217,7 @@ export const backupRestoreFlow = (status: WalletStatus): string =>
   flowScreen(
     "backup-restore",
     `<section class="section">
-      <p class="review-flag" role="note">Restoring replaces the wallet’s current preferences, labels, contacts, and tracked assets. It does not change accounts or signing keys.</p>
+      <p class="review-flag" role="note">Restore applies the backup’s active network, account labels, groups, hidden-token choices, display currency, and theme. Saved contacts and tracked assets, network, service, and approval settings, accounts, and signing keys stay unchanged.</p>
       ${textField({
         accept: "application/json",
         attributes: { id: "backup-file" },
