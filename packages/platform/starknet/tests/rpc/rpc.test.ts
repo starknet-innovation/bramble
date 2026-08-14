@@ -201,6 +201,31 @@ describe("starknet RPC helpers", () => {
     expect(writes).toEqual(["https://selected.example"]);
   });
 
+  // A wrong-chain endpoint tells the user what to fix; an unreachable one does
+  // not. Reporting the later transport failure would hide the actual cause, and
+  // the friendly-error mapping keys on this exact message.
+  test("reports a wrong-chain endpoint even when a later endpoint is unreachable", async () => {
+    const provider = (nodeUrl: string) =>
+      ({
+        async getChainId() {
+          if (nodeUrl.includes("offline")) {
+            throw new Error("fetch failed");
+          }
+          return "0x534e5f5345504f4c4941";
+        },
+      }) as unknown as import("starknet").RpcProvider;
+
+    const rejection = await withRpcWrite(
+      ["https://wrongchain.example", "https://offline.example"],
+      "0x534e5f4d41494e",
+      async () => "unreachable",
+      provider,
+    ).catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(WalletError);
+    expect((rejection as Error).message).toBe("RPC endpoint returned the wrong Starknet chain");
+  });
+
   test("marks only add-transaction fetches as status unknown", async () => {
     for (const method of [
       "starknet_addDeclareTransaction",

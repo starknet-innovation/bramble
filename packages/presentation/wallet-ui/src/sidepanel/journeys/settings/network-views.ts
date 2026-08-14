@@ -13,25 +13,31 @@ import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
 import { explorerFallbackAllowed, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import { button } from "@mc-wallet/ui-kit/controls";
 import { checkboxField, textField } from "@mc-wallet/ui-kit/fields";
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { isStarknetNetworkId, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { strk20ServicesForm } from "../privacy/privacy-settings-view";
 
-// Devnet is the one network whose node the user runs themselves, so selecting it
-// is the moment to state what the wallet expects: the bundled endpoint and the
-// chain id the write-path guard checks. Both are recoverable through the
-// advanced endpoint editor one row below, which is why the nudge points there.
-const devnetHint = (status: WalletStatus): string =>
-  status.networkId === "SN_DEVNET"
-    ? `<p class="hint">Expects a node on 127.0.0.1:5050 started with --chain-id SN_DEVNET. Running yours elsewhere? Set a custom RPC under Advanced.</p>`
-    : "";
-
 const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   preferences && isStarknetNetworkId(status.networkId)
     ? (preferences.rpcOverrides?.[status.networkId] ?? "")
     : "";
+
+// Devnet is the one network whose node the user runs themselves, so selecting it
+// is the moment to state what the wallet expects: the endpoint it will actually
+// dial and the chain id the write-path guard checks. The endpoint is read from
+// the network record rather than restated, and an override is reported back
+// instead of nudging the user toward a change they already made.
+const devnetHint = (status: WalletStatus, preferences: WalletPreferences | null): string => {
+  if (status.networkId !== "SN_DEVNET") {
+    return "";
+  }
+  const override = rpcOverrideFor(status, preferences);
+  const endpoint = escapeHtml(override || STARKNET_NETWORKS.SN_DEVNET.rpcUrls[0]);
+  const elsewhere = override ? "" : " Running yours elsewhere? Set a custom RPC under Advanced.";
+  return `<p class="hint">Expects a node at ${endpoint} started with --chain-id SN_DEVNET.${elsewhere}</p>`;
+};
 
 const strk20ConfigFor = (
   status: WalletStatus,
@@ -116,7 +122,7 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
           .join("")}
       </div>
       <p class="hint">Switching selects or derives an account on the target network.</p>
-      ${devnetHint(status)}
+      ${devnetHint(status, preferences)}
       <p id="picker-result" role="status"></p>
     </section>
     <section class="section">

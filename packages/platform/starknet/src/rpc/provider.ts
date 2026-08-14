@@ -395,12 +395,16 @@ export const withRpcWrite = async <T>(
 ): Promise<T> => {
   let selected: RpcProvider | null = null;
   let lastError: unknown = new WalletError("No RPC endpoints configured");
+  // A wrong-chain endpoint is strictly more diagnostic than an unreachable one,
+  // so it is kept apart from `lastError` and wins: a later endpoint that simply
+  // fails to answer must not bury the reason the first one was rejected.
+  let chainMismatch: WalletError | null = null;
   for (const nodeUrl of rpcUrls) {
     try {
       const provider = makeProvider(nodeUrl);
       const chainId = await provider.getChainId();
       if (!sameFelt(chainId, expectedChainId)) {
-        lastError = new WalletError("RPC endpoint returned the wrong Starknet chain");
+        chainMismatch = new WalletError("RPC endpoint returned the wrong Starknet chain");
         continue;
       }
       selected = provider;
@@ -410,7 +414,7 @@ export const withRpcWrite = async <T>(
     }
   }
   if (!selected) {
-    throw lastError;
+    throw chainMismatch ?? lastError;
   }
   try {
     return await run(guardRpcBroadcasts(selected));

@@ -46,12 +46,14 @@ const EXACT: ReadonlyMap<string, string> = new Map([
     "Blocked for safety: the swap asked to approve the wrong token. Nothing was signed.",
   ],
   ["token list unavailable", "Couldn't load the token list. Check your connection and try again."],
-  // The write-path endpoint guard. Almost always a devnet started without a
-  // matching chain id, so the copy names the flag rather than the chain ids,
-  // which are opaque short-string felts a user cannot act on.
+  // The write-path endpoint guard, which fires on every network — the raw text
+  // names neither cause nor remedy and compares two opaque short-string felts.
+  // The remedy is the endpoint, so the copy points at where endpoints are set;
+  // the devnet-only `--chain-id SN_DEVNET` requirement is stated on that same
+  // screen by the network picker, where it is true rather than guessed at.
   [
     "rpc endpoint returned the wrong starknet chain",
-    "That endpoint reports a different Starknet chain, so nothing was submitted. Local Devnet must be started with --chain-id SN_DEVNET, or point the wallet at your node under Network → Advanced.",
+    "That endpoint reports a different Starknet chain, so nothing was submitted. Check the endpoint under Network → Advanced.",
   ],
 ]);
 

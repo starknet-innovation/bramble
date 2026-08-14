@@ -60,6 +60,12 @@ export const getOzAccountClassHash = async (
   networkId: StarknetNetworkId,
 ): Promise<string> => {
   if (networkId === "SN_DEVNET") {
+    // Validated like Krusty's value below rather than trusted as a literal: the
+    // comment above invites an editor to paste a new hash in after a devnet
+    // upgrade, and a malformed paste would otherwise reach callers as `null`.
+    if (!isNonZeroStarkFieldElement(DEVNET_OZ_ACCOUNT_CLASS_HASH)) {
+      throw new WalletError("Devnet account class hash is invalid");
+    }
     return canonicalFelt(DEVNET_OZ_ACCOUNT_CLASS_HASH) as string;
   }
 

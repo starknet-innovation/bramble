@@ -84,8 +84,9 @@ schema, so it cannot be changed after creation.
   OWN account class, so `getOzAccountClassHash` resolves `SN_DEVNET` to the class the node predeclares
   (`devnet_getConfig` -> `account_contract_class_hash`) — same preset and constructor, derivation unchanged. It is
   devnet-VERSION specific and pinned by no CI gate. Argent accounts stay unavailable on a devnet that has not
-  declared that class itself; predeployed accounts use a seed-derived salt, so importing one of their keys yields
-  a fresh counterfactual address, not the pre-funded one.
+  declared that class itself. Devnet derives its predeployed accounts' keys from the node seed but deploys them
+  at its own fixed salt, while the OZ path tries only `["0x0", publicKeyX]` (`deployment.ts`) — so importing a
+  predeployed key yields a fresh counterfactual address, not the pre-funded one.
 - Audit: OpenZeppelin Contracts for Cairo audit reports —
   <https://github.com/OpenZeppelin/cairo-contracts/tree/main/audits> (API docs:
   <https://docs.openzeppelin.com/contracts-cairo/3.x/api/account#AccountUpgradeable>).
