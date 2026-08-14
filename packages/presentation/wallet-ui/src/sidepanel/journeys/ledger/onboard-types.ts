@@ -43,9 +43,39 @@ export type LedgerOnboardAddKind =
   | "openzeppelin";
 
 /**
+ * The two chooser routes that drive a hardware device, and their mapping to the
+ * account contract they deploy. Single-sourced beside the union because the
+ * controller both dispatches these routes and has to name one again when a
+ * device failure needs to say which route to retry.
+ */
+export type LedgerDeviceRoute = "ledger-argent" | "ledger-openzeppelin";
+
+/**
+ * Whether a chooser route drives a hardware device.
+ */
+export const isDeviceRoute = (kind: LedgerOnboardAddKind): kind is LedgerDeviceRoute =>
+  kind === "ledger-argent" || kind === "ledger-openzeppelin";
+
+/**
+ * The account contract a device route deploys.
+ */
+export const deviceContractFor = (kind: LedgerDeviceRoute): AccountContractType =>
+  kind === "ledger-argent" ? "argent" : "openzeppelin";
+
+/**
+ * The device route that deploys an account contract; the inverse of
+ * {@link deviceContractFor}, used when a device failure has to name the route
+ * to retry and only the contract type is still in hand.
+ */
+export const deviceRouteFor = (contract: AccountContractType): LedgerDeviceRoute =>
+  contract === "argent" ? "ledger-argent" : "ledger-openzeppelin";
+
+/**
  * The onboarding device-prompt view the binder renders: the add-account
  * chooser, the connect gesture, the silent read, the multi-select account
- * picker (with the currently-selected indices), or a typed error.
+ * picker (with the currently-selected indices), or a typed error. The error
+ * carries the route that produced it, because this one view serves every
+ * add-account route and its retry must re-run the failed one.
  */
 export type LedgerOnboardView =
   | { readonly kind: "chooser"; readonly selected: LedgerOnboardAddKind | null }
@@ -58,7 +88,7 @@ export type LedgerOnboardView =
       readonly message?: string;
       readonly selected: readonly number[];
     }
-  | { readonly kind: "error"; readonly message: string };
+  | { readonly kind: "error"; readonly message: string; readonly retry: LedgerOnboardAddKind };
 
 /**
  * Best-effort on-chain state; `null` degrades to unavailable without blocking.
@@ -107,6 +137,7 @@ export type LedgerOnboardController = {
   readonly connect: () => void;
   readonly continueChoice: () => void;
   readonly loadMore: () => void;
+  readonly retry: (kind: LedgerOnboardAddKind) => void;
   readonly select: (kind: LedgerOnboardAddKind) => void;
   readonly showChooser: () => void;
   readonly start: (accountContractType?: AccountContractType) => void;

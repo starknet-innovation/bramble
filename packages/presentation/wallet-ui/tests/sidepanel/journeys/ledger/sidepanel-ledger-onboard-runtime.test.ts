@@ -327,4 +327,30 @@ describe("Ledger onboarding runtime (DOM)", () => {
     expect(h.mount.hidden).toBe(true);
     expect(h.multisigs()).toBe(1);
   });
+
+  // A failed software add once rendered a retry bound to the device connect
+  // gesture, so "Try again" dropped the user into Ledger setup instead of
+  // re-deriving. The retry must re-enter the route that actually failed.
+  test("a failed software add retries its own route, never the device flow", async () => {
+    let hdAdds = 0;
+    const h = mountRuntime({
+      addHd: () => {
+        hdAdds += 1;
+        return Promise.reject(new Error("Krusty KMS class hashes are missing SN_DEVNET"));
+      },
+    });
+    h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="openzeppelin"]');
+    click(h.mount, "[data-add-continue]");
+    await tick();
+
+    expect(h.mount.textContent).toContain("Krusty KMS class hashes are missing SN_DEVNET");
+    expect(h.mount.querySelector("[data-ledger-onboard-connect]")).toBeNull();
+
+    click(h.mount, '[data-ledger-onboard-retry="openzeppelin"]');
+    await tick();
+    expect(hdAdds).toBe(2);
+    expect(h.mount.querySelector("[data-ledger-onboard-connect]")).toBeNull();
+    expect(toggleCount(h.mount)).toBe(0);
+  });
 });

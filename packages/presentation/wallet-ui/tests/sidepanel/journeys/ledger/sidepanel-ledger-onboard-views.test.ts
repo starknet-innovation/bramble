@@ -53,8 +53,22 @@ describe("onboarding views", () => {
   test("connect, reading, and error device states render their controls", () => {
     expect(ledgerConnectPrompt()).toContain("data-ledger-onboard-connect");
     expect(ledgerReadingPrompt()).toContain("Reading accounts");
-    expect(ledgerOnboardError("Unlock your Ledger, then try again.")).toContain(
-      "Unlock your Ledger",
+    expect(
+      ledgerOnboardError("Unlock your Ledger, then try again.", "ledger-openzeppelin"),
+    ).toContain("Unlock your Ledger");
+  });
+
+  // The error state serves every add-account route, so its retry must carry the
+  // failed route and must never reuse the device connect binding.
+  test("the error retry carries its route and never binds the connect gesture", () => {
+    const html = ledgerOnboardError(
+      "Krusty KMS class hashes are missing SN_DEVNET",
+      "openzeppelin",
+    );
+    expect(html).toContain('data-ledger-onboard-retry="openzeppelin"');
+    expect(html).not.toContain("data-ledger-onboard-connect");
+    expect(ledgerOnboardError("Unlock your Ledger.", "ledger-argent")).toContain(
+      'data-ledger-onboard-retry="ledger-argent"',
     );
   });
 
@@ -72,7 +86,7 @@ describe("onboarding views", () => {
       addAccountChooser(),
       ledgerConnectPrompt(),
       ledgerReadingPrompt(),
-      ledgerOnboardError("nope"),
+      ledgerOnboardError("nope", "ledger-openzeppelin"),
     ]) {
       expect(html).toContain('class="onboard-hero');
       expect(html).toContain("onboard-actions");

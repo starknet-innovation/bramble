@@ -34,12 +34,15 @@ import type {
   LedgerPubKeyEntry,
 } from "@mc-wallet/wallet-model/accounts";
 import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@mc-wallet/wallet-model/ledger-path";
-import type {
-  LedgerCandidate,
-  LedgerCandidateState,
-  LedgerOnboardAddKind,
-  LedgerOnboardController,
-  LedgerOnboardControllerDeps,
+import {
+  deviceContractFor,
+  deviceRouteFor,
+  isDeviceRoute,
+  type LedgerCandidate,
+  type LedgerCandidateState,
+  type LedgerOnboardAddKind,
+  type LedgerOnboardController,
+  type LedgerOnboardControllerDeps,
 } from "./onboard-types";
 
 /**
@@ -200,7 +203,11 @@ export const createLedgerOnboardController = (
       }
     } catch (error) {
       if (epoch === flowEpoch) {
-        deps.render({ kind: "error", message: ledgerMessage(asLedgerRejection(error).code) });
+        deps.render({
+          kind: "error",
+          message: ledgerMessage(asLedgerRejection(error).code),
+          retry: deviceRouteFor(accountContractType),
+        });
       }
     } finally {
       if (session) {
@@ -250,7 +257,11 @@ export const createLedgerOnboardController = (
       (error) => {
         busy = false;
         if (epoch === flowEpoch) {
-          deps.render({ kind: "error", message: ledgerMessage(asLedgerRejection(error).code) });
+          deps.render({
+            kind: "error",
+            message: ledgerMessage(asLedgerRejection(error).code),
+            retry: deviceRouteFor(accountContractType),
+          });
         }
       },
     );
@@ -346,15 +357,15 @@ export const createLedgerOnboardController = (
       await deps.refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not add the account.";
-      deps.render({ kind: "error", message });
+      deps.render({ kind: "error", message, retry: contractType });
     } finally {
       busy = false;
     }
   };
 
   const choose = (kind: LedgerOnboardAddKind): void => {
-    if (kind === "ledger-argent" || kind === "ledger-openzeppelin") {
-      accountContractType = kind === "ledger-argent" ? "argent" : "openzeppelin";
+    if (isDeviceRoute(kind)) {
+      accountContractType = deviceContractFor(kind);
       resetState();
       deps.render({ kind: "connect" });
     } else if (kind === "argent" || kind === "openzeppelin") {
@@ -389,6 +400,16 @@ export const createLedgerOnboardController = (
     },
     loadMore() {
       void loadPage(obtainMore, nextIndex, false);
+    },
+    // The device routes retry straight back into enumeration, as their own
+    // "Try again" always did; every other route re-enters through `choose`.
+    retry(kind) {
+      if (isDeviceRoute(kind)) {
+        accountContractType = deviceContractFor(kind);
+        startConnect();
+        return;
+      }
+      choose(kind);
     },
     select(kind) {
       selectedAddKind = kind;

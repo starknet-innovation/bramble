@@ -146,13 +146,13 @@ export const ledgerDevicePicker = (devices: readonly LedgerDeviceChoice[]): stri
  * A device error during onboarding, with the catalog message and a retry,
  * centred in the overlay shell.
  */
-export const ledgerOnboardError = (message: string): string =>
+export const ledgerOnboardError = (message: string, retry: LedgerOnboardAddKind): string =>
   onboardHero(
     icon("alert"),
     `<h1>Something went wrong</h1>
       <p class="review-flag">${escapeHtml(message)}</p>`,
     `${button({
-      attributes: { "data-ledger-onboard-connect": true },
+      attributes: { "data-ledger-onboard-retry": retry },
       icon: "refresh",
       label: "Try again",
       variant: "secondary",

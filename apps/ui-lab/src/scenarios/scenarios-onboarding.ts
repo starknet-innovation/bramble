@@ -379,7 +379,7 @@ export const ledgerOnboardingScenario: WalletScenario = {
       state: { added: 1, retryable: 1, staleDuplicates: false },
     },
     {
-      content: () => ledgerOnboardError(ledgerMessage("no-app-open")),
+      content: () => ledgerOnboardError(ledgerMessage("no-app-open"), "ledger-openzeppelin"),
       id: "error",
       label: "Device recovery",
       narrative: "The failure names the missing Starknet app and retains both retry and cancel.",

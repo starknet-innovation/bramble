@@ -135,6 +135,11 @@ export const createLedgerOnboardRuntime = (
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-onboard-connect]")
       ?.addEventListener("click", () => controller.connect());
+    const retryButton = mount.querySelector<HTMLButtonElement>("[data-ledger-onboard-retry]");
+    const retryKind = retryButton?.dataset["ledgerOnboardRetry"];
+    if (retryButton && isAddKind(retryKind)) {
+      retryButton.addEventListener("click", () => controller.retry(retryKind));
+    }
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-onboard-cancel]")
       ?.addEventListener("click", () => controller.cancel());
@@ -165,7 +170,7 @@ export const createLedgerOnboardRuntime = (
     if (view.kind === "picker") {
       return ledgerAccountPicker(view.candidates, view.selected, view.message);
     }
-    return ledgerOnboardError(view.message);
+    return ledgerOnboardError(view.message, view.retry);
   };
 
   const render = (view: LedgerOnboardView | null): void => {
