@@ -86,6 +86,8 @@ provider.getEstimateFeeBulk = (async () => [
 export type MultisigHarnessOptions = {
   readonly beforeAccountDeployment?: () => Promise<void> | void;
   readonly beforeSubmitPrepared?: () => Promise<void> | void;
+  readonly deploymentBalance?: string | null;
+  readonly deploymentStatus?: boolean;
   readonly failPreferencesAfterSubmit?: boolean;
   readonly getConfig?: () => {
     readonly classHash: string;
@@ -198,13 +200,20 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
         return { overallFee: "44", unit: "FRI" };
       },
       async getDeploymentStatus() {
-        return true;
+        return options.deploymentStatus ?? true;
       },
       async getNftOwner() {
         return harnessAccountA.address;
       },
-      async getTokenBalances() {
-        return [];
+      async getTokenBalances({ tokens }) {
+        const balance = options.deploymentBalance;
+        return balance === null || balance === undefined
+          ? []
+          : tokens.map((token) => ({
+              ...token,
+              balance,
+              formatted: balance,
+            }));
       },
       async getTokenMetadata() {
         return { decimals: 18, name: "Ether", symbol: "ETH" };

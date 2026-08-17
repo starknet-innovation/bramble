@@ -197,6 +197,37 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(detail).not.toContain('data-ms-home-tab="assets"');
   });
 
+  test("replaces disabled Prepare with a resumable deployment action", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const record = {
+      ...fixture.record,
+      deployment: { salt: "0x5", signerPublicKeys: [signer.publicKeyX], threshold: 1 },
+    };
+    const undeployed = { config: null, deployed: false, record } as const;
+
+    const home = multisigDetailFlow(
+      fixture.status,
+      signer,
+      undeployed,
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(home).toContain('data-view="multisig-deploy"');
+    expect(home).toContain("Deployment required");
+    expect(home).not.toContain('data-view="multisig-propose"');
+
+    const deployment = multisigDeployFlow(fixture.status, signer, true, null, undeployed);
+    expect(deployment).toContain("saved signer set, threshold, and salt are restored");
+    expect(deployment).toContain(`value="${signer.publicKeyX}"`);
+    expect(deployment).toContain('name="threshold"');
+    expect(deployment).toContain('value="0x5"');
+    expect(deployment).toContain(`value="${signer.id}"`);
+  });
+
   test("disables signing when fresh on-chain authority is unavailable", async () => {
     const fixture = await makeArgentMultisigFixture();
     const html = multisigDetailFlow(

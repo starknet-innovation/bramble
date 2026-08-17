@@ -17,6 +17,7 @@ import {
 } from "@mc-wallet/multisig/repository";
 import { normalizeArgentMultisigConfig } from "@mc-wallet/starknet/account-contracts";
 import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
@@ -296,6 +297,7 @@ export const readSubmitIntentInput = (message: unknown): { readonly intentId: st
 export type ArgentMultisigDeploymentReview = ArgentMultisigDeployConfig & {
   readonly address: string;
   readonly fee: FeeEstimate;
+  readonly feeAffordability: FeeAffordability;
   readonly name?: string;
   readonly networkId: StarknetNetworkId;
   readonly signerAccountId: string;
@@ -307,6 +309,7 @@ const readDeploymentReview = (value: unknown): ArgentMultisigDeploymentReview | 
     !hasOnlyKnownKeys(value, [
       "address",
       "fee",
+      "feeAffordability",
       "name",
       "networkId",
       "salt",
@@ -316,6 +319,9 @@ const readDeploymentReview = (value: unknown): ArgentMultisigDeploymentReview | 
     ]) ||
     !isCanonicalNonZeroFelt(value["address"]) ||
     !isFeeEstimate(value["fee"]) ||
+    (value["feeAffordability"] !== "insufficient" &&
+      value["feeAffordability"] !== "ok" &&
+      value["feeAffordability"] !== "unknown") ||
     !isName(value["name"]) ||
     !isStarknetNetworkId(value["networkId"]) ||
     !isAccountId(value["signerAccountId"]) ||
@@ -327,6 +333,7 @@ const readDeploymentReview = (value: unknown): ArgentMultisigDeploymentReview | 
     address: value["address"],
     ...deployConfigFrom(value),
     fee: value["fee"],
+    feeAffordability: value["feeAffordability"],
     ...(value["name"] === undefined ? {} : { name: value["name"] }),
     networkId: value["networkId"],
     signerAccountId: value["signerAccountId"],
@@ -338,7 +345,7 @@ const readDeploymentReview = (value: unknown): ArgentMultisigDeploymentReview | 
  */
 export const readReviewDeploymentInput = (
   message: unknown,
-): Omit<ArgentMultisigDeploymentReview, "address" | "fee"> | null => {
+): Omit<ArgentMultisigDeploymentReview, "address" | "fee" | "feeAffordability"> | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [

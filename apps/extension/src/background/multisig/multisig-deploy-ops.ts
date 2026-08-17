@@ -7,6 +7,7 @@ import {
 } from "@mc-wallet/multisig/repository";
 import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
+import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { signerForContext } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
@@ -18,6 +19,7 @@ import {
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { readStrkBalance } from "../transactions/fee-guard";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import {
   type ArgentMultisigDeploymentReview,
@@ -54,6 +56,7 @@ const deploymentView = (record: DeployableArgentRecord) => ({
     signerGuids: record.deployment.signerPublicKeys.map(argentSignerGuid),
     threshold: record.deployment.threshold,
   },
+  deployed: false,
   record,
 });
 
@@ -107,7 +110,7 @@ const claimDeployment = async (
 
 const deploymentContext = async (
   deps: MultisigOpsDeps,
-  input: Omit<ArgentMultisigDeploymentReview, "address" | "fee">,
+  input: Omit<ArgentMultisigDeploymentReview, "address" | "fee" | "feeAffordability">,
 ) => {
   const authorized = captureSessionAuthorization(deps.session);
   const active = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
@@ -132,7 +135,7 @@ const deploymentContext = async (
   if (!(await multisigRpc(deps).isClassDeclared({ rpcUrls }))) {
     return { error: "stable Argent Multisig 0.2 class is not declared on this network" } as const;
   }
-  return { active, authorized, rpcUrls, signer } as const;
+  return { active, authorized, preferences, rpcUrls, signer } as const;
 };
 
 const reviewDeployment = async (
@@ -149,7 +152,11 @@ const reviewDeployment = async (
   }
   const address = (await import("@mc-wallet/multisig/deploy")).predictArgentMultisigAddress(input);
   const reviewBase = { ...input, address };
-  const account = recordForReview({ ...reviewBase, fee: { overallFee: "0", unit: "FRI" } });
+  const account = recordForReview({
+    ...reviewBase,
+    fee: { overallFee: "0", unit: "FRI" },
+    feeAffordability: "unknown",
+  });
   const estimate = deps.runtimeRpc.estimateAccountDeploymentFee;
   if (!estimate) {
     return { error: "Argent multisig deployment review unavailable" };
@@ -165,8 +172,25 @@ const reviewDeployment = async (
   if (!context.authorized.isCurrent()) {
     return { error: "wallet locked" };
   }
-  const deploymentReview = { ...reviewBase, fee };
-  deps.multisigDeploymentReviews.put(deploymentReview);
+  const feeAffordability = resolveFeeAffordability({
+    balance: await readStrkBalance(
+      deps,
+      { address, networkId: input.networkId },
+      context.preferences,
+    ),
+    fee,
+  });
+  if (!context.authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
+  const deploymentReview = { ...reviewBase, fee, feeAffordability };
+  if (feeAffordability !== "insufficient") {
+    try {
+      await deps.multisigDeploymentReviews.put(deploymentReview);
+    } catch {
+      return { error: "Argent multisig deployment review unavailable" };
+    }
+  }
   return { deploymentReview, ok: true };
 };
 
@@ -179,11 +203,20 @@ const submitDeployment = async (
     return { error: "invalid Argent multisig deployment request" };
   }
   const { review } = input;
+  if (review.feeAffordability === "insufficient") {
+    return { error: "Argent multisig deployment address needs STRK before deployment" };
+  }
   const record = await checkedDeploymentRecord(review);
   if (!record) {
     return { error: "Argent multisig deployment review address mismatch" };
   }
-  if (!deps.multisigDeploymentReviews.take(review)) {
+  let reviewAvailable = false;
+  try {
+    reviewAvailable = await deps.multisigDeploymentReviews.take(review);
+  } catch {
+    return { error: "Argent multisig deployment review unavailable" };
+  }
+  if (!reviewAvailable) {
     return { error: "Argent multisig deployment must exactly match a fresh fee review" };
   }
   const context = await deploymentContext(deps, review);

@@ -11,6 +11,7 @@ import {
 } from "@mc-wallet/multisig/repository";
 import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
@@ -24,6 +25,8 @@ import {
  */
 export type ArgentMultisigView = {
   readonly config: ArgentMultisigConfig | null;
+  /** Fresh deployment status; null or absent means the network read failed. */
+  readonly deployed?: boolean | null;
   readonly record: ArgentMultisigRecord;
 };
 
@@ -42,6 +45,7 @@ export type ArgentMultisigIntentPackage = {
 export type ArgentMultisigDeploymentReview = {
   readonly address: string;
   readonly fee: FeeEstimate;
+  readonly feeAffordability: FeeAffordability;
   readonly name?: string;
   readonly networkId: StarknetNetworkId;
   readonly salt: string;
@@ -104,8 +108,11 @@ const isConfig = (value: unknown): value is ArgentMultisigConfig => {
 
 const isView = (value: unknown): value is ArgentMultisigView =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["config", "record"]) &&
+  hasOnlyKnownKeys(value, ["config", "deployed", "record"]) &&
   isArgentMultisigRecord(value["record"]) &&
+  (value["deployed"] === undefined ||
+    value["deployed"] === null ||
+    typeof value["deployed"] === "boolean") &&
   (value["config"] === null || isConfig(value["config"]));
 
 const isIntentPackage = (value: unknown): value is ArgentMultisigIntentPackage =>
@@ -191,6 +198,7 @@ export const isArgentMultisigDeploymentReviewResponse = (
     hasOnlyKnownKeys(review, [
       "address",
       "fee",
+      "feeAffordability",
       "name",
       "networkId",
       "salt",
@@ -200,6 +208,9 @@ export const isArgentMultisigDeploymentReviewResponse = (
     ]) &&
     canonicalNonZeroFelt(review["address"]) &&
     isFeeEstimate(review["fee"]) &&
+    (review["feeAffordability"] === "insufficient" ||
+      review["feeAffordability"] === "ok" ||
+      review["feeAffordability"] === "unknown") &&
     (review["name"] === undefined ||
       (typeof review["name"] === "string" &&
         review["name"].length > 0 &&

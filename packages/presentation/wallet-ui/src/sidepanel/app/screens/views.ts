@@ -129,6 +129,7 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
       context.account,
       context.multisigClassDeclared,
       context.preferences,
+      selectedMultisig(context),
     );
   }
   if (

@@ -43,6 +43,7 @@ import {
   createApprovalSurfaceOpener,
 } from "./approvals/approval-surface";
 import { createApprovalQueue } from "./approvals/approvals";
+import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
 import {
   type OnboardingSurfaceBrowser,
   openOnboardingOnInstall,
@@ -115,6 +116,7 @@ const sessionStore = (() => {
     return undefined;
   }
 })();
+const multisigDeploymentReviews = createArgentMultisigDeploymentReviews(sessionStore);
 // The vault store is created up front so the unlock session can drop its
 // cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
 // operations for the life of an unlock rather than re-derived every time.
@@ -271,6 +273,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   prices: priceService,
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
+  multisigDeploymentReviews,
   multisigStore: multisigLog,
 });
 

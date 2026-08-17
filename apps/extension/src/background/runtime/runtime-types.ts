@@ -356,6 +356,7 @@ type RequestAccountsResponse =
  */
 type ArgentMultisigView = {
   readonly config: ArgentMultisigConfig | null;
+  readonly deployed: boolean | null;
   readonly record: ArgentMultisigRecord;
 };
 

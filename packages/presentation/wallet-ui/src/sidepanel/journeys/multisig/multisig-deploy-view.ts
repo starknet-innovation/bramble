@@ -6,6 +6,8 @@ import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { inputControl, textField } from "@mc-wallet/ui-kit/fields";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
@@ -36,12 +38,13 @@ type SignerKeySource = {
   readonly address: string;
   readonly label: string;
   readonly publicKeyX: string;
-  readonly source: "Saved contact" | "Wallet account";
+  readonly source: "Deployment setup" | "Saved contact" | "Wallet account";
 };
 
 const signerKeySources = (
   accounts: readonly AccountRef[],
   preferences: WalletPreferences | null,
+  deploymentKeys: readonly string[],
 ): readonly SignerKeySource[] => {
   const seen = new Set<string>();
   return [
@@ -59,6 +62,12 @@ const signerKeySources = (
         publicKeyX: entry.publicKeyX ?? "",
         source: "Saved contact" as const,
       })) ?? []),
+    ...deploymentKeys.map((publicKeyX) => ({
+      address: publicKeyX,
+      label: `Signer ${accountLabel(publicKeyX)}`,
+      publicKeyX,
+      source: "Deployment setup" as const,
+    })),
   ].filter(({ publicKeyX }) => {
     if (!publicKeyX || seen.has(publicKeyX)) return false;
     seen.add(publicKeyX);
@@ -66,7 +75,11 @@ const signerKeySources = (
   });
 };
 
-const selectedSignerRow = (source: SignerKeySource, selected: boolean): string => `
+const selectedSignerRow = (
+  source: SignerKeySource,
+  selected: boolean,
+  onlySigner: boolean,
+): string => `
   <div class="multisig-selected-signer" data-signer-public-key="${escapeHtml(source.publicKeyX)}" role="listitem"${selected ? "" : " hidden"}>
     <span class="option-avatar">${accountAvatar(source.address)}</span>
     <span class="option-copy">
@@ -75,18 +88,21 @@ const selectedSignerRow = (source: SignerKeySource, selected: boolean): string =
     </span>
     ${iconButton({
       attributes: { "data-remove-signer-public-key": source.publicKeyX },
-      disabled: selected,
+      disabled: selected && onlySigner,
       icon: "x",
       label: `Remove ${source.label}`,
       variant: "ghost",
     })}
   </div>`;
 
-const signerKeyOptions = (sources: readonly SignerKeySource[], selectedPublicKey: string): string =>
+const signerKeyOptions = (
+  sources: readonly SignerKeySource[],
+  selectedPublicKeys: readonly string[],
+): string =>
   sources
     .map(
       ({ address, label, publicKeyX, source }) => `
-        <button class="option-row multisig-key-source" data-add-signer-public-key="${escapeHtml(publicKeyX)}" type="button"${publicKeyX === selectedPublicKey ? " hidden" : ""}>
+        <button class="option-row multisig-key-source" data-add-signer-public-key="${escapeHtml(publicKeyX)}" type="button"${selectedPublicKeys.some((key) => sameFelt(key, publicKeyX)) ? " hidden" : ""}>
           <span class="option-avatar">${accountAvatar(address)}</span>
           <span class="option-copy">
             <strong>${escapeHtml(label)}</strong>
@@ -106,6 +122,7 @@ export const multisigDeployFlow = (
   account: AccountRef | null,
   classState: boolean | "error" | null,
   preferences: WalletPreferences | null = null,
+  selectedMultisig: ArgentMultisigView | null = null,
 ): string => {
   if (!account) {
     return (
@@ -114,7 +131,15 @@ export const multisigDeployFlow = (
     );
   }
   const accounts = status.accounts.filter((candidate) => candidate.networkId === status.networkId);
-  const signerSources = signerKeySources(accounts, preferences);
+  const savedDeployment =
+    selectedMultisig?.deployed === false ? selectedMultisig.record.deployment : undefined;
+  const selectedPublicKeys = savedDeployment?.signerPublicKeys ?? [account.publicKeyX];
+  const deploymentSigner = savedDeployment
+    ? accounts.find((candidate) =>
+        savedDeployment.signerPublicKeys.some((key) => sameFelt(key, candidate.publicKeyX)),
+      )
+    : account;
+  const signerSources = signerKeySources(accounts, preferences, selectedPublicKeys);
   if (classState === false) {
     return (
       flowHeader("Deploy Argent multisig", status) +
@@ -155,16 +180,34 @@ export const multisigDeployFlow = (
               ? '<p class="review-flag" role="alert">Class availability could not be verified. Deployment remains disabled.</p>'
               : ""
         }
+        ${
+          savedDeployment
+            ? '<p class="review-flag" role="note">Deployment required. The saved signer set, threshold, and salt are restored below.</p>'
+            : ""
+        }
+        ${
+          savedDeployment && !deploymentSigner
+            ? '<p class="review-flag" role="alert">None of this wallet\'s accounts is a saved deployment signer. Import one before deploying.</p>'
+            : ""
+        }
         <form id="multisig-deploy-form">
-          ${textField({ label: "Name (optional)", maxlength: 48, name: "name" })}
+          ${textField({ label: "Name (optional)", maxlength: 48, name: "name", value: savedDeployment ? (selectedMultisig?.record.name ?? "") : "" })}
           <section class="multisig-signer-set" aria-labelledby="multisig-signer-set-title">
             <div class="multisig-signer-set-head">
               <strong id="multisig-signer-set-title">Signer set</strong>
-              <span class="hint" data-signer-count>1 signer</span>
+              <span class="hint" data-signer-count>${selectedPublicKeys.length} signer${selectedPublicKeys.length === 1 ? "" : "s"}</span>
             </div>
-            <input name="signerPublicKeys" type="hidden" value="${escapeHtml(account.publicKeyX)}" />
+            <input name="signerPublicKeys" type="hidden" value="${escapeHtml(selectedPublicKeys.join(" "))}" />
             <div class="multisig-selected-signers" data-selected-signers role="list" aria-live="polite">
-              ${signerSources.map((source) => selectedSignerRow(source, source.publicKeyX === account.publicKeyX)).join("")}
+              ${signerSources
+                .map((source) =>
+                  selectedSignerRow(
+                    source,
+                    selectedPublicKeys.some((key) => sameFelt(key, source.publicKeyX)),
+                    selectedPublicKeys.length === 1,
+                  ),
+                )
+                .join("")}
             </div>
             <details class="disclosure multisig-signer-sources">
               <summary>
@@ -173,7 +216,7 @@ export const multisigDeployFlow = (
               </summary>
               <div class="disclosure-body">
                 <div class="option-list" role="group" aria-label="Available signer identities">
-                  ${signerKeyOptions(signerSources, account.publicKeyX)}
+                  ${signerKeyOptions(signerSources, selectedPublicKeys)}
                 </div>
                 <div class="multisig-manual-signer">
                   ${inputControl({
@@ -209,18 +252,18 @@ export const multisigDeployFlow = (
               </div>
             </template>
           </section>
-          ${textField({ inputmode: "numeric", label: "Signatures required", name: "threshold", required: true, value: "1" })}
-          ${textField({ className: "mono", label: "Deployment salt", name: "salt", required: true, spellcheck: false, value: "0x0" })}
+          ${textField({ inputmode: "numeric", label: "Signatures required", name: "threshold", required: true, value: String(savedDeployment?.threshold ?? 1) })}
+          ${textField({ className: "mono", label: "Deployment salt", name: "salt", required: true, spellcheck: false, value: savedDeployment?.salt ?? "0x0" })}
           <div class="multisig-deployment-signer-field" role="group" aria-label="Deployment signer">
             <span class="context-label">Deployment signer</span>
-            <input name="signerAccountId" type="hidden" value="${escapeHtml(account.id)}" />
+            <input name="signerAccountId" type="hidden" value="${escapeHtml(deploymentSigner?.id ?? "")}" />
             <div class="option-list">
-              ${accounts.map((candidate) => deploymentSignerOption(candidate, preferences, candidate.id === account.id)).join("")}
+              ${accounts.map((candidate) => deploymentSignerOption(candidate, preferences, candidate.id === deploymentSigner?.id)).join("")}
             </div>
             <span class="hint">Must match a signer key and authorizes this deployment only.</span>
           </div>
           <div id="multisig-deploy-review" aria-live="polite"></div>
-          ${button({ disabled: classState !== true, label: "Review deployment", type: "submit" })}
+          ${button({ disabled: classState !== true || !deploymentSigner, label: "Review deployment", type: "submit" })}
           <p id="multisig-deploy-result" role="status"></p>
         </form>
       </section>`,

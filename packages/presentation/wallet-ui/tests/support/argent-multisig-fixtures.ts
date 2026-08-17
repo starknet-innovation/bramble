@@ -93,6 +93,7 @@ export const makeArgentMultisigFixture = async (
       signerGuids,
       threshold: 1,
     },
+    deployed: true,
     record,
   };
   const signature = ec.starkCurve.sign(prepared.transactionHash, PRIVATE_KEY);
@@ -111,6 +112,7 @@ export const makeArgentMultisigFixture = async (
     deploymentReview: {
       address: record.address,
       fee: { overallFee: "44", unit: "FRI" },
+      feeAffordability: "ok",
       name: "Treasury",
       networkId: record.networkId,
       salt: "0x0",

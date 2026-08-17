@@ -135,6 +135,68 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(app.querySelector("[data-signer-count]")?.textContent).toBe("2 signers");
   });
 
+  test("keeps an unfunded deployment in review instead of offering broadcast", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const client = await testClient({
+      reviewDeployment: async () => ({
+        ...fixture.deploymentReview,
+        feeAffordability: "insufficient",
+      }),
+    });
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      client,
+      fixture.status,
+    );
+
+    app.querySelector<HTMLFormElement>("#multisig-deploy-form")?.requestSubmit();
+    await flush();
+
+    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
+      "Check funding again",
+    );
+    expect(app.querySelector("#multisig-deploy-result")?.textContent).toContain(
+      "Fund the predicted address",
+    );
+    expect(app.querySelector(".multisig-deployment-target code")?.textContent).not.toBe(
+      fixture.deploymentReview.address,
+    );
+    expect(
+      app.querySelector(".multisig-deployment-target [data-copy]")?.getAttribute("data-copy"),
+    ).toBe(fixture.deploymentReview.address);
+  });
+
+  test("keeps deployment failures in a copyable toast and resets the review action", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const raw = "RPC: starknet_addDeployAccountTransaction: Resources bounds exceed balance (0).";
+    const client = await testClient({
+      deployMultisig: async () => {
+        throw new Error(raw);
+      },
+    });
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      client,
+      fixture.status,
+    );
+    const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+    form?.requestSubmit();
+    await flush();
+    form?.requestSubmit();
+    await flush();
+
+    expect(app.querySelector("#multisig-deploy-result")?.textContent).not.toContain("RPC:");
+    expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain("Fund 0x");
+    expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();
+    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
+      "Review deployment",
+    );
+  });
+
   test("registers an existing account with its address and current signer authority", async () => {
     const fixture = await makeArgentMultisigFixture();
     const captured: unknown[] = [];
@@ -316,6 +378,8 @@ describe("bindMultisigs frozen-intent forms", () => {
     const client = await testClient();
     const app = mount(
       multisigPortfolio({
+        authorityAvailable: true,
+        canDeploy: false,
         canSign: true,
         data: EMPTY_MULTISIG_PORTFOLIO,
         intents: "<p>Intent panel</p>",

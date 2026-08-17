@@ -4,6 +4,7 @@
  * authority, deployment availability, and recovery states must be directly
  * inspectable before the shared-account experience can ship.
  */
+import { isRecord } from "@mc-wallet/core/json";
 import {
   type ArgentMultisigView,
   bindMultisigs,
@@ -29,11 +30,41 @@ const base: DashboardOptions = {
   selectedMultisigId: argentMultisig.record.id,
 };
 
-const bindFixtureMultisig = (context: FrameContext): void => {
+const bindFixtureMultisig = (
+  context: FrameContext,
+  feeAffordability: "insufficient" | "ok" = "ok",
+): void => {
   const runtime = {
-    sendMessage: async (): Promise<unknown> => ({
-      error: "UI Lab blocks non-fixture runtime requests",
-    }),
+    sendMessage: async (message: unknown): Promise<unknown> => {
+      if (
+        isRecord(message) &&
+        message["type"] === "wallet.reviewArgentMultisigDeployment" &&
+        typeof message["networkId"] === "string" &&
+        typeof message["salt"] === "string" &&
+        typeof message["signerAccountId"] === "string" &&
+        Array.isArray(message["signerPublicKeys"]) &&
+        message["signerPublicKeys"].every((key) => typeof key === "string") &&
+        Number.isSafeInteger(message["threshold"])
+      ) {
+        return {
+          deploymentReview: {
+            address: argentMultisig.record.address,
+            fee: { overallFee: "252237000000000000", unit: "FRI" },
+            feeAffordability,
+            ...(typeof message["name"] === "string" && message["name"].length > 0
+              ? { name: message["name"] }
+              : {}),
+            networkId: message["networkId"],
+            salt: message["salt"],
+            signerAccountId: message["signerAccountId"],
+            signerPublicKeys: message["signerPublicKeys"],
+            threshold: message["threshold"],
+          },
+          ok: true,
+        };
+      }
+      return { error: "UI Lab blocks non-fixture runtime requests" };
+    },
   };
   bindMultisigs({
     app: context.app,
@@ -45,6 +76,16 @@ const bindFixtureMultisig = (context: FrameContext): void => {
     wallet: createSidepanelRuntime(runtime),
   });
 };
+
+const prepareDeploymentReview =
+  (feeAffordability: "insufficient" | "ok") =>
+  async (context: FrameContext): Promise<void> => {
+    bindFixtureMultisig(context, feeAffordability);
+    const form = context.app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+    if (!form) throw new Error("Missing production multisig deployment form");
+    form.requestSubmit();
+    await nextTurn();
+  };
 
 const revealIntentPanel = async (context: FrameContext): Promise<void> => {
   bindFixtureMultisig(context);
@@ -74,6 +115,11 @@ const checkpoint = (
 });
 
 const unavailableAuthority: ArgentMultisigView = { ...argentMultisig, config: null };
+const undeployedMultisig: ArgentMultisigView = {
+  ...argentMultisig,
+  config: null,
+  deployed: false,
+};
 const changedAuthority: ArgentMultisigView = {
   ...argentMultisig,
   config: {
@@ -152,6 +198,40 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     ),
     prepare: bindFixtureMultisig,
   },
+  {
+    ...checkpoint(
+      "deploy-reviewed",
+      "Reviewed deployment",
+      "The predicted address, irreversible authority, fee ceiling, and exact constructor fit the extension surface before confirmation.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { class: "declared", funding: "ready", threshold: 2 },
+    ),
+    prepare: prepareDeploymentReview("ok"),
+  },
+  {
+    ...checkpoint(
+      "deploy-funding",
+      "Funding required",
+      "An unfunded counterfactual address is caught before broadcast and names the recovery action.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { class: "declared", funding: "required", threshold: 2 },
+    ),
+    prepare: prepareDeploymentReview("insufficient"),
+  },
+  checkpoint(
+    "home-deployment-required",
+    "Deployment required",
+    "An undeployed saved account replaces the dead Prepare action with the exact next step and explains why transactions are blocked.",
+    { multisigs: [undeployedMultisig], view: "multisig-home" },
+    { action: "deploy", deployed: false },
+  ),
+  checkpoint(
+    "deploy-resume",
+    "Resume saved deployment",
+    "The wallet restores the original signer set, threshold, salt, and eligible deployment signer instead of making the user reconstruct them.",
+    { multisigs: [undeployedMultisig], view: "multisig-deploy" },
+    { constructor: "restored", deployed: false },
+  ),
   checkpoint(
     "home",
     "Shared portfolio",

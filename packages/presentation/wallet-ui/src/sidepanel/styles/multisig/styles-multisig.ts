@@ -34,7 +34,32 @@ export const MULTISIG_STYLES = `
   }
   .multisig-deploy-section,
   #multisig-deploy-form,
-  #multisig-deploy-form > label { min-width: 0; }
+  #multisig-deploy-form > label,
+  #multisig-deploy-review,
+  #multisig-deploy-review > * { min-width: 0; }
+  #multisig-deploy-review {
+    display: grid;
+    gap: ${SPACE.md};
+    max-width: 100%;
+    overflow: hidden;
+  }
+  #multisig-deploy-review > *,
+  #multisig-deploy-form > button { max-width: 100%; }
+  .multisig-deployment-target {
+    align-items: center;
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .multisig-deployment-target > span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .multisig-deployment-target code {
+    min-width: 0;
+    overflow: hidden;
+    text-align: right;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  .multisig-deployment-target .icon-button { height: 32px; min-height: 32px; width: 32px; }
   .multisig-signer-set {
     background: var(--mc-panel);
     border-radius: ${RADIUS.lg};

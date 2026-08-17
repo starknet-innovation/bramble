@@ -391,13 +391,25 @@ export const multisigDetailFlow = (
   }
   const { record } = view;
   const options = localSignerOptions(view, status.accounts, preferences);
+  const canDeploy =
+    view.deployed === false &&
+    record.deployment !== undefined &&
+    status.accounts.some(
+      (account) =>
+        account.networkId === record.networkId &&
+        record.deployment?.signerPublicKeys.some((key) => sameFelt(key, account.publicKeyX)),
+    );
   const openCount = intents.filter(
     (intent) =>
       intent.accountId === record.id && (intent.state === "collecting" || intent.state === "ready"),
   ).length;
   const authorityWarning =
     loadError || view.config === null
-      ? '<div class="review-panel" role="alert"><p class="review-flag">Current on-chain signer authority is unavailable. Signing is disabled.</p></div>'
+      ? view.deployed === false
+        ? screen === "multisig-home"
+          ? ""
+          : '<div class="review-panel" role="status"><p class="review-flag">This account is not deployed yet. Deploy it before preparing or signing transactions.</p></div>'
+        : '<div class="review-panel" role="alert"><p class="review-flag">Current on-chain signer authority is unavailable. Signing is disabled.</p></div>'
       : "";
   if (screen === "multisig-detail") {
     return (
@@ -412,8 +424,11 @@ export const multisigDetailFlow = (
     screen,
     `${authorityWarning}
       ${multisigPortfolio({
+        authorityAvailable: view.config !== null,
+        canDeploy,
         canSign: options.length > 0 && view.config !== null,
         data: portfolio,
+        ...(view.deployed === undefined ? {} : { deployed: view.deployed }),
         intents: compactIntentList(record, intents, preferences),
         openCount,
         preferences,

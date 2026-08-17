@@ -6,9 +6,15 @@ import {
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
-import { buttonBusy, errorMessage, renderFragment, showToast } from "../../shared/dom";
+import {
+  bindCopyButtons,
+  buttonBusy,
+  errorMessage,
+  renderFragment,
+  showToast,
+} from "../../shared/dom";
 import { icon } from "../../shared/icons";
-import { accountLabel } from "../../shared/parts";
+import { accountLabel, copyButton } from "../../shared/parts";
 import {
   formatFeeEstimate,
   reviewConstraints,
@@ -33,6 +39,18 @@ const reviews = new WeakMap<
   }
 >();
 const reviewGenerations = new WeakMap<HTMLFormElement, number>();
+const EXPIRED_DEPLOYMENT_REVIEW =
+  "Argent multisig deployment must exactly match a fresh fee review";
+
+const deploymentFailureToast = (raw: string, review: ArgentMultisigDeploymentReview): string => {
+  if (raw === EXPIRED_DEPLOYMENT_REVIEW) {
+    return "The fee review expired. Review the deployment again before confirming.";
+  }
+  if (/exceed balance|insufficient.*balance|address needs STRK/i.test(raw)) {
+    return `Fund ${accountLabel(review.address)} with at least ${formatFeeEstimate(review.fee)}, then review the deployment again.`;
+  }
+  return raw;
+};
 
 const publicKeys = (raw: string): readonly string[] =>
   raw
@@ -206,7 +224,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       input = deploymentSetup(form);
     } catch (error) {
       const message = errorMessage(error, "Invalid deployment fields");
-      deps.setResult("multisig-deploy-result", message);
+      deps.setResult("multisig-deploy-result", "Check the deployment fields and try again.");
       showToast(message, "error", form);
       return;
     }
@@ -229,8 +247,14 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         },
         (error: unknown) => {
           const message = errorMessage(error, "Deployment failed");
-          deps.setResult("multisig-deploy-result", message);
-          showToast(message, "error", form);
+          deps.setResult(
+            "multisig-deploy-result",
+            message === EXPIRED_DEPLOYMENT_REVIEW
+              ? "Fee review expired. Review the deployment again."
+              : "Deployment failed. Review the error, then try again.",
+          );
+          button?.lastChild?.replaceWith("Review deployment");
+          showToast(deploymentFailureToast(message, reviewed), "error", form);
           buttonBusy(button, false);
         },
       );
@@ -251,12 +275,18 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       .reviewDeployment(input)
       .then((next) => {
         if (!isCurrent()) return;
-        reviews.set(form, { input, review: next });
+        const fundingRequired = next.feeAffordability === "insufficient";
+        if (!fundingRequired) reviews.set(form, { input, review: next });
         if (reviewRoot) {
           renderFragment(
             reviewRoot,
-            `${reviewOutcome(`Deploy a ${next.threshold}-of-${next.signerPublicKeys.length} Argent multisig at ${next.address}.`)}
-            ${reviewPanel([], "Deployment creates a new on-chain shared account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
+            `${reviewOutcome(`Deploy a ${next.threshold}-of-${next.signerPublicKeys.length} Argent multisig.`)}
+            <div class="multisig-deployment-target" aria-label="Predicted multisig address">
+              <span>Predicted address</span>
+              <code title="${escapeHtml(next.address)}">${escapeHtml(accountLabel(next.address))}</code>
+              ${copyButton(next.address, "Copy predicted multisig address")}
+            </div>
+            ${reviewPanel([], fundingRequired ? `Funding is required first. Send at least ${formatFeeEstimate(next.fee)} to the predicted address, then check again.` : "Deployment creates a new on-chain shared account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
             ${reviewConstraints(`Maximum network fee: ${formatFeeEstimate(next.fee)}`)}
             <details class="disclosure" data-disclosure="multisig-deployment-technical">
               <summary>
@@ -275,15 +305,26 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
               </div>
             </details>`,
           );
+          bindCopyButtons(reviewRoot);
         }
-        button?.lastChild?.replaceWith("Deploy reviewed account");
-        deps.setResult("multisig-deploy-result", "Review every field, then confirm.");
+        button?.lastChild?.replaceWith(
+          fundingRequired ? "Check funding again" : "Deploy reviewed account",
+        );
+        deps.setResult(
+          "multisig-deploy-result",
+          fundingRequired
+            ? "Fund the predicted address, then check again."
+            : "Review every field, then confirm.",
+        );
         buttonBusy(button, false);
       })
       .catch((error: unknown) => {
         if (!isCurrent()) return;
         const message = errorMessage(error, "Deployment review failed");
-        deps.setResult("multisig-deploy-result", message);
+        deps.setResult(
+          "multisig-deploy-result",
+          "Deployment review failed. Check the error and retry.",
+        );
         showToast(message, "error", form);
         buttonBusy(button, false);
       });

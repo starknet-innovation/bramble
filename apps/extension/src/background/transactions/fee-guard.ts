@@ -8,7 +8,6 @@
  */
 
 import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   STARKNET_NETWORKS,
   STRK_TOKEN_ADDRESS,
@@ -42,7 +41,7 @@ const strkToken = (networkId: StarknetNetworkId, preferences: WalletPreferences)
  */
 export const readStrkBalance = async (
   deps: { readonly runtimeRpc: Pick<RuntimeRpc, "getTokenBalances"> },
-  account: AccountRef,
+  account: { readonly address: string; readonly networkId: StarknetNetworkId },
   preferences: WalletPreferences,
 ): Promise<string | null> => {
   try {

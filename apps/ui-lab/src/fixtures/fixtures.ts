@@ -217,11 +217,17 @@ export const argentMultisig: ArgentMultisigView = {
     signerGuids: argentSigners.signerPublicKeys.map(argentSignerGuid),
     threshold: argentSigners.threshold,
   },
+  deployed: true,
   record: {
     accountContractType: "argent-multisig",
     address: "0x71234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
     classHash: ARGENT_MULTISIG_CONTRACT.classHash,
     currentConfig: argentSigners,
+    deployment: {
+      salt: "0x0",
+      signerPublicKeys: argentSigners.signerPublicKeys,
+      threshold: argentSigners.threshold,
+    },
     id: "SN_MAIN:0x71234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
     name: "Operations treasury",
     networkId: "SN_MAIN",

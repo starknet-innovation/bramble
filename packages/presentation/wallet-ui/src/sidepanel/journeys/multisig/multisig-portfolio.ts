@@ -123,8 +123,11 @@ const collectiblesPanel = (
  * multisig-specific primary actions, then Tokens, Collectibles, and intents.
  */
 export const multisigPortfolio = (input: {
+  readonly authorityAvailable: boolean;
+  readonly canDeploy: boolean;
   readonly canSign: boolean;
   readonly data: MultisigPortfolioData;
+  readonly deployed?: boolean | null;
   readonly openCount: number;
   readonly preferences: WalletPreferences | null;
   readonly intents: string;
@@ -133,12 +136,22 @@ export const multisigPortfolio = (input: {
   ${portfolioHero(input.record, input.preferences, input.data)}
   <section class="home-actions multisig-primary-actions" aria-label="Multisig actions">
     <div class="action-row">
-      ${actionTile("multisig-propose", "Prepare", "plus", input.canSign)}
+      ${input.canDeploy ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Prepare", "plus", input.canSign)}
       ${actionTile("multisig-receive", "Receive", "qrCode", true)}
       ${actionTile("multisig-signers", "Signers", "users", true)}
       ${actionTile("multisig-track", "Import", "search", true)}
     </div>
-    ${input.canSign ? "" : '<p class="hint">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'}
+    ${
+      input.canDeploy
+        ? '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Deploy this saved account on Starknet before preparing a transaction.</p>'
+        : input.deployed === false
+          ? '<p class="hint multisig-action-note">This watched address is not deployed, and its original constructor is not available in this wallet.</p>'
+          : !input.authorityAvailable
+            ? '<p class="hint multisig-action-note">Deployment and signer authority could not be verified. Retry when network access is restored.</p>'
+            : input.canSign
+              ? ""
+              : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
+    }
   </section>
   <section class="home-tabs multisig-portfolio-tabs" data-active-tab="assets" aria-label="Shared account">
     <div class="tab-bar">

@@ -1,6 +1,4 @@
-/**
- * End-to-end frozen-intent collection and replay tests.
- */
+/** End-to-end frozen-intent collection and replay tests. */
 import { describe, expect, test } from "bun:test";
 import {
   type ArgentMultisigSigningIntent,
@@ -76,6 +74,26 @@ describe("Argent multisig background lifecycle", () => {
     });
   });
 
+  test("distinguishes an undeployed saved account from unavailable signer authority", async () => {
+    const { handler } = await makeMultisigHarness({
+      deploymentStatus: false,
+      getConfig() {
+        throw new Error("contract not found");
+      },
+    });
+    await expect(
+      handler({ type: "wallet.multisigs" }, harnessExtensionSender),
+    ).resolves.toMatchObject({
+      multisigs: [
+        {
+          config: null,
+          deployed: false,
+          record: { id: HARNESS_MULTISIG_ID },
+        },
+      ],
+      ok: true,
+    });
+  });
   test("derives a bounded multi-call summary from exact calls", async () => {
     const { handler } = await makeMultisigHarness();
     const prepared = await handler(

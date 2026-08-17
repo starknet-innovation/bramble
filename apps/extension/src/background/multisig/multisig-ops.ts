@@ -96,6 +96,7 @@ const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigIn
  */
 type ArgentMultisigView = {
   readonly config: ArgentMultisigConfig | null;
+  readonly deployed: boolean | null;
   readonly record: ArgentMultisigRecord;
 };
 
@@ -217,17 +218,21 @@ const listMultisigs = async (deps: MultisigOpsDeps, message: unknown): Promise<R
   );
   const multisigs: ArgentMultisigView[] = await Promise.all(
     records.map(async (record) => {
+      const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences);
       try {
         const config = await multisigRpc(deps).getConfig({
           address: record.address,
-          rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
+          rpcUrls,
         });
         const refreshed = await reconcileArgentCurrentConfig(deps, record, config);
         await markObservedArgentIntentOutcomes(deps, refreshed);
         await markChangedIntentsStale(deps.multisigStore, record.id, config);
-        return { config, record: refreshed };
+        return { config, deployed: true, record: refreshed };
       } catch {
-        return { config: null, record };
+        const deployed = await deps.runtimeRpc
+          .getDeploymentStatus({ accountAddress: record.address, rpcUrls })
+          .catch(() => null);
+        return { config: null, deployed, record };
       }
     }),
   );
@@ -264,7 +269,11 @@ const addMultisig = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   const stored = await addRecord(deps.multisigStore, record, context.authorized.isCurrent);
   if (stored.result === "unauthorized") return { error: "wallet locked" };
   return stored.result === "stored"
-    ? { intents: [], multisig: { config: context.config, record: stored.record }, ok: true }
+    ? {
+        intents: [],
+        multisig: { config: context.config, deployed: true, record: stored.record },
+        ok: true,
+      }
     : { error: `Argent multisig registry ${stored.result}` };
 };
 
@@ -294,7 +303,7 @@ const refreshMultisig = async (
   const intents = (await deps.multisigStore.listIntents()).filter(
     (intent) => intent.accountId === context.record.id,
   );
-  return { intents, multisig: { config, record: refreshed }, ok: true };
+  return { intents, multisig: { config, deployed: true, record: refreshed }, ok: true };
 };
 
 const removeMultisig = async (
