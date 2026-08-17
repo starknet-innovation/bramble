@@ -313,6 +313,7 @@ describe("bindMultisigs frozen-intent forms", () => {
   test("imports the complete validated intent package without projecting fields", async () => {
     const fixture = await makeArgentMultisigFixture();
     const imported: ArgentMultisigIntentPackage[] = [];
+    const opened: unknown[] = [];
     const client = await testClient({
       async importIntent(intentPackage) {
         imported.push(intentPackage);
@@ -326,10 +327,12 @@ describe("bindMultisigs frozen-intent forms", () => {
       </form>`,
       client,
       fixture.status,
+      { openDetail: (...args) => opened.push(args) },
     );
     app.querySelector<HTMLFormElement>("#multisig-track-form")?.requestSubmit();
     await flush();
     expect(imported).toEqual([fixture.intentPackage]);
+    expect(opened).toEqual([[fixture.record.id, "multisig-detail"]]);
   });
 
   test("binds a signature to the frozen intent id and explicitly selected signer", async () => {

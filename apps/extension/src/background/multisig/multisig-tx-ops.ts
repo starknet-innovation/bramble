@@ -78,7 +78,7 @@ const importedIntentReview = async (deps: MultisigOpsDeps, intent: ArgentMultisi
     deps,
     resolved.context,
     intent.prepared.calls,
-    resolved.config,
+    resolved.publicConfig,
   );
   if (review && "error" in review) return review;
   const existing = await deps.multisigStore.getIntent(intent.id);
@@ -222,7 +222,7 @@ const resolveLocalSigning = async (
     return { error: "selected signer account is unavailable on this network" };
   }
   const guid = argentSignerGuid(signer.publicKeyX);
-  if (!resolved.config.chain.signerGuids.includes(guid)) {
+  if (!resolved.config.signerGuids.includes(guid)) {
     return { error: "selected account is not a current Argent multisig signer" };
   }
   if (intent.signatures.some((existing) => argentSignerGuid(existing.publicKey) === guid)) {
@@ -394,7 +394,7 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
   try {
     transactionHash = await multisigRpc(deps).submitPreparedInvoke({
       config: {
-        signerPublicKeys: submission.resolved.config.signerPublicKeys,
+        signerPublicKeys: submission.intent.signatures.map((signature) => signature.publicKey),
         threshold: submission.resolved.config.threshold,
       },
       prepared: submission.intent.prepared,

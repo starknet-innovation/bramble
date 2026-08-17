@@ -185,6 +185,8 @@ describe("Argent multisig list and exact-intent detail", () => {
     );
     expect(home).toContain('data-view="multisig-detail"');
     expect(home).toContain("1 of 1 signatures");
+    expect(home).toContain('class="ghost small tab-more" data-view="multisig-track"');
+    expect(home).toContain("Import intent");
     expect(home).not.toContain('data-ms-submit="');
 
     const detail = multisigDetailFlow(
@@ -252,6 +254,22 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(home).not.toContain("Current on-chain signer authority is unavailable");
     expect(home).toContain("signer authority could not be verified");
     expect(home).toContain('data-view="multisig-propose" type="button" disabled');
+  });
+
+  test("places the external intent handoff inside the empty Intents tab", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(home).toContain("Import a package from another signer to review it here");
+    expect(home).toContain('class="ghost small tab-more" data-view="multisig-track"');
+    expect(home.match(/data-view="multisig-track"/g)).toHaveLength(1);
   });
 
   test("suppresses every signing action when fresh authority differs from the frozen snapshot", async () => {

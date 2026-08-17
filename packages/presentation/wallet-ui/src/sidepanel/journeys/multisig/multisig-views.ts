@@ -346,25 +346,37 @@ const compactIntentList = (
   preferences: WalletPreferences | null,
 ): string => {
   const scoped = intents.filter((intent) => intent.accountId === record.id);
-  return scoped.length === 0
-    ? emptyState("No frozen signing intents are stored for this account.")
-    : `<ul class="menu-list multisig-intent-list">${scoped
-        .map((intent) => {
-          const assets = intentReviewAssets(intent, record, preferences);
-          const assetGlyphs =
-            assets.length === 0
-              ? ""
-              : `<span class="multisig-intent-assets" aria-hidden="true">${assets.map((asset) => tokenGlyph(asset.address, asset.symbol)).join("")}</span>`;
-          return `<li class="multisig-intent-row${assets.length === 0 ? "" : " has-assets"}">${menuRow(
-            {
-              attributes: { "data-view": "multisig-detail" },
-              icon: "users",
-              label: intent.summary,
-              supportingText: `${intent.state} · ${intent.signatures.length} of ${intent.configSnapshot.threshold} signatures`,
-            },
-          )}${assetGlyphs}</li>`;
-        })
-        .join("")}</ul>`;
+  const list =
+    scoped.length === 0
+      ? emptyState(
+          "No signing intents yet. Import a package from another signer to review it here.",
+        )
+      : `<ul class="menu-list multisig-intent-list">${scoped
+          .map((intent) => {
+            const assets = intentReviewAssets(intent, record, preferences);
+            const assetGlyphs =
+              assets.length === 0
+                ? ""
+                : `<span class="multisig-intent-assets" aria-hidden="true">${assets.map((asset) => tokenGlyph(asset.address, asset.symbol)).join("")}</span>`;
+            return `<li class="multisig-intent-row${assets.length === 0 ? "" : " has-assets"}">${menuRow(
+              {
+                attributes: { "data-view": "multisig-detail" },
+                icon: "users",
+                label: intent.summary,
+                supportingText: `${intent.state} · ${intent.signatures.length} of ${intent.configSnapshot.threshold} signatures`,
+              },
+            )}${assetGlyphs}</li>`;
+          })
+          .join("")}</ul>`;
+  return `${list}${button({
+    attributes: { "data-view": "multisig-track" },
+    className: "tab-more",
+    icon: "chevronRight",
+    iconPosition: "after",
+    label: "Import intent",
+    size: "small",
+    variant: "ghost",
+  })}`;
 };
 
 /**

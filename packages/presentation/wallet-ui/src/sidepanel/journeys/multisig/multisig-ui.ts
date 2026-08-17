@@ -409,8 +409,9 @@ const bindImport = (deps: MultisigUiDeps): void => {
       return;
     }
     run(deps, button, "multisig-track-result", async () => {
-      await deps.multisig.importIntent(intentPackage);
-      return "Frozen intent verified and imported";
+      const result = await deps.multisig.importIntent(intentPackage);
+      deps.openDetail(result.intent.accountId, "multisig-detail");
+      return "Intent verified and ready to review";
     });
   });
 };

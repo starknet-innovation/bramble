@@ -140,7 +140,6 @@ export const multisigPortfolio = (input: {
       ${input.canDeploy ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Prepare", "plus", input.canSign)}
       ${actionTile("multisig-receive", "Receive", "qrCode", true)}
       ${actionTile("multisig-signers", "Signers", "users", true)}
-      ${actionTile("multisig-track", "Import", "search", true)}
     </div>
     ${
       input.canDeploy

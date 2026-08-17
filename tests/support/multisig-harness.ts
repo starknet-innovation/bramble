@@ -105,6 +105,7 @@ export type MultisigHarnessOptions = {
   readonly onSigned?: () => void;
   readonly submitAccountDeployment?: () => Promise<string>;
   readonly submitPrepared?: (transactionHash: string) => Promise<string>;
+  readonly watchedOnly?: boolean;
 };
 
 /**
@@ -282,8 +283,12 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     accountContractType: "argent-multisig",
     address: HARNESS_MULTISIG,
     classHash: ARGENT_MULTISIG_CONTRACT.classHash,
-    currentConfig: { signerPublicKeys: HARNESS_KEYS, threshold: 2 },
-    deployment: { salt: "0x0", signerPublicKeys: HARNESS_KEYS, threshold: 2 },
+    ...(options.watchedOnly
+      ? {}
+      : {
+          currentConfig: { signerPublicKeys: HARNESS_KEYS, threshold: 2 },
+          deployment: { salt: "0x0", signerPublicKeys: HARNESS_KEYS, threshold: 2 },
+        }),
     id: HARNESS_MULTISIG_ID,
     networkId: "SN_MAIN",
   });

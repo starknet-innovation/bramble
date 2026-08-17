@@ -22,6 +22,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
 import {
   markObservedArgentIntentOutcomes,
+  matchesArgentPublicConfig,
   reconcileArgentCurrentConfig,
   sameArgentSignerGuids,
   storedArgentPublicConfig,
@@ -155,10 +156,20 @@ export const configSnapshot = (config: ArgentMultisigConfig): ArgentMultisigConf
 });
 
 /**
- * Requires fresh chain authority to match the constructor public keys retained
- * by this wallet. Signer GUIDs are one-way, so a changed signer set cannot be
- * safely prepared until its public keys are imported through a future config
- * package rather than guessed locally.
+ * Reads the fresh signer authority for one pinned Argent multisig.
+ */
+export const currentChainConfigFor = async (
+  deps: MultisigOpsDeps,
+  context: Pick<ArgentMultisigContext, "record" | "rpcUrls">,
+): Promise<ArgentMultisigConfig> =>
+  multisigRpc(deps).getConfig({
+    address: context.record.address,
+    rpcUrls: context.rpcUrls,
+  });
+
+/**
+ * Requires fresh chain authority to match the public keys retained by this
+ * wallet. Preparation and signer-management review must not guess those keys.
  */
 export const currentConfigFor = async (
   deps: MultisigOpsDeps,
@@ -172,12 +183,8 @@ export const currentConfigFor = async (
   if (!current) {
     throw new Error("Argent multisig public signer configuration is unavailable");
   }
-  const chain = await multisigRpc(deps).getConfig({
-    address: context.record.address,
-    rpcUrls: context.rpcUrls,
-  });
-  const guids = current.signerPublicKeys.map(argentSignerGuid);
-  if (chain.threshold !== current.threshold || !sameArgentSignerGuids(chain.signerGuids, guids)) {
+  const chain = await currentChainConfigFor(deps, context);
+  if (!matchesArgentPublicConfig(current, chain)) {
     throw new Error("Argent multisig signer configuration changed on-chain");
   }
   return {

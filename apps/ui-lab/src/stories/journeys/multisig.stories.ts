@@ -138,7 +138,19 @@ export const DeployResume: LabStory = {
   },
 };
 export const Home = checkpointStory("Shared portfolio", "multisig", "home");
-export const HomeEmpty = checkpointStory("Shared portfolio without work", "multisig", "home-empty");
+export const HomeEmpty: LabStory = {
+  args: { checkpointId: "home-empty", scenarioId: "multisig" },
+  name: "Home · import first intent",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector('[data-view="multisig-track"]')).toHaveTextContent(
+      "Import intent",
+    );
+    await expect(body?.querySelector(".multisig-primary-actions")).not.toHaveTextContent("Import");
+  },
+};
 export const HomeIntents: LabStory = {
   args: { checkpointId: "home-intents", scenarioId: "multisig" },
   name: "Home · condensed open work",

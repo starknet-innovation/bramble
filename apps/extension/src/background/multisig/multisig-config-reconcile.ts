@@ -30,7 +30,13 @@ export const storedArgentPublicConfig = (
   record: ArgentMultisigRecord,
 ): ArgentMultisigPublicConfig | null => record.currentConfig ?? record.deployment ?? null;
 
-const matchesChain = (current: ArgentMultisigPublicConfig, chain: ArgentMultisigConfig): boolean =>
+/**
+ * Checks whether retained public signer keys match one fresh on-chain GUID view.
+ */
+export const matchesArgentPublicConfig = (
+  current: ArgentMultisigPublicConfig,
+  chain: ArgentMultisigConfig,
+): boolean =>
   current.threshold === chain.threshold &&
   sameArgentSignerGuids(current.signerPublicKeys.map(argentSignerGuid), chain.signerGuids);
 
@@ -54,7 +60,7 @@ const matchingCandidateSuffix = (
       const applied = candidates.slice(start);
       for (const candidate of applied)
         next = nextArgentMultisigPublicConfig(next, candidate.change);
-      if (matchesChain(next, chain)) return { applied, next };
+      if (matchesArgentPublicConfig(next, chain)) return { applied, next };
     } catch {
       // An already-applied prefix may no longer be valid against `current`.
     }
@@ -72,7 +78,7 @@ export const reconcileArgentCurrentConfig = async (
   chain: ArgentMultisigConfig,
 ): Promise<ArgentMultisigRecord> => {
   const current = storedArgentPublicConfig(record);
-  if (!current || matchesChain(current, chain)) return record;
+  if (!current || matchesArgentPublicConfig(current, chain)) return record;
   const accepted = new Set(
     (await deps.activity.list())
       .filter(
