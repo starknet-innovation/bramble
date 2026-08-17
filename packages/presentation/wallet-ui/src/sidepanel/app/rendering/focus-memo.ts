@@ -9,6 +9,32 @@ import { CREATE_GROUP_PANEL } from "../../journeys/settings/group-state";
 import { isWalletView } from "../../shared/parts";
 
 const FOCUS_NAMES = ["address", "amount", "label", "mnemonic", "recipient", "vaultPassphrase"];
+const REPAINT_DRAFT_NAMES = new Set([
+  "address",
+  "amount",
+  "calldata",
+  "contractAddress",
+  "deploymentSalt",
+  "discoveryUrl",
+  "entrypoint",
+  "feeToken",
+  "indexerUrl",
+  "intentPackage",
+  "label",
+  "name",
+  "ohttpRelayUrl",
+  "paymasterUrl",
+  "poolAddress",
+  "proverUrl",
+  "recipient",
+  "rpcUrl",
+  "salt",
+  "signature",
+  "signerPublicKeys",
+  "subaccountAnonymizerAddress",
+  "threshold",
+  "tokenId",
+]);
 
 // A data-attribute selector with the value quoted and any embedded quote or
 // backslash escaped, so ids that carry a colon (e.g. `networkId:address`) or a
@@ -125,7 +151,7 @@ export const focusMemo = (): readonly string[] => {
     return [`[data-view="${active.dataset["view"]}"]`];
   }
   const name = active.getAttribute("name");
-  if (name && FOCUS_NAMES.includes(name)) {
+  if (name && (FOCUS_NAMES.includes(name) || REPAINT_DRAFT_NAMES.has(name))) {
     return [`[name="${name}"]`];
   }
   return [];
@@ -205,6 +231,62 @@ const restoreGroupNameDraft = (root: Element | null, draft: GroupNameDraft | nul
   }
 };
 
+type ActiveDraft = {
+  readonly selectionEnd: number | null;
+  readonly selectionStart: number | null;
+  readonly selector: string;
+  readonly value: string;
+};
+
+// Only explicitly non-secret fields may cross a shell swap. Recovery phrases,
+// vault passphrases, imported keys, and file inputs are intentionally absent.
+const activeDraftMemo = (): ActiveDraft | null => {
+  const active = document.activeElement;
+  if (
+    !(
+      active instanceof HTMLInputElement ||
+      active instanceof HTMLTextAreaElement ||
+      active instanceof HTMLSelectElement
+    )
+  ) {
+    return null;
+  }
+  const name = active.getAttribute("name");
+  if (!name || !REPAINT_DRAFT_NAMES.has(name)) {
+    return null;
+  }
+  const [selector] = focusMemo();
+  if (!selector) {
+    return null;
+  }
+  return {
+    selectionEnd: active instanceof HTMLSelectElement ? null : active.selectionEnd,
+    selectionStart: active instanceof HTMLSelectElement ? null : active.selectionStart,
+    selector,
+    value: active.value,
+  };
+};
+
+const restoreActiveDraft = (root: Element | null, draft: ActiveDraft | null): void => {
+  if (!draft) {
+    return;
+  }
+  const field = root?.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+    draft.selector,
+  );
+  if (!field) {
+    return;
+  }
+  field.value = draft.value;
+  if (
+    !(field instanceof HTMLSelectElement) &&
+    draft.selectionStart !== null &&
+    draft.selectionEnd !== null
+  ) {
+    field.setSelectionRange(draft.selectionStart, draft.selectionEnd);
+  }
+};
+
 /**
  * Everything a full-shell repaint must carry across the DOM swap: the ordered
  * focus selectors and, when a group-name field is being edited, its in-progress
@@ -212,6 +294,7 @@ const restoreGroupNameDraft = (root: Element | null, draft: GroupNameDraft | nul
  * step rather than juggling the two concerns at the call site.
  */
 export type RepaintFocus = {
+  readonly activeDraft: ActiveDraft | null;
   readonly groupNameDraft: GroupNameDraft | null;
   readonly scrollTop: number;
   readonly selectors: readonly string[];
@@ -222,6 +305,7 @@ export type RepaintFocus = {
  * swap. Pair with {@link restoreRepaintFocus} around the innerHTML replacement.
  */
 export const captureRepaintFocus = (): RepaintFocus => ({
+  activeDraft: activeDraftMemo(),
   groupNameDraft: groupNameDraftMemo(),
   scrollTop: document.scrollingElement?.scrollTop ?? document.documentElement.scrollTop,
   selectors: focusMemo(),
@@ -239,4 +323,5 @@ export const restoreRepaintFocus = (root: Element | null, focus: RepaintFocus): 
   document.body.scrollTop = focus.scrollTop;
   restoreFocus(root, focus.selectors);
   restoreGroupNameDraft(root, focus.groupNameDraft);
+  restoreActiveDraft(root, focus.activeDraft);
 };

@@ -21,6 +21,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import { icon } from "../../shared/icons";
 import {
   accountDisplayName,
   dockScreen,
@@ -223,46 +224,64 @@ const intentCard = (
       ...(configReview ? { knownContracts: [view.record.address] } : {}),
     },
   );
-  return `<article class="allowance-row" data-ms-intent="${escapeHtml(intent.id)}">
-    <div class="row"><strong>Exact Starknet transaction</strong>${pill(intent.state)}</div>
-    <p class="hint"><strong>Locally decoded summary:</strong> ${escapeHtml(intent.summary)}</p>
-    <section aria-label="Decoded exact calls">
-      <p><strong>Decoded exact calls</strong></p>
-      ${reviewCallsList(transactionReview.calls.map((call) => call.summary))}
-    </section>
-    ${reviewPanel(riskFlagMessages(transactionReview.flags))}
-    ${receipt(
+  return `<article class="allowance-row multisig-intent" data-ms-intent="${escapeHtml(intent.id)}">
+    <header class="decision-head">
+      <span class="decision-seal">${icon("users")}</span>
+      <span><p class="decision-label">Reviewed intent</p><h2>${escapeHtml(intent.summary)}</h2></span>
+      ${pill(intent.state)}
+    </header>
+    ${reviewCallsList(transactionReview.calls.map((call) => call.summary))}
+    ${reviewPanel(
       [
-        {
-          label: "Transaction hash",
-          action: {
-            attributes: { "data-copy": intent.prepared.transactionHash },
-            icon: "copy",
-            label: "Copy transaction hash",
-          },
-          value: intent.prepared.transactionHash,
-          valueStyle: "code",
-        },
-        { label: "Sender", value: intent.prepared.senderAddress, valueStyle: "code" },
-        { label: "Chain ID", value: intent.prepared.chainId, valueStyle: "code" },
-        { label: "Nonce", value: intent.prepared.nonce, valueStyle: "code" },
+        ...riskFlagMessages(transactionReview.flags),
+        ...(hasFreshAuthority
+          ? []
+          : [
+              "The fresh on-chain signer authority does not exactly match this intent snapshot. Signing and submission are disabled.",
+            ]),
+      ],
+      "No additional wallet warnings were detected. Verify every call and signer before approving this shared transaction.",
+    )}
+    <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
+      <p class="decision-label">Maximum cost and constraints</p>
+      ${receipt([
         { label: "Maximum network fee", value: formatFeeEstimate(fee) },
         {
           label: "Signatures",
           value: `${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
         },
-        { label: "Calls", value: String(intent.prepared.calls.length) },
-      ],
-      { "data-ms-exact-identity": "true" },
-    )}
-    ${
-      hasFreshAuthority
-        ? ""
-        : '<div class="review-panel" role="alert"><p class="review-flag">The fresh on-chain signer authority does not exactly match this intent snapshot. Signing and submission are disabled.</p></div>'
-    }
-    ${configReview && view.record.currentConfig ? configReviewView(configReview, view.record.currentConfig) : ""}
-    <details><summary>Review exact calls</summary><ol class="allowance-list">${exactCalls(intent)}</ol></details>
-    <p class="hint">Verify the locally decoded details against the exact calls, sender, nonce, fee ceiling, and transaction hash.</p>
+      ])}
+    </section>
+    <details class="disclosure decision-technical" data-disclosure="multisig-intent-${escapeHtml(intent.id)}">
+      <summary>
+        <span class="menu-copy"><strong>Technical details</strong><small>Exact identity, calls, and configuration</small></span>
+        <span class="disclosure-mark">${icon("chevronRight")}</span>
+      </summary>
+      <div class="disclosure-body">
+        ${receipt(
+          [
+            {
+              label: "Transaction hash",
+              action: {
+                attributes: { "data-copy": intent.prepared.transactionHash },
+                icon: "copy",
+                label: "Copy transaction hash",
+              },
+              value: intent.prepared.transactionHash,
+              valueStyle: "code",
+            },
+            { label: "Sender", value: intent.prepared.senderAddress, valueStyle: "code" },
+            { label: "Chain ID", value: intent.prepared.chainId, valueStyle: "code" },
+            { label: "Nonce", value: intent.prepared.nonce, valueStyle: "code" },
+            { label: "Calls", value: String(intent.prepared.calls.length) },
+          ],
+          { "data-ms-exact-identity": "true" },
+        )}
+        ${configReview && view.record.currentConfig ? configReviewView(configReview, view.record.currentConfig) : ""}
+        <ol class="allowance-list">${exactCalls(intent)}</ol>
+      </div>
+    </details>
+    <p class="hint">Confirm only after the outcome, fee ceiling, signer threshold, and exact transaction identity agree.</p>
     ${
       options.length > 0 && canCollect
         ? selectField({

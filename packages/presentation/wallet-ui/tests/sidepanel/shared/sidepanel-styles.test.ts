@@ -5,7 +5,7 @@
  * the side panel UI.
  */
 import { describe, expect, test } from "bun:test";
-import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE, TYPE } from "@mc-wallet/ui-kit/tokens";
 import { SIDEPANEL_STYLES } from "../../../src/sidepanel/styles/index";
 
 describe("sidepanel styles", () => {
@@ -302,15 +302,18 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toContain("terminal-cta");
   });
 
-  test("the icon-only dock uses white and grey focus without icon containers", () => {
-    // The dock removes persistent text labels but retains names in accessible
-    // tooltip copy. White and muted grey distinguish state without a surface.
+  test("the labelled dock uses white and grey focus without icon containers", () => {
+    // Persistent labels make every destination recognizable; white and muted
+    // grey distinguish state without adding an active-state surface.
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--mc-text\)/,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*background/);
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*box-shadow/);
-    expect(SIDEPANEL_STYLES).toMatch(/\.nav-tooltip \{[^}]*opacity: 0;[^}]*visibility: hidden/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      new RegExp(`\\.nav-label \\{[^}]*font-size: ${TYPE.micro.size}`, "s"),
+    );
+    expect(SIDEPANEL_STYLES).not.toContain(".nav-tooltip");
     expect(SIDEPANEL_STYLES).not.toMatch(/\.tab-icon[^{}]*\{[^}]*background/s);
   });
 

@@ -30,9 +30,18 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
       if (!id) {
         return;
       }
+      const review = button
+        .closest(".allowance-row")
+        ?.querySelector<HTMLElement>("[data-allowance-review-for]");
       buttonBusy(button, true);
+      if (review) {
+        review.hidden = false;
+        review.textContent = REVIEWED_FEES.has(button)
+          ? "Submitting the reviewed revoke…"
+          : "Preparing the revoke and estimating its maximum fee…";
+      }
       if (result) {
-        result.textContent = "Submitting revoke...";
+        result.textContent = "";
       }
       const reviewedFee = REVIEWED_FEES.get(button);
       if (reviewedFee) REVIEWED_FEES.delete(button);
@@ -41,7 +50,8 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
           if (typeof response !== "string") {
             REVIEWED_FEES.set(button, response);
             const fee = formatFeeEstimate(response);
-            if (result) result.textContent = `Maximum network fee: ${fee}`;
+            if (review)
+              review.textContent = `Maximum network fee: ${fee}. Confirm to set this spender's allowance to zero.`;
             button.lastChild?.replaceWith(`Confirm revoke · ${fee}`);
             buttonBusy(button, false);
             return;
@@ -50,6 +60,8 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
           if (result) {
             result.textContent = `Submitted ${response}`;
           }
+          if (review)
+            review.textContent = "Revoke submitted. Activity will show its network status.";
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
@@ -58,6 +70,7 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
           if (result) {
             result.textContent = errorMessage(error, "Revoke failed");
           }
+          if (review) review.textContent = errorMessage(error, "Revoke failed");
           buttonBusy(button, false);
         },
       );

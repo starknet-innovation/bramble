@@ -245,6 +245,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     padding: ${SPACE.md};
   }
   .review-panel p { color: var(--mc-text); font-size: ${TYPE.label.size}; }
+  .review-panel .decision-label { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
 ${SIGN_REQUEST_STYLES}
   .review-flag { color: var(--mc-danger); font-size: ${TYPE.caption.size}; }
   .review-fee { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }

@@ -76,7 +76,7 @@ export const BASE_STYLES = `
   body.popup-surface #app { min-height: 600px; }
   h1, h2, h3, p, ul { margin: 0; }
   ul { list-style: none; padding: 0; }
-  h1 { font-size: ${TYPE.title.size}; font-weight: 700; letter-spacing: -0.02em; line-height: ${TYPE.title.line}; }
+  h1 { font-size: ${TYPE.display.size}; font-weight: 700; letter-spacing: -0.02em; line-height: ${TYPE.display.line}; }
   h2 { font-size: ${TYPE.title.size}; font-weight: 700; letter-spacing: -0.01em; line-height: ${TYPE.title.line}; }
   p { color: var(--mc-muted); }
   .shell {
@@ -304,7 +304,7 @@ export const BASE_STYLES = `
     padding: 2px 0 ${SPACE.xs};
   }
   .flow-title { display: grid; flex: 1; gap: 1px; min-width: 0; }
-  .flow-title h1 { font-size: ${TYPE.title.size}; }
+  .flow-title h1 { font-size: ${TYPE.display.size}; }
   .flow-title p {
     color: var(--mc-muted);
     font-size: ${TYPE.caption.size};

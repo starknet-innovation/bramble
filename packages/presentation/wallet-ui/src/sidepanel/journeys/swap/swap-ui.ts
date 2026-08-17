@@ -20,6 +20,7 @@ import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
+import { reviewPanel } from "../../shared/review-render";
 import { compactAmount, tokenGlyph } from "../portfolio/token-row";
 import {
   SWAP_LOSS_HIGH_RISK_PERCENT,
@@ -29,7 +30,7 @@ import {
   type SwapQuoteView,
   swapValueDeltaPercent,
 } from "./swap-client";
-import { bindSwapPicker, pickerSide, repaintSwapPicker, setPickerSide } from "./swap-picker";
+import { bindSwapPicker, repaintSwapPicker, setPickerSide } from "./swap-picker";
 import { swapConfirmReceipt } from "./swap-views";
 
 /**
@@ -252,20 +253,22 @@ const paintSwapStages = (root: Element, figures: SwapFigures): void => {
   });
   const calls = root.querySelector("#swap-call-review");
   if (calls) {
-    const warnings = preparation.flags.map(
-      (flag) => `<li class="swap-delta-bad">${escapeHtml(flag.message)}</li>`,
+    calls.innerHTML = `<ul class="review-calls">${preparation.summaries
+      .map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`)
+      .join(
+        "",
+      )}</ul><p class="hint">Review digest <code>${escapeHtml(preparation.payloadDigest.slice(0, 23))}…</code></p>`;
+  }
+  const risk = root.querySelector("#swap-risk-review");
+  if (risk) {
+    risk.innerHTML = reviewPanel(
+      preparation.flags.map((flag) => flag.message),
+      "No additional wallet warnings were detected. Verify the route outcome and minimum received before confirming.",
     );
-    calls.innerHTML = `<p class="eyebrow">Frozen executable calls</p><ul>${[
-      ...preparation.summaries.map((summary) => `<li>${escapeHtml(summary)}</li>`),
-      ...warnings,
-    ].join(
-      "",
-    )}</ul><p class="hint">Review digest <code>${escapeHtml(preparation.payloadDigest.slice(0, 23))}…</code></p>`;
   }
 };
 
-// Renders every dynamic region from module state. Called after each repaint
-// and after every imperative state change, so there is exactly one painter.
+// Renders every dynamic region after a repaint or imperative state change.
 const applySwapUi = (deps: SwapUiDeps, root: Element): void => {
   const figures = swapFigures(deps);
   paintSwapPanels(deps, root, figures);
@@ -374,12 +377,14 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     requestQuote(deps, root);
   });
   root.querySelector("#swap-sell-token")?.addEventListener("click", () => {
-    setPickerSide(pickerSide() === "sell" ? null : "sell");
+    setPickerSide("sell");
     repaintSwapPicker(deps, root);
+    root.querySelector<HTMLInputElement>("#swap-picker-search")?.focus();
   });
   root.querySelector("#swap-buy-token")?.addEventListener("click", () => {
-    setPickerSide(pickerSide() === "buy" ? null : "buy");
+    setPickerSide("buy");
     repaintSwapPicker(deps, root);
+    root.querySelector<HTMLInputElement>("#swap-picker-search")?.focus();
   });
   bindSwapPicker(deps, root, applySelection(deps, root));
   root.querySelector("#swap-review")?.addEventListener("click", () => {

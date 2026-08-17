@@ -7,7 +7,7 @@ import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { shortAddress } from "@mc-wallet/transactions/verify-decode";
 import { emptyState, pill } from "@mc-wallet/ui-kit/content";
 import { iconButton } from "@mc-wallet/ui-kit/controls";
-import type { IconName } from "@mc-wallet/ui-kit/icons";
+import { type IconName, icon } from "@mc-wallet/ui-kit/icons";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
@@ -67,6 +67,57 @@ export const WALLET_VIEWS = [
  */
 export type WalletView = (typeof WALLET_VIEWS)[number];
 
+const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
+  account: "Accounts",
+  activity: "Activity",
+  "address-book": "Address book",
+  allowances: "Token allowances",
+  "advanced-network": "Network services",
+  appearance: "Appearance",
+  backup: "Backup and restore",
+  "backup-export": "Backup export",
+  "backup-restore": "Backup restore",
+  "connected-sites": "Connected sites",
+  home: "Home",
+  "import-key": "Private-key import",
+  multisigs: "Multisig accounts",
+  "multisig-add": "Add multisig",
+  "multisig-deploy": "Deploy multisig",
+  "multisig-detail": "Multisig transaction",
+  "multisig-home": "Multisig portfolio",
+  "multisig-propose": "Prepare multisig transaction",
+  "multisig-receive": "Multisig receive",
+  "multisig-signers": "Multisig signers",
+  "multisig-track": "Track multisig transaction",
+  "multisig-watch": "Watch multisig",
+  network: "Networks",
+  nfts: "Collectibles",
+  "nft-detail": "Collectible details",
+  "nft-hidden": "Hidden collectibles",
+  "nft-send": "Send collectible",
+  "nft-watch": "Watch collectible",
+  privacy: "Private balances",
+  receive: "Receive",
+  requests: "Wallet requests",
+  "request-settings": "Request display",
+  reveal: "Recovery secrets",
+  security: "Security and permissions",
+  send: "Send",
+  settings: "Settings",
+  swap: "Swap",
+  tokens: "Tokens",
+  "token-add": "Add token",
+  "token-detail": "Token details",
+  "token-discover": "Discover tokens",
+};
+
+/**
+ * Returns the stable human label used when a task is paused or resumed. This
+ * mapping is presentation-only; navigation still validates against
+ * {@link WALLET_VIEWS}.
+ */
+export const walletViewLabel = (view: WalletView): string => WALLET_VIEW_LABELS[view];
+
 /**
  * Dock screens shown with the bottom navigation.
  */
@@ -82,6 +133,20 @@ export const isWalletView = (value: unknown): value is WalletView =>
  * Truncates a Starknet address for display.
  */
 export const accountLabel = (address: string): string => shortAddress(address);
+
+/**
+ * Renders a native, repaint-persistent explanation for protocol concepts. The
+ * copy is escaped and stays collapsed until requested, keeping expert detail
+ * available without making it part of the primary decision plane.
+ */
+export const contextHelp = (id: string, title: string, body: string): string =>
+  `<details class="disclosure context-help" data-disclosure="${escapeHtml(id)}">
+    <summary>
+      <span class="menu-copy"><strong>${escapeHtml(title)}</strong></span>
+      <span class="disclosure-mark">${icon("chevronRight")}</span>
+    </summary>
+    <div class="disclosure-body"><p>${escapeHtml(body)}</p></div>
+  </details>`;
 
 const NAME_ADJECTIVES = [
   "Amber",

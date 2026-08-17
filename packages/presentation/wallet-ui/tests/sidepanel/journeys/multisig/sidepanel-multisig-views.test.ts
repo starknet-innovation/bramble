@@ -57,8 +57,9 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("0 STRK");
     expect(html).toContain("transfer");
     expect(html).toContain("0xdef");
-    expect(html).toContain("Decoded exact calls");
-    expect(html).toContain("Locally decoded summary:");
+    expect(html).toContain("What will happen");
+    expect(html).toContain("Maximum cost and constraints");
+    expect(html).toContain("Technical details");
     expect(html).not.toContain("Collaborator note");
     expect(html).toContain('data-ms-sign="');
     expect(html).toContain("Copy intent package");
@@ -90,7 +91,7 @@ describe("Argent multisig list and exact-intent detail", () => {
       preferences,
     );
 
-    expect(html).toContain("Locally decoded summary:</strong> Looks harmless");
+    expect(html).toContain("<h2>Looks harmless</h2>");
     expect(html).toContain("effectively unlimited spending allowance");
     expect(html).toContain("0x9876…cdef is not a token or contact this wallet knows");
     expect(html).toContain("Allow 0x4567…cdef to spend");

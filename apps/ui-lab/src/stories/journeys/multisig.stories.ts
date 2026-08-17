@@ -1,13 +1,65 @@
-import { checkpointStory, LAB_META, type LabMeta } from "../../runtime/story-helpers";
+import { expect } from "storybook/test";
+import {
+  assertCheckpointReady,
+  checkpointStory,
+  LAB_META,
+  type LabMeta,
+  type LabStory,
+} from "../../runtime/story-helpers";
 
 const meta: LabMeta = {
   ...LAB_META,
-  args: { checkpointId: "multisig-home", scenarioId: "multisig" },
+  args: { checkpointId: "home", scenarioId: "multisig" },
   title: "Wallet journeys/09 Argent multisig",
 };
 
 export default meta;
 
-export const Accounts = checkpointStory("Watched accounts", "multisig", "multisig-home");
-export const Intent = checkpointStory("Prepare exact intent", "multisig", "multisig-propose");
-export const Deploy = checkpointStory("Deploy account", "multisig", "multisig-deploy");
+export const Empty = checkpointStory("No shared accounts", "multisig", "empty");
+export const Accounts = checkpointStory("Shared account list", "multisig", "list");
+export const ChooseSetup = checkpointStory("Choose setup path", "multisig", "add");
+export const Watch = checkpointStory("Watch existing account", "multisig", "watch");
+export const DeployUnavailable = checkpointStory(
+  "Deployment unavailable",
+  "multisig",
+  "deploy-class-check",
+);
+export const Deploy = checkpointStory("Review deployment inputs", "multisig", "deploy-ready");
+export const Home = checkpointStory("Shared portfolio", "multisig", "home");
+export const HomeEmpty = checkpointStory("Shared portfolio without work", "multisig", "home-empty");
+export const IntentCollecting = checkpointStory(
+  "Collect signatures",
+  "multisig",
+  "intent-collecting",
+);
+export const IntentReady: LabStory = {
+  args: { checkpointId: "intent-ready", scenarioId: "multisig" },
+  name: "Ready to submit",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector('[data-ms-home-tab="intents"]')).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(body?.querySelector("[data-ms-intent]")).toHaveTextContent(/Signatures\s*2 of 2/);
+    await expect(body?.querySelector("[data-ms-intent]")).toHaveTextContent("Risk and recovery");
+  },
+};
+export const IntentStale = checkpointStory("Stale transaction", "multisig", "intent-stale");
+export const AuthorityUnavailable = checkpointStory(
+  "Authority unavailable",
+  "multisig",
+  "authority-unavailable",
+);
+export const AuthorityChanged = checkpointStory(
+  "Authority changed",
+  "multisig",
+  "authority-changed",
+);
+export const Signers = checkpointStory("Current signer authority", "multisig", "signers");
+export const Track = checkpointStory("Import signing intent", "multisig", "track");
+export const Receive = checkpointStory("Receive into multisig", "multisig", "receive");
+export const Propose = checkpointStory("Prepare exact transaction", "multisig", "propose");
+export const SyncError = checkpointStory("Shared-account sync failure", "multisig", "sync-error");

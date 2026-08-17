@@ -5,12 +5,19 @@
  * budget; each binder is safe to call after every render and closes over the
  * shared state accessors passed in `ShellBindingDeps`.
  */
+import { escapeHtml } from "@mc-wallet/core/html";
 import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { WalletView } from "../app/screens/views";
 import type { SidepanelWallet } from "../runtime/runtime";
-import { buttonBusy, errorMessage, scopedStatus, showToast } from "../shared/dom";
-import { formatFeeEstimate } from "../shared/review-render";
+import { buttonBusy, errorMessage, renderFragment, scopedStatus, showToast } from "../shared/dom";
+import { icon } from "../shared/icons";
+import {
+  formatFeeEstimate,
+  reviewConstraints,
+  reviewOutcome,
+  reviewPanel,
+} from "../shared/review-render";
 
 const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
 
@@ -164,6 +171,7 @@ export const awaitDeployment = async (
  */
 export const bindDeploy = (deps: ShellBindingDeps): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#deploy-button");
+  const reviewPanelRoot = deps.app?.querySelector<HTMLElement>("#deploy-review");
   button?.addEventListener("click", () => {
     const scope = deps.deploymentScope?.() ?? null;
     buttonBusy(button, true);
@@ -178,6 +186,22 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         if (typeof response !== "string") {
           DEPLOYMENT_FEES.set(button, response);
           const fee = formatFeeEstimate(response);
+          if (reviewPanelRoot) {
+            const accountId = scope?.accountId ?? "Active account";
+            renderFragment(
+              reviewPanelRoot,
+              `${reviewOutcome("Deploy the selected account contract on the active network so it can submit transactions.")}
+              ${reviewPanel([], "Deployment is an on-chain, irreversible account-creation transaction. The account address and signing authority do not change.")}
+              ${reviewConstraints(`Maximum network fee: ${fee}`)}
+              <details class="disclosure" data-disclosure="account-deployment-technical">
+                <summary>
+                  <span class="menu-copy"><strong>Technical details</strong><small>Exact account identity</small></span>
+                  <span class="disclosure-mark">${icon("chevronRight")}</span>
+                </summary>
+                <div class="disclosure-body"><code>${escapeHtml(accountId)}</code></div>
+              </details>`,
+            );
+          }
           scopedStatus(button, `Maximum network fee: ${fee}`);
           button.lastChild?.replaceWith(`Confirm deployment · ${fee}`);
           buttonBusy(button, false);
@@ -192,6 +216,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
       },
       (error: unknown) => {
         DEPLOYMENT_FEES.delete(button);
+        if (reviewPanelRoot) renderFragment(reviewPanelRoot, "");
         showToast(errorMessage(error, "Deployment failed"), "error");
         scopedStatus(button, errorMessage(error, "Deployment failed"));
         buttonBusy(button, false);

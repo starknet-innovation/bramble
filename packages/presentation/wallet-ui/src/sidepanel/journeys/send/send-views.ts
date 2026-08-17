@@ -429,8 +429,8 @@ export const sendFlow = (
               </div>
               <div class="send-review-summary" id="send-review-summary"></div>
               <div class="send-review-fee" id="send-review-fee" aria-live="polite"></div>
-              <details class="send-review-disclosure">
-                <summary><span>Transaction details</span>${icon("chevronDown")}</summary>
+              <details class="send-review-disclosure" data-disclosure="send-technical-details">
+                <summary><span>Technical details</span>${icon("chevronDown")}</summary>
                 <div class="send-review-disclosure-body" id="review-panel"></div>
               </details>
               <p class="send-review-note">${canSend ? "Confirm only if the recipient, amount, and decoded action are correct." : "Send is unavailable."}</p>

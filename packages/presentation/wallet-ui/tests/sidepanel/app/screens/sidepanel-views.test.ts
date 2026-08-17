@@ -47,8 +47,8 @@ describe("sidepanel views", () => {
     expect(dock).not.toContain('data-view="receive"');
     expect(html).toContain('aria-controls="wallet-screen-home"');
     expect(html).toContain('aria-selected="true"');
-    expect(dock).toContain('class="nav-tooltip"');
-    expect(dock).not.toContain('class="tab-label"');
+    expect(dock).toContain('class="nav-label"');
+    expect(dock).not.toContain('class="nav-tooltip"');
   });
 
   test("home keeps the frequent actions together, not settings or activity", () => {
@@ -87,7 +87,10 @@ describe("sidepanel views", () => {
     expect(html).toContain('data-view="address-book"');
     expect(html).toContain('data-view="appearance"');
     expect(html).toContain('data-view="request-settings"');
-    expect(html).toContain('data-view="security"');
+    expect(html).toContain('data-view="connected-sites"');
+    expect(html).toContain('data-view="allowances"');
+    expect(html).toContain('data-view="backup"');
+    expect(html).toContain('data-view="reveal"');
     expect(html).not.toContain('id="active-network"');
     expect(html).not.toContain('id="active-account"');
     expect(html).not.toContain('data-theme-id="dark"');
@@ -409,16 +412,6 @@ describe("sidepanel views", () => {
 
     expect(html).toContain('id="new-account"');
     expect(html).toContain("Add account");
-  });
-
-  test("settings links to the reveal-secrets flow", () => {
-    expect(WALLET_VIEWS).toContain("reveal");
-    const html = dashboard("settings", status, [], preferences, { balances: [] });
-
-    expect(html).toContain('data-view="security"');
-    const security = dashboard("security", status, [], preferences, { balances: [] });
-    expect(security).toContain('data-view="reveal"');
-    expect(security).toContain("Reveal recovery secrets");
   });
 
   test("reveal flow re-authenticates and masks secrets until tapped", () => {

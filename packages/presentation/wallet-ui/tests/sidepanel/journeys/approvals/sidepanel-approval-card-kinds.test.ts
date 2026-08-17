@@ -198,7 +198,7 @@ describe("approvalCard renders each approval kind", () => {
       expect(html).toContain(input.title);
       expect(html).toContain(input.hint);
       expect(html).toContain("Exact private request");
-      expect(html).toContain("Technical request identity");
+      expect(html).toContain("Technical details");
       expect(html).toContain(input.action);
     });
   }

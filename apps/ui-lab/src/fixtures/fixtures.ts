@@ -1,3 +1,4 @@
+import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import {
   ARGENT_MULTISIG_CONTRACT,
@@ -29,7 +30,7 @@ export const softwareAccount: AccountRef = {
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
   id: `SN_MAIN:${SOFTWARE_ADDRESS}`,
   networkId: "SN_MAIN",
-  publicKeyX: "0x211",
+  publicKeyX: "0x5f679dacd8278105bd3b84a15548fe84079068276b0e84d6cc093eb5430f063",
   publicKeyY: "0x311",
 };
 
@@ -45,7 +46,7 @@ export const ledgerAccount: AccountRef = {
   },
   id: `SN_MAIN:${LEDGER_ADDRESS}`,
   networkId: "SN_MAIN",
-  publicKeyX: "0x411",
+  publicKeyX: "0x6509ed71b354b7125d61b6f3423cbfa33dd7a6b21f0878399a5713118f9e68e",
 };
 
 export const secondAccount: AccountRef = {
@@ -209,4 +210,75 @@ export const argentMultisig: ArgentMultisigView = {
     name: "Operations treasury",
     networkId: "SN_MAIN",
   },
+};
+
+const argentPrepared = {
+  accountDeploymentData: [],
+  calldata: [
+    "0x1",
+    "0x33068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
+    "0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e",
+    "0x3",
+    RECIPIENT_ADDRESS,
+    "0x17d7840",
+    "0x0",
+  ],
+  calls: [
+    {
+      calldata: [RECIPIENT_ADDRESS, "0x17d7840", "0x0"],
+      contractAddress: "0x33068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
+      entrypoint: "transfer",
+    },
+  ],
+  chainId: "0x534e5f4d41494e",
+  feeDataAvailabilityMode: "L1" as const,
+  nonce: "0x7",
+  nonceDataAvailabilityMode: "L1" as const,
+  paymasterData: [],
+  resourceBounds: {
+    l1DataGas: { maxAmount: "0x0", maxPricePerUnit: "0x0" },
+    l1Gas: { maxAmount: "0x1", maxPricePerUnit: "0x886c98b760000" },
+    l2Gas: { maxAmount: "0x0", maxPricePerUnit: "0x0" },
+  },
+  senderAddress: argentMultisig.record.address,
+  tip: "0x0",
+  transactionHash: "0x4b1aa1c77c968ac524cb4fd4a7bcf2c1999a770c5095397b82e4bcf14f3c4b6",
+  version: "0x3" as const,
+};
+
+export const argentCollectingIntent: ArgentMultisigSigningIntent = {
+  accountId: argentMultisig.record.id,
+  configSnapshot: {
+    classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+    signerGuids: argentMultisig.config?.signerGuids ?? [],
+    threshold: 2,
+  },
+  id: `${argentMultisig.record.id}:${argentPrepared.transactionHash}`,
+  prepared: argentPrepared,
+  signatures: [],
+  state: "collecting",
+  summary: "Send 25 USDC to Research treasury",
+};
+
+export const argentReadyIntent: ArgentMultisigSigningIntent = {
+  ...argentCollectingIntent,
+  signatures: argentSigners.signerPublicKeys.map((publicKey) =>
+    publicKey === softwareAccount.publicKeyX
+      ? {
+          publicKey,
+          r: "0x3ec43277e38eb646cc0a878a1e0cd255eb393522671a91dc31a9c8c0afb0e2f",
+          s: "0x75a22a60ee673a9849ae7a0c85ff4985867f296267f7ce08899deb42fce4032",
+        }
+      : {
+          publicKey,
+          r: "0x7b6aaffb16aa1af37b306510173918811dcc6e7e30728f6ac24865c06bdae50",
+          s: "0x3512e7d5d4b347e2fae55d8225de0e51cab4994533ad45e24de9c83c0d5f1ca",
+        },
+  ),
+  state: "ready",
+};
+
+export const argentStaleIntent: ArgentMultisigSigningIntent = {
+  ...argentCollectingIntent,
+  state: "stale",
 };

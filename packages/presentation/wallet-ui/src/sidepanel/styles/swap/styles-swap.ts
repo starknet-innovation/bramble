@@ -44,7 +44,11 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     padding: 0;
     width: 100%;
   }
-  input.swap-amount:focus-visible { background: transparent; outline: none; }
+  input.swap-amount:focus-visible {
+    background: transparent;
+    box-shadow: inset 0 -2px 0 var(--mc-focus-ring);
+    outline: none;
+  }
   @media (hover: hover) and (pointer: fine) {
     input.swap-amount:not(:disabled):hover { background: transparent; }
   }
@@ -166,7 +170,7 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     position: fixed;
     z-index: 15;
   }
-  .swap-sheet:not([hidden]) { animation: panel-enter ${MOTION.enterMs}ms var(--ease-out) both; }
+  .swap-sheet[data-closing="true"] { pointer-events: none; }
   .swap-sheet-head { align-items: center; display: flex; justify-content: space-between; }
   .swap-sheet-head h2 { flex: 1; text-align: center; }
   /* Symmetry spacer: the close button sits right, so the title centre-line

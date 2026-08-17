@@ -75,7 +75,7 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
         <p id="swap-warning" class="swap-warning" role="alert" hidden></p>
         <button id="swap-review" type="button" disabled>${icon("swap")}<span id="swap-review-label">Swap</span></button>
       </section>
-      <div id="swap-picker" class="swap-sheet" role="dialog" aria-modal="true" aria-label="Choose token" hidden>
+      <div id="swap-picker" class="swap-sheet" role="dialog" aria-modal="true" aria-labelledby="swap-picker-title" hidden>
         <header class="swap-sheet-head">
           <h2 id="swap-picker-title">Receive</h2>
           ${iconButton({
@@ -99,10 +99,20 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
         ${emptyState("", "status", { hidden: true, id: "swap-picker-status" })}
       </div>
       <section class="swap-stage" id="swap-confirm" hidden>
-        <p class="eyebrow">Confirm swap</p>
+        <header class="decision-head">
+          <span class="decision-seal">${icon("shield")}</span>
+          <span><p class="decision-label">Reviewed intent</p><h2>Confirm this swap</h2></span>
+        </header>
         ${receipt([], { id: "swap-confirm-receipt" })}
-        <div id="swap-call-review"></div>
-        <p class="hint">These exact calls were built and frozen before this screen. Confirm submits them once; the route cannot change after review.</p>
+        <div id="swap-risk-review"></div>
+        <details class="disclosure decision-technical" data-disclosure="swap-technical-details">
+          <summary>
+            <span class="menu-copy"><strong>Technical details</strong><small>Frozen calls and review digest</small></span>
+            <span class="disclosure-mark">${icon("chevronRight")}</span>
+          </summary>
+          <div class="disclosure-body" id="swap-call-review"></div>
+        </details>
+        <p class="hint">The route is frozen. Confirm submits these reviewed calls once; it cannot change after this screen.</p>
         <div class="swap-actions">
           ${button({
             attributes: { id: "swap-confirm-button" },
@@ -155,37 +165,41 @@ export type SwapConfirmFigures = {
  * screen before signing.
  */
 export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
-  receiptRows([
-    { label: "You sell", value: `${compactAmount(figures.sellAmount)} ${figures.sellSymbol}` },
-    {
-      label: "You receive (est.)",
-      value: `${compactAmount(figures.buyAmount)} ${figures.buySymbol}`,
-    },
-    {
-      label: "Minimum received",
-      value: `${compactAmount(figures.minBuyAmount)} ${figures.buySymbol} (wallet-enforced)`,
-    },
-    ...(figures.valueDelta === null
-      ? []
-      : [
-          {
-            label: "Value change",
-            value: `${figures.valueDelta > 0 ? "+" : ""}${figures.valueDelta.toFixed(2)}%`,
-            valueTone:
-              figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
-                ? ("danger" as const)
-                : ("default" as const),
-          },
-        ]),
-    { label: "Maximum network fee", value: formatFeeEstimate(figures.networkFee) },
-    // This remains separate from the reviewed network fee: it is the
-    // aggregator's USD guess, not a resource bound the wallet signs. For the
-    // same reason there is no "Slippage cap" row: it restated a
-    // panel-local constant, where the enforced minimum above states the value
-    // the signed call actually carries.
-    {
-      label: "Aggregator fee estimate",
-      value: `≈ ${formatFiat(figures.gasFeesInUsd, "usd")} (not wallet-enforced)`,
-    },
-    { label: "Route", value: "AVNU aggregator" },
-  ]);
+  `<div class="receipt-group decision-outcome-rows">
+    <p class="decision-label">What will happen</p>
+    ${receiptRows([
+      { label: "You sell", value: `${compactAmount(figures.sellAmount)} ${figures.sellSymbol}` },
+      {
+        label: "You receive (est.)",
+        value: `${compactAmount(figures.buyAmount)} ${figures.buySymbol}`,
+      },
+    ])}
+  </div>
+  <div class="receipt-group decision-boundary-rows">
+    <p class="decision-label">Maximum cost and constraints</p>
+    ${receiptRows([
+      {
+        label: "Minimum received",
+        value: `${compactAmount(figures.minBuyAmount)} ${figures.buySymbol} (wallet-enforced)`,
+      },
+      ...(figures.valueDelta === null
+        ? []
+        : [
+            {
+              label: "Value change",
+              value: `${figures.valueDelta > 0 ? "+" : ""}${figures.valueDelta.toFixed(2)}%`,
+              valueTone:
+                figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
+                  ? ("danger" as const)
+                  : ("default" as const),
+            },
+          ]),
+      { label: "Maximum network fee", value: formatFeeEstimate(figures.networkFee) },
+      // This is the aggregator's guess, not a resource bound the wallet signs.
+      {
+        label: "Aggregator fee estimate",
+        value: `≈ ${formatFiat(figures.gasFeesInUsd, "usd")} (not wallet-enforced)`,
+      },
+      { label: "Route", value: "AVNU aggregator" },
+    ])}
+  </div>`;

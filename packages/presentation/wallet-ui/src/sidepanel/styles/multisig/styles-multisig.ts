@@ -17,6 +17,8 @@ export const MULTISIG_STYLES = `
   .multisig-portfolio-tabs { min-width: 0; }
   .multisig-portfolio-tabs .tab-set { gap: ${SPACE.lg}; }
   .multisig-portfolio-tabs [data-ms-home-panel] { min-width: 0; }
+  .multisig-intent { align-items: stretch; display: grid; gap: ${SPACE.md}; }
+  .multisig-intent .decision-head .pill { margin-left: auto; }
   [data-ms-exact-identity] .receipt-row { align-items: flex-start; }
   [data-ms-exact-identity] .receipt-row dd { max-width: 70%; }
   [data-ms-exact-identity] .receipt-row dd code { overflow-wrap: anywhere; text-align: left; word-break: break-word; }

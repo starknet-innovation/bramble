@@ -241,6 +241,10 @@ describe("bindMultisigs frozen-intent forms", () => {
     const newest = reviewPanel?.innerHTML;
     expect(newest).toContain("0x999");
     expect(newest).toContain("0x2");
+    expect(newest).toContain("What will happen");
+    expect(newest).toContain("Risk and recovery");
+    expect(newest).toContain("Maximum cost and constraints");
+    expect(newest).toContain("Technical details");
     pending[0]?.resolve(fixture.deploymentReview);
     await flush();
 

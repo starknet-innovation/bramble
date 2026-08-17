@@ -63,7 +63,6 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   .receipt-row dd code { color: var(--mc-text); overflow-wrap: normal; word-break: normal; }
   .receipt-row dd .icon-button { height: 28px; min-height: 0; width: 28px; }
   .receipt-row dd .icon-button .icon { height: 15px; width: 15px; }
-
   /* Approval request facts use the same receipt grammar, but allow long
      untrusted identifiers to wrap inside the panel instead of widening it. */
   .request-detail {
@@ -115,7 +114,6 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow-wrap: anywhere;
     word-break: break-word;
   }
-
   /* Segmented control: one recessed track, equal flat options, the active one
      lifted on a soft panel chip. Used for small either/or preferences (theme). */
   .seg {
@@ -210,7 +208,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     min-height: 28px;
     text-wrap: nowrap;
   }
-  .approval-takeover { grid-template-rows: minmax(0, 1fr) auto auto; min-height: 0; }
+  .approval-takeover { grid-template-rows: auto minmax(0, 1fr) auto auto; min-height: 0; }
   .approval-takeover .request-list { min-height: 0; }
   .approval-takeover .request-card {
     background: transparent;

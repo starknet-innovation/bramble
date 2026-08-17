@@ -156,12 +156,13 @@ describe("design system", () => {
         label: "Account contract",
         name: "accountContractType",
         options: [
-          { label: "Argent Account", value: "argent" },
-          { label: "OpenZeppelin Account", value: "openzeppelin" },
+          { label: "Argent Account — Recommended", value: "argent" },
+          { label: "OpenZeppelin Account — Compatibility", value: "openzeppelin" },
         ],
         selected: "argent",
       }),
     );
+    expect(markup).toContain("Why Argent is recommended");
     expect(markup).toContain("Starknet Mainnet");
   });
 });

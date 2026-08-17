@@ -73,7 +73,9 @@ const prepareSwap =
             swapPreparation: {
               flags: [],
               id: PREPARATION_ID,
+              minBuyAmount: "19260",
               payloadDigest: PREPARATION_ID,
+              reviewedFee: { overallFee: "2400000000000000", unit: "FRI" },
               summaries: [
                 "Approve 1.25 ETH to AVNU router",
                 "Swap 1.25 ETH for at least 19,260 STRK",

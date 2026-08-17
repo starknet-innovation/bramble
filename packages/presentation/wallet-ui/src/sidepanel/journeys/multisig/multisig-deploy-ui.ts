@@ -3,7 +3,13 @@ import { escapeHtml } from "@mc-wallet/core/html";
 import { normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../../shared/dom";
-import { formatFeeEstimate } from "../../shared/review-render";
+import { icon } from "../../shared/icons";
+import {
+  formatFeeEstimate,
+  reviewConstraints,
+  reviewOutcome,
+  reviewPanel,
+} from "../../shared/review-render";
 import type { ArgentMultisigDeploymentSetup, MultisigClient } from "./multisig-runtime";
 
 type MultisigDeployUiDeps = {
@@ -55,11 +61,11 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#multisig-deploy-form");
   const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const reviewEnabled = button?.disabled === false;
-  const reviewPanel = deps.app?.querySelector<HTMLElement>("#multisig-deploy-review");
+  const reviewRoot = deps.app?.querySelector<HTMLElement>("#multisig-deploy-review");
   form?.addEventListener("input", () => {
     reviews.delete(form);
     reviewGenerations.set(form, (reviewGenerations.get(form) ?? 0) + 1);
-    if (reviewPanel) renderFragment(reviewPanel, "");
+    if (reviewRoot) renderFragment(reviewRoot, "");
     button?.lastChild?.replaceWith("Review deployment");
     if (reviewEnabled) buttonBusy(button, false);
   });
@@ -78,7 +84,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     const reviewed = stored && sameSetup(stored.input, input) ? stored.review : undefined;
     if (stored && !reviewed) {
       reviews.delete(form);
-      if (reviewPanel) renderFragment(reviewPanel, "");
+      if (reviewRoot) renderFragment(reviewRoot, "");
       button?.lastChild?.replaceWith("Review deployment");
     }
     buttonBusy(button, true);
@@ -116,21 +122,28 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       .then((next) => {
         if (!isCurrent()) return;
         reviews.set(form, { input, review: next });
-        if (reviewPanel) {
+        if (reviewRoot) {
           renderFragment(
-            reviewPanel,
-            `<section class="review-panel" role="note">
-              <p><strong>Exact deployment review</strong></p>
-              <dl class="request-detail">
-                <div><dt>Address</dt><dd><code>${escapeHtml(next.address)}</code></dd></div>
-                <div><dt>Signers</dt><dd>${next.signerPublicKeys.length}</dd></div>
-                <div><dt>Public keys</dt><dd><code>${escapeHtml(next.signerPublicKeys.join(" "))}</code></dd></div>
-                <div><dt>Threshold</dt><dd>${next.threshold}</dd></div>
-                <div><dt>Salt</dt><dd><code>${escapeHtml(next.salt)}</code></dd></div>
-                <div><dt>Deployment signer</dt><dd><code>${escapeHtml(next.signerAccountId)}</code></dd></div>
-                <div><dt>Maximum network fee</dt><dd>${escapeHtml(formatFeeEstimate(next.fee))}</dd></div>
-              </dl>
-            </section>`,
+            reviewRoot,
+            `${reviewOutcome(`Deploy a ${next.threshold}-of-${next.signerPublicKeys.length} Argent multisig at ${next.address}.`)}
+            ${reviewPanel([], "Deployment creates a new on-chain shared account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
+            ${reviewConstraints(`Maximum network fee: ${formatFeeEstimate(next.fee)}`)}
+            <details class="disclosure" data-disclosure="multisig-deployment-technical">
+              <summary>
+                <span class="menu-copy"><strong>Technical details</strong><small>Exact constructor authority and signer</small></span>
+                <span class="disclosure-mark">${icon("chevronRight")}</span>
+              </summary>
+              <div class="disclosure-body">
+                <dl class="request-detail">
+                  <div><dt>Address</dt><dd><code>${escapeHtml(next.address)}</code></dd></div>
+                  <div><dt>Signers</dt><dd>${next.signerPublicKeys.length}</dd></div>
+                  <div><dt>Public keys</dt><dd><code>${escapeHtml(next.signerPublicKeys.join(" "))}</code></dd></div>
+                  <div><dt>Threshold</dt><dd>${next.threshold}</dd></div>
+                  <div><dt>Salt</dt><dd><code>${escapeHtml(next.salt)}</code></dd></div>
+                  <div><dt>Deployment signer</dt><dd><code>${escapeHtml(next.signerAccountId)}</code></dd></div>
+                </dl>
+              </div>
+            </details>`,
           );
         }
         button?.lastChild?.replaceWith("Deploy reviewed account");

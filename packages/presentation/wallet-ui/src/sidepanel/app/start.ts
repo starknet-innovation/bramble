@@ -1,6 +1,7 @@
 /** Primary side-panel UI and its scene-preserving paint loop. */
 import type { LedgerConnector } from "@mc-wallet/ledger-protocol/session";
 import type { WalletStatus } from "../../popup/responses/responses";
+import { actionableApprovals } from "../journeys/approvals/approval-screen";
 import { bindLedgerFirstRun } from "../journeys/ledger/first-run";
 import { createLedgerOnboardEntry } from "../journeys/ledger/onboard-entry";
 import { createLedgerSignRuntime } from "../journeys/ledger/sign-runtime";
@@ -38,7 +39,7 @@ import {
   bindPickers,
   deploymentPollScope,
 } from "../shell/shell-bindings";
-import { type NavDirection, navDirection } from "./navigation/nav-direction";
+import type { NavDirection } from "./navigation/nav-direction";
 import { popView, pushView, type ViewHistory } from "./navigation/nav-history";
 import {
   emptyRenderCache,
@@ -46,7 +47,12 @@ import {
   updateRenderScope,
   verificationForAccount,
 } from "./rendering/render-cache";
-import { createSceneRenderer } from "./rendering/scene-renderer";
+import {
+  createSceneRenderer,
+  createScopeAnnouncer,
+  scopeChangeAnnouncement,
+} from "./rendering/scene-renderer";
+import { sceneDirection, sceneFor } from "./rendering/scene-transition";
 import { bindClusterScreens } from "./screens/cluster-ui";
 import { dashboard, type WalletView } from "./screens/views";
 import { createDeploymentCache } from "./sync/deployment-cache";
@@ -88,6 +94,7 @@ export const startWalletUi = async (
   let expandedGroupId: string | null = null;
   let snoozedApprovalIds: readonly string[] = [];
   let sendIntent: SendIntent | null = null;
+  let hasPaintedScope = false;
 
   const renderScene = createSceneRenderer(app, () => bindAll());
 
@@ -110,6 +117,7 @@ export const startWalletUi = async (
   ledgerOnboardMount.className = "ledger-onboard-overlay";
   ledgerOnboardMount.hidden = true;
   document.body.append(ledgerOnboardMount);
+  const scopeAnnouncer = createScopeAnnouncer(document);
   const ledgerOnboard = createLedgerOnboardEntry({
     addHd: async (accountContractType) => {
       await wallet.addAccount(lastNetworkId, accountContractType);
@@ -298,17 +306,18 @@ export const startWalletUi = async (
       sendIntent = null;
     }
     applyTheme();
-    const scene =
-      fullPageOnboarding && status.hasVault
-        ? "onboarding-complete"
-        : !status.hasVault
-          ? "onboarding"
-          : status.locked
-            ? "locked"
-            : `dashboard:${activeView}`;
+    const actionable = actionableApprovals(cache.pending, snoozedApprovalIds);
+    const scene = sceneFor(fullPageOnboarding, status, actionable[0]?.id, activeView);
+    const previousScene = lastScene;
     const animate = scene !== lastScene;
     lastScene = scene;
-    const direction = forcedDirection ?? navDirection(lastActiveView, activeView);
+    const direction = sceneDirection(
+      forcedDirection,
+      scene,
+      previousScene,
+      lastActiveView,
+      activeView,
+    );
     forcedDirection = null;
     const healed = healTransientGroupState(
       { drawerGroupFilter, expandedGroupId, openAssignId },
@@ -409,6 +418,10 @@ export const startWalletUi = async (
     const generation = ++renderGeneration;
     const isCurrent = (): boolean => generation === renderGeneration;
     const scopeChanged = updateRenderScope(cache, status);
+    if (scopeChanged && hasPaintedScope) {
+      scopeAnnouncer.textContent = scopeChangeAnnouncement(scopeChanged);
+    }
+    hasPaintedScope = true;
     if (scopeChanged) {
       privacy.reset();
       sendIntent = null;

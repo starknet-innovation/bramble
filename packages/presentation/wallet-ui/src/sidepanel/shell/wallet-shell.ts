@@ -174,5 +174,6 @@ export const deployNotice = (
           size: "small",
           variant: "secondary",
         })}
+        <div id="deploy-review" aria-live="polite"></div>
         <p id="deploy-result" role="status"></p>
       </div>`;

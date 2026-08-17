@@ -8,6 +8,7 @@ import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { checkboxField, inputControl, selectField, textField } from "@mc-wallet/ui-kit/fields";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
+import { contextHelp } from "../../shared/parts";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 
 const flowBack = (label: string): string =>
@@ -285,11 +286,16 @@ const accountStep = (): string => `
         label: "Account contract",
         name: "accountContractType",
         options: [
-          { label: "Argent Account", value: "argent" },
-          { label: "OpenZeppelin Account", value: "openzeppelin" },
+          { label: "Argent Account — Recommended", value: "argent" },
+          { label: "OpenZeppelin Account — Compatibility", value: "openzeppelin" },
         ],
         selected: "argent",
       })}
+      ${contextHelp(
+        "onboarding-account-contract",
+        "Why Argent is recommended",
+        "Argent is the default for new MC Wallet accounts and current wallet integrations. Choose OpenZeppelin only when you need compatibility with that account model. This choice controls the on-chain account contract, not where your recovery phrase is stored.",
+      )}
       <button
         class="onboarding-account"
         id="account-preview"
@@ -330,11 +336,16 @@ const ledgerStep = (status: WalletStatus): string => `
         label: "Account contract",
         name: "ledgerAccountContractType",
         options: [
-          { label: "Argent Account", value: "argent" },
-          { label: "OpenZeppelin Account", value: "openzeppelin" },
+          { label: "Argent Account — Recommended", value: "argent" },
+          { label: "OpenZeppelin Account — Compatibility", value: "openzeppelin" },
         ],
         selected: "argent",
       })}
+      ${contextHelp(
+        "ledger-account-contract",
+        "Which account contract should I choose?",
+        "Argent is recommended for a new Ledger-backed account. Choose OpenZeppelin only for compatibility with an existing OpenZeppelin account model. Your signing key remains on Ledger in either case.",
+      )}
       ${passwordFields("ledger")}
       <p id="ledger-passphrase-result" role="status"></p>
       ${mainnetAcknowledgement(
