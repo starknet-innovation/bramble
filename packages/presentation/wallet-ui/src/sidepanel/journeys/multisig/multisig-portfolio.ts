@@ -132,6 +132,7 @@ export const multisigPortfolio = (input: {
   readonly preferences: WalletPreferences | null;
   readonly intents: string;
   readonly record: ArgentMultisigRecord;
+  readonly signerKnown: boolean;
 }): string => `
   ${portfolioHero(input.record, input.preferences, input.data)}
   <section class="home-actions multisig-primary-actions" aria-label="Multisig actions">
@@ -150,7 +151,9 @@ export const multisigPortfolio = (input: {
             ? '<p class="hint multisig-action-note">Deployment and signer authority could not be verified. Retry when network access is restored.</p>'
             : input.canSign
               ? ""
-              : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
+              : input.signerKnown
+                ? '<p class="hint multisig-action-note"><strong>Signer found.</strong> This account is synced, but preparing transactions requires its complete signer setup.</p>'
+                : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>
   <section class="home-tabs multisig-portfolio-tabs" data-active-tab="assets" aria-label="Shared account">

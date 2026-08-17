@@ -130,6 +130,69 @@ export const MULTISIG_STYLES = `
   .multisig-portfolio-hero { padding-top: ${SPACE.md}; }
   .multisig-primary-actions { padding-block: ${SPACE.xs}; }
   .multisig-primary-actions .action-row { width: 100%; }
+  .multisig-compose-flow {
+    display: grid;
+    gap: ${SPACE.xl};
+    min-width: 0;
+  }
+  .multisig-compose-intro {
+    color: var(--mc-muted);
+    line-height: ${TYPE.body.line};
+    margin: 0;
+  }
+  .multisig-compose-form {
+    display: grid;
+    gap: ${SPACE.md};
+    min-width: 0;
+  }
+  .multisig-compose-form > label,
+  .multisig-compose-form > button { min-width: 0; width: 100%; }
+  .multisig-compose-flow:has(.multisig-advanced-call[open]) > #multisig-propose-form {
+    display: none;
+  }
+  .multisig-compose-origin { display: grid; gap: ${SPACE.sm}; }
+  .multisig-compose-origin .send-origin-account {
+    min-width: 0;
+    padding: ${SPACE.sm} ${SPACE.md};
+  }
+  .multisig-compose-origin .send-recipient-copy { padding-right: 0; }
+  .multisig-recipient-picker .disclosure-body,
+  .multisig-asset-picker .disclosure-body {
+    display: grid;
+    gap: ${SPACE.md};
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .multisig-recipient-picker .send-recipient-row,
+  .multisig-asset-picker .send-asset-row { background: var(--mc-elevated); }
+  .multisig-asset-picker { min-width: 0; }
+  .multisig-asset-picker > summary.send-token-trigger {
+    align-items: center;
+    border-radius: ${RADIUS.full};
+    cursor: pointer;
+    display: inline-flex;
+    gap: ${SPACE.sm};
+    list-style: none;
+  }
+  .multisig-asset-picker > summary.send-token-trigger::-webkit-details-marker { display: none; }
+  .multisig-asset-picker[open] > summary .icon { transform: rotate(180deg); }
+  .multisig-asset-picker > .disclosure-body {
+    border-top: 1px solid var(--mc-hairline);
+    margin-top: ${SPACE.md};
+    padding-top: ${SPACE.md};
+  }
+  .multisig-compose-form .send-amount-card { min-width: 0; }
+  .multisig-compose-form .send-amount-field input { min-width: 0; }
+  .multisig-compose-form #multisig-amount-guidance {
+    color: var(--mc-muted);
+    margin: -${SPACE.sm} 0 0;
+    text-align: right;
+  }
+  .multisig-advanced-call > .disclosure-body {
+    display: grid;
+    gap: ${SPACE.md};
+  }
+  .multisig-advanced-call .multisig-compose-form { padding-top: ${SPACE.xs}; }
   .home-tab-count {
     color: var(--mc-muted);
     font-size: ${TYPE.caption.size};

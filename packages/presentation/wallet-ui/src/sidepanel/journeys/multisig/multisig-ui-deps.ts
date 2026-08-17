@@ -12,7 +12,7 @@ import type { MultisigClient } from "./multisig-runtime";
 export type MultisigUiDeps = {
   readonly app: Element | null;
   readonly multisig: MultisigClient;
-  readonly openDetail: (id: string) => void;
+  readonly openDetail: (id: string, destination?: "multisig-detail" | "multisig-home") => void;
   readonly openList: () => void;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly selectedMultisigId: () => string | null;

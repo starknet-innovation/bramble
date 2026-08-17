@@ -15,7 +15,6 @@ import {
   type ArgentMultisigSigningIntent,
   isArgentMultisigSigningIntent,
 } from "@mc-wallet/multisig/repository";
-import { normalizeArgentMultisigConfig } from "@mc-wallet/starknet/account-contracts";
 import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
@@ -85,54 +84,23 @@ const deployConfigFrom = (value: Record<string, unknown>): ArgentMultisigDeployC
  */
 export type AddArgentMultisigInput = {
   readonly address: string;
-  readonly name?: string;
   readonly networkId: StarknetNetworkId;
-  readonly signerAccountId: string;
-  readonly signerPublicKeys: readonly string[];
-  readonly threshold: number;
 };
 
 /**
- * Parses explicit current public authority for an existing pinned account.
+ * Parses address-only discovery for an existing pinned account.
  */
 export const readAddMultisigInput = (message: unknown): AddArgentMultisigInput | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, [
-      "address",
-      "name",
-      "networkId",
-      "signerAccountId",
-      "signerPublicKeys",
-      "threshold",
-      "type",
-    ]) ||
+    !hasOnlyKnownKeys(message, ["address", "networkId", "type"]) ||
     message["type"] !== "wallet.addMultisig" ||
     !isStarknetNetworkId(message["networkId"]) ||
-    !isAccountId(message["signerAccountId"]) ||
-    !isName(message["name"]) ||
-    !isCanonicalNonZeroFelt(message["address"]) ||
-    !Array.isArray(message["signerPublicKeys"]) ||
-    !message["signerPublicKeys"].every((key) => typeof key === "string") ||
-    !Number.isSafeInteger(message["threshold"])
+    !isCanonicalNonZeroFelt(message["address"])
   ) {
     return null;
   }
-  try {
-    const config = normalizeArgentMultisigConfig({
-      signerPublicKeys: message["signerPublicKeys"] as readonly string[],
-      threshold: Number(message["threshold"]),
-    });
-    return {
-      address: message["address"],
-      ...config,
-      ...(message["name"] === undefined ? {} : { name: message["name"] }),
-      networkId: message["networkId"],
-      signerAccountId: message["signerAccountId"],
-    };
-  } catch {
-    return null;
-  }
+  return { address: message["address"], networkId: message["networkId"] };
 };
 
 /**

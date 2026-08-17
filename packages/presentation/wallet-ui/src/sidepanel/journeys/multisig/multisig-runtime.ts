@@ -20,22 +20,23 @@ import type { RuntimeApi, ScopedBalanceState } from "../../runtime/runtime";
 import { responseError } from "../../runtime/runtime-errors";
 
 /**
- * Current public authority required to register a stable Argent multisig.
+ * Address and active network required to sync an existing Argent multisig.
  */
 export type ArgentMultisigSetup = {
   readonly address: string;
-  readonly name?: string;
   readonly networkId: string;
-  readonly signerAccountId: string;
-  readonly signerPublicKeys: readonly string[];
-  readonly threshold: number;
 };
 
 /**
  * Constructor authority required to review a new Argent multisig deployment.
  */
-export type ArgentMultisigDeploymentSetup = Omit<ArgentMultisigSetup, "address"> & {
+export type ArgentMultisigDeploymentSetup = {
+  readonly name?: string;
+  readonly networkId: string;
   readonly salt: string;
+  readonly signerAccountId: string;
+  readonly signerPublicKeys: readonly string[];
+  readonly threshold: number;
 };
 
 /**

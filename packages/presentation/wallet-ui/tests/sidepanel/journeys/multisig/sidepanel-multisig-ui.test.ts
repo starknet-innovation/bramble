@@ -1,6 +1,7 @@
 /** DOM bindings forward only exact Argent multisig intents, signatures, and calls. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { buildErc20TransferCall, parseTokenAmount } from "@mc-wallet/starknet/rpc";
 import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigIntentPackage,
@@ -73,10 +74,12 @@ const mount = (
   html: string,
   client: MultisigClient,
   status: Awaited<ReturnType<typeof makeArgentMultisigFixture>>["status"],
+  overrides: Partial<MultisigUiDeps> = {},
 ): HTMLElement =>
   mountMultisigUi(html, async () => undefined, {
     multisig: client,
     wallet: { loadStatus: async () => status } as MultisigUiDeps["wallet"],
+    ...overrides,
   });
 
 describe("bindMultisigs frozen-intent forms", () => {
@@ -197,9 +200,10 @@ describe("bindMultisigs frozen-intent forms", () => {
     );
   });
 
-  test("registers an existing account with its address and current signer authority", async () => {
+  test("syncs an existing account from its address and opens the matched account", async () => {
     const fixture = await makeArgentMultisigFixture();
     const captured: unknown[] = [];
+    const opened: unknown[] = [];
     const client = await testClient({
       async addMultisig(input) {
         captured.push(input);
@@ -209,32 +213,27 @@ describe("bindMultisigs frozen-intent forms", () => {
     const app = mount(
       `<form id="multisig-add-form">
         <input name="address" value="0x000123" />
-        <input name="name" value=" Treasury " />
-        <input name="signerAccountId" value="${fixture.status.activeAccountId}" />
-        <input name="signerPublicKeys" value="${fixture.status.accounts[0]?.publicKeyX}" />
-        <input name="threshold" value="1" />
         <button type="submit">Add</button>
       </form>`,
       client,
       fixture.status,
+      { openDetail: (...input) => opened.push(input) },
     );
     app.querySelector<HTMLFormElement>("#multisig-add-form")?.requestSubmit();
     await flush();
     expect(captured).toEqual([
       {
         address: "0x123",
-        name: "Treasury",
         networkId: "SN_MAIN",
-        signerAccountId: fixture.status.activeAccountId,
-        signerPublicKeys: [fixture.status.accounts[0]?.publicKeyX],
-        threshold: 1,
       },
     ]);
+    expect(opened).toEqual([[fixture.record.id, "multisig-home"]]);
   });
 
   test("normalizes public call fields once and prepares the selected account", async () => {
     const fixture = await makeArgentMultisigFixture();
     const captured: unknown[] = [];
+    const opened: unknown[] = [];
     const client = await testClient({
       async prepareIntent(multisigId, calls) {
         captured.push({ calls, multisigId });
@@ -245,7 +244,7 @@ describe("bindMultisigs frozen-intent forms", () => {
       },
     });
     const app = mount(
-      `<form id="multisig-propose-form" data-multisig-id="${fixture.record.id}">
+      `<form data-ms-prepare="contract" data-multisig-id="${fixture.record.id}">
         <input name="contractAddress" value="0x000DEF" />
         <input name="entrypoint" value=" transfer " />
         <textarea name="calldata">0x0001, 0x02</textarea>
@@ -253,12 +252,46 @@ describe("bindMultisigs frozen-intent forms", () => {
       </form>`,
       client,
       fixture.status,
+      { openDetail: (...args) => opened.push(args) },
     );
-    app.querySelector<HTMLFormElement>("#multisig-propose-form")?.requestSubmit();
+    app.querySelector<HTMLFormElement>("[data-ms-prepare]")?.requestSubmit();
     await flush();
     expect(captured).toEqual([
       {
         calls: [{ calldata: ["0x1", "0x2"], contractAddress: "0xdef", entrypoint: "transfer" }],
+        multisigId: fixture.record.id,
+      },
+    ]);
+    expect(opened).toEqual([[fixture.record.id, "multisig-detail"]]);
+  });
+
+  test("builds a token transfer from recipient, asset, and decimal amount fields", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const captured: unknown[] = [];
+    const client = await testClient({
+      async prepareIntent(multisigId, calls) {
+        captured.push({ calls, multisigId });
+        return { intent: fixture.intent };
+      },
+    });
+    const app = mount(
+      `<form data-ms-prepare="transfer" data-multisig-id="${fixture.record.id}">
+        <input name="recipient" value="0xabc" />
+        <input name="amount" value="1.25" />
+        <input name="tokenAddress" value="0xdef" />
+        <input name="tokenBalance" value="500" />
+        <input name="tokenDecimals" value="2" />
+        <input name="tokenPrice" value="2" />
+        <button type="submit">Review</button>
+      </form>`,
+      client,
+      fixture.status,
+    );
+    app.querySelector<HTMLFormElement>("[data-ms-prepare]")?.requestSubmit();
+    await flush();
+    expect(captured).toEqual([
+      {
+        calls: [buildErc20TransferCall("0xdef", "0xabc", parseTokenAmount("1.25", 2))],
         multisigId: fixture.record.id,
       },
     ]);
@@ -386,6 +419,7 @@ describe("bindMultisigs frozen-intent forms", () => {
         openCount: 1,
         preferences: null,
         record: fixture.record,
+        signerKnown: true,
       }),
       client,
       fixture.status,

@@ -391,6 +391,15 @@ export const multisigDetailFlow = (
   }
   const { record } = view;
   const options = localSignerOptions(view, status.accounts, preferences);
+  const storedConfig = record.currentConfig ?? record.deployment;
+  const hasCompleteSignerConfig =
+    view.config !== null &&
+    storedConfig !== undefined &&
+    storedConfig.threshold === view.config.threshold &&
+    storedConfig.signerPublicKeys.length === view.config.signerGuids.length &&
+    storedConfig.signerPublicKeys.every((key, index) =>
+      sameFelt(argentSignerGuid(key), view.config?.signerGuids[index] ?? ""),
+    );
   const canDeploy =
     view.deployed === false &&
     record.deployment !== undefined &&
@@ -426,13 +435,14 @@ export const multisigDetailFlow = (
       ${multisigPortfolio({
         authorityAvailable: view.config !== null,
         canDeploy,
-        canSign: options.length > 0 && view.config !== null,
+        canSign: options.length > 0 && hasCompleteSignerConfig,
         data: portfolio,
         ...(view.deployed === undefined ? {} : { deployed: view.deployed }),
         intents: compactIntentList(record, intents, preferences),
         openCount,
         preferences,
         record,
+        signerKnown: options.length > 0,
       })}
       <p id="multisig-detail-result" role="status"></p>`,
   );

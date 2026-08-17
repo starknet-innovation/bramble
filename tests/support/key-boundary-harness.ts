@@ -388,8 +388,6 @@ const seedArgentMultisig = async (
     {
       address: KEY_BOUNDARY_MULTISIG,
       networkId: "SN_MAIN",
-      signerAccountId: account.id,
-      ...KEY_BOUNDARY_MULTISIG_CONFIG,
       type: "wallet.addMultisig",
     },
     extensionSender,

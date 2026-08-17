@@ -1,4 +1,5 @@
 import { expect } from "storybook/test";
+import { RECIPIENT_ADDRESS } from "../../fixtures/fixtures";
 import {
   assertCheckpointReady,
   checkpointStory,
@@ -28,7 +29,18 @@ export const ChooseSetup: LabStory = {
     await expect(body?.querySelector(".multisig-setup-options")).toBeVisible();
   },
 };
-export const Watch = checkpointStory("Watch existing account", "multisig", "watch");
+export const Watch: LabStory = {
+  args: { checkpointId: "watch", scenarioId: "multisig" },
+  name: "Watch existing account",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelectorAll("#multisig-add-form input")).toHaveLength(1);
+    await expect(body?.querySelector('input[name="address"]')).toBeVisible();
+    await expect(body?.querySelector('button[type="submit"]')).toHaveTextContent("Sync multisig");
+  },
+};
 export const DeployUnavailable = checkpointStory(
   "Deployment unavailable",
   "multisig",
@@ -204,5 +216,38 @@ export const AuthorityChanged = checkpointStory(
 export const Signers = checkpointStory("Current signer authority", "multisig", "signers");
 export const Track = checkpointStory("Import signing intent", "multisig", "track");
 export const Receive = checkpointStory("Receive into multisig", "multisig", "receive");
-export const Propose = checkpointStory("Prepare exact transaction", "multisig", "propose");
+export const Propose: LabStory = {
+  args: { checkpointId: "propose", scenarioId: "multisig" },
+  name: "Compose token transfer",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector('#multisig-propose-form input[name="recipient"]')).toHaveValue(
+      RECIPIENT_ADDRESS,
+    );
+    await expect(body?.querySelector('#multisig-propose-form input[name="amount"]')).toHaveValue(
+      "25",
+    );
+    await expect(body?.querySelector("#multisig-selected-token-glyph .token-logo")).toBeVisible();
+    await expect(
+      body?.querySelector('#multisig-propose-form button[type="submit"]'),
+    ).toHaveTextContent("Review transaction");
+    await expect(body?.querySelector(".multisig-advanced-call")).not.toHaveAttribute("open");
+  },
+};
+export const ProposeAdvanced: LabStory = {
+  args: { checkpointId: "propose-advanced", scenarioId: "multisig" },
+  name: "Compose · advanced contract call",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector(".multisig-advanced-call")).toHaveAttribute("open");
+    await expect(body?.querySelector('[data-ms-prepare="contract"]')).toBeVisible();
+    await expect(body?.querySelector('[data-ms-prepare="contract"]')).toHaveTextContent(
+      "Review contract call",
+    );
+  },
+};
 export const SyncError = checkpointStory("Shared-account sync failure", "multisig", "sync-error");

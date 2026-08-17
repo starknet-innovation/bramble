@@ -98,6 +98,32 @@ const revealIntentPanel = async (context: FrameContext): Promise<void> => {
   }
 };
 
+const prepareTransferComposer = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context);
+  const picker = context.app.querySelector<HTMLDetailsElement>(".multisig-recipient-picker");
+  if (!picker) throw new Error("Missing production multisig recipient picker");
+  picker.open = true;
+  const recipient = Array.from(
+    context.app.querySelectorAll<HTMLButtonElement>("[data-ms-propose-recipient]"),
+  ).find((button) => button.textContent?.includes("Research treasury"));
+  recipient?.click();
+  const amount = context.app.querySelector<HTMLInputElement>(
+    '#multisig-propose-form input[name="amount"]',
+  );
+  if (!recipient || !amount) throw new Error("Missing production multisig transfer controls");
+  amount.value = "25";
+  amount.dispatchEvent(new Event("input", { bubbles: true }));
+  amount.blur();
+  await nextTurn();
+};
+
+const revealAdvancedCall = async (context: FrameContext): Promise<void> => {
+  const details = context.app.querySelector<HTMLDetailsElement>(".multisig-advanced-call");
+  if (!details) throw new Error("Missing production multisig advanced call disclosure");
+  details.open = true;
+  await nextTurn();
+};
+
 const checkpoint = (
   id: string,
   label: string,
@@ -177,9 +203,9 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   checkpoint(
     "watch",
     "Watch existing account",
-    "The wallet verifies the current signer authority for the entered account before it becomes actionable.",
+    "One address syncs the live threshold and signer set, then checks for a matching signer in this wallet.",
     { selectedMultisigId: null, view: "multisig-watch" },
-    { verification: "required" },
+    { input: "address only", verification: "automatic" },
   ),
   checkpoint(
     "deploy-class-check",
@@ -343,13 +369,26 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     { view: "multisig-receive" },
     { task: "receive" },
   ),
-  checkpoint(
-    "propose",
-    "Prepare exact transaction",
-    "The composer states that one immutable V3 transaction will be frozen for every signer to verify.",
-    { view: "multisig-propose" },
-    { task: "prepare frozen intent" },
-  ),
+  {
+    ...checkpoint(
+      "propose",
+      "Compose token transfer",
+      "The common path uses saved recipients, tracked assets, token logos, balances, and human amounts before review.",
+      { view: "multisig-propose" },
+      { task: "compose token transfer" },
+    ),
+    prepare: prepareTransferComposer,
+  },
+  {
+    ...checkpoint(
+      "propose-advanced",
+      "Advanced contract call",
+      "Exact target, entrypoint, and calldata remain available without dominating the common transfer journey.",
+      { view: "multisig-propose" },
+      { disclosure: "advanced", task: "compose contract call" },
+    ),
+    prepare: revealAdvancedCall,
+  },
   checkpoint(
     "sync-error",
     "Shared-account sync failure",

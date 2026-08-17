@@ -7,21 +7,18 @@ import {
   readPrepareIntentInput,
   readRemoveMultisigInput,
 } from "../../../apps/extension/src/background/multisig/multisig-inputs";
-import { HARNESS_KEYS, HARNESS_MULTISIG_ID, harnessAccountA } from "../../support/multisig-harness";
+import { HARNESS_MULTISIG_ID, harnessAccountA } from "../../support/multisig-harness";
 
 describe("Argent multisig message inputs", () => {
-  test("requires explicit network, signer, current config, address, and bounded calls", () => {
+  test("accepts address-only multisig discovery and bounded calls", () => {
     const add = {
       address: HARNESS_MULTISIG_ID.split(":")[1],
       networkId: "SN_MAIN",
-      signerAccountId: harnessAccountA.id,
-      signerPublicKeys: HARNESS_KEYS,
-      threshold: 2,
       type: "wallet.addMultisig",
     };
     expect(readAddMultisigInput(add)).not.toBeNull();
     expect(readAddMultisigInput({ ...add, extra: true })).toBeNull();
-    expect(readAddMultisigInput({ ...add, signerAccountId: undefined })).toBeNull();
+    expect(readAddMultisigInput({ ...add, signerAccountId: harnessAccountA.id })).toBeNull();
     const prepare = {
       calls: [{ calldata: [], contractAddress: "0x222", entrypoint: "transfer" }],
       multisigId: HARNESS_MULTISIG_ID,

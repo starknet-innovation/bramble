@@ -265,21 +265,55 @@ describe("Argent multisig list and exact-intent detail", () => {
 });
 
 describe("Argent frozen-intent composer", () => {
-  test("registers existing accounts by address and current authority, not constructor salt", async () => {
+  test("registers existing accounts by address and derives authority from chain", async () => {
     const fixture = await makeArgentMultisigFixture();
     const html = multisigWatchFlow(fixture.status, fixture.status.accounts[0] ?? null);
     expect(html).toContain('name="address"');
-    expect(html).toContain("Current signer public keys");
+    expect(html).toContain("reads the signer set and threshold from Starknet");
+    expect(html).not.toContain('name="signerPublicKeys"');
+    expect(html).not.toContain('name="signerAccountId"');
+    expect(html).not.toContain('name="threshold"');
     expect(html).not.toContain('name="salt"');
   });
 
-  test("states the exact signed fields and binds the selected account id", async () => {
+  test("shows a matched local signer without enabling an incomplete watched setup", async () => {
     const fixture = await makeArgentMultisigFixture();
-    const html = multisigProposeFlow(fixture.status, fixture.view);
-    expect(html).toContain("freezes one exact Starknet V3 transaction");
-    expect(html).toContain("nonce, sender, fee ceiling, chain and transaction hash");
+    const record = { ...fixture.record };
+    delete record.currentConfig;
+    const html = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      { ...fixture.view, record },
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(html).toContain("Signer found");
+    expect(html).toContain('data-view="multisig-propose" type="button" disabled');
+  });
+
+  test("starts with a familiar token transfer and keeps raw calls advanced", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const preferences = defaultWalletPreferences();
+    const token = preferences.tokens.find((candidate) => candidate.symbol === "STRK");
+    if (!token) throw new Error("STRK fixture unavailable");
+    const html = multisigProposeFlow(fixture.status, fixture.view, preferences, {
+      balances: { balances: [{ ...token, balance: "42000000000000000000", formatted: "42" }] },
+      changes: {},
+      currency: "usd",
+      nfts: [],
+      prices: { [token.address]: 0.5 },
+    });
+    expect(html).toContain("New transaction");
+    expect(html).toContain("Nothing is signed or submitted");
     expect(html).toContain(`data-multisig-id="${fixture.record.id}"`);
-    expect(html).toContain("Prepare exact transaction");
+    expect(html).toContain("Review transaction");
+    expect(html).toContain("Choose saved recipient");
+    expect(html).toContain("STRK");
+    expect(html).toContain("token-logo");
+    expect(html).toContain("Advanced contract call");
+    expect(html).toContain('data-ms-prepare="contract"');
   });
 
   test("does not render a form without freshly verified authority", async () => {

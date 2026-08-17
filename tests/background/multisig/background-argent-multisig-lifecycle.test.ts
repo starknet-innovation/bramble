@@ -9,7 +9,6 @@ import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
 import { createMemoryStore, type KeyValueStore } from "@mc-wallet/store/kv";
 import { canonicalFelt, DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
 import {
-  HARNESS_KEYS,
   HARNESS_MULTISIG_ID,
   HARNESS_TARGET,
   harnessAccountA,
@@ -426,11 +425,8 @@ describe("Argent multisig background lifecycle", () => {
     await expect(
       harness.handler(
         {
-          address: HARNESS_MULTISIG_ID.slice(HARNESS_MULTISIG_ID.indexOf(":") + 1),
+          address: "0xabc",
           networkId: "SN_MAIN",
-          signerAccountId: harnessAccountA.id,
-          signerPublicKeys: HARNESS_KEYS,
-          threshold: 2,
           type: "wallet.addMultisig",
         },
         harnessExtensionSender,

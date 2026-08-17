@@ -49,9 +49,11 @@ const addRecord = async (
   readonly result: Awaited<ReturnType<MultisigStore["upsertMultisig"]>>;
 }> => {
   const existing = (await store.listMultisigs()).find((candidate) => candidate.id === record.id);
+  if (!isAuthorized()) return { record, result: "unauthorized" };
   if (!existing) return { record, result: await store.upsertMultisig(record, isAuthorized) };
+  if (!record.currentConfig) return { record: existing, result: "stored" };
   const expected = storedArgentPublicConfig(existing);
-  if (!expected || !record.currentConfig) return { record, result: "invalid" };
+  if (!expected) return { record: existing, result: "stored" };
   const returned = { ...existing, currentConfig: record.currentConfig };
   const result = await store.updateCurrentConfig(
     existing.id,
@@ -71,24 +73,22 @@ const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigIn
   if (active.networkId !== input.networkId) {
     return { error: "switch to the multisig network first" } as const;
   }
-  const signer = active.accounts.find(
-    (account) => account.id === input.signerAccountId && account.networkId === input.networkId,
-  );
-  if (!signer) {
-    return { error: "selected signer account is unavailable on this network" } as const;
-  }
   const preferences = await deps.preferencesStore.read();
   const config = await multisigRpc(deps).getConfig({
     address: input.address,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences),
   });
-  const matches =
-    config.signerGuids.includes(argentSignerGuid(signer.publicKeyX)) &&
-    config.threshold === input.threshold &&
-    sameArgentSignerGuids(config.signerGuids, input.signerPublicKeys.map(argentSignerGuid));
-  return matches
-    ? { authorized, config }
-    : { error: "Argent multisig current config or selected signer does not match chain state" };
+  const signerPublicKeys = config.signerGuids
+    .map(
+      (guid) =>
+        active.accounts.find(
+          (account) =>
+            account.networkId === input.networkId &&
+            sameFelt(argentSignerGuid(account.publicKeyX), guid),
+        )?.publicKeyX,
+    )
+    .filter((publicKey): publicKey is string => publicKey !== undefined);
+  return { authorized, config, signerPublicKeys };
 };
 
 /**
@@ -255,12 +255,15 @@ const addMultisig = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
     accountContractType: "argent-multisig",
     address,
     classHash: ARGENT_MULTISIG_CONTRACT.classHash,
-    currentConfig: {
-      signerPublicKeys: input.signerPublicKeys,
-      threshold: input.threshold,
-    },
+    ...(context.signerPublicKeys.length === context.config.signerGuids.length
+      ? {
+          currentConfig: {
+            signerPublicKeys: context.signerPublicKeys,
+            threshold: context.config.threshold,
+          },
+        }
+      : {}),
     id: `${input.networkId}:${address}`,
-    ...(input.name === undefined ? {} : { name: input.name }),
     networkId: input.networkId,
   };
   if (!context.authorized.isCurrent()) {

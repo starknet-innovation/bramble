@@ -271,9 +271,9 @@ export const startWalletUi = async (
     bindMultisigs({
       app,
       multisig,
-      openDetail: (id) => {
+      openDetail: (id, destination = "multisig-home") => {
         selectedMultisigId = id;
-        navigate("multisig-home");
+        navigate(destination);
       },
       openList: () => {
         selectedMultisigId = null;

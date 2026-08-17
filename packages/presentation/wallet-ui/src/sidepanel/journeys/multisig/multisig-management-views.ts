@@ -2,27 +2,14 @@
 import { escapeHtml } from "@mc-wallet/core/html";
 import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
-import { selectField, textareaField, textField } from "@mc-wallet/ui-kit/fields";
+import { textareaField, textField } from "@mc-wallet/ui-kit/fields";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import {
-  accountDisplayName,
-  accountLabel,
-  flowHeader,
-  flowScreen,
-  noAccountEmpty,
-} from "../../shared/parts";
+import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
 import { receiveAddressView } from "../send/receive-view";
 import { argentMultisigContractLabel, multisigDisplayName } from "./multisig-views";
-
-const signerOptions = (
-  status: WalletStatus,
-): readonly { readonly label: string; readonly value: string }[] =>
-  status.accounts
-    .filter((account) => account.networkId === status.networkId)
-    .map((account) => ({ label: accountDisplayName(account, null), value: account.id }));
 
 const setupOption = (
   view: "multisig-deploy" | "multisig-watch",
@@ -53,30 +40,26 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
   );
 
 /**
- * Renders current-authority registration; an address alone is never trusted.
+ * Renders address-only discovery; authority is read from chain and matched locally.
  */
 export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Add Argent multisig", status, "Verify current signer authority") +
+  flowHeader("Add Argent multisig", status, "Sync signer authority from Starknet") +
   flowScreen(
     "multisig-watch",
     `<section class="section">
       ${account ? "" : noAccountEmpty(status)}
       <form id="multisig-add-form">
-        ${textField({ label: "Name (optional)", maxlength: 48, name: "name" })}
-        ${textField({ className: "mono", label: "Multisig address", name: "address", required: true, spellcheck: false })}
         ${textField({
+          autocomplete: "off",
           className: "mono",
-          hint: "One canonical public key per line for the current on-chain signer set.",
-          label: "Current signer public keys",
-          name: "signerPublicKeys",
-          placeholder: "0x123 0x456",
+          hint: "The wallet reads the signer set and threshold from Starknet, then checks for a matching signer in this wallet.",
+          label: "Multisig address",
+          name: "address",
+          placeholder: "0x…",
           required: true,
           spellcheck: false,
         })}
-        ${textField({ inputmode: "numeric", label: "Signatures required", name: "threshold", required: true, value: "1" })}
-        ${selectField({ label: "Signer in this wallet", name: "signerAccountId", options: signerOptions(status), required: true })}
-        <p class="hint">The wallet checks the pinned class, compares the exact live signer GUID set and threshold, and verifies the selected local signer.</p>
-        ${button({ disabled: account === null, label: "Verify and add", type: "submit" })}
+        ${button({ disabled: account === null, label: "Sync multisig", type: "submit" })}
         <p id="multisig-add-result" role="status"></p>
       </form>
     </section>`,
