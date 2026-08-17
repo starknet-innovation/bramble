@@ -15,6 +15,47 @@ import {
 } from "../../support/multisig-harness";
 
 describe("Argent multisig deployment review", () => {
+  test("watches a counterfactual address and deploys only its matching constructor", async () => {
+    const harness = await makeMultisigHarness({
+      getConfig() {
+        throw new Error("20: Contract not found: undefined");
+      },
+    });
+    await harness.multisigStore.removeMultisig(HARNESS_MULTISIG_ID);
+    const address = HARNESS_MULTISIG_ID.split(":")[1] ?? "";
+
+    await expect(
+      harness.handler(
+        { address, networkId: "SN_MAIN", type: "wallet.addMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({
+      multisig: { config: null, deployed: false, record: { address } },
+      ok: true,
+    });
+    const setup = {
+      expectedAddress: address,
+      networkId: "SN_MAIN",
+      salt: "0x0",
+      signerAccountId: harnessAccountA.id,
+      signerPublicKeys: HARNESS_KEYS,
+      threshold: 2,
+      type: "wallet.reviewArgentMultisigDeployment",
+    } as const;
+    await expect(
+      harness.handler({ ...setup, salt: "0x1" }, harnessExtensionSender),
+    ).resolves.toEqual({
+      error: "Signer set, threshold, and salt do not reproduce the watched multisig address",
+    });
+    const reviewed = await harness.handler(setup, harnessExtensionSender);
+    const review = (reviewed as { readonly deploymentReview: Record<string, unknown> })
+      .deploymentReview;
+    await expect(
+      harness.handler({ review, type: "wallet.deployArgentMultisig" }, harnessExtensionSender),
+    ).resolves.toMatchObject({ ok: true, transactionHash: "0x7cd" });
+    expect(harness.deploymentSubmitCount()).toBe(1);
+  });
+
   test("keeps one exact review across a service-worker restart and consumes it once", async () => {
     const storage = createMemoryStore();
     const firstWorker = createArgentMultisigDeploymentReviews(storage);

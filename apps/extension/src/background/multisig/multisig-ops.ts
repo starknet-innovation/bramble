@@ -8,6 +8,7 @@ import type {
   MultisigStore,
 } from "@mc-wallet/multisig/repository";
 import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import { isContractNotFoundError } from "@mc-wallet/starknet/provider";
 import type { TokenBalance } from "@mc-wallet/starknet/rpc";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
@@ -65,6 +66,19 @@ const addRecord = async (
   return { record: returned, result };
 };
 
+const readDeployedConfig = async (
+  deps: MultisigOpsDeps,
+  address: string,
+  rpcUrls: readonly string[],
+): Promise<ArgentMultisigConfig | null> => {
+  try {
+    return await multisigRpc(deps).getConfig({ address, rpcUrls });
+  } catch (error) {
+    if (isContractNotFoundError(error)) return null;
+    throw error;
+  }
+};
+
 const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigInput) => {
   const authorized = captureSessionAuthorization(deps.session);
   const active = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
@@ -75,10 +89,12 @@ const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigIn
     return { error: "switch to the multisig network first" } as const;
   }
   const preferences = await deps.preferencesStore.read();
-  const config = await multisigRpc(deps).getConfig({
-    address: input.address,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences),
-  });
+  const config = await readDeployedConfig(
+    deps,
+    input.address,
+    networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences),
+  );
+  if (!config) return { authorized, config, signerPublicKeys: [] };
   const signerPublicKeys = config.signerGuids
     .map(
       (guid) =>
@@ -227,10 +243,8 @@ const listMultisigs = async (deps: MultisigOpsDeps, message: unknown): Promise<R
     records.map(async (record) => {
       const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences);
       try {
-        const config = await multisigRpc(deps).getConfig({
-          address: record.address,
-          rpcUrls,
-        });
+        const config = await readDeployedConfig(deps, record.address, rpcUrls);
+        if (!config) return { config: null, deployed: false, record };
         const refreshed = await reconcileArgentCurrentConfig(deps, record, config);
         await markObservedArgentIntentOutcomes(deps, refreshed);
         await markChangedIntentsStale(deps.multisigStore, record.id, config);
@@ -262,7 +276,7 @@ const addMultisig = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
     accountContractType: "argent-multisig",
     address,
     classHash: ARGENT_MULTISIG_CONTRACT.classHash,
-    ...(context.signerPublicKeys.length === context.config.signerGuids.length
+    ...(context.config && context.signerPublicKeys.length === context.config.signerGuids.length
       ? {
           currentConfig: {
             signerPublicKeys: context.signerPublicKeys,
@@ -281,7 +295,11 @@ const addMultisig = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   return stored.result === "stored"
     ? {
         intents: [],
-        multisig: { config: context.config, deployed: true, record: stored.record },
+        multisig: {
+          config: context.config,
+          deployed: context.config !== null,
+          record: stored.record,
+        },
         ok: true,
       }
     : { error: `Argent multisig registry ${stored.result}` };
@@ -303,16 +321,20 @@ const refreshMultisig = async (
   if ("error" in context) {
     return context;
   }
-  const config = await multisigRpc(deps).getConfig({
-    address: context.record.address,
-    rpcUrls: context.rpcUrls,
-  });
-  const refreshed = await reconcileArgentCurrentConfig(deps, context.record, config);
-  await markObservedArgentIntentOutcomes(deps, refreshed);
-  await markChangedIntentsStale(deps.multisigStore, context.record.id, config);
+  const config = await readDeployedConfig(deps, context.record.address, context.rpcUrls);
   const intents = (await deps.multisigStore.listIntents()).filter(
     (intent) => intent.accountId === context.record.id,
   );
+  if (!config) {
+    return {
+      intents,
+      multisig: { config: null, deployed: false, record: context.record },
+      ok: true,
+    };
+  }
+  const refreshed = await reconcileArgentCurrentConfig(deps, context.record, config);
+  await markObservedArgentIntentOutcomes(deps, refreshed);
+  await markChangedIntentsStale(deps.multisigStore, context.record.id, config);
   return { intents, multisig: { config, deployed: true, record: refreshed }, ok: true };
 };
 

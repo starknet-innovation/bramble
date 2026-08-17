@@ -313,12 +313,17 @@ const readDeploymentReview = (value: unknown): ArgentMultisigDeploymentReview | 
  */
 export const readReviewDeploymentInput = (
   message: unknown,
-): Omit<ArgentMultisigDeploymentReview, "address" | "fee" | "feeAffordability"> | null => {
+):
+  | (Omit<ArgentMultisigDeploymentReview, "address" | "fee" | "feeAffordability"> & {
+      readonly expectedAddress?: string;
+    })
+  | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "name",
       "networkId",
+      "expectedAddress",
       "salt",
       "signerAccountId",
       "signerPublicKeys",
@@ -326,6 +331,8 @@ export const readReviewDeploymentInput = (
       "type",
     ]) ||
     message["type"] !== "wallet.reviewArgentMultisigDeployment" ||
+    (message["expectedAddress"] !== undefined &&
+      !isCanonicalNonZeroFelt(message["expectedAddress"])) ||
     !isName(message["name"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !isAccountId(message["signerAccountId"]) ||
@@ -335,6 +342,9 @@ export const readReviewDeploymentInput = (
   }
   return {
     ...deployConfigFrom(message),
+    ...(message["expectedAddress"] === undefined
+      ? {}
+      : { expectedAddress: message["expectedAddress"] }),
     ...(message["name"] === undefined ? {} : { name: message["name"] }),
     networkId: message["networkId"],
     signerAccountId: message["signerAccountId"],

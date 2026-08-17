@@ -31,6 +31,7 @@ export type ArgentMultisigSetup = {
  * Constructor authority required to review a new Argent multisig deployment.
  */
 export type ArgentMultisigDeploymentSetup = {
+  readonly expectedAddress?: string;
   readonly name?: string;
   readonly networkId: string;
   readonly salt: string;

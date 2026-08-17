@@ -34,7 +34,7 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
       ${account ? "" : noAccountEmpty(status)}
       <div class="multisig-setup-options" role="group" aria-label="Argent multisig setup">
         ${setupOption("multisig-deploy", "users", "Create a new multisig", "Deploy the pinned Argent 0.2 account.")}
-        ${setupOption("multisig-watch", "search", "Add an existing multisig", "Verify its live signer authority.")}
+        ${setupOption("multisig-watch", "search", "Add a shared address", "Sync it now or complete deployment.")}
       </div>
     </section>`,
   );
@@ -43,7 +43,7 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
  * Renders address-only discovery; authority is read from chain and matched locally.
  */
 export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Add Argent multisig", status, "Sync signer authority from Starknet") +
+  flowHeader("Add Argent multisig", status, "Sync or complete an undeployed account") +
   flowScreen(
     "multisig-watch",
     `<section class="section">
@@ -52,14 +52,14 @@ export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | nu
         ${textField({
           autocomplete: "off",
           className: "mono",
-          hint: "The wallet reads the signer set and threshold from Starknet, then checks for a matching signer in this wallet.",
+          hint: "If deployed, signer authority syncs from Starknet. If not, the address is saved and deployment setup is verified before use.",
           label: "Multisig address",
           name: "address",
           placeholder: "0x…",
           required: true,
           spellcheck: false,
         })}
-        ${button({ disabled: account === null, label: "Sync multisig", type: "submit" })}
+        ${button({ disabled: account === null, label: "Add multisig", type: "submit" })}
         <p id="multisig-add-result" role="status"></p>
       </form>
     </section>`,

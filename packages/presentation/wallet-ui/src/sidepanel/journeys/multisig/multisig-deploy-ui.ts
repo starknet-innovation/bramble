@@ -61,6 +61,9 @@ const publicKeys = (raw: string): readonly string[] =>
 const deploymentSetup = (form: HTMLFormElement): ArgentMultisigDeploymentSetup => {
   const data = new FormData(form);
   return {
+    ...(String(data.get("expectedAddress") ?? "")
+      ? { expectedAddress: normalizeFeltInput(String(data.get("expectedAddress"))) }
+      : {}),
     ...(String(data.get("name") ?? "").trim()
       ? { name: String(data.get("name") ?? "").trim() }
       : {}),

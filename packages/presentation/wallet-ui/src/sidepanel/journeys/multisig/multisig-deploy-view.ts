@@ -133,6 +133,8 @@ export const multisigDeployFlow = (
   const accounts = status.accounts.filter((candidate) => candidate.networkId === status.networkId);
   const savedDeployment =
     selectedMultisig?.deployed === false ? selectedMultisig.record.deployment : undefined;
+  const expectedAddress =
+    selectedMultisig?.deployed === false ? selectedMultisig.record.address : undefined;
   const selectedPublicKeys = savedDeployment?.signerPublicKeys ?? [account.publicKeyX];
   const deploymentSigner = savedDeployment
     ? accounts.find((candidate) =>
@@ -170,6 +172,20 @@ export const multisigDeployFlow = (
               valueStyle: "code",
             },
             { label: "Network", value: status.network },
+            ...(expectedAddress
+              ? [
+                  {
+                    action: {
+                      attributes: { "data-copy": expectedAddress },
+                      icon: "copy" as const,
+                      label: "Copy watched address",
+                    },
+                    label: "Watched address",
+                    value: accountLabel(expectedAddress),
+                    valueStyle: "code" as const,
+                  },
+                ]
+              : []),
           ],
           { "data-multisig-deploy-summary": true },
         )}
@@ -183,7 +199,9 @@ export const multisigDeployFlow = (
         ${
           savedDeployment
             ? '<p class="review-flag" role="note">Deployment required. The saved signer set, threshold, and salt are restored below.</p>'
-            : ""
+            : expectedAddress
+              ? '<p class="review-flag" role="note">Deployment required. Enter the original signer set, threshold, and salt; review will verify that they reproduce the watched address.</p>'
+              : ""
         }
         ${
           savedDeployment && !deploymentSigner
@@ -191,7 +209,8 @@ export const multisigDeployFlow = (
             : ""
         }
         <form id="multisig-deploy-form">
-          ${textField({ label: "Name (optional)", maxlength: 48, name: "name", value: savedDeployment ? (selectedMultisig?.record.name ?? "") : "" })}
+          ${expectedAddress ? `<input name="expectedAddress" type="hidden" value="${escapeHtml(expectedAddress)}" />` : ""}
+          ${textField({ label: "Name (optional)", maxlength: 48, name: "name", value: selectedMultisig?.record.name ?? "" })}
           <section class="multisig-signer-set" aria-labelledby="multisig-signer-set-title">
             <div class="multisig-signer-set-head">
               <strong id="multisig-signer-set-title">Signer set</strong>

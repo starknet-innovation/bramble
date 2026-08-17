@@ -428,7 +428,6 @@ describe("bindMultisigs frozen-intent forms", () => {
     const app = mount(
       multisigPortfolio({
         authorityAvailable: true,
-        canDeploy: false,
         canSign: true,
         data: EMPTY_MULTISIG_PORTFOLIO,
         intents: "<p>Intent panel</p>",

@@ -146,6 +146,16 @@ const undeployedMultisig: ArgentMultisigView = {
   config: null,
   deployed: false,
 };
+const {
+  currentConfig: _currentConfig,
+  deployment: _deployment,
+  ...watchedUndeployedRecord
+} = argentMultisig.record;
+const watchedUndeployedMultisig: ArgentMultisigView = {
+  config: null,
+  deployed: false,
+  record: watchedUndeployedRecord,
+};
 const changedAuthority: ArgentMultisigView = {
   ...argentMultisig,
   config: {
@@ -202,10 +212,10 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   ),
   checkpoint(
     "watch",
-    "Watch existing account",
-    "One address syncs the live threshold and signer set, then checks for a matching signer in this wallet.",
+    "Add shared address",
+    "One address syncs a deployed account or becomes a verified deployment handoff when it is still counterfactual.",
     { selectedMultisigId: null, view: "multisig-watch" },
-    { input: "address only", verification: "automatic" },
+    { input: "address only", verification: "chain or deployment review" },
   ),
   checkpoint(
     "deploy-class-check",
@@ -247,10 +257,20 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   checkpoint(
     "home-deployment-required",
     "Deployment required",
-    "An undeployed saved account replaces the dead Prepare action with the exact next step and explains why transactions are blocked.",
-    { multisigs: [undeployedMultisig], view: "multisig-home" },
-    { action: "deploy", deployed: false },
+    "A shared counterfactual address can be watched before deployment and replaces the dead Prepare action with the exact recovery step.",
+    { multisigs: [watchedUndeployedMultisig], view: "multisig-home" },
+    { action: "complete setup", deployed: false },
   ),
+  {
+    ...checkpoint(
+      "deploy-recover",
+      "Deploy watched address",
+      "The wallet collects the missing constructor and binds fee review to the watched address so an incorrect signer set, threshold, or salt cannot deploy a different account.",
+      { multisigs: [watchedUndeployedMultisig], view: "multisig-deploy" },
+      { constructor: "address-bound", deployed: false },
+    ),
+    prepare: bindFixtureMultisig,
+  },
   checkpoint(
     "deploy-resume",
     "Resume saved deployment",

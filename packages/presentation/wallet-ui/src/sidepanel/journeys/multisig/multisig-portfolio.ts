@@ -9,11 +9,12 @@ import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
+import { explorerAccountUrl } from "@mc-wallet/wallet-model/networks";
 import type { DiscoveredNft } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
-import { actionTile } from "../../shell/wallet-shell";
+import { actionTile, explorerTile } from "../../shell/wallet-shell";
 import { nftImageMarkup, visibleNftItems } from "../collectibles/nft-views";
 import { visibleHomeBalances } from "../portfolio/home-tabs";
 import { balanceRow } from "../portfolio/token-row";
@@ -124,7 +125,6 @@ const collectiblesPanel = (
  */
 export const multisigPortfolio = (input: {
   readonly authorityAvailable: boolean;
-  readonly canDeploy: boolean;
   readonly canSign: boolean;
   readonly data: MultisigPortfolioData;
   readonly deployed?: boolean | null;
@@ -137,22 +137,23 @@ export const multisigPortfolio = (input: {
   ${portfolioHero(input.record, input.preferences, input.data)}
   <section class="home-actions multisig-primary-actions" aria-label="Multisig actions">
     <div class="action-row">
-      ${input.canDeploy ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Prepare", "plus", input.canSign)}
+      ${input.deployed === false ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Prepare", "plus", input.canSign)}
       ${actionTile("multisig-receive", "Receive", "qrCode", true)}
       ${actionTile("multisig-signers", "Signers", "users", true)}
+      ${explorerTile(explorerAccountUrl(input.record.networkId, input.record.address))}
     </div>
     ${
-      input.canDeploy
-        ? '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Deploy this saved account on Starknet before preparing a transaction.</p>'
-        : input.deployed === false
-          ? '<p class="hint multisig-action-note">This watched address is not deployed, and its original constructor is not available in this wallet.</p>'
-          : !input.authorityAvailable
-            ? '<p class="hint multisig-action-note">Deployment and signer authority could not be verified. Retry when network access is restored.</p>'
-            : input.canSign
-              ? ""
-              : input.signerKnown
-                ? '<p class="hint multisig-action-note"><strong>Signer found.</strong> This account is synced, but preparing transactions requires its complete signer setup.</p>'
-                : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
+      input.deployed === false
+        ? input.record.deployment
+          ? '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Deploy this saved account on Starknet before preparing a transaction.</p>'
+          : '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Open Deploy and enter the original signer set, threshold, and salt; review will verify this address.</p>'
+        : !input.authorityAvailable
+          ? '<p class="hint multisig-action-note">Deployment and signer authority could not be verified. Retry when network access is restored.</p>'
+          : input.canSign
+            ? ""
+            : input.signerKnown
+              ? '<p class="hint multisig-action-note"><strong>Signer found.</strong> This account is synced, but preparing transactions requires its complete signer setup.</p>'
+              : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>
   <section class="home-tabs multisig-portfolio-tabs" data-active-tab="assets" aria-label="Shared account">

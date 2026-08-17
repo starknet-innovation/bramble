@@ -1,5 +1,5 @@
 import { expect } from "storybook/test";
-import { RECIPIENT_ADDRESS } from "../../fixtures/fixtures";
+import { argentMultisig, RECIPIENT_ADDRESS } from "../../fixtures/fixtures";
 import {
   assertCheckpointReady,
   checkpointStory,
@@ -31,14 +31,14 @@ export const ChooseSetup: LabStory = {
 };
 export const Watch: LabStory = {
   args: { checkpointId: "watch", scenarioId: "multisig" },
-  name: "Watch existing account",
+  name: "Add shared address",
   play: async ({ canvasElement }) => {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelectorAll("#multisig-add-form input")).toHaveLength(1);
     await expect(body?.querySelector('input[name="address"]')).toBeVisible();
-    await expect(body?.querySelector('button[type="submit"]')).toHaveTextContent("Sync multisig");
+    await expect(body?.querySelector('button[type="submit"]')).toHaveTextContent("Add multisig");
   },
 };
 export const DeployUnavailable = checkpointStory(
@@ -119,9 +119,28 @@ export const HomeDeploymentRequired: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelector('[data-view="multisig-deploy"]')).toHaveTextContent("Deploy");
     await expect(body?.querySelector(".multisig-action-note")).toHaveTextContent(
-      "Deploy this saved account",
+      "enter the original signer set, threshold, and salt",
     );
     await expect(body?.querySelector('[data-view="multisig-propose"]')).not.toBeInTheDocument();
+  },
+};
+export const DeployRecover: LabStory = {
+  args: { checkpointId: "deploy-recover", scenarioId: "multisig" },
+  name: "Deployment · watched address",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector(".review-flag[role='note']")).toHaveTextContent(
+      "reproduce the watched address",
+    );
+    await expect(body?.querySelector('input[name="expectedAddress"]')).toHaveValue(
+      argentMultisig.record.address,
+    );
+    await expect(body?.querySelector("[data-multisig-deploy-summary]")).toHaveTextContent(
+      "Watched address",
+    );
+    await expect(body?.querySelector('button[type="submit"]')).toBeEnabled();
   },
 };
 export const DeployResume: LabStory = {
@@ -148,7 +167,10 @@ export const HomeEmpty: LabStory = {
     await expect(body?.querySelector('[data-view="multisig-track"]')).toHaveTextContent(
       "Import intent",
     );
-    await expect(body?.querySelector(".multisig-primary-actions")).not.toHaveTextContent("Import");
+    const actions = body?.querySelector(".multisig-primary-actions");
+    await expect(actions).not.toHaveTextContent("Import");
+    await expect(actions).toHaveTextContent("Explorer");
+    await expect(actions?.querySelectorAll(".action-tile")).toHaveLength(4);
   },
 };
 export const HomeIntents: LabStory = {

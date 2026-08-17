@@ -412,14 +412,6 @@ export const multisigDetailFlow = (
     storedConfig.signerPublicKeys.every((key, index) =>
       sameFelt(argentSignerGuid(key), view.config?.signerGuids[index] ?? ""),
     );
-  const canDeploy =
-    view.deployed === false &&
-    record.deployment !== undefined &&
-    status.accounts.some(
-      (account) =>
-        account.networkId === record.networkId &&
-        record.deployment?.signerPublicKeys.some((key) => sameFelt(key, account.publicKeyX)),
-    );
   const openCount = intents.filter(
     (intent) =>
       intent.accountId === record.id && (intent.state === "collecting" || intent.state === "ready"),
@@ -444,7 +436,6 @@ export const multisigDetailFlow = (
     `${authorityWarning}
       ${multisigPortfolio({
         authorityAvailable: view.config !== null,
-        canDeploy,
         canSign: options.length > 0 && hasCompleteSignerConfig,
         data: portfolio,
         ...(view.deployed === undefined ? {} : { deployed: view.deployed }),

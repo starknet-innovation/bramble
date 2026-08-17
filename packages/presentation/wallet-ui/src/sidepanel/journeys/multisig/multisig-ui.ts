@@ -77,9 +77,11 @@ const bindAdd = (deps: MultisigUiDeps): void => {
             ),
         ).length;
         showToast(
-          matched === 0
-            ? "Multisig synced · watch-only"
-            : `Multisig synced · ${matched} wallet signer${matched === 1 ? "" : "s"} found`,
+          view.deployed === false
+            ? "Undeployed multisig added · complete setup to deploy"
+            : matched === 0
+              ? "Multisig synced · watch-only"
+              : `Multisig synced · ${matched} wallet signer${matched === 1 ? "" : "s"} found`,
           "success",
           button ?? deps.app,
         );

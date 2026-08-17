@@ -187,12 +187,18 @@ const reviewDeployment = async (
   if (!input) {
     return { error: "invalid Argent multisig deployment review request" };
   }
-  const context = await deploymentContext(deps, input);
+  const { expectedAddress, ...setup } = input;
+  const address = (await import("@mc-wallet/multisig/deploy")).predictArgentMultisigAddress(setup);
+  if (expectedAddress !== undefined && !sameFelt(address, expectedAddress)) {
+    return {
+      error: "Signer set, threshold, and salt do not reproduce the watched multisig address",
+    };
+  }
+  const context = await deploymentContext(deps, setup);
   if (context.error !== undefined) {
     return { error: context.error };
   }
-  const address = (await import("@mc-wallet/multisig/deploy")).predictArgentMultisigAddress(input);
-  const reviewBase = { ...input, address };
+  const reviewBase = { ...setup, address };
   const account = recordForReview({
     ...reviewBase,
     fee: { overallFee: "0", unit: "FRI" },
@@ -216,7 +222,7 @@ const reviewDeployment = async (
   const feeAffordability = resolveFeeAffordability({
     balance: await readStrkBalance(
       deps,
-      { address, networkId: input.networkId },
+      { address, networkId: setup.networkId },
       context.preferences,
     ),
     fee,

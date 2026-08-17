@@ -185,6 +185,8 @@ describe("Argent multisig list and exact-intent detail", () => {
     );
     expect(home).toContain('data-view="multisig-detail"');
     expect(home).toContain("1 of 1 signatures");
+    expect(home).toContain(`href="https://starkscan.co/contract/${fixture.record.address}"`);
+    expect(home).toContain('aria-label="Open this account on the block explorer"');
     expect(home).toContain('class="ghost small tab-more" data-view="multisig-track"');
     expect(home).toContain("Import intent");
     expect(home).not.toContain('data-ms-submit="');
@@ -228,6 +230,37 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(deployment).toContain('name="threshold"');
     expect(deployment).toContain('value="0x5"');
     expect(deployment).toContain(`value="${signer.id}"`);
+  });
+
+  test("turns an undeployed address-only watch into a verified deployment setup", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const {
+      currentConfig: _currentConfig,
+      deployment: _deployment,
+      ...addressOnlyRecord
+    } = fixture.record;
+    const undeployed = { config: null, deployed: false, record: addressOnlyRecord } as const;
+
+    const home = multisigDetailFlow(
+      fixture.status,
+      signer,
+      undeployed,
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(home).toContain('data-view="multisig-deploy"');
+    expect(home).toContain("enter the original signer set, threshold, and salt");
+    expect(home).not.toContain('data-view="multisig-propose"');
+
+    const deployment = multisigDeployFlow(fixture.status, signer, true, null, undeployed);
+    expect(deployment).toContain("reproduce the watched address");
+    expect(deployment).toContain('name="expectedAddress" type="hidden"');
+    expect(deployment).toContain(`value="${fixture.record.address}"`);
+    expect(deployment).toContain("Watched address");
   });
 
   test("disables signing when fresh on-chain authority is unavailable", async () => {
@@ -300,7 +333,7 @@ describe("Argent frozen-intent composer", () => {
     const fixture = await makeArgentMultisigFixture();
     const html = multisigWatchFlow(fixture.status, fixture.status.accounts[0] ?? null);
     expect(html).toContain('name="address"');
-    expect(html).toContain("reads the signer set and threshold from Starknet");
+    expect(html).toContain("If deployed, signer authority syncs from Starknet");
     expect(html).not.toContain('name="signerPublicKeys"');
     expect(html).not.toContain('name="signerAccountId"');
     expect(html).not.toContain('name="threshold"');

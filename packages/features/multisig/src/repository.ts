@@ -177,14 +177,21 @@ const upsertMultisigIn = (shape: StoredShape, record: ArgentMultisigRecord): Sha
   const existing = shape.multisigs.findIndex((stored) => stored.id === record.id);
   if (existing >= 0) {
     const current = shape.multisigs[existing];
+    const enrichesAddressOnlyWatch =
+      current !== undefined &&
+      current.deployment === undefined &&
+      effectiveCurrentConfig(current) === undefined &&
+      record.deployment !== undefined &&
+      sameCurrentConfig(record.currentConfig, record.deployment);
     if (
       !current ||
       current.accountContractType !== record.accountContractType ||
       current.address !== record.address ||
       current.classHash !== record.classHash ||
       current.networkId !== record.networkId ||
-      JSON.stringify(current.deployment) !== JSON.stringify(record.deployment) ||
-      !sameCurrentConfig(effectiveCurrentConfig(current), effectiveCurrentConfig(record))
+      (!enrichesAddressOnlyWatch &&
+        (JSON.stringify(current.deployment) !== JSON.stringify(record.deployment) ||
+          !sameCurrentConfig(effectiveCurrentConfig(current), effectiveCurrentConfig(record))))
     ) {
       return { result: "conflict", shape };
     }
