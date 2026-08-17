@@ -1,7 +1,6 @@
 /** DOM bindings forward only exact Argent multisig intents, signatures, and calls. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { buildErc20TransferCall, parseTokenAmount } from "@mc-wallet/starknet/rpc";
 import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigIntentPackage,
@@ -268,17 +267,18 @@ describe("bindMultisigs frozen-intent forms", () => {
   test("builds a token transfer from recipient, asset, and decimal amount fields", async () => {
     const fixture = await makeArgentMultisigFixture();
     const captured: unknown[] = [];
+    const prepared = deferred<{ intent: typeof fixture.intent }>();
     const client = await testClient({
       async prepareIntent(multisigId, calls) {
         captured.push({ calls, multisigId });
-        return { intent: fixture.intent };
+        return prepared.promise;
       },
     });
     const app = mount(
       `<form data-ms-prepare="transfer" data-multisig-id="${fixture.record.id}">
         <input name="recipient" value="0xabc" />
         <input name="amount" value="1.25" />
-        <input name="tokenAddress" value="0xdef" />
+        <input name="tokenAddress" value="0x000DEF" />
         <input name="tokenBalance" value="500" />
         <input name="tokenDecimals" value="2" />
         <input name="tokenPrice" value="2" />
@@ -287,14 +287,27 @@ describe("bindMultisigs frozen-intent forms", () => {
       client,
       fixture.status,
     );
-    app.querySelector<HTMLFormElement>("[data-ms-prepare]")?.requestSubmit();
+    const form = app.querySelector<HTMLFormElement>("[data-ms-prepare]");
+    const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    form?.requestSubmit();
     await flush();
+    expect(form?.getAttribute("aria-busy")).toBe("true");
+    expect(button?.disabled).toBe(true);
+    expect(button?.textContent).toContain("Preparing review…");
     expect(captured).toEqual([
       {
-        calls: [buildErc20TransferCall("0xdef", "0xabc", parseTokenAmount("1.25", 2))],
+        calls: [
+          {
+            calldata: ["0xabc", "0x7d", "0x0"],
+            contractAddress: "0xdef",
+            entrypoint: "transfer",
+          },
+        ],
         multisigId: fixture.record.id,
       },
     ]);
+    prepared.resolve({ intent: fixture.intent });
+    await flush();
   });
 
   test("imports the complete validated intent package without projecting fields", async () => {

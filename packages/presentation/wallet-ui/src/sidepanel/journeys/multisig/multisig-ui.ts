@@ -2,7 +2,12 @@
 
 import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { buildErc20TransferCall, parseTokenAmount } from "@mc-wallet/starknet/rpc";
-import { normalizeFeltInput, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import {
+  canonicalFelt,
+  normalizeFeltInput,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
@@ -327,17 +332,23 @@ const preparedCall = (form: HTMLFormElement) => {
       throw new Error("Amount exceeds the shared account balance");
     }
     const call = buildErc20TransferCall(
-      String(data.get("tokenAddress") ?? ""),
-      String(data.get("recipient") ?? ""),
+      normalizeFeltInput(String(data.get("tokenAddress") ?? "")),
+      normalizeFeltInput(String(data.get("recipient") ?? "")),
       amount,
     );
     if (!Array.isArray(call.calldata)) throw new Error("Transfer calldata is unavailable");
     const calldata: string[] = [];
     for (const felt of call.calldata) {
       if (typeof felt !== "string") throw new Error("Transfer calldata is unavailable");
-      calldata.push(felt);
+      const canonical = canonicalFelt(felt);
+      if (canonical === null) throw new Error("Transfer calldata is unavailable");
+      calldata.push(canonical);
     }
-    return { calldata, contractAddress: call.contractAddress, entrypoint: call.entrypoint };
+    return {
+      calldata,
+      contractAddress: normalizeFeltInput(call.contractAddress),
+      entrypoint: call.entrypoint,
+    };
   }
   return {
     calldata: parseFelts(String(data.get("calldata") ?? "")),
@@ -350,11 +361,21 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
   deps.app?.querySelectorAll<HTMLFormElement>("[data-ms-prepare]").forEach((form) => {
     if (form.dataset["msPrepare"] === "transfer") bindTransferComposer(form);
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const label = button
+      ? Array.from(button.childNodes).find((node) => node.nodeType === 3)
+      : undefined;
+    const idleLabel = label?.textContent ?? "";
+    const setPreparing = (preparing: boolean): void => {
+      buttonBusy(button, preparing);
+      if (preparing) form.setAttribute("aria-busy", "true");
+      else form.removeAttribute("aria-busy");
+      if (label) label.textContent = preparing ? "Preparing review…" : idleLabel;
+    };
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const multisigId = form.dataset["multisigId"];
       if (!multisigId) return;
-      buttonBusy(button, true);
+      setPreparing(true);
       void Promise.resolve()
         .then(() => deps.multisig.prepareIntent(multisigId, [preparedCall(form)]))
         .then(
@@ -368,7 +389,7 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
               "error",
               button ?? deps.app,
             );
-            buttonBusy(button, false);
+            setPreparing(false);
           },
         );
     });

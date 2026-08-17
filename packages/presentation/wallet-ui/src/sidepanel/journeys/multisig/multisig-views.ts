@@ -413,13 +413,11 @@ export const multisigDetailFlow = (
       intent.accountId === record.id && (intent.state === "collecting" || intent.state === "ready"),
   ).length;
   const authorityWarning =
-    loadError || view.config === null
-      ? view.deployed === false
-        ? screen === "multisig-home"
-          ? ""
-          : '<div class="review-panel" role="status"><p class="review-flag">This account is not deployed yet. Deploy it before preparing or signing transactions.</p></div>'
-        : '<div class="review-panel" role="alert"><p class="review-flag">Current on-chain signer authority is unavailable. Signing is disabled.</p></div>'
-      : "";
+    screen === "multisig-home" || (!loadError && view.config !== null)
+      ? ""
+      : view.deployed === false
+        ? '<div class="review-panel" role="status"><p class="review-flag">This account is not deployed yet. Deploy it before preparing or signing transactions.</p></div>'
+        : '<div class="review-panel" role="alert"><p class="review-flag">Current on-chain signer authority is unavailable. Signing is disabled.</p></div>';
   if (screen === "multisig-detail") {
     return (
       flowHeader(multisigDisplayName(record), status, configLabel(view)) +

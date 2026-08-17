@@ -239,6 +239,19 @@ describe("Argent multisig list and exact-intent detail", () => {
     );
     expect(html).toContain("Current on-chain signer authority is unavailable");
     expect(html).not.toContain('data-ms-sign="');
+
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      { config: null, record: fixture.record },
+      [fixture.intent],
+      true,
+      null,
+      "multisig-home",
+    );
+    expect(home).not.toContain("Current on-chain signer authority is unavailable");
+    expect(home).toContain("signer authority could not be verified");
+    expect(home).toContain('data-view="multisig-propose" type="button" disabled');
   });
 
   test("suppresses every signing action when fresh authority differs from the frozen snapshot", async () => {
