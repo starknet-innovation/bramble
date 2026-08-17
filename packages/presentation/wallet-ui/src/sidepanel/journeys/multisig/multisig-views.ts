@@ -37,6 +37,7 @@ import {
   reviewPanel,
   riskFlagMessages,
 } from "../../shared/review-render";
+import { tokenGlyph } from "../portfolio/token-row";
 import { multisigDisplayName } from "./multisig-model";
 import {
   EMPTY_MULTISIG_PORTFOLIO,
@@ -128,6 +129,17 @@ const localSignerOptions = (
         }))
     : [];
 
+const intentReviewAssets = (
+  intent: ArgentMultisigSigningIntent,
+  record: ArgentMultisigRecord,
+  preferences: WalletPreferences | null,
+) =>
+  verificationContext(record, preferences ?? { addressBook: [], tokens: [] })
+    .tokens.filter((token) =>
+      intent.prepared.calls.some((call) => sameFelt(call.contractAddress, token.address)),
+    )
+    .map((token) => ({ address: token.address, symbol: token.symbol }));
+
 const exactCalls = (intent: ArgentMultisigSigningIntent): string =>
   intent.prepared.calls
     .map(
@@ -218,6 +230,7 @@ const intentCard = (
     hasFreshAuthority && (intent.state === "collecting" || intent.state === "ready");
   const fee = preparedArgentMultisigFee(intent.prepared);
   const configReview = configReviewFor(intent, view);
+  const reviewAssets = intentReviewAssets(intent, view.record, preferences);
   const transactionReview = verifyCalls(
     intent.prepared.calls.map((call) => ({ ...call, calldata: [...call.calldata] })),
     {
@@ -231,7 +244,10 @@ const intentCard = (
       <span><p class="decision-label">Reviewed intent</p><h2>${escapeHtml(intent.summary)}</h2></span>
       ${pill(intent.state)}
     </header>
-    ${reviewCallsList(transactionReview.calls.map((call) => call.summary))}
+    ${reviewCallsList(
+      transactionReview.calls.map((call) => call.summary),
+      reviewAssets,
+    )}
     ${reviewPanel([
       ...riskFlagMessages(transactionReview.flags),
       ...(hasFreshAuthority
@@ -382,20 +398,27 @@ const intentList = (
 const compactIntentList = (
   record: ArgentMultisigRecord,
   intents: readonly ArgentMultisigSigningIntent[],
+  preferences: WalletPreferences | null,
 ): string => {
   const scoped = intents.filter((intent) => intent.accountId === record.id);
   return scoped.length === 0
     ? emptyState("No frozen signing intents are stored for this account.")
     : `<ul class="menu-list multisig-intent-list">${scoped
-        .map(
-          (intent) =>
-            `<li>${menuRow({
+        .map((intent) => {
+          const assets = intentReviewAssets(intent, record, preferences);
+          const assetGlyphs =
+            assets.length === 0
+              ? ""
+              : `<span class="multisig-intent-assets" aria-hidden="true">${assets.map((asset) => tokenGlyph(asset.address, asset.symbol)).join("")}</span>`;
+          return `<li class="multisig-intent-row${assets.length === 0 ? "" : " has-assets"}">${menuRow(
+            {
               attributes: { "data-view": "multisig-detail" },
               icon: "users",
               label: intent.summary,
               supportingText: `${intent.state} · ${intent.signatures.length} of ${intent.configSnapshot.threshold} signatures`,
-            })}</li>`,
-        )
+            },
+          )}${assetGlyphs}</li>`;
+        })
         .join("")}</ul>`;
 };
 
@@ -446,7 +469,7 @@ export const multisigDetailFlow = (
       ${multisigPortfolio({
         canSign: options.length > 0 && view.config !== null,
         data: portfolio,
-        intents: compactIntentList(record, intents),
+        intents: compactIntentList(record, intents, preferences),
         openCount,
         preferences,
         record,

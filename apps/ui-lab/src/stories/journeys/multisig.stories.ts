@@ -37,6 +37,7 @@ export const HomeIntents: LabStory = {
     await expect(
       body?.querySelector('.multisig-intent-list [data-view="multisig-detail"]'),
     ).toBeVisible();
+    await expect(body?.querySelector(".multisig-intent-assets .token-logo")).toBeVisible();
     await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
   },
 };
@@ -54,6 +55,9 @@ export const IntentReady: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelector('[data-ms-home-tab="intents"]')).not.toBeInTheDocument();
     await expect(body?.querySelector("[data-ms-intent]")).toHaveTextContent(/Signatures\s*2 of 2/);
+    await expect(
+      body?.querySelector("[data-ms-intent] .review-call-assets .token-logo"),
+    ).toBeVisible();
     await expect(body?.querySelector("[data-ms-submit]")).toBeVisible();
   },
 };

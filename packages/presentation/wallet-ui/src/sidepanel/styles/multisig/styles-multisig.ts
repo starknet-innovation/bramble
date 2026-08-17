@@ -24,6 +24,12 @@ export const MULTISIG_STYLES = `
   .multisig-intent ol { min-width: 0; padding-left: ${SPACE.lg}; }
   .multisig-review-flow { min-width: 0; }
   .multisig-intent-list { overflow: hidden; }
+  .multisig-intent-row { position: relative; }
+  .multisig-intent-row.has-assets .menu-icon { visibility: hidden; }
+  .multisig-intent-assets { display: inline-flex; inset-inline-start: calc(${SPACE.lg} - 4px); pointer-events: none; position: absolute; top: 50%; transform: translateY(-50%); }
+  .multisig-intent-assets > * + * { margin-left: -6px; }
+  .multisig-intent-assets .token-logo, .multisig-intent-assets .token-mark { height: 28px; width: 28px; }
+  .multisig-intent-assets .token-mark { font-size: 8px; }
   [data-ms-exact-identity] .receipt-row { align-items: flex-start; }
   [data-ms-exact-identity] .receipt-row dd { max-width: 70%; }
   [data-ms-exact-identity] .receipt-row dd code { overflow-wrap: anywhere; text-align: left; word-break: break-word; }

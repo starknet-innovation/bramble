@@ -96,6 +96,20 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("0x9876…cdef is not a token or contact this wallet knows");
     expect(html).toContain("Allow 0x4567…cdef to spend");
     expect(html).toContain("Call opaque_action on 0x9876…cdef");
+    expect(html).toContain('class="review-call-assets"');
+    expect(html).toContain('class="token-logo"');
+
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [{ ...fixture.intent, summary: "Looks harmless" }],
+      false,
+      preferences,
+      "multisig-home",
+    );
+    expect(home).toContain('class="multisig-intent-assets"');
+    expect(home).toContain('class="token-logo"');
   });
 
   test("renders exact signer-management authority before collection", async () => {
