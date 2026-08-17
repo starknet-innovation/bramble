@@ -412,6 +412,8 @@ describe("sidepanel views", () => {
 
     expect(html).toContain('id="new-account"');
     expect(html).toContain("Add account");
+    expect(html).toContain("Signer public key");
+    expect(html).toContain(`data-copy="${account.publicKeyX}"`);
   });
 
   test("reveal flow re-authenticates and masks secrets until tapped", () => {
@@ -458,14 +460,15 @@ describe("sidepanel views", () => {
   });
 
   test("contacts can be removed from the address book flow", () => {
+    const contact = { address: "0x1", id: "c", label: "A", networkId: "SN_MAIN" as const };
     const withContact = {
       ...preferences,
-      addressBook: [
-        { address: "0x123", id: "SN_MAIN:0x123", label: "Ada", networkId: "SN_MAIN" as const },
-      ],
+      addressBook: [{ ...contact, publicKeyX: "0xabc" }],
     };
     const html = dashboard("address-book", status, [], withContact, { balances: [] });
-    expect(html).toContain('data-remove-address="SN_MAIN:0x123"');
+    expect(html).toContain(`data-remove-address="${contact.id}"`);
+    expect(html).toContain('name="publicKeyX"');
+    expect(html).toContain('data-copy="0xabc"');
   });
 
   test("renders balances as labelled token rows with a refresh control", () => {

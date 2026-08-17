@@ -320,8 +320,19 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "wallet unavailable");
     },
-    async saveAddress(label: string, address: string, networkId: string): Promise<void> {
-      const response = await sendMessage({ address, label, networkId, type: "wallet.saveAddress" });
+    async saveAddress(
+      label: string,
+      address: string,
+      networkId: string,
+      publicKeyX?: string,
+    ): Promise<void> {
+      const response = await sendMessage({
+        address,
+        label,
+        networkId,
+        ...(publicKeyX ? { publicKeyX } : {}),
+        type: "wallet.saveAddress",
+      });
       if (isPreferencesResponse(response)) {
         return;
       }

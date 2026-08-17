@@ -1,12 +1,102 @@
 /** Pure stable Argent multisig deployment form. */
+import { escapeHtml } from "@mc-wallet/core/html";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { selectField, textField } from "@mc-wallet/ui-kit/fields";
+import { button, iconButton } from "@mc-wallet/ui-kit/controls";
+import { inputControl, textField } from "@mc-wallet/ui-kit/fields";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
-import { accountDisplayName, flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
+import { icon } from "../../shared/icons";
+import {
+  accountAvatar,
+  accountDisplayName,
+  accountLabel,
+  flowHeader,
+  flowScreen,
+  hardwareBadge,
+  noAccountEmpty,
+} from "../../shared/parts";
+
+const deploymentSignerOption = (
+  account: AccountRef,
+  preferences: WalletPreferences | null,
+  selected: boolean,
+): string => `
+  <button class="option-row multisig-deployment-signer" data-deployment-signer="${escapeHtml(account.id)}" type="button" aria-pressed="${selected}">
+    <span class="option-avatar">${accountAvatar(account.address)}</span>
+    <span class="option-copy">
+      <span class="option-name"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>${hardwareBadge(account)}</span>
+      <code>${escapeHtml(accountLabel(account.address))}</code>
+    </span>
+    <span class="option-mark">${icon("check")}</span>
+  </button>`;
+
+type SignerKeySource = {
+  readonly address: string;
+  readonly label: string;
+  readonly publicKeyX: string;
+  readonly source: "Saved contact" | "Wallet account";
+};
+
+const signerKeySources = (
+  accounts: readonly AccountRef[],
+  preferences: WalletPreferences | null,
+): readonly SignerKeySource[] => {
+  const seen = new Set<string>();
+  return [
+    ...accounts.map((candidate) => ({
+      address: candidate.address,
+      label: accountDisplayName(candidate, preferences),
+      publicKeyX: candidate.publicKeyX,
+      source: "Wallet account" as const,
+    })),
+    ...(preferences?.addressBook
+      .filter((entry) => entry.publicKeyX !== undefined)
+      .map((entry) => ({
+        address: entry.address,
+        label: entry.label,
+        publicKeyX: entry.publicKeyX ?? "",
+        source: "Saved contact" as const,
+      })) ?? []),
+  ].filter(({ publicKeyX }) => {
+    if (!publicKeyX || seen.has(publicKeyX)) return false;
+    seen.add(publicKeyX);
+    return true;
+  });
+};
+
+const selectedSignerRow = (source: SignerKeySource, selected: boolean): string => `
+  <div class="multisig-selected-signer" data-signer-public-key="${escapeHtml(source.publicKeyX)}" role="listitem"${selected ? "" : " hidden"}>
+    <span class="option-avatar">${accountAvatar(source.address)}</span>
+    <span class="option-copy">
+      <strong>${escapeHtml(source.label)}</strong>
+      <span class="option-sub">${source.source} · Key ${escapeHtml(accountLabel(source.publicKeyX))}</span>
+    </span>
+    ${iconButton({
+      attributes: { "data-remove-signer-public-key": source.publicKeyX },
+      disabled: selected,
+      icon: "x",
+      label: `Remove ${source.label}`,
+      variant: "ghost",
+    })}
+  </div>`;
+
+const signerKeyOptions = (sources: readonly SignerKeySource[], selectedPublicKey: string): string =>
+  sources
+    .map(
+      ({ address, label, publicKeyX, source }) => `
+        <button class="option-row multisig-key-source" data-add-signer-public-key="${escapeHtml(publicKeyX)}" type="button"${publicKeyX === selectedPublicKey ? " hidden" : ""}>
+          <span class="option-avatar">${accountAvatar(address)}</span>
+          <span class="option-copy">
+            <strong>${escapeHtml(label)}</strong>
+            <code>${escapeHtml(accountLabel(address))}</code>
+            <span class="option-sub">${source} · Key ${escapeHtml(accountLabel(publicKeyX))}</span>
+          </span>
+          <span class="option-mark">${icon("plus")}</span>
+        </button>`,
+    )
+    .join("");
 
 /**
  * Renders exact constructor input and an explicit local deployment signer.
@@ -24,6 +114,7 @@ export const multisigDeployFlow = (
     );
   }
   const accounts = status.accounts.filter((candidate) => candidate.networkId === status.networkId);
+  const signerSources = signerKeySources(accounts, preferences);
   if (classState === false) {
     return (
       flowHeader("Deploy Argent multisig", status) +
@@ -36,15 +127,27 @@ export const multisigDeployFlow = (
     );
   }
   return (
-    flowHeader("Deploy Argent multisig", status, "True M-of-N account signatures") +
+    flowHeader("Deploy Argent multisig", status, "True M-of-N signatures") +
     flowScreen(
       "multisig-deploy",
-      `<section class="section">
-        ${receipt([
-          { label: "Contract", value: `Argent Multisig ${ARGENT_MULTISIG_CONTRACT.version}` },
-          { label: "Class hash", value: ARGENT_MULTISIG_CONTRACT.classHash, valueStyle: "code" },
-          { label: "Network", value: status.network },
-        ])}
+      `<section class="section multisig-deploy-section">
+        ${receipt(
+          [
+            { label: "Contract", value: `Argent Multisig ${ARGENT_MULTISIG_CONTRACT.version}` },
+            {
+              action: {
+                attributes: { "data-copy": ARGENT_MULTISIG_CONTRACT.classHash },
+                icon: "copy",
+                label: "Copy class hash",
+              },
+              label: "Class hash",
+              value: accountLabel(ARGENT_MULTISIG_CONTRACT.classHash),
+              valueStyle: "code",
+            },
+            { label: "Network", value: status.network },
+          ],
+          { "data-multisig-deploy-summary": true },
+        )}
         ${
           classState === null
             ? '<p class="hint">Checking the pinned class on this network…</p>'
@@ -54,20 +157,68 @@ export const multisigDeployFlow = (
         }
         <form id="multisig-deploy-form">
           ${textField({ label: "Name (optional)", maxlength: 48, name: "name" })}
-          ${textField({ className: "mono", hint: "Canonical signer public keys separated by spaces. Order is normalized by the audited constructor helper.", label: "Signer public keys", name: "signerPublicKeys", required: true, spellcheck: false, value: account.publicKeyX })}
+          <section class="multisig-signer-set" aria-labelledby="multisig-signer-set-title">
+            <div class="multisig-signer-set-head">
+              <strong id="multisig-signer-set-title">Signer set</strong>
+              <span class="hint" data-signer-count>1 signer</span>
+            </div>
+            <input name="signerPublicKeys" type="hidden" value="${escapeHtml(account.publicKeyX)}" />
+            <div class="multisig-selected-signers" data-selected-signers role="list" aria-live="polite">
+              ${signerSources.map((source) => selectedSignerRow(source, source.publicKeyX === account.publicKeyX)).join("")}
+            </div>
+            <details class="disclosure multisig-signer-sources">
+              <summary>
+                <span class="menu-copy"><strong>Add signer</strong><small>Choose an identity or enter one public key</small></span>
+                <span class="disclosure-mark">${icon("chevronRight")}</span>
+              </summary>
+              <div class="disclosure-body">
+                <div class="option-list" role="group" aria-label="Available signer identities">
+                  ${signerKeyOptions(signerSources, account.publicKeyX)}
+                </div>
+                <div class="multisig-manual-signer">
+                  ${inputControl({
+                    ariaLabel: "Signer public key",
+                    attributes: { "data-manual-signer-public-key": true },
+                    autocapitalize: "none",
+                    className: "mono",
+                    placeholder: "0x…",
+                    spellcheck: false,
+                  })}
+                  ${button({
+                    attributes: { "data-add-manual-signer": true },
+                    icon: "plus",
+                    label: "Add key",
+                    size: "small",
+                    variant: "secondary",
+                  })}
+                </div>
+                <p class="hint">Save frequent co-signers in Address book to select them by identity next time.</p>
+                <p class="multisig-manual-signer-result" data-manual-signer-result role="status"></p>
+              </div>
+            </details>
+            <template data-manual-signer-template>
+              <div class="multisig-selected-signer" data-manual-signer role="listitem">
+                <span class="option-avatar">${icon("user")}</span>
+                <span class="option-copy"><strong>Manual signer</strong><span class="option-sub" data-manual-signer-label></span></span>
+                ${iconButton({
+                  attributes: { "data-remove-signer-public-key": true },
+                  icon: "x",
+                  label: "Remove manual signer",
+                  variant: "ghost",
+                })}
+              </div>
+            </template>
+          </section>
           ${textField({ inputmode: "numeric", label: "Signatures required", name: "threshold", required: true, value: "1" })}
           ${textField({ className: "mono", label: "Deployment salt", name: "salt", required: true, spellcheck: false, value: "0x0" })}
-          ${selectField({
-            hint: "This account must be one of the configured public keys and authorizes only this reviewed deployment.",
-            label: "Deployment signer",
-            name: "signerAccountId",
-            options: accounts.map((candidate) => ({
-              label: accountDisplayName(candidate, preferences),
-              value: candidate.id,
-            })),
-            required: true,
-            selected: account.id,
-          })}
+          <div class="multisig-deployment-signer-field" role="group" aria-label="Deployment signer">
+            <span class="context-label">Deployment signer</span>
+            <input name="signerAccountId" type="hidden" value="${escapeHtml(account.id)}" />
+            <div class="option-list">
+              ${accounts.map((candidate) => deploymentSignerOption(candidate, preferences, candidate.id === account.id)).join("")}
+            </div>
+            <span class="hint">Must match a signer key and authorizes this deployment only.</span>
+          </div>
           <div id="multisig-deploy-review" aria-live="polite"></div>
           ${button({ disabled: classState !== true, label: "Review deployment", type: "submit" })}
           <p id="multisig-deploy-result" role="status"></p>

@@ -1,9 +1,14 @@
 /** Two-step exact-review binding for stable Argent multisig deployment. */
 import { escapeHtml } from "@mc-wallet/core/html";
-import { normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
+import {
+  isNonZeroStarkFieldElement,
+  normalizeFeltInput,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../../shared/dom";
 import { icon } from "../../shared/icons";
+import { accountLabel } from "../../shared/parts";
 import {
   formatFeeEstimate,
   reviewConstraints,
@@ -62,7 +67,132 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const reviewEnabled = button?.disabled === false;
   const reviewRoot = deps.app?.querySelector<HTMLElement>("#multisig-deploy-review");
-  form?.addEventListener("input", () => {
+  const signerAccountInput = form?.querySelector<HTMLInputElement>('input[name="signerAccountId"]');
+  const signerKeyInput = form?.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]');
+  const signerList = form?.querySelector<HTMLElement>("[data-selected-signers]");
+  const signerCount = form?.querySelector<HTMLElement>("[data-signer-count]");
+  const signerDisclosure = form?.querySelector<HTMLElement>(".multisig-signer-sources > summary");
+  const manualSignerInput = form?.querySelector<HTMLInputElement>(
+    "[data-manual-signer-public-key]",
+  );
+  const manualSignerResult = form?.querySelector<HTMLElement>("[data-manual-signer-result]");
+  const manualSignerTemplate = form?.querySelector<HTMLTemplateElement>(
+    "[data-manual-signer-template]",
+  );
+  const thresholdInput = form?.querySelector<HTMLInputElement>('input[name="threshold"]');
+  const notifyInput = (input: HTMLInputElement): void => {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const signerRows = (): readonly HTMLElement[] =>
+    signerList ? [...signerList.querySelectorAll<HTMLElement>("[data-signer-public-key]")] : [];
+  const rowForKey = (publicKey: string): HTMLElement | undefined =>
+    signerRows().find((row) => sameFelt(row.dataset["signerPublicKey"] ?? "", publicKey));
+  const syncSignerSet = (): void => {
+    if (!signerKeyInput) return;
+    const selected = signerRows().filter((row) => !row.hidden);
+    const selectedKeys = selected.flatMap((row) =>
+      row.dataset["signerPublicKey"] ? [row.dataset["signerPublicKey"]] : [],
+    );
+    signerKeyInput.value = selectedKeys.join(" ");
+    if (signerCount) {
+      signerCount.textContent = `${selected.length} signer${selected.length === 1 ? "" : "s"}`;
+    }
+    form?.querySelectorAll<HTMLButtonElement>("[data-add-signer-public-key]").forEach((choice) => {
+      const sourceChoice = choice;
+      const publicKey = choice.dataset["addSignerPublicKey"];
+      sourceChoice.hidden = Boolean(
+        publicKey && selectedKeys.some((candidate) => sameFelt(candidate, publicKey)),
+      );
+    });
+    selected.forEach((row) => {
+      const remove = row.querySelector<HTMLButtonElement>("[data-remove-signer-public-key]");
+      if (remove) remove.disabled = selected.length === 1;
+    });
+    if (thresholdInput && Number(thresholdInput.value) > selected.length) {
+      thresholdInput.value = String(selected.length);
+    }
+    notifyInput(signerKeyInput);
+  };
+  form?.querySelectorAll<HTMLButtonElement>("[data-deployment-signer]").forEach((choice) => {
+    choice.addEventListener("click", () => {
+      const accountId = choice.dataset["deploymentSigner"];
+      if (!accountId || !signerAccountInput || signerAccountInput.value === accountId) return;
+      signerAccountInput.value = accountId;
+      form.querySelectorAll<HTMLButtonElement>("[data-deployment-signer]").forEach((candidate) => {
+        candidate.setAttribute(
+          "aria-pressed",
+          String(candidate.dataset["deploymentSigner"] === accountId),
+        );
+      });
+      notifyInput(signerAccountInput);
+    });
+  });
+  form?.querySelectorAll<HTMLButtonElement>("[data-add-signer-public-key]").forEach((choice) => {
+    choice.addEventListener("click", () => {
+      const publicKey = choice.dataset["addSignerPublicKey"];
+      const row = publicKey ? rowForKey(publicKey) : undefined;
+      if (!row?.hidden) return;
+      row.hidden = false;
+      syncSignerSet();
+      signerDisclosure?.focus();
+    });
+  });
+  signerList?.addEventListener("click", (event) => {
+    const target = event.target;
+    const ElementType = signerList.ownerDocument.defaultView?.Element;
+    if (!ElementType || !(target instanceof ElementType)) return;
+    const remove = target.closest<HTMLButtonElement>("[data-remove-signer-public-key]");
+    const row = remove?.closest<HTMLElement>("[data-signer-public-key]");
+    if (!remove || !row || remove.disabled) return;
+    if (row.hasAttribute("data-manual-signer")) row.remove();
+    else row.hidden = true;
+    syncSignerSet();
+    signerDisclosure?.focus();
+  });
+  const addManualSigner = (): void => {
+    if (!manualSignerInput || !manualSignerTemplate || !signerList) return;
+    const publicKey = normalizeFeltInput(manualSignerInput.value);
+    if (!isNonZeroStarkFieldElement(publicKey)) {
+      if (manualSignerResult) {
+        manualSignerResult.textContent = "Enter a valid non-zero Starknet public key.";
+      }
+      manualSignerInput.focus();
+      return;
+    }
+    const knownRow = rowForKey(publicKey);
+    if (knownRow && !knownRow.hidden) {
+      if (manualSignerResult) manualSignerResult.textContent = "That signer is already included.";
+      manualSignerInput.focus();
+      return;
+    }
+    if (knownRow) {
+      knownRow.hidden = false;
+    } else {
+      const fragment = manualSignerTemplate.content.cloneNode(true) as DocumentFragment;
+      const row = fragment.querySelector<HTMLElement>(".multisig-selected-signer");
+      const label = fragment.querySelector<HTMLElement>("[data-manual-signer-label]");
+      const remove = fragment.querySelector<HTMLButtonElement>("[data-remove-signer-public-key]");
+      if (!row || !label || !remove) return;
+      row.dataset["signerPublicKey"] = publicKey;
+      label.textContent = `Key ${accountLabel(publicKey)}`;
+      remove.dataset["removeSignerPublicKey"] = publicKey;
+      signerList.append(fragment);
+    }
+    manualSignerInput.value = "";
+    if (manualSignerResult) manualSignerResult.textContent = "Signer added.";
+    syncSignerSet();
+    manualSignerInput.focus();
+  };
+  form
+    ?.querySelector<HTMLButtonElement>("[data-add-manual-signer]")
+    ?.addEventListener("click", addManualSigner);
+  manualSignerInput?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addManualSigner();
+  });
+  form?.addEventListener("input", (event) => {
+    if (event.target === manualSignerInput) return;
     reviews.delete(form);
     reviewGenerations.set(form, (reviewGenerations.get(form) ?? 0) + 1);
     if (reviewRoot) renderFragment(reviewRoot, "");

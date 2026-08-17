@@ -65,7 +65,7 @@ export const secondAccount: AccountRef = {
   address: SECOND_ADDRESS,
   derivation: { accountIndex: 1, addressIndex: 0, kind: "starknet-bip44" },
   id: `SN_MAIN:${SECOND_ADDRESS}`,
-  publicKeyX: "0x511",
+  publicKeyX: "0x5114567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   publicKeyY: "0x611",
 };
 
@@ -108,6 +108,7 @@ export const preferences: WalletPreferences = {
       id: `SN_MAIN:${RECIPIENT_ADDRESS}`,
       label: "Research treasury",
       networkId: "SN_MAIN",
+      publicKeyX: "0x7334567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
     },
   ],
   approvalSurface: "side-panel",

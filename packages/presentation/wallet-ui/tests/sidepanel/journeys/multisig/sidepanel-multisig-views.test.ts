@@ -1,6 +1,7 @@
 /** Argent multisig views expose exact frozen authority and fail closed without freshness. */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
 import { multisigAccountOptions } from "../../../../src/sidepanel/journeys/multisig/multisig-account-options";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
@@ -274,9 +275,31 @@ describe("Argent multisig management views", () => {
     expect(multisigDeployFlow(fixture.status, account, "error")).toContain(
       "Deployment remains disabled",
     );
-    const ready = multisigDeployFlow(fixture.status, account, true, defaultWalletPreferences());
+    const preferences = {
+      ...defaultWalletPreferences(),
+      addressBook: [
+        {
+          address: "0x123",
+          id: "SN_MAIN:0x123",
+          label: "Research treasury",
+          networkId: "SN_MAIN" as const,
+          publicKeyX: "0x999",
+        },
+      ],
+    };
+    const ready = multisigDeployFlow(fixture.status, account, true, preferences);
     expect(ready).toContain('id="multisig-deploy-form"');
     expect(ready).toContain(`value="${account?.publicKeyX}"`);
+    expect(ready).toContain(`data-copy="${ARGENT_MULTISIG_CONTRACT.classHash}"`);
+    expect(ready).not.toContain(`<code>${ARGENT_MULTISIG_CONTRACT.classHash}</code>`);
+    expect(ready).toContain(`data-deployment-signer="${account?.id}"`);
+    expect(ready).toContain('class="option-avatar"');
+    expect(ready).toContain('data-add-signer-public-key="0x999"');
+    expect(ready).toContain("Signer set");
+    expect(ready).toContain("Add signer");
+    expect(ready).toContain('name="signerPublicKeys" type="hidden"');
+    expect(ready).not.toContain("Space-separated public keys");
+    expect(ready).toContain('name="signerAccountId" type="hidden"');
     expect(ready).toContain("Review deployment");
   });
 
@@ -284,7 +307,9 @@ describe("Argent multisig management views", () => {
     const fixture = await makeArgentMultisigFixture();
     const account = fixture.status.accounts[0] ?? null;
 
-    expect(multisigAddFlow(fixture.status, account)).toContain("Create a new multisig");
+    const setup = multisigAddFlow(fixture.status, account);
+    expect(setup).toContain("Create a new multisig");
+    expect(setup).toContain('class="multisig-setup-options"');
     expect(multisigAddFlow(fixture.status, null)).toContain("No account on");
     expect(multisigSignersFlow(fixture.status, account, null)).toContain("no longer watched");
     expect(multisigSignersFlow(fixture.status, account, fixture.view)).toContain(

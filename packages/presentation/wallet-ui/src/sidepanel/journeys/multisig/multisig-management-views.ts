@@ -3,10 +3,10 @@ import { escapeHtml } from "@mc-wallet/core/html";
 import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
 import { selectField, textareaField, textField } from "@mc-wallet/ui-kit/fields";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import { icon } from "../../shared/icons";
 import {
   accountDisplayName,
   accountLabel,
@@ -24,28 +24,30 @@ const signerOptions = (
     .filter((account) => account.networkId === status.networkId)
     .map((account) => ({ label: accountDisplayName(account, null), value: account.id }));
 
+const setupOption = (
+  view: "multisig-deploy" | "multisig-watch",
+  iconName: "search" | "users",
+  label: string,
+  supportingText: string,
+): string => `
+  <button class="add-account-option multisig-setup-option" data-view="${view}" type="button">
+    <span class="add-account-option-icon">${icon(iconName)}</span>
+    <span class="add-account-option-copy"><strong>${label}</strong><span>${supportingText}</span></span>
+    <span class="menu-chevron">${icon("chevronRight")}</span>
+  </button>`;
+
 /**
  * Renders the shared-account gateway without mutating chain state.
  */
 export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Argent Multisig", status, "True M-of-N account signatures") +
+  flowHeader("Argent Multisig", status, "True M-of-N signatures") +
   flowScreen(
     "multisig-add",
     `<section class="section">
       ${account ? "" : noAccountEmpty(status)}
-      <div class="menu-list" role="group" aria-label="Argent multisig setup">
-        ${menuRow({
-          attributes: { "data-view": "multisig-deploy" },
-          icon: "users",
-          label: "Create a new multisig",
-          supportingText: "Deploy the pinned Argent Multisig 0.2 account.",
-        })}
-        ${menuRow({
-          attributes: { "data-view": "multisig-watch" },
-          icon: "search",
-          label: "Add an existing multisig",
-          supportingText: "Verify its address and current live signer authority.",
-        })}
+      <div class="multisig-setup-options" role="group" aria-label="Argent multisig setup">
+        ${setupOption("multisig-deploy", "users", "Create a new multisig", "Deploy the pinned Argent 0.2 account.")}
+        ${setupOption("multisig-watch", "search", "Add an existing multisig", "Verify its live signer authority.")}
       </div>
     </section>`,
   );

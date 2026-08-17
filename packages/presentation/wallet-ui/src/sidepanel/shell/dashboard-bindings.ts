@@ -38,6 +38,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         String(data.get("label") ?? ""),
         String(data.get("address") ?? "").trim(),
         String(data.get("networkId") ?? ""),
+        String(data.get("publicKeyX") ?? "").trim() || undefined,
       )
       .then(
         async () => {

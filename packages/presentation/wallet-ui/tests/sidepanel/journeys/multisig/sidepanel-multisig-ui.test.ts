@@ -1,9 +1,11 @@
 /** DOM bindings forward only exact Argent multisig intents, signatures, and calls. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigIntentPackage,
 } from "../../../../src/popup/responses/multisig-responses";
+import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import {
   EMPTY_MULTISIG_PORTFOLIO,
   multisigPortfolio,
@@ -78,6 +80,61 @@ const mount = (
   });
 
 describe("bindMultisigs frozen-intent forms", () => {
+  test("manages deployment signers as validated rows instead of list text", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const primary = fixture.status.accounts[0];
+    if (!primary) throw new Error("signer fixture unavailable");
+    const secondary = { ...primary, id: `${primary.networkId}:0x456`, publicKeyX: "0x456" };
+    const status = { ...fixture.status, accountCount: 2, accounts: [primary, secondary] };
+    const app = mount(
+      multisigDeployFlow(status, primary, true, defaultWalletPreferences()),
+      await testClient(),
+      status,
+    );
+
+    app.querySelector<HTMLButtonElement>(`[data-deployment-signer="${secondary.id}"]`)?.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerAccountId"]')?.value).toBe(
+      secondary.id,
+    );
+    expect(
+      app.querySelector(`[data-deployment-signer="${secondary.id}"]`)?.getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    const addKey = app.querySelector<HTMLButtonElement>(
+      `[data-add-signer-public-key="${secondary.publicKeyX}"]`,
+    );
+    addKey?.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]')?.value).toBe(
+      `${primary.publicKeyX} ${secondary.publicKeyX}`,
+    );
+    expect(app.querySelector("[data-signer-count]")?.textContent).toBe("2 signers");
+    expect(addKey?.hidden).toBe(true);
+
+    const threshold = app.querySelector<HTMLInputElement>('input[name="threshold"]');
+    if (!threshold) throw new Error("threshold field unavailable");
+    threshold.value = "2";
+    app
+      .querySelector<HTMLButtonElement>(`[data-remove-signer-public-key="${primary.publicKeyX}"]`)
+      ?.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]')?.value).toBe(
+      secondary.publicKeyX,
+    );
+    expect(threshold.value).toBe("1");
+
+    const manual = app.querySelector<HTMLInputElement>("[data-manual-signer-public-key]");
+    const addManual = app.querySelector<HTMLButtonElement>("[data-add-manual-signer]");
+    if (!manual || !addManual) throw new Error("manual signer controls unavailable");
+    manual.value = "not-a-key";
+    addManual.click();
+    expect(app.querySelector("[data-manual-signer-result]")?.textContent).toContain("valid");
+    manual.value = "0x999";
+    addManual.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]')?.value).toBe(
+      `${secondary.publicKeyX} 0x999`,
+    );
+    expect(app.querySelector("[data-signer-count]")?.textContent).toBe("2 signers");
+  });
+
   test("registers an existing account with its address and current signer authority", async () => {
     const fixture = await makeArgentMultisigFixture();
     const captured: unknown[] = [];

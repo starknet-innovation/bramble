@@ -17,14 +17,56 @@ export default meta;
 
 export const Empty = checkpointStory("No shared accounts", "multisig", "empty");
 export const Accounts = checkpointStory("Shared account list", "multisig", "list");
-export const ChooseSetup = checkpointStory("Choose setup path", "multisig", "add");
+export const ChooseSetup: LabStory = {
+  args: { checkpointId: "add", scenarioId: "multisig" },
+  name: "Choose setup path",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelectorAll(".multisig-setup-option")).toHaveLength(2);
+    await expect(body?.querySelector(".multisig-setup-options")).toBeVisible();
+  },
+};
 export const Watch = checkpointStory("Watch existing account", "multisig", "watch");
 export const DeployUnavailable = checkpointStory(
   "Deployment unavailable",
   "multisig",
   "deploy-class-check",
 );
-export const Deploy = checkpointStory("Review deployment inputs", "multisig", "deploy-ready");
+export const Deploy: LabStory = {
+  args: { checkpointId: "deploy-ready", scenarioId: "multisig" },
+  name: "Review deployment inputs",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("[data-multisig-deploy-summary] [data-copy]")).toBeVisible();
+    await expect(body?.querySelector(".multisig-deployment-signer .option-avatar")).toBeVisible();
+    await expect(body?.querySelector(".multisig-signer-set")).toBeVisible();
+    await expect(body?.querySelector(".multisig-selected-signer:not([hidden])")).toBeVisible();
+    await expect(body?.querySelector(".multisig-signer-sources > summary")).toBeVisible();
+    await expect(body?.querySelector('input[name="signerPublicKeys"]')).toHaveAttribute(
+      "type",
+      "hidden",
+    );
+    await expect(body?.querySelector('input[name="signerAccountId"]')).toHaveAttribute(
+      "type",
+      "hidden",
+    );
+    const addSigner = body?.querySelector<HTMLButtonElement>(
+      "[data-add-signer-public-key]:not([hidden])",
+    );
+    addSigner?.click();
+    await expect(body?.querySelector("[data-signer-count]")).toHaveTextContent("2 signers");
+    const addedKey = addSigner?.dataset["addSignerPublicKey"];
+    const removeSigner = [...(body?.querySelectorAll<HTMLButtonElement>(
+      "[data-remove-signer-public-key]",
+    ) ?? [])].find((control) => control.dataset["removeSignerPublicKey"] === addedKey);
+    removeSigner?.click();
+    await expect(body?.querySelector("[data-signer-count]")).toHaveTextContent("1 signer");
+  },
+};
 export const Home = checkpointStory("Shared portfolio", "multisig", "home");
 export const HomeEmpty = checkpointStory("Shared portfolio without work", "multisig", "home-empty");
 export const HomeIntents: LabStory = {

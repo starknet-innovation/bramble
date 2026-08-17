@@ -29,7 +29,7 @@ const base: DashboardOptions = {
   selectedMultisigId: argentMultisig.record.id,
 };
 
-const revealIntentPanel = async (context: FrameContext): Promise<void> => {
+const bindFixtureMultisig = (context: FrameContext): void => {
   const runtime = {
     sendMessage: async (): Promise<unknown> => ({
       error: "UI Lab blocks non-fixture runtime requests",
@@ -44,6 +44,10 @@ const revealIntentPanel = async (context: FrameContext): Promise<void> => {
     selectedMultisigId: () => argentMultisig.record.id,
     wallet: createSidepanelRuntime(runtime),
   });
+};
+
+const revealIntentPanel = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context);
   const tab = context.app.querySelector<HTMLButtonElement>('[data-ms-home-tab="intents"]');
   if (tab) {
     tab.click();
@@ -138,13 +142,16 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     { multisigClassDeclared: false, selectedMultisigId: null, view: "multisig-deploy" },
     { class: "not declared" },
   ),
-  checkpoint(
-    "deploy-ready",
-    "Review deployment inputs",
-    "Constructor authority, threshold, signer, class, network, and salt are composed as one reviewable deployment task.",
-    { selectedMultisigId: null, view: "multisig-deploy" },
-    { class: "declared", threshold: 2 },
-  ),
+  {
+    ...checkpoint(
+      "deploy-ready",
+      "Review deployment inputs",
+      "Constructor authority, threshold, signer, class, network, and salt are composed as one reviewable deployment task.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { class: "declared", threshold: 2 },
+    ),
+    prepare: bindFixtureMultisig,
+  },
   checkpoint(
     "home",
     "Shared portfolio",

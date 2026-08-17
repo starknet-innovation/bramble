@@ -378,8 +378,13 @@ export const createPreferencesStore = ({
           throw new WalletError("Invalid address book entry");
         }
         const preferences = await read();
+        const previous = preferences.addressBook.find((stored) => stored.id === nextEntry.id);
+        const savedEntry =
+          nextEntry.publicKeyX || !previous?.publicKeyX
+            ? nextEntry
+            : { ...nextEntry, publicKeyX: previous.publicKeyX };
         const entries = preferences.addressBook.filter((stored) => stored.id !== nextEntry.id);
-        const next = { ...preferences, addressBook: [...entries, nextEntry] };
+        const next = { ...preferences, addressBook: [...entries, savedEntry] };
         await writePreferences(store, next);
         return next;
       },

@@ -263,6 +263,16 @@ export const accountFlow = (
                 },
                 {
                   action: {
+                    attributes: { "data-copy": account.publicKeyX },
+                    icon: "copy",
+                    label: "Copy signer public key",
+                  },
+                  label: "Signer public key",
+                  value: accountLabel(account.publicKeyX),
+                  valueStyle: "code",
+                },
+                {
+                  action: {
                     attributes: { "data-copy": account.classHash },
                     icon: "copy",
                     label: "Copy class hash",
