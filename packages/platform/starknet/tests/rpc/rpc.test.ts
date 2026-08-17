@@ -20,6 +20,9 @@ import {
   isTransactionNotFoundError,
   isTransportRpcError,
   parseTokenAmount,
+  RPC_REFUSED_MESSAGE,
+  RpcRefusedError,
+  timedRpcFetch,
   withRpcFallback,
   withRpcWrite,
 } from "@mc-wallet/starknet/rpc";
@@ -298,5 +301,79 @@ describe("starknet RPC helpers", () => {
     // A multi-word response whose leading word is not a parseable felt cannot
     // yield a ByteArray length, so the decoder falls back to the first word.
     expect(decodeErc20String(["not-a-number", "0x1"])).toBe("");
+  });
+});
+
+describe("endpoint refusals versus submission ambiguity", () => {
+  const refusalFetch = (body: string, status = 200) =>
+    timedRpcFetch(1_000, async () => new Response(body, { status }));
+
+  test("a rate-limit answer is a refusal, not a lost response", async () => {
+    // Real shape observed from the wallet's own mainnet endpoint under load:
+    // HTTP 200 carrying `error` as a bare STRING. A JSON-RPC error is always an
+    // object with a numeric code, so this is the gateway, not the node.
+    const rejection = await refusalFetch('{"error":"rate_limited"}')(
+      "https://selected.example",
+      {},
+    ).catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(RpcRefusedError);
+    // Still transport-shaped, so a READ fails over to the next endpoint.
+    expect(isTransportRpcError(rejection)).toBe(true);
+    expect((rejection as Error).message).toBe(RPC_REFUSED_MESSAGE);
+  });
+
+  test("an HTTP 429 is a refusal whatever its body", async () => {
+    const rejection = await refusalFetch("too many requests", 429)(
+      "https://selected.example",
+      {},
+    ).catch((error: unknown) => error);
+    expect(rejection).toBeInstanceOf(RpcRefusedError);
+  });
+
+  test("a real JSON-RPC error and a large body are left alone", async () => {
+    // `error` as an OBJECT with a code is the node answering; never a refusal.
+    await expect(
+      refusalFetch('{"jsonrpc":"2.0","id":1,"error":{"code":20,"message":"Contract not found"}}')(
+        "https://selected.example",
+        {},
+      ),
+    ).resolves.toBeInstanceOf(Response);
+    // Bodies past the refusal budget are not re-parsed; a Sierra class must not
+    // pay for this check on every read.
+    const large = `{"error":"${"a".repeat(2_000)}"}`;
+    await expect(refusalFetch(large)("https://selected.example", {})).resolves.toBeInstanceOf(
+      Response,
+    );
+  });
+
+  test("a refused broadcast stays determinate so the caller may retry", async () => {
+    const provider = {
+      channel: {
+        async fetchEndpoint() {
+          throw new RpcRefusedError(RPC_REFUSED_MESSAGE);
+        },
+      },
+      async getChainId() {
+        return "0x534e5f4d41494e";
+      },
+    } as unknown as import("starknet").RpcProvider;
+
+    const rejection = await withRpcWrite(
+      ["https://selected.example"],
+      "0x534e5f4d41494e",
+      async (selected) => {
+        const fetchEndpoint = Reflect.get(selected.channel, "fetchEndpoint") as (
+          rpcMethod: string,
+        ) => Promise<never>;
+        return fetchEndpoint("starknet_addDeployAccountTransaction");
+      },
+      () => provider,
+    ).catch((error: unknown) => error);
+
+    // The whole point: NOT indeterminate. Reporting a refusal as ambiguity left
+    // a deploy claim unresolvable and burned the counterfactual address.
+    expect(rejection).not.toBeInstanceOf(IndeterminateRpcWriteError);
+    expect((rejection as Error).message).toBe(RPC_REFUSED_MESSAGE);
   });
 });

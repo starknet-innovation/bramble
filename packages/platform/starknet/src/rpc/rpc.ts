@@ -49,7 +49,10 @@ export {
   isContractNotFoundError,
   isTransactionNotFoundError,
   isTransportRpcError,
+  RPC_REFUSED_MESSAGE,
+  RpcRefusedError,
   type StarkHashSigner,
+  timedRpcFetch,
   withRpcFallback,
   withRpcWrite,
 } from "./provider";
