@@ -26,7 +26,7 @@ import {
   readDeployMultisigInput,
   readReviewDeploymentInput,
 } from "./multisig-inputs";
-import { recoverArgentDeploymentHash } from "./multisig-operation-recovery";
+import { resolveArgentDeployment } from "./multisig-operation-recovery";
 
 type DeployableArgentRecord = ArgentMultisigRecord & {
   readonly deployment: NonNullable<ArgentMultisigRecord["deployment"]>;
@@ -96,16 +96,57 @@ const claimDeployment = async (
       : { error: `Argent multisig deployment claim ${claim}` };
   }
   const existing = await deps.multisigStore.getOperation(operationId);
-  const transactionHash =
-    existing?.transactionHash ?? (await recoverArgentDeploymentHash(deps, record, operationId));
-  return transactionHash
-    ? {
-        address: record.address,
-        multisig: deploymentView(record),
-        ok: true,
-        transactionHash,
-      }
-    : { error: "Argent multisig deployment outcome is unresolved" };
+  if (existing?.transactionHash) {
+    return {
+      address: record.address,
+      multisig: deploymentView(record),
+      ok: true,
+      transactionHash: existing.transactionHash,
+    };
+  }
+  return resolveClaimedDeployment(deps, record, operationId);
+};
+
+/**
+ * Settles a deployment whose claim already exists but carries no hash — the
+ * state a lost submit response leaves behind. Returns the operation id when the
+ * caller may broadcast, or a terminal response.
+ */
+const resolveClaimedDeployment = async (
+  deps: MultisigOpsDeps,
+  record: DeployableArgentRecord,
+  operationId: string,
+): Promise<RuntimeResponse | string> => {
+  const resolution = await resolveArgentDeployment(deps, record, operationId);
+  if (resolution.kind === "unknown") {
+    return { error: "Argent multisig deployment outcome is unresolved" };
+  }
+  if (resolution.kind === "deployed") {
+    return {
+      address: record.address,
+      multisig: deploymentView(record),
+      ok: true,
+      ...(resolution.transactionHash === null
+        ? {}
+        : { transactionHash: resolution.transactionHash }),
+    };
+  }
+  // The chain is certain nothing was deployed at this deterministic address, so
+  // the claim guards nothing: release it and take a fresh one so THIS attempt
+  // broadcasts. Without it a single lost response burned the address
+  // permanently, because a deploy's hash is only ever recovered from local
+  // evidence that a lost response never produced. Re-claiming keeps the guard
+  // intact for the new attempt; if it cannot be retaken, nothing is sent.
+  await deps.multisigStore.releaseOperation(operationId).catch(() => {});
+  const reclaimed = await deps.multisigStore.claimOperation({
+    accountId: record.id,
+    id: operationId,
+    kind: "deploy",
+    target: record.address,
+  });
+  return reclaimed === "claimed"
+    ? operationId
+    : { error: "Argent multisig deployment did not reach the network. Try again." };
 };
 
 const deploymentContext = async (

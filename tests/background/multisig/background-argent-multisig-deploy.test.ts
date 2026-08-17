@@ -3,6 +3,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { memoryMultisigStore } from "@mc-wallet/multisig/repository";
+import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import { createArgentMultisigDeploymentReviews } from "../../../apps/extension/src/background/multisig/multisig-deployment-reviews";
 import {
@@ -181,5 +182,92 @@ describe("Argent multisig deployment review", () => {
       ),
     ).resolves.toMatchObject({ ok: true });
     expect(harness.deploymentSubmitCount()).toBe(1);
+  });
+});
+
+describe("Argent multisig deployment claim recovery", () => {
+  const reviewFor = async (
+    harness: Awaited<ReturnType<typeof makeMultisigHarness>>,
+    salt: string,
+  ): Promise<Record<string, unknown>> => {
+    const reviewed = await harness.handler(
+      {
+        networkId: "SN_MAIN",
+        salt,
+        signerAccountId: harnessAccountA.id,
+        signerPublicKeys: HARNESS_KEYS,
+        threshold: 2,
+        type: "wallet.reviewArgentMultisigDeployment",
+      },
+      harnessExtensionSender,
+    );
+    return (reviewed as { readonly deploymentReview: Record<string, unknown> }).deploymentReview;
+  };
+
+  test("releases the claim and permits a retry when the chain shows nothing deployed", async () => {
+    // A submit whose response was lost leaves a durable claim with no hash, and
+    // a deploy hash is only ever recovered from local evidence a lost response
+    // never produced. Before the chain check that state was terminal: the
+    // counterfactual address could never be deployed by this wallet again.
+    let loseResponse = true;
+    const harness = await makeMultisigHarness({
+      beforeAccountDeployment() {
+        // Only an INDETERMINATE failure keeps the claim; a determinate one is
+        // already released at the submit site. This is the real lost-response
+        // case, and the one that used to be terminal.
+        if (loseResponse) throw new IndeterminateRpcWriteError("submission status is unknown");
+      },
+      deploymentStatus: false,
+    });
+
+    const first = await reviewFor(harness, "0xb");
+    await expect(
+      harness.handler(
+        { review: first, type: "wallet.deployArgentMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ error: "submission status is unknown" });
+    expect(harness.deploymentSubmitCount()).toBe(0);
+
+    loseResponse = false;
+    const retry = await reviewFor(harness, "0xb");
+    // The chain is certain the address is empty, so the claim is released and
+    // this attempt is allowed to broadcast rather than reporting "unresolved".
+    await expect(
+      harness.handler(
+        { review: retry, type: "wallet.deployArgentMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(harness.deploymentSubmitCount()).toBe(1);
+  });
+
+  test("keeps the claim and never rebroadcasts when the address is already deployed", async () => {
+    let loseResponse = true;
+    const harness = await makeMultisigHarness({
+      beforeAccountDeployment() {
+        if (loseResponse) throw new IndeterminateRpcWriteError("submission status is unknown");
+      },
+      deploymentStatus: true,
+    });
+
+    const first = await reviewFor(harness, "0xc");
+    await expect(
+      harness.handler(
+        { review: first, type: "wallet.deployArgentMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ error: "submission status is unknown" });
+
+    loseResponse = false;
+    const retry = await reviewFor(harness, "0xc");
+    await expect(
+      harness.handler(
+        { review: retry, type: "wallet.deployArgentMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    // Resolved from chain existence, not by sending a second deployment.
+    expect(harness.deploymentSubmitCount()).toBe(0);
   });
 });
