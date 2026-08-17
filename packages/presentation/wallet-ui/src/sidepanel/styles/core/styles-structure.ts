@@ -102,12 +102,10 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     word-break: break-all;
   }
   .review-calls {
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
     display: grid;
     gap: ${SPACE.sm};
     min-width: 0;
-    padding: ${SPACE.md};
+    padding: 0;
   }
   .review-call {
     min-width: 0;
@@ -234,7 +232,6 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     letter-spacing: -0.01em;
   }
   .approval-takeover .request-copy, .approval-takeover .decision-layer { gap: ${SPACE.xs}; }
-  .approval-takeover .review-calls { padding: ${SPACE.sm} ${SPACE.md}; }
   .approval-takeover .request-token { align-items: center; display: inline-flex; gap: 6px; }
   .approval-takeover .request-token .token-logo, .approval-takeover .request-token .token-mark { height: 22px; width: 22px; }
   .approval-takeover .request-token .token-mark { font-size: 8px; letter-spacing: 0; line-height: 1; }
