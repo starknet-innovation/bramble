@@ -60,9 +60,9 @@ export const Deploy: LabStory = {
     addSigner?.click();
     await expect(body?.querySelector("[data-signer-count]")).toHaveTextContent("2 signers");
     const addedKey = addSigner?.dataset["addSignerPublicKey"];
-    const removeSigner = [...(body?.querySelectorAll<HTMLButtonElement>(
-      "[data-remove-signer-public-key]",
-    ) ?? [])].find((control) => control.dataset["removeSignerPublicKey"] === addedKey);
+    const removeSigner = [
+      ...(body?.querySelectorAll<HTMLButtonElement>("[data-remove-signer-public-key]") ?? []),
+    ].find((control) => control.dataset["removeSignerPublicKey"] === addedKey);
     removeSigner?.click();
     await expect(body?.querySelector("[data-signer-count]")).toHaveTextContent("1 signer");
   },
