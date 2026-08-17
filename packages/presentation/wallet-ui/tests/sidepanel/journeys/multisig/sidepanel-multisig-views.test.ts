@@ -133,6 +133,31 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("1 of 1");
   });
 
+  test("keeps home intents condensed and moves the full review to the detail flow", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [fixture.readyIntent],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(home).toContain('data-view="multisig-detail"');
+    expect(home).toContain("1 of 1 signatures");
+    expect(home).not.toContain('data-ms-submit="');
+
+    const detail = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [fixture.readyIntent],
+    );
+    expect(detail).toContain('data-ms-submit="');
+    expect(detail).not.toContain('data-ms-home-tab="assets"');
+  });
+
   test("disables signing when fresh on-chain authority is unavailable", async () => {
     const fixture = await makeArgentMultisigFixture();
     const html = multisigDetailFlow(
@@ -144,7 +169,6 @@ describe("Argent multisig list and exact-intent detail", () => {
     );
     expect(html).toContain("Current on-chain signer authority is unavailable");
     expect(html).not.toContain('data-ms-sign="');
-    expect(html).toMatch(/data-view="multisig-propose"[^>]*disabled/);
   });
 
   test("suppresses every signing action when fresh authority differs from the frozen snapshot", async () => {

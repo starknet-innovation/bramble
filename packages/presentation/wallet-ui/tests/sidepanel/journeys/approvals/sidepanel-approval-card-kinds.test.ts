@@ -44,7 +44,7 @@ describe("approvalCard renders each approval kind", () => {
 
     expect(html).toContain("Connection request");
     expect(html).toContain(ORIGIN);
-    expect(html).toContain("this site can see your granted account addresses");
+    expect(html).toContain("Share the granted account addresses with this site");
     expect(html).toContain(`data-approval-action="approve" data-approval-id="${ID}"`);
     // Not locked, not blocked: the approve button is enabled.
     expect(html).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
@@ -99,6 +99,27 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain(`data-approval-id="${ID}" type="button" disabled`);
   });
 
+  test("decoded token actions use address-bound glyphs without a clean-state panel", () => {
+    const html = approvalCard(
+      {
+        id: ID,
+        kind: "invoke",
+        origin: ORIGIN,
+        reviewAssets: [
+          {
+            address: "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
+            symbol: "USDC",
+          },
+        ],
+        summaries: ["Send 25 USDC to Research treasury"],
+      },
+      status,
+    );
+    expect(html).toContain("review-call-assets");
+    expect(html).toContain('class="token-logo"');
+    expect(html).not.toContain("No additional wallet warnings");
+  });
+
   test("strk20-invoke request shows the private-transaction copy and call summaries", () => {
     const approval: PendingApproval = {
       actionReviews: [
@@ -131,11 +152,6 @@ describe("approvalCard renders each approval kind", () => {
     const html = approvalCard(approval, status);
 
     expect(html).toContain("Private transaction request");
-    expect(html).toContain("Review each private action and the frozen execution call.");
-    expect(html).toContain(
-      "Wallet-funded public routes get a second exact-call network-fee review",
-    );
-    expect(html).toContain("sponsored private-relay routes submit after this approval");
     expect(html).toContain("Withdraw 10 to 0x0471…938d");
     expect(html).toContain("Exact action parameters");
     expect(html).toContain("Collect policy");
@@ -196,7 +212,6 @@ describe("approvalCard renders each approval kind", () => {
       const html = approvalCard(approval, status);
 
       expect(html).toContain(input.title);
-      expect(html).toContain(input.hint);
       expect(html).toContain("Exact private request");
       expect(html).toContain("Technical details");
       expect(html).toContain(input.action);
@@ -214,8 +229,8 @@ describe("approvalCard renders each approval kind", () => {
       status,
     );
 
-    expect(html).toContain("reveals every private token balance");
-    expect(html).not.toContain("only the listed private token balances");
+    expect(html).toContain("Share all private token balances");
+    expect(html).not.toContain("No additional wallet warnings");
   });
 
   test("switch-chain request shows the network-switch copy", () => {

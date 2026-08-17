@@ -8,6 +8,7 @@ import {
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
 import type {
   ArgentMultisigView,
   DiscoveredNft,
@@ -174,6 +175,10 @@ export const invokeApproval: PendingApproval = {
   id: "00000000-0000-4000-8000-000000000134",
   kind: "invoke",
   origin: "https://terminal.mcwallet.dev",
+  reviewAssets: [
+    { address: USDC_ADDRESS, symbol: "USDC" },
+    { address: STRK_TOKEN_ADDRESS, symbol: "STRK" },
+  ],
   summaries: ["Swap 75 USDC for at least 186 STRK", "Approve 75 USDC to Ekubo router"],
 };
 

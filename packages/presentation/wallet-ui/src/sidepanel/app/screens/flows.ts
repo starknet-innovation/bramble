@@ -205,9 +205,8 @@ export const accountFlow = (
               return `<button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${selected}">
                     <span class="option-avatar">${accountAvatar(stored.address)}</span>
                     <span class="option-copy">
-                      <strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>
+                      <span class="option-name"><strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>${accountGroupsLine(memberGroups)}</span>
                       <code>${accountLabel(stored.address)}</code>
-                      ${accountGroupsLine(memberGroups)}
                     </span>
                     ${selected ? `<span class="option-mark">${icon("check")}</span>` : ""}
                   </button>`;

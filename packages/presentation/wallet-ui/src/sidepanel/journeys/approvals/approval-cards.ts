@@ -19,6 +19,7 @@ import {
   riskFlagMessages,
 } from "../../shared/review-render";
 import { SIGN_REQUEST_UNCLASSIFIED_WARNING, signRequestView } from "../../shared/sign-request";
+import { tokenGlyph } from "../portfolio/token-row";
 
 const denyButton = (approval: PendingApproval): string =>
   button({
@@ -219,17 +220,20 @@ const requestIdentity = (origin: string, kind: string): string => {
     // The full escaped value remains visible if an invalid origin reaches this
     // presentation boundary; approval validation still fails closed upstream.
   }
-  return `<p class="eyebrow">${kind}</p><div class="request-site"><span class="request-site-mark">${icon("globe")}</span><div class="request-site-copy"><span>Request from</span><strong>${escapeHtml(host)}</strong><code>${escapeHtml(origin)}</code></div></div>`;
+  return `<p class="eyebrow">${kind}</p><div class="request-site"><span class="request-site-mark">${icon("globe")}</span><div class="request-site-copy"><span>Request from</span><strong title="${escapeHtml(origin)}">${escapeHtml(host)}</strong></div></div>`;
 };
+
+const approvalCalls = (approval: PendingApproval): string =>
+  reviewCallsList(approval.summaries ?? [], approval.reviewAssets ?? []);
 
 const connectCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Connection request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to approve this site." : "Once approved, this site can see your granted account addresses."}</p>
+      ${status.locked ? '<p class="hint">Unlock the wallet to approve this site.</p>' : ""}
       ${reviewOutcome("Share the granted account addresses with this site until you disconnect it.")}
     </div>
-    ${reviewPanel(approval.insights ?? [], "You can revoke this site's access later from Connected sites.")}
+    ${reviewPanel(approval.insights ?? [])}
     ${reviewConstraints("No transaction is signed and no network fee is charged.")}
     ${decisionRow(approval, "Approve", status.locked)}
   </li>`;
@@ -243,11 +247,10 @@ const watchAssetCard = (approval: PendingApproval): string => {
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Add token request")}
-      <dl class="request-detail"><div><dt>Symbol</dt><dd>${escapeHtml(token.symbol)}</dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Decimals</dt><dd>${escapeHtml(String(token.decimals))}</dd></div><div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(token.address))}</code></dd></div></dl>
-      <p class="hint">Approve to track this ERC20 token in your wallet.</p>
+      <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(token.address))}</code></dd></div></dl>
       ${reviewOutcome("Add this token contract to the wallet's tracked asset list.")}
     </div>
-    ${reviewPanel(approval.insights ?? [], "Tracking a token does not grant it permission to move funds. You can remove it later.")}
+    ${reviewPanel(approval.insights ?? [])}
     ${reviewConstraints("No transaction is signed and no network fee is charged.")}
     ${decisionRow(approval, "Add token", false)}
   </li>`;
@@ -264,13 +267,10 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Transaction request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review and approve this transaction." : "Review each call carefully. Approving signs and submits it from your active account."}</p>
-      ${reviewCallsList(approval.summaries ?? []) || reviewOutcome("Sign and submit the decoded transaction from the active account.")}
+      ${status.locked ? '<p class="hint">Unlock the wallet to review and approve this transaction.</p>' : ""}
+      ${approvalCalls(approval) || reviewOutcome("Sign and submit the decoded transaction from the active account.")}
     </div>
-    ${reviewPanel(
-      [...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])],
-      "No additional wallet warnings were detected. Verify the requesting site and every decoded call before approving.",
-    )}
+    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
     ${
       reviewFeeSection(
         {
@@ -312,13 +312,10 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
       ${reviewOutcome("Create a signed authorization over the decoded message shown below and return it to this site.")}
     </div>
     ${view.html}
-    ${reviewPanel(
-      [
-        ...(view.classified ? [] : [SIGN_REQUEST_UNCLASSIFIED_WARNING]),
-        ...(approval.insights ?? []),
-      ],
-      "No additional wallet warnings were detected. Sign only if the domain and every decoded field match your intent.",
-    )}
+    ${reviewPanel([
+      ...(view.classified ? [] : [SIGN_REQUEST_UNCLASSIFIED_WARNING]),
+      ...(approval.insights ?? []),
+    ])}
     ${reviewConstraints("No transaction or network fee is submitted. The signed result can still authorize site-specific actions.")}
     ${contextDisclosure(approval)}
     ${view.classified ? decisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
@@ -329,13 +326,10 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Private transaction request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review this private transaction." : "Review each private action and the frozen execution call. The prover cannot change it after approval. Wallet-funded public routes get a second exact-call network-fee review; sponsored private-relay routes submit after this approval."}</p>
-      ${reviewCallsList(approval.summaries ?? []) || reviewOutcome("Authorize the exact private action bound to this request.")}
+      ${status.locked ? '<p class="hint">Unlock the wallet to review this private transaction.</p>' : ""}
+      ${approvalCalls(approval) || reviewOutcome("Authorize the exact private action bound to this request.")}
     </div>
-    ${reviewPanel(
-      [...strk20LinkageWarnings(approval), ...(approval.insights ?? [])],
-      "No additional wallet warnings were detected. Verify the private action and requesting site before approving.",
-    )}
+    ${reviewPanel([...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
     ${reviewConstraints("This approval carries no public wallet fee. Wallet-funded routes require a separate exact-call fee review.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
@@ -355,10 +349,10 @@ const strk20DisclosureCard = (
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, copy.title)}
-      <p class="hint">${status.locked ? copy.lockedHint : copy.hint}</p>
-      ${reviewCallsList(approval.summaries ?? []) || reviewOutcome(copy.hint)}
+      ${status.locked ? `<p class="hint">${copy.lockedHint}</p>` : ""}
+      ${approvalCalls(approval) || reviewOutcome(copy.hint)}
     </div>
-    ${reviewPanel(approval.insights ?? [], "The disclosure is limited to the exact account, network, site, and data described above.")}
+    ${reviewPanel(approval.insights ?? [])}
     ${reviewConstraints("This approval carries no transaction fee. Any later transaction requires its own review.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
@@ -370,9 +364,9 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Network switch request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network. Nothing changes unless you approve."}</p>
-      ${reviewCallsList(approval.summaries ?? []) || reviewOutcome("Switch the wallet to the requested Starknet network.")}
+      ${approvalCalls(approval) || reviewOutcome("Switch the wallet to the requested Starknet network.")}
     </div>
-    ${reviewPanel(approval.insights ?? [], "You can switch back at any time; confirm the requested network matches the site task.")}
+    ${reviewPanel(approval.insights ?? [])}
     ${reviewConstraints("No transaction is signed and no network fee is charged.")}
     ${decisionRow(approval, "Switch network", status.locked)}
   </li>`;
@@ -382,9 +376,12 @@ const addChainCard = (approval: PendingApproval): string => `
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Add network request")}
       <p class="hint">This site is asking to add a custom Starknet network. Nothing is saved unless you approve.</p>
-      ${reviewCallsList(approval.summaries ?? []) || reviewOutcome("Add the requested custom Starknet network to the wallet.")}
+      ${approvalCalls(approval) || reviewOutcome("Add the requested custom Starknet network to the wallet.")}
     </div>
-    ${reviewPanel(approval.insights ?? [], "Custom network endpoints can observe requests sent through them. Review the network details before use.")}
+    ${reviewPanel([
+      "Custom network endpoints can observe requests sent through them. Review the network details before use.",
+      ...(approval.insights ?? []),
+    ])}
     ${reviewConstraints("Adding the network does not sign a transaction or charge a fee.")}
     ${decisionRow(approval, "Add network", false)}
   </li>`;

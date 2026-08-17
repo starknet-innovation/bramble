@@ -24,15 +24,19 @@ type SwapMode =
   | "review"
   | "submitted";
 
-const quoteResponse = (highRisk: boolean) => ({
+const quoteResponse = (highRisk: boolean, reversed = false) => ({
   ok: true,
   swapQuote: {
-    buyAmount: highRisk ? "14285" : "19357",
-    buyAmountInUsd: highRisk ? 3_300 : 4_471.56,
+    buyAmount: reversed ? "1.25" : highRisk ? "14285" : "19357",
+    buyAmountInUsd: reversed ? 4_480.53 : highRisk ? 3_300 : 4_471.56,
     gasFeesInUsd: 0.08,
-    quoteId: highRisk ? "fixture-high-risk" : "fixture-best-route",
-    sellAmount: "1.25",
-    sellAmountInUsd: 4_480.53,
+    quoteId: reversed
+      ? "fixture-reverse-route"
+      : highRisk
+        ? "fixture-high-risk"
+        : "fixture-best-route",
+    sellAmount: reversed ? "19357" : "1.25",
+    sellAmountInUsd: reversed ? 4_471.56 : 4_480.53,
   },
 });
 
@@ -65,7 +69,11 @@ const prepareSwap =
           if (mode === "quote-failed") {
             return { error: "No safe route is available for this amount." };
           }
-          return quoteResponse(mode === "high-risk");
+          const sellTokenId =
+            typeof message === "object" && message !== null && "sellTokenId" in message
+              ? message.sellTokenId
+              : null;
+          return quoteResponse(mode === "high-risk", sellTokenId === STRK_TOKEN.id);
         }
         if (type === "wallet.swapPrepare") {
           return {
@@ -106,6 +114,14 @@ const prepareSwap =
     };
     bindSwap({ ...deps, app: null });
     bindSwap(deps);
+    if (!context.app.querySelector("#swap-sell-token")?.textContent?.includes("ETH")) {
+      context.app.querySelector<HTMLButtonElement>("#swap-sell-token")?.click();
+      await nextTurn();
+      context.app
+        .querySelector<HTMLButtonElement>(`[data-swap-pick-address="${ETH_TOKEN.address}"]`)
+        ?.click();
+      await nextTurn();
+    }
     if (mode === "edit") {
       return;
     }

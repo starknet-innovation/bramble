@@ -27,6 +27,19 @@ export const DeployUnavailable = checkpointStory(
 export const Deploy = checkpointStory("Review deployment inputs", "multisig", "deploy-ready");
 export const Home = checkpointStory("Shared portfolio", "multisig", "home");
 export const HomeEmpty = checkpointStory("Shared portfolio without work", "multisig", "home-empty");
+export const HomeIntents: LabStory = {
+  args: { checkpointId: "home-intents", scenarioId: "multisig" },
+  name: "Home · condensed open work",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(
+      body?.querySelector('.multisig-intent-list [data-view="multisig-detail"]'),
+    ).toBeVisible();
+    await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
+  },
+};
 export const IntentCollecting = checkpointStory(
   "Collect signatures",
   "multisig",
@@ -39,12 +52,9 @@ export const IntentReady: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
-    await expect(body?.querySelector('[data-ms-home-tab="intents"]')).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    await expect(body?.querySelector('[data-ms-home-tab="intents"]')).not.toBeInTheDocument();
     await expect(body?.querySelector("[data-ms-intent]")).toHaveTextContent(/Signatures\s*2 of 2/);
-    await expect(body?.querySelector("[data-ms-intent]")).toHaveTextContent("Risk and recovery");
+    await expect(body?.querySelector("[data-ms-submit]")).toBeVisible();
   },
 };
 export const IntentStale = checkpointStory("Stale transaction", "multisig", "intent-stale");

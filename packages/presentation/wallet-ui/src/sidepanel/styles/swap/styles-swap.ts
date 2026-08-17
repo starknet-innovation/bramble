@@ -140,6 +140,24 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
   }
   .swap-picker .token-mark, .swap-picker .token-logo { height: 28px; width: 28px; }
   .swap-picker .token-mark { font-size: 9px; }
+  #swap-confirm { min-width: 0; padding-bottom: ${SPACE.lg}; }
+  #swap-confirm .receipt { min-width: 0; }
+  .swap-review-pair {
+    align-items: center;
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    padding: ${SPACE.md} 0;
+  }
+  .swap-review-asset { align-items: center; display: flex; gap: ${SPACE.sm}; min-width: 0; }
+  .swap-review-asset:last-child { justify-content: flex-end; text-align: right; }
+  .swap-review-asset > span:last-child { display: grid; min-width: 0; }
+  .swap-review-asset small { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
+  .swap-review-asset strong { font-size: ${TYPE.label.size}; overflow-wrap: anywhere; }
+  .swap-review-asset .token-logo, .swap-review-asset .token-mark { flex: none; height: 30px; width: 30px; }
+  .swap-review-asset .token-mark { font-size: 9px; }
+  .swap-review-arrow { color: var(--mc-muted); display: inline-flex; transform: rotate(-90deg); }
+  .swap-review-arrow .icon { height: 15px; width: 15px; }
   .swap-actions { display: grid; gap: ${SPACE.sm}; }
   /* Quote sanity heuristics: the value delta rides the buy USD line and turns
      danger when the route loses real value; past the warn threshold an

@@ -53,6 +53,24 @@ export const SwapPickerKeyboard: LabStory = {
 };
 export const SwapLoading = checkpointStory("Swap · finding route", "swap", "loading");
 export const SwapQuote = checkpointStory("Swap · quote", "swap", "quote");
+export const SwapFlipValues: LabStory = {
+  args: { checkpointId: "quote", scenarioId: "swap" },
+  name: "Swap · flip preserves values",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const flip = body?.querySelector<HTMLButtonElement>("#swap-flip");
+    if (!body || !flip) throw new Error("Missing swap flip fixture");
+    await userEvent.click(flip);
+    await waitFor(() =>
+      expect(body.querySelector<HTMLInputElement>("#swap-sell-amount")).toHaveValue("19357"),
+    );
+    await expect(body.querySelector("#swap-buy-amount")).toHaveTextContent("1.25");
+    await expect(body.querySelector("#swap-sell-token")).toHaveTextContent("STRK");
+    await expect(body.querySelector("#swap-buy-token")).toHaveTextContent("ETH");
+  },
+};
 export const SwapHighRisk = checkpointStory("Swap · high-loss route", "swap", "high-risk");
 export const SwapQuoteFailure = checkpointStory("Swap · no route", "swap", "quote-failed");
 export const SwapReview: LabStory = {
@@ -66,7 +84,9 @@ export const SwapReview: LabStory = {
     await expect(body?.querySelector("#swap-confirm-receipt")).toHaveTextContent(
       /Minimum received\s*19,260 STRK \(wallet-enforced\)/,
     );
-    await expect(body?.querySelector("#swap-risk-review")).toHaveTextContent("Risk and recovery");
+    await expect(body?.querySelectorAll(".swap-review-pair .token-logo")).toHaveLength(2);
+    await expect(body?.querySelector("#swap-risk-review")).toBeEmptyDOMElement();
+    await expect(body?.querySelector("#swap-confirm-button")).toBeVisible();
   },
 };
 export const SwapExecutionFailure = checkpointStory(

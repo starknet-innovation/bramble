@@ -24,6 +24,7 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
   accountDisplayName,
+  accountLabel,
   dockScreen,
   flowHeader,
   flowScreen,
@@ -132,7 +133,7 @@ const exactCalls = (intent: ArgentMultisigSigningIntent): string =>
     .map(
       (call, index) => `<li class="review-panel">
         <p><strong>Call ${index + 1}</strong> · <code>${escapeHtml(call.entrypoint)}</code></p>
-        <p>Contract · <code>${escapeHtml(call.contractAddress)}</code></p>
+        <p>Contract · <code title="${escapeHtml(call.contractAddress)}">${escapeHtml(accountLabel(call.contractAddress))}</code></p>
         <p>Calldata · <code>${escapeHtml(call.calldata.join(" ") || "none")}</code></p>
       </li>`,
     )
@@ -180,12 +181,12 @@ const configReviewView = (
     <p class="review-flag"><strong>${escapeHtml(review.summary)}</strong></p>
     <p>Threshold · <strong>${current.threshold} of ${current.signerPublicKeys.length} before → ${review.nextConfig.threshold} of ${review.nextConfig.signerPublicKeys.length} after</strong></p>
     <p>Current signers</p>
-    <ol>${current.signerPublicKeys.map((key) => `<li><code>${escapeHtml(key)}</code></li>`).join("")}</ol>
+    <ol>${current.signerPublicKeys.map((key) => `<li><code title="${escapeHtml(key)}">${escapeHtml(accountLabel(key))}</code></li>`).join("")}</ol>
     <p>Exact change</p>
-    ${changedSigners.map((line) => `<p><code>${escapeHtml(line)}</code></p>`).join("")}
+    ${changedSigners.map((line) => `<p><code title="${escapeHtml(line)}">${escapeHtml(line.length > 24 ? `${line.slice(0, 14)}…${line.slice(-6)}` : line)}</code></p>`).join("")}
     <p>Resulting threshold · <strong>${review.nextConfig.threshold} of ${review.nextConfig.signerPublicKeys.length}</strong></p>
     <p>Resulting signers</p>
-    <ol>${review.nextConfig.signerPublicKeys.map((key) => `<li><code>${escapeHtml(key)}</code></li>`).join("")}</ol>
+    <ol>${review.nextConfig.signerPublicKeys.map((key) => `<li><code title="${escapeHtml(key)}">${escapeHtml(accountLabel(key))}</code></li>`).join("")}</ol>
   </section>`;
 };
 
@@ -231,17 +232,14 @@ const intentCard = (
       ${pill(intent.state)}
     </header>
     ${reviewCallsList(transactionReview.calls.map((call) => call.summary))}
-    ${reviewPanel(
-      [
-        ...riskFlagMessages(transactionReview.flags),
-        ...(hasFreshAuthority
-          ? []
-          : [
-              "The fresh on-chain signer authority does not exactly match this intent snapshot. Signing and submission are disabled.",
-            ]),
-      ],
-      "No additional wallet warnings were detected. Verify every call and signer before approving this shared transaction.",
-    )}
+    ${reviewPanel([
+      ...riskFlagMessages(transactionReview.flags),
+      ...(hasFreshAuthority
+        ? []
+        : [
+            "The fresh on-chain signer authority does not exactly match this intent snapshot. Signing and submission are disabled.",
+          ]),
+    ])}
     <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
       <p class="decision-label">Maximum cost and constraints</p>
       ${receipt([
@@ -267,10 +265,29 @@ const intentCard = (
                 icon: "copy",
                 label: "Copy transaction hash",
               },
-              value: intent.prepared.transactionHash,
+              value: accountLabel(intent.prepared.transactionHash),
               valueStyle: "code",
             },
-            { label: "Sender", value: intent.prepared.senderAddress, valueStyle: "code" },
+            {
+              label: "Sender",
+              action: {
+                attributes: { "data-copy": intent.prepared.senderAddress },
+                icon: "copy",
+                label: "Copy sender",
+              },
+              value: accountLabel(intent.prepared.senderAddress),
+              valueStyle: "code",
+            },
+            {
+              label: "Class hash",
+              action: {
+                attributes: { "data-copy": intent.configSnapshot.classHash },
+                icon: "copy",
+                label: "Copy class hash",
+              },
+              value: accountLabel(intent.configSnapshot.classHash),
+              valueStyle: "code",
+            },
             { label: "Chain ID", value: intent.prepared.chainId, valueStyle: "code" },
             { label: "Nonce", value: intent.prepared.nonce, valueStyle: "code" },
             { label: "Calls", value: String(intent.prepared.calls.length) },
@@ -362,6 +379,26 @@ const intentList = (
         .join("")}</div><p id="multisig-intent-result" role="status"></p>`;
 };
 
+const compactIntentList = (
+  record: ArgentMultisigRecord,
+  intents: readonly ArgentMultisigSigningIntent[],
+): string => {
+  const scoped = intents.filter((intent) => intent.accountId === record.id);
+  return scoped.length === 0
+    ? emptyState("No frozen signing intents are stored for this account.")
+    : `<ul class="menu-list multisig-intent-list">${scoped
+        .map(
+          (intent) =>
+            `<li>${menuRow({
+              attributes: { "data-view": "multisig-detail" },
+              icon: "users",
+              label: intent.summary,
+              supportingText: `${intent.state} · ${intent.signatures.length} of ${intent.configSnapshot.threshold} signatures`,
+            })}</li>`,
+        )
+        .join("")}</ul>`;
+};
+
 /**
  * Renders one shared account, its portfolio, and exact frozen intents.
  */
@@ -390,27 +427,31 @@ export const multisigDetailFlow = (
     (intent) =>
       intent.accountId === record.id && (intent.state === "collecting" || intent.state === "ready"),
   ).length;
-  return (
-    (screen === "multisig-home"
-      ? ""
-      : flowHeader(multisigDisplayName(record), status, configLabel(view))) +
-    (screen === "multisig-home" ? dockScreen : flowScreen)(
-      screen,
-      `${
-        loadError || view.config === null
-          ? '<div class="review-panel" role="alert"><p class="review-flag">Current on-chain signer authority is unavailable. Signing is disabled.</p></div>'
-          : ""
-      }
+  const authorityWarning =
+    loadError || view.config === null
+      ? '<div class="review-panel" role="alert"><p class="review-flag">Current on-chain signer authority is unavailable. Signing is disabled.</p></div>'
+      : "";
+  if (screen === "multisig-detail") {
+    return (
+      flowHeader(multisigDisplayName(record), status, configLabel(view)) +
+      flowScreen(
+        screen,
+        `<section class="section multisig-review-flow">${authorityWarning}${intentList(record, view, intents, status, preferences)}</section><p id="multisig-detail-result" role="status"></p>`,
+      )
+    );
+  }
+  return dockScreen(
+    screen,
+    `${authorityWarning}
       ${multisigPortfolio({
         canSign: options.length > 0 && view.config !== null,
         data: portfolio,
-        intents: intentList(record, view, intents, status, preferences),
+        intents: compactIntentList(record, intents),
         openCount,
         preferences,
         record,
       })}
       <p id="multisig-detail-result" role="status"></p>`,
-    )
   );
 };
 

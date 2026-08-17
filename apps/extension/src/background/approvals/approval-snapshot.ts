@@ -89,6 +89,9 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
   ...(approval.relayFeeAction === undefined
     ? {}
     : { relayFeeAction: cloneApprovalValue(approval.relayFeeAction) }),
+  ...(approval.reviewAssets === undefined
+    ? {}
+    : { reviewAssets: approval.reviewAssets.map((asset) => ({ ...asset })) }),
   ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
   ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
   ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),

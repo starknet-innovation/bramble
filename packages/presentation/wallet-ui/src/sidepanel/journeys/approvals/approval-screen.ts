@@ -63,7 +63,7 @@ export const approvalTakeover = (
   <main class="screen flow approval-takeover" id="wallet-screen-approval-takeover" aria-labelledby="approval-title" tabindex="-1">
     <section class="takeover-continuity" role="note" aria-label="Paused wallet task">
       <span class="takeover-continuity-mark">${icon("shield")}</span>
-      <span><strong>${escapeHtml(pausedTask)} paused</strong><small>Finish, deny, or review later to return where you left off.</small></span>
+      <span><strong>${escapeHtml(pausedTask)} paused</strong></span>
     </section>
     <ul class="request-list">${approvalCard(first, status)}</ul>
     <section class="approval-live" id="approval-live" role="status" aria-live="polite" hidden>

@@ -171,7 +171,7 @@ export const resolvePendingApproval = async (
   await openPendingWalletSurface(sidepanel, timeout, abort);
   await expect(sidepanel.getByText("Review request")).toBeVisible();
   await expect(sidepanel.getByText(eyebrow, { exact: true }).first()).toBeVisible();
-  // The origin renders in both the takeover header and the request card.
-  await expect(sidepanel.getByText(origin).first()).toBeVisible();
+  // The compact card shows the host while preserving the exact origin as its title.
+  await expect(sidepanel.getByTitle(origin).first()).toBeVisible();
   await sidepanel.locator(`[data-approval-action="${action}"]`).click();
 };

@@ -13,6 +13,7 @@ import { escapeHtml } from "@mc-wallet/core/html";
 import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { button } from "@mc-wallet/ui-kit/controls";
 import type { UiAttributes } from "@mc-wallet/ui-kit/html-attributes";
+import { tokenGlyph } from "../journeys/portfolio/token-row";
 import { icon } from "./icons";
 import { formatFri } from "./parts";
 
@@ -140,13 +141,23 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
  * summaries, so callers can inline it unconditionally without leaving an empty
  * list behind.
  */
-export const reviewCallsList = (summaries: readonly string[]): string =>
+export const reviewCallsList = (
+  summaries: readonly string[],
+  assets: readonly { readonly address: string; readonly symbol: string }[] = [],
+): string =>
   summaries.length === 0
     ? ""
     : `<section class="decision-layer decision-outcome" aria-label="What will happen">
         <p class="decision-label">What will happen</p>
         <ul class="review-calls">${summaries
-          .map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`)
+          .map((summary) => {
+            const words = new Set(summary.toUpperCase().match(/[A-Z0-9.]+/gu) ?? []);
+            const marks = assets
+              .filter((asset) => words.has(asset.symbol.toUpperCase()))
+              .map((asset) => tokenGlyph(asset.address, asset.symbol))
+              .join("");
+            return `<li class="review-call">${marks ? `<span class="review-call-assets">${marks}</span>` : ""}<span>${escapeHtml(summary)}</span></li>`;
+          })
           .join("")}</ul>
       </section>`;
 

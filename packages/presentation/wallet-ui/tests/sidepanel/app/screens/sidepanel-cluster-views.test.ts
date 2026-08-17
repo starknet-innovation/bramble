@@ -129,7 +129,7 @@ describe("cluster views", () => {
     expect(settings).toContain("Reveal recovery secrets");
   });
 
-  test("a site request names the paused task and the exact return contract", () => {
+  test("a site request names the paused task without repeating return guidance", () => {
     const pending = [
       {
         id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
@@ -140,7 +140,7 @@ describe("cluster views", () => {
     const html = dashboard("send", status, pending, preferences, { balances: [] });
 
     expect(html).toContain("Send paused");
-    expect(html).toContain("Finish, deny, or review later to return where you left off.");
+    expect(html).not.toContain("Finish, deny, or review later to return where you left off.");
     expect(html).toContain('aria-label="Paused wallet task"');
   });
 

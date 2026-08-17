@@ -42,9 +42,12 @@ const revealIntentPanel = async (context: FrameContext): Promise<void> => {
     wallet: createSidepanelRuntime(runtime),
   });
   const tab = context.app.querySelector<HTMLButtonElement>('[data-ms-home-tab="intents"]');
-  if (!tab) throw new Error("Missing production multisig intents tab");
-  tab.click();
-  await nextTurn();
+  if (tab) {
+    tab.click();
+    await nextTurn();
+  } else if (!context.app.querySelector("[data-ms-intent]")) {
+    throw new Error("Missing production multisig intent review");
+  }
 };
 
 const checkpoint = (
@@ -135,6 +138,14 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     true,
   ),
   checkpoint(
+    "home-intents",
+    "Condensed open work",
+    "Home keeps each intent to one scannable line before opening the focused review.",
+    { multisigIntents: [argentReadyIntent], view: "multisig-home" },
+    { openIntents: 1, view: "condensed" },
+    true,
+  ),
+  checkpoint(
     "intent-collecting",
     "Collect signatures",
     "Human outcome and risk lead; fee ceiling, threshold progress, and exact identity remain verifiable.",
@@ -164,7 +175,6 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     "Missing fresh signer authority disables proposal preparation and signature collection.",
     { multisigs: [unavailableAuthority], view: "multisig-detail" },
     { authority: "unavailable", failClosed: true },
-    true,
   ),
   checkpoint(
     "authority-changed",

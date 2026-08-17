@@ -45,7 +45,9 @@ export const GROUP_STYLES = `
      account shows its folder's icon at full ink. */
   button.drawer-assign.is-ungrouped { color: var(--mc-muted); }
   .option-group-item { display: grid; gap: 4px; }
-  .account-groups-line { display: inline-flex; gap: 4px; margin-top: 2px; }
+  .option-name { align-items: center; display: flex; gap: 6px; min-width: 0; }
+  .option-name strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .account-groups-line { display: inline-flex; flex: none; gap: 4px; }
   .account-groups-line .icon { color: var(--mc-muted); height: 13px; width: 13px; }
   .group-assign {
     background: var(--mc-soft);

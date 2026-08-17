@@ -178,14 +178,14 @@ describe("Send review vs dApp invoke card decode/risk parity (#19)", () => {
     expect(sendReview(summaries, flags)).toContain(panel);
   });
 
-  test("a clean transfer keeps a neutral risk reminder on both surfaces", () => {
+  test("a clean transfer keeps Send guidance without repeating it in the takeover", () => {
     const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
 
     expect(flags).toEqual([]);
     expect(reviewPanel(riskFlagMessages(flags))).toBe("");
     expect(dappCard(summaries, flags)).toContain(reviewCallsList(summaries));
     expect(sendReview(summaries, flags)).toContain(reviewCallsList(summaries));
-    expect(dappCard(summaries, flags)).toContain("Risk and recovery");
+    expect(dappCard(summaries, flags)).not.toContain("Risk and recovery");
     expect(sendReview(summaries, flags)).toContain("Risk and recovery");
   });
 

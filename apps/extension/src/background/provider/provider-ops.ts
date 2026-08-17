@@ -16,7 +16,7 @@ import {
   verifyCalls,
 } from "@mc-wallet/transactions/verify";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
@@ -61,10 +61,8 @@ export type ProviderOpsDeps = {
   readonly extensionId: string;
   readonly guard?: OriginGuard;
   /**
-   * Panel round-trip queue for keyless Ledger accounts. Optional so partial
-   * test stubs stay valid. Production invoke estimation skips account
-   * validation and does not call this queue; the seam remains part of the RPC
-   * input shape shared with submit paths and narrow test doubles.
+   * Optional panel round-trip queue for keyless Ledger accounts. Production
+   * invoke estimation does not call it; Ledger submission fails closed without it.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
@@ -213,6 +211,9 @@ export const queueInvokeApproval = async (
     flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
     origin: input.origin,
     ...(input.proof === undefined ? {} : { proof: input.proof }),
+    reviewAssets: trusted.tokens
+      .filter((token) => input.calls.some((call) => sameFelt(call.contractAddress, token.address)))
+      .map((token) => ({ address: token.address, symbol: token.symbol })),
     summaries: report.calls.map((call) => call.summary),
   });
   notifyApprovalsChanged();

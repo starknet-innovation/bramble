@@ -17,7 +17,7 @@ import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
 import { formatFeeEstimate } from "../../shared/review-render";
-import { compactAmount } from "../portfolio/token-row";
+import { compactAmount, tokenGlyph } from "../portfolio/token-row";
 import type { SwapPreparationView } from "./swap-client";
 import { SWAP_LOSS_WARN_PERCENT } from "./swap-client";
 
@@ -110,9 +110,11 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
             <span class="menu-copy"><strong>Technical details</strong><small>Frozen calls and review digest</small></span>
             <span class="disclosure-mark">${icon("chevronRight")}</span>
           </summary>
-          <div class="disclosure-body" id="swap-call-review"></div>
+          <div class="disclosure-body">
+            <div id="swap-quote-details"></div>
+            <div id="swap-call-review"></div>
+          </div>
         </details>
-        <p class="hint">The route is frozen. Confirm submits these reviewed calls once; it cannot change after this screen.</p>
         <div class="swap-actions">
           ${button({
             attributes: { id: "swap-confirm-button" },
@@ -145,12 +147,14 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
  * that separation is the whole point of the row.
  */
 export type SwapConfirmFigures = {
+  readonly buyAddress: string;
   readonly buyAmount: string;
   readonly buySymbol: string;
   readonly gasFeesInUsd: number;
   readonly lossPercent: number;
   readonly minBuyAmount: string;
   readonly networkFee: SwapPreparationView["reviewedFee"];
+  readonly sellAddress: string;
   readonly sellAmount: string;
   readonly sellSymbol: string;
   readonly valueDelta: number | null;
@@ -165,15 +169,16 @@ export type SwapConfirmFigures = {
  * screen before signing.
  */
 export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
-  `<div class="receipt-group decision-outcome-rows">
-    <p class="decision-label">What will happen</p>
-    ${receiptRows([
-      { label: "You sell", value: `${compactAmount(figures.sellAmount)} ${figures.sellSymbol}` },
-      {
-        label: "You receive (est.)",
-        value: `${compactAmount(figures.buyAmount)} ${figures.buySymbol}`,
-      },
-    ])}
+  `<div class="swap-review-pair" aria-label="What will happen">
+    <div class="swap-review-asset">
+      ${tokenGlyph(figures.sellAddress, figures.sellSymbol)}
+      <span><small>You sell</small><strong>${compactAmount(figures.sellAmount)} ${figures.sellSymbol}</strong></span>
+    </div>
+    <span class="swap-review-arrow">${icon("arrowDown")}</span>
+    <div class="swap-review-asset">
+      ${tokenGlyph(figures.buyAddress, figures.buySymbol)}
+      <span><small>You receive</small><strong>${compactAmount(figures.buyAmount)} ${figures.buySymbol}</strong></span>
+    </div>
   </div>
   <div class="receipt-group decision-boundary-rows">
     <p class="decision-label">Maximum cost and constraints</p>
@@ -182,24 +187,30 @@ export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
         label: "Minimum received",
         value: `${compactAmount(figures.minBuyAmount)} ${figures.buySymbol} (wallet-enforced)`,
       },
-      ...(figures.valueDelta === null
-        ? []
-        : [
-            {
-              label: "Value change",
-              value: `${figures.valueDelta > 0 ? "+" : ""}${figures.valueDelta.toFixed(2)}%`,
-              valueTone:
-                figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
-                  ? ("danger" as const)
-                  : ("default" as const),
-            },
-          ]),
       { label: "Maximum network fee", value: formatFeeEstimate(figures.networkFee) },
-      // This is the aggregator's guess, not a resource bound the wallet signs.
-      {
-        label: "Aggregator fee estimate",
-        value: `≈ ${formatFiat(figures.gasFeesInUsd, "usd")} (not wallet-enforced)`,
-      },
-      { label: "Route", value: "AVNU aggregator" },
     ])}
   </div>`;
+
+/**
+ * Renders secondary quote facts behind the technical disclosure.
+ */
+export const swapQuoteDetails = (figures: SwapConfirmFigures): string =>
+  receipt([
+    ...(figures.valueDelta === null
+      ? []
+      : [
+          {
+            label: "Value change",
+            value: `${figures.valueDelta > 0 ? "+" : ""}${figures.valueDelta.toFixed(2)}%`,
+            valueTone:
+              figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
+                ? ("danger" as const)
+                : ("default" as const),
+          },
+        ]),
+    {
+      label: "Aggregator fee estimate",
+      value: `≈ ${formatFiat(figures.gasFeesInUsd, "usd")} (not wallet-enforced)`,
+    },
+    { label: "Route", value: "AVNU aggregator" },
+  ]);

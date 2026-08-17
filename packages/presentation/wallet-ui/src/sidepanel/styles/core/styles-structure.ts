@@ -208,31 +208,35 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     min-height: 28px;
     text-wrap: nowrap;
   }
-  .approval-takeover { grid-template-rows: auto minmax(0, 1fr) auto auto; min-height: 0; }
-  .approval-takeover .request-list { min-height: 0; }
+  .approval-takeover { gap: ${SPACE.md}; grid-template-rows: auto minmax(0, 1fr) auto auto; min-height: 0; }
+  .approval-takeover .request-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .approval-takeover .request-card {
     background: transparent;
     border-radius: 0;
     box-shadow: none;
     display: flex;
     flex-direction: column;
+    gap: ${SPACE.sm};
     min-height: 100%;
     padding: 0;
   }
   .approval-takeover .request-site {
     background: var(--mc-panel);
-    border-radius: ${RADIUS.lg};
-    box-shadow: var(--mc-elev-sm);
-    padding: ${SPACE.lg};
+    border-radius: ${RADIUS.md};
+    padding: ${SPACE.sm} ${SPACE.md};
   }
   .approval-takeover .request-site-mark {
     background: var(--mc-accent-soft);
     color: var(--mc-accent);
   }
   .approval-takeover .request-site-copy strong {
-    font-size: ${TYPE.title.size};
+    font-size: ${TYPE.body.size};
     letter-spacing: -0.01em;
   }
+  .approval-takeover .request-copy, .approval-takeover .decision-layer { gap: ${SPACE.xs}; }
+  .approval-takeover .review-calls { padding: ${SPACE.sm} ${SPACE.md}; }
+  .approval-takeover .request-token { align-items: center; display: inline-flex; gap: 6px; }
+  .approval-takeover .request-token .token-logo, .approval-takeover .request-token .token-mark { height: 22px; width: 22px; }
   .approval-takeover .review-panel {
     background: transparent;
     border-radius: 0;
@@ -240,17 +244,17 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     padding: ${SPACE.md} 0 0;
   }
   .approval-takeover .review-flag {
-    align-items: flex-start;
+    align-items: center;
     color: var(--mc-muted);
     display: flex;
     gap: ${SPACE.sm};
     line-height: ${TYPE.caption.line};
   }
-  .approval-takeover .review-flag .icon { color: var(--mc-danger); flex: none; margin-top: 1px; }
+  .approval-takeover .review-flag .icon { color: var(--mc-danger); flex: none; }
   .approval-takeover .button-row {
     grid-template-columns: minmax(0, 1fr) minmax(104px, auto);
     margin-top: auto;
-    padding-top: ${SPACE.xl};
+    padding-top: ${SPACE.sm};
   }
   .takeover-queue { color: var(--mc-muted); font-size: ${TYPE.caption.size}; text-align: center; }
   .takeover-foot { display: grid; gap: ${SPACE.sm}; }
