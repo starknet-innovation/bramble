@@ -59,6 +59,35 @@ export const IntentReady: LabStory = {
       body?.querySelector("[data-ms-intent] .review-call-assets .token-logo"),
     ).toBeVisible();
     await expect(body?.querySelector("[data-ms-submit]")).toBeVisible();
+    await expect(body?.querySelector("[data-ms-sign]")).not.toBeInTheDocument();
+    await expect(body?.querySelectorAll(".multisig-intent-action > button")).toHaveLength(1);
+    await expect(body?.querySelector(".multisig-collaboration")).not.toHaveAttribute("open");
+  },
+};
+export const IntentLocalSignerComplete: LabStory = {
+  args: { checkpointId: "intent-signed-local", scenarioId: "multisig" },
+  name: "Collecting · this wallet already signed",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("[data-ms-sign]")).not.toBeInTheDocument();
+    await expect(
+      body?.querySelector(".multisig-intent-action > [data-ms-copy-package]"),
+    ).toBeVisible();
+  },
+};
+export const IntentNoLocalSigner: LabStory = {
+  args: { checkpointId: "intent-no-local-signer", scenarioId: "multisig" },
+  name: "Collecting · no eligible local signer",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("[data-ms-sign]")).not.toBeInTheDocument();
+    await expect(
+      body?.querySelector(".multisig-intent-action > [data-ms-copy-package]"),
+    ).toBeVisible();
   },
 };
 export const IntentStale = checkpointStory("Stale transaction", "multisig", "intent-stale");

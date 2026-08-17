@@ -56,8 +56,12 @@ const fillBackupVerify = async (sidepanel: Page, phrase: string): Promise<void> 
 const protectAndSelectAccount = async (sidepanel: Page): Promise<void> => {
   await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
   await sidepanel.locator('input[name="vaultPassphraseConfirm"]').fill(VAULT_PASSPHRASE);
-  await sidepanel.getByRole("button", { name: "Review account" }).click();
-  await expect(sidepanel.getByRole("heading", { name: "Choose accounts to add" })).toBeVisible();
+  await sidepanel.getByRole("button", { name: "Choose account contract" }).click();
+  await expect(
+    sidepanel.getByRole("heading", { name: "Choose your account contract" }),
+  ).toBeVisible();
+  await sidepanel.getByRole("button", { name: "Review OpenZeppelin account" }).click();
+  await expect(sidepanel.getByRole("heading", { name: "Review your account" })).toBeVisible();
   await sidepanel.locator("#account-preview").click();
   await acknowledgeMainnetIfPresent(sidepanel);
   await expect(sidepanel.getByRole("button", { name: "Add selected account" })).toBeEnabled();

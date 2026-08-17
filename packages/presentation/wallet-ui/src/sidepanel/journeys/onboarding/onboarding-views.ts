@@ -5,10 +5,9 @@
  */
 
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { checkboxField, inputControl, selectField, textField } from "@mc-wallet/ui-kit/fields";
+import { checkboxField, inputControl, textField } from "@mc-wallet/ui-kit/fields";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { contextHelp } from "../../shared/parts";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 
 const flowBack = (label: string): string =>
@@ -48,6 +47,26 @@ const option = (
     </span>
     ${icon("chevronRight")}
   </button>`;
+
+const accountContractChoices = (kind: "ledger" | "software"): string => {
+  const attribute = kind === "ledger" ? "data-ledger-account-contract" : "data-account-contract";
+  return `<div class="onboarding-contract-options" role="group" aria-label="Account contract">
+    <button class="onboarding-contract" ${attribute}="openzeppelin" type="button" aria-pressed="true">
+      <span class="onboarding-contract-copy">
+        <span class="onboarding-contract-title"><strong>OpenZeppelin Account</strong><span>Recommended</span></span>
+        <span>${kind === "ledger" ? "Ledger keeps the signer key; OpenZeppelin defines the on-chain account." : "The recommended account model for new MC Wallet accounts."}</span>
+      </span>
+      <span class="onboarding-contract-check">${icon("check")}</span>
+    </button>
+    <button class="onboarding-contract" ${attribute}="argent" type="button" aria-pressed="false">
+      <span class="onboarding-contract-copy">
+        <span class="onboarding-contract-title"><strong>Argent Account</strong><span>Supported</span></span>
+        <span>${kind === "ledger" ? "Use the same Ledger signer with the Argent account model." : "Choose the Argent account model when you prefer it."}</span>
+      </span>
+      <span class="onboarding-contract-check">${icon("check")}</span>
+    </button>
+  </div>`;
+};
 
 /**
  * Renders both recovery grids. Each cell states its 1-based position as content,
@@ -269,33 +288,35 @@ const passwordStep = (): string => `
     </div>
     <div class="onboarding-step-cta">
       ${button({
-        attributes: { id: "review-account-button" },
+        attributes: { id: "choose-account-contract-button" },
         disabled: true,
-        label: "Review account",
+        label: "Choose account contract",
+      })}
+    </div>
+  </section>`;
+
+const accountContractStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="account-contract" hidden>
+    ${flowBack("Back to passphrase")}
+    ${stepHead("wallet", "Choose your account contract", "This determines the account deployed on Starknet. Your recovery phrase and local vault protection stay the same.")}
+    <div class="onboarding-fields">
+      <input name="accountContractType" type="hidden" value="openzeppelin" />
+      ${accountContractChoices("software")}
+      <p class="hint">MC Wallet supports both account models. OpenZeppelin is the recommended default.</p>
+    </div>
+    <div class="onboarding-step-cta">
+      ${button({
+        attributes: { id: "review-account-button" },
+        label: "Review OpenZeppelin account",
       })}
     </div>
   </section>`;
 
 const accountStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="accounts" hidden>
-    ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Choose accounts to add", "Select the Starknet account you want available when setup finishes.")}
+    ${flowBack("Back to account contract")}
+    ${stepHead("wallet", "Review your account", "Confirm the derived public address, then add it to this wallet.")}
     <div class="onboarding-fields">
-      ${selectField({
-        hint: "Argent is recommended for new accounts. OpenZeppelin remains available for compatibility.",
-        label: "Account contract",
-        name: "accountContractType",
-        options: [
-          { label: "Argent Account — Recommended", value: "argent" },
-          { label: "OpenZeppelin Account — Compatibility", value: "openzeppelin" },
-        ],
-        selected: "argent",
-      })}
-      ${contextHelp(
-        "onboarding-account-contract",
-        "Why Argent is recommended",
-        "Argent is the default for new MC Wallet accounts and current wallet integrations. Choose OpenZeppelin only when you need compatibility with that account model. This choice controls the on-chain account contract, not where your recovery phrase is stored.",
-      )}
       <button
         class="onboarding-account"
         id="account-preview"
@@ -304,7 +325,7 @@ const accountStep = (): string => `
       >
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
-          <strong>Primary account</strong>
+          <strong data-preview-label>Primary OpenZeppelin account</strong>
           <span data-preview-address>Deriving account…</span>
         </span>
         <span class="onboarding-account-check">${icon("check")}</span>
@@ -326,26 +347,28 @@ const accountStep = (): string => `
     </div>
   </section>`;
 
+const ledgerContractStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="ledger-contract" hidden>
+    ${flowBack("Back to wallet methods")}
+    ${stepHead("shield", "Choose the Ledger account contract", "Your signing key stays on Ledger in either case. This choice only changes the account contract deployed on Starknet.")}
+    <div class="onboarding-fields">
+      ${accountContractChoices("ledger")}
+      <p class="hint">MC Wallet supports both account models. OpenZeppelin is the recommended default.</p>
+    </div>
+    <div class="onboarding-step-cta">
+      ${button({
+        attributes: { id: "ledger-contract-continue" },
+        label: "Continue with OpenZeppelin",
+      })}
+    </div>
+  </section>`;
+
 const ledgerStep = (status: WalletStatus): string => `
   <section class="onboarding-step" data-onboarding-step="ledger" hidden>
-    ${flowBack("Back to wallet methods")}
-    ${stepHead("shield", "Secure this wallet with Ledger", "Set a local vault passphrase, then connect the device and choose accounts.")}
+    ${flowBack("Back to account contract")}
+    ${stepHead("lock", "Protect the Ledger registry", "Create the local vault passphrase used to unlock account labels and settings on this device.")}
     <form id="ledger-setup-form" class="onboarding-fields">
-      ${selectField({
-        hint: "Argent is recommended for new accounts. OpenZeppelin remains available for compatibility.",
-        label: "Account contract",
-        name: "ledgerAccountContractType",
-        options: [
-          { label: "Argent Account — Recommended", value: "argent" },
-          { label: "OpenZeppelin Account — Compatibility", value: "openzeppelin" },
-        ],
-        selected: "argent",
-      })}
-      ${contextHelp(
-        "ledger-account-contract",
-        "Which account contract should I choose?",
-        "Argent is recommended for a new Ledger-backed account. Choose OpenZeppelin only for compatibility with an existing OpenZeppelin account model. Your signing key remains on Ledger in either case.",
-      )}
+      <input name="ledgerAccountContractType" type="hidden" value="openzeppelin" />
       ${passwordFields("ledger")}
       <p id="ledger-passphrase-result" role="status"></p>
       ${mainnetAcknowledgement(
@@ -383,7 +406,9 @@ export const onboardingWizard = (status: WalletStatus): string => `
       ${generatedStep()}
       ${verifyStep()}
       ${passwordStep()}
+      ${accountContractStep()}
       ${accountStep()}
     </form>
+    ${ledgerContractStep()}
     ${ledgerStep(status)}
   </main>`;

@@ -41,8 +41,27 @@ const toastEl = (): HTMLElement => {
 };
 
 describe("error toast copy control", () => {
+  test("every error toast is copyable, including friendly mapped errors", () => {
+    showToast("Failed to fetch", "error", document);
+
+    expect(
+      toastEl().querySelector<HTMLButtonElement>(".toast-copy")?.getAttribute("aria-label"),
+    ).toBe("Copy error message");
+  });
+
+  test("renders in the document that owns the triggering control", () => {
+    const isolated = document.implementation.createHTMLDocument("Wallet frame");
+    const trigger = isolated.createElement("button");
+    isolated.body.append(trigger);
+
+    showToast("Wallet frame error", "error", trigger);
+
+    expect(isolated.querySelector("#toast-stack .toast.error")).not.toBeNull();
+    expect(document.querySelector("#toast-stack")).toBeNull();
+  });
+
   test("a press on the copy button never captures the pointer", () => {
-    showToast(TECHNICAL_ERROR, "error");
+    showToast(TECHNICAL_ERROR, "error", document);
     const copy = toastEl().querySelector<HTMLButtonElement>(".toast-copy");
     if (!copy) {
       throw new Error("copy control not rendered");
@@ -55,7 +74,7 @@ describe("error toast copy control", () => {
   });
 
   test("a press on the toast body still starts a swipe", () => {
-    showToast(TECHNICAL_ERROR, "error");
+    showToast(TECHNICAL_ERROR, "error", document);
     const text = toastEl().querySelector(".toast-text");
     if (!text) {
       throw new Error("toast text not rendered");

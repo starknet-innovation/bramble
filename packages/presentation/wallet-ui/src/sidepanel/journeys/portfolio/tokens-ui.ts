@@ -60,11 +60,11 @@ const bindAddToken = (deps: TokensUiDeps): void => {
     buttonBusy(submitButton, true);
     void deps.wallet.addToken(address).then(
       async () => {
-        showToast("Token added", "success");
+        showToast("Token added", "success", form);
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Add token failed"), "error");
+        showToast(errorMessage(error, "Add token failed"), "error", form);
         if (result) {
           result.textContent = errorMessage(error, "Add token failed");
         }
@@ -84,11 +84,11 @@ const bindDetectAdd = (deps: TokensUiDeps, container: Element | null | undefined
       buttonBusy(button, true);
       void deps.wallet.addToken(address).then(
         async () => {
-          showToast("Token added", "success");
+          showToast("Token added", "success", button);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Add token failed"), "error");
+          showToast(errorMessage(error, "Add token failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -116,7 +116,7 @@ const bindDetect = (deps: TokensUiDeps): void => {
         buttonBusy(button, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Token detection failed"), "error");
+        showToast(errorMessage(error, "Token detection failed"), "error", button);
         if (status) {
           status.textContent = errorMessage(error, "Token detection failed");
         }
@@ -137,11 +137,11 @@ const bindToggles = (deps: TokensUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.setTokenHidden(tokenId, !hidden).then(
         async () => {
-          showToast(hidden ? "Token shown" : "Token hidden", "success");
+          showToast(hidden ? "Token shown" : "Token hidden", "success", button);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Token update failed"), "error");
+          showToast(errorMessage(error, "Token update failed"), "error", button);
           buttonBusy(button, false);
         },
       );

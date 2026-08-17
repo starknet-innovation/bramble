@@ -248,7 +248,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
               ? { ...transferState, error: "", stage: "submitted" }
               : { ...transferState, error: outcome.message, stage: "failed" };
           repaintActiveTransfer?.();
-          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error");
+          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", form);
           return;
         }
       } catch {
@@ -340,7 +340,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = errorMessage(error, preparationFailure(composed));
-            showToast(message, "error");
+            showToast(message, "error", form);
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             repaintActiveTransfer?.();
           },
@@ -384,7 +384,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = friendlyReviewError(error);
-            showToast(message, "error");
+            showToast(message, "error", form);
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             repaintActiveTransfer?.();
           },
@@ -433,7 +433,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             stage: "failed",
           };
           repaintActiveTransfer?.();
-          showToast("Transaction was not sent", "error");
+          showToast("Transaction was not sent", "error", form);
         },
       );
       return;
@@ -473,7 +473,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             stage: "failed",
           };
           repaintActiveTransfer?.();
-          showToast("Transaction was not sent", "error");
+          showToast("Transaction was not sent", "error", form);
         },
       );
   });

@@ -3,7 +3,7 @@
  * the Send flow. The progress rail stays live while the browser snapshots only
  * the named stage frame, preserving continuity between review and signing.
  */
-import { prefersReducedMotion } from "../../shared/motion";
+import { transitionTaskStage } from "../../app/rendering/stage-transition";
 
 const STAGE_ORDER = {
   asset: 1,
@@ -20,65 +20,8 @@ const STAGE_ORDER = {
 } as const;
 
 type SendStage = keyof typeof STAGE_ORDER;
-type ViewTransition = { readonly finished: Promise<void> };
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (callback: () => void) => ViewTransition;
-};
-
-let transitionSerial = 0;
-
 const isSendStage = (stage: string | undefined): stage is SendStage =>
   stage !== undefined && Object.hasOwn(STAGE_ORDER, stage);
-
-const transitionStage = <Stage extends string>(
-  doc: Document,
-  previousStage: string | undefined,
-  nextStage: Stage,
-  order: Readonly<Record<Stage, number>>,
-  transitionKey: "sendTransition",
-  transitionIdKey: "sendTransitionId",
-  update: () => void,
-): void => {
-  if (
-    previousStage === undefined ||
-    !Object.hasOwn(order, previousStage) ||
-    previousStage === nextStage ||
-    prefersReducedMotion()
-  ) {
-    update();
-    return;
-  }
-  const transitionDocument = doc as ViewTransitionDocument;
-  if (typeof transitionDocument.startViewTransition !== "function") {
-    update();
-    return;
-  }
-
-  const serial = ++transitionSerial;
-  const id = String(serial);
-  const root = doc.documentElement;
-  root.dataset[transitionKey] =
-    order[nextStage] >= order[previousStage as Stage] ? "forward" : "back";
-  root.dataset[transitionIdKey] = id;
-  let updated = false;
-  const cleanup = (): void => {
-    if (root.dataset[transitionIdKey] === id) {
-      delete root.dataset[transitionKey];
-      delete root.dataset[transitionIdKey];
-    }
-  };
-
-  try {
-    const transition = transitionDocument.startViewTransition(() => {
-      updated = true;
-      update();
-    });
-    void transition.finished.then(cleanup, cleanup);
-  } catch {
-    cleanup();
-    if (!updated) update();
-  }
-};
 
 /**
  * Applies one Send-stage update inside a directional named View Transition
@@ -95,7 +38,7 @@ export const transitionSendStage = (
     update();
     return;
   }
-  transitionStage(
+  transitionTaskStage(
     doc,
     previousStage,
     nextStage,

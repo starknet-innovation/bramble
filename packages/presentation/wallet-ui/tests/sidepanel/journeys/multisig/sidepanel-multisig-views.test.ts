@@ -144,7 +144,31 @@ describe("Argent multisig list and exact-intent detail", () => {
       [fixture.readyIntent],
     );
     expect(html).toContain('data-ms-submit="');
+    expect(html).toContain("Submit transaction");
+    expect(html).not.toContain('data-ms-sign="');
+    expect(html).toContain("Share or manage signatures");
     expect(html).toContain("1 of 1");
+  });
+
+  test("makes package sharing primary when no eligible local signer is available", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const observer = {
+      ...signer,
+      id: "SN_MAIN:0x999",
+      publicKeyX: "0x999",
+    };
+    const html = multisigDetailFlow(
+      { ...fixture.status, accountCount: 1, accounts: [observer], activeAccountId: observer.id },
+      observer,
+      fixture.view,
+      [fixture.intent],
+    );
+    expect(html).toContain("No eligible signer is available in this wallet");
+    expect(html).toContain('class="multisig-intent-action"');
+    expect(html).toContain('data-ms-copy-package="');
+    expect(html).not.toContain('data-ms-sign="');
   });
 
   test("keeps home intents condensed and moves the full review to the detail flow", async () => {

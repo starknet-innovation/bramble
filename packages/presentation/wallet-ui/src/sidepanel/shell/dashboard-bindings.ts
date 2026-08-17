@@ -41,14 +41,14 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
       )
       .then(
         async () => {
-          showToast("Address saved", "success");
+          showToast("Address saved", "success", form);
           if (result) {
             result.textContent = "Address saved";
           }
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Address save failed"), "error");
+          showToast(errorMessage(error, "Address save failed"), "error", form);
           if (result) {
             result.textContent = errorMessage(error, "Address save failed");
           }
@@ -113,11 +113,15 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
         overallFee !== undefined && unit !== undefined ? { overallFee, unit } : undefined;
       void wallet.decideApproval(id, action === "approve", reviewedFee).then(
         async () => {
-          showToast(action === "approve" ? "Request approved" : "Request denied", "success");
+          showToast(
+            action === "approve" ? "Request approved" : "Request denied",
+            "success",
+            button,
+          );
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Approval failed"), "error");
+          showToast(errorMessage(error, "Approval failed"), "error", button);
           if (result) {
             result.textContent = errorMessage(error, "Approval failed");
           }
@@ -145,7 +149,7 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
       void wallet.retryApprovalFee(id).then(
         async () => render(await wallet.loadStatus()),
         (error: unknown) => {
-          showToast(errorMessage(error, "Fee estimate failed"), "error");
+          showToast(errorMessage(error, "Fee estimate failed"), "error", button);
           buttonBusy(button, false);
         },
       );

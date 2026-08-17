@@ -127,7 +127,11 @@ const startJourney = async (
     if (state.registration === "pending") {
       // Registered on Starknet, not yet visible to the indexer. The poll flips
       // this on its own, so the only wrong move here is preparing a second one.
-      showToast("Registration is on its way. You'll be able to shield shortly.", "success");
+      showToast(
+        "Registration is on its way. You'll be able to shield shortly.",
+        "success",
+        button ?? deps.app,
+      );
       buttonBusy(button, false);
       return;
     }
@@ -144,7 +148,7 @@ const startJourney = async (
     deps.setJourney({ preparation, stage: "activate-review", tokenId });
     deps.navigate("privacy");
   } catch (error) {
-    showToast(errorMessage(error, "Private journey unavailable"), "error");
+    showToast(errorMessage(error, "Private journey unavailable"), "error", button ?? deps.app);
     buttonBusy(button, false);
   }
 };

@@ -20,7 +20,22 @@ export const MULTISIG_STYLES = `
   .multisig-intent { align-items: stretch; display: grid; gap: ${SPACE.md}; min-width: 0; overflow: hidden; }
   .multisig-intent .decision-head .pill { margin-left: auto; }
   .multisig-intent .decision-head h2, .multisig-intent code { overflow-wrap: anywhere; }
-  .multisig-intent .row { flex-wrap: wrap; justify-content: flex-start; }
+  .multisig-intent-action { display: grid; gap: ${SPACE.sm}; }
+  .multisig-intent-action > button { width: 100%; }
+  .multisig-action-note {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+  }
+  .multisig-collaboration { margin-top: ${SPACE.xs}; }
+  .multisig-collaboration .disclosure-body { display: grid; gap: ${SPACE.md}; }
+  .multisig-collaboration-actions {
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .multisig-collaboration-actions > :only-child { grid-column: 1 / -1; }
+  .multisig-collaboration-actions button { min-width: 0; width: 100%; }
   .multisig-intent ol { min-width: 0; padding-left: ${SPACE.lg}; }
   .multisig-review-flow { min-width: 0; }
   .multisig-intent-list { overflow: hidden; }

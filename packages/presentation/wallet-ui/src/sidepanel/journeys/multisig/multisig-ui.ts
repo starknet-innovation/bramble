@@ -28,13 +28,13 @@ const run = (
   buttonBusy(button, true);
   void action().then(
     async (message) => {
-      showToast(message, "success");
+      showToast(message, "success", button ?? deps.app);
       await rerender(deps);
     },
     (error: unknown) => {
       const message = errorMessage(error, "Argent multisig request failed");
       setResult(deps, resultId, message);
-      showToast(message, "error");
+      showToast(message, "error", button ?? deps.app);
       buttonBusy(button, false);
     },
   );
@@ -108,9 +108,15 @@ const bindList = (deps: MultisigUiDeps): void => {
   });
 };
 
-const copyText = async (value: string, message: string): Promise<void> => {
-  await navigator.clipboard.writeText(value);
-  showToast(message, "success");
+const copyText = async (
+  button: HTMLButtonElement,
+  value: string,
+  message: string,
+): Promise<void> => {
+  const clipboard = button.ownerDocument.defaultView?.navigator.clipboard;
+  if (!clipboard) throw new Error("Clipboard unavailable");
+  await clipboard.writeText(value);
+  showToast(message, "success", button);
 };
 
 const intentById = async (deps: MultisigUiDeps, id: string) => {
@@ -127,11 +133,12 @@ const bindIntentCards = (deps: MultisigUiDeps): void => {
         .then((intent) => {
           if (!intent) throw new Error("Signing intent unavailable");
           return copyText(
+            button,
             JSON.stringify({ intent, kind: "mc-wallet.argent-multisig-intent", version: 1 }),
             "Intent package copied",
           );
         })
-        .catch((error: unknown) => showToast(errorMessage(error, "Copy failed"), "error"));
+        .catch((error: unknown) => showToast(errorMessage(error, "Copy failed"), "error", button));
     });
   });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-copy-signature]").forEach((button) => {
@@ -143,9 +150,9 @@ const bindIntentCards = (deps: MultisigUiDeps): void => {
         .then((intent) => {
           const signature = intent?.signatures[index];
           if (!signature) throw new Error("Signature fragment unavailable");
-          return copyText(JSON.stringify(signature), "Signature fragment copied");
+          return copyText(button, JSON.stringify(signature), "Signature fragment copied");
         })
-        .catch((error: unknown) => showToast(errorMessage(error, "Copy failed"), "error"));
+        .catch((error: unknown) => showToast(errorMessage(error, "Copy failed"), "error", button));
     });
   });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-sign]").forEach((button) => {
@@ -179,7 +186,7 @@ const bindIntentCards = (deps: MultisigUiDeps): void => {
         String(new FormData(form).get("signature") ?? ""),
       );
       if (!id || !signature) {
-        showToast("Signature fragment is invalid", "error");
+        showToast("Signature fragment is invalid", "error", form);
         return;
       }
       run(deps, form.querySelector('button[type="submit"]'), "multisig-intent-result", async () => {
@@ -220,7 +227,7 @@ const bindImport = (deps: MultisigUiDeps): void => {
       String(new FormData(form).get("intentPackage") ?? ""),
     );
     if (!intentPackage) {
-      showToast("Intent package is invalid", "error");
+      showToast("Intent package is invalid", "error", form);
       return;
     }
     run(deps, button, "multisig-track-result", async () => {

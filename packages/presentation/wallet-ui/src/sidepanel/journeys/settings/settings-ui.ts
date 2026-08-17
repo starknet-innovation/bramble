@@ -46,11 +46,11 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
     buttonBusy(submitButton, true);
     void deps.wallet.setAccountLabel(accountId, label).then(
       async () => {
-        showToast(label ? "Label saved" : "Label cleared", "success");
+        showToast(label ? "Label saved" : "Label cleared", "success", form);
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Label update failed"), "error");
+        showToast(errorMessage(error, "Label update failed"), "error", form);
         if (result) {
           result.textContent = errorMessage(error, "Label update failed");
         }
@@ -100,11 +100,11 @@ export const bindContacts = (deps: SettingsUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.removeAddress(id).then(
         async () => {
-          showToast("Contact removed", "success");
+          showToast("Contact removed", "success", button);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Contact removal failed"), "error");
+          showToast(errorMessage(error, "Contact removal failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -135,11 +135,12 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
               ? "Wallet requests open as a popup"
               : "Wallet requests open in the side panel",
             "success",
+            button,
           );
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Wallet request preference failed"), "error");
+          showToast(errorMessage(error, "Wallet request preference failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -158,11 +159,11 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.setDisplay({ theme }).then(
         async () => {
-          showToast(`Theme: ${theme}`, "success");
+          showToast(`Theme: ${theme}`, "success", button);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Theme update failed"), "error");
+          showToast(errorMessage(error, "Theme update failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -178,11 +179,11 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
     currencySelect.disabled = true;
     void deps.wallet.setDisplay({ displayCurrency: value }).then(
       async () => {
-        showToast(`Currency: ${value.toUpperCase()}`, "success");
+        showToast(`Currency: ${value.toUpperCase()}`, "success", currencySelect);
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Currency update failed"), "error");
+        showToast(errorMessage(error, "Currency update failed"), "error", currencySelect);
         if (result) {
           result.textContent = errorMessage(error, "Currency update failed");
         }
@@ -209,16 +210,16 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
           type: "application/json",
         });
         const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
+        const anchor = exportButton.ownerDocument.createElement("a");
         anchor.href = url;
         anchor.download = "mc-wallet-backup.json";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
-        showToast("Backup downloaded", "success");
+        showToast("Backup downloaded", "success", exportButton);
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Backup export failed"), "error");
+        showToast(errorMessage(error, "Backup export failed"), "error", exportButton);
         buttonBusy(exportButton, false);
       },
     );
@@ -227,7 +228,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
   importButton?.addEventListener("click", () => {
     const file = fileInput?.files?.[0];
     if (!file) {
-      showToast("Choose a backup file first", "error");
+      showToast("Choose a backup file first", "error", importButton);
       return;
     }
     buttonBusy(importButton, true);
@@ -236,11 +237,11 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
       .then((text) => deps.wallet.importPreferences(JSON.parse(text) as unknown))
       .then(
         async () => {
-          showToast("Backup restored", "success");
+          showToast("Backup restored", "success", importButton);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Backup restore failed"), "error");
+          showToast(errorMessage(error, "Backup restore failed"), "error", importButton);
           if (result) {
             result.textContent = errorMessage(error, "Backup restore failed");
           }

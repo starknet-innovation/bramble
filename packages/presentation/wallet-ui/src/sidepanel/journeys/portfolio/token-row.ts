@@ -164,7 +164,7 @@ export const unifiedBalanceRow = (
   },
 ): string => {
   const fiat = tokenFiatValue(token.formatted, price);
-  return `<li class="token-row token-unified">
+  return `<li class="token-row token-unified" data-live-group>
     <details class="token-disclosure">
       <summary aria-label="Show ${escapeHtml(token.symbol)} balance breakdown">
         ${tokenGlyph(token.address, token.symbol)}
@@ -200,7 +200,7 @@ export const balanceRow = (
   options: { readonly private?: boolean } = {},
 ): string => {
   const fiat = tokenFiatValue(token.formatted, price);
-  return `<li class="token-row">
+  return `<li class="token-row" data-live-group>
     <button class="token-open" type="button" data-token-detail="${escapeHtml(token.id)}">
       ${tokenGlyph(token.address, token.symbol)}
       <div class="token-copy">

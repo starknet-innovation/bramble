@@ -6,12 +6,26 @@
  * and every colour rides the skin tokens. Composed after the structure layer
  * in ./styles.ts.
  */
-import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
 
 /**
  * Swap stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
+  .swap-stage:not([hidden]) { view-transition-name: swap-stage; }
+  html[data-swap-transition]::view-transition-old(root),
+  html[data-swap-transition]::view-transition-new(root) { animation: none; }
+  ::view-transition-group(swap-stage) { animation-duration: 220ms; animation-timing-function: ${EASE.out}; }
+  ::view-transition-image-pair(swap-stage) { isolation: auto; }
+  ::view-transition-old(swap-stage), ::view-transition-new(swap-stage) { mix-blend-mode: normal; }
+  html[data-swap-transition="forward"]::view-transition-old(swap-stage) { animation: swap-stage-out-left 150ms ${EASE.out} both; }
+  html[data-swap-transition="forward"]::view-transition-new(swap-stage) { animation: swap-stage-in-right 220ms ${EASE.out} both; }
+  html[data-swap-transition="back"]::view-transition-old(swap-stage) { animation: swap-stage-out-right 150ms ${EASE.out} both; }
+  html[data-swap-transition="back"]::view-transition-new(swap-stage) { animation: swap-stage-in-left 220ms ${EASE.out} both; }
+  @keyframes swap-stage-in-right { from { opacity: 0; transform: translateX(12px); } }
+  @keyframes swap-stage-out-left { to { opacity: 0; transform: translateX(-8px); } }
+  @keyframes swap-stage-in-left { from { opacity: 0; transform: translateX(-12px); } }
+  @keyframes swap-stage-out-right { to { opacity: 0; transform: translateX(8px); } }
   /* The pair reads as one instrument: two soft panels with a hairline of page
      ground between them and the flip control riding the seam. */
   .swap-card { display: grid; gap: 3px; position: relative; }
@@ -61,7 +75,7 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     font-size: ${TYPE.body.size};
     font-weight: ${WEIGHT.semibold};
     gap: 6px;
-    min-height: 36px;
+    min-height: ${CONTROL.hit};
     padding: 0 10px 0 6px;
   }
   button.swap-token .token-mark, button.swap-token .token-logo { height: 24px; width: 24px; }
@@ -83,7 +97,7 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     color: var(--mc-accent);
     font-size: ${TYPE.micro.size};
     font-weight: ${WEIGHT.semibold};
-    min-height: 22px;
+    min-height: ${CONTROL.hit};
     padding: 0 ${SPACE.sm};
   }
   /* Flip control: a circular button riding the seam between the panels, cut
@@ -93,7 +107,7 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     border-radius: ${RADIUS.full};
     box-shadow: 0 0 0 3px var(--mc-bg);
     color: var(--mc-text);
-    height: 36px;
+    height: ${CONTROL.hit};
     left: 50%;
     min-height: 0;
     padding: 0;
@@ -101,7 +115,7 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     top: 50%;
     transform: translate(-50%, -50%);
     transition: background ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms var(--ease-out);
-    width: 36px;
+    width: ${CONTROL.hit};
     z-index: 1;
   }
   button.swap-flip .icon { height: 16px; width: 16px; }
@@ -203,7 +217,7 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.semibold};
     gap: 6px;
-    min-height: 36px;
+    min-height: ${CONTROL.hit};
     padding: 0 ${SPACE.md} 0 ${SPACE.sm};
   }
   button.swap-chip .token-mark, button.swap-chip .token-logo { height: 20px; width: 20px; }
@@ -264,4 +278,9 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
   }
   .swap-success .swap-success-summary { animation-delay: 60ms; font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.semibold}; }
   .swap-success .hint { animation-delay: 120ms; }
+  @media (prefers-reduced-motion: reduce) {
+    html[data-swap-transition]::view-transition-group(swap-stage),
+    html[data-swap-transition]::view-transition-old(swap-stage),
+    html[data-swap-transition]::view-transition-new(swap-stage) { animation: none; }
+  }
 `;

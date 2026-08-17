@@ -109,10 +109,10 @@ export const importKeyFlow = (status: WalletStatus): string =>
           label: "Account contract",
           name: "accountContractType",
           options: [
+            { label: "OpenZeppelin Account — Recommended", value: "openzeppelin" },
             { label: "Argent Account", value: "argent" },
-            { label: "OpenZeppelin Account", value: "openzeppelin" },
           ],
-          selected: "argent",
+          selected: "openzeppelin",
         })}
         ${textareaField({
           autocomplete: "off",

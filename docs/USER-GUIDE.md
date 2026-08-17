@@ -46,10 +46,10 @@ side panel. If you close the onboarding tab, click the toolbar icon and use
    create the wallet until the words match.
 4. Set a **vault passphrase** of at least **12 characters**. This encrypts the
    wallet on *this* device; it is not your recovery phrase.
-5. Review and explicitly select the derived account. **Argent Account** is the
-   recommended default for new wallets; choose **OpenZeppelin Account** only
-   when you need compatibility with that account model. Setup defaults to
-   Starknet Mainnet, so tick the **real-funds acknowledgement**.
+5. Review and explicitly select the derived account. MC Wallet supports both
+   account models; **OpenZeppelin Account** is the recommended default and
+   **Argent Account** remains available. Setup defaults to Starknet Mainnet, so
+   tick the **real-funds acknowledgement**.
 6. Press **Add selected account**, then open the side-panel wallet from the
    completion screen.
 
@@ -81,8 +81,8 @@ software recovery phrase.
 
 ### Send, receive, and deploy
 
-Choose either a stable Argent Account or an OpenZeppelin compatibility account,
-backed by the encrypted software vault or a Ledger. A newly created account
+Choose either a stable OpenZeppelin Account or Argent Account, backed by the
+encrypted software vault or a Ledger. A newly created account
 first exists as a *counterfactual* address; **on-chain deployment is a separate
 action** you take from the dashboard when you are
 ready. Use the dashboard to send transfers, receive (share your address), switch

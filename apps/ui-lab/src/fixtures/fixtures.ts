@@ -1,6 +1,7 @@
 import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import {
+  ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
   argentSignerGuid,
   normalizeArgentMultisigConfig,
@@ -33,6 +34,15 @@ export const softwareAccount: AccountRef = {
   networkId: "SN_MAIN",
   publicKeyX: "0x5f679dacd8278105bd3b84a15548fe84079068276b0e84d6cc093eb5430f063",
   publicKeyY: "0x311",
+};
+
+export const argentSoftwareAccount: AccountRef = {
+  ...softwareAccount,
+  accountContractType: "argent",
+  address: "0x1434567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
+  classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+  deploymentSalt: softwareAccount.publicKeyX,
+  id: "SN_MAIN:0x1434567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
 };
 
 export const ledgerAccount: AccountRef = {

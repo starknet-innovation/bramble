@@ -77,7 +77,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     } catch (error) {
       const message = errorMessage(error, "Invalid deployment fields");
       deps.setResult("multisig-deploy-result", message);
-      showToast(message, "error");
+      showToast(message, "error", form);
       return;
     }
     const stored = reviews.get(form);
@@ -93,14 +93,14 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       reviews.delete(form);
       void deps.multisig.deployMultisig(reviewed).then(
         async (result) => {
-          showToast(`Deployment submitted: ${result.transactionHash}`, "success");
+          showToast(`Deployment submitted: ${result.transactionHash}`, "success", form);
           deps.openList();
           await deps.rerender();
         },
         (error: unknown) => {
           const message = errorMessage(error, "Deployment failed");
           deps.setResult("multisig-deploy-result", message);
-          showToast(message, "error");
+          showToast(message, "error", form);
           buttonBusy(button, false);
         },
       );
@@ -154,7 +154,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         if (!isCurrent()) return;
         const message = errorMessage(error, "Deployment review failed");
         deps.setResult("multisig-deploy-result", message);
-        showToast(message, "error");
+        showToast(message, "error", form);
         buttonBusy(button, false);
       });
   });

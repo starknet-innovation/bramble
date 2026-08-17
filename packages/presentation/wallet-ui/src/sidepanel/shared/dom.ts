@@ -54,15 +54,19 @@ export type ToastTone = "error" | "success";
 const SUCCESS_TOAST_MS = 3200;
 const ERROR_TOAST_MS = 8000;
 
-const toastCopyButton = (message: string): HTMLButtonElement => {
-  const copy = document.createElement("button");
+const documentFor = (context?: Document | Element | null): Document =>
+  context ? ("defaultView" in context ? context : context.ownerDocument) : document;
+
+const toastCopyButton = (doc: Document, message: string): HTMLButtonElement => {
+  const copy = doc.createElement("button");
   copy.className = "icon-button toast-copy";
   copy.type = "button";
   copy.setAttribute("aria-label", "Copy error message");
   copy.title = "Copy error message";
   copy.innerHTML = icon("copy");
   copy.addEventListener("click", () => {
-    void navigator.clipboard.writeText(message).then(
+    const clipboard = copy.ownerDocument.defaultView?.navigator.clipboard;
+    void (clipboard?.writeText(message) ?? Promise.reject(new Error("Clipboard unavailable"))).then(
       () => {
         copy.innerHTML = icon("check");
       },
@@ -177,33 +181,38 @@ const TOAST_SPRING = resolveSpring("momentum");
 /**
  * Shows a transient toast in the fixed stack at the bottom of the shell.
  * Anatomy is a fixed scannable heuristic: a leading tone chip (green check /
- * red alert) the eye reads before any text, then the message, then an error's
- * copy control. It springs in with a little momentum, can be swiped away, and
- * error toasts stay longer.
+ * red alert) the eye reads before any text, then the message, then every
+ * error's copy control. It springs in with a little momentum, can be swiped
+ * away, and error toasts stay longer.
  */
-export const showToast = (message: string, tone: ToastTone): void => {
+export const showToast = (
+  message: string,
+  tone: ToastTone,
+  context: Document | Element | null | undefined,
+): void => {
+  const doc = documentFor(context);
   const stackId = "toast-stack";
-  const stack = document.querySelector<HTMLElement>(`#${stackId}`) ?? document.createElement("div");
+  const stack = doc.querySelector<HTMLElement>(`#${stackId}`) ?? doc.createElement("div");
   if (!stack.id) {
     stack.id = stackId;
     stack.className = "toast-stack";
     stack.setAttribute("aria-live", "polite");
-    document.body.append(stack);
+    doc.body.append(stack);
   }
 
   const friendly = tone === "error" ? friendlyError(message) : null;
-  const toast = document.createElement("div");
+  const toast = doc.createElement("div");
   toast.className = `toast ${tone}`;
-  const mark = document.createElement("span");
+  const mark = doc.createElement("span");
   mark.className = "toast-icon";
   mark.innerHTML = icon(tone === "error" ? "alert" : "check");
   toast.append(mark);
-  const text = document.createElement("span");
+  const text = doc.createElement("span");
   text.className = "toast-text";
   text.textContent = friendly ? friendly.message : message;
   toast.append(text);
-  if (friendly?.copyable) {
-    toast.append(toastCopyButton(friendly.message));
+  if (tone === "error") {
+    toast.append(toastCopyButton(doc, friendly?.message ?? message));
   }
   stack.append(toast);
   animate(
@@ -251,17 +260,18 @@ export const bindCopyButtons = (app: Element | null): void => {
         return;
       }
       buttonBusy(button, true);
-      void navigator.clipboard.writeText(value).then(
+      const clipboard = button.ownerDocument.defaultView?.navigator.clipboard;
+      void (clipboard?.writeText(value) ?? Promise.reject(new Error("Clipboard unavailable"))).then(
         () => {
           if (!scopedStatus(button, "Copied")) {
-            showToast("Copied", "success");
+            showToast("Copied", "success", button);
           }
           buttonBusy(button, false);
           confirmCopyGlyph(button);
         },
         () => {
           scopedStatus(button, "Copy failed");
-          showToast("Copy failed", "error");
+          showToast("Copy failed", "error", button);
           buttonBusy(button, false);
         },
       );
@@ -277,5 +287,5 @@ export const bindCopyButtons = (app: Element | null): void => {
  * template); this performs no sanitisation.
  */
 export const renderFragment = (target: Element, markup: string): void => {
-  target.replaceChildren(document.createRange().createContextualFragment(markup));
+  target.replaceChildren(target.ownerDocument.createRange().createContextualFragment(markup));
 };

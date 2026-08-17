@@ -48,6 +48,7 @@ import { STRUCTURE_STYLES } from "./core/styles-structure";
 import { TRANSITION_STYLES } from "./core/styles-transitions";
 import { MULTISIG_STYLES } from "./multisig/styles-multisig";
 import { ONBOARDING_STYLES } from "./onboarding/styles-onboarding";
+import { ONBOARDING_CONTRACT_STYLES } from "./onboarding/styles-onboarding-contract";
 import { ONBOARDING_WELCOME_STYLES } from "./onboarding/styles-onboarding-welcome";
 import { HOME_STYLES } from "./portfolio/styles-home";
 import { TOKEN_STYLES } from "./portfolio/styles-tokens";
@@ -61,4 +62,4 @@ import { SWAP_STYLES } from "./swap/styles-swap";
  * Skin-token-only stylesheet injected by the side panel entrypoint.
  */
 export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${DOCK_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${DECISION_STYLES}${SWAP_STYLES}${PROGRESS_STYLES}${PRIVACY_STYLES}${SEND_STYLES}${SEND_COMPOSE_STYLES}${COMPONENT_STYLES}${JOURNEY_STYLES}${MULTISIG_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
-${HOME_STYLES}${ONBOARDING_STYLES}${ONBOARDING_WELCOME_STYLES}`;
+${HOME_STYLES}${ONBOARDING_CONTRACT_STYLES}${ONBOARDING_STYLES}${ONBOARDING_WELCOME_STYLES}`;

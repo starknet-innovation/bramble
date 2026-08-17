@@ -15,6 +15,9 @@ import {
   argentMultisig,
   argentReadyIntent,
   argentStaleIntent,
+  secondAccount,
+  softwareAccount,
+  statusFor,
 } from "../fixtures/fixtures";
 import { type DashboardOptions, walletDashboard } from "../runtime/scenario-dashboard";
 import { nextTurn } from "../runtime/scenario-runtime";
@@ -77,6 +80,26 @@ const changedAuthority: ArgentMultisigView = {
     }),
     signerGuids: [...(argentMultisig.config?.signerGuids ?? []), "0x999"],
   },
+};
+const softwareSignature = argentReadyIntent.signatures.find(
+  (signature) => signature.publicKey === softwareAccount.publicKeyX,
+);
+if (!softwareSignature) {
+  throw new Error("UI Lab multisig fixture is missing the software signer signature");
+}
+const locallySignedIntent = {
+  ...argentCollectingIntent,
+  signatures: [softwareSignature],
+};
+const softwareSignerOnly = {
+  ...statusFor(softwareAccount),
+  accountCount: 1,
+  accounts: [softwareAccount],
+};
+const observerOnly = {
+  ...statusFor(secondAccount),
+  accountCount: 1,
+  accounts: [secondAccount],
 };
 
 const checkpoints: readonly ScenarioCheckpoint[] = [
@@ -159,6 +182,30 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     "Submission appears only after the verified threshold is complete and fresh authority still matches.",
     { multisigIntents: [argentReadyIntent], view: "multisig-detail" },
     { signatures: 2, state: "ready", threshold: 2 },
+    true,
+  ),
+  checkpoint(
+    "intent-signed-local",
+    "Local signer complete",
+    "After this wallet signs, sharing becomes the next action and signing is not offered twice.",
+    {
+      multisigIntents: [locallySignedIntent],
+      status: softwareSignerOnly,
+      view: "multisig-detail",
+    },
+    { localSigner: "signed", signatures: 1, state: "collecting", threshold: 2 },
+    true,
+  ),
+  checkpoint(
+    "intent-no-local-signer",
+    "No eligible local signer",
+    "A watch-only participant is directed to share the package without seeing an unusable signer action.",
+    {
+      multisigIntents: [argentCollectingIntent],
+      status: observerOnly,
+      view: "multisig-detail",
+    },
+    { localSigner: "unavailable", signatures: 0, state: "collecting", threshold: 2 },
     true,
   ),
   checkpoint(

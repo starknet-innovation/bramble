@@ -31,6 +31,7 @@ import {
   swapValueDeltaPercent,
 } from "./swap-client";
 import { bindSwapPicker, repaintSwapPicker, setPickerSide } from "./swap-picker";
+import { type SwapStage, transitionSwapStage } from "./swap-transition";
 import { swapConfirmReceipt, swapQuoteDetails } from "./swap-views";
 
 /**
@@ -58,7 +59,7 @@ let quote: SwapQuoteView | null = null;
 let preparation: SwapPreparationView | null = null;
 let quoteSeq = 0;
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
-let stage: "confirm" | "edit" | "success" = "edit";
+let stage: SwapStage = "edit";
 let successSummary = "";
 const SUCCESS_HOLD_MS = 1900;
 let successTimer: ReturnType<typeof setTimeout> | null = null;
@@ -418,10 +419,12 @@ export const bindSwap = (deps: SwapUiDeps): void => {
             return;
           }
           preparation = prepared;
-          stage = "confirm";
           setResult(root, "");
           buttonBusy(reviewButton, false);
-          applySwapUi(deps, root);
+          transitionSwapStage(root.ownerDocument, stage, "confirm", () => {
+            stage = "confirm";
+            applySwapUi(deps, root);
+          });
         },
         (error: unknown) => {
           if (preparationSeq !== quoteSeq || quote !== quoted) {
@@ -435,9 +438,11 @@ export const bindSwap = (deps: SwapUiDeps): void => {
       );
   });
   root.querySelector("#swap-back-button")?.addEventListener("click", () => {
-    stage = "edit";
     preparation = null;
-    requestQuote(deps, root);
+    transitionSwapStage(root.ownerDocument, stage, "edit", () => {
+      stage = "edit";
+      requestQuote(deps, root);
+    });
   });
   const confirmButton = root.querySelector<HTMLButtonElement>("#swap-confirm-button");
   confirmButton?.addEventListener("click", () => {
@@ -456,12 +461,14 @@ export const bindSwap = (deps: SwapUiDeps): void => {
         const sellText = `${compactAmount(executed.sellAmount)} ${sellToken.symbol}`;
         const buyText = `${compactAmount(executed.buyAmount)} ${buyToken.symbol}`;
         successSummary = `${sellText} → ~${buyText}`;
-        stage = "success";
         quote = null;
         preparation = null;
         amountText = "";
         setResult(root, "");
-        applySwapUi(deps, root);
+        transitionSwapStage(root.ownerDocument, stage, "success", () => {
+          stage = "success";
+          applySwapUi(deps, root);
+        });
         if (successTimer !== null) {
           clearTimeout(successTimer);
         }
@@ -472,18 +479,20 @@ export const bindSwap = (deps: SwapUiDeps): void => {
           deps.navigateHome();
           // Honest state on landing: the transaction is sent and pending,
           // not yet final — Activity carries it until it settles.
-          showToast(`Transaction sent — ${sellText} → ~${buyText} pending`, "success");
+          showToast(`Transaction sent — ${sellText} → ~${buyText} pending`, "success", root);
         }, SUCCESS_HOLD_MS);
         await deps.render(await deps.wallet.loadStatus());
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Swap failed"), "error");
+        showToast(errorMessage(error, "Swap failed"), "error", root);
         setResult(root, errorMessage(error, "Swap failed"));
         confirmButton.innerHTML = restingContent;
         buttonBusy(confirmButton, false);
-        stage = "edit";
         preparation = null;
-        requestQuote(deps, root);
+        transitionSwapStage(root.ownerDocument, stage, "edit", () => {
+          stage = "edit";
+          requestQuote(deps, root);
+        });
       },
     );
   });

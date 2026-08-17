@@ -56,7 +56,7 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
             buttonBusy(button, false);
             return;
           }
-          showToast("Revoke submitted", "success");
+          showToast("Revoke submitted", "success", button);
           if (result) {
             result.textContent = `Submitted ${response}`;
           }
@@ -66,7 +66,7 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
         },
         (error: unknown) => {
           REVIEWED_FEES.delete(button);
-          showToast(errorMessage(error, "Revoke failed"), "error");
+          showToast(errorMessage(error, "Revoke failed"), "error", button);
           if (result) {
             result.textContent = errorMessage(error, "Revoke failed");
           }

@@ -434,7 +434,7 @@ export const bindSwapPicker = (
         })
         .catch((error: unknown) => {
           pendingAdd = null;
-          showToast(errorMessage(error, "Could not add that token"), "error");
+          showToast(errorMessage(error, "Could not add that token"), "error", root);
           setResultText(root, errorMessage(error, "Could not add that token"));
           applyPickerUi(deps, root);
         });

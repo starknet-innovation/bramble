@@ -46,11 +46,11 @@ export const bindDashboard = (deps: ShellBindingDeps): void => {
     buttonBusy(lockButton, true);
     void wallet.lockVault().then(
       (status) => {
-        showToast("Vault locked", "success");
+        showToast("Vault locked", "success", lockButton);
         void render(status);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Lock failed"), "error");
+        showToast(errorMessage(error, "Lock failed"), "error", lockButton);
         if (result) {
           result.textContent = errorMessage(error, "Lock failed");
         }
@@ -207,7 +207,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           buttonBusy(button, false);
           return;
         }
-        showToast("Deployment submitted", "success");
+        showToast("Deployment submitted", "success", button);
         scopedStatus(button, `Deployment submitted: ${response}`);
         buttonBusy(button, false);
         // Nothing else re-renders after a deploy submit, so watch for the
@@ -217,7 +217,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
       (error: unknown) => {
         DEPLOYMENT_FEES.delete(button);
         if (reviewPanelRoot) renderFragment(reviewPanelRoot, "");
-        showToast(errorMessage(error, "Deployment failed"), "error");
+        showToast(errorMessage(error, "Deployment failed"), "error", button);
         scopedStatus(button, errorMessage(error, "Deployment failed"));
         buttonBusy(button, false);
       },
@@ -249,11 +249,11 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
       void wallet.setActiveNetwork(networkId).then(
         async (status) => {
           setActiveView("settings");
-          showToast("Network switched", "success");
+          showToast("Network switched", "success", button);
           await render(status);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Network switch failed"), "error");
+          showToast(errorMessage(error, "Network switch failed"), "error", button);
           if (result) {
             result.textContent = errorMessage(error, "Network switch failed");
           }
@@ -278,11 +278,11 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
           // Picking an account is "use this account": land on Home showing the
           // now-active account instead of returning to the entry point.
           setActiveView("home");
-          showToast("Account switched", "success");
+          showToast("Account switched", "success", button);
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Account switch failed"), "error");
+          showToast(errorMessage(error, "Account switch failed"), "error", button);
           if (result) {
             result.textContent = errorMessage(error, "Account switch failed");
           }

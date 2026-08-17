@@ -38,7 +38,7 @@ export const createSceneRenderer = (
     if (!mount) {
       return;
     }
-    const focus = captureRepaintFocus();
+    const focus = captureRepaintFocus(mount);
     const liveValues = captureLiveValues(mount);
     mount.innerHTML = `<style>${SIDEPANEL_STYLES}</style><section class="shell${animate ? " shell-animate" : ""}">${content}</section>`;
     restoreRepaintFocus(mount, focus);

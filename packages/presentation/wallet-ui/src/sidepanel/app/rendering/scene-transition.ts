@@ -56,7 +56,7 @@ export const transitionScene = (
   direction: NavDirection,
   commit: (animateFallback: boolean) => void,
 ): void => {
-  if (prefersReducedMotion()) {
+  if (prefersReducedMotion(doc)) {
     commit(false);
     return;
   }

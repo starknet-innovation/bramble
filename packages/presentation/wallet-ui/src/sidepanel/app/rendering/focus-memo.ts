@@ -135,9 +135,10 @@ const groupControlMemo = (element: HTMLElement): readonly string[] => {
  * Returns [] when nothing focusable is worth restoring — so a non-user repaint
  * (streaming balances, prices) with no relevant control focused moves nothing.
  */
-export const focusMemo = (): readonly string[] => {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLElement)) {
+export const focusMemo = (doc: Document = document): readonly string[] => {
+  const active = doc.activeElement;
+  const ElementType = doc.defaultView?.HTMLElement;
+  if (!ElementType || !(active instanceof ElementType)) {
     return [];
   }
   const group = groupControlMemo(active);
@@ -163,13 +164,14 @@ export const focusMemo = (): readonly string[] => {
  * (so a hidden or removed candidate falls through to its successor).
  */
 export const restoreFocus = (root: Element | null, selectors: readonly string[]): void => {
+  const doc = root?.ownerDocument ?? document;
   for (const selector of selectors) {
     const element = root?.querySelector<HTMLElement>(selector);
     if (!element) {
       continue;
     }
     element.focus({ preventScroll: true });
-    if (document.activeElement === element) {
+    if (doc.activeElement === element) {
       return;
     }
   }
@@ -182,7 +184,7 @@ export const restoreFocus = (root: Element | null, selectors: readonly string[])
  * still reset it to that server value. `selector` locates the same field after
  * the swap; `value` and the caret offsets re-seed the text the user was typing.
  */
-export type GroupNameDraft = {
+type GroupNameDraft = {
   readonly selectionEnd: number | null;
   readonly selectionStart: number | null;
   readonly selector: string;
@@ -195,9 +197,10 @@ export type GroupNameDraft = {
  * {@link restoreGroupNameDraft} across the shell swap so a streaming repaint
  * never discards text the user is mid-typing into a new-group or rename field.
  */
-const groupNameDraftMemo = (): GroupNameDraft | null => {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLInputElement) || active.dataset["groupName"] === undefined) {
+const groupNameDraftMemo = (doc: Document): GroupNameDraft | null => {
+  const active = doc.activeElement;
+  const InputType = doc.defaultView?.HTMLInputElement;
+  if (!InputType || !(active instanceof InputType) || active.dataset["groupName"] === undefined) {
     return null;
   }
   const [selector] = groupControlMemo(active);
@@ -240,13 +243,15 @@ type ActiveDraft = {
 
 // Only explicitly non-secret fields may cross a shell swap. Recovery phrases,
 // vault passphrases, imported keys, and file inputs are intentionally absent.
-const activeDraftMemo = (): ActiveDraft | null => {
-  const active = document.activeElement;
+const activeDraftMemo = (doc: Document): ActiveDraft | null => {
+  const active = doc.activeElement;
+  const view = doc.defaultView;
   if (
+    !view ||
     !(
-      active instanceof HTMLInputElement ||
-      active instanceof HTMLTextAreaElement ||
-      active instanceof HTMLSelectElement
+      active instanceof view.HTMLInputElement ||
+      active instanceof view.HTMLTextAreaElement ||
+      active instanceof view.HTMLSelectElement
     )
   ) {
     return null;
@@ -255,13 +260,13 @@ const activeDraftMemo = (): ActiveDraft | null => {
   if (!name || !REPAINT_DRAFT_NAMES.has(name)) {
     return null;
   }
-  const [selector] = focusMemo();
+  const [selector] = focusMemo(doc);
   if (!selector) {
     return null;
   }
   return {
-    selectionEnd: active instanceof HTMLSelectElement ? null : active.selectionEnd,
-    selectionStart: active instanceof HTMLSelectElement ? null : active.selectionStart,
+    selectionEnd: active instanceof view.HTMLSelectElement ? null : active.selectionEnd,
+    selectionStart: active instanceof view.HTMLSelectElement ? null : active.selectionStart,
     selector,
     value: active.value,
   };
@@ -304,23 +309,27 @@ export type RepaintFocus = {
  * Captures the focus target and any in-progress group-name edit before a shell
  * swap. Pair with {@link restoreRepaintFocus} around the innerHTML replacement.
  */
-export const captureRepaintFocus = (): RepaintFocus => ({
-  activeDraft: activeDraftMemo(),
-  groupNameDraft: groupNameDraftMemo(),
-  scrollTop: document.scrollingElement?.scrollTop ?? document.documentElement.scrollTop,
-  selectors: focusMemo(),
-});
+export const captureRepaintFocus = (root: Element | null = null): RepaintFocus => {
+  const doc = root?.ownerDocument ?? document;
+  return {
+    activeDraft: activeDraftMemo(doc),
+    groupNameDraft: groupNameDraftMemo(doc),
+    scrollTop: doc.scrollingElement?.scrollTop ?? doc.documentElement.scrollTop,
+    selectors: focusMemo(doc),
+  };
+};
 
 /**
  * Restores the focus target and re-seeds any captured group-name edit after a
  * shell swap, so neither keyboard focus nor mid-typed text jumps under the user.
  */
 export const restoreRepaintFocus = (root: Element | null, focus: RepaintFocus): void => {
+  const doc = root?.ownerDocument ?? document;
   // Replacing the shell can make the document snap to the top before fresh
   // async state lands. Restore position before focus so polling never moves the
   // user's current proposal or account row under their pointer.
-  document.documentElement.scrollTop = focus.scrollTop;
-  document.body.scrollTop = focus.scrollTop;
+  doc.documentElement.scrollTop = focus.scrollTop;
+  doc.body.scrollTop = focus.scrollTop;
   restoreFocus(root, focus.selectors);
   restoreGroupNameDraft(root, focus.groupNameDraft);
   restoreActiveDraft(root, focus.activeDraft);

@@ -134,7 +134,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
         buttonBusy(submitButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Reveal failed"), "error");
+        showToast(errorMessage(error, "Reveal failed"), "error", form);
         if (result) {
           result.textContent = errorMessage(error, "Reveal failed");
         }

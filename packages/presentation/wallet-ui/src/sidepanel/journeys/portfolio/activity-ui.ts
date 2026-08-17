@@ -54,17 +54,17 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
       ({ entries, historyUnavailable }) => {
         const blob = new Blob([activityToCsv(entries)], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
+        const anchor = exportButton.ownerDocument.createElement("a");
         anchor.href = url;
         anchor.download = "mc-wallet-activity.csv";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         const toast = activityExportToast(historyUnavailable);
-        showToast(toast.message, toast.tone);
+        showToast(toast.message, toast.tone, exportButton);
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Export failed"), "error");
+        showToast(errorMessage(error, "Export failed"), "error", exportButton);
         buttonBusy(exportButton, false);
       },
     );

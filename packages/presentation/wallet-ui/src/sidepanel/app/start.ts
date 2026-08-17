@@ -121,7 +121,7 @@ export const startWalletUi = async (
   const ledgerOnboard = createLedgerOnboardEntry({
     addHd: async (accountContractType) => {
       await wallet.addAccount(lastNetworkId, accountContractType);
-      showToast("Account added", "success");
+      showToast("Account added", "success", app);
     },
     cache,
     connector: ledgerConnector,

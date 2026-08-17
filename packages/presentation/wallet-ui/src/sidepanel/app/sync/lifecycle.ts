@@ -26,7 +26,7 @@ export const startRefreshLifecycle = ({
   wallet,
 }: RefreshLifecycleOptions): void => {
   const scheduler = createRefreshScheduler({
-    refresh: withTransactionAlerts(wallet, async () => render(await wallet.loadStatus())),
+    refresh: withTransactionAlerts(document, wallet, async () => render(await wallet.loadStatus())),
     visible: () => document.visibilityState === "visible",
   });
   mutationRuntime.setListener(scheduler.afterAction);

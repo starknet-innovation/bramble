@@ -256,7 +256,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   .takeover-queue { color: var(--mc-muted); font-size: ${TYPE.caption.size}; text-align: center; }
   .takeover-foot { display: grid; gap: ${SPACE.sm}; }
-  .takeover-foot button.ghost { justify-self: center; min-height: ${SPACE.xl}; }
+  .takeover-foot button.ghost { justify-self: center; min-height: ${CONTROL.hitSmall}; }
 
   /* Ledger sign takeover: a keyless-Ledger request parks in the background and
      must be fulfilled from the panel that owns the device, so while one is

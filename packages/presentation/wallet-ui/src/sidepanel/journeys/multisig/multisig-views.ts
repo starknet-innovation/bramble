@@ -15,7 +15,6 @@ import { preparedArgentMultisigFee } from "@mc-wallet/starknet/multisig-invoke";
 import { verificationContext, verifyCalls } from "@mc-wallet/transactions/verify";
 import { emptyState, pill, receipt } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
-import { selectField, textareaField } from "@mc-wallet/ui-kit/fields";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
@@ -38,6 +37,7 @@ import {
   riskFlagMessages,
 } from "../../shared/review-render";
 import { tokenGlyph } from "../portfolio/token-row";
+import { multisigIntentActions } from "./multisig-intent-actions";
 import { multisigDisplayName } from "./multisig-model";
 import {
   EMPTY_MULTISIG_PORTFOLIO,
@@ -115,13 +115,15 @@ const localSignerOptions = (
   view: ArgentMultisigView,
   accounts: readonly AccountRef[],
   preferences: WalletPreferences | null,
+  signedPublicKeys: readonly string[] = [],
 ): readonly { readonly label: string; readonly value: string }[] =>
   view.config
     ? accounts
         .filter(
           (account) =>
             account.networkId === view.record.networkId &&
-            view.config?.signerGuids.includes(argentSignerGuid(account.publicKeyX)),
+            view.config?.signerGuids.includes(argentSignerGuid(account.publicKeyX)) &&
+            !signedPublicKeys.some((publicKey) => sameFelt(publicKey, account.publicKeyX)),
         )
         .map((account) => ({
           label: accountDisplayName(account, preferences),
@@ -224,10 +226,14 @@ const intentCard = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
 ): string => {
-  const options = localSignerOptions(view, status.accounts, preferences);
+  const allOptions = localSignerOptions(view, status.accounts, preferences);
+  const options = localSignerOptions(
+    view,
+    status.accounts,
+    preferences,
+    intent.signatures.map((signature) => signature.publicKey),
+  );
   const hasFreshAuthority = configMatchesIntent(intent, view);
-  const canCollect =
-    hasFreshAuthority && (intent.state === "collecting" || intent.state === "ready");
   const fee = preparedArgentMultisigFee(intent.prepared);
   const configReview = configReviewFor(intent, view);
   const reviewAssets = intentReviewAssets(intent, view.record, preferences);
@@ -315,68 +321,7 @@ const intentCard = (
       </div>
     </details>
     <p class="hint">Confirm only after the outcome, fee ceiling, signer threshold, and exact transaction identity agree.</p>
-    ${
-      options.length > 0 && canCollect
-        ? selectField({
-            label: "Signer in this wallet",
-            name: "signerAccountId",
-            options,
-          })
-        : ""
-    }
-    <div class="row">
-      ${button({
-        attributes: { "data-ms-copy-package": intent.id },
-        label: "Copy intent package",
-        size: "small",
-        variant: "secondary",
-      })}
-      ${
-        options.length > 0 && canCollect
-          ? button({
-              attributes: { "data-ms-sign": intent.id },
-              label: "Sign exact hash",
-              size: "small",
-            })
-          : ""
-      }
-      ${
-        intent.state === "ready" && hasFreshAuthority
-          ? button({
-              attributes: { "data-ms-submit": intent.id },
-              label: "Submit",
-              size: "small",
-            })
-          : ""
-      }
-    </div>
-    ${
-      intent.signatures.length > 0
-        ? `<div class="row">${intent.signatures
-            .map((_, index) =>
-              button({
-                attributes: {
-                  "data-ms-copy-signature": intent.id,
-                  "data-ms-signature-index": String(index),
-                },
-                label: `Copy signature ${index + 1}`,
-                size: "small",
-                variant: "ghost",
-              }),
-            )
-            .join("")}</div>`
-        : ""
-    }
-    ${
-      canCollect
-        ? `<details><summary>Import signature fragment</summary>
-          <form data-ms-signature-form="${escapeHtml(intent.id)}">
-            ${textareaField({ label: "Signature fragment", name: "signature", placeholder: '{"publicKey":"0x…","r":"0x…","s":"0x…"}', required: true, rows: 3, spellcheck: false })}
-            ${button({ label: "Verify and import", size: "small", type: "submit", variant: "secondary" })}
-          </form>
-        </details>`
-        : ""
-    }
+    ${multisigIntentActions(intent, options, allOptions.length > 0, hasFreshAuthority)}
   </article>`;
 };
 

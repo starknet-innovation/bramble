@@ -50,7 +50,7 @@ const portfolioHero = (
   const hasPrices = visible.some((balance) => data.prices[balance.address] !== undefined);
   const total = hasPrices ? portfolioTotal(visible, data.prices) : null;
   const delta = hasPrices ? portfolioDelta(visible, data.prices, data.changes) : null;
-  return `<section class="hero multisig-portfolio-hero" aria-label="Shared account balance">
+  return `<section class="hero multisig-portfolio-hero" aria-label="Shared account balance" data-live-group>
     <p class="hero-total" data-live-key="multisig-total:${escapeHtml(record.id)}" data-live-value="${total ?? "unknown"}">${total === null ? "—" : escapeHtml(formatFiat(total, data.currency))}</p>
     ${
       delta
