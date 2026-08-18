@@ -3,6 +3,7 @@
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import type { SendIntent } from "../send/send-model";
 import type { MultisigClient } from "./multisig-runtime";
 
 /**
@@ -13,6 +14,7 @@ export type MultisigUiDeps = {
   readonly app: Element | null;
   readonly multisig: MultisigClient;
   readonly openDetail: (id: string, destination?: "multisig-detail" | "multisig-home") => void;
+  readonly openFunding?: (intent: SendIntent) => Promise<void>;
   readonly openList: () => void;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly selectedMultisigId: () => string | null;

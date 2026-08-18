@@ -155,7 +155,7 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
     );
   }
   if (activeView === "multisig-signers") {
-    return multisigSignersFlow(context.status, context.account, selected);
+    return multisigSignersFlow(context.status, context.account, selected, context.preferences);
   }
   if (activeView === "multisig-receive") {
     return multisigReceiveFlow(context.status, selected);

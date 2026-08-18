@@ -90,6 +90,11 @@ describe("Argent multisig deployment review", () => {
       harnessExtensionSender,
     );
     expect(reviewed).toMatchObject({ deploymentReview: { feeAffordability: "insufficient" } });
+    expect(await harness.multisigStore.listMultisigs()).toContainEqual(
+      expect.objectContaining({
+        deployment: expect.objectContaining({ salt: "0x9", threshold: 2 }),
+      }),
+    );
     const review = (reviewed as { readonly deploymentReview: Record<string, unknown> })
       .deploymentReview;
 

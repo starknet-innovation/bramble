@@ -85,6 +85,7 @@ const deployConfigFrom = (value: Record<string, unknown>): ArgentMultisigDeployC
 export type AddArgentMultisigInput = {
   readonly address: string;
   readonly networkId: StarknetNetworkId;
+  readonly signerPublicKeys?: readonly string[];
 };
 
 /**
@@ -93,14 +94,25 @@ export type AddArgentMultisigInput = {
 export const readAddMultisigInput = (message: unknown): AddArgentMultisigInput | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["address", "networkId", "type"]) ||
+    !hasOnlyKnownKeys(message, ["address", "networkId", "signerPublicKeys", "type"]) ||
     message["type"] !== "wallet.addMultisig" ||
     !isStarknetNetworkId(message["networkId"]) ||
-    !isCanonicalNonZeroFelt(message["address"])
+    !isCanonicalNonZeroFelt(message["address"]) ||
+    (message["signerPublicKeys"] !== undefined &&
+      (!Array.isArray(message["signerPublicKeys"]) ||
+        message["signerPublicKeys"].length === 0 ||
+        message["signerPublicKeys"].length > MULTISIG_LIMITS.signers ||
+        !message["signerPublicKeys"].every(isCanonicalNonZeroFelt)))
   ) {
     return null;
   }
-  return { address: message["address"], networkId: message["networkId"] };
+  return {
+    address: message["address"],
+    networkId: message["networkId"],
+    ...(message["signerPublicKeys"] === undefined
+      ? {}
+      : { signerPublicKeys: message["signerPublicKeys"] as readonly string[] }),
+  };
 };
 
 /**

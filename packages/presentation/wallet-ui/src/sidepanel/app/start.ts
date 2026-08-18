@@ -95,9 +95,7 @@ export const startWalletUi = async (
   let snoozedApprovalIds: readonly string[] = [];
   let sendIntent: SendIntent | null = null;
   let hasPaintedScope = false;
-
   const renderScene = createSceneRenderer(app, () => bindAll());
-
   const deployment = createDeploymentCache(wallet);
   const cache: RenderData = emptyRenderCache();
   let privacy: ReturnType<typeof createPrivacyController>;
@@ -112,7 +110,6 @@ export const startWalletUi = async (
     status: () => cache.status,
     wallet,
   });
-
   const ledgerOnboardMount = document.createElement("div");
   ledgerOnboardMount.className = "ledger-onboard-overlay";
   ledgerOnboardMount.hidden = true;
@@ -133,7 +130,6 @@ export const startWalletUi = async (
     },
     wallet,
   });
-
   const bindAll = (): void => {
     bindEntryNavigation(app, navigate, goBack);
     bindCopyButtons(app);
@@ -279,12 +275,16 @@ export const startWalletUi = async (
         selectedMultisigId = null;
         navigate("multisigs");
       },
+      openFunding: async (intent) => {
+        await wallet.setActiveAccount(intent.accountId);
+        sendIntent = intent;
+        navigate("send");
+      },
       render,
       selectedMultisigId: () => selectedMultisigId,
       wallet,
     });
   };
-
   const applyTheme = (): void => {
     lastSkinName = applyEntryTheme(
       cache.preferences?.theme ?? "dark",
@@ -292,7 +292,6 @@ export const startWalletUi = async (
       document.documentElement,
     );
   };
-
   const paint = (): void => {
     const { status } = cache;
     lastNetworkId = status.networkId;

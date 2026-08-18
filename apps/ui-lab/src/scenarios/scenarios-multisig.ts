@@ -15,19 +15,29 @@ import {
   argentCollectingIntent,
   argentMultisig,
   argentReadyIntent,
+  argentSoftwareAccount,
   argentStaleIntent,
+  preferences,
   secondAccount,
   softwareAccount,
   statusFor,
 } from "../fixtures/fixtures";
+import { STRK_TOKEN } from "../fixtures/journey-fixtures";
 import { type DashboardOptions, walletDashboard } from "../runtime/scenario-dashboard";
 import { nextTurn } from "../runtime/scenario-runtime";
 import type { FrameContext, ScenarioCheckpoint, WalletScenario } from "../runtime/types";
 
+const baseStatus = statusFor(softwareAccount);
 const base: DashboardOptions = {
   multisigClassDeclared: true,
   multisigs: [argentMultisig],
+  preferences: { ...preferences, tokens: [...preferences.tokens, STRK_TOKEN] },
   selectedMultisigId: argentMultisig.record.id,
+  status: {
+    ...baseStatus,
+    accountCount: baseStatus.accounts.length + 1,
+    accounts: [...baseStatus.accounts, argentSoftwareAccount],
+  },
 };
 
 const bindFixtureMultisig = (
@@ -63,6 +73,15 @@ const bindFixtureMultisig = (
           ok: true,
         };
       }
+      if (isRecord(message) && message["type"] === "wallet.deployArgentMultisig") {
+        const { deployment: _fixtureDeployment, ...record } = argentMultisig.record;
+        return {
+          address: argentMultisig.record.address,
+          multisig: { ...argentMultisig, deployed: false, record },
+          ok: true,
+          transactionHash: "0x456",
+        };
+      }
       return { error: "UI Lab blocks non-fixture runtime requests" };
     },
   };
@@ -86,6 +105,26 @@ const prepareDeploymentReview =
     form.requestSubmit();
     await nextTurn();
   };
+
+const prepareDeploymentApproval = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context);
+  const continueButton = context.app.querySelector<HTMLButtonElement>(
+    "[data-multisig-deploy-continue]",
+  );
+  if (!continueButton) throw new Error("Missing production multisig approval action");
+  continueButton.click();
+  await nextTurn();
+};
+
+const prepareDeploymentSubmitted = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context, "ok");
+  const form = context.app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+  if (!form) throw new Error("Missing production multisig deployment form");
+  form.requestSubmit();
+  await nextTurn();
+  form.requestSubmit();
+  await nextTurn();
+};
 
 const revealIntentPanel = async (context: FrameContext): Promise<void> => {
   bindFixtureMultisig(context);
@@ -141,6 +180,12 @@ const checkpoint = (
 });
 
 const unavailableAuthority: ArgentMultisigView = { ...argentMultisig, config: null };
+const { currentConfig: _incompleteCurrentConfig, ...incompleteSignerRecord } =
+  argentMultisig.record;
+const incompleteSignerConfig: ArgentMultisigView = {
+  ...argentMultisig,
+  record: incompleteSignerRecord,
+};
 const undeployedMultisig: ArgentMultisigView = {
   ...argentMultisig,
   config: null,
@@ -227,12 +272,22 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   {
     ...checkpoint(
       "deploy-ready",
-      "Review deployment inputs",
-      "Constructor authority, threshold, signer, class, network, and salt are composed as one reviewable deployment task.",
+      "Choose deployment signers",
+      "The account name and signer identities are resolved before approval and deployment choices appear.",
       { selectedMultisigId: null, view: "multisig-deploy" },
-      { class: "declared", threshold: 2 },
+      { class: "declared", step: "signers" },
     ),
     prepare: bindFixtureMultisig,
+  },
+  {
+    ...checkpoint(
+      "deploy-approval",
+      "Set approval policy",
+      "Threshold, deployment signer, and advanced salt form one focused decision after the signer set is complete.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { class: "declared", step: "approval", threshold: 2 },
+    ),
+    prepare: prepareDeploymentApproval,
   },
   {
     ...checkpoint(
@@ -253,6 +308,16 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
       { class: "declared", funding: "required", threshold: 2 },
     ),
     prepare: prepareDeploymentReview("insufficient"),
+  },
+  {
+    ...checkpoint(
+      "deploy-submitted",
+      "Deployment submitted",
+      "The transaction hash and account stay visible after broadcast while Starknet confirms deployment.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { deployment: "submitted", outcome: "pending" },
+    ),
+    prepare: prepareDeploymentSubmitted,
   },
   checkpoint(
     "home-deployment-required",
@@ -371,9 +436,16 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   checkpoint(
     "signers",
     "Current signer authority",
-    "The live signer GUIDs and threshold are readable before any new intent is prepared.",
+    "Recognizable signer identities and guided authority changes replace raw contract-call composition.",
     { view: "multisig-signers" },
-    { threshold: 2 },
+    { actions: ["add", "replace", "remove", "threshold"], threshold: 2 },
+  ),
+  checkpoint(
+    "signers-incomplete",
+    "Complete signer setup",
+    "An address-only watch stays readable and offers a verified recovery step only when originating a transaction needs missing public keys.",
+    { multisigs: [incompleteSignerConfig], view: "multisig-signers" },
+    { recovery: "verify public keys", threshold: 2 },
   ),
   checkpoint(
     "track",

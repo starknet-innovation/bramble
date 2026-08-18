@@ -227,6 +227,17 @@ describe("Argent multisig serialized store", () => {
     expect(await registry.upsertMultisig(addressOnly)).toBe("conflict");
   });
 
+  test("enriches an address-only watch with a verified current public config", async () => {
+    const { store } = memoryKv();
+    const registry = createMultisigStore({ store });
+    const { currentConfig: _currentConfig, deployment: _deployment, ...addressOnly } = record;
+    const { deployment: _savedDeployment, ...withCurrentConfig } = record;
+
+    expect(await registry.upsertMultisig(addressOnly)).toBe("stored");
+    expect(await registry.upsertMultisig(withCurrentConfig)).toBe("stored");
+    expect(await registry.listMultisigs()).toEqual([withCurrentConfig]);
+  });
+
   test("keeps deployment immutable and updates current config with optimistic authority", async () => {
     const { store } = memoryKv();
     const registry = createMultisigStore({ store });

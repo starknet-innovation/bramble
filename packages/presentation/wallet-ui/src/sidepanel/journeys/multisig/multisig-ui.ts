@@ -13,6 +13,7 @@ import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
 import { parseArgentMultisigIntentPackage, parseArgentMultisigSignature } from "./multisig-model";
+import { bindMultisigSignerManagement } from "./multisig-signer-management-ui";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 /**
@@ -465,14 +466,16 @@ export const bindMultisigs = (deps: MultisigUiDeps): void => {
   bindAdd(deps);
   bindList(deps);
   bindIntentCards(deps);
+  bindMultisigSignerManagement(deps);
   bindPrepare(deps);
   bindImport(deps);
   bindTabs(deps);
   bindMultisigDeploy({
     app: deps.app,
     multisig: deps.multisig,
-    openList: deps.openList,
-    rerender: () => rerender(deps),
+    openDetail: (id) => deps.openDetail(id, "multisig-home"),
+    openFunding:
+      deps.openFunding ?? (() => Promise.reject(new Error("Local funding is unavailable"))),
     setResult: (id, message) => setResult(deps, id, message),
   });
 };

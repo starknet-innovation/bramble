@@ -11,12 +11,20 @@ import { HARNESS_MULTISIG_ID, harnessAccountA } from "../../support/multisig-har
 
 describe("Argent multisig message inputs", () => {
   test("accepts address-only multisig discovery and bounded calls", () => {
+    const address = HARNESS_MULTISIG_ID.split(":")[1];
+    if (!address) throw new Error("missing multisig address fixture");
     const add = {
-      address: HARNESS_MULTISIG_ID.split(":")[1],
+      address,
       networkId: "SN_MAIN",
       type: "wallet.addMultisig",
     };
     expect(readAddMultisigInput(add)).not.toBeNull();
+    expect(readAddMultisigInput({ ...add, signerPublicKeys: ["0x123", "0x456"] })).toEqual({
+      address: add.address,
+      networkId: "SN_MAIN",
+      signerPublicKeys: ["0x123", "0x456"],
+    });
+    expect(readAddMultisigInput({ ...add, signerPublicKeys: [] })).toBeNull();
     expect(readAddMultisigInput({ ...add, extra: true })).toBeNull();
     expect(readAddMultisigInput({ ...add, signerAccountId: harnessAccountA.id })).toBeNull();
     const prepare = {

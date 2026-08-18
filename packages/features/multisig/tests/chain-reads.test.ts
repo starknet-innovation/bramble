@@ -3,6 +3,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  argentMultisigConfigChangeCall,
   getArgentMultisigConfig,
   isArgentMultisigCall,
   isArgentMultisigCalls,
@@ -155,6 +156,22 @@ describe("Argent multisig call validation", () => {
       nextConfig: { signerPublicKeys: ["0x123", "0x456"], threshold: 1 },
       summary: "Change Argent multisig threshold to 1",
     });
+  });
+
+  test("builds every guided signer-management action through the strict ABI parser", () => {
+    for (const change of [
+      { kind: "change_threshold", threshold: 1 },
+      { kind: "add_signers", signerPublicKeys: ["0x789"], threshold: 2 },
+      { kind: "remove_signers", signerPublicKeys: ["0x456"], threshold: 1 },
+      {
+        addSignerPublicKey: "0xabc",
+        kind: "replace_signer",
+        removeSignerPublicKey: "0x456",
+      },
+    ] as const) {
+      const call = argentMultisigConfigChangeCall(ADDRESS, change);
+      expect(parseArgentMultisigConfigChange(ADDRESS, call)).toEqual(change);
+    }
   });
 
   test("rejects malformed or semantically impossible management transitions", () => {

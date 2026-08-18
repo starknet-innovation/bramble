@@ -152,7 +152,7 @@ export const multisigPortfolio = (input: {
           : input.canSign
             ? ""
             : input.signerKnown
-              ? '<p class="hint multisig-action-note"><strong>Signer found.</strong> This account is synced, but preparing transactions requires its complete signer setup.</p>'
+              ? `<div class="multisig-action-recovery"><p class="hint multisig-action-note"><strong>Signer found.</strong> Add the remaining public signer keys before preparing a transaction.</p>${button({ attributes: { "data-view": "multisig-signers" }, label: "Complete signer setup", size: "small", variant: "secondary" })}</div>`
               : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>

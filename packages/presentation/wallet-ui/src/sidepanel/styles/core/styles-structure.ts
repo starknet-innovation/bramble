@@ -180,6 +180,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     padding: ${SPACE.md} ${SPACE.lg} ${SPACE.lg};
     position: relative;
   }
+  details.disclosure:not([open]) > .disclosure-body { display: none; }
   .disclosure-body::before {
     background: var(--mc-hairline);
     content: "";

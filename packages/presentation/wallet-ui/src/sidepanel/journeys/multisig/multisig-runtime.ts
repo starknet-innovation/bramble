@@ -25,6 +25,7 @@ import { responseError } from "../../runtime/runtime-errors";
 export type ArgentMultisigSetup = {
   readonly address: string;
   readonly networkId: string;
+  readonly signerPublicKeys?: readonly string[];
 };
 
 /**

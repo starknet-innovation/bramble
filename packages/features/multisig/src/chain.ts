@@ -63,6 +63,7 @@ export {
   type ArgentMultisigConfigChange,
   type ArgentMultisigConfigReview,
   type ArgentMultisigPublicConfig,
+  argentMultisigConfigChangeCall,
   nextArgentMultisigPublicConfig,
   parseArgentMultisigConfigChange,
   reviewArgentMultisigConfigChange,

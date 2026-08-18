@@ -181,8 +181,9 @@ const upsertMultisigIn = (shape: StoredShape, record: ArgentMultisigRecord): Sha
       current !== undefined &&
       current.deployment === undefined &&
       effectiveCurrentConfig(current) === undefined &&
-      record.deployment !== undefined &&
-      sameCurrentConfig(record.currentConfig, record.deployment);
+      record.currentConfig !== undefined &&
+      (record.deployment === undefined ||
+        sameCurrentConfig(record.currentConfig, record.deployment));
     if (
       !current ||
       current.accountContractType !== record.accountContractType ||

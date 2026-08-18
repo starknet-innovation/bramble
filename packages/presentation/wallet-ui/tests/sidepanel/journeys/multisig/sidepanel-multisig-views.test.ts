@@ -1,7 +1,6 @@
 /** Argent multisig views expose exact frozen authority and fail closed without freshness. */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
 import { multisigAccountOptions } from "../../../../src/sidepanel/journeys/multisig/multisig-account-options";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
@@ -225,7 +224,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(home).not.toContain('data-view="multisig-propose"');
 
     const deployment = multisigDeployFlow(fixture.status, signer, true, null, undeployed);
-    expect(deployment).toContain("saved signer set, threshold, and salt are restored");
+    expect(deployment).toContain("Saved setup restored");
     expect(deployment).toContain(`value="${signer.publicKeyX}"`);
     expect(deployment).toContain('name="threshold"');
     expect(deployment).toContain('value="0x5"');
@@ -260,7 +259,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(deployment).toContain("reproduce the watched address");
     expect(deployment).toContain('name="expectedAddress" type="hidden"');
     expect(deployment).toContain(`value="${fixture.record.address}"`);
-    expect(deployment).toContain("Watched address");
+    expect(deployment).not.toContain("multisig-contract-details");
   });
 
   test("disables signing when fresh on-chain authority is unavailable", async () => {
@@ -419,8 +418,7 @@ describe("Argent multisig management views", () => {
     const ready = multisigDeployFlow(fixture.status, account, true, preferences);
     expect(ready).toContain('id="multisig-deploy-form"');
     expect(ready).toContain(`value="${account?.publicKeyX}"`);
-    expect(ready).toContain(`data-copy="${ARGENT_MULTISIG_CONTRACT.classHash}"`);
-    expect(ready).not.toContain(`<code>${ARGENT_MULTISIG_CONTRACT.classHash}</code>`);
+    expect(ready).not.toContain("multisig-contract-details");
     expect(ready).toContain(`data-deployment-signer="${account?.id}"`);
     expect(ready).toContain('class="option-avatar"');
     expect(ready).toContain('data-add-signer-public-key="0x999"');
@@ -429,6 +427,8 @@ describe("Argent multisig management views", () => {
     expect(ready).toContain('name="signerPublicKeys" type="hidden"');
     expect(ready).not.toContain("Space-separated public keys");
     expect(ready).toContain('name="signerAccountId" type="hidden"');
+    expect(ready).toContain("Continue to approval");
+    expect(ready).toContain("data-multisig-deploy-back");
     expect(ready).toContain("Review deployment");
   });
 
@@ -442,11 +442,11 @@ describe("Argent multisig management views", () => {
     expect(multisigAddFlow(fixture.status, null)).toContain("No account on");
     expect(multisigSignersFlow(fixture.status, account, null)).toContain("no longer watched");
     expect(multisigSignersFlow(fixture.status, account, fixture.view)).toContain(
-      fixture.view.config?.signerGuids[0] ?? "missing",
+      fixture.record.currentConfig?.signerPublicKeys[0] ?? "missing",
     );
     expect(
       multisigSignersFlow(fixture.status, account, { ...fixture.view, config: null }),
-    ).toContain("Signing is disabled");
+    ).toContain("network access is restored");
     expect(multisigReceiveFlow(fixture.status, null)).toContain("no longer watched");
     expect(multisigReceiveFlow(fixture.status, fixture.view)).toContain(fixture.record.address);
     expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched Argent multisig");

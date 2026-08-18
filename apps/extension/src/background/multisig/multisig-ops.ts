@@ -7,7 +7,11 @@ import type {
   ArgentMultisigRecord,
   MultisigStore,
 } from "@mc-wallet/multisig/repository";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import {
+  ARGENT_MULTISIG_CONTRACT,
+  argentSignerGuid,
+  normalizeArgentMultisigConfig,
+} from "@mc-wallet/starknet/account-contracts";
 import { isContractNotFoundError } from "@mc-wallet/starknet/provider";
 import type { TokenBalance } from "@mc-wallet/starknet/rpc";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
@@ -55,7 +59,10 @@ const addRecord = async (
   if (!existing) return { record, result: await store.upsertMultisig(record, isAuthorized) };
   if (!record.currentConfig) return { record: existing, result: "stored" };
   const expected = storedArgentPublicConfig(existing);
-  if (!expected) return { record: existing, result: "stored" };
+  if (!expected) {
+    const result = await store.upsertMultisig(record, isAuthorized);
+    return { record: result === "stored" ? record : existing, result };
+  }
   const returned = { ...existing, currentConfig: record.currentConfig };
   const result = await store.updateCurrentConfig(
     existing.id,
@@ -94,17 +101,41 @@ const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigIn
     input.address,
     networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences),
   );
-  if (!config) return { authorized, config, signerPublicKeys: [] };
-  const signerPublicKeys = config.signerGuids
-    .map(
-      (guid) =>
-        active.accounts.find(
-          (account) =>
-            account.networkId === input.networkId &&
-            sameFelt(argentSignerGuid(account.publicKeyX), guid),
-        )?.publicKeyX,
-    )
-    .filter((publicKey): publicKey is string => publicKey !== undefined);
+  if (!config) {
+    return input.signerPublicKeys
+      ? { error: "Signer keys cannot be verified until the multisig is deployed" }
+      : { authorized, config, signerPublicKeys: [] };
+  }
+  let signerPublicKeys: readonly string[];
+  try {
+    signerPublicKeys = input.signerPublicKeys
+      ? normalizeArgentMultisigConfig({
+          signerPublicKeys: input.signerPublicKeys,
+          threshold: config.threshold,
+        }).signerPublicKeys
+      : config.signerGuids
+          .map(
+            (guid) =>
+              active.accounts.find(
+                (account) =>
+                  account.networkId === input.networkId &&
+                  sameFelt(argentSignerGuid(account.publicKeyX), guid),
+              )?.publicKeyX,
+          )
+          .filter((publicKey): publicKey is string => publicKey !== undefined);
+  } catch {
+    return { error: "Signer public keys are invalid or duplicated" };
+  }
+  if (
+    input.signerPublicKeys &&
+    (signerPublicKeys.length !== config.signerGuids.length ||
+      signerPublicKeys.some(
+        (publicKey, index) =>
+          !sameFelt(argentSignerGuid(publicKey), config.signerGuids[index] ?? ""),
+      ))
+  ) {
+    return { error: "Signer public keys do not match the current on-chain authority" };
+  }
   return { authorized, config, signerPublicKeys };
 };
 

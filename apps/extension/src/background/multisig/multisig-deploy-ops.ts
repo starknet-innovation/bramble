@@ -231,6 +231,16 @@ const reviewDeployment = async (
     return { error: "wallet locked" };
   }
   const deploymentReview = { ...reviewBase, fee, feeAffordability };
+  const stored = await deps.multisigStore.upsertMultisig(
+    recordForReview(deploymentReview),
+    context.authorized.isCurrent,
+  );
+  if (stored === "unauthorized") {
+    return { error: "wallet locked" };
+  }
+  if (stored !== "stored") {
+    return { error: `Argent multisig registry ${stored}` };
+  }
   if (feeAffordability !== "insufficient") {
     try {
       await deps.multisigDeploymentReviews.put(deploymentReview);

@@ -1,5 +1,5 @@
 /** Argent multisig portfolio styles. */
-import { RADIUS, SIZE, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
 
 /**
  * Stylesheet fragment for current Argent multisig surfaces.
@@ -37,12 +37,97 @@ export const MULTISIG_STYLES = `
   #multisig-deploy-form > label,
   #multisig-deploy-review,
   #multisig-deploy-review > * { min-width: 0; }
+  .multisig-deploy-progress {
+    align-items: start;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .multisig-deploy-progress li {
+    align-items: center;
+    color: var(--mc-muted);
+    display: grid;
+    font-size: ${TYPE.micro.size};
+    gap: 4px;
+    justify-items: center;
+    position: relative;
+    text-align: center;
+  }
+  .multisig-deploy-progress li::before {
+    background: var(--mc-hairline);
+    content: "";
+    height: 1px;
+    left: calc(-50% + 12px);
+    position: absolute;
+    right: calc(50% + 12px);
+    top: 11px;
+  }
+  .multisig-deploy-progress li:first-child::before { display: none; }
+  .multisig-deploy-progress li > span {
+    align-items: center;
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.full};
+    display: flex;
+    font-variant-numeric: tabular-nums;
+    height: 22px;
+    justify-content: center;
+    position: relative;
+    width: 22px;
+  }
+  .multisig-deploy-progress li[data-state="active"] { color: var(--mc-text); }
+  .multisig-deploy-progress li[data-state="active"] > span {
+    background: var(--mc-accent);
+    color: var(--mc-accent-text);
+  }
+  .multisig-deploy-progress li[data-state="complete"] > span {
+    background: var(--mc-positive-soft);
+    color: var(--mc-positive);
+  }
+  .multisig-deploy-advanced .disclosure-body { display: grid; gap: ${SPACE.md}; }
+  .multisig-deploy-setup { display: grid; gap: ${SPACE.md}; min-width: 0; }
+  .multisig-deploy-step-pane { display: grid; gap: ${SPACE.md}; min-width: 0; view-transition-name: multisig-deploy-stage; }
+  #multisig-deploy-form[data-deployment-stage="setup"] .multisig-deploy-approval-step,
+  #multisig-deploy-form[data-deployment-stage="approval"] .multisig-deploy-signers-step,
+  #multisig-deploy-form:not([data-deployment-stage="setup"]):not([data-deployment-stage="approval"]) > .multisig-deploy-setup {
+    display: none;
+  }
+  .multisig-deploy-actions {
+    display: grid;
+    gap: ${SPACE.sm};
+  }
+  .multisig-deploy-actions > button { min-width: 0; width: 100%; }
+  #multisig-deploy-form[data-deployment-stage="setup"] > .multisig-deploy-actions,
+  #multisig-deploy-form[data-deployment-stage="fund"] > .multisig-deploy-actions { display: none; }
+  #multisig-deploy-form:not([data-deployment-stage="approval"]) [data-multisig-deploy-back] { display: none; }
+  #multisig-deploy-form[data-deployment-stage="approval"] > .multisig-deploy-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #multisig-deploy-form[data-deployment-stage="address"] #multisig-deploy-review:empty::after {
+    color: var(--mc-muted);
+    content: "Calculating the address and deployment fee…";
+    display: block;
+    padding-block: ${SPACE.xl};
+    text-align: center;
+  }
   #multisig-deploy-review {
     display: grid;
     gap: ${SPACE.md};
     max-width: 100%;
     overflow: hidden;
   }
+  #multisig-deploy-form:not([data-deployment-stage="setup"]):not([data-deployment-stage="approval"]) #multisig-deploy-review { view-transition-name: multisig-deploy-stage; }
+  html[data-multisig-deploy-transition]::view-transition-old(root),
+  html[data-multisig-deploy-transition]::view-transition-new(root) { animation: none; }
+  ::view-transition-group(multisig-deploy-stage) {
+    animation-duration: ${MOTION.enterMs}ms;
+    animation-timing-function: ${EASE.out};
+  }
+  html[data-multisig-deploy-transition="forward"]::view-transition-old(multisig-deploy-stage) { animation: mc-vt-out-left ${MOTION.pressMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="forward"]::view-transition-new(multisig-deploy-stage) { animation: mc-vt-in-right ${MOTION.enterMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="back"]::view-transition-old(multisig-deploy-stage) { animation: mc-vt-out-right ${MOTION.pressMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="back"]::view-transition-new(multisig-deploy-stage) { animation: mc-vt-in-left ${MOTION.enterMs}ms ${EASE.out} both; }
   #multisig-deploy-review > *,
   #multisig-deploy-form > button { max-width: 100%; }
   .multisig-deployment-target {
@@ -59,7 +144,58 @@ export const MULTISIG_STYLES = `
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
-  .multisig-deployment-target .icon-button { height: 32px; min-height: 32px; width: 32px; }
+  .multisig-deployment-target .icon-button { height: ${SIZE.control}; min-height: ${SIZE.control}; width: ${SIZE.control}; }
+  .multisig-funding-stage { display: grid; gap: ${SPACE.lg}; }
+  .multisig-funding-head {
+    align-items: center;
+    display: flex;
+    gap: ${SPACE.md};
+    justify-content: space-between;
+  }
+  .multisig-funding-head h2 { margin: 2px 0 0; }
+  .multisig-funding-token {
+    align-items: center;
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.full};
+    display: flex;
+    font-size: ${TYPE.micro.size};
+    font-weight: 700;
+    height: 40px;
+    justify-content: center;
+    width: 40px;
+  }
+  .multisig-funding-address { display: grid; gap: ${SPACE.md}; justify-items: center; }
+  .multisig-funding-address .qr-card { max-width: 148px; padding: ${SPACE.sm}; }
+  .multisig-funding-address .address-line { max-width: 100%; width: 100%; }
+  .multisig-funding-address .address-line code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  .multisig-funding-local { display: grid; gap: ${SPACE.sm}; }
+  .multisig-deployment-success { display: grid; gap: ${SPACE.lg}; justify-items: center; text-align: center; }
+  .multisig-deployment-success-mark {
+    align-items: center;
+    background: var(--mc-positive-soft);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-positive);
+    display: flex;
+    height: 56px;
+    justify-content: center;
+    width: 56px;
+  }
+  .multisig-deployment-success .request-detail { text-align: left; width: 100%; }
+  .multisig-deployment-success-actions { display: grid; gap: ${SPACE.sm}; width: 100%; }
+  .multisig-deployment-success-actions > a {
+    align-items: center;
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-text);
+    display: flex;
+    justify-content: center;
+    min-height: ${SIZE.control};
+    text-decoration: none;
+  }
   .multisig-signer-set {
     background: var(--mc-panel);
     border-radius: ${RADIUS.lg};
@@ -127,9 +263,93 @@ export const MULTISIG_STYLES = `
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
+  .multisig-authority-summary { display: grid; gap: ${SPACE.lg}; }
+  .multisig-signer-roster {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    overflow: hidden;
+  }
+  .multisig-signer-identity {
+    align-items: center;
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: ${SIZE.row};
+    padding: ${SPACE.sm} ${SPACE.md};
+    position: relative;
+  }
+  .multisig-signer-identity + .multisig-signer-identity::before {
+    background: var(--mc-hairline);
+    content: "";
+    height: 1px;
+    inset: 0 0 auto ${SPACE.lg};
+    position: absolute;
+  }
+  .multisig-signer-identity .option-copy strong,
+  .multisig-signer-identity .option-sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  .multisig-signer-manage { background: transparent; overflow: visible; }
+  .multisig-signer-manage > summary {
+    align-items: center;
+    border-radius: ${RADIUS.full};
+    display: flex;
+    height: ${SIZE.control};
+    justify-content: center;
+    padding: 0;
+    width: ${SIZE.control};
+  }
+  .multisig-signer-manage[open] {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .multisig-signer-manage[open] > summary { margin-left: auto; }
+  .multisig-signer-manage .disclosure-body,
+  .multisig-authority-actions,
+  .multisig-authority-actions .disclosure-body { display: grid; gap: ${SPACE.md}; }
+  .multisig-signer-manage form + form {
+    border-top: 1px solid var(--mc-hairline);
+    padding-top: ${SPACE.md};
+  }
+  .multisig-signer-recovery-list {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    overflow: hidden;
+  }
+  .multisig-signer-recovery-row {
+    align-items: center;
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: ${SIZE.row};
+    padding: ${SPACE.sm} ${SPACE.md};
+  }
+  .multisig-signer-recovery-row + .multisig-signer-recovery-row,
+  .multisig-signer-recovery-field + .multisig-signer-recovery-field,
+  .multisig-signer-recovery-row + .multisig-signer-recovery-field,
+  .multisig-signer-recovery-field + .multisig-signer-recovery-row {
+    border-top: 1px solid var(--mc-hairline);
+  }
+  .multisig-signer-recovery-row .option-copy strong,
+  .multisig-signer-recovery-row .option-sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  .multisig-signer-recovery-field { padding: ${SPACE.md}; }
+  .multisig-signer-match { color: var(--mc-positive); display: inline-flex; }
+  .multisig-config-note { color: var(--mc-muted); font-size: ${TYPE.caption.size}; margin: 0; }
+  .multisig-deployment-success .request-detail dd { align-items: center; display: flex; gap: ${SPACE.xs}; }
+  .multisig-authority-actions > .ghost { justify-self: start; }
   .multisig-portfolio-hero { padding-top: ${SPACE.md}; }
   .multisig-primary-actions { padding-block: ${SPACE.xs}; }
   .multisig-primary-actions .action-row { width: 100%; }
+  .multisig-action-recovery { display: grid; gap: ${SPACE.sm}; }
+  .multisig-action-recovery > button { justify-self: start; }
   .multisig-compose-flow {
     display: grid;
     gap: ${SPACE.xl};
@@ -237,5 +457,12 @@ export const MULTISIG_STYLES = `
   .drawer-multisig .account-groups-line {
     color: var(--mc-muted);
     font-size: ${TYPE.micro.size};
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html[data-multisig-deploy-transition]::view-transition-group(multisig-deploy-stage),
+    html[data-multisig-deploy-transition]::view-transition-old(multisig-deploy-stage),
+    html[data-multisig-deploy-transition]::view-transition-new(multisig-deploy-stage) {
+      animation: none;
+    }
   }
 `;
