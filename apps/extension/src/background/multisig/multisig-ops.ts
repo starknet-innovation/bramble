@@ -9,7 +9,6 @@ import type {
 } from "@mc-wallet/multisig/repository";
 import {
   ARGENT_MULTISIG_CONTRACT,
-  argentSignerGuid,
   normalizeArgentMultisigConfig,
 } from "@mc-wallet/starknet/account-contracts";
 import { isContractNotFoundError } from "@mc-wallet/starknet/provider";
@@ -26,6 +25,8 @@ import {
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
 import {
+  discoveredArgentSignerPublicKeys,
+  enrichArgentAddressOnlyWatch,
   markObservedArgentIntentOutcomes,
   matchesArgentPublicConfig,
   reconcileArgentCurrentConfig,
@@ -96,11 +97,8 @@ const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigIn
     return { error: "switch to the multisig network first" } as const;
   }
   const preferences = await deps.preferencesStore.read();
-  const config = await readDeployedConfig(
-    deps,
-    input.address,
-    networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences),
-  );
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
+  const config = await readDeployedConfig(deps, input.address, rpcUrls);
   if (!config) {
     return input.signerPublicKeys
       ? { error: "Signer keys cannot be verified until the multisig is deployed" }
@@ -113,28 +111,22 @@ const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigIn
           signerPublicKeys: input.signerPublicKeys,
           threshold: config.threshold,
         }).signerPublicKeys
-      : config.signerGuids
-          .map(
-            (guid) =>
-              active.accounts.find(
-                (account) =>
-                  account.networkId === input.networkId &&
-                  sameFelt(argentSignerGuid(account.publicKeyX), guid),
-              )?.publicKeyX,
-          )
-          .filter((publicKey): publicKey is string => publicKey !== undefined);
+      : await discoveredArgentSignerPublicKeys(
+          deps,
+          active,
+          preferences,
+          input.address,
+          config,
+          rpcUrls,
+        );
   } catch {
     return { error: "Signer public keys are invalid or duplicated" };
   }
   if (
     input.signerPublicKeys &&
-    (signerPublicKeys.length !== config.signerGuids.length ||
-      signerPublicKeys.some(
-        (publicKey, index) =>
-          !sameFelt(argentSignerGuid(publicKey), config.signerGuids[index] ?? ""),
-      ))
+    !matchesArgentPublicConfig({ signerPublicKeys, threshold: config.threshold }, config)
   ) {
-    return { error: "Signer public keys do not match the current on-chain authority" };
+    return { error: "A supplied public key is not a current Stark signer for this multisig" };
   }
   return { authorized, config, signerPublicKeys };
 };
@@ -276,7 +268,15 @@ const listMultisigs = async (deps: MultisigOpsDeps, message: unknown): Promise<R
       try {
         const config = await readDeployedConfig(deps, record.address, rpcUrls);
         if (!config) return { config: null, deployed: false, record };
-        const refreshed = await reconcileArgentCurrentConfig(deps, record, config);
+        const reconciled = await reconcileArgentCurrentConfig(deps, record, config);
+        const refreshed = await enrichArgentAddressOnlyWatch(
+          deps,
+          active,
+          preferences,
+          reconciled,
+          config,
+          rpcUrls,
+        );
         await markObservedArgentIntentOutcomes(deps, refreshed);
         await markChangedIntentsStale(deps.multisigStore, record.id, config);
         return { config, deployed: true, record: refreshed };
@@ -363,7 +363,15 @@ const refreshMultisig = async (
       ok: true,
     };
   }
-  const refreshed = await reconcileArgentCurrentConfig(deps, context.record, config);
+  const reconciled = await reconcileArgentCurrentConfig(deps, context.record, config);
+  const refreshed = await enrichArgentAddressOnlyWatch(
+    deps,
+    context.active,
+    await deps.preferencesStore.read(),
+    reconciled,
+    config,
+    context.rpcUrls,
+  );
   await markObservedArgentIntentOutcomes(deps, refreshed);
   await markChangedIntentsStale(deps.multisigStore, context.record.id, config);
   return { intents, multisig: { config, deployed: true, record: refreshed }, ok: true };

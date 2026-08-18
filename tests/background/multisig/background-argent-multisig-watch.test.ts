@@ -74,11 +74,36 @@ describe("Argent multisig watch", () => {
         harnessExtensionSender,
       ),
     ).resolves.toEqual({
-      error: "Signer public keys do not match the current on-chain authority",
+      error: "A supplied public key is not a current Stark signer for this multisig",
     });
     await expect(
       harness.handler(
         { ...input, signerPublicKeys: [knownSigner, "0x999"] },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({
+      multisig: { record: { currentConfig: publicConfig } },
+      ok: true,
+    });
+  });
+
+  test("recovers a complete deployed signer set from verified linked events", async () => {
+    const publicConfig = normalizeArgentMultisigConfig({
+      signerPublicKeys: ["0x888", "0x999"],
+      threshold: 2,
+    });
+    const harness = await makeMultisigHarness({
+      getConfig: () => ({
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+        signerGuids: publicConfig.signerPublicKeys.map(argentSignerGuid),
+        threshold: publicConfig.threshold,
+      }),
+      getSignerPublicKeys: () => publicConfig.signerPublicKeys,
+    });
+
+    await expect(
+      harness.handler(
+        { address: "0xabf", networkId: "SN_MAIN", type: "wallet.addMultisig" },
         harnessExtensionSender,
       ),
     ).resolves.toMatchObject({

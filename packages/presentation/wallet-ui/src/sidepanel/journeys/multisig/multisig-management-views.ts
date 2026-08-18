@@ -179,7 +179,7 @@ export const multisigSignersFlow = (
       : null;
   const identities = signerIdentities(completeConfig?.signerPublicKeys ?? [], status, preferences);
   const recoverySigners =
-    config?.signerGuids.map((guid, index) => {
+    config?.signerGuids.map((guid) => {
       const account = status.accounts.find(
         (candidate) =>
           candidate.networkId === record.networkId &&
@@ -195,8 +195,9 @@ export const multisigSignersFlow = (
       const identity = publicKey
         ? signerIdentities([publicKey], status, preferences)[0]
         : undefined;
-      return { guid, identity, index, publicKey };
+      return { identity, publicKey };
     }) ?? [];
+  const unresolvedSignerCount = recoverySigners.filter((signer) => !signer.publicKey).length;
   const candidates = availableSignerOptions(
     completeConfig?.signerPublicKeys ?? [],
     status,
@@ -261,23 +262,25 @@ export const multisigSignersFlow = (
                 .join("")}</div>`
             : config
               ? `<div class="multisig-complete-config">
-                  <p class="multisig-config-note" role="note">This wallet found ${recoverySigners.filter((signer) => signer.publicKey).length} of ${config.signerGuids.length} signer keys. Complete any unmatched signer, then verify the setup.</p>
+                  <p class="multisig-config-note" role="note">We could not recover every current Stark signer from chain history. Add the ${unresolvedSignerCount === 1 ? "missing public key below" : `${unresolvedSignerCount} missing public keys below in any order`}.</p>
                   <form id="multisig-complete-config-form" data-multisig-id="${escapeHtml(record.id)}">
+                    ${config.signerGuids.map((guid) => `<input name="signerGuid" type="hidden" value="${escapeHtml(guid)}" />`).join("")}
                     <div class="multisig-signer-recovery-list" role="list">
                       ${recoverySigners
                         .map((signer) =>
                           signer.identity && signer.publicKey
                             ? `<article class="multisig-signer-recovery-row" role="listitem">
                                 <span class="option-avatar">${accountAvatar(signer.identity.address)}</span>
-                                <span class="option-copy"><strong>${escapeHtml(signer.identity.label)}</strong><span class="option-sub">Signer ${signer.index + 1} matched · ${escapeHtml(signer.identity.detail)}</span></span>
+                                <span class="option-copy"><strong>${escapeHtml(signer.identity.label)}</strong><span class="option-sub">Signer matched · ${escapeHtml(signer.identity.detail)}</span></span>
                                 <span class="multisig-signer-match">${icon("check")}</span>
                                 <input name="signerPublicKey" type="hidden" value="${escapeHtml(signer.publicKey)}" />
                               </article>`
                             : `<div class="multisig-signer-recovery-field" role="listitem">
                                 ${textField({
+                                  attributes: { "data-signer-key": "true" },
                                   className: "mono",
-                                  hint: `Signer identity ${accountLabel(signer.guid)}`,
-                                  label: `Signer ${signer.index + 1} public key`,
+                                  hint: "Enter a Stark public key. It will be checked against the live account.",
+                                  label: "Missing signer public key",
                                   name: "signerPublicKey",
                                   placeholder: "0x…",
                                   required: true,
@@ -287,8 +290,7 @@ export const multisigSignersFlow = (
                         )
                         .join("")}
                     </div>
-                    ${button({ label: "Verify and save signer setup", type: "submit" })}
-                    <p class="hint">Every key is checked against fresh on-chain signer identities before this wallet saves it.</p>
+                    ${button({ label: "Verify missing signer keys", type: "submit" })}
                     <p id="multisig-complete-config-result" role="status"></p>
                   </form>
                 </div>`

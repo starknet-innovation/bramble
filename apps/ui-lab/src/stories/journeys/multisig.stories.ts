@@ -300,11 +300,20 @@ export const Signers: LabStory = {
     await expect(body?.querySelector(".multisig-signer-roster")).not.toHaveTextContent(/0x\w{20}/);
   },
 };
-export const SignersIncomplete = checkpointStory(
-  "Complete signer setup",
-  "multisig",
-  "signers-incomplete",
-);
+export const SignersIncomplete: LabStory = {
+  args: { checkpointId: "signers-incomplete", scenarioId: "multisig" },
+  name: "Signer recovery fallback",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector(".multisig-config-note")).toHaveTextContent("chain history");
+    await expect(body?.querySelector("[data-signer-key]")).toBeVisible();
+    await expect(body?.querySelector(".multisig-complete-config")).not.toHaveTextContent(
+      /Signer identity|0x\w{20}/,
+    );
+  },
+};
 export const Track = checkpointStory("Import signing intent", "multisig", "track");
 export const Receive = checkpointStory("Receive into multisig", "multisig", "receive");
 export const Propose: LabStory = {

@@ -94,6 +94,7 @@ export type MultisigHarnessOptions = {
     readonly signerGuids: readonly string[];
     readonly threshold: number;
   };
+  readonly getSignerPublicKeys?: () => readonly string[];
   readonly multisigStore?: MultisigStore;
   readonly getNonce?: () => string;
   readonly getTransactionStatuses?: (
@@ -232,6 +233,9 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
               threshold: 2,
             }
           );
+        },
+        async getSignerPublicKeys() {
+          return options.getSignerPublicKeys?.() ?? HARNESS_KEYS;
         },
         async getNonce() {
           return options.getNonce?.() ?? options.nonce ?? "0x7";

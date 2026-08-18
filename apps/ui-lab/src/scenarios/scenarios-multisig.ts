@@ -440,13 +440,20 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     { view: "multisig-signers" },
     { actions: ["add", "replace", "remove", "threshold"], threshold: 2 },
   ),
-  checkpoint(
-    "signers-incomplete",
-    "Complete signer setup",
-    "An address-only watch stays readable and offers a verified recovery step only when originating a transaction needs missing public keys.",
-    { multisigs: [incompleteSignerConfig], view: "multisig-signers" },
-    { recovery: "verify public keys", threshold: 2 },
-  ),
+  {
+    ...checkpoint(
+      "signers-incomplete",
+      "Signer recovery fallback",
+      "Address-only join normally syncs signer keys from chain history; this fallback asks only for keys the RPC could not recover.",
+      {
+        multisigs: [incompleteSignerConfig],
+        status: softwareSignerOnly,
+        view: "multisig-signers",
+      },
+      { recovery: "missing Stark public keys", threshold: 2 },
+    ),
+    prepare: bindFixtureMultisig,
+  },
   checkpoint(
     "track",
     "Import signing intent",

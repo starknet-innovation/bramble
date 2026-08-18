@@ -3,7 +3,8 @@ import {
   type ArgentMultisigConfigChange,
   argentMultisigConfigChangeCall,
 } from "@mc-wallet/multisig/chain";
-import { normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
+import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import { normalizeFeltInput, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
@@ -67,12 +68,46 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
 const bindCompleteSignerConfig = (deps: MultisigUiDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#multisig-complete-config-form");
   const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const editableKeys = [...(form?.querySelectorAll<HTMLInputElement>("[data-signer-key]") ?? [])];
+  for (const input of editableKeys) {
+    input.addEventListener("input", () => {
+      input.setCustomValidity("");
+      input.removeAttribute("aria-invalid");
+      setResult(deps, "multisig-complete-config-result", "");
+    });
+  }
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
     const multisigId = form.dataset["multisigId"];
     const separator = multisigId?.indexOf(":") ?? -1;
     if (!multisigId || separator < 1) return;
     const data = new FormData(form);
+    const signerGuids = data.getAll("signerGuid").map(String);
+    const seenGuids: string[] = [];
+    for (const input of form.querySelectorAll<HTMLInputElement>('[name="signerPublicKey"]')) {
+      let guid: string;
+      try {
+        guid = argentSignerGuid(normalizeFeltInput(input.value));
+      } catch {
+        guid = "";
+      }
+      const message =
+        guid === ""
+          ? "Enter a valid Stark public key."
+          : !signerGuids.some((expected) => sameFelt(expected, guid))
+            ? "This public key is not a current Stark signer for this multisig."
+            : seenGuids.some((seen) => sameFelt(seen, guid))
+              ? "Each signer public key can only be added once."
+              : null;
+      if (message) {
+        input.setCustomValidity(message);
+        input.setAttribute("aria-invalid", "true");
+        setResult(deps, "multisig-complete-config-result", message);
+        showToast(message, "error", input);
+        return;
+      }
+      seenGuids.push(guid);
+    }
     const signerPublicKeys = data
       .getAll("signerPublicKey")
       .map(String)

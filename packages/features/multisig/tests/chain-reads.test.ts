@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import {
   argentMultisigConfigChangeCall,
   getArgentMultisigConfig,
+  getArgentMultisigSignerPublicKeys,
   isArgentMultisigCall,
   isArgentMultisigCalls,
   isArgentMultisigSignerGuid,
@@ -13,7 +14,7 @@ import {
   requireSafeArgentMultisigCalls,
   reviewArgentMultisigConfigChange,
 } from "@mc-wallet/multisig/chain";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import type { RpcProvider } from "starknet";
 
 const ADDRESS = "0x111";
@@ -291,6 +292,90 @@ describe("getArgentMultisigConfig", () => {
         rpcUrls: RPC_URLS,
       }),
     ).rejects.toThrow("verification took too long");
+  });
+});
+
+describe("getArgentMultisigSignerPublicKeys", () => {
+  test("recovers and verifies current Stark signer keys from linked events", async () => {
+    const publicKeys = ["0x123", "0x456"];
+    const signerGuids = publicKeys
+      .map(argentSignerGuid)
+      .sort((left, right) => (BigInt(left) < BigInt(right) ? -1 : 1));
+    const eventFilters: unknown[] = [];
+    const eventFor = (publicKey: string) => ({
+      block_hash: BLOCK_HASH,
+      block_number: 100,
+      data: ["0x0", publicKey],
+      from_address: ADDRESS,
+      keys: ["0x1", argentSignerGuid(publicKey)],
+      transaction_hash: "0x789",
+    });
+    const provider = {
+      async getBlockLatestAccepted() {
+        return { block_hash: BLOCK_HASH, block_number: 123 };
+      },
+      async getClassHashAt(_address: string, blockIdentifier?: number) {
+        if (typeof blockIdentifier === "number" && blockIdentifier < 100) {
+          throw new Error("Contract not found");
+        }
+        return ARGENT_MULTISIG_CONTRACT.classHash;
+      },
+      async getEvents(filter: unknown) {
+        eventFilters.push(filter);
+        return { events: publicKeys.map(eventFor) };
+      },
+    } as unknown as RpcProvider;
+
+    const expectedKeys = [...publicKeys].sort((left, right) =>
+      BigInt(argentSignerGuid(left)) < BigInt(argentSignerGuid(right)) ? -1 : 1,
+    );
+    await expect(
+      getArgentMultisigSignerPublicKeys({
+        address: ADDRESS,
+        makeProvider: () => provider,
+        rpcUrls: RPC_URLS,
+        signerGuids,
+      }),
+    ).resolves.toEqual(expectedKeys);
+    expect(eventFilters).toHaveLength(1);
+    expect(eventFilters[0]).toMatchObject({
+      address: ADDRESS,
+      from_block: { block_number: 100 },
+      to_block: { block_hash: BLOCK_HASH },
+    });
+  });
+
+  test("rejects a linked Stark key that does not derive to its event GUID", async () => {
+    const provider = {
+      async getBlockLatestAccepted() {
+        return { block_hash: BLOCK_HASH, block_number: 1 };
+      },
+      async getClassHashAt() {
+        return ARGENT_MULTISIG_CONTRACT.classHash;
+      },
+      async getEvents() {
+        return {
+          events: [
+            {
+              block_hash: BLOCK_HASH,
+              block_number: 1,
+              data: ["0x0", "0x456"],
+              from_address: ADDRESS,
+              keys: ["0x1", argentSignerGuid("0x123")],
+              transaction_hash: "0x789",
+            },
+          ],
+        };
+      },
+    } as unknown as RpcProvider;
+    await expect(
+      getArgentMultisigSignerPublicKeys({
+        address: ADDRESS,
+        makeProvider: () => provider,
+        rpcUrls: RPC_URLS,
+        signerGuids: [argentSignerGuid("0x123")],
+      }),
+    ).rejects.toThrow("Invalid Argent multisig signer event");
   });
 });
 

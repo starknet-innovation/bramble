@@ -11,7 +11,6 @@ import {
   EMPTY_MULTISIG_PORTFOLIO,
   multisigPortfolio,
 } from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
-import type { MultisigClient } from "../../../../src/sidepanel/journeys/multisig/multisig-runtime";
 import type { MultisigUiDeps } from "../../../../src/sidepanel/journeys/multisig/multisig-ui";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -168,41 +167,6 @@ describe("bindMultisigs frozen-intent forms", () => {
         },
       ],
       multisigId: fixture.record.id,
-    });
-  });
-
-  test("completes an address-only watch from matched local signer identities", async () => {
-    const fixture = await makeArgentMultisigFixture();
-    const signerPublicKeys = fixture.record.currentConfig?.signerPublicKeys;
-    if (!signerPublicKeys) throw new Error("signer config fixture unavailable");
-    const { currentConfig: _currentConfig, ...record } = fixture.record;
-    let completed: Parameters<MultisigClient["addMultisig"]>[0] | undefined;
-    const client = await testClient({
-      addMultisig: async (input) => {
-        completed = input;
-        return fixture.view;
-      },
-    });
-    const app = mount(
-      multisigSignersFlow(
-        fixture.status,
-        fixture.status.accounts[0] ?? null,
-        { ...fixture.view, record },
-        defaultWalletPreferences(),
-      ),
-      client,
-      fixture.status,
-    );
-
-    expect(app.querySelectorAll('input[name="signerPublicKey"][type="hidden"]')).toHaveLength(1);
-    expect(app.querySelector("textarea")).toBeNull();
-    app.querySelector<HTMLFormElement>("#multisig-complete-config-form")?.requestSubmit();
-    await flush();
-
-    expect(completed).toEqual({
-      address: fixture.record.address,
-      networkId: fixture.record.networkId,
-      signerPublicKeys,
     });
   });
 

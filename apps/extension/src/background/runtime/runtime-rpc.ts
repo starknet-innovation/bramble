@@ -4,7 +4,12 @@
  */
 
 import { untrustedFetch } from "@mc-wallet/core/http-json";
-import { type ArgentMultisigConfigInput, getArgentMultisigConfig } from "@mc-wallet/multisig/chain";
+import {
+  type ArgentMultisigConfigInput,
+  type ArgentSignerDiscoveryInput,
+  getArgentMultisigConfig,
+  getArgentMultisigSignerPublicKeys,
+} from "@mc-wallet/multisig/chain";
 import {
   type ArgentMultisigClassStatusInput,
   isArgentMultisigClassDeclared,
@@ -84,6 +89,9 @@ type MultisigRpc = {
   readonly getConfig: (
     input: ArgentMultisigConfigInput,
   ) => ReturnType<typeof getArgentMultisigConfig>;
+  readonly getSignerPublicKeys?: (
+    input: ArgentSignerDiscoveryInput,
+  ) => ReturnType<typeof getArgentMultisigSignerPublicKeys>;
   readonly getNonce: (input: {
     readonly address: string;
     readonly rpcUrls: readonly string[];
@@ -263,6 +271,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   getTransactionStatuses,
   multisig: {
     getConfig: getArgentMultisigConfig,
+    getSignerPublicKeys: getArgentMultisigSignerPublicKeys,
     getNonce: getArgentMultisigNonce,
     isClassDeclared: isArgentMultisigClassDeclared,
     prepareInvoke: prepareArgentMultisigInvokeV3,
