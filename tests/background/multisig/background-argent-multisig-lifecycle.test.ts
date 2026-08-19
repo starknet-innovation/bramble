@@ -78,6 +78,7 @@ describe("Argent multisig background lifecycle", () => {
       getConfig() {
         throw new Error("contract not found");
       },
+      watchedOnly: true,
     });
     await expect(
       handler({ type: "wallet.multisigs" }, harnessExtensionSender),
@@ -104,6 +105,7 @@ describe("Argent multisig background lifecycle", () => {
         getConfig() {
           throw new Error(message);
         },
+        watchedOnly: true,
       });
       await expect(
         handler({ type: "wallet.multisigs" }, harnessExtensionSender),
@@ -112,6 +114,23 @@ describe("Argent multisig background lifecycle", () => {
         ok: true,
       });
     }
+  });
+
+  test("does not re-read authority while listing a locally confirmed signer set", async () => {
+    let authorityReads = 0;
+    const { handler } = await makeMultisigHarness({
+      getConfig() {
+        authorityReads += 1;
+        throw new Error("ambient authority read should not run");
+      },
+    });
+    await expect(
+      handler({ type: "wallet.multisigs" }, harnessExtensionSender),
+    ).resolves.toMatchObject({
+      multisigs: [{ authorityStatus: "available", deployed: true }],
+      ok: true,
+    });
+    expect(authorityReads).toBe(0);
   });
   test("derives a bounded multi-call summary from exact calls", async () => {
     const { handler } = await makeMultisigHarness();

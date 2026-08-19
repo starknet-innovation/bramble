@@ -385,11 +385,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
               ?.addEventListener("click", () => deps.openDetail(result.multisig.record.id));
           }
           if (button) button.hidden = true;
-          deps.setResult(
-            "multisig-deploy-result",
-            "Deployment submitted. Waiting for Starknet confirmation.",
-          );
-          showToast("Multisig deployment submitted", "success", form);
+          deps.setResult("multisig-deploy-result", "");
         },
         (error: unknown) => {
           const message = errorMessage(error, "Deployment failed");
@@ -469,12 +465,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         button?.lastChild?.replaceWith(
           fundingRequired ? "Review deployment" : "Deploy reviewed account",
         );
-        deps.setResult(
-          "multisig-deploy-result",
-          fundingRequired
-            ? "Fund the predicted address, then check again."
-            : "Review every field, then confirm.",
-        );
+        deps.setResult("multisig-deploy-result", "");
         buttonBusy(button, false);
       })
       .catch((error: unknown) => {

@@ -68,6 +68,7 @@ export type HttpFetch = BoundedHttpFetch;
  */
 export type TokenPriceInput = {
   readonly addresses: readonly string[];
+  readonly cached?: true;
   readonly currency: DisplayCurrency;
   readonly networkId: StarknetNetworkId;
 };
@@ -348,7 +349,7 @@ export const createPriceService = ({
   };
 
   return {
-    async getPrices({ addresses, currency, networkId }) {
+    async getPrices({ addresses, cached, currency, networkId }) {
       const platform = priceFeedPlatform(networkId);
       const wanted = [...new Set(addresses.map(normalizePriceAddress))].slice(0, MAX_ADDRESSES);
       const cache = await readPriceCache();
@@ -361,6 +362,16 @@ export const createPriceService = ({
           currency,
           prices: cache.prices,
           stale: false,
+        });
+      }
+      if (cached) {
+        return projectPrices({
+          addresses,
+          asOf: snapshotAsOf(cache.fetchedAt),
+          changes: cache.changes ?? {},
+          currency,
+          prices: cache.prices,
+          stale: !isCacheFresh(cache, now()),
         });
       }
       // A fresh, fully-covered cache is a confirmed-current hit.

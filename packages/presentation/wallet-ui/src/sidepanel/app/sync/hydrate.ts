@@ -34,8 +34,9 @@ const hydrateMultisigs = async (
   cached: RenderData["multisigs"],
   multisig: MultisigClient,
   networkId: string,
+  cachedOnly = false,
 ): Promise<Pick<RenderData, "multisigs" | "multisigsError" | "multisigsNetworkId">> => {
-  const loaded = await multisig.loadMultisigs();
+  const loaded = await multisig.loadMultisigs(cachedOnly);
   if (loaded === "error") {
     return { multisigs: cached, multisigsError: true, multisigsNetworkId: null };
   }
@@ -101,6 +102,86 @@ const nftSnapshot = (
   return [...combined.values()];
 };
 
+const hydrateCachedView = async (
+  deps: HydrateDeps,
+  walletBalanceView: boolean,
+  priceView: boolean,
+  activityView: boolean,
+  registryView: boolean,
+  multisigBalanceView: boolean,
+): Promise<void> => {
+  const {
+    status,
+    activeView,
+    selectedMultisigId,
+    cache,
+    wallet,
+    multisig,
+    isCurrent = () => true,
+    paint,
+  } = deps;
+  const jobs: Promise<unknown>[] = [];
+  const cached = <T>(load: Promise<T>, assign: (value: T) => void): void => {
+    jobs.push(
+      load
+        .then((value) => {
+          if (isCurrent()) assign(value);
+        })
+        .catch(() => undefined),
+    );
+  };
+  if (walletBalanceView) {
+    cached(wallet.loadBalances(true), (value) => {
+      if (
+        "balances" in value &&
+        value.accountId === status.activeAccountId &&
+        value.networkId === status.networkId
+      )
+        cache.balances = value;
+    });
+  }
+  if (priceView) {
+    cached(wallet.loadPrices(true), (value) => {
+      cache.prices = value.prices;
+      cache.changes = value.changes;
+      cache.priceAsOf = value.asOf;
+      cache.priceStale = value.stale;
+    });
+  }
+  if (activityView) {
+    cached(
+      wallet.loadActivity(
+        activeView === "home" ? undefined : (selectedMultisigId ?? undefined),
+        true,
+      ),
+      (value) => {
+        cache.transactions = value.entries;
+      },
+    );
+  }
+  if (registryView) {
+    cached(hydrateMultisigs(cache.multisigs, multisig, status.networkId, true), (value) =>
+      Object.assign(cache, value),
+    );
+  }
+  if (multisigBalanceView && selectedMultisigId) {
+    cached(multisig.loadBalances(selectedMultisigId, true), (value) => {
+      if (
+        "balances" in value &&
+        value.accountId === selectedMultisigId &&
+        value.networkId === status.networkId
+      ) {
+        cache.multisigBalanceId = selectedMultisigId;
+        cache.multisigBalances = value;
+      }
+    });
+  }
+  if (jobs.length > 0) {
+    await Promise.all(jobs);
+    if (isCurrent()) paint();
+  }
+};
+
 /**
  * Loads the view-scoped network data in parallel and repaints once it lands.
  * Each loader is best-effort: a rejected fetch leaves the cached value intact
@@ -119,6 +200,34 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     isCurrent = () => true,
     paint,
   } = deps;
+  const walletBalanceView =
+    activeView === "home" ||
+    activeView === "send" ||
+    activeView === "swap" ||
+    activeView === "tokens" ||
+    activeView === "token-detail";
+  const priceView =
+    walletBalanceView || activeView === "multisig-home" || activeView === "multisig-propose";
+  const activityView =
+    activeView === "activity" || activeView === "home" || activeView === "multisig-home";
+  const registryView = cache.multisigsNetworkId !== status.networkId || activeView === "multisigs";
+  const multisigBalanceView =
+    selectedMultisigId !== null &&
+    (activeView === "multisig-home" ||
+      activeView === "multisig-propose" ||
+      activeView === "multisig-receive");
+  const authorityCriticalView =
+    activeView === "multisig-detail" ||
+    activeView === "multisig-signers" ||
+    activeView === "multisig-propose";
+  await hydrateCachedView(
+    deps,
+    walletBalanceView,
+    priceView,
+    activityView,
+    registryView,
+    multisigBalanceView,
+  );
   const primaryJobs: Promise<unknown>[] = [];
   const deferredJobs: Promise<unknown>[] = [];
   const streamingJobs: Promise<unknown>[] = [];
@@ -145,22 +254,8 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
         .catch(() => undefined),
     );
   };
-  if (
-    activeView === "home" ||
-    activeView === "send" ||
-    activeView === "swap" ||
-    activeView === "tokens" ||
-    activeView === "token-detail" ||
-    activeView === "multisig-home" ||
-    activeView === "multisig-propose"
-  ) {
-    if (
-      activeView === "home" ||
-      activeView === "send" ||
-      activeView === "swap" ||
-      activeView === "tokens" ||
-      activeView === "token-detail"
-    ) {
+  if (priceView) {
+    if (walletBalanceView) {
       fill(wallet.loadBalances(), (value) => {
         cache.balances =
           "balances" in value &&
@@ -185,7 +280,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       true,
     );
   }
-  if (activeView === "activity" || activeView === "home" || activeView === "multisig-home") {
+  if (activityView) {
     fill(
       wallet.loadActivity(activeView === "home" ? undefined : (selectedMultisigId ?? undefined)),
       (value) => {
@@ -234,7 +329,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       activeView === "home",
     );
   }
-  if (cache.multisigsNetworkId !== status.networkId || activeView === "multisigs") {
+  if (registryView) {
     primaryJobs.push(
       hydrateMultisigs(cache.multisigs, multisig, status.networkId).then((value) => {
         if (isCurrent()) {
@@ -244,6 +339,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     );
   }
   if (
+    (!registryView || authorityCriticalView) &&
     selectedMultisigId &&
     cache.multisigsNetworkId === status.networkId &&
     (activeView === "multisig-home" ||
@@ -260,12 +356,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       }),
     );
   }
-  if (
-    (activeView === "multisig-home" ||
-      activeView === "multisig-propose" ||
-      activeView === "multisig-receive") &&
-    selectedMultisigId
-  ) {
+  if (multisigBalanceView && selectedMultisigId) {
     fill(multisig.loadBalances(selectedMultisigId), (value) => {
       cache.multisigBalanceId = selectedMultisigId;
       cache.multisigBalances =

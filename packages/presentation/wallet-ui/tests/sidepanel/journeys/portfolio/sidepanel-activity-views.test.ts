@@ -87,6 +87,25 @@ describe("activity journey boundaries", () => {
     expect(html).toContain('data-copy="0x123"');
   });
 
+  test("uses distinct accessible glyphs for common transaction outcomes", () => {
+    const html = activityScreen(
+      [],
+      status,
+      [
+        transaction,
+        { ...transaction, hash: "0x124", kind: "invoke", summary: "Swap 1 STRK for USDC" },
+        { ...transaction, hash: "0x125", kind: "invoke", summary: "Stake 10 STRK" },
+        { ...transaction, hash: "0x126", kind: "invoke", summary: "Claim rewards" },
+      ],
+      false,
+    );
+
+    expect(html).toContain('class="tx-kind-icon tx-kind-transfer" aria-label="Transfer"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-swap" aria-label="Swap"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-stake" aria-label="Stake"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-other" aria-label="Contract interaction"');
+  });
+
   test("omits the explorer link on a network that has none", () => {
     const devnet: WalletStatus = { ...status, networkId: "SN_DEVNET" };
     const html = activityScreen([], devnet, [{ ...transaction, networkId: "SN_DEVNET" }], false);

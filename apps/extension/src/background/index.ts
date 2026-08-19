@@ -48,6 +48,7 @@ import {
   type OnboardingSurfaceBrowser,
   openOnboardingOnInstall,
 } from "./onboarding/onboarding-surface";
+import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createMessageHandler } from "./routing/messages";
 import type { RuntimeSender } from "./routing/senders";
 import { walletEventBroadcasts } from "./runtime/events";
@@ -183,6 +184,9 @@ const activityLog = (() => {
     return undefined;
   }
 })();
+// Public chain data only. The adapter is restricted to trusted extension
+// contexts at startup; wallet secrets remain exclusively in the encrypted vault.
+const balanceSnapshots = createBalanceSnapshotStore(createBrowserLocalStore());
 const originHistory = (() => {
   try {
     return createOriginHistoryStore({ now: systemClock, store: createBrowserLocalStore() });
@@ -264,6 +268,7 @@ const runtimeReady = sessionReady.then(async () => {
 const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   activeStateCoordinator,
   approvals,
+  balanceSnapshots,
   session,
   preferencesStore: preferenceStore,
   runtimeRpc,

@@ -71,6 +71,7 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   activeStateCoordinator: ctx.activeStateCoordinator,
   activity: ctx.activity,
   allowanceStore: ctx.allowanceStore,
+  balanceSnapshots: ctx.balanceSnapshots,
   ledgerSignQueue: ctx.ledgerSignQueue,
   multisigStore: ctx.multisigStore,
   now: ctx.now,

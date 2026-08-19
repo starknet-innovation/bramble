@@ -14,6 +14,8 @@ import {
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
 
+export { activityToCsv } from "./activity-csv";
+
 /**
  * Browser storage key for the activity log.
  */
@@ -151,6 +153,15 @@ export type ActivityLog = {
    * per refresh.
    */
   readonly takeFailureNotices: (scope: ActivityScope) => Promise<readonly ActivityEntry[]>;
+  /**
+   * Replaces one scope with a validated merged local/on-chain snapshot. Optional
+   * only so narrow injected test doubles remain compatible; persistent stores
+   * implement it so discovered history survives future offline opens.
+   */
+  readonly replaceScope?: (
+    entries: readonly ActivityEntry[],
+    scope: ActivityScope,
+  ) => Promise<readonly ActivityEntry[]>;
   readonly updateStatuses: (
     outcomes: Readonly<Record<string, ActivityOutcome>>,
     scope: ActivityScope,
@@ -338,6 +349,17 @@ export const createActivityLog = ({
         const entries = await readEntries(store);
         await store.set(ACTIVITY_STORE_KEY, entriesAfterRecord(entries, next));
       },
+      async replaceScope(entries, scope) {
+        const scoped = entries
+          .filter((entry) => isActivityEntry(entry) && matchesScope(entry, scope))
+          .sort((left, right) => right.submittedAt - left.submittedAt)
+          .slice(0, MAX_ENTRIES_PER_SCOPE);
+        await store.set(ACTIVITY_STORE_KEY, [
+          ...(await readEntries(store)).filter((entry) => !matchesScope(entry, scope)),
+          ...scoped,
+        ]);
+        return scoped;
+      },
       async takeFailureNotices(scope) {
         const { delivered, next } = drainFailureNotices(await readEntries(store), scope);
         if (delivered.length > 0) {
@@ -367,6 +389,19 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
       const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
       entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
     },
+    async replaceScope(next, scope) {
+      const scoped = next
+        .filter((entry) => isActivityEntry(entry) && matchesScope(entry, scope))
+        .sort((left, right) => right.submittedAt - left.submittedAt)
+        .slice(0, MAX_ENTRIES_PER_SCOPE);
+      entries.splice(
+        0,
+        entries.length,
+        ...entries.filter((entry) => !matchesScope(entry, scope)),
+        ...scoped,
+      );
+      return scoped;
+    },
     async takeFailureNotices(scope) {
       const { delivered, next } = drainFailureNotices(entries, scope);
       entries.splice(0, entries.length, ...next);
@@ -378,109 +413,3 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
     },
   };
 };
-
-const CSV_HEADER =
-  "datetime,networkId,accountId,kind,status,amount,token,counterparty,hash,summary";
-
-// Leading characters a spreadsheet treats as the start of a formula, plus the
-// whitespace (tab, carriage return) some importers strip before deciding.
-const CSV_FORMULA_LEAD = /^[\t\r=+@-]/;
-
-// Padding an importer may skip before it decides whether a cell opens a formula:
-// Unicode whitespace — which `trimStart` covers, including the no-break space
-// and the byte-order mark — plus the C0 and DEL control characters, tested by
-// code point because a regex class may not carry control characters.
-const isPaddingCode = (code: number): boolean => code <= 0x20 || code === 0x7f;
-
-const withoutLeadPadding = (value: string): string => {
-  let current = value.trimStart();
-  while (current.length > 0 && isPaddingCode(current.charCodeAt(0))) {
-    current = current.slice(1).trimStart();
-  }
-  return current;
-};
-
-// Reports whether a cell would open a formula, judged both on the raw value (so
-// a leading tab or carriage return still counts as a lead in its own right) and
-// on the value with importer-skippable padding removed, so ` =1+1` and a
-// NUL-prefixed payload are neutralized exactly like the bare `=1+1`.
-const opensFormula = (value: string): boolean =>
-  CSV_FORMULA_LEAD.test(value) || CSV_FORMULA_LEAD.test(withoutLeadPadding(value));
-
-// Renders one cell. Every field is quoted so no value can break the row, and a
-// value that would otherwise open a formula is prefixed with an apostrophe so
-// the spreadsheet imports it as literal text.
-const csvField = (value: string): string => {
-  const literal = opensFormula(value) ? `'${value}` : value;
-  return `"${literal.replaceAll('"', '""')}"`;
-};
-
-const pad = (value: number, width: number): string => value.toString().padStart(width, "0");
-
-/**
- * Formats an epoch-millisecond timestamp as a UTC ISO-8601 string
- * (`YYYY-MM-DDTHH:mm:ss.sssZ`). Implemented as pure integer arithmetic rather
- * than the `Date` constructor so it stays clock-boundary safe: the output
- * depends only on the argument, never on ambient time or locale. The civil
- * date is derived with Howard Hinnant's days-to-year/month/day algorithm.
- */
-const toIsoDate = (submittedAt: number): string => {
-  const millis = ((submittedAt % 1000) + 1000) % 1000;
-  const totalSeconds = Math.floor(submittedAt / 1000);
-  const secondOfDay = ((totalSeconds % 86400) + 86400) % 86400;
-  const seconds = secondOfDay % 60;
-  const minutes = Math.floor(secondOfDay / 60) % 60;
-  const hours = Math.floor(secondOfDay / 3600);
-
-  const z = Math.floor(totalSeconds / 86400) + 719468;
-  const era = Math.floor(z / 146097);
-  const dayOfEra = z - era * 146097;
-  const yearOfEra = Math.floor(
-    (dayOfEra -
-      Math.floor(dayOfEra / 1460) +
-      Math.floor(dayOfEra / 36524) -
-      Math.floor(dayOfEra / 146096)) /
-      365,
-  );
-  const dayOfYear =
-    dayOfEra - (365 * yearOfEra + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100));
-  const monthPart = Math.floor((5 * dayOfYear + 2) / 153);
-  const day = dayOfYear - Math.floor((153 * monthPart + 2) / 5) + 1;
-  const month = monthPart < 10 ? monthPart + 3 : monthPart - 9;
-  const year = yearOfEra + era * 400 + (month <= 2 ? 1 : 0);
-
-  return `${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)}T${pad(hours, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)}.${pad(millis, 3)}Z`;
-};
-
-/**
- * Serializes activity entries as CSV for export. The timestamp is rendered as
- * ISO-8601 and the amount, token, and counterparty are split into their own
- * columns; entries missing those optional fields export blank cells.
- *
- * Cells carry text this wallet never controls (a dapp-supplied token symbol or
- * origin reaches the summary and counterparty), so every field is quoted and any
- * value opening with a formula lead (`=`, `+`, `-`, `@`, tab, carriage return) —
- * on its own or behind whitespace or control-character padding an importer would
- * skip — is prefixed with an apostrophe. A spreadsheet opening the export
- * therefore shows the recorded text instead of evaluating it.
- */
-export const activityToCsv = (entries: readonly ActivityEntry[]): string =>
-  [
-    CSV_HEADER,
-    ...entries.map((entry) =>
-      [
-        toIsoDate(entry.submittedAt),
-        entry.networkId,
-        entry.accountId,
-        entry.kind,
-        entry.status,
-        entry.amount ?? "",
-        entry.token ?? "",
-        entry.counterparty ?? "",
-        entry.hash,
-        entry.summary,
-      ]
-        .map(csvField)
-        .join(","),
-    ),
-  ].join("\n");

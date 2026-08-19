@@ -130,6 +130,31 @@ export const readMultisigIdInput = (
     : null;
 
 /**
+ * Parses a multisig balance read, optionally from the durable snapshot.
+ */
+export const readMultisigBalancesInput = (
+  message: unknown,
+): { readonly cached: boolean; readonly multisigId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["cached", "multisigId", "type"]) &&
+  message["type"] === "wallet.multisigBalances" &&
+  isAccountId(message["multisigId"]) &&
+  (message["cached"] === undefined || message["cached"] === true)
+    ? { cached: message["cached"] === true, multisigId: message["multisigId"] }
+    : null;
+
+/**
+ * Parses the watched-multisig reader's optional stored-snapshot request.
+ */
+export const readMultisigsInput = (message: unknown): { readonly cached: boolean } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["cached", "type"]) &&
+  message["type"] === "wallet.multisigs" &&
+  (message["cached"] === undefined || message["cached"] === true)
+    ? { cached: message["cached"] === true }
+    : null;
+
+/**
  * Parses account removal, with an explicit terminal-history acknowledgement.
  */
 export const readRemoveMultisigInput = (

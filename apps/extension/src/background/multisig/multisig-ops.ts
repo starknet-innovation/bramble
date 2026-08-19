@@ -1,5 +1,5 @@
 /**
- * Privileged Argent multisig registry and fresh chain-config operations.
+ * Privileged Argent multisig registry and authority operations.
  */
 import type {
   ArgentMultisigAuthorityStatus,
@@ -13,12 +13,12 @@ import type {
 } from "@mc-wallet/multisig/repository";
 import {
   ARGENT_MULTISIG_CONTRACT,
+  argentSignerGuid,
   normalizeArgentMultisigConfig,
 } from "@mc-wallet/starknet/account-contracts";
 import { isContractNotFoundError } from "@mc-wallet/starknet/provider";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
   type ActiveAccountContext,
   activeAccountContext,
@@ -31,10 +31,10 @@ import { handleMultisigAccountOps } from "./multisig-account-ops";
 import {
   discoverArgentSigners,
   enrichArgentAddressOnlyWatch,
+  markChangedIntentsStale,
   markObservedArgentIntentOutcomes,
   matchesArgentPublicConfig,
   reconcileArgentCurrentConfig,
-  sameArgentSignerGuids,
   storedArgentPublicConfig,
 } from "./multisig-config-reconcile";
 import { type ArgentMultisigContext, contextFor } from "./multisig-context";
@@ -44,6 +44,7 @@ import {
   type AddArgentMultisigInput,
   readAddMultisigInput,
   readMultisigIdInput,
+  readMultisigsInput,
 } from "./multisig-inputs";
 
 /**
@@ -269,37 +270,49 @@ export const currentConfigFor = async (
   };
 };
 
-const markChangedIntentsStale = async (
-  store: MultisigStore,
-  accountId: string,
-  config: ArgentMultisigConfig,
-): Promise<void> => {
-  for (const intent of await store.listIntents()) {
-    if (
-      intent.accountId === accountId &&
-      (intent.state === "collecting" || intent.state === "ready") &&
-      (intent.configSnapshot.threshold !== config.threshold ||
-        !sameArgentSignerGuids(intent.configSnapshot.signerGuids, config.signerGuids))
-    ) {
-      await store.upsertIntent({ ...intent, state: "stale" });
-    }
-  }
+const storedMultisigView = (record: ArgentMultisigRecord): ArgentMultisigView => {
+  const stored = storedArgentPublicConfig(record);
+  return {
+    authorityStatus: record.currentConfig
+      ? "available"
+      : record.deployment
+        ? "undeployed"
+        : "network-unavailable",
+    config: stored
+      ? {
+          classHash: record.classHash,
+          signerGuids: stored.signerPublicKeys.map(argentSignerGuid),
+          threshold: stored.threshold,
+        }
+      : null,
+    deployed: record.currentConfig ? true : record.deployment ? false : null,
+    record,
+    unsupportedSigners: [],
+  };
 };
 
 const listMultisigs = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
-  if (!readTypeOnlyInput(message, "wallet.multisigs")) {
-    return { error: "invalid Argent multisig list request" };
-  }
+  const input = readMultisigsInput(message);
+  if (!input) return { error: "invalid Argent multisig list request" };
   const active = await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (active.error !== undefined) {
-    return { error: active.error };
-  }
+  if (active.error !== undefined) return { error: active.error };
   const preferences = await deps.preferencesStore.read();
   const records = (await deps.multisigStore.listMultisigs()).filter(
     (record) => record.networkId === active.networkId,
   );
+  const accountIds = new Set(records.map((record) => record.id));
+  const intents = (await deps.multisigStore.listIntents()).filter((intent) =>
+    accountIds.has(intent.accountId),
+  );
+  if (input.cached) {
+    return { intents, multisigs: records.map(storedMultisigView), ok: true };
+  }
   const multisigs: ArgentMultisigView[] = await Promise.all(
     records.map(async (record) => {
+      if (record.currentConfig) {
+        await markObservedArgentIntentOutcomes(deps, record);
+        return storedMultisigView(record);
+      }
       const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences);
       const authority = await readAuthority(deps, record.address, rpcUrls);
       const config = authority.config;
@@ -342,10 +355,6 @@ const listMultisigs = async (deps: MultisigOpsDeps, message: unknown): Promise<R
         };
       }
     }),
-  );
-  const accountIds = new Set(records.map((record) => record.id));
-  const intents = (await deps.multisigStore.listIntents()).filter((intent) =>
-    accountIds.has(intent.accountId),
   );
   return { intents, multisigs, ok: true };
 };

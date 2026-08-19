@@ -116,8 +116,12 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         "import Argent multisig signature failed",
       );
     },
-    async loadBalances(multisigId: string): Promise<ScopedBalanceState> {
-      const response = await sendMessage({ multisigId, type: "wallet.multisigBalances" });
+    async loadBalances(multisigId: string, cached = false): Promise<ScopedBalanceState> {
+      const response = await sendMessage({
+        ...(cached ? { cached: true } : {}),
+        multisigId,
+        type: "wallet.multisigBalances",
+      });
       if (isBalancesResponse(response) && response.accountId === multisigId) {
         return {
           accountId: response.accountId,
@@ -137,7 +141,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         return "error";
       }
     },
-    async loadMultisigs(): Promise<
+    async loadMultisigs(cached = false): Promise<
       | {
           readonly intents: readonly ArgentMultisigSigningIntent[];
           readonly multisigs: readonly ArgentMultisigView[];
@@ -145,21 +149,11 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       | "error"
     > {
       try {
-        const response = await sendMessage({ type: "wallet.multisigs" });
+        const response = await sendMessage({
+          ...(cached ? { cached: true } : {}),
+          type: "wallet.multisigs",
+        });
         if (!isArgentMultisigsResponse(response)) return "error";
-        for (const multisig of response.multisigs) {
-          if (multisig.authorityStatus === "available") {
-            refreshes.set(
-              multisig.record.id,
-              Promise.resolve({
-                intents: response.intents.filter(
-                  (intent) => intent.accountId === multisig.record.id,
-                ),
-                multisig,
-              }),
-            );
-          }
-        }
         return { intents: response.intents, multisigs: response.multisigs };
       } catch {
         return "error";

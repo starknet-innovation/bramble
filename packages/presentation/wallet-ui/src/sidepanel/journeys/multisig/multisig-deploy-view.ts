@@ -33,12 +33,11 @@ export const deploymentFundingStage = (
 ): string => `<section class="multisig-funding-stage" aria-labelledby="multisig-funding-title">
     <div class="multisig-funding-head">
       <div>
-        <p class="context-label">Address ready</p>
         <h2 id="multisig-funding-title">Fund this multisig</h2>
       </div>
       <span class="multisig-funding-token" aria-label="STRK">STRK</span>
     </div>
-    <p class="hint">The setup is saved. Send at least ${formatFeeEstimate(review.fee)} to this address; this screen can be closed and resumed safely.</p>
+    <p class="hint">Send at least ${formatFeeEstimate(review.fee)} to this saved address. You can close this screen and resume safely.</p>
     <div class="multisig-funding-address">
       <div class="qr-card">${qrSvg(review.address, "Multisig funding address")}</div>
       <div class="address-line">
@@ -63,7 +62,7 @@ const deploymentSignerOption = (
     <span class="option-copy">
       <span class="option-name"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>${hardwareBadge(account)}</span>
       <code>${escapeHtml(accountLabel(account.address))}</code>
-      <span class="option-sub">${account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"} account · Signer key matches</span>
+      <span class="option-sub">${account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"} · Key matches</span>
     </span>
     <span class="option-mark">${icon("check")}</span>
   </button>`;
@@ -190,7 +189,7 @@ export const multisigDeployFlow = (
     );
   }
   return (
-    flowHeader("Deploy Argent multisig", status, "True M-of-N signatures") +
+    flowHeader("Deploy Argent multisig", status, "Multiple signers approve together") +
     flowScreen(
       "multisig-deploy",
       `<section class="section multisig-deploy-section">

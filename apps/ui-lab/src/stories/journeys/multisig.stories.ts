@@ -91,10 +91,10 @@ export const DeployApproval: LabStory = {
     await expect(body?.querySelector('input[name="threshold"]')).toBeVisible();
     await expect(body?.querySelector(".multisig-deployment-signer .option-avatar")).toBeVisible();
     await expect(body?.querySelector(".multisig-deployment-signer-field")).toHaveTextContent(
-      "Argent account · Signer key matches",
+      "Argent · Key matches",
     );
     await expect(body?.querySelector(".multisig-deployment-signer-field")).toHaveTextContent(
-      "OpenZeppelin account · Signer key matches",
+      "OpenZeppelin · Key matches",
     );
     await expect(body?.querySelector("[data-multisig-deploy-back]")).toBeVisible();
     await expect(body?.querySelector<HTMLButtonElement>('button[type="submit"]')).toHaveTextContent(
@@ -125,9 +125,7 @@ export const DeployFunding: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
-    await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent(
-      "The setup is saved",
-    );
+    await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent("saved address");
     await expect(body?.querySelector(".multisig-funding-stage .qr-card")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-fund-local]")).toHaveTextContent(
       "Fund from this wallet",

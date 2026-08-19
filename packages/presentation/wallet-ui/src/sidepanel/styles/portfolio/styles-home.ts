@@ -11,6 +11,21 @@ import { MOTION, RADIUS, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const HOME_STYLES = `
+  .tx-kind-icon {
+    align-items: center;
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-text);
+    display: flex;
+    flex: none;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+  }
+  .tx-kind-icon .icon { height: 18px; width: 18px; }
+  .tx-kind-transfer, .tx-kind-swap, .tx-kind-deploy { background: var(--mc-accent-soft); color: var(--mc-accent); }
+  .tx-kind-stake { background: var(--mc-positive-soft); color: var(--mc-positive); }
+  .tx-kind-private, .tx-kind-approval { color: var(--mc-accent); }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger
      block so it cannot be skimmed past. Icon and text share one baseline. */

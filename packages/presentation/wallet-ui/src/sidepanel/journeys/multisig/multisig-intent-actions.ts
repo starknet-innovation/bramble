@@ -36,7 +36,7 @@ const intentAction = (
   if (intent.state === "ready") {
     return {
       canSign: false,
-      note: "Signature threshold reached. This transaction is ready to submit.",
+      note: "",
       packageIsPrimary: false,
       primary: button({ attributes: { "data-ms-submit": intent.id }, label: "Submit transaction" }),
     };
@@ -56,7 +56,7 @@ const intentAction = (
   if (intent.state === "collecting" && availableSigners.length > 0) {
     return {
       canSign: true,
-      note: "Review the outcome and fee ceiling before adding this wallet’s signature.",
+      note: "",
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-ms-sign": intent.id },
@@ -178,7 +178,7 @@ export const multisigIntentActions = (
       : ""
   }
     <div class="multisig-intent-action" data-live-group data-live-key="multisig-intent:${escapeHtml(intent.id)}:state" data-live-value="${escapeHtml(`${intent.state}:${intent.signatures.length}`)}">
-      <p class="multisig-action-note">${escapeHtml(action.note)}</p>
+      ${action.note ? `<p class="multisig-action-note">${escapeHtml(action.note)}</p>` : ""}
       ${action.primary}
     </div>
     ${collaborationTools(
@@ -189,19 +189,19 @@ export const multisigIntentActions = (
 };
 
 /**
- * Replaces a terminal intent review with the wallet's standard transaction
- * receipt. A submitted intent has no remaining signing controls to review.
+ * Replaces a submitted intent review with the wallet's standard transaction
+ * receipt while confirmation remains pending. Accepted outcomes live in Activity.
  */
 export const multisigIntentOutcome = (intent: ArgentMultisigSigningIntent): string | null => {
-  if (intent.state !== "submitted" && intent.state !== "accepted") return null;
+  if (intent.state !== "submitted") return null;
   const hash = intent.broadcastTransactionHash ?? intent.prepared.transactionHash;
   return `<section class="send-outcome send-success multisig-intent-success" data-ms-intent="${escapeHtml(intent.id)}" role="status" aria-live="polite">
     <span class="send-outcome-mark" aria-hidden="true">
       <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
     </span>
     <div class="send-outcome-copy">
-      <p class="send-outcome-kicker">${intent.state === "accepted" ? "Confirmed on Starknet" : "Submitted to Starknet"}</p>
-      <h2>${intent.state === "accepted" ? "Transaction complete" : "Transaction submitted"}</h2>
+      <p class="send-outcome-kicker">Submitted to Starknet</p>
+      <h2>Transaction submitted</h2>
       <p>${escapeHtml(intent.summary)}</p>
       <div class="address-line">
         <code title="${escapeHtml(hash)}">${escapeHtml(accountLabel(hash))}</code>

@@ -169,6 +169,7 @@ describe("createMultisigClient", () => {
     });
     expect(messages).toEqual([
       { type: "wallet.multisigs" },
+      { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
       {
         calls: [{ calldata: ["0x1"], contractAddress: "0xdef", entrypoint: "transfer" }],
         multisigId: fixture.record.id,
@@ -189,5 +190,24 @@ describe("createMultisigClient", () => {
     await expect(client.submitIntent("intent-id")).rejects.toThrow(
       "submit Argent multisig intent failed",
     );
+  });
+
+  test("never treats a cached registry view as a fresh authority refresh", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const messages: unknown[] = [];
+    const client = createMultisigClient({
+      async sendMessage(message) {
+        messages.push(message);
+        return (message as { type?: string }).type === "wallet.multisigs"
+          ? { intents: [], multisigs: [fixture.view], ok: true }
+          : { intents: [], multisig: fixture.view, ok: true };
+      },
+    });
+    await client.loadMultisigs(true);
+    await client.refreshMultisig(fixture.record.id);
+    expect(messages).toEqual([
+      { cached: true, type: "wallet.multisigs" },
+      { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
+    ]);
   });
 });

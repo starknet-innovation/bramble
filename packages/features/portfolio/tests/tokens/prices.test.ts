@@ -67,6 +67,14 @@ describe("createPriceService.getPrices", () => {
     expect(calls).toHaveLength(1);
 
     clock.value += 10 * 60 * 1000;
+    const cached = await service.getPrices({
+      addresses: [USDC],
+      cached: true,
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+    expect(cached).toMatchObject({ asOf: 1000, prices: { [USDC]: 2 }, stale: true });
+    expect(calls).toHaveLength(1);
     await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" });
     expect(calls).toHaveLength(2);
   });

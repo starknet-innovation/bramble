@@ -30,7 +30,7 @@ test("replaces a submitted intent review with the standard success receipt", asy
   );
 
   expect(html).toContain('class="send-outcome send-success multisig-intent-success"');
-  expect(html).toContain('class="multisig-intent-stack"');
+  expect(html).not.toContain('class="multisig-intent-stack"');
   expect(html).not.toContain('class="allowance-list"');
   expect(html).toContain('class="send-success-check"');
   expect(html).toContain("Transaction submitted");

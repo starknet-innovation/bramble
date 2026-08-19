@@ -22,6 +22,12 @@ const accepted = softwareActivity[0];
 if (!balance || !accepted) {
   throw new Error("Missing UI Lab data-display fixtures");
 }
+const activityExamples = [
+  accepted,
+  { ...accepted, hash: "0x702", kind: "invoke" as const, summary: "Swap 50 USDC for STRK" },
+  { ...accepted, hash: "0x703", kind: "invoke" as const, summary: "Stake 20 STRK" },
+  { ...accepted, hash: "0x704", kind: "invoke" as const, summary: "Claim rewards" },
+];
 
 export const Receipts: CatalogStory = {
   render: (args) =>
@@ -77,11 +83,11 @@ export const ActivityRows: CatalogStory = {
       "Activity rows",
       "Activity is account-partitioned in data and concise in presentation: action summary, hash, liveness state, and copy affordance.",
       catalogGroup(
-        "Accepted transaction",
-        "The production row receives an activity entry already scoped to the active account.",
+        "Transaction types",
+        "Distinct glyphs make transfers, swaps, staking, and other contract interactions scannable before reading.",
         catalogSample(
-          "Accepted",
-          `<ul class="tx-list">${transactionRow(accepted)}</ul>`,
+          "Accepted activity",
+          `<ul class="tx-list">${activityExamples.map(transactionRow).join("")}</ul>`,
           "catalog-card-limit",
         ),
       ),

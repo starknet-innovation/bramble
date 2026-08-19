@@ -180,12 +180,16 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "reveal failed");
     },
-    async loadActivity(accountId?: string): Promise<{
+    async loadActivity(
+      accountId?: string,
+      cached = false,
+    ): Promise<{
       readonly entries: ActivityResponse["activity"];
       readonly historyUnavailable: boolean;
     }> {
       const response = await sendMessage({
         ...(accountId === undefined ? {} : { accountId }),
+        ...(cached ? { cached: true } : {}),
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {
@@ -246,8 +250,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "transfer review failed");
     },
-    async loadBalances(): Promise<ScopedBalanceState> {
-      const response = await sendMessage({ type: "wallet.getBalances" });
+    async loadBalances(cached = false): Promise<ScopedBalanceState> {
+      const response = await sendMessage({
+        ...(cached ? { cached: true } : {}),
+        type: "wallet.getBalances",
+      });
       if (isBalancesResponse(response)) {
         return {
           accountId: response.accountId,
@@ -264,13 +271,16 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "token detection failed");
     },
-    async loadPrices(): Promise<{
+    async loadPrices(cached = false): Promise<{
       readonly asOf: number | null;
       readonly changes: Readonly<Record<string, number>>;
       readonly prices: Readonly<Record<string, number>>;
       readonly stale: boolean;
     }> {
-      const response = await sendMessage({ type: "wallet.prices" });
+      const response = await sendMessage({
+        ...(cached ? { cached: true } : {}),
+        type: "wallet.prices",
+      });
       if (!isPricesResponse(response)) {
         return { asOf: null, changes: {}, prices: {}, stale: false };
       }

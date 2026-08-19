@@ -35,18 +35,10 @@ const OTHER_ACCOUNT_ID =
 const SEPOLIA_ACCOUNT_ID = `SN_SEPOLIA:${account.address}`;
 
 const walletStub = {
-  async createAccount() {
-    return account;
-  },
-  async addDerivedAccount() {
-    return account;
-  },
-  async ensureNetworkAccount() {
-    return account;
-  },
-  async getGrantedAccounts() {
-    return [account];
-  },
+  addDerivedAccount: async () => account,
+  createAccount: async () => account,
+  ensureNetworkAccount: async () => account,
+  getGrantedAccounts: async () => [account],
   async generateMnemonic() {
     return "habit hope tip crystal because grunt nation idea electric witness alert like";
   },
@@ -82,10 +74,12 @@ const makeHarness = (options?: {
   readonly statusReport?: TransactionStatusReport;
   readonly strkBalance?: string;
 }) => {
+  let historyRequests = 0;
   const history =
     options?.historyThrows || options?.onChainHistory
       ? {
           async getTransactionHistory(): Promise<readonly ActivityEntry[]> {
+            historyRequests += 1;
             if (options.historyThrows) {
               throw new Error("fetch failed");
             }
@@ -171,7 +165,7 @@ const makeHarness = (options?: {
     },
     session,
   });
-  return { activity, handler, session, statusRequests };
+  return { activity, handler, historyRequests: () => historyRequests, session, statusRequests };
 };
 
 describe("wallet operations", () => {
@@ -453,7 +447,7 @@ describe("wallet operations", () => {
       summary: "Received 3 ETH from 0x7770…0abc",
       token: "ETH",
     };
-    const { handler } = makeHarness({ onChainHistory: [chainOnly] });
+    const { handler, historyRequests } = makeHarness({ onChainHistory: [chainOnly] });
     await handler(
       {
         accountId: account.id,
@@ -472,6 +466,11 @@ describe("wallet operations", () => {
     };
     expect(response.activity.map((entry) => entry.hash)).toEqual(["0xc4a1", "0x7ab"]);
     expect(response.historyUnavailable).toBeUndefined();
+    const cached = (await handler({ cached: true, type: "wallet.activity" }, extensionSender)) as {
+      activity: readonly ActivityEntry[];
+    };
+    expect(cached.activity.map((entry) => entry.hash)).toEqual(["0xc4a1", "0x7ab"]);
+    expect(historyRequests()).toBe(1);
   });
 
   test("degrades to the local feed with an indicator when history is unreachable", async () => {

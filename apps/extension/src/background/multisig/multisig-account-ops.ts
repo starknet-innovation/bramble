@@ -6,7 +6,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
 import { contextFor } from "./multisig-context";
 import type { MultisigOpsDeps } from "./multisig-deps";
-import { readMultisigIdInput, readRemoveMultisigInput } from "./multisig-inputs";
+import { readMultisigBalancesInput, readRemoveMultisigInput } from "./multisig-inputs";
 
 const removeMultisig = async (
   deps: MultisigOpsDeps,
@@ -68,7 +68,7 @@ const multisigBalances = async (
   deps: MultisigOpsDeps,
   message: unknown,
 ): Promise<RuntimeResponse> => {
-  const input = readMultisigIdInput(message, "wallet.multisigBalances");
+  const input = readMultisigBalancesInput(message);
   if (!input) return { error: "invalid Argent multisig balances request" };
   const context = await contextFor(
     deps,
@@ -76,6 +76,18 @@ const multisigBalances = async (
     input.multisigId,
   );
   if ("error" in context) return context;
+  if (input.cached) {
+    const balances = await deps.balanceSnapshots
+      ?.read(context.record.id, context.record.networkId)
+      .catch(() => null);
+    if (!balances) return { error: "multisig balance snapshot unavailable" };
+    return {
+      accountId: context.record.id,
+      balances,
+      networkId: context.record.networkId,
+      ok: true,
+    };
+  }
   const balances: readonly TokenBalance[] = await deps.runtimeRpc.getTokenBalances({
     accountAddress: context.record.address,
     rpcUrls: context.rpcUrls,
@@ -83,6 +95,9 @@ const multisigBalances = async (
       (token) => token.networkId === context.record.networkId,
     ),
   });
+  await deps.balanceSnapshots
+    ?.write({ accountId: context.record.id, balances, networkId: context.record.networkId })
+    .catch(() => undefined);
   return {
     accountId: context.record.id,
     balances,

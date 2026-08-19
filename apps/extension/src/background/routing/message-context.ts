@@ -34,6 +34,10 @@ import {
   createArgentMultisigDeploymentReviews,
 } from "../multisig/multisig-deployment-reviews";
 import {
+  type BalanceSnapshotStore,
+  memoryBalanceSnapshotStore,
+} from "../portfolio/balance-snapshots";
+import {
   createStrk20WalletPreparationStore,
   type Strk20WalletPreparationStore,
 } from "../privacy/strk20-wallet-preparations";
@@ -58,6 +62,7 @@ export type RouterContext = {
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
+  readonly balanceSnapshots: BalanceSnapshotStore;
   readonly extensionId: string;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue: LedgerSignQueue;
@@ -85,6 +90,7 @@ export type MessageHandlerOptions = {
   readonly activity?: ActivityLog;
   readonly allowanceStore?: AllowanceStore;
   readonly approvals?: ApprovalQueue;
+  readonly balanceSnapshots?: BalanceSnapshotStore;
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
@@ -138,6 +144,9 @@ const multisigDeploymentReviewsFor = (
 const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): WatchAssetAdmission =>
   provided ?? createWatchAssetAdmission();
 
+const balanceSnapshotsFor = (provided: BalanceSnapshotStore | undefined): BalanceSnapshotStore =>
+  provided ?? memoryBalanceSnapshotStore();
+
 /**
  * Resolves every optional collaborator into the fully wired router context.
  * Absent collaborators fall back to in-memory or explicitly-unavailable
@@ -164,6 +173,7 @@ export const routerContext = (
     activity: options.activity ?? memoryActivityLog(),
     allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
     approvals,
+    balanceSnapshots: balanceSnapshotsFor(options.balanceSnapshots),
     extensionId,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),

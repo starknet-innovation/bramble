@@ -12,6 +12,7 @@ import {
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
+  MultisigStore,
 } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
@@ -23,7 +24,7 @@ import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
  * Compares already-canonical ordered signer GUIDs. Untrusted aliases fail by
  * inequality; this pure comparison never throws or normalizes authority.
  */
-export const sameArgentSignerGuids = (left: readonly string[], right: readonly string[]): boolean =>
+const sameArgentSignerGuids = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length && left.every((value, index) => value === right[index]);
 
 /**
@@ -42,6 +43,26 @@ export const matchesArgentPublicConfig = (
 ): boolean =>
   current.threshold === chain.threshold &&
   sameArgentSignerGuids(current.signerPublicKeys.map(argentSignerGuid), chain.signerGuids);
+
+/**
+ * Marks open intents stale when their frozen authority no longer matches.
+ */
+export const markChangedIntentsStale = async (
+  store: MultisigStore,
+  accountId: string,
+  config: ArgentMultisigConfig,
+): Promise<void> => {
+  for (const intent of await store.listIntents()) {
+    if (
+      intent.accountId === accountId &&
+      (intent.state === "collecting" || intent.state === "ready") &&
+      (intent.configSnapshot.threshold !== config.threshold ||
+        !sameArgentSignerGuids(intent.configSnapshot.signerGuids, config.signerGuids))
+    ) {
+      await store.upsertIntent({ ...intent, state: "stale" });
+    }
+  }
+};
 
 type SignerDiscoveryContext = {
   readonly accounts: readonly AccountRef[];

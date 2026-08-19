@@ -20,7 +20,7 @@ import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import { explorerTransactionUrl } from "@mc-wallet/wallet-model/networks";
 import type { DiscoveredNft, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
-import { icon } from "../../shared/icons";
+import { type IconName, icon } from "../../shared/icons";
 import {
   type NftGalleryItem,
   nftImageMarkup,
@@ -146,6 +146,27 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
   preconfirmed: "pre-confirmed",
 };
 
+const activityAppearance = (
+  entry: ActivityEntry,
+): { readonly icon: IconName; readonly label: string; readonly type: string } => {
+  const summary = entry.summary.toLowerCase();
+  if (/\bswap(ped|ping)?\b/.test(summary)) return { icon: "swap", label: "Swap", type: "swap" };
+  if (/\b(un)?stak(e|ed|ing)\b|\bdelegat(e|ed|ing)\b/.test(summary))
+    return { icon: "piggyBank", label: "Stake", type: "stake" };
+  if (/\b(un)?shield(ed|ing)?\b|\bprivate\b/.test(summary))
+    return { icon: "shield", label: "Private transaction", type: "private" };
+  if (/\b(approve|approved|revoke|revoked)\b/.test(summary))
+    return { icon: "lock", label: "Approval", type: "approval" };
+  if (entry.kind === "transfer") {
+    const received = /\b(receive|received)\b/.test(summary);
+    return { icon: received ? "receive" : "send", label: "Transfer", type: "transfer" };
+  }
+  if (entry.kind === "deploy") return { icon: "rocket", label: "Deployment", type: "deploy" };
+  if (entry.kind === "declare")
+    return { icon: "terminal", label: "Contract declaration", type: "declare" };
+  return { icon: "activity", label: "Contract interaction", type: "other" };
+};
+
 /**
  * Renders one recorded transaction row for the account-partitioned Activity
  * dock and its design-system specimen. A provisional status carries an
@@ -155,11 +176,13 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
 export const transactionRow = (entry: ActivityEntry): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
   const label = STATUS_LABEL[entry.status] ?? entry.status;
+  const appearance = activityAppearance(entry);
   // Devnet has no explorer, so the outbound link is simply absent there rather
   // than pointing somewhere that cannot resolve the hash.
   const explorer = explorerTransactionUrl(entry.networkId, entry.hash);
   return `
   <li class="tx-row">
+    <span class="tx-kind-icon tx-kind-${appearance.type}" aria-label="${appearance.label}" title="${appearance.label}">${icon(appearance.icon)}</span>
     <div class="tx-copy">
       <strong>${escapeHtml(entry.summary)}</strong>
       <code>${escapeHtml(`${entry.hash.slice(0, 10)}…${entry.hash.slice(-6)}`)}</code>

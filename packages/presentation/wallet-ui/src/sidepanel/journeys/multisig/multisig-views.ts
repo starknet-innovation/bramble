@@ -341,7 +341,6 @@ const intentCard = (
         <ol class="allowance-list">${exactCalls(intent)}</ol>
       </div>
     </details>
-    <p class="hint">Confirm only after the outcome, fee ceiling, signer threshold, and exact transaction identity agree.</p>
     ${multisigIntentActions(intent, options, allOptions.length > 0, hasFreshAuthority)}
   </article>`;
 };
@@ -354,16 +353,19 @@ const intentList = (
   preferences: WalletPreferences | null,
 ): string => {
   const scoped = intents.filter((intent) => intent.accountId === record.id);
-  return scoped.length === 0
-    ? emptyState("No frozen signing intents are stored for this account.")
-    : `<div class="multisig-intent-stack">${scoped
-        .map((intent) => {
-          const card = intentCard(intent, view, status, preferences);
-          return intent.state === "submitted" || intent.state === "accepted"
-            ? card
-            : `<div class="allowance-list">${card}</div>`;
-        })
-        .join("")}</div><p id="multisig-intent-result" role="status"></p>`;
+  const submitted = scoped.find((intent) => intent.state === "submitted");
+  if (submitted) return intentCard(submitted, view, status, preferences);
+  const awaiting = scoped.filter(
+    (intent) => intent.state === "collecting" || intent.state === "ready",
+  );
+  const stale = scoped.filter((intent) => intent.state === "stale");
+  if (awaiting.length === 0 && stale.length === 0) {
+    return emptyState("No intents are awaiting verification or signature.");
+  }
+  return `<div class="multisig-intent-stack">
+    ${awaiting.length === 0 ? "" : `<section><p class="eyebrow">Awaiting verification &amp; signature</p><div class="allowance-list">${awaiting.map((intent) => intentCard(intent, view, status, preferences)).join("")}</div></section>`}
+    ${stale.length === 0 ? "" : `<section><p class="eyebrow">Needs attention</p><div class="allowance-list">${stale.map((intent) => intentCard(intent, view, status, preferences)).join("")}</div></section>`}
+  </div><p id="multisig-intent-result" role="status"></p>`;
 };
 
 const compactIntentList = (
@@ -371,13 +373,16 @@ const compactIntentList = (
   intents: readonly ArgentMultisigSigningIntent[],
   preferences: WalletPreferences | null,
 ): string => {
-  const scoped = intents.filter((intent) => intent.accountId === record.id);
+  const scoped = intents.filter(
+    (intent) =>
+      intent.accountId === record.id && (intent.state === "collecting" || intent.state === "ready"),
+  );
   const list =
     scoped.length === 0
       ? emptyState(
-          "No signing intents yet. Import a package from another signer to review it here.",
+          "No intents are awaiting verification or signature. Import one to review it here.",
         )
-      : `<ul class="menu-list multisig-intent-list">${scoped
+      : `<p class="eyebrow">Awaiting verification &amp; signature</p><ul class="menu-list multisig-intent-list">${scoped
           .map((intent) => {
             const assets = intentReviewAssets(intent, record, preferences);
             const assetGlyphs =
@@ -389,7 +394,7 @@ const compactIntentList = (
                 attributes: { "data-view": "multisig-detail" },
                 icon: "users",
                 label: intent.summary,
-                supportingText: `${intent.state} · ${intent.signatures.length} of ${intent.configSnapshot.threshold} signatures`,
+                supportingText: `${intent.state === "ready" ? "Ready to submit" : "Awaiting signatures"} · ${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
               },
             )}${assetGlyphs}</li>`;
           })

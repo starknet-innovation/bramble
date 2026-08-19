@@ -16,6 +16,7 @@ import {
 } from "./provider";
 import { decodeUint256Response } from "./rpc-assets";
 import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-submit";
+import type { TokenBalance } from "./token-balance";
 
 /**
  * Re-exported declare-transaction submission so callers keep one RPC import path.
@@ -83,14 +84,7 @@ export {
   type InvokeSubmission,
   submitInvokeTransaction,
 } from "./rpc-submit";
-/**
- * Token balance returned to the side panel.
- */
-export type TokenBalance = TokenConfig & {
-  readonly balance: string;
-  readonly formatted: string;
-};
-
+export { isTokenBalance, type TokenBalance } from "./token-balance";
 /**
  * ERC20 transfer submission result.
  */

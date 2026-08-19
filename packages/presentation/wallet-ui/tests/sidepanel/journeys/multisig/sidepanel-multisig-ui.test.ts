@@ -123,10 +123,10 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(app.querySelector("[data-multisig-check-funding]")?.textContent).toContain(
       "Check funding again",
     );
-    expect(app.querySelector("#multisig-deploy-result")?.textContent).toContain(
-      "Fund the predicted address",
-    );
-    expect(app.querySelector(".multisig-funding-stage .qr-card")).not.toBeNull();
+    expect(app.querySelector("#multisig-deploy-result")?.textContent).toBe("");
+    const fundingStage = app.querySelector(".multisig-funding-stage");
+    expect(fundingStage?.textContent).toContain("Fund this multisig");
+    expect(fundingStage?.querySelector(".qr-card")).not.toBeNull();
     expect(
       app.querySelector(".multisig-funding-stage [data-copy]")?.getAttribute("data-copy"),
     ).toBe(fixture.deploymentReview.address);

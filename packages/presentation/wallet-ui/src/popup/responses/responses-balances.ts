@@ -17,27 +17,14 @@
  * `shared/json` grammars their writer used.
  */
 
-import {
-  hasOnlyKnownKeys,
-  hasUniqueStrings,
-  isBaseUnitsAmount,
-  isJson,
-  isRecord,
-} from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
+import { isTokenBalance, type TokenBalance } from "@mc-wallet/starknet/rpc";
 import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
-import { isTokenConfig, type TokenConfig } from "@mc-wallet/wallet-model/preferences";
 
 /**
- * Popup token balance item accepted from the background boundary. Structurally
- * the stored token config plus its read balance, spelled as one extension of
- * {@link TokenConfig} rather than a second field list, so the wire shape cannot
- * drift from the record the background actually sends (`starknet/rpc`'s
- * `TokenBalance` is the same extension of the same type).
+ * Shared validated balance row accepted by presentation boundaries.
  */
-export type TokenBalance = TokenConfig & {
-  readonly balance: string;
-  readonly formatted: string;
-};
+export type { TokenBalance };
 
 /**
  * Popup token balances response accepted from the background boundary.
@@ -56,37 +43,6 @@ export type DetectTokensResponse = {
   readonly ok: true;
   readonly suggestions: readonly TokenBalance[];
 };
-
-// The TokenConfig half of a wire row, re-assembled as its own record so the
-// storage validator sees exactly the six keys it owns. Never a second copy of
-// those six rules: the canonical-address and derived-id checks in particular
-// exist once, in ../storage/preferences-entries.
-const tokenConfigPart = (value: Record<string, unknown>): Record<string, unknown> => ({
-  address: value["address"],
-  decimals: value["decimals"],
-  id: value["id"],
-  name: value["name"],
-  networkId: value["networkId"],
-  symbol: value["symbol"],
-});
-
-const isTokenBalance = (value: unknown): value is TokenBalance =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, [
-    "address",
-    "balance",
-    "decimals",
-    "formatted",
-    "id",
-    "name",
-    "networkId",
-    "symbol",
-  ]) &&
-  isBaseUnitsAmount(value["balance"]) &&
-  typeof value["formatted"] === "string" &&
-  value["formatted"].length > 0 &&
-  isTokenConfig(tokenConfigPart(value));
 
 /**
  * Checks balance responses before rendering. Each row must be a token the store

@@ -132,7 +132,7 @@ const setupOption = (
  * Renders the shared-account gateway without mutating chain state.
  */
 export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Argent Multisig", status, "True M-of-N signatures") +
+  flowHeader("Argent Multisig", status, "Multiple signers approve together") +
   flowScreen(
     "multisig-add",
     `<section class="section">
