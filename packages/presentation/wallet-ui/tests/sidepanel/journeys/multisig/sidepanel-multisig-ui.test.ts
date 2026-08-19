@@ -135,7 +135,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(fundingIntent).toMatchObject({
       accountId: signer.id,
       completeMultisigId: `${fixture.deploymentReview.networkId}:${fixture.deploymentReview.address}`,
-      completeTo: "multisig-home",
+      completeTo: "multisig-deploy",
       recipient: fixture.deploymentReview.address,
       source: "public",
       destination: "public",

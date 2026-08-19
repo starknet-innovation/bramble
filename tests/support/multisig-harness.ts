@@ -89,7 +89,8 @@ export type MultisigHarnessOptions = {
   readonly beforeAccountDeployment?: () => Promise<void> | void;
   readonly beforeSubmitPrepared?: () => Promise<void> | void;
   readonly deploymentBalance?: string | null;
-  readonly deploymentStatus?: boolean;
+  readonly deploymentEstimateError?: Error;
+  readonly deploymentStatus?: boolean | (() => boolean);
   readonly failPreferencesAfterSubmit?: boolean;
   readonly getConfig?: () => {
     readonly classHash: string;
@@ -201,13 +202,16 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     preferencesStore,
     runtimeRpc: {
       async estimateAccountDeploymentFee() {
+        if (options.deploymentEstimateError) throw options.deploymentEstimateError;
         return { overallFee: "44", unit: "FRI" };
       },
       async estimateInvokeFee() {
         return { overallFee: "44", unit: "FRI" };
       },
       async getDeploymentStatus() {
-        return options.deploymentStatus ?? true;
+        return typeof options.deploymentStatus === "function"
+          ? options.deploymentStatus()
+          : (options.deploymentStatus ?? false);
       },
       async getNftOwner() {
         return harnessAccountA.address;

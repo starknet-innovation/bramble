@@ -147,7 +147,9 @@ export const DeploySubmitted: LabStory = {
     await expect(body?.querySelector(".multisig-deployment-success")).toHaveTextContent(
       "Multisig deployment is in progress",
     );
-    await expect(body?.querySelector("[data-open-deployed-multisig]")).toBeVisible();
+    await expect(body?.querySelector("[data-open-deployed-multisig]")).toHaveTextContent(
+      "Go to deployed account",
+    );
   },
 };
 export const HomeDeploymentRequired: LabStory = {

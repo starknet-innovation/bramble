@@ -26,6 +26,12 @@ import {
   reviewPanel,
 } from "../../shared/review-render";
 import type { SendIntent } from "../send/send-model";
+import {
+  ALREADY_DEPLOYED_MESSAGE,
+  deploymentFailureToast,
+  deploymentReviewFailure,
+  EXPIRED_DEPLOYMENT_REVIEW,
+} from "./multisig-deploy-errors";
 import { bindDeploymentFunding } from "./multisig-deploy-funding-ui";
 import { deploymentFundingStage } from "./multisig-deploy-view";
 import type { ArgentMultisigDeploymentSetup, MultisigClient } from "./multisig-runtime";
@@ -87,18 +93,6 @@ const reviews = new WeakMap<
   }
 >();
 const reviewGenerations = new WeakMap<HTMLFormElement, number>();
-const EXPIRED_DEPLOYMENT_REVIEW =
-  "Argent multisig deployment must exactly match a fresh fee review";
-
-const deploymentFailureToast = (raw: string, review: ArgentMultisigDeploymentReview): string => {
-  if (raw === EXPIRED_DEPLOYMENT_REVIEW) {
-    return "The fee review expired. Review the deployment again before confirming.";
-  }
-  if (/exceed balance|insufficient.*balance|address needs STRK/i.test(raw)) {
-    return `Fund ${accountLabel(review.address)} with at least ${formatFeeEstimate(review.fee)}, then review the deployment again.`;
-  }
-  return raw;
-};
 const publicKeys = (raw: string): readonly string[] =>
   raw
     .split(/[\s,]+/)
@@ -380,7 +374,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
                   <div><dt>Transaction</dt><dd><code>${escapeHtml(accountLabel(result.transactionHash))}</code>${copyButton(result.transactionHash, "Copy deployment transaction hash")}</dd></div>
                 </dl>
                 <div class="multisig-deployment-success-actions">
-                  ${buttonMarkup({ attributes: { "data-open-deployed-multisig": result.multisig.record.id }, label: "Open shared account" })}
+                  ${buttonMarkup({ attributes: { "data-open-deployed-multisig": result.multisig.record.id }, label: "Go to deployed account" })}
                   ${explorer ? `<a class="button secondary" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer">View transaction</a>` : ""}
                 </div>
               </section>`,
@@ -485,11 +479,13 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       })
       .catch((error: unknown) => {
         if (!isCurrent()) return;
-        const message = errorMessage(error, "Deployment review failed");
+        const message = deploymentReviewFailure(errorMessage(error, "Deployment review failed"));
         setDeploymentStage(form, "approval");
         deps.setResult(
           "multisig-deploy-result",
-          "Deployment review failed. Check the error and retry.",
+          message === ALREADY_DEPLOYED_MESSAGE
+            ? message
+            : "Deployment review failed. Check the error and retry.",
         );
         showToast(message, "error", form);
         buttonBusy(button, false);

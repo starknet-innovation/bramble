@@ -154,13 +154,13 @@ describe("bindTransfer", () => {
     expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
   });
 
-  test("returns a shortcut-owned funding send to its multisig", async () => {
+  test("continues a shortcut-owned funding send into deployment", async () => {
     const { app, deps } = mount();
     paint(
       app,
       sendFlow(status, account, preferences, [publicBalance], {}, {}, "usd", [], {
         accountId: account.id,
-        completeTo: "multisig-home",
+        completeTo: "multisig-deploy",
         destination: "public",
         networkId: status.networkId,
         recipient: RECIPIENT,
@@ -178,10 +178,10 @@ describe("bindTransfer", () => {
     await flush();
     await flush();
 
-    expect(app.querySelector("#send-home")?.textContent).toBe("View multisig");
+    expect(app.querySelector("#send-home")?.textContent).toBe("Deploy Multisignature Account");
     app.querySelector<HTMLButtonElement>("#send-home")?.click();
     app.querySelector<HTMLButtonElement>("#send-close")?.click();
-    expect(views).toEqual(["multisig-home", "multisig-home"]);
+    expect(views).toEqual(["multisig-deploy", "multisig-deploy"]);
   });
 
   // Back out of the review and the next Review send must show the review again,

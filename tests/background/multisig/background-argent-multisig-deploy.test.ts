@@ -106,6 +106,28 @@ describe("Argent multisig deployment review", () => {
     expect(harness.deploymentSubmitCount()).toBe(0);
   });
 
+  test("reports an existing deployment before fee estimation and across an estimate race", async () => {
+    const input = {
+      networkId: "SN_MAIN",
+      salt: "0x9",
+      signerAccountId: harnessAccountA.id,
+      signerPublicKeys: HARNESS_KEYS,
+      threshold: 2,
+      type: "wallet.reviewArgentMultisigDeployment",
+    } as const;
+    const alreadyDeployed = await makeMultisigHarness({ deploymentStatus: true });
+    await expect(alreadyDeployed.handler(input, harnessExtensionSender)).resolves.toEqual({
+      error: "Argent multisig is already deployed",
+    });
+
+    const raced = await makeMultisigHarness({
+      deploymentEstimateError: new Error("Deployment failed: contract already deployed at address"),
+    });
+    await expect(raced.handler(input, harnessExtensionSender)).resolves.toEqual({
+      error: "Argent multisig is already deployed",
+    });
+  });
+
   test("submits only the exact one-time constructor, signer, network, address, and fee review", async () => {
     const harness = await makeMultisigHarness();
     const reviewed = await harness.handler(
@@ -316,11 +338,12 @@ describe("Argent multisig deployment claim recovery", () => {
 
   test("keeps the claim and never rebroadcasts when the address is already deployed", async () => {
     let loseResponse = true;
+    let deployed = false;
     const harness = await makeMultisigHarness({
       beforeAccountDeployment() {
         if (loseResponse) throw new IndeterminateRpcWriteError("submission status is unknown");
       },
-      deploymentStatus: true,
+      deploymentStatus: () => deployed,
     });
 
     const first = await reviewFor(harness, "0xc");
@@ -332,14 +355,22 @@ describe("Argent multisig deployment claim recovery", () => {
     ).resolves.toEqual({ error: "submission status is unknown" });
 
     loseResponse = false;
-    const retry = await reviewFor(harness, "0xc");
+    deployed = true;
     await expect(
       harness.handler(
-        { review: retry, type: "wallet.deployArgentMultisig" },
+        {
+          networkId: "SN_MAIN",
+          salt: "0xc",
+          signerAccountId: harnessAccountA.id,
+          signerPublicKeys: HARNESS_KEYS,
+          threshold: 2,
+          type: "wallet.reviewArgentMultisigDeployment",
+        },
         harnessExtensionSender,
       ),
-    ).resolves.toMatchObject({ ok: true });
-    // Resolved from chain existence, not by sending a second deployment.
+    ).resolves.toEqual({ error: "Argent multisig is already deployed" });
+    // The preflight resolves from chain existence without estimating or
+    // broadcasting a second deployment.
     expect(harness.deploymentSubmitCount()).toBe(0);
   });
 });

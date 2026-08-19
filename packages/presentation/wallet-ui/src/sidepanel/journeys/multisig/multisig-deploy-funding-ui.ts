@@ -32,7 +32,7 @@ export const bindDeploymentFunding = (
         .openFunding({
           accountId: source,
           completeMultisigId: `${review.networkId}:${review.address}`,
-          completeTo: "multisig-home",
+          completeTo: "multisig-deploy",
           destination: "public",
           networkId: review.networkId,
           recipient: review.address,

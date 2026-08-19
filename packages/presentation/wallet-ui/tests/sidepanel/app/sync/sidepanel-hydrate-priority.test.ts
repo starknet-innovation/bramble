@@ -350,7 +350,7 @@ describe("home hydration priority", () => {
     expect(cache.multisigsError).toBe(false);
   });
 
-  test("refreshes only the selected multisig after the network registry is loaded", async () => {
+  test("retains locally confirmed authority when a selected-account refresh is unavailable", async () => {
     const multisigId = "SN_MAIN:0x7123";
     const record = {
       accountContractType: "argent-multisig" as const,
@@ -389,7 +389,15 @@ describe("home hydration priority", () => {
         refreshMultisig: async (id: string) => {
           selectedReads += 1;
           expect(id).toBe(multisigId);
-          return { intents: [], multisig: view };
+          return {
+            intents: [],
+            multisig: {
+              ...view,
+              authorityStatus: "network-unavailable" as const,
+              config: null,
+              deployed: null,
+            },
+          };
         },
       },
       paint: () => undefined,
@@ -401,6 +409,7 @@ describe("home hydration priority", () => {
 
     expect(listReads).toBe(0);
     expect(selectedReads).toBe(1);
+    expect(cache.multisigs.multisigs).toEqual([view]);
     expect(cache.multisigsError).toBe(false);
   });
 });

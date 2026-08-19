@@ -145,6 +145,10 @@ describe("createMultisigClient", () => {
       intents: [fixture.intent],
       multisig: fixture.view,
     });
+    await expect(client.refreshMultisig(fixture.record.id)).resolves.toEqual({
+      intents: [fixture.intent],
+      multisig: fixture.view,
+    });
     await expect(
       client.prepareIntent(fixture.record.id, [
         { calldata: ["0x1"], contractAddress: "0xdef", entrypoint: "transfer" },
@@ -154,6 +158,10 @@ describe("createMultisigClient", () => {
       intent: fixture.intent,
       intentPackage: fixture.intentPackage,
     });
+    await expect(client.refreshMultisig(fixture.record.id)).resolves.toEqual({
+      intents: [fixture.intent],
+      multisig: fixture.view,
+    });
     await expect(
       client.signIntent(fixture.intent.id, fixture.status.activeAccountId ?? ""),
     ).resolves.toEqual({
@@ -161,12 +169,12 @@ describe("createMultisigClient", () => {
     });
     expect(messages).toEqual([
       { type: "wallet.multisigs" },
-      { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
       {
         calls: [{ calldata: ["0x1"], contractAddress: "0xdef", entrypoint: "transfer" }],
         multisigId: fixture.record.id,
         type: "wallet.prepareArgentMultisigIntent",
       },
+      { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
       {
         intentId: fixture.intent.id,
         signerAccountId: fixture.status.activeAccountId,

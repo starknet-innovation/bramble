@@ -32,6 +32,11 @@ type DeployableArgentRecord = ArgentMultisigRecord & {
   readonly deployment: NonNullable<ArgentMultisigRecord["deployment"]>;
 };
 
+const ALREADY_DEPLOYED_ERROR = "Argent multisig is already deployed";
+
+const isAlreadyDeployedError = (error: unknown): boolean =>
+  /already deployed/i.test(error instanceof Error ? error.message : String(error));
+
 const recordForReview = (review: ArgentMultisigDeploymentReview): DeployableArgentRecord => ({
   accountContractType: "argent-multisig",
   address: review.address,
@@ -181,6 +186,32 @@ const deploymentContext = async (
   return { active, authorized, preferences, rpcUrls, signer } as const;
 };
 
+type DeploymentEstimate = NonNullable<
+  MultisigOpsDeps["runtimeRpc"]["estimateAccountDeploymentFee"]
+>;
+
+const deploymentFeeForReview = async (
+  deps: MultisigOpsDeps,
+  input: Parameters<DeploymentEstimate>[0],
+  isCurrent: () => boolean,
+): Promise<
+  { readonly error: string } | { readonly fee: Awaited<ReturnType<DeploymentEstimate>> }
+> => {
+  const estimate = deps.runtimeRpc.estimateAccountDeploymentFee;
+  if (!estimate) return { error: "Argent multisig deployment review unavailable" };
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({ accountAddress: input.account.address, rpcUrls: input.rpcUrls })
+    .catch(() => false);
+  if (!isCurrent()) return { error: "wallet locked" };
+  if (deployed) return { error: ALREADY_DEPLOYED_ERROR };
+  try {
+    return { fee: await estimate(input) };
+  } catch (error) {
+    if (isAlreadyDeployedError(error)) return { error: ALREADY_DEPLOYED_ERROR };
+    throw error;
+  }
+};
+
 const reviewDeployment = async (
   deps: MultisigOpsDeps,
   message: unknown,
@@ -206,18 +237,20 @@ const reviewDeployment = async (
     fee: { overallFee: "0", unit: "FRI" },
     feeAffordability: "unknown",
   });
-  const estimate = deps.runtimeRpc.estimateAccountDeploymentFee;
-  if (!estimate) {
-    return { error: "Argent multisig deployment review unavailable" };
-  }
-  const fee = await estimate({
-    account,
-    rpcUrls: context.rpcUrls,
-    signHash: signerForContext(deps, {
-      account: context.signer,
-      vaultPassphrase: context.active.vaultPassphrase,
-    }),
-  });
+  const estimated = await deploymentFeeForReview(
+    deps,
+    {
+      account,
+      rpcUrls: context.rpcUrls,
+      signHash: signerForContext(deps, {
+        account: context.signer,
+        vaultPassphrase: context.active.vaultPassphrase,
+      }),
+    },
+    context.authorized.isCurrent,
+  );
+  if ("error" in estimated) return estimated;
+  const { fee } = estimated;
   if (!context.authorized.isCurrent()) {
     return { error: "wallet locked" };
   }

@@ -61,10 +61,20 @@ export type MultisigClient = ReturnType<typeof createMultisigClient>;
  */
 export const createMultisigClient = (runtime?: RuntimeApi) => {
   const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
+  type RefreshResult =
+    | {
+        readonly intents: readonly ArgentMultisigSigningIntent[];
+        readonly multisig: ArgentMultisigView;
+      }
+    | "error";
+  const refreshes = new Map<string, Promise<RefreshResult>>();
+  const invalidateRefreshes = (): void => refreshes.clear();
   const intentResult = async (
     message: unknown,
     fallback: string,
   ): Promise<ArgentMultisigIntentResult> => {
+    // Transaction boundaries still force a fresh background authority check.
+    invalidateRefreshes();
     const response = await sendMessage(message);
     if (!isArgentMultisigIntentResponse(response)) {
       throw responseError(response, fallback);
@@ -79,6 +89,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
 
   return {
     async addMultisig(input: ArgentMultisigSetup): Promise<ArgentMultisigView> {
+      invalidateRefreshes();
       const response = await sendMessage({ ...input, type: "wallet.addMultisig" });
       if (!isArgentMultisigResponse(response)) {
         throw responseError(response, "add Argent multisig failed");
@@ -86,6 +97,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       return response.multisig;
     },
     async deployMultisig(review: ArgentMultisigDeploymentReview) {
+      invalidateRefreshes();
       const response = await sendMessage({ review, type: "wallet.deployArgentMultisig" });
       if (!isArgentMultisigDeployResponse(response)) {
         throw responseError(response, "deploy Argent multisig failed");
@@ -134,9 +146,21 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
     > {
       try {
         const response = await sendMessage({ type: "wallet.multisigs" });
-        return isArgentMultisigsResponse(response)
-          ? { intents: response.intents, multisigs: response.multisigs }
-          : "error";
+        if (!isArgentMultisigsResponse(response)) return "error";
+        for (const multisig of response.multisigs) {
+          if (multisig.authorityStatus === "available") {
+            refreshes.set(
+              multisig.record.id,
+              Promise.resolve({
+                intents: response.intents.filter(
+                  (intent) => intent.accountId === multisig.record.id,
+                ),
+                multisig,
+              }),
+            );
+          }
+        }
+        return { intents: response.intents, multisigs: response.multisigs };
       } catch {
         return "error";
       }
@@ -147,23 +171,32 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         "prepare Argent multisig intent failed",
       );
     },
-    async refreshMultisig(multisigId: string): Promise<
-      | {
-          readonly intents: readonly ArgentMultisigSigningIntent[];
-          readonly multisig: ArgentMultisigView;
+    async refreshMultisig(multisigId: string): Promise<RefreshResult> {
+      const existing = refreshes.get(multisigId);
+      if (existing) return existing;
+      const refresh = sendMessage({ multisigId, type: "wallet.refreshMultisig" })
+        .then(
+          (response): RefreshResult =>
+            isArgentMultisigResponse(response)
+              ? { intents: response.intents, multisig: response.multisig }
+              : "error",
+        )
+        .catch((): RefreshResult => "error");
+      refreshes.set(multisigId, refresh);
+      // A successful confirmed authority is stable until a multisig action.
+      // Failed reads remain retryable when the network recovers.
+      void refresh.then((result) => {
+        if (
+          (result === "error" || result.multisig.authorityStatus === "network-unavailable") &&
+          refreshes.get(multisigId) === refresh
+        ) {
+          refreshes.delete(multisigId);
         }
-      | "error"
-    > {
-      try {
-        const response = await sendMessage({ multisigId, type: "wallet.refreshMultisig" });
-        return isArgentMultisigResponse(response)
-          ? { intents: response.intents, multisig: response.multisig }
-          : "error";
-      } catch {
-        return "error";
-      }
+      });
+      return refresh;
     },
     async removeMultisig(multisigId: string, confirmHistoryRemoval = false): Promise<void> {
+      invalidateRefreshes();
       const response = await sendMessage({
         ...(confirmHistoryRemoval ? { confirmHistoryRemoval: true } : {}),
         multisigId,
@@ -176,6 +209,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
     async reviewDeployment(
       input: ArgentMultisigDeploymentSetup,
     ): Promise<ArgentMultisigDeploymentReview> {
+      invalidateRefreshes();
       const response = await sendMessage({
         ...input,
         type: "wallet.reviewArgentMultisigDeployment",

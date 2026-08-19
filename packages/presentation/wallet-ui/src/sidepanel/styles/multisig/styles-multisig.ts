@@ -428,6 +428,7 @@ export const MULTISIG_STYLES = `
   .multisig-portfolio-tabs { min-width: 0; }
   .multisig-portfolio-tabs .tab-set { gap: ${SPACE.lg}; }
   .multisig-portfolio-tabs [data-ms-home-panel] { min-width: 0; }
+  .multisig-intent-stack { display: grid; gap: ${SPACE.md}; }
   .multisig-intent { align-items: stretch; display: grid; gap: ${SPACE.md}; min-width: 0; overflow: hidden; }
   .multisig-intent .decision-head .pill { margin-left: auto; }
   .multisig-intent .decision-head h2, .multisig-intent code { overflow-wrap: anywhere; }

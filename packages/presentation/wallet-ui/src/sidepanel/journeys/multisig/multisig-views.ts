@@ -356,8 +356,13 @@ const intentList = (
   const scoped = intents.filter((intent) => intent.accountId === record.id);
   return scoped.length === 0
     ? emptyState("No frozen signing intents are stored for this account.")
-    : `<div class="allowance-list">${scoped
-        .map((intent) => intentCard(intent, view, status, preferences))
+    : `<div class="multisig-intent-stack">${scoped
+        .map((intent) => {
+          const card = intentCard(intent, view, status, preferences);
+          return intent.state === "submitted" || intent.state === "accepted"
+            ? card
+            : `<div class="allowance-list">${card}</div>`;
+        })
         .join("")}</div><p id="multisig-intent-result" role="status"></p>`;
 };
 

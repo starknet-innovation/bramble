@@ -48,8 +48,31 @@ const hydrateSelectedMultisig = async (
   multisigId: string,
 ): Promise<Pick<RenderData, "multisigs" | "multisigsError">> => {
   const loaded = await multisig.refreshMultisig(multisigId);
-  if (loaded === "error") return { multisigs: cached, multisigsError: true };
   const existing = cached.multisigs.findIndex((view) => view.record.id === multisigId);
+  const locallyConfirmed =
+    existing >= 0 && cached.multisigs[existing]?.record.currentConfig !== undefined;
+  // Ambient refreshes may improve cached UI state, but they never revoke a
+  // locally confirmed signer view on a transient RPC failure. Prepare, sign,
+  // and submit still revalidate authority in the privileged background.
+  if (
+    locallyConfirmed &&
+    (loaded === "error" || loaded.multisig.authorityStatus === "network-unavailable")
+  ) {
+    return {
+      multisigs:
+        loaded === "error"
+          ? cached
+          : {
+              intents: [
+                ...loaded.intents,
+                ...cached.intents.filter((intent) => intent.accountId !== multisigId),
+              ],
+              multisigs: cached.multisigs,
+            },
+      multisigsError: false,
+    };
+  }
+  if (loaded === "error") return { multisigs: cached, multisigsError: true };
   return {
     multisigs: {
       intents: [

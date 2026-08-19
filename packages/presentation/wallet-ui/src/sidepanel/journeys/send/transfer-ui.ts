@@ -48,7 +48,7 @@ export type TransferUiDeps = {
   readonly app: Element | null;
   readonly back?: () => void;
   readonly confirmationDelaysMs?: readonly number[];
-  readonly navigate?: (view: "activity" | "home" | "multisig-home") => void;
+  readonly navigate?: (view: "activity" | "home" | "multisig-deploy") => void;
   /** Invalidates the cached private balance once a private send is accepted. */
   readonly onPrivateSendSettled?: () => void;
   readonly privacy?: () => PrivacyDisclosureState;
@@ -101,7 +101,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   }
   const accountId = sendFormInput(form, "accountId")?.value ?? "";
   const completionTarget =
-    form.dataset["sendCompleteTo"] === "multisig-home" ? "multisig-home" : "home";
+    form.dataset["sendCompleteTo"] === "multisig-deploy" ? "multisig-deploy" : "home";
   if (transferState.fields && transferState.fields.accountId !== accountId) {
     transferEpoch += 1;
     transferState = initialTransferState();
@@ -149,8 +149,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       transferEpoch += 1;
       transferState = initialTransferState();
     }
-    if (transferState.transactionHash && completionTarget === "multisig-home") {
-      navigate?.("multisig-home");
+    if (transferState.transactionHash && completionTarget === "multisig-deploy") {
+      navigate?.("multisig-deploy");
       return;
     }
     if (back) {
@@ -226,7 +226,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const homeButton = form.querySelector<HTMLButtonElement>("#send-home");
   if (homeButton) {
     homeButton.textContent =
-      completionTarget === "multisig-home" ? "View multisig" : "Back to home";
+      completionTarget === "multisig-deploy" ? "Deploy Multisignature Account" : "Back to home";
     homeButton.addEventListener("click", () => navigate?.(completionTarget));
   }
   form
