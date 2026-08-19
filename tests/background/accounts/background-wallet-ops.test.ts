@@ -20,7 +20,6 @@ const account: AccountRef = {
   publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
-
 const extensionSender: RuntimeSender = {
   id: "extension-id",
   url: "chrome-extension://extension-id/sidepanel.html",
@@ -33,7 +32,10 @@ const tokenId = `SN_MAIN:ETH:${ETH}`;
 const OTHER_ACCOUNT_ID =
   "SN_MAIN:0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const SEPOLIA_ACCOUNT_ID = `SN_SEPOLIA:${account.address}`;
-
+type ActivityResponse = {
+  readonly activity: readonly ActivityEntry[];
+  readonly historyUnavailable?: boolean;
+};
 const walletStub = {
   addDerivedAccount: async () => account,
   createAccount: async () => account,
@@ -64,7 +66,6 @@ const walletStub = {
     };
   },
 };
-
 const makeHarness = (options?: {
   readonly balanceThrows?: boolean;
   readonly deployed?: boolean;
@@ -167,7 +168,6 @@ const makeHarness = (options?: {
   });
   return { activity, handler, historyRequests: () => historyRequests, session, statusRequests };
 };
-
 describe("wallet operations", () => {
   test("review returns decoded summaries, flags, and the fee estimate", async () => {
     const { handler } = makeHarness();
@@ -181,7 +181,6 @@ describe("wallet operations", () => {
       },
       extensionSender,
     );
-
     expect(response).toMatchObject({
       ok: true,
       review: {
@@ -209,7 +208,6 @@ describe("wallet operations", () => {
       },
       extensionSender,
     );
-
     expect(response).toMatchObject({
       ok: true,
       review: {
@@ -234,7 +232,6 @@ describe("wallet operations", () => {
       },
       extensionSender,
     );
-
     expect(response).toMatchObject({
       ok: true,
       review: { fee: null, feeEstimateFailed: true, requiresDeployment: false },
@@ -426,7 +423,6 @@ describe("wallet operations", () => {
       { accountId: account.id, networkId: "SN_MAIN" },
     );
     session.lock();
-
     expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
       alerts: [],
       ok: true,
@@ -460,10 +456,10 @@ describe("wallet operations", () => {
       extensionSender,
     );
 
-    const response = (await handler({ type: "wallet.activity" }, extensionSender)) as {
-      activity: readonly ActivityEntry[];
-      historyUnavailable?: boolean;
-    };
+    const response = (await handler(
+      { type: "wallet.activity" },
+      extensionSender,
+    )) as ActivityResponse;
     expect(response.activity.map((entry) => entry.hash)).toEqual(["0xc4a1", "0x7ab"]);
     expect(response.historyUnavailable).toBeUndefined();
     const cached = (await handler({ cached: true, type: "wallet.activity" }, extensionSender)) as {
@@ -471,10 +467,13 @@ describe("wallet operations", () => {
     };
     expect(cached.activity.map((entry) => entry.hash)).toEqual(["0xc4a1", "0x7ab"]);
     expect(historyRequests()).toBe(1);
+    await handler({ type: "wallet.activity" }, extensionSender);
+    expect(historyRequests()).toBe(1);
+    await handler({ refreshHistory: true, type: "wallet.activity" }, extensionSender);
+    expect(historyRequests()).toBe(2);
   });
-
   test("degrades to the local feed with an indicator when history is unreachable", async () => {
-    const { handler } = makeHarness({ historyThrows: true });
+    const { handler, historyRequests } = makeHarness({ historyThrows: true });
     await handler(
       {
         accountId: account.id,
@@ -487,12 +486,14 @@ describe("wallet operations", () => {
       extensionSender,
     );
 
-    const response = (await handler({ type: "wallet.activity" }, extensionSender)) as {
-      activity: readonly ActivityEntry[];
-      historyUnavailable?: boolean;
-    };
+    const response = (await handler(
+      { type: "wallet.activity" },
+      extensionSender,
+    )) as ActivityResponse;
     expect(response.historyUnavailable).toBe(true);
-    expect(response.activity).toHaveLength(1);
     expect(response.activity[0]?.hash).toBe("0x7ab");
+    const retry = (await handler({ type: "wallet.activity" }, extensionSender)) as ActivityResponse;
+    expect(retry.historyUnavailable).toBe(true);
+    expect(historyRequests()).toBe(1);
   });
 });

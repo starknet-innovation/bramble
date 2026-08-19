@@ -82,6 +82,26 @@ export const portfolioScenario: WalletScenario = {
     {
       content: () =>
         walletDashboard({
+          balanceState: {
+            asOf: 1_787_121_000_000,
+            balances: journeyBalances,
+            stale: true,
+          },
+          preferences: journeyPreferences,
+          priceAsOf: 1_787_120_700_000,
+          priceStale: true,
+          prices: journeyPrices,
+        }),
+      id: "saved-data",
+      label: "Saved data during outage",
+      narrative:
+        "Last-known balances and prices remain usable while their capture times make degraded freshness explicit.",
+      prepare: bindFixtureHome,
+      state: { balances: "saved", pricing: "saved", recovery: "automatic" },
+    },
+    {
+      content: () =>
+        walletDashboard({
           balanceState: { balances: journeyBalances },
           changes: journeyChanges,
           preferences: journeyPreferences,

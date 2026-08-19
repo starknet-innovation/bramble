@@ -1,5 +1,6 @@
 /** Removal and balance operations for one resolved Argent multisig account. */
 import type { TokenBalance } from "@mc-wallet/starknet/rpc";
+import { systemClock } from "@mc-wallet/transactions/activity";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -77,15 +78,19 @@ const multisigBalances = async (
   );
   if ("error" in context) return context;
   if (input.cached) {
-    const balances = await deps.balanceSnapshots
+    const snapshot = await deps.balanceSnapshots
       ?.read(context.record.id, context.record.networkId)
       .catch(() => null);
-    if (!balances) return { error: "multisig balance snapshot unavailable" };
+    if (!snapshot) return { error: "multisig balance snapshot unavailable" };
+    const now = (deps.now ?? systemClock)();
     return {
       accountId: context.record.id,
-      balances,
+      asOf: snapshot.fetchedAt > 0 ? snapshot.fetchedAt : null,
+      balances: snapshot.balances,
       networkId: context.record.networkId,
       ok: true,
+      stale:
+        snapshot.fetchedAt <= 0 || snapshot.fetchedAt > now || now - snapshot.fetchedAt >= 60_000,
     };
   }
   const balances: readonly TokenBalance[] = await deps.runtimeRpc.getTokenBalances({
@@ -95,14 +100,22 @@ const multisigBalances = async (
       (token) => token.networkId === context.record.networkId,
     ),
   });
+  const fetchedAt = (deps.now ?? systemClock)();
   await deps.balanceSnapshots
-    ?.write({ accountId: context.record.id, balances, networkId: context.record.networkId })
+    ?.write({
+      accountId: context.record.id,
+      balances,
+      fetchedAt,
+      networkId: context.record.networkId,
+    })
     .catch(() => undefined);
   return {
     accountId: context.record.id,
+    asOf: fetchedAt > 0 ? fetchedAt : null,
     balances,
     networkId: context.record.networkId,
     ok: true,
+    stale: false,
   };
 };
 

@@ -157,9 +157,11 @@ describe("Argent multisig background lifecycle", () => {
       ),
     ).resolves.toEqual({
       accountId: HARNESS_MULTISIG_ID,
+      asOf: expect.any(Number),
       balances: [],
       networkId: "SN_MAIN",
       ok: true,
+      stale: false,
     });
   });
 

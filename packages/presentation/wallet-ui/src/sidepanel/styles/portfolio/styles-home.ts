@@ -24,7 +24,8 @@ export const HOME_STYLES = `
   }
   .tx-kind-icon .icon { height: 18px; width: 18px; }
   .tx-kind-transfer, .tx-kind-swap, .tx-kind-deploy { background: var(--mc-accent-soft); color: var(--mc-accent); }
-  .tx-kind-stake { background: var(--mc-positive-soft); color: var(--mc-positive); }
+  .tx-kind-stake, .tx-kind-reward { background: var(--mc-positive-soft); color: var(--mc-positive); }
+  .tx-kind-unstake { background: var(--mc-accent-soft); color: var(--mc-accent); }
   .tx-kind-private, .tx-kind-approval { color: var(--mc-accent); }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger

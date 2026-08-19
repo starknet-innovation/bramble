@@ -42,7 +42,13 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
 
   refreshButton?.addEventListener("click", () => {
     buttonBusy(refreshButton, true);
-    void wallet.loadStatus().then(render, () => buttonBusy(refreshButton, false));
+    const accountId = app?.querySelector<HTMLElement>("[data-activity-account-id]")?.dataset[
+      "activityAccountId"
+    ];
+    void wallet
+      .loadActivity(accountId, false, true)
+      .then(() => wallet.loadStatus())
+      .then(render, () => buttonBusy(refreshButton, false));
   });
 
   exportButton?.addEventListener("click", () => {

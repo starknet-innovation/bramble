@@ -210,4 +210,21 @@ describe("createMultisigClient", () => {
       { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
     ]);
   });
+
+  test("bypasses an ambient authority cache for signing-critical views", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    let requests = 0;
+    const client = createMultisigClient({
+      async sendMessage() {
+        requests += 1;
+        return { intents: [], multisig: fixture.view, ok: true };
+      },
+    });
+
+    await client.refreshMultisig(fixture.record.id);
+    await client.refreshMultisig(fixture.record.id);
+    await client.refreshMultisig(fixture.record.id, true);
+
+    expect(requests).toBe(2);
+  });
 });

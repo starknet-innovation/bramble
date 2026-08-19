@@ -49,6 +49,7 @@ import {
   openOnboardingOnInstall,
 } from "./onboarding/onboarding-surface";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
+import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createMessageHandler } from "./routing/messages";
 import type { RuntimeSender } from "./routing/senders";
 import { walletEventBroadcasts } from "./runtime/events";
@@ -187,6 +188,7 @@ const activityLog = (() => {
 // Public chain data only. The adapter is restricted to trusted extension
 // contexts at startup; wallet secrets remain exclusively in the encrypted vault.
 const balanceSnapshots = createBalanceSnapshotStore(createBrowserLocalStore());
+const nftSnapshots = createNftSnapshotStore(createBrowserLocalStore());
 const originHistory = (() => {
   try {
     return createOriginHistoryStore({ now: systemClock, store: createBrowserLocalStore() });
@@ -269,6 +271,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   activeStateCoordinator,
   approvals,
   balanceSnapshots,
+  nftSnapshots,
   session,
   preferencesStore: preferenceStore,
   runtimeRpc,

@@ -20,8 +20,10 @@ export { activityToCsv } from "./activity-csv";
  * Browser storage key for the activity log.
  */
 const ACTIVITY_STORE_KEY = "mc-wallet:activity";
+const ACTIVITY_HISTORY_SYNC_KEY = "mc-wallet:activity-history-sync";
 
 const MAX_ENTRIES_PER_SCOPE = 200;
+const MAX_SYNC_SCOPES = 50;
 
 /**
  * System wall-clock reader. Lives in this clock-boundary module so other
@@ -139,7 +141,15 @@ export type ActivityScope = {
  * Activity log surface used by background message handling.
  */
 export type ActivityLog = {
+  /** Last explorer history attempt for one public account scope. */
+  readonly historySync?: (scope: ActivityScope) => Promise<ActivityHistoryState | null>;
   readonly list: () => Promise<readonly ActivityEntry[]>;
+  /** Records an explorer attempt without touching activity rows. */
+  readonly markHistorySynced?: (
+    scope: ActivityScope,
+    syncedAt: number,
+    unavailable: boolean,
+  ) => Promise<void>;
   readonly record: (
     entry: Omit<
       ActivityEntry,
@@ -166,6 +176,27 @@ export type ActivityLog = {
     outcomes: Readonly<Record<string, ActivityOutcome>>,
     scope: ActivityScope,
   ) => Promise<readonly ActivityEntry[]>;
+};
+
+/**
+ * Last on-chain history attempt retained for one account scope.
+ */
+export type ActivityHistoryState = { readonly syncedAt: number; readonly unavailable: boolean };
+type ActivityHistorySync = ActivityHistoryState & ActivityScope;
+
+const isHistorySync = (value: unknown): value is ActivityHistorySync =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["accountId", "networkId", "syncedAt", "unavailable"]) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
+  typeof value["syncedAt"] === "number" &&
+  Number.isSafeInteger(value["syncedAt"]) &&
+  value["syncedAt"] >= 0 &&
+  typeof value["unavailable"] === "boolean";
+
+const readHistorySyncs = async (store: KeyValueStore): Promise<readonly ActivityHistorySync[]> => {
+  const stored = await store.get(ACTIVITY_HISTORY_SYNC_KEY);
+  return Array.isArray(stored) ? stored.filter(isHistorySync).slice(-MAX_SYNC_SCOPES) : [];
 };
 
 const isActivityStatus = (value: unknown): value is ActivityStatus =>
@@ -337,6 +368,12 @@ export const createActivityLog = ({
 }): ActivityLog =>
   serializeStoreMutations<ActivityLog>(
     {
+      async historySync(scope) {
+        const sync = (await readHistorySyncs(store)).find(
+          (entry) => entry.accountId === scope.accountId && entry.networkId === scope.networkId,
+        );
+        return sync ? { syncedAt: sync.syncedAt, unavailable: sync.unavailable } : null;
+      },
       async list() {
         const entries = await readEntries(store);
         return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
@@ -348,6 +385,14 @@ export const createActivityLog = ({
         }
         const entries = await readEntries(store);
         await store.set(ACTIVITY_STORE_KEY, entriesAfterRecord(entries, next));
+      },
+      async markHistorySynced(scope, syncedAt, unavailable) {
+        const next = { ...scope, syncedAt, unavailable };
+        if (!isHistorySync(next)) return;
+        const retained = (await readHistorySyncs(store)).filter(
+          (entry) => entry.accountId !== scope.accountId || entry.networkId !== scope.networkId,
+        );
+        await store.set(ACTIVITY_HISTORY_SYNC_KEY, [...retained, next].slice(-MAX_SYNC_SCOPES));
       },
       async replaceScope(entries, scope) {
         const scoped = entries
@@ -373,7 +418,7 @@ export const createActivityLog = ({
         return [...activityForScope(updated, scope)].sort((a, b) => b.submittedAt - a.submittedAt);
       },
     },
-    ["list"],
+    ["historySync", "list"],
   );
 
 /**
@@ -381,13 +426,21 @@ export const createActivityLog = ({
  */
 export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
   const entries: ActivityEntry[] = [];
+  const historySyncs = new Map<string, ActivityHistoryState>();
+  const scopeKey = (scope: ActivityScope): string => `${scope.networkId}:${scope.accountId}`;
   return {
+    async historySync(scope) {
+      return historySyncs.get(scopeKey(scope)) ?? null;
+    },
     async list() {
       return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
     },
     async record(entry) {
       const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
       entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
+    },
+    async markHistorySynced(scope, syncedAt, unavailable) {
+      historySyncs.set(scopeKey(scope), { syncedAt, unavailable });
     },
     async replaceScope(next, scope) {
       const scoped = next

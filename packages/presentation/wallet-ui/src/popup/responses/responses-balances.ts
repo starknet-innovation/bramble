@@ -31,9 +31,11 @@ export type { TokenBalance };
  */
 export type BalancesResponse = {
   readonly accountId: string;
+  readonly asOf?: number | null;
   readonly balances: readonly TokenBalance[];
   readonly networkId: string;
   readonly ok: true;
+  readonly stale?: boolean;
 };
 
 /**
@@ -54,8 +56,14 @@ export type DetectTokensResponse = {
 export const isBalancesResponse = (value: unknown): value is BalancesResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["accountId", "balances", "networkId", "ok"]) &&
+  hasOnlyKnownKeys(value, ["accountId", "asOf", "balances", "networkId", "ok", "stale"]) &&
   value["ok"] === true &&
+  (value["asOf"] === undefined ||
+    value["asOf"] === null ||
+    (typeof value["asOf"] === "number" &&
+      Number.isSafeInteger(value["asOf"]) &&
+      value["asOf"] >= 0)) &&
+  (value["stale"] === undefined || typeof value["stale"] === "boolean") &&
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   Array.isArray(value["balances"]) &&
   value["balances"].every(

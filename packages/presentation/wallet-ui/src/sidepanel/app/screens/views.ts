@@ -276,7 +276,7 @@ export const dashboard = (
   drawerGroupFilter: string | null = null,
   expandedGroupId: string | null = null,
   priceStale = false,
-  _priceAsOf: number | null = null,
+  priceAsOf: number | null = null,
   discoveredNfts: readonly DiscoveredNft[] = [],
   openAssignId: string | null = null,
   classHashVerification: ClassHashVerification | null = null,
@@ -315,6 +315,8 @@ export const dashboard = (
       nfts:
         selectedMultisigId !== null && multisigNftId === selectedMultisigId ? multisigNfts : null,
       prices,
+      priceAsOf,
+      priceStale,
     },
     multisigIntents,
     multisigs,
@@ -413,6 +415,7 @@ export const dashboard = (
               changes,
               currency,
               priceStale,
+              priceAsOf,
               discoveredNfts,
               privacy,
             );

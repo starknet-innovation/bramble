@@ -245,13 +245,12 @@ describe("sidepanel home", () => {
       priceAsOf,
     );
 
-  test("stale cached prices render without an error-like notice", () => {
+  test("stale cached prices remain visible with their saved timestamp", () => {
     const html = homeWithPrices({ "0x00aa": 5 }, true, 1752501900000);
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
 
-    expect(hero).not.toContain('class="hero-stale"');
-    expect(hero).not.toContain("Showing last saved prices");
-    expect(hero).not.toContain("14 Jul, 14:05 UTC");
+    expect(hero).toContain('class="hero-stale"');
+    expect(hero).toContain("Using saved prices (14 Jul, 14:05 UTC)");
     // Cached fiat still renders — the total is not blanked to "—".
     expect(hero).not.toMatch(/class="hero-total">—/);
   });
@@ -273,6 +272,23 @@ describe("sidepanel home", () => {
 
     expect(hero).not.toContain("hero-stale");
     expect(hero).not.toContain("last saved");
+  });
+
+  test("saved balances survive a failed refresh with a clear capture time", () => {
+    const html = dashboard(
+      "home",
+      status,
+      [],
+      preferences,
+      { asOf: 1752501900000, balances: [], stale: true },
+      null,
+      [],
+      [],
+      {},
+    );
+    const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
+
+    expect(hero).toContain("Using saved balances (14 Jul, 14:05 UTC)");
   });
 
   test("flow screens carry neither the drawer nor the home tabs", () => {

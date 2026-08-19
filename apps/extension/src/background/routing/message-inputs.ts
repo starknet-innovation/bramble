@@ -113,7 +113,6 @@ export const readFeeReviewInput = (
         ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
       }
     : null;
-
 /**
  * Parses an activity request for either the active signer or one explicitly
  * selected watched account. The background resolves and authorizes the scope;
@@ -121,12 +120,17 @@ export const readFeeReviewInput = (
  */
 export const readActivityInput = (
   message: unknown,
-): { readonly accountId?: string; readonly cached: boolean } | null => {
+): {
+  readonly accountId?: string;
+  readonly cached: boolean;
+  readonly refreshHistory: boolean;
+} | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountId", "cached", "type"]) ||
+    !hasOnlyKnownKeys(message, ["accountId", "cached", "refreshHistory", "type"]) ||
     message["type"] !== "wallet.activity" ||
     (message["cached"] !== undefined && message["cached"] !== true) ||
+    (message["refreshHistory"] !== undefined && message["refreshHistory"] !== true) ||
     (message["accountId"] !== undefined && !isAccountId(message["accountId"]))
   ) {
     return null;
@@ -134,9 +138,9 @@ export const readActivityInput = (
   return {
     ...(message["accountId"] === undefined ? {} : { accountId: message["accountId"] }),
     cached: message["cached"] === true,
+    refreshHistory: message["refreshHistory"] === true,
   };
 };
-
 /**
  * Parses connected-site revocation messages and normalizes the origin.
  */
@@ -152,7 +156,6 @@ export const readRevokeOriginInput = (message: unknown): { readonly origin: stri
   const origin = normalizeWalletOrigin(message["origin"]);
   return origin ? { origin } : null;
 };
-
 /**
  * Parses account-read messages and optional extension-page passphrases.
  */

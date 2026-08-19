@@ -125,8 +125,10 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       if (isBalancesResponse(response) && response.accountId === multisigId) {
         return {
           accountId: response.accountId,
+          ...(response.asOf === undefined ? {} : { asOf: response.asOf }),
           balances: response.balances,
           networkId: response.networkId,
+          ...(response.stale === undefined ? {} : { stale: response.stale }),
         };
       }
       return {
@@ -165,7 +167,8 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         "prepare Argent multisig intent failed",
       );
     },
-    async refreshMultisig(multisigId: string): Promise<RefreshResult> {
+    async refreshMultisig(multisigId: string, force = false): Promise<RefreshResult> {
+      if (force) refreshes.delete(multisigId);
       const existing = refreshes.get(multisigId);
       if (existing) return existing;
       const refresh = sendMessage({ multisigId, type: "wallet.refreshMultisig" })

@@ -11,7 +11,6 @@ import {
 import { mergeActivity } from "@mc-wallet/transactions/tx-history";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import { currentArgentSignerRecords } from "../multisig/multisig-membership";
 import { readActivityInput } from "../routing/message-inputs";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
@@ -37,6 +36,8 @@ type ActivityTarget = {
   readonly scope: ActivityScope;
 };
 
+const HISTORY_SYNC_TTL_MS = 60_000;
+
 const activityTarget = async (
   deps: ActivityOpsDeps,
   context: { readonly account: AccountRef; readonly networkId: StarknetNetworkId },
@@ -50,8 +51,10 @@ const activityTarget = async (
       scope: { accountId: context.account.id, networkId: context.networkId },
     };
   }
-  const record = (await currentArgentSignerRecords(deps, context.account, context.networkId)).find(
-    (stored) => stored.id === requestedAccountId,
+  // Activity is public address history. Authorize the requested address from
+  // the local registry; signer authority is re-read only at signing boundaries.
+  const record = (await deps.multisigStore?.listMultisigs())?.find(
+    (stored) => stored.id === requestedAccountId && stored.networkId === context.networkId,
   );
   return record
     ? {
@@ -104,11 +107,25 @@ export const handleActivity = async (
   if (input.cached) {
     return { activity: activityForScope(await deps.activity.list(), target.scope), ok: true };
   }
-  const local = await reconcileScope(deps, target.scope, (deps.now ?? systemClock)());
-  const history = await accountHistory(deps, target);
+  const now = (deps.now ?? systemClock)();
+  const local = await reconcileScope(deps, target.scope, now);
+  const previousSync = await deps.activity.historySync?.(target.scope).catch(() => null);
+  const scanHistory =
+    input.refreshHistory ||
+    previousSync == null ||
+    previousSync.syncedAt > now ||
+    now - previousSync.syncedAt >= HISTORY_SYNC_TTL_MS;
+  const history = scanHistory
+    ? await accountHistory(deps, target)
+    : { onChain: [], unavailable: previousSync.unavailable };
   const merged = mergeActivity(local, history.onChain);
   if (!history.unavailable) {
     await deps.activity.replaceScope?.(merged, target.scope).catch(() => undefined);
+  }
+  if (scanHistory) {
+    await deps.activity
+      .markHistorySynced?.(target.scope, now, history.unavailable)
+      .catch(() => undefined);
   }
   return {
     activity: merged,

@@ -37,6 +37,7 @@ import {
   type BalanceSnapshotStore,
   memoryBalanceSnapshotStore,
 } from "../portfolio/balance-snapshots";
+import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
 import {
   createStrk20WalletPreparationStore,
   type Strk20WalletPreparationStore,
@@ -68,6 +69,7 @@ export type RouterContext = {
   readonly ledgerSignQueue: LedgerSignQueue;
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
+  readonly nftSnapshots?: NftSnapshotStore;
   readonly now: () => number;
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
@@ -94,6 +96,7 @@ export type MessageHandlerOptions = {
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
+  readonly nftSnapshots?: NftSnapshotStore;
   /**
    * Wall-clock reader used to age transaction observation windows. Injected so
    * reconciliation is deterministic under test; defaults to the system clock.
@@ -147,6 +150,11 @@ const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): Watc
 const balanceSnapshotsFor = (provided: BalanceSnapshotStore | undefined): BalanceSnapshotStore =>
   provided ?? memoryBalanceSnapshotStore();
 
+const nftSnapshotsFor = (
+  provided: NftSnapshotStore | undefined,
+): Pick<RouterContext, "nftSnapshots"> | Record<string, never> =>
+  provided ? { nftSnapshots: provided } : {};
+
 /**
  * Resolves every optional collaborator into the fully wired router context.
  * Absent collaborators fall back to in-memory or explicitly-unavailable
@@ -179,6 +187,7 @@ export const routerContext = (
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
+    ...nftSnapshotsFor(options.nftSnapshots),
     now: options.now ?? systemClock,
     originHistory: options.originHistory ?? memoryOriginHistory(),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,

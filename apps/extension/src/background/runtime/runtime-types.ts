@@ -122,9 +122,11 @@ type PreferencesResponse = {
  */
 type BalancesResponse = {
   readonly accountId: string;
+  readonly asOf: number | null;
   readonly balances: readonly TokenBalance[];
   readonly networkId: StarknetNetworkId;
   readonly ok: true;
+  readonly stale: boolean;
 };
 
 /**
@@ -414,9 +416,11 @@ type MultisigDeployResponse = {
 /** Token balances scoped to a watched shared account. */
 type MultisigBalancesResponse = {
   readonly accountId: string;
+  readonly asOf: number | null;
   readonly balances: readonly TokenBalance[];
   readonly networkId: StarknetNetworkId;
   readonly ok: true;
+  readonly stale: boolean;
 };
 
 /**

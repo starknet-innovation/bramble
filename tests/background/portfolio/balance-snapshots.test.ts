@@ -15,10 +15,15 @@ describe("balance snapshots", () => {
   test("survives recreation and never crosses account scope", async () => {
     const storage = createMemoryStore();
     const snapshots = createBalanceSnapshotStore(storage);
-    await snapshots.write({ accountId: "SN_MAIN:0x1", balances, networkId: "SN_MAIN" });
+    await snapshots.write({
+      accountId: "SN_MAIN:0x1",
+      balances,
+      fetchedAt: 42,
+      networkId: "SN_MAIN",
+    });
 
     const restored = createBalanceSnapshotStore(storage);
-    expect(await restored.read("SN_MAIN:0x1", "SN_MAIN")).toEqual(balances);
+    expect(await restored.read("SN_MAIN:0x1", "SN_MAIN")).toEqual({ balances, fetchedAt: 42 });
     expect(await restored.read("SN_MAIN:0x2", "SN_MAIN")).toBeNull();
   });
 
@@ -34,10 +39,14 @@ describe("balance snapshots", () => {
       await snapshots.write({
         accountId: `SN_MAIN:0x${index.toString(16)}`,
         balances,
+        fetchedAt: index,
         networkId: "SN_MAIN",
       });
     }
     expect(await snapshots.read("SN_MAIN:0x1", "SN_MAIN")).toBeNull();
-    expect(await snapshots.read("SN_MAIN:0x33", "SN_MAIN")).toEqual(balances);
+    expect(await snapshots.read("SN_MAIN:0x33", "SN_MAIN")).toEqual({
+      balances,
+      fetchedAt: 51,
+    });
   });
 });

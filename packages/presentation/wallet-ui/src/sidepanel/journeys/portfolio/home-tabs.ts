@@ -151,10 +151,18 @@ const activityAppearance = (
 ): { readonly icon: IconName; readonly label: string; readonly type: string } => {
   const summary = entry.summary.toLowerCase();
   if (/\bswap(ped|ping)?\b/.test(summary)) return { icon: "swap", label: "Swap", type: "swap" };
-  if (/\b(un)?stak(e|ed|ing)\b|\bdelegat(e|ed|ing)\b/.test(summary))
+  if (/\bunstak(e|ed|ing)\b|\bundelegat(e|ed|ing)\b/.test(summary))
+    return { icon: "piggyBankBroken", label: "Unstake", type: "unstake" };
+  if (
+    /\b(claim|claimed|claiming)\b.*\brewards?\b|\brewards?\b.*\b(claim|claimed|claiming)\b/.test(
+      summary,
+    )
+  )
+    return { icon: "blackberry", label: "Claim rewards", type: "reward" };
+  if (/\bstak(e|ed|ing)\b|\bdelegat(e|ed|ing)\b/.test(summary))
     return { icon: "piggyBank", label: "Stake", type: "stake" };
   if (/\b(un)?shield(ed|ing)?\b|\bprivate\b/.test(summary))
-    return { icon: "shield", label: "Private transaction", type: "private" };
+    return { icon: "maskedFace", label: "Private transaction", type: "private" };
   if (/\b(approve|approved|revoke|revoked)\b/.test(summary))
     return { icon: "lock", label: "Approval", type: "approval" };
   if (entry.kind === "transfer") {

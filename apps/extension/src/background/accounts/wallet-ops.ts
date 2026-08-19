@@ -7,7 +7,7 @@ import {
   type FeeEstimate,
   parseTokenAmount,
 } from "@mc-wallet/starknet/rpc";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
+import { type ActivityLog, systemClock } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import {
@@ -20,6 +20,7 @@ import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wall
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import type { BalanceSnapshotStore } from "../portfolio/balance-snapshots";
+import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
 import {
   readBalancesInput,
   readFeeReviewInput,
@@ -66,6 +67,8 @@ export type WalletOpsDeps = {
    * read-only asset discovery. Signing paths resolve multisigs separately.
    */
   readonly multisigStore?: MultisigStore;
+  /** Public, last-known ownership snapshots; transfer paths still re-prove live ownership. */
+  readonly nftSnapshots?: NftSnapshotStore;
   /**
    * Wall-clock reader used to age transaction observation windows. Injected so
    * reconciliation stays deterministic under test; defaults to the system
@@ -154,6 +157,8 @@ const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
 const passiveAccountContext = (deps: WalletOpsDeps) =>
   observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
 
+const BALANCE_STALE_MS = 60_000;
+
 const handleGetBalances: WalletOpsHandler = async (deps, message) => {
   const input = readBalancesInput(message);
   if (!input) {
@@ -166,21 +171,40 @@ const handleGetBalances: WalletOpsHandler = async (deps, message) => {
   const preferences = await deps.preferencesStore.read();
   const network = STARKNET_NETWORKS[context.networkId];
   if (input.cached) {
-    const balances = await deps.balanceSnapshots
+    const snapshot = await deps.balanceSnapshots
       ?.read(context.account.id, network.id)
       .catch(() => null);
-    if (!balances) return { error: "balance snapshot unavailable" };
-    return { accountId: context.account.id, balances, networkId: network.id, ok: true };
+    if (!snapshot) return { error: "balance snapshot unavailable" };
+    const now = (deps.now ?? systemClock)();
+    return {
+      accountId: context.account.id,
+      asOf: snapshot.fetchedAt > 0 ? snapshot.fetchedAt : null,
+      balances: snapshot.balances,
+      networkId: network.id,
+      ok: true,
+      stale:
+        snapshot.fetchedAt <= 0 ||
+        snapshot.fetchedAt > now ||
+        now - snapshot.fetchedAt >= BALANCE_STALE_MS,
+    };
   }
   const balances = await deps.runtimeRpc.getTokenBalances({
     accountAddress: context.account.address,
     rpcUrls: networkRpcUrls(network, preferences),
     tokens: preferences.tokens.filter((token) => token.networkId === network.id),
   });
+  const fetchedAt = (deps.now ?? systemClock)();
   await deps.balanceSnapshots
-    ?.write({ accountId: context.account.id, balances, networkId: network.id })
+    ?.write({ accountId: context.account.id, balances, fetchedAt, networkId: network.id })
     .catch(() => undefined);
-  return { accountId: context.account.id, balances, networkId: network.id, ok: true };
+  return {
+    accountId: context.account.id,
+    asOf: fetchedAt > 0 ? fetchedAt : null,
+    balances,
+    networkId: network.id,
+    ok: true,
+    stale: false,
+  };
 };
 
 const handleDeploymentStatus: WalletOpsHandler = async (deps, message) => {

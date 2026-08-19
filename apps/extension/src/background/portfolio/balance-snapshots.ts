@@ -19,8 +19,11 @@ const MAX_SCOPES = 50;
 type BalanceSnapshot = {
   readonly accountId: string;
   readonly balances: readonly TokenBalance[];
+  readonly fetchedAt: number;
   readonly networkId: StarknetNetworkId;
 };
+
+type BalanceSnapshotValue = Pick<BalanceSnapshot, "balances" | "fetchedAt">;
 
 /**
  * Background-owned balance cache; callers still refresh from RPC after reads.
@@ -29,15 +32,18 @@ export type BalanceSnapshotStore = {
   readonly read: (
     accountId: string,
     networkId: StarknetNetworkId,
-  ) => Promise<readonly TokenBalance[] | null>;
+  ) => Promise<BalanceSnapshotValue | null>;
   readonly write: (snapshot: BalanceSnapshot) => Promise<void>;
 };
 
 const isSnapshot = (value: unknown): value is BalanceSnapshot =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountId", "balances", "networkId"]) &&
+  hasOnlyKnownKeys(value, ["accountId", "balances", "fetchedAt", "networkId"]) &&
   isStarknetNetworkId(value["networkId"]) &&
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
+  typeof value["fetchedAt"] === "number" &&
+  Number.isSafeInteger(value["fetchedAt"]) &&
+  value["fetchedAt"] >= 0 &&
   Array.isArray(value["balances"]) &&
   value["balances"].every(
     (balance) => isTokenBalance(balance) && balance.networkId === value["networkId"],
@@ -56,11 +62,10 @@ export const createBalanceSnapshotStore = (store: KeyValueStore): BalanceSnapsho
   serializeStoreMutations<BalanceSnapshotStore>(
     {
       async read(accountId, networkId) {
-        return (
-          (await readSnapshots(store)).find(
-            (snapshot) => snapshot.accountId === accountId && snapshot.networkId === networkId,
-          )?.balances ?? null
+        const snapshot = (await readSnapshots(store)).find(
+          (stored) => stored.accountId === accountId && stored.networkId === networkId,
         );
+        return snapshot ? { balances: snapshot.balances, fetchedAt: snapshot.fetchedAt } : null;
       },
       async write(snapshot) {
         if (!isSnapshot(snapshot)) return;

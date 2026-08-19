@@ -8,6 +8,7 @@ const meta: LabMeta = {
 
 export default meta;
 
+export const SavedData = checkpointStory("Portfolio saved data", "portfolio", "saved-data");
 export const Ready = checkpointStory("Portfolio ready", "portfolio", "ready");
 export const MajorActions = checkpointStory(
   "Portfolio · four major actions",

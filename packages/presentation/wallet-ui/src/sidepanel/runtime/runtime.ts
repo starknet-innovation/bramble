@@ -56,7 +56,12 @@ export type RuntimeApi = {
  * Balance loading state rendered by the side panel.
  */
 export type BalanceState =
-  | { readonly balances: readonly TokenBalance[]; readonly error?: never }
+  | {
+      readonly asOf?: number | null;
+      readonly balances: readonly TokenBalance[];
+      readonly error?: never;
+      readonly stale?: boolean;
+    }
   | { readonly balances?: never; readonly error: string };
 /**
  * Successful balances retain the account/network scope proven by the response.
@@ -64,9 +69,11 @@ export type BalanceState =
 export type ScopedBalanceState =
   | {
       readonly accountId: string;
+      readonly asOf?: number | null;
       readonly balances: readonly TokenBalance[];
       readonly error?: never;
       readonly networkId: string;
+      readonly stale?: boolean;
     }
   | {
       readonly accountId?: never;
@@ -183,6 +190,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     async loadActivity(
       accountId?: string,
       cached = false,
+      refreshHistory = false,
     ): Promise<{
       readonly entries: ActivityResponse["activity"];
       readonly historyUnavailable: boolean;
@@ -190,6 +198,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({
         ...(accountId === undefined ? {} : { accountId }),
         ...(cached ? { cached: true } : {}),
+        ...(refreshHistory ? { refreshHistory: true } : {}),
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {
@@ -258,8 +267,10 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       if (isBalancesResponse(response)) {
         return {
           accountId: response.accountId,
+          ...(response.asOf === undefined ? {} : { asOf: response.asOf }),
           balances: response.balances,
           networkId: response.networkId,
+          ...(response.stale === undefined ? {} : { stale: response.stale }),
         };
       }
       return { error: isErrorResponse(response) ? response.error : "balances unavailable" };

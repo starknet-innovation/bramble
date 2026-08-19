@@ -347,7 +347,10 @@ describe("home hydration priority", () => {
     expect(signerBalanceReads).toBe(0);
     expect(cache.multisigBalanceId).toBe(multisigId);
     expect(cache.multisigBalances).toEqual(sharedBalances);
-    expect(sharedNftReads).toEqual([[true, `${status.networkId}:${multisigId}`, multisigId]]);
+    expect(sharedNftReads).toEqual([
+      [true, `${status.networkId}:${multisigId}`, multisigId, true],
+      [true, `${status.networkId}:${multisigId}`, multisigId],
+    ]);
     expect(cache.multisigNftId).toBe(multisigId);
     expect(cache.multisigNfts).toHaveLength(1);
     expect(multisigReads).toEqual([true, false]);
@@ -387,8 +390,9 @@ describe("home hydration priority", () => {
       deployment: {},
       multisig: {
         loadMultisigs: async () => ({ intents: [], multisigs: [] }),
-        refreshMultisig: async () => {
+        refreshMultisig: async (_id: string, force = false) => {
           refreshes += 1;
+          expect(force).toBe(true);
           return {
             intents: [],
             multisig: { authorityStatus: "available", record: { id: multisigId } },
@@ -441,9 +445,10 @@ describe("home hydration priority", () => {
           listReads += 1;
           return { intents: [], multisigs: [view] };
         },
-        refreshMultisig: async (id: string) => {
+        refreshMultisig: async (id: string, force = false) => {
           selectedReads += 1;
           expect(id).toBe(multisigId);
+          expect(force).toBe(true);
           return {
             intents: [],
             multisig: {

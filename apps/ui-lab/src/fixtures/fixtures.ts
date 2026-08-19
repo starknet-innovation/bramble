@@ -153,6 +153,9 @@ const activity = (
 export const softwareActivity: readonly ActivityEntry[] = [
   activity(softwareAccount, "0x701", "Sent 24 USDC", "accepted"),
   activity(softwareAccount, "0x702", "Swapped 50 USDC for STRK", "accepted"),
+  { ...activity(softwareAccount, "0x703", "Unstaked 120 STRK", "accepted"), kind: "invoke" },
+  { ...activity(softwareAccount, "0x704", "Claimed staking rewards", "accepted"), kind: "invoke" },
+  { ...activity(softwareAccount, "0x705", "Private transfer 20 USDC", "accepted"), kind: "invoke" },
 ];
 
 export const secondActivity: readonly ActivityEntry[] = [

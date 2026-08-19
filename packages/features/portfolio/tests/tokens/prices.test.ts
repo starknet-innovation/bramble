@@ -92,7 +92,7 @@ describe("createPriceService.getPrices", () => {
   });
 
   test("returns empty, stale-flagged prices when offline with no cache", async () => {
-    const { service } = makeHarness(() => {
+    const { calls, service } = makeHarness(() => {
       throw new Error("offline");
     });
 
@@ -101,11 +101,13 @@ describe("createPriceService.getPrices", () => {
     expect(
       await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" }),
     ).toEqual({ asOf: null, changes: {}, currency: "usd", prices: {}, stale: true });
+    await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" });
+    expect(calls).toHaveLength(1);
   });
 
   test("falls back to the last-known-good prices when the host becomes unreachable", async () => {
     let online = true;
-    const { clock, service } = makeHarness((url) => {
+    const { calls, clock, service } = makeHarness((url) => {
       if (!online) {
         throw new Error("offline");
       }
@@ -144,6 +146,8 @@ describe("createPriceService.getPrices", () => {
       prices: { [USDC]: 2 },
       stale: true,
     });
+    await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" });
+    expect(calls).toHaveLength(2);
 
     // Host recovers on the next refresh: fresh, non-stale prices with a new asOf.
     online = true;

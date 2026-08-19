@@ -95,7 +95,9 @@ describe("activity journey boundaries", () => {
         transaction,
         { ...transaction, hash: "0x124", kind: "invoke", summary: "Swap 1 STRK for USDC" },
         { ...transaction, hash: "0x125", kind: "invoke", summary: "Stake 10 STRK" },
-        { ...transaction, hash: "0x126", kind: "invoke", summary: "Claim rewards" },
+        { ...transaction, hash: "0x126", kind: "invoke", summary: "Unstake 10 STRK" },
+        { ...transaction, hash: "0x127", kind: "invoke", summary: "Claim rewards" },
+        { ...transaction, hash: "0x128", kind: "invoke", summary: "Private transfer 5 USDC" },
       ],
       false,
     );
@@ -103,7 +105,9 @@ describe("activity journey boundaries", () => {
     expect(html).toContain('class="tx-kind-icon tx-kind-transfer" aria-label="Transfer"');
     expect(html).toContain('class="tx-kind-icon tx-kind-swap" aria-label="Swap"');
     expect(html).toContain('class="tx-kind-icon tx-kind-stake" aria-label="Stake"');
-    expect(html).toContain('class="tx-kind-icon tx-kind-other" aria-label="Contract interaction"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-unstake" aria-label="Unstake"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-reward" aria-label="Claim rewards"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-private" aria-label="Private transaction"');
   });
 
   test("omits the explorer link on a network that has none", () => {
