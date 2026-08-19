@@ -72,6 +72,13 @@ describe("Argent multisig response validators", () => {
         ok: true,
       }),
     ).toBe(false);
+    expect(
+      isArgentMultisigResponse({
+        intents: [],
+        multisig: { ...fixture.view, authorityStatus: "unsupported-signers" },
+        ok: true,
+      }),
+    ).toBe(false);
   });
 
   test("validates deployment review and requires the deployed address to match the record", async () => {
@@ -112,6 +119,9 @@ describe("createMultisigClient", () => {
         if (type === "wallet.multisigs") {
           return { intents: [fixture.intent], multisigs: [fixture.view], ok: true };
         }
+        if (type === "wallet.refreshMultisig") {
+          return { intents: [fixture.intent], multisig: fixture.view, ok: true };
+        }
         if (type === "wallet.prepareArgentMultisigIntent") {
           return {
             feeReview: { overallFee: "44", unit: "FRI" },
@@ -131,6 +141,10 @@ describe("createMultisigClient", () => {
       intents: [fixture.intent],
       multisigs: [fixture.view],
     });
+    await expect(client.refreshMultisig(fixture.record.id)).resolves.toEqual({
+      intents: [fixture.intent],
+      multisig: fixture.view,
+    });
     await expect(
       client.prepareIntent(fixture.record.id, [
         { calldata: ["0x1"], contractAddress: "0xdef", entrypoint: "transfer" },
@@ -147,6 +161,7 @@ describe("createMultisigClient", () => {
     });
     expect(messages).toEqual([
       { type: "wallet.multisigs" },
+      { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
       {
         calls: [{ calldata: ["0x1"], contractAddress: "0xdef", entrypoint: "transfer" }],
         multisigId: fixture.record.id,

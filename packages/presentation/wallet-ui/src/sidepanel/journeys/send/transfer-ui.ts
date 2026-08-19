@@ -48,7 +48,7 @@ export type TransferUiDeps = {
   readonly app: Element | null;
   readonly back?: () => void;
   readonly confirmationDelaysMs?: readonly number[];
-  readonly navigate?: (view: "activity" | "home") => void;
+  readonly navigate?: (view: "activity" | "home" | "multisig-home") => void;
   /** Invalidates the cached private balance once a private send is accepted. */
   readonly onPrivateSendSettled?: () => void;
   readonly privacy?: () => PrivacyDisclosureState;
@@ -100,6 +100,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     transferApp = app;
   }
   const accountId = sendFormInput(form, "accountId")?.value ?? "";
+  const completionTarget =
+    form.dataset["sendCompleteTo"] === "multisig-home" ? "multisig-home" : "home";
   if (transferState.fields && transferState.fields.accountId !== accountId) {
     transferEpoch += 1;
     transferState = initialTransferState();
@@ -146,6 +148,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     if (transferState.transactionHash === null) {
       transferEpoch += 1;
       transferState = initialTransferState();
+    }
+    if (transferState.transactionHash && completionTarget === "multisig-home") {
+      navigate?.("multisig-home");
+      return;
     }
     if (back) {
       back();
@@ -205,19 +211,24 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     form,
     onRouteChange: dropReview,
     ...(deps.reloadPrivacy ? { retry: deps.reloadPrivacy } : {}),
-    retryable: () => deps.privacy?.().error !== null,
+    retryable: () => {
+      const fields = transferFields(form);
+      return (
+        deps.privacy?.().error !== null &&
+        (fields.source === "private" || fields.destination === "private")
+      );
+    },
     route,
   });
 
   form.querySelector("#send-edit")?.addEventListener("click", editDetails);
   form.querySelector("#send-failure-edit")?.addEventListener("click", editDetails);
-  form.querySelector("#send-another")?.addEventListener("click", () => {
-    transferEpoch += 1;
-    form.reset();
-    transferState = initialTransferState();
-    repaint();
-    form.querySelector<HTMLInputElement>("#send-recipient-search")?.focus();
-  });
+  const homeButton = form.querySelector<HTMLButtonElement>("#send-home");
+  if (homeButton) {
+    homeButton.textContent =
+      completionTarget === "multisig-home" ? "View multisig" : "Back to home";
+    homeButton.addEventListener("click", () => navigate?.(completionTarget));
+  }
   form
     .querySelector("#send-view-activity")
     ?.addEventListener("click", () => navigate?.("activity"));

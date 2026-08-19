@@ -5,6 +5,7 @@ import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository
 import { button } from "@mc-wallet/ui-kit/controls";
 import { selectField, textareaField } from "@mc-wallet/ui-kit/fields";
 import { icon } from "../../shared/icons";
+import { accountLabel } from "../../shared/parts";
 
 type SignerOption = { readonly label: string; readonly value: string };
 type IntentAction = {
@@ -89,41 +90,66 @@ const collaborationTools = (
   canImport: boolean,
   packageIsPrimary: boolean,
 ): string => {
-  const tools = `${
-    packageIsPrimary
-      ? ""
-      : button({
-          attributes: { "data-ms-copy-package": intent.id },
-          label: "Copy intent package",
-          size: "small",
-          variant: "secondary",
-        })
-  }${intent.signatures
-    .map((_, index) =>
+  const signatures = intent.signatures
+    .map((signature, index) =>
       button({
         attributes: {
           "data-ms-copy-signature": intent.id,
           "data-ms-signature-index": String(index),
         },
-        label: `Copy signature ${index + 1}`,
+        icon: "copy",
+        label: `Signature from ${accountLabel(signature.publicKey)}`,
         size: "small",
         variant: "ghost",
       }),
     )
-    .join("")}`;
+    .join("");
   return `<details class="disclosure multisig-collaboration">
     <summary>
-      <span class="menu-copy"><strong>${packageIsPrimary ? "Manage signatures" : "Share or manage signatures"}</strong><small>${intent.signatures.length} collected · ${intent.configSnapshot.threshold} required</small></span>
+      <span class="menu-copy"><strong>Co-signer handoff</strong><small>${intent.signatures.length} of ${intent.configSnapshot.threshold} signatures collected</small></span>
       <span class="disclosure-mark">${icon("chevronRight")}</span>
     </summary>
     <div class="disclosure-body">
-      ${tools ? `<div class="multisig-collaboration-actions">${tools}</div>` : ""}
+      ${
+        packageIsPrimary
+          ? ""
+          : `<section class="multisig-handoff-section">
+              <div class="multisig-handoff-copy">
+                <strong>Share the reviewed transaction</strong>
+                <p>Copies the transaction and every signature collected so far for another MC Wallet signer.</p>
+              </div>
+              ${button({
+                attributes: { "data-ms-copy-package": intent.id },
+                icon: "copy",
+                label: "Copy full intent package",
+                size: "small",
+                variant: "secondary",
+              })}
+            </section>`
+      }
       ${
         canImport
-          ? `<form data-ms-signature-form="${escapeHtml(intent.id)}">
-              ${textareaField({ label: "Import signature fragment", name: "signature", placeholder: '{"publicKey":"0x…","r":"0x…","s":"0x…"}', required: true, rows: 3, spellcheck: false })}
-              ${button({ label: "Verify and import", size: "small", type: "submit", variant: "secondary" })}
-            </form>`
+          ? `<section class="multisig-handoff-section">
+              <div class="multisig-handoff-copy">
+                <strong>Add a co-signer signature</strong>
+                <p>Paste one signature fragment returned by a signer. It is verified before it counts toward the threshold.</p>
+              </div>
+              <form data-ms-signature-form="${escapeHtml(intent.id)}">
+                ${textareaField({ label: "Signature fragment", name: "signature", placeholder: '{"publicKey":"0x…","r":"0x…","s":"0x…"}', required: true, rows: 3, spellcheck: false })}
+                ${button({ label: "Verify and add signature", size: "small", type: "submit", variant: "secondary" })}
+              </form>
+            </section>`
+          : ""
+      }
+      ${
+        signatures
+          ? `<details class="disclosure multisig-fragment-exports">
+              <summary>
+                <span class="menu-copy"><strong>Individual signature fragments</strong><small>Advanced handoff · ${intent.signatures.length} available</small></span>
+                <span class="disclosure-mark">${icon("chevronRight")}</span>
+              </summary>
+              <div class="disclosure-body multisig-collaboration-actions">${signatures}</div>
+            </details>`
           : ""
       }
     </div>
@@ -160,4 +186,36 @@ export const multisigIntentActions = (
       intent.state === "collecting" && hasFreshAuthority,
       action.packageIsPrimary,
     )}`;
+};
+
+/**
+ * Replaces a terminal intent review with the wallet's standard transaction
+ * receipt. A submitted intent has no remaining signing controls to review.
+ */
+export const multisigIntentOutcome = (intent: ArgentMultisigSigningIntent): string | null => {
+  if (intent.state !== "submitted" && intent.state !== "accepted") return null;
+  const hash = intent.broadcastTransactionHash ?? intent.prepared.transactionHash;
+  return `<section class="send-outcome send-success multisig-intent-success" data-ms-intent="${escapeHtml(intent.id)}" role="status" aria-live="polite">
+    <span class="send-outcome-mark" aria-hidden="true">
+      <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
+    </span>
+    <div class="send-outcome-copy">
+      <p class="send-outcome-kicker">${intent.state === "accepted" ? "Confirmed on Starknet" : "Submitted to Starknet"}</p>
+      <h2>${intent.state === "accepted" ? "Transaction complete" : "Transaction submitted"}</h2>
+      <p>${escapeHtml(intent.summary)}</p>
+      <div class="address-line">
+        <code title="${escapeHtml(hash)}">${escapeHtml(accountLabel(hash))}</code>
+        ${button({
+          attributes: { "data-copy": hash },
+          icon: "copy",
+          label: "Copy transaction hash",
+          size: "small",
+          variant: "ghost",
+        })}
+      </div>
+    </div>
+    <div class="send-actions">
+      ${button({ attributes: { "data-view": "multisig-home" }, icon: "home", label: "Back to multisig" })}
+    </div>
+  </section>`;
 };

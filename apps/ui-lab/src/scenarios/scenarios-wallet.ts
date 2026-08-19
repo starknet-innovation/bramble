@@ -175,6 +175,21 @@ export const portfolioScenario: WalletScenario = {
       content: () =>
         walletDashboard({
           balanceState: { balances: journeyBalances },
+          deployment: false,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+          view: "deploy-account",
+        }),
+      id: "deploy-account",
+      label: "Deploy account review",
+      narrative:
+        "Single-signer deployment uses a dedicated transaction review and receipt rather than expanding Home.",
+      state: { accountDeployment: "required", task: "review deployment" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
           preferences: journeyPreferences,
           priceStale: true,
           prices: {},
@@ -221,7 +236,7 @@ export const portfolioScenario: WalletScenario = {
   id: "portfolio",
   surface: "sidepanel",
   title: "Home and portfolio",
-  views: ["home"],
+  views: ["home", "deploy-account"],
 };
 
 export const assetsScenario: WalletScenario = {

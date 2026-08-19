@@ -200,7 +200,13 @@ const upsertMultisigIn = (shape: StoredShape, record: ArgentMultisigRecord): Sha
       result: "stored",
       shape: {
         ...shape,
-        multisigs: shape.multisigs.map((stored, index) => (index === existing ? record : stored)),
+        multisigs: shape.multisigs.map((stored, index) =>
+          index === existing && current?.name && record.name === undefined
+            ? { ...record, name: current.name }
+            : index === existing
+              ? record
+              : stored,
+        ),
       },
     };
   }

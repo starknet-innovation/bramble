@@ -28,6 +28,10 @@ import { compactAmount } from "../portfolio/token-row";
  */
 export type SendIntent = {
   readonly accountId: string;
+  /** Shared account selected when a setup-owned funding send completes. */
+  readonly completeMultisigId?: string;
+  /** Returns a shortcut-owned send to its originating account after completion. */
+  readonly completeTo?: "multisig-home";
   readonly destination: ValueBucket;
   readonly networkId: string;
   readonly recipient: string;

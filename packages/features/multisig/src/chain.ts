@@ -111,6 +111,36 @@ export type ArgentMultisigConfig = {
 };
 
 /**
+ * Fresh authority state exposed without collapsing trust failures. Unknown or
+ * malformed values are rejected at the response boundary.
+ */
+export type ArgentMultisigAuthorityStatus =
+  | "available"
+  | "invalid-config"
+  | "network-unavailable"
+  | "undeployed"
+  | "unsupported-class"
+  | "unsupported-signers";
+
+/**
+ * Non-Stark signer linked by the pinned account. The GUID is untrusted until
+ * matched to accepted contract events; this wallet never signs for this type.
+ */
+export type ArgentUnsupportedSigner = {
+  readonly guid: string;
+  readonly type: "eip191" | "secp256k1" | "secp256r1" | "webauthn";
+};
+
+/**
+ * Signer material recovered from accepted `SignerLinked` events. Invalid event
+ * data fails closed instead of returning a partial signer identity.
+ */
+export type ArgentSignerDiscovery = {
+  readonly signerPublicKeys: readonly string[];
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
+};
+
+/**
  * Inputs for reading one Argent multisig account's authority configuration.
  */
 export type ArgentMultisigConfigInput = {
@@ -222,31 +252,47 @@ const firstDeploymentBlock = async (
   return low;
 };
 
-const linkedStarkSigner = (
+type LinkedSigner =
+  | { readonly guid: string; readonly publicKey: string; readonly type: "starknet" }
+  | ({ readonly guid: string } & ArgentUnsupportedSigner);
+
+const SIGNER_TYPES: Readonly<Record<string, ArgentUnsupportedSigner["type"]>> = {
+  "0x1": "secp256k1",
+  "0x2": "secp256r1",
+  "0x3": "eip191",
+  "0x4": "webauthn",
+};
+
+const linkedSigner = (
   keys: readonly string[],
   data: readonly string[],
   signerGuids: readonly string[],
-): readonly [guid: string, publicKey: string] | null => {
+): LinkedSigner | null => {
   const guid = feltAt(keys, 1, "signer event");
-  if (!signerGuids.includes(guid) || feltAt(data, 0, "signer event") !== "0x0") return null;
+  if (!signerGuids.includes(guid)) return null;
+  const discriminator = feltAt(data, 0, "signer event");
+  if (discriminator !== "0x0") {
+    const type = SIGNER_TYPES[discriminator];
+    if (!type) throw new WalletError("Invalid Argent multisig signer event");
+    return { guid, type };
+  }
   const publicKey = feltAt(data, 1, "signer event");
   if (!isNonZeroStarkFieldElement(publicKey) || !sameFelt(argentSignerGuid(publicKey), guid)) {
     throw new WalletError("Invalid Argent multisig signer event");
   }
-  return [guid, publicKey];
+  return { guid, publicKey, type: "starknet" };
 };
 
 const rememberLinkedSigner = (
-  byGuid: Map<string, string>,
-  signer: readonly [guid: string, publicKey: string] | null,
+  byGuid: Map<string, LinkedSigner>,
+  signer: LinkedSigner | null,
 ): void => {
   if (!signer) return;
-  const [guid, publicKey] = signer;
-  const existing = byGuid.get(guid);
-  if (existing !== undefined && !sameFelt(existing, publicKey)) {
+  const existing = byGuid.get(signer.guid);
+  if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(signer)) {
     throw new WalletError("Conflicting Argent multisig signer events");
   }
-  byGuid.set(guid, publicKey);
+  byGuid.set(signer.guid, signer);
 };
 
 const signerKeysFromEvents = async (
@@ -255,8 +301,8 @@ const signerKeysFromEvents = async (
   signerGuids: readonly string[],
   deploymentBlock: number,
   acceptedBlockHash: string,
-): Promise<readonly string[]> => {
-  const byGuid = new Map<string, string>();
+): Promise<ArgentSignerDiscovery> => {
+  const byGuid = new Map<string, LinkedSigner>();
   let continuationToken: string | undefined;
   let pages = 0;
   do {
@@ -273,26 +319,34 @@ const signerKeysFromEvents = async (
       throw new WalletError("Argent multisig signer history is too large to verify");
     }
     for (const event of chunk.events) {
-      rememberLinkedSigner(byGuid, linkedStarkSigner(event.keys, event.data, signerGuids));
+      rememberLinkedSigner(byGuid, linkedSigner(event.keys, event.data, signerGuids));
     }
     continuationToken = chunk.continuation_token;
   } while (continuationToken !== undefined);
-  return signerGuids
-    .map((guid) => byGuid.get(guid))
-    .filter((publicKey): publicKey is string => publicKey !== undefined);
+  const signers = signerGuids.flatMap((guid) => {
+    const signer = byGuid.get(guid);
+    return signer ? [signer] : [];
+  });
+  return {
+    signerPublicKeys: signers.flatMap((signer) =>
+      signer.type === "starknet" ? [signer.publicKey] : [],
+    ),
+    unsupportedSigners: signers.flatMap((signer) => (signer.type === "starknet" ? [] : [signer])),
+  };
 };
 
 /**
  * Recovers current Stark signer public keys from the pinned contract's
- * accepted `SignerLinked` history. Every recovered key is re-derived against
- * the fresh GUID input; unsupported signer types remain unresolved.
+ * accepted `SignerLinked` history. Every recovered Stark key is re-derived
+ * against the fresh GUID input; other supported Argent schemes are classified
+ * so callers never ask the user for an impossible Stark key.
  */
 export const getArgentMultisigSignerPublicKeys = async ({
   address,
   makeProvider,
   rpcUrls,
   signerGuids,
-}: ArgentSignerDiscoveryInput): Promise<readonly string[]> => {
+}: ArgentSignerDiscoveryInput): Promise<ArgentSignerDiscovery> => {
   const account = requireAddress(address);
   const guids = signerGuids.map(requireGuid);
   if (

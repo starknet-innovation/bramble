@@ -346,4 +346,16 @@ describe("sidepanel styles", () => {
     );
     expect(SIDEPANEL_STYLES).toContain("button.onboarding-option:not(:disabled):hover");
   });
+
+  test("onboarding orbit nodes stay inside compact side panels", () => {
+    expect(SIDEPANEL_STYLES).toMatch(
+      /@media \(max-width: 400px\) \{[\s\S]*--orbit-outer-size: min\(350px, calc\(100vw - 48px\)\)/,
+    );
+  });
+
+  test("the selected onboarding contract keeps readable supporting copy", () => {
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.onboarding-contract\[aria-pressed="true"\] \.onboarding-contract-copy > span:last-child \{\s*color: var\(--mc-text\)/,
+    );
+  });
 });

@@ -147,6 +147,22 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         "prepare Argent multisig intent failed",
       );
     },
+    async refreshMultisig(multisigId: string): Promise<
+      | {
+          readonly intents: readonly ArgentMultisigSigningIntent[];
+          readonly multisig: ArgentMultisigView;
+        }
+      | "error"
+    > {
+      try {
+        const response = await sendMessage({ multisigId, type: "wallet.refreshMultisig" });
+        return isArgentMultisigResponse(response)
+          ? { intents: response.intents, multisig: response.multisig }
+          : "error";
+      } catch {
+        return "error";
+      }
+    },
     async removeMultisig(multisigId: string, confirmHistoryRemoval = false): Promise<void> {
       const response = await sendMessage({
         ...(confirmHistoryRemoval ? { confirmHistoryRemoval: true } : {}),

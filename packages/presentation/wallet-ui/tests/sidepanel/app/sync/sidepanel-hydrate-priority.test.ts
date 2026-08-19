@@ -349,4 +349,58 @@ describe("home hydration priority", () => {
     expect(reads).toBe(1);
     expect(cache.multisigsError).toBe(false);
   });
+
+  test("refreshes only the selected multisig after the network registry is loaded", async () => {
+    const multisigId = "SN_MAIN:0x7123";
+    const record = {
+      accountContractType: "argent-multisig" as const,
+      address: "0x7123",
+      classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+      currentConfig: { signerPublicKeys: ["0x1"], threshold: 1 },
+      id: multisigId,
+      networkId: "SN_MAIN" as const,
+    };
+    const view = {
+      authorityStatus: "available" as const,
+      config: {
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+        signerGuids: ["0x1"],
+        threshold: 1,
+      },
+      deployed: true,
+      record,
+      unsupportedSigners: [],
+    };
+    const cache = emptyRenderCache();
+    cache.multisigsNetworkId = "SN_MAIN";
+    cache.multisigs = { intents: [], multisigs: [view] };
+    let listReads = 0;
+    let selectedReads = 0;
+
+    await hydrateView({
+      activeView: "multisig-detail",
+      cache,
+      deployment: {},
+      multisig: {
+        loadMultisigs: async () => {
+          listReads += 1;
+          return { intents: [], multisigs: [view] };
+        },
+        refreshMultisig: async (id: string) => {
+          selectedReads += 1;
+          expect(id).toBe(multisigId);
+          return { intents: [], multisig: view };
+        },
+      },
+      paint: () => undefined,
+      selectedMultisigId: multisigId,
+      selectedTokenId: null,
+      status,
+      wallet: {},
+    } as never);
+
+    expect(listReads).toBe(0);
+    expect(selectedReads).toBe(1);
+    expect(cache.multisigsError).toBe(false);
+  });
 });

@@ -32,6 +32,7 @@ import {
   noAccountEmpty,
   type WalletView,
 } from "../../shared/parts";
+import { reviewOutcome, reviewPanel } from "../../shared/review-render";
 import { knownAccountType } from "../../shell/account-types";
 
 // Fees use STRK and registration invokes a deployed account. Deployment blocks
@@ -90,6 +91,64 @@ const receiveFlow = (
       }
       ${account ? privacyPoolNotice(privacy, poolAction) : ""}
       <p id="receive-result" role="status"></p>
+    </section>`,
+  );
+
+/**
+ * Account deployment follows the same review and receipt model as other
+ * fee-paying transactions instead of expanding controls into Home.
+ */
+const deployAccountFlow = (
+  status: WalletStatus,
+  account: AccountRef | null,
+  preferences: WalletPreferences | null,
+  deployment: boolean | null,
+): string =>
+  flowHeader(
+    "Deploy account",
+    status,
+    account ? accountDisplayName(account, preferences) : undefined,
+  ) +
+  flowScreen(
+    "deploy-account",
+    `<section class="section">
+      ${
+        account
+          ? `<section id="deploy-review-stage">
+              ${reviewOutcome("Deploy this account contract on Starknet so it can submit transactions.")}
+              ${receipt([
+                { label: "Account", value: accountDisplayName(account, preferences) },
+                { label: "Address", value: accountLabel(account.address), valueStyle: "code" },
+                {
+                  label: "Contract",
+                  value: knownAccountType(account.classHash) ?? "Starknet account",
+                },
+                { label: "Network", value: status.network },
+              ])}
+              ${reviewPanel([], "Deployment creates this account on-chain. Its address and signing authority do not change.")}
+              <div id="deploy-review" aria-live="polite"></div>
+              ${button({
+                attributes: { id: "deploy-button" },
+                disabled: deployment !== false,
+                icon: "check",
+                label: deployment === true ? "Account already deployed" : "Review deployment",
+              })}
+              <p id="deploy-result" role="status"></p>
+            </section>
+            <section class="send-outcome send-success" id="deploy-success" role="status" aria-live="polite" hidden>
+              <span class="send-outcome-mark" aria-hidden="true">
+                <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
+              </span>
+              <div class="send-outcome-copy">
+                <p class="send-outcome-kicker">Submitted to Starknet</p>
+                <h2>Deployment submitted</h2>
+                <p>Your account will be ready once Starknet confirms this transaction.</p>
+                <code id="deploy-hash"></code>
+              </div>
+              ${button({ attributes: { "data-view": "home" }, icon: "home", label: "Back to home" })}
+            </section>`
+          : noAccountEmpty(status)
+      }
     </section>`,
   );
 
@@ -334,6 +393,8 @@ export const simpleFlowScreen = (
       return swapFlow(ctx.status, ctx.account);
     case "receive":
       return receiveFlow(ctx.status, ctx.account, ctx.privacy, poolNoticeAction(ctx));
+    case "deploy-account":
+      return deployAccountFlow(ctx.status, ctx.account, ctx.preferences, ctx.deployment);
     case "network":
       return networkFlow(ctx.status, ctx.preferences);
     case "advanced-network":

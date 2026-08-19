@@ -51,6 +51,7 @@ const recordForReview = (review: ArgentMultisigDeploymentReview): DeployableArge
 });
 
 const deploymentView = (record: DeployableArgentRecord) => ({
+  authorityStatus: "undeployed" as const,
   config: {
     classHash: record.classHash,
     signerGuids: record.deployment.signerPublicKeys.map(argentSignerGuid),
@@ -58,6 +59,7 @@ const deploymentView = (record: DeployableArgentRecord) => ({
   },
   deployed: false,
   record,
+  unsupportedSigners: [],
 });
 
 const checkedDeploymentRecord = async (
@@ -267,6 +269,10 @@ const submitDeployment = async (
   if (!record) {
     return { error: "Argent multisig deployment review address mismatch" };
   }
+  const context = await deploymentContext(deps, review);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
   let reviewAvailable = false;
   try {
     reviewAvailable = await deps.multisigDeploymentReviews.take(review);
@@ -275,10 +281,6 @@ const submitDeployment = async (
   }
   if (!reviewAvailable) {
     return { error: "Argent multisig deployment must exactly match a fresh fee review" };
-  }
-  const context = await deploymentContext(deps, review);
-  if (context.error !== undefined) {
-    return { error: context.error };
   }
   const claimed = await claimDeployment(deps, record, context.authorized.isCurrent);
   if (typeof claimed !== "string") {

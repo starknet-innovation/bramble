@@ -196,6 +196,20 @@ export const DeployResume: LabStory = {
     await expect(body?.querySelector('button[type="submit"]')).toBeEnabled();
   },
 };
+export const DeploySignerRequired: LabStory = {
+  args: { checkpointId: "deploy-signer-required", scenarioId: "multisig" },
+  name: "Deployment · local signer required",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("[data-deployment-signer-status]")).toHaveTextContent(
+      "Add an account from this wallet",
+    );
+    await expect(body?.querySelector("[data-multisig-deploy-continue]")).toBeDisabled();
+    await expect(body?.querySelector('button[type="submit"]')).toBeDisabled();
+  },
+};
 export const Home = checkpointStory("Shared portfolio", "multisig", "home");
 export const HomeEmpty: LabStory = {
   args: { checkpointId: "home-empty", scenarioId: "multisig" },
@@ -248,6 +262,40 @@ export const IntentReady: LabStory = {
     await expect(body?.querySelector("[data-ms-sign]")).not.toBeInTheDocument();
     await expect(body?.querySelectorAll(".multisig-intent-action > button")).toHaveLength(1);
     await expect(body?.querySelector(".multisig-collaboration")).not.toHaveAttribute("open");
+  },
+};
+export const IntentHandoff: LabStory = {
+  args: { checkpointId: "intent-handoff", scenarioId: "multisig" },
+  name: "Ready · co-signer handoff",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector(".multisig-collaboration")).toHaveAttribute("open");
+    await expect(body?.querySelector(".multisig-collaboration")).toHaveTextContent(
+      "Share the reviewed transaction",
+    );
+    await expect(body?.querySelector("[data-ms-copy-package]")).toHaveTextContent(
+      "Copy full intent package",
+    );
+    await expect(body?.querySelector(".multisig-fragment-exports")).not.toHaveAttribute("open");
+  },
+};
+export const IntentSubmitted: LabStory = {
+  args: { checkpointId: "intent-submitted", scenarioId: "multisig" },
+  name: "Submitted · receipt",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector(".multisig-intent-success .send-success-check")).toBeVisible();
+    await expect(body?.querySelector(".multisig-intent-success")).toHaveTextContent(
+      "Transaction submitted",
+    );
+    await expect(body?.querySelector('[data-view="multisig-home"]')).toHaveTextContent(
+      "Back to multisig",
+    );
+    await expect(body?.querySelector("[data-ms-submit]")).not.toBeInTheDocument();
   },
 };
 export const IntentLocalSignerComplete: LabStory = {
@@ -312,6 +360,22 @@ export const SignersIncomplete: LabStory = {
     await expect(body?.querySelector(".multisig-complete-config")).not.toHaveTextContent(
       /Signer identity|0x\w{20}/,
     );
+  },
+};
+export const SignersWatchOnly: LabStory = {
+  args: { checkpointId: "signers-watch-only", scenarioId: "multisig" },
+  name: "Signer type · watch only",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector(".multisig-complete-config")).toHaveTextContent(
+      "Passkey signer",
+    );
+    await expect(body?.querySelector("[data-signer-key]")).not.toBeInTheDocument();
+    await expect(
+      body?.querySelector("#multisig-complete-config-form button"),
+    ).not.toBeInTheDocument();
   },
 };
 export const Track = checkpointStory("Import signing intent", "multisig", "track");

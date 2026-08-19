@@ -62,4 +62,7 @@ export const ONBOARDING_CONTRACT_STYLES = `
     background: var(--mc-soft-press);
     box-shadow: var(--mc-elev-sm);
   }
+  .onboarding-contract[aria-pressed="true"] .onboarding-contract-copy > span:last-child {
+    color: var(--mc-text);
+  }
 `;

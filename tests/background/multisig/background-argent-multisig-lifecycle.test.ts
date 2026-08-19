@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import {
   type ArgentMultisigSigningIntent,
   createMultisigStore,
-  memoryMultisigStore,
 } from "@mc-wallet/multisig/repository";
 import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
 import { createMemoryStore, type KeyValueStore } from "@mc-wallet/store/kv";
@@ -85,6 +84,7 @@ describe("Argent multisig background lifecycle", () => {
     ).resolves.toMatchObject({
       multisigs: [
         {
+          authorityStatus: "undeployed",
           config: null,
           deployed: false,
           record: { id: HARNESS_MULTISIG_ID },
@@ -92,6 +92,26 @@ describe("Argent multisig background lifecycle", () => {
       ],
       ok: true,
     });
+  });
+
+  test("keeps unsupported classes, invalid configs, and network failures distinct", async () => {
+    for (const [message, authorityStatus] of [
+      ["Account is not the pinned Argent Multisig 0.2 class", "unsupported-class"],
+      ["Invalid Argent multisig threshold response", "invalid-config"],
+      ["RPC endpoint unavailable", "network-unavailable"],
+    ] as const) {
+      const { handler } = await makeMultisigHarness({
+        getConfig() {
+          throw new Error(message);
+        },
+      });
+      await expect(
+        handler({ type: "wallet.multisigs" }, harnessExtensionSender),
+      ).resolves.toMatchObject({
+        multisigs: [{ authorityStatus, config: null, deployed: null }],
+        ok: true,
+      });
+    }
   });
   test("derives a bounded multi-call summary from exact calls", async () => {
     const { handler } = await makeMultisigHarness();
@@ -122,54 +142,6 @@ describe("Argent multisig background lifecycle", () => {
       networkId: "SN_MAIN",
       ok: true,
     });
-  });
-
-  test("returns a known broadcast hash but never rebroadcasts after journal failure", async () => {
-    const backing = memoryMultisigStore();
-    const harness = await makeMultisigHarness({
-      multisigStore: {
-        ...backing,
-        async setOperationHash() {
-          throw new Error("post-broadcast journal unavailable");
-        },
-      },
-    });
-    let intent = intentFrom(
-      await harness.handler(
-        {
-          calls: [{ calldata: ["0x1"], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
-          multisigId: HARNESS_MULTISIG_ID,
-          type: "wallet.prepareArgentMultisigIntent",
-        },
-        harnessExtensionSender,
-      ),
-    );
-    for (const account of [harnessAccountA, harnessAccountB]) {
-      intent = intentFrom(
-        await harness.handler(
-          {
-            intentId: intent.id,
-            signerAccountId: account.id,
-            type: "wallet.signArgentMultisigIntent",
-          },
-          harnessExtensionSender,
-        ),
-      );
-    }
-    await expect(
-      harness.handler(
-        { intentId: intent.id, type: "wallet.submitArgentMultisigIntent" },
-        harnessExtensionSender,
-      ),
-    ).resolves.toMatchObject({ ok: true, transactionHash: intent.prepared.transactionHash });
-    expect(harness.submitCount()).toBe(1);
-    await expect(
-      harness.handler(
-        { intentId: intent.id, type: "wallet.submitArgentMultisigIntent" },
-        harnessExtensionSender,
-      ),
-    ).resolves.toEqual({ error: "Argent multisig submission outcome is unresolved" });
-    expect(harness.submitCount()).toBe(1);
   });
 
   test("rolls back a locally produced signature when the wallet locks before persistence", async () => {

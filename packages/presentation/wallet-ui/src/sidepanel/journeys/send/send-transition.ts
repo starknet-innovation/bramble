@@ -15,13 +15,17 @@ const STAGE_ORDER = {
   pending: 3,
   recipient: -1,
   review: 1,
-  reviewing: 1,
   submitted: 3,
 } as const;
 
-type SendStage = keyof typeof STAGE_ORDER;
+type VisibleSendStage = keyof typeof STAGE_ORDER;
+type SendStage = VisibleSendStage | "reviewing";
 const isSendStage = (stage: string | undefined): stage is SendStage =>
-  stage !== undefined && Object.hasOwn(STAGE_ORDER, stage);
+  stage === "reviewing" || (stage !== undefined && Object.hasOwn(STAGE_ORDER, stage));
+const visibleStage = (stage: SendStage): VisibleSendStage =>
+  stage === "reviewing" ? "details" : stage;
+const isProgressStage = (stage: VisibleSendStage): boolean =>
+  stage === "authorizing" || stage === "broadcasting" || stage === "confirming";
 
 /**
  * Applies one Send-stage update inside a directional named View Transition
@@ -38,10 +42,19 @@ export const transitionSendStage = (
     update();
     return;
   }
+  const previousVisible = visibleStage(previousStage);
+  const nextVisible = visibleStage(nextStage);
+  if (
+    previousVisible === nextVisible ||
+    (isProgressStage(previousVisible) && isProgressStage(nextVisible))
+  ) {
+    update();
+    return;
+  }
   transitionTaskStage(
     doc,
-    previousStage,
-    nextStage,
+    previousVisible,
+    nextVisible,
     STAGE_ORDER,
     "sendTransition",
     "sendTransitionId",

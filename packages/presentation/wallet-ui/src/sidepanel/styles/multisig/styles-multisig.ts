@@ -86,11 +86,18 @@ export const MULTISIG_STYLES = `
     color: var(--mc-positive);
   }
   .multisig-deploy-advanced .disclosure-body { display: grid; gap: ${SPACE.md}; }
+  .multisig-deploy-stage-frame {
+    display: grid;
+    gap: ${SPACE.md};
+    min-width: 0;
+    overflow: clip;
+    view-transition-name: multisig-deploy-stage;
+  }
   .multisig-deploy-setup { display: grid; gap: ${SPACE.md}; min-width: 0; }
-  .multisig-deploy-step-pane { display: grid; gap: ${SPACE.md}; min-width: 0; view-transition-name: multisig-deploy-stage; }
+  .multisig-deploy-step-pane { display: grid; gap: ${SPACE.md}; min-width: 0; }
   #multisig-deploy-form[data-deployment-stage="setup"] .multisig-deploy-approval-step,
   #multisig-deploy-form[data-deployment-stage="approval"] .multisig-deploy-signers-step,
-  #multisig-deploy-form:not([data-deployment-stage="setup"]):not([data-deployment-stage="approval"]) > .multisig-deploy-setup {
+  #multisig-deploy-form:not([data-deployment-stage="setup"]):not([data-deployment-stage="approval"]) .multisig-deploy-stage-frame > .multisig-deploy-setup {
     display: none;
   }
   .multisig-deploy-actions {
@@ -98,10 +105,10 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.sm};
   }
   .multisig-deploy-actions > button { min-width: 0; width: 100%; }
-  #multisig-deploy-form[data-deployment-stage="setup"] > .multisig-deploy-actions,
-  #multisig-deploy-form[data-deployment-stage="fund"] > .multisig-deploy-actions { display: none; }
+  #multisig-deploy-form[data-deployment-stage="setup"] .multisig-deploy-stage-frame > .multisig-deploy-actions,
+  #multisig-deploy-form[data-deployment-stage="fund"] .multisig-deploy-stage-frame > .multisig-deploy-actions { display: none; }
   #multisig-deploy-form:not([data-deployment-stage="approval"]) [data-multisig-deploy-back] { display: none; }
-  #multisig-deploy-form[data-deployment-stage="approval"] > .multisig-deploy-actions {
+  #multisig-deploy-form[data-deployment-stage="approval"] .multisig-deploy-stage-frame > .multisig-deploy-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   #multisig-deploy-form[data-deployment-stage="address"] #multisig-deploy-review:empty::after {
@@ -117,7 +124,6 @@ export const MULTISIG_STYLES = `
     max-width: 100%;
     overflow: hidden;
   }
-  #multisig-deploy-form:not([data-deployment-stage="setup"]):not([data-deployment-stage="approval"]) #multisig-deploy-review { view-transition-name: multisig-deploy-stage; }
   html[data-multisig-deploy-transition]::view-transition-old(root),
   html[data-multisig-deploy-transition]::view-transition-new(root) { animation: none; }
   ::view-transition-group(multisig-deploy-stage) {
@@ -129,7 +135,7 @@ export const MULTISIG_STYLES = `
   html[data-multisig-deploy-transition="back"]::view-transition-old(multisig-deploy-stage) { animation: mc-vt-out-right ${MOTION.pressMs}ms ${EASE.out} both; }
   html[data-multisig-deploy-transition="back"]::view-transition-new(multisig-deploy-stage) { animation: mc-vt-in-left ${MOTION.enterMs}ms ${EASE.out} both; }
   #multisig-deploy-review > *,
-  #multisig-deploy-form > button { max-width: 100%; }
+  #multisig-deploy-form button { max-width: 100%; }
   .multisig-deployment-target {
     align-items: center;
     display: grid;
@@ -434,13 +440,23 @@ export const MULTISIG_STYLES = `
   }
   .multisig-collaboration { margin-top: ${SPACE.xs}; }
   .multisig-collaboration .disclosure-body { display: grid; gap: ${SPACE.md}; }
+  .multisig-handoff-section { display: grid; gap: ${SPACE.sm}; min-width: 0; }
+  .multisig-handoff-section + .multisig-handoff-section {
+    border-top: 1px solid var(--mc-hairline);
+    padding-top: ${SPACE.md};
+  }
+  .multisig-handoff-copy { display: grid; gap: ${SPACE.xs}; }
+  .multisig-handoff-copy p {
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+  }
+  .multisig-handoff-section > button { justify-self: start; }
   .multisig-collaboration-actions {
     display: grid;
     gap: ${SPACE.sm};
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .multisig-collaboration-actions > :only-child { grid-column: 1 / -1; }
-  .multisig-collaboration-actions button { min-width: 0; width: 100%; }
+  .multisig-collaboration-actions button { justify-content: start; min-width: 0; width: 100%; }
+  .multisig-fragment-exports { margin-top: ${SPACE.xs}; }
   .multisig-intent ol { min-width: 0; padding-left: ${SPACE.lg}; }
   .multisig-review-flow { min-width: 0; }
   .multisig-intent-list { overflow: hidden; }

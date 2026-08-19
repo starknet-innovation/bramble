@@ -5,19 +5,12 @@
  * budget; each binder is safe to call after every render and closes over the
  * shared state accessors passed in `ShellBindingDeps`.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
 import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { WalletView } from "../app/screens/views";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { buttonBusy, errorMessage, renderFragment, scopedStatus, showToast } from "../shared/dom";
-import { icon } from "../shared/icons";
-import {
-  formatFeeEstimate,
-  reviewConstraints,
-  reviewOutcome,
-  reviewPanel,
-} from "../shared/review-render";
+import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
 
 const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
 
@@ -172,8 +165,10 @@ export const awaitDeployment = async (
 export const bindDeploy = (deps: ShellBindingDeps): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#deploy-button");
   const reviewPanelRoot = deps.app?.querySelector<HTMLElement>("#deploy-review");
+  const reviewStage = deps.app?.querySelector<HTMLElement>("#deploy-review-stage");
+  const successStage = deps.app?.querySelector<HTMLElement>("#deploy-success");
+  const hash = deps.app?.querySelector<HTMLElement>("#deploy-hash");
   button?.addEventListener("click", () => {
-    const scope = deps.deploymentScope?.() ?? null;
     buttonBusy(button, true);
     scopedStatus(
       button,
@@ -187,20 +182,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           DEPLOYMENT_FEES.set(button, response);
           const fee = formatFeeEstimate(response);
           if (reviewPanelRoot) {
-            const accountId = scope?.accountId ?? "Active account";
-            renderFragment(
-              reviewPanelRoot,
-              `${reviewOutcome("Deploy the selected account contract on the active network so it can submit transactions.")}
-              ${reviewPanel([], "Deployment is an on-chain, irreversible account-creation transaction. The account address and signing authority do not change.")}
-              ${reviewConstraints(`Maximum network fee: ${fee}`)}
-              <details class="disclosure" data-disclosure="account-deployment-technical">
-                <summary>
-                  <span class="menu-copy"><strong>Technical details</strong><small>Exact account identity</small></span>
-                  <span class="disclosure-mark">${icon("chevronRight")}</span>
-                </summary>
-                <div class="disclosure-body"><code>${escapeHtml(accountId)}</code></div>
-              </details>`,
-            );
+            renderFragment(reviewPanelRoot, reviewConstraints(`Maximum network fee: ${fee}`));
           }
           scopedStatus(button, `Maximum network fee: ${fee}`);
           button.lastChild?.replaceWith(`Confirm deployment · ${fee}`);
@@ -208,11 +190,11 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           return;
         }
         showToast("Deployment submitted", "success", button);
-        scopedStatus(button, `Deployment submitted: ${response}`);
+        if (hash) hash.textContent = response;
+        reviewStage?.setAttribute("hidden", "");
+        successStage?.removeAttribute("hidden");
+        scopedStatus(button, "");
         buttonBusy(button, false);
-        // Nothing else re-renders after a deploy submit, so watch for the
-        // account going live and clear the "deploy now" banner when it does.
-        if (scope) void watchDeployment(deps, scope);
       },
       (error: unknown) => {
         DEPLOYMENT_FEES.delete(button);

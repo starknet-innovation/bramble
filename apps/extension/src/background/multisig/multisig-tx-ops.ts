@@ -323,15 +323,64 @@ const existingSubmissionResponse = async (
   deps: MultisigOpsDeps,
   intent: ArgentMultisigSigningIntent,
   operationId: string,
-): Promise<RuntimeResponse> => {
+): Promise<RuntimeResponse | null> => {
   const existing = await deps.multisigStore.getOperation(operationId);
-  const recovered = existing?.transactionHash
+  const transactionHash = existing?.transactionHash ?? intent.broadcastTransactionHash;
+  if (transactionHash) return { intent, ok: true, transactionHash };
+  const recovered = await recoverSubmittedArgentIntent(deps, intent, operationId);
+  if (recovered.kind === "submitted") {
+    return {
+      intent: recovered.intent,
+      ok: true,
+      transactionHash: recovered.intent.prepared.transactionHash,
+    };
+  }
+  if (recovered.kind === "unknown") {
+    return { error: "Argent multisig submission outcome is unresolved" };
+  }
+  await deps.multisigStore.releaseOperation(operationId);
+  const reclaimed = await deps.multisigStore.claimOperation({
+    accountId: intent.accountId,
+    id: operationId,
+    kind: "submit",
+    target: intent.prepared.transactionHash,
+  });
+  return reclaimed === "claimed"
     ? null
-    : await recoverSubmittedArgentIntent(deps, intent, operationId);
-  const transactionHash = existing?.transactionHash ?? recovered?.prepared.transactionHash;
-  return transactionHash
-    ? { intent: recovered ?? intent, ok: true, transactionHash }
-    : { error: "Argent multisig submission outcome is unresolved" };
+    : { error: "The previous submission did not reach Starknet. Try again." };
+};
+
+const claimSubmission = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+  operationId: string,
+): Promise<RuntimeResponse | null> => {
+  const claim = await deps.multisigStore.claimOperation({
+    accountId: intent.accountId,
+    id: operationId,
+    kind: "submit",
+    target: intent.prepared.transactionHash,
+  });
+  if (claim === "exists") return existingSubmissionResponse(deps, intent, operationId);
+  return claim === "claimed" ? null : { error: `Argent multisig submission claim ${claim}` };
+};
+
+const knownSubmissionResponse = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+  operationId: string,
+): Promise<RuntimeResponse | null> => {
+  const transactionHash =
+    intent.broadcastTransactionHash ??
+    (await deps.multisigStore.getOperation(operationId))?.transactionHash;
+  if (!transactionHash) return null;
+  const submitted: ArgentMultisigSigningIntent = {
+    ...intent,
+    broadcastTransactionHash: transactionHash,
+    state: intent.state === "accepted" || intent.state === "rejected" ? intent.state : "submitted",
+  };
+  await deps.multisigStore.upsertIntent(submitted).catch(() => "invalid" as const);
+  return { intent: submitted, ok: true, transactionHash };
 };
 
 const resolveSubmission = async (
@@ -353,31 +402,17 @@ const resolveSubmission = async (
   if (!operationId) {
     return { response: { error: "invalid Argent multisig submission claim" } };
   }
-  const claim = await deps.multisigStore.claimOperation({
-    accountId: intent.accountId,
-    id: operationId,
-    kind: "submit",
-    target: intent.prepared.transactionHash,
-  });
-  if (claim === "exists") {
-    return { response: await existingSubmissionResponse(deps, intent, operationId) };
-  }
-  if (claim !== "claimed") {
-    return { response: { error: `Argent multisig submission claim ${claim}` } };
-  }
+  const known = await knownSubmissionResponse(deps, intent, operationId);
+  if (known) return { response: known };
   const resolved = await currentArgentIntentContext(deps, intent);
-  if ("error" in resolved) {
-    await deps.multisigStore.releaseOperation(operationId);
-    return { response: resolved };
-  }
-  if (!authorized.isCurrent()) {
-    await deps.multisigStore.releaseOperation(operationId);
-    return { response: { error: "wallet locked" } };
+  if ("error" in resolved || !authorized.isCurrent()) {
+    return { response: "error" in resolved ? resolved : { error: "wallet locked" } };
   }
   if (intent.signatures.length !== intent.configSnapshot.threshold) {
-    await deps.multisigStore.releaseOperation(operationId);
     return { response: { error: "Argent multisig threshold is not satisfied" } };
   }
+  const response = await claimSubmission(deps, intent, operationId);
+  if (response) return { response };
   return { authorized, intent, operationId, resolved };
 };
 

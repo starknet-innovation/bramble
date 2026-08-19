@@ -17,6 +17,7 @@ import {
   argentReadyIntent,
   argentSoftwareAccount,
   argentStaleIntent,
+  argentSubmittedIntent,
   preferences,
   secondAccount,
   softwareAccount,
@@ -137,6 +138,14 @@ const revealIntentPanel = async (context: FrameContext): Promise<void> => {
   }
 };
 
+const revealCollaboration = async (context: FrameContext): Promise<void> => {
+  await revealIntentPanel(context);
+  const collaboration = context.app.querySelector<HTMLDetailsElement>(".multisig-collaboration");
+  if (!collaboration) throw new Error("Missing production co-signer handoff");
+  collaboration.open = true;
+  await nextTurn();
+};
+
 const prepareTransferComposer = async (context: FrameContext): Promise<void> => {
   bindFixtureMultisig(context);
   const picker = context.app.querySelector<HTMLDetailsElement>(".multisig-recipient-picker");
@@ -179,15 +188,32 @@ const checkpoint = (
   state,
 });
 
-const unavailableAuthority: ArgentMultisigView = { ...argentMultisig, config: null };
+const unavailableAuthority: ArgentMultisigView = {
+  ...argentMultisig,
+  authorityStatus: "network-unavailable",
+  config: null,
+  deployed: null,
+};
 const { currentConfig: _incompleteCurrentConfig, ...incompleteSignerRecord } =
   argentMultisig.record;
 const incompleteSignerConfig: ArgentMultisigView = {
   ...argentMultisig,
   record: incompleteSignerRecord,
 };
+const unsupportedSignerAuthority: ArgentMultisigView = {
+  ...argentMultisig,
+  authorityStatus: "unsupported-signers",
+  config: {
+    classHash: argentMultisig.record.classHash,
+    signerGuids: ["0x123"],
+    threshold: 1,
+  },
+  record: incompleteSignerRecord,
+  unsupportedSigners: [{ guid: "0x123", type: "webauthn" }],
+};
 const undeployedMultisig: ArgentMultisigView = {
   ...argentMultisig,
+  authorityStatus: "undeployed",
   config: null,
   deployed: false,
 };
@@ -197,9 +223,19 @@ const {
   ...watchedUndeployedRecord
 } = argentMultisig.record;
 const watchedUndeployedMultisig: ArgentMultisigView = {
+  authorityStatus: "undeployed",
   config: null,
   deployed: false,
   record: watchedUndeployedRecord,
+  unsupportedSigners: [],
+};
+const externalOnlyDeployment: ArgentMultisigView = {
+  ...watchedUndeployedMultisig,
+  record: {
+    ...watchedUndeployedRecord,
+    currentConfig: { signerPublicKeys: ["0x999"], threshold: 1 },
+    deployment: { salt: "0x0", signerPublicKeys: ["0x999"], threshold: 1 },
+  },
 };
 const changedAuthority: ArgentMultisigView = {
   ...argentMultisig,
@@ -337,12 +373,29 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     prepare: bindFixtureMultisig,
   },
   checkpoint(
+    "signers-watch-only",
+    "Unsupported signer type",
+    "A passkey or other supported Argent signer stays recognizable and watch-only without asking for an impossible Stark public key.",
+    { multisigs: [unsupportedSignerAuthority], view: "multisig-signers" },
+    { recovery: "watch only", signerType: "webauthn" },
+  ),
+  checkpoint(
     "deploy-resume",
     "Resume saved deployment",
     "The wallet restores the original signer set, threshold, salt, and eligible deployment signer instead of making the user reconstruct them.",
     { multisigs: [undeployedMultisig], view: "multisig-deploy" },
     { constructor: "restored", deployed: false },
   ),
+  {
+    ...checkpoint(
+      "deploy-signer-required",
+      "Deployment signer required",
+      "A restored external-only signer set cannot advance until one account owned by this wallet is added as the deployment signer.",
+      { multisigs: [externalOnlyDeployment], view: "multisig-deploy" },
+      { recovery: "add local signer", step: "signers" },
+    ),
+    prepare: bindFixtureMultisig,
+  },
   checkpoint(
     "home",
     "Shared portfolio",
@@ -380,6 +433,25 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     "Submission appears only after the verified threshold is complete and fresh authority still matches.",
     { multisigIntents: [argentReadyIntent], view: "multisig-detail" },
     { signatures: 2, state: "ready", threshold: 2 },
+    true,
+  ),
+  {
+    ...checkpoint(
+      "intent-handoff",
+      "Co-signer handoff",
+      "The full package, verified signature import, and advanced fragment export are separated by the job each action performs.",
+      { multisigIntents: [argentReadyIntent], view: "multisig-detail" },
+      { disclosure: "open", task: "co-signer handoff" },
+      true,
+    ),
+    prepare: revealCollaboration,
+  },
+  checkpoint(
+    "intent-submitted",
+    "Transaction submitted",
+    "A completed multisig submission becomes a familiar receipt with one clear return action, not a frozen review card.",
+    { multisigIntents: [argentSubmittedIntent], view: "multisig-detail" },
+    { outcome: "submitted", state: "receipt" },
     true,
   ),
   checkpoint(

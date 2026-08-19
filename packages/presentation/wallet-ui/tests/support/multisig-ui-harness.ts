@@ -59,6 +59,7 @@ export const makeMultisigUiClient = async (
     loadClassStatus: async () => true,
     loadMultisigs: async () => ({ intents: [fixture.intent], multisigs: [fixture.view] }),
     prepareIntent: async () => ({ intent: fixture.intent }),
+    refreshMultisig: async () => ({ intents: [fixture.intent], multisig: fixture.view }),
     removeMultisig: async () => undefined,
     reviewDeployment: async () => fixture.deploymentReview,
     signIntent: async () => ({ intent: fixture.intent }),

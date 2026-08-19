@@ -33,12 +33,36 @@ export type HydrateDeps = {
 const hydrateMultisigs = async (
   cached: RenderData["multisigs"],
   multisig: MultisigClient,
-): Promise<Pick<RenderData, "multisigs" | "multisigsError">> => {
+  networkId: string,
+): Promise<Pick<RenderData, "multisigs" | "multisigsError" | "multisigsNetworkId">> => {
   const loaded = await multisig.loadMultisigs();
   if (loaded === "error") {
-    return { multisigs: cached, multisigsError: true };
+    return { multisigs: cached, multisigsError: true, multisigsNetworkId: null };
   }
-  return { multisigs: loaded, multisigsError: false };
+  return { multisigs: loaded, multisigsError: false, multisigsNetworkId: networkId };
+};
+
+const hydrateSelectedMultisig = async (
+  cached: RenderData["multisigs"],
+  multisig: MultisigClient,
+  multisigId: string,
+): Promise<Pick<RenderData, "multisigs" | "multisigsError">> => {
+  const loaded = await multisig.refreshMultisig(multisigId);
+  if (loaded === "error") return { multisigs: cached, multisigsError: true };
+  const existing = cached.multisigs.findIndex((view) => view.record.id === multisigId);
+  return {
+    multisigs: {
+      intents: [
+        ...loaded.intents,
+        ...cached.intents.filter((intent) => intent.accountId !== multisigId),
+      ],
+      multisigs:
+        existing < 0
+          ? [loaded.multisig, ...cached.multisigs]
+          : cached.multisigs.map((view, index) => (index === existing ? loaded.multisig : view)),
+    },
+    multisigsError: false,
+  };
 };
 
 const nftSnapshot = (
@@ -187,27 +211,29 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       activeView === "home",
     );
   }
-  if (
-    activeView === "home" ||
-    activeView === "activity" ||
-    activeView === "settings" ||
-    activeView === "account" ||
-    activeView === "send" ||
-    activeView === "multisigs" ||
-    activeView === "multisig-home" ||
-    activeView === "multisig-detail" ||
-    activeView === "multisig-signers" ||
-    activeView === "multisig-track" ||
-    activeView === "multisig-receive" ||
-    activeView === "multisig-watch" ||
-    activeView === "multisig-propose" ||
-    activeView === "multisig-deploy"
-  ) {
+  if (cache.multisigsNetworkId !== status.networkId || activeView === "multisigs") {
     primaryJobs.push(
-      hydrateMultisigs(cache.multisigs, multisig).then((value) => {
+      hydrateMultisigs(cache.multisigs, multisig, status.networkId).then((value) => {
         if (isCurrent()) {
           Object.assign(cache, value);
         }
+      }),
+    );
+  }
+  if (
+    selectedMultisigId &&
+    cache.multisigsNetworkId === status.networkId &&
+    (activeView === "multisig-home" ||
+      activeView === "multisig-detail" ||
+      activeView === "multisig-signers" ||
+      activeView === "multisig-track" ||
+      activeView === "multisig-receive" ||
+      activeView === "multisig-propose" ||
+      activeView === "multisig-deploy")
+  ) {
+    primaryJobs.push(
+      hydrateSelectedMultisig(cache.multisigs, multisig, selectedMultisigId).then((value) => {
+        if (isCurrent()) Object.assign(cache, value);
       }),
     );
   }

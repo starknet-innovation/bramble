@@ -210,6 +210,8 @@ describe("Argent multisig serialized store", () => {
     expect(await registry.upsertIntent(intent)).toBe("invalid");
     expect(await registry.upsertMultisig(record)).toBe("stored");
     expect(await registry.upsertMultisig({ ...record, name: "Shared treasury" })).toBe("stored");
+    expect(await registry.upsertMultisig(record)).toBe("stored");
+    expect((await registry.listMultisigs())[0]?.name).toBe("Shared treasury");
     const { deployment: _deployment, ...withoutDeployment } = record;
     expect(await registry.upsertMultisig(withoutDeployment)).toBe("conflict");
     expect(await registry.upsertIntent(intent)).toBe("stored");

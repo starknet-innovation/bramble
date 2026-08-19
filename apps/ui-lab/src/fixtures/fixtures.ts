@@ -212,6 +212,7 @@ const argentSigners = normalizeArgentMultisigConfig({
 });
 
 export const argentMultisig: ArgentMultisigView = {
+  authorityStatus: "available",
   config: {
     classHash: ARGENT_MULTISIG_CONTRACT.classHash,
     signerGuids: argentSigners.signerPublicKeys.map(argentSignerGuid),
@@ -232,6 +233,7 @@ export const argentMultisig: ArgentMultisigView = {
     name: "Operations treasury",
     networkId: "SN_MAIN",
   },
+  unsupportedSigners: [],
 };
 
 const argentPrepared = {
@@ -298,6 +300,12 @@ export const argentReadyIntent: ArgentMultisigSigningIntent = {
         },
   ),
   state: "ready",
+};
+
+export const argentSubmittedIntent: ArgentMultisigSigningIntent = {
+  ...argentReadyIntent,
+  broadcastTransactionHash: argentReadyIntent.prepared.transactionHash,
+  state: "submitted",
 };
 
 export const argentStaleIntent: ArgentMultisigSigningIntent = {

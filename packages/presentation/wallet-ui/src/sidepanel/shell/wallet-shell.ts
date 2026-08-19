@@ -147,10 +147,9 @@ export const explorerTile = (url: string | null): string => {
 };
 
 /**
- * Renders the counterfactual-account deployment action when chain state is
- * conclusively undeployed. Deployment is a fee-paying transaction, so the action
- * stays disabled — with the reason on hover — until the account holds STRK to
- * pay with. Offering it to an empty account only produces a failed estimate.
+ * Renders the counterfactual-account status when chain state is conclusively
+ * undeployed. Home only directs the user to the next task; fee review and
+ * submission stay in their dedicated transaction journeys.
  */
 export const deployNotice = (
   account: AccountRef | null,
@@ -162,18 +161,15 @@ export const deployNotice = (
     : `<div class="deploy-notice">
         ${button({
           attributes: {
-            id: "deploy-button",
+            "data-view": fundedForFees ? "deploy-account" : "receive",
             title: fundedForFees
               ? "This account contract is not on-chain yet. Deploying it enables transactions."
               : "Deploying costs a network fee. Receive STRK into this account first.",
           },
           className: "deploy-chip",
-          disabled: !fundedForFees,
           icon: "alert",
-          label: fundedForFees ? "Not deployed — deploy now" : "Not deployed — receive STRK first",
+          label: fundedForFees ? "Deploy account" : "Fund with STRK",
           size: "small",
           variant: "secondary",
         })}
-        <div id="deploy-review" aria-live="polite"></div>
-        <p id="deploy-result" role="status"></p>
       </div>`;

@@ -125,6 +125,7 @@ const collectiblesPanel = (
  */
 export const multisigPortfolio = (input: {
   readonly authorityAvailable: boolean;
+  readonly authorityMessage?: string;
   readonly canSign: boolean;
   readonly data: MultisigPortfolioData;
   readonly deployed?: boolean | null;
@@ -147,13 +148,15 @@ export const multisigPortfolio = (input: {
         ? input.record.deployment
           ? '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Deploy this saved account on Starknet before preparing a transaction.</p>'
           : '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Open Deploy and enter the original signer set, threshold, and salt; review will verify this address.</p>'
-        : !input.authorityAvailable
-          ? '<p class="hint multisig-action-note">Deployment and signer authority could not be verified. Retry when network access is restored.</p>'
-          : input.canSign
-            ? ""
-            : input.signerKnown
-              ? `<div class="multisig-action-recovery"><p class="hint multisig-action-note"><strong>Signer found.</strong> Add the remaining public signer keys before preparing a transaction.</p>${button({ attributes: { "data-view": "multisig-signers" }, label: "Complete signer setup", size: "small", variant: "secondary" })}</div>`
-              : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
+        : input.authorityMessage
+          ? `<p class="hint multisig-action-note">${escapeHtml(input.authorityMessage)}</p>`
+          : !input.authorityAvailable
+            ? '<p class="hint multisig-action-note">Deployment and signer authority could not be verified. Retry when network access is restored.</p>'
+            : input.canSign
+              ? ""
+              : input.signerKnown
+                ? `<div class="multisig-action-recovery"><p class="hint multisig-action-note"><strong>Signer found.</strong> Add the remaining public signer keys before preparing a transaction.</p>${button({ attributes: { "data-view": "multisig-signers" }, label: "Complete signer setup", size: "small", variant: "secondary" })}</div>`
+                : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>
   <section class="home-tabs multisig-portfolio-tabs" data-active-tab="assets" aria-label="Shared account">

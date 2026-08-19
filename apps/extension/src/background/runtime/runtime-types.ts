@@ -2,7 +2,11 @@
  * Shared background runtime response and service types.
  */
 
-import type { ArgentMultisigConfig } from "@mc-wallet/multisig/chain";
+import type {
+  ArgentMultisigAuthorityStatus,
+  ArgentMultisigConfig,
+  ArgentUnsupportedSigner,
+} from "@mc-wallet/multisig/chain";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
@@ -355,9 +359,11 @@ type RequestAccountsResponse =
  * Fresh chain view paired with immutable Argent account provenance.
  */
 type ArgentMultisigView = {
+  readonly authorityStatus: ArgentMultisigAuthorityStatus;
   readonly config: ArgentMultisigConfig | null;
   readonly deployed: boolean | null;
   readonly record: ArgentMultisigRecord;
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
 };
 
 /** Watched Argent accounts and frozen intents for the active network. */

@@ -5,6 +5,7 @@ import {
   type ArgentMultisigConfig,
   type ArgentMultisigConfigChange,
   type ArgentMultisigPublicConfig,
+  type ArgentUnsupportedSigner,
   nextArgentMultisigPublicConfig,
   parseArgentMultisigConfigChange,
 } from "@mc-wallet/multisig/chain";
@@ -51,22 +52,27 @@ type SignerDiscoveryContext = {
  * Resolves current signer keys from accepted linked events, local accounts,
  * and address-book contacts, preserving fresh on-chain GUID order.
  */
-export const discoveredArgentSignerPublicKeys = async (
+export const discoverArgentSigners = async (
   deps: MultisigOpsDeps,
   active: SignerDiscoveryContext,
   preferences: WalletPreferences,
   address: string,
   config: ArgentMultisigConfig,
   rpcUrls: readonly string[],
-): Promise<readonly string[]> => {
+): Promise<{
+  readonly signerPublicKeys: readonly string[];
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
+}> => {
   let linked: readonly string[] = [];
+  let unsupportedSigners: readonly ArgentUnsupportedSigner[] = [];
   try {
-    linked =
-      (await multisigRpc(deps).getSignerPublicKeys?.({
-        address,
-        rpcUrls,
-        signerGuids: config.signerGuids,
-      })) ?? [];
+    const discovered = (await multisigRpc(deps).getSignerPublicKeys?.({
+      address,
+      rpcUrls,
+      signerGuids: config.signerGuids,
+    })) ?? { signerPublicKeys: [], unsupportedSigners: [] };
+    linked = discovered.signerPublicKeys;
+    unsupportedSigners = discovered.unsupportedSigners;
   } catch {
     // A watched address remains useful when historical RPC reads are unavailable.
   }
@@ -79,9 +85,13 @@ export const discoveredArgentSignerPublicKeys = async (
       .filter((contact) => contact.networkId === active.networkId)
       .flatMap((contact) => (contact.publicKeyX === undefined ? [] : [contact.publicKeyX])),
   ];
-  return config.signerGuids
-    .map((guid) => candidates.find((publicKey) => sameFelt(argentSignerGuid(publicKey), guid)))
-    .filter((publicKey): publicKey is string => publicKey !== undefined);
+  return {
+    signerPublicKeys: config.signerGuids
+      .filter((guid) => !unsupportedSigners.some((unsupported) => sameFelt(unsupported.guid, guid)))
+      .map((guid) => candidates.find((publicKey) => sameFelt(argentSignerGuid(publicKey), guid)))
+      .filter((publicKey): publicKey is string => publicKey !== undefined),
+    unsupportedSigners,
+  };
 };
 
 /**
@@ -94,9 +104,15 @@ export const enrichArgentAddressOnlyWatch = async (
   record: ArgentMultisigRecord,
   config: ArgentMultisigConfig,
   rpcUrls: readonly string[],
-): Promise<ArgentMultisigRecord> => {
-  if (storedArgentPublicConfig(record)) return record;
-  const signerPublicKeys = await discoveredArgentSignerPublicKeys(
+): Promise<{
+  readonly record: ArgentMultisigRecord;
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
+}> => {
+  const stored = storedArgentPublicConfig(record);
+  if (stored && matchesArgentPublicConfig(stored, config)) {
+    return { record, unsupportedSigners: [] };
+  }
+  const discovered = await discoverArgentSigners(
     deps,
     active,
     preferences,
@@ -104,12 +120,20 @@ export const enrichArgentAddressOnlyWatch = async (
     config,
     rpcUrls,
   );
-  if (signerPublicKeys.length !== config.signerGuids.length) return record;
+  if (stored) {
+    return { record, unsupportedSigners: discovered.unsupportedSigners };
+  }
+  if (discovered.signerPublicKeys.length !== config.signerGuids.length) {
+    return { record, unsupportedSigners: discovered.unsupportedSigners };
+  }
   const enriched = {
     ...record,
-    currentConfig: { signerPublicKeys, threshold: config.threshold },
+    currentConfig: { signerPublicKeys: discovered.signerPublicKeys, threshold: config.threshold },
   };
-  return (await deps.multisigStore.upsertMultisig(enriched)) === "stored" ? enriched : record;
+  return {
+    record: (await deps.multisigStore.upsertMultisig(enriched)) === "stored" ? enriched : record,
+    unsupportedSigners: discovered.unsupportedSigners,
+  };
 };
 
 type ConfigCandidate = {

@@ -1,6 +1,10 @@
 /** Strict response validators for privileged Argent multisig messages. */
 import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
-import type { ArgentMultisigConfig } from "@mc-wallet/multisig/chain";
+import type {
+  ArgentMultisigAuthorityStatus,
+  ArgentMultisigConfig,
+  ArgentUnsupportedSigner,
+} from "@mc-wallet/multisig/chain";
 import { MULTISIG_LIMITS } from "@mc-wallet/multisig/chain";
 import {
   type ArgentMultisigRecord,
@@ -24,10 +28,12 @@ import {
  * Fresh untrusted chain authority paired with one watched account.
  */
 export type ArgentMultisigView = {
+  readonly authorityStatus: ArgentMultisigAuthorityStatus;
   readonly config: ArgentMultisigConfig | null;
   /** Fresh deployment status; null or absent means the network read failed. */
   readonly deployed?: boolean | null;
   readonly record: ArgentMultisigRecord;
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
 };
 
 /**
@@ -106,10 +112,38 @@ const isConfig = (value: unknown): value is ArgentMultisigConfig => {
   );
 };
 
+const AUTHORITY_STATUSES: readonly ArgentMultisigAuthorityStatus[] = [
+  "available",
+  "invalid-config",
+  "network-unavailable",
+  "undeployed",
+  "unsupported-class",
+  "unsupported-signers",
+];
+
+const isUnsupportedSigner = (value: unknown): value is ArgentUnsupportedSigner =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["guid", "type"]) &&
+  canonicalNonZeroFelt(value["guid"]) &&
+  (value["type"] === "eip191" ||
+    value["type"] === "secp256k1" ||
+    value["type"] === "secp256r1" ||
+    value["type"] === "webauthn");
+
 const isView = (value: unknown): value is ArgentMultisigView =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["config", "deployed", "record"]) &&
+  hasOnlyKnownKeys(value, [
+    "authorityStatus",
+    "config",
+    "deployed",
+    "record",
+    "unsupportedSigners",
+  ]) &&
+  AUTHORITY_STATUSES.includes(value["authorityStatus"] as ArgentMultisigAuthorityStatus) &&
   isArgentMultisigRecord(value["record"]) &&
+  Array.isArray(value["unsupportedSigners"]) &&
+  value["unsupportedSigners"].every(isUnsupportedSigner) &&
+  (value["authorityStatus"] === "unsupported-signers") === value["unsupportedSigners"].length > 0 &&
   (value["deployed"] === undefined ||
     value["deployed"] === null ||
     typeof value["deployed"] === "boolean") &&

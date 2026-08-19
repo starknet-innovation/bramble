@@ -150,6 +150,32 @@ describe("Argent multisig deployment review", () => {
     });
   });
 
+  test("does not consume a fee review before deployment context is available", async () => {
+    const harness = await makeMultisigHarness();
+    const reviewed = await harness.handler(
+      {
+        networkId: "SN_MAIN",
+        salt: "0xd",
+        signerAccountId: harnessAccountA.id,
+        signerPublicKeys: HARNESS_KEYS,
+        threshold: 2,
+        type: "wallet.reviewArgentMultisigDeployment",
+      },
+      harnessExtensionSender,
+    );
+    const review = (reviewed as { readonly deploymentReview: Record<string, unknown> })
+      .deploymentReview;
+    harness.session.lock();
+    await expect(
+      harness.handler({ review, type: "wallet.deployArgentMultisig" }, harnessExtensionSender),
+    ).resolves.toEqual({ error: "wallet locked" });
+
+    harness.session.unlock("correct horse battery staple");
+    await expect(
+      harness.handler({ review, type: "wallet.deployArgentMultisig" }, harnessExtensionSender),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
   test("does not rebroadcast a deployment after its hash journal write fails", async () => {
     const backing = memoryMultisigStore();
     const harness = await makeMultisigHarness({

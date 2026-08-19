@@ -12,29 +12,41 @@ import type { MultisigOpsDeps } from "./multisig-deps";
 import { normalizedArgentMultisigCalls } from "./multisig-inputs";
 
 /**
+ * Outcome of checking an exact deterministic submit hash.
+ */
+export type ArgentSubmitResolution =
+  | { readonly intent: ArgentMultisigSigningIntent; readonly kind: "submitted" }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unknown" };
+
+/**
  * Recovers an unresolved submit only from a fresh chain observation of its
- * exact deterministic hash. Missing or failed evidence returns null and never retries a write.
+ * exact deterministic hash. A successful not-found response is distinct from
+ * a failed read so the caller may safely retry only the same frozen payload.
  */
 export const recoverSubmittedArgentIntent = async (
   deps: MultisigOpsDeps,
   intent: ArgentMultisigSigningIntent,
   operationId: string,
-): Promise<ArgentMultisigSigningIntent | null> => {
+): Promise<ArgentSubmitResolution> => {
   const record = (await deps.multisigStore.listMultisigs()).find(
     (candidate) => candidate.id === intent.accountId,
   );
-  if (!record) return null;
+  if (!record) return { kind: "unknown" };
   const preferences = await deps.preferencesStore.read();
-  const reports = await deps.runtimeRpc
-    .getTransactionStatuses({
+  let reports: Awaited<ReturnType<MultisigOpsDeps["runtimeRpc"]["getTransactionStatuses"]>>;
+  try {
+    reports = await deps.runtimeRpc.getTransactionStatuses({
       hashes: [intent.prepared.transactionHash],
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
-    })
-    .catch(() => ({}));
+    });
+  } catch {
+    return { kind: "unknown" };
+  }
   const report = Object.entries(reports).find(([hash]) =>
     sameFelt(hash, intent.prepared.transactionHash),
   )?.[1];
-  if (!report?.found) return null;
+  if (!report?.found) return { kind: "absent" };
   const state =
     report.status === "accepted"
       ? "accepted"
@@ -63,7 +75,7 @@ export const recoverSubmittedArgentIntent = async (
     networkId: record.networkId,
     summary: intent.summary,
   });
-  return recovered;
+  return { intent: recovered, kind: "submitted" };
 };
 
 /**

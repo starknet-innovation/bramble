@@ -1,6 +1,8 @@
 /**
  * Shared deterministic harness for privileged Argent multisig messages.
  */
+
+import type { ArgentUnsupportedSigner } from "@mc-wallet/multisig/chain";
 import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
 import { createPreferencesStore } from "@mc-wallet/settings/preferences";
 import {
@@ -94,7 +96,10 @@ export type MultisigHarnessOptions = {
     readonly signerGuids: readonly string[];
     readonly threshold: number;
   };
-  readonly getSignerPublicKeys?: () => readonly string[];
+  readonly getSignerPublicKeys?: () => {
+    readonly signerPublicKeys: readonly string[];
+    readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
+  };
   readonly multisigStore?: MultisigStore;
   readonly getNonce?: () => string;
   readonly getTransactionStatuses?: (
@@ -235,7 +240,12 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
           );
         },
         async getSignerPublicKeys() {
-          return options.getSignerPublicKeys?.() ?? HARNESS_KEYS;
+          return (
+            options.getSignerPublicKeys?.() ?? {
+              signerPublicKeys: HARNESS_KEYS,
+              unsupportedSigners: [],
+            }
+          );
         },
         async getNonce() {
           return options.getNonce?.() ?? options.nonce ?? "0x7";

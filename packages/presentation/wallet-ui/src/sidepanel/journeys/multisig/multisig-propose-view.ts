@@ -229,15 +229,20 @@ export const multisigProposeFlow = (
       flowScreen("multisig-propose", emptyState("This Argent multisig is no longer watched."))
     );
   }
-  if (!view.config) {
+  if (!view.config || view.authorityStatus !== "available") {
+    const message =
+      view.authorityStatus === "unsupported-signers"
+        ? "This account uses signer types this wallet cannot sign with. It remains available to watch and receive."
+        : view.authorityStatus === "unsupported-class"
+          ? "This address is not the pinned Argent Multisig 0.2 account."
+          : view.authorityStatus === "invalid-config"
+            ? "The account returned an invalid signer configuration."
+            : view.authorityStatus === "undeployed"
+              ? "Deploy this account before creating a transaction."
+              : "Signer authority could not be refreshed. Check the network and retry.";
     return (
       flowHeader("New transaction", status, multisigDisplayName(view.record)) +
-      flowScreen(
-        "multisig-propose",
-        emptyState(
-          "Current on-chain signer authority is unavailable. Retry before creating a transaction.",
-        ),
-      )
+      flowScreen("multisig-propose", emptyState(message))
     );
   }
   const data = portfolio ?? {

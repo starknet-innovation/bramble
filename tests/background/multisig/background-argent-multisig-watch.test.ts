@@ -98,7 +98,10 @@ describe("Argent multisig watch", () => {
         signerGuids: publicConfig.signerPublicKeys.map(argentSignerGuid),
         threshold: publicConfig.threshold,
       }),
-      getSignerPublicKeys: () => publicConfig.signerPublicKeys,
+      getSignerPublicKeys: () => ({
+        signerPublicKeys: publicConfig.signerPublicKeys,
+        unsupportedSigners: [],
+      }),
     });
 
     await expect(
@@ -108,6 +111,33 @@ describe("Argent multisig watch", () => {
       ),
     ).resolves.toMatchObject({
       multisig: { record: { currentConfig: publicConfig } },
+      ok: true,
+    });
+  });
+
+  test("keeps supported non-Stark authorities watch-only without requesting Stark keys", async () => {
+    const harness = await makeMultisigHarness({
+      getConfig: () => ({
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+        signerGuids: ["0x123"],
+        threshold: 1,
+      }),
+      getSignerPublicKeys: () => ({
+        signerPublicKeys: [],
+        unsupportedSigners: [{ guid: "0x123", type: "webauthn" }],
+      }),
+    });
+
+    await expect(
+      harness.handler(
+        { address: "0xac0", networkId: "SN_MAIN", type: "wallet.addMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({
+      multisig: {
+        authorityStatus: "unsupported-signers",
+        unsupportedSigners: [{ guid: "0x123", type: "webauthn" }],
+      },
       ok: true,
     });
   });

@@ -8,7 +8,7 @@
  * ./styles-swap.ts.
  */
 
-import { emptyState, receipt, receiptRows } from "@mc-wallet/ui-kit/content";
+import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { inputControl } from "@mc-wallet/ui-kit/fields";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
@@ -103,7 +103,7 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
           <span class="decision-seal">${icon("shield")}</span>
           <span><p class="decision-label">Reviewed intent</p><h2>Confirm this swap</h2></span>
         </header>
-        ${receipt([], { id: "swap-confirm-receipt" })}
+        <div id="swap-confirm-receipt"></div>
         <div id="swap-risk-review"></div>
         <details class="disclosure decision-technical" data-disclosure="swap-technical-details">
           <summary>
@@ -180,9 +180,9 @@ export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
       <span><small>You receive</small><strong>${compactAmount(figures.buyAmount)} ${figures.buySymbol}</strong></span>
     </div>
   </div>
-  <div class="receipt-group decision-boundary-rows">
+  <div class="receipt-group">
     <p class="decision-label">Maximum cost and constraints</p>
-    ${receiptRows([
+    ${receipt([
       {
         label: "Minimum received",
         value: `${compactAmount(figures.minBuyAmount)} ${figures.buySymbol} (wallet-enforced)`,

@@ -58,7 +58,12 @@ export const BASE_STYLES = `
     --mc-avatar-3: hsl(0 0% 72%);
   }
   * { box-sizing: border-box; }
-  html, body, #app { min-height: 100%; }
+  html, body, #app {
+    max-width: 100%;
+    min-height: 100%;
+    min-width: 0;
+    width: 100%;
+  }
   body {
     background: var(--mc-bg);
     color: var(--mc-text);
@@ -83,10 +88,22 @@ export const BASE_STYLES = `
     display: flex;
     flex-direction: column;
     gap: ${SPACE.lg};
+    max-width: 100%;
     min-height: 100vh;
+    min-width: 0;
     padding: ${SPACE.md} ${SPACE.lg} ${SPACE.md};
+    width: 100%;
   }
-  .screen { align-content: start; display: grid; flex: 1; gap: ${SPACE.lg}; }
+  .screen {
+    align-content: start;
+    display: grid;
+    flex: 1;
+    gap: ${SPACE.lg};
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+  .screen > * { max-width: 100%; min-width: 0; }
   /* Dock screens scroll their content UNDER the anchored bottom bar. Reserve
      clearance below the content equal to the bar footprint plus a breathing
      gap, so the last row never hides beneath it at any scroll position. Flow

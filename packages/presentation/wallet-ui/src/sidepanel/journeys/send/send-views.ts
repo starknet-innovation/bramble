@@ -299,8 +299,8 @@ const workingStage = (): string => `
   <section class="send-working" id="send-working" role="status" aria-live="polite" hidden>
     <span class="send-working-mark">${liquidDots("send")}</span>
     <div class="send-working-copy">
-      <h2 id="send-working-title">Preparing review</h2>
-      <p id="send-working-copy">Checking the exact transaction.</p>
+      <h2 id="send-working-title">Authorizing transaction</h2>
+      <p id="send-working-copy">The reviewed transaction is being authorized inside the wallet.</p>
     </div>
     <ol class="send-task-list" aria-label="Transaction status">
       <li data-send-task="review" data-state="active"><span></span><span id="send-task-review-label">Review transaction</span></li>
@@ -324,7 +324,7 @@ const successStage = (): string => `
     </div>
     <div class="send-actions">
       ${button({ attributes: { id: "send-view-activity" }, icon: "activity", label: "View activity" })}
-      ${button({ attributes: { id: "send-another" }, label: "Send another", variant: "secondary" })}
+      ${button({ attributes: { id: "send-home" }, label: "Back to home", variant: "secondary" })}
     </div>
   </section>`;
 
@@ -401,7 +401,7 @@ export const sendFlow = (
         ${account ? "" : noAccountEmpty(status)}
         ${account && assets.length === 0 ? emptyState("No tokens are tracked on this network yet, so nothing can be sent.") : ""}
         ${missingIntentAsset ? '<p class="review-flag" role="alert">The requested token is no longer tracked on this network. Choose an asset before continuing.</p>' : ""}
-        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
+        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />

@@ -26,6 +26,11 @@ export const Collectibles = checkpointStory(
 );
 export const AccountDrawer = checkpointStory("Account drawer", "portfolio", "account-drawer");
 export const Undeployed = checkpointStory("Counterfactual account", "portfolio", "undeployed");
+export const DeployAccount = checkpointStory(
+  "Deploy account review",
+  "portfolio",
+  "deploy-account",
+);
 export const PricesOffline = checkpointStory("Prices unavailable", "portfolio", "prices-offline");
 export const BalanceFailed = checkpointStory(
   "Balance refresh failed",

@@ -28,6 +28,26 @@ type SignerIdentity = {
   readonly publicKey: string;
 };
 
+const unsupportedSignerLabel = (
+  type: ArgentMultisigView["unsupportedSigners"][number]["type"],
+): string =>
+  ({
+    eip191: "EIP-191 signer",
+    secp256k1: "Secp256k1 signer",
+    secp256r1: "Secp256r1 signer",
+    webauthn: "Passkey signer",
+  })[type];
+
+const authorityFailureMessage = (status: ArgentMultisigView["authorityStatus"]): string =>
+  ({
+    available: "Current signer authority is unavailable.",
+    "invalid-config": "This account returned an invalid signer configuration. Signing is disabled.",
+    "network-unavailable": "Signer authority could not be refreshed. Check the network and retry.",
+    undeployed: "This account is not deployed yet. Complete deployment before managing signers.",
+    "unsupported-class": "This address is not the pinned Argent Multisig 0.2 account.",
+    "unsupported-signers": "This account includes signer types this wallet cannot manage.",
+  })[status];
+
 const signerIdentities = (
   publicKeys: readonly string[],
   status: WalletStatus,
@@ -180,6 +200,7 @@ export const multisigSignersFlow = (
   const identities = signerIdentities(completeConfig?.signerPublicKeys ?? [], status, preferences);
   const recoverySigners =
     config?.signerGuids.map((guid) => {
+      const unsupported = view.unsupportedSigners.find((signer) => sameFelt(signer.guid, guid));
       const account = status.accounts.find(
         (candidate) =>
           candidate.networkId === record.networkId &&
@@ -195,9 +216,11 @@ export const multisigSignersFlow = (
       const identity = publicKey
         ? signerIdentities([publicKey], status, preferences)[0]
         : undefined;
-      return { identity, publicKey };
+      return { identity, publicKey, unsupported };
     }) ?? [];
-  const unresolvedSignerCount = recoverySigners.filter((signer) => !signer.publicKey).length;
+  const unresolvedSignerCount = recoverySigners.filter(
+    (signer) => !signer.publicKey && !signer.unsupported,
+  ).length;
   const candidates = availableSignerOptions(
     completeConfig?.signerPublicKeys ?? [],
     status,
@@ -262,7 +285,11 @@ export const multisigSignersFlow = (
                 .join("")}</div>`
             : config
               ? `<div class="multisig-complete-config">
-                  <p class="multisig-config-note" role="note">We could not recover every current Stark signer from chain history. Add the ${unresolvedSignerCount === 1 ? "missing public key below" : `${unresolvedSignerCount} missing public keys below in any order`}.</p>
+                  <p class="multisig-config-note" role="note">${
+                    view.unsupportedSigners.length > 0
+                      ? `This account includes ${view.unsupportedSigners.length === 1 ? "a signer type" : "signer types"} this wallet cannot sign with. It remains available to watch, receive, and inspect.`
+                      : `We could not recover every current Stark signer from chain history. Add the ${unresolvedSignerCount === 1 ? "missing public key below" : `${unresolvedSignerCount} missing public keys below in any order`}.`
+                  }</p>
                   <form id="multisig-complete-config-form" data-multisig-id="${escapeHtml(record.id)}">
                     ${config.signerGuids.map((guid) => `<input name="signerGuid" type="hidden" value="${escapeHtml(guid)}" />`).join("")}
                     <div class="multisig-signer-recovery-list" role="list">
@@ -275,7 +302,12 @@ export const multisigSignersFlow = (
                                 <span class="multisig-signer-match">${icon("check")}</span>
                                 <input name="signerPublicKey" type="hidden" value="${escapeHtml(signer.publicKey)}" />
                               </article>`
-                            : `<div class="multisig-signer-recovery-field" role="listitem">
+                            : signer.unsupported
+                              ? `<article class="multisig-signer-recovery-row" role="listitem">
+                                  <span class="option-avatar">${icon("shield")}</span>
+                                  <span class="option-copy"><strong>${escapeHtml(unsupportedSignerLabel(signer.unsupported.type))}</strong><span class="option-sub">Recognized on-chain · Watch only · GUID ${escapeHtml(accountLabel(signer.unsupported.guid))}</span></span>
+                                </article>`
+                              : `<div class="multisig-signer-recovery-field" role="listitem">
                                 ${textField({
                                   attributes: { "data-signer-key": "true" },
                                   className: "mono",
@@ -290,11 +322,11 @@ export const multisigSignersFlow = (
                         )
                         .join("")}
                     </div>
-                    ${button({ label: "Verify missing signer keys", type: "submit" })}
-                    <p id="multisig-complete-config-result" role="status"></p>
+                    ${unresolvedSignerCount > 0 ? button({ label: "Verify missing signer keys", type: "submit" }) : ""}
+                    ${unresolvedSignerCount > 0 ? '<p id="multisig-complete-config-result" role="status"></p>' : ""}
                   </form>
                 </div>`
-              : '<p class="review-flag" role="alert">Current signer authority could not be verified. Retry when network access is restored.</p>'
+              : `<p class="review-flag" role="alert">${escapeHtml(authorityFailureMessage(view.authorityStatus))}</p>`
         }
       </section>
       ${

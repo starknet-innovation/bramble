@@ -84,6 +84,14 @@ describe("bindMultisigs frozen-intent forms", () => {
       `${secondary.publicKeyX} 0x999`,
     );
     expect(app.querySelector("[data-signer-count]")?.textContent).toBe("2 signers");
+    const lastLocalRemove = app.querySelector<HTMLButtonElement>(
+      `[data-remove-signer-public-key="${secondary.publicKeyX}"]`,
+    );
+    expect(lastLocalRemove?.disabled).toBe(true);
+    lastLocalRemove?.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerAccountId"]')?.value).toBe(
+      secondary.id,
+    );
   });
 
   test("keeps an unfunded deployment in review instead of offering broadcast", async () => {
@@ -126,6 +134,8 @@ describe("bindMultisigs frozen-intent forms", () => {
     await flush();
     expect(fundingIntent).toMatchObject({
       accountId: signer.id,
+      completeMultisigId: `${fixture.deploymentReview.networkId}:${fixture.deploymentReview.address}`,
+      completeTo: "multisig-home",
       recipient: fixture.deploymentReview.address,
       source: "public",
       destination: "public",

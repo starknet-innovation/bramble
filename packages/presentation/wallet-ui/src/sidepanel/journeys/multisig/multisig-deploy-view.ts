@@ -209,8 +209,9 @@ export const multisigDeployFlow = (
               ? '<p class="review-flag" role="alert">Class availability could not be verified. Deployment remains disabled.</p>'
               : ""
         }
-        <form id="multisig-deploy-form" data-deployment-stage="setup">
-          <div class="multisig-deploy-setup" data-multisig-deploy-setup>
+        <form id="multisig-deploy-form" data-class-ready="${classState === true}" data-deployment-stage="setup">
+          <div class="multisig-deploy-stage-frame">
+            <div class="multisig-deploy-setup" data-multisig-deploy-setup>
             ${expectedAddress ? `<input name="expectedAddress" type="hidden" value="${escapeHtml(expectedAddress)}" />` : ""}
             <input name="fundingTokenId" type="hidden" value="${escapeHtml(strkToken?.id ?? "")}" />
             <template data-multisig-funding-controls>
@@ -302,7 +303,8 @@ export const multisigDeployFlow = (
               </div>
             </template>
               </section>
-              ${button({ attributes: { "data-multisig-deploy-continue": true }, label: "Continue to approval" })}
+              ${button({ attributes: { "data-multisig-deploy-continue": true }, disabled: !deploymentSigner, label: "Continue to approval" })}
+              <p class="multisig-manual-signer-result" data-deployment-signer-status role="status">${deploymentSigner ? "" : "Add an account from this wallet to the signer set before continuing."}</p>
             </div>
             <div class="multisig-deploy-step-pane multisig-deploy-approval-step" data-multisig-deploy-stage="approval">
               ${
@@ -345,13 +347,14 @@ export const multisigDeployFlow = (
                 </div>
               </details>
             </div>
+            </div>
+            <div id="multisig-deploy-review" aria-live="polite"></div>
+            <div class="multisig-deploy-actions">
+              ${button({ attributes: { "data-multisig-deploy-back": true }, label: "Back", variant: "secondary" })}
+              ${button({ disabled: classState !== true || !deploymentSigner, label: "Review deployment", type: "submit" })}
+            </div>
+            <p id="multisig-deploy-result" role="status"></p>
           </div>
-          <div id="multisig-deploy-review" aria-live="polite"></div>
-          <div class="multisig-deploy-actions">
-            ${button({ attributes: { "data-multisig-deploy-back": true }, label: "Back", variant: "secondary" })}
-            ${button({ disabled: classState !== true || !deploymentSigner, label: "Review deployment", type: "submit" })}
-          </div>
-          <p id="multisig-deploy-result" role="status"></p>
         </form>
       </section>`,
     )

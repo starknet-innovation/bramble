@@ -99,13 +99,11 @@ const deploymentFailureToast = (raw: string, review: ArgentMultisigDeploymentRev
   }
   return raw;
 };
-
 const publicKeys = (raw: string): readonly string[] =>
   raw
     .split(/[\s,]+/)
     .filter(Boolean)
     .map(normalizeFeltInput);
-
 const deploymentSetup = (form: HTMLFormElement): ArgentMultisigDeploymentSetup => {
   const data = new FormData(form);
   return {
@@ -122,7 +120,6 @@ const deploymentSetup = (form: HTMLFormElement): ArgentMultisigDeploymentSetup =
     threshold: Number(data.get("threshold")),
   };
 };
-
 const sameSetup = (
   left: ArgentMultisigDeploymentSetup,
   right: ArgentMultisigDeploymentSetup,
@@ -150,6 +147,10 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   const signerList = form?.querySelector<HTMLElement>("[data-selected-signers]");
   const signerCount = form?.querySelector<HTMLElement>("[data-signer-count]");
   const signerDisclosure = form?.querySelector<HTMLElement>(".multisig-signer-sources > summary");
+  const continueButton = form?.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]");
+  const deploymentSignerStatus = form?.querySelector<HTMLElement>(
+    "[data-deployment-signer-status]",
+  );
   const manualSignerInput = form?.querySelector<HTMLInputElement>(
     "[data-manual-signer-public-key]",
   );
@@ -187,6 +188,9 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     const deploymentChoices = Array.from(
       form?.querySelectorAll<HTMLButtonElement>("[data-deployment-signer]") ?? [],
     );
+    const localSignerKeys = deploymentChoices.flatMap((choice) =>
+      choice.dataset["deploymentSignerKey"] ? [choice.dataset["deploymentSignerKey"]] : [],
+    );
     deploymentChoices.forEach((choice) => {
       const targetChoice = choice;
       const publicKey = targetChoice.dataset["deploymentSignerKey"];
@@ -197,17 +201,31 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     const selectedDeployment = deploymentChoices.find(
       (choice) => choice.dataset["deploymentSigner"] === signerAccountInput?.value,
     );
-    if (selectedDeployment?.hidden && signerAccountInput) {
+    if ((!selectedDeployment || selectedDeployment.hidden) && signerAccountInput) {
       const next = deploymentChoices.find((choice) => !choice.hidden);
       signerAccountInput.value = next?.dataset["deploymentSigner"] ?? "";
       deploymentChoices.forEach((choice) => {
         choice.setAttribute("aria-pressed", String(choice === next));
       });
     }
+    const selectedLocalCount = selected.filter((row) =>
+      localSignerKeys.some((key) => sameFelt(key, row.dataset["signerPublicKey"] ?? "")),
+    ).length;
     selected.forEach((row) => {
       const remove = row.querySelector<HTMLButtonElement>("[data-remove-signer-public-key]");
-      if (remove) remove.disabled = selected.length === 1;
+      const isLocal = localSignerKeys.some((key) =>
+        sameFelt(key, row.dataset["signerPublicKey"] ?? ""),
+      );
+      if (remove) remove.disabled = selected.length === 1 || (isLocal && selectedLocalCount === 1);
     });
+    const hasDeploymentSigner = deploymentChoices.some((choice) => !choice.hidden);
+    if (continueButton) continueButton.disabled = !hasDeploymentSigner;
+    if (button) button.disabled = form?.dataset["classReady"] !== "true" || !hasDeploymentSigner;
+    if (deploymentSignerStatus) {
+      deploymentSignerStatus.textContent = hasDeploymentSigner
+        ? ""
+        : "Add an account from this wallet to the signer set before continuing.";
+    }
     if (thresholdInput && Number(thresholdInput.value) > selected.length) {
       thresholdInput.value = String(selected.length);
     }

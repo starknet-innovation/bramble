@@ -62,7 +62,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("Technical details");
     expect(html).not.toContain("Collaborator note");
     expect(html).toContain('data-ms-sign="');
-    expect(html).toContain("Copy intent package");
+    expect(html).toContain("Copy full intent package");
     expect(html).not.toContain('data-ms-submit="');
   });
 
@@ -146,7 +146,9 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain('data-ms-submit="');
     expect(html).toContain("Submit transaction");
     expect(html).not.toContain('data-ms-sign="');
-    expect(html).toContain("Share or manage signatures");
+    expect(html).toContain("Co-signer handoff");
+    expect(html).toContain("Copy full intent package");
+    expect(html).toContain("Individual signature fragments");
     expect(html).toContain("1 of 1");
   });
 
@@ -208,7 +210,13 @@ describe("Argent multisig list and exact-intent detail", () => {
       ...fixture.record,
       deployment: { salt: "0x5", signerPublicKeys: [signer.publicKeyX], threshold: 1 },
     };
-    const undeployed = { config: null, deployed: false, record } as const;
+    const undeployed = {
+      ...fixture.view,
+      authorityStatus: "undeployed",
+      config: null,
+      deployed: false,
+      record,
+    } as const;
 
     const home = multisigDetailFlow(
       fixture.status,
@@ -240,7 +248,13 @@ describe("Argent multisig list and exact-intent detail", () => {
       deployment: _deployment,
       ...addressOnlyRecord
     } = fixture.record;
-    const undeployed = { config: null, deployed: false, record: addressOnlyRecord } as const;
+    const undeployed = {
+      ...fixture.view,
+      authorityStatus: "undeployed",
+      config: null,
+      deployed: false,
+      record: addressOnlyRecord,
+    } as const;
 
     const home = multisigDetailFlow(
       fixture.status,
@@ -264,27 +278,34 @@ describe("Argent multisig list and exact-intent detail", () => {
 
   test("disables signing when fresh on-chain authority is unavailable", async () => {
     const fixture = await makeArgentMultisigFixture();
+    const account = fixture.status.accounts[0] ?? null;
+    const unavailableView = {
+      ...fixture.view,
+      authorityStatus: "network-unavailable",
+      config: null,
+      deployed: null,
+    } as const;
     const html = multisigDetailFlow(
       fixture.status,
-      fixture.status.accounts[0] ?? null,
-      { config: null, record: fixture.record },
+      account,
+      unavailableView,
       [fixture.intent],
       true,
     );
-    expect(html).toContain("Current on-chain signer authority is unavailable");
+    expect(html).toContain("latest signer-authority refresh failed");
     expect(html).not.toContain('data-ms-sign="');
 
     const home = multisigDetailFlow(
       fixture.status,
-      fixture.status.accounts[0] ?? null,
-      { config: null, record: fixture.record },
+      account,
+      unavailableView,
       [fixture.intent],
       true,
       null,
       "multisig-home",
     );
     expect(home).not.toContain("Current on-chain signer authority is unavailable");
-    expect(home).toContain("signer authority could not be verified");
+    expect(home).toContain("Signer authority could not be refreshed");
     expect(home).toContain('data-view="multisig-propose" type="button" disabled');
   });
 
@@ -310,12 +331,12 @@ describe("Argent multisig list and exact-intent detail", () => {
       fixture.status,
       fixture.status.accounts[0] ?? null,
       {
+        ...fixture.view,
         config: {
           classHash: fixture.record.classHash,
           signerGuids: [...(fixture.view.config?.signerGuids ?? []), "0x999"],
           threshold: fixture.view.config?.threshold ?? 1,
         },
-        record: fixture.record,
       },
       [fixture.readyIntent],
     );
@@ -370,6 +391,7 @@ describe("Argent frozen-intent composer", () => {
     });
     expect(html).toContain("New transaction");
     expect(html).toContain("Nothing is signed or submitted");
+    expect(html).toContain("<strong>Treasury</strong>");
     expect(html).toContain(`data-multisig-id="${fixture.record.id}"`);
     expect(html).toContain("Review transaction");
     expect(html).toContain("Choose saved recipient");
@@ -382,10 +404,12 @@ describe("Argent frozen-intent composer", () => {
   test("does not render a form without freshly verified authority", async () => {
     const fixture = await makeArgentMultisigFixture();
     const html = multisigProposeFlow(fixture.status, {
+      ...fixture.view,
+      authorityStatus: "network-unavailable",
       config: null,
-      record: fixture.record,
+      deployed: null,
     });
-    expect(html).toContain("Current on-chain signer authority is unavailable");
+    expect(html).toContain("Signer authority could not be refreshed");
     expect(html).not.toContain('id="multisig-propose-form"');
   });
 });
@@ -445,8 +469,13 @@ describe("Argent multisig management views", () => {
       fixture.record.currentConfig?.signerPublicKeys[0] ?? "missing",
     );
     expect(
-      multisigSignersFlow(fixture.status, account, { ...fixture.view, config: null }),
-    ).toContain("network access is restored");
+      multisigSignersFlow(fixture.status, account, {
+        ...fixture.view,
+        authorityStatus: "network-unavailable",
+        config: null,
+        deployed: null,
+      }),
+    ).toContain("Check the network and retry");
     expect(multisigReceiveFlow(fixture.status, null)).toContain("no longer watched");
     expect(multisigReceiveFlow(fixture.status, fixture.view)).toContain(fixture.record.address);
     expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched Argent multisig");

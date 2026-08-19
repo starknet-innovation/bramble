@@ -37,7 +37,7 @@ import {
   riskFlagMessages,
 } from "../../shared/review-render";
 import { tokenGlyph } from "../portfolio/token-row";
-import { multisigIntentActions } from "./multisig-intent-actions";
+import { multisigIntentActions, multisigIntentOutcome } from "./multisig-intent-actions";
 import { multisigDisplayName } from "./multisig-model";
 import {
   EMPTY_MULTISIG_PORTFOLIO,
@@ -51,8 +51,26 @@ export { multisigProposeFlow } from "./multisig-propose-view";
 
 const configLabel = (view: ArgentMultisigView): string =>
   view.config
-    ? `${view.config.threshold} of ${view.config.signerGuids.length} signers`
-    : "Configuration unavailable";
+    ? `${view.config.threshold} of ${view.config.signerGuids.length} signers${view.authorityStatus === "unsupported-signers" ? " · Watch only" : ""}`
+    : {
+        available: "Configuration unavailable",
+        "invalid-config": "Invalid configuration",
+        "network-unavailable": "Authority unavailable",
+        undeployed: "Not deployed",
+        "unsupported-class": "Unsupported account class",
+        "unsupported-signers": "Unsupported signer types",
+      }[view.authorityStatus];
+
+const authorityMessage = (view: ArgentMultisigView): string | null =>
+  ({
+    available: null,
+    "invalid-config": "The account returned an invalid signer configuration. Signing is disabled.",
+    "network-unavailable": "Signer authority could not be refreshed. Check the network and retry.",
+    undeployed: null,
+    "unsupported-class":
+      "This address is not the pinned Argent Multisig 0.2 account. It is available to inspect only.",
+    "unsupported-signers": `This account includes ${view.unsupportedSigners.length === 1 ? "a signer type" : "signer types"} this wallet cannot sign with. It remains available to watch and receive.`,
+  })[view.authorityStatus];
 
 const multisigRow = (view: ArgentMultisigView, openCount: number): string => `
   <li class="allowance-row">
@@ -117,7 +135,7 @@ const localSignerOptions = (
   preferences: WalletPreferences | null,
   signedPublicKeys: readonly string[] = [],
 ): readonly { readonly label: string; readonly value: string }[] =>
-  view.config
+  view.config && view.authorityStatus === "available"
     ? accounts
         .filter(
           (account) =>
@@ -210,6 +228,7 @@ const configMatchesIntent = (
 ): boolean => {
   const current = view.config;
   return (
+    view.authorityStatus === "available" &&
     current !== null &&
     sameFelt(current.classHash, intent.configSnapshot.classHash) &&
     current.threshold === intent.configSnapshot.threshold &&
@@ -226,6 +245,8 @@ const intentCard = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
 ): string => {
+  const outcome = multisigIntentOutcome(intent);
+  if (outcome) return outcome;
   const allOptions = localSignerOptions(view, status.accounts, preferences);
   const options = localSignerOptions(
     view,
@@ -416,12 +437,16 @@ export const multisigDetailFlow = (
     (intent) =>
       intent.accountId === record.id && (intent.state === "collecting" || intent.state === "ready"),
   ).length;
+  const authorityIssue = authorityMessage(view);
+  const effectiveAuthorityIssue = loadError
+    ? "Signer authority could not be refreshed. Retry before preparing or signing."
+    : authorityIssue;
   const authorityWarning =
-    screen === "multisig-home" || (!loadError && view.config !== null)
+    screen === "multisig-home" || (!loadError && authorityIssue === null)
       ? ""
       : view.deployed === false
         ? '<div class="review-panel" role="status"><p class="review-flag">This account is not deployed yet. Deploy it before preparing or signing transactions.</p></div>'
-        : '<div class="review-panel" role="alert"><p class="review-flag">Current on-chain signer authority is unavailable. Signing is disabled.</p></div>';
+        : `<div class="review-panel" role="alert"><p class="review-flag">${escapeHtml(loadError ? "The latest signer-authority refresh failed. Signing remains disabled until retry succeeds." : (authorityIssue ?? "Current signer authority is unavailable."))}</p></div>`;
   if (screen === "multisig-detail") {
     return (
       flowHeader(multisigDisplayName(record), status, configLabel(view)) +
@@ -435,8 +460,9 @@ export const multisigDetailFlow = (
     screen,
     `${authorityWarning}
       ${multisigPortfolio({
-        authorityAvailable: view.config !== null,
-        canSign: options.length > 0 && hasCompleteSignerConfig,
+        authorityAvailable: !loadError && view.config !== null,
+        ...(effectiveAuthorityIssue ? { authorityMessage: effectiveAuthorityIssue } : {}),
+        canSign: !loadError && options.length > 0 && hasCompleteSignerConfig,
         data: portfolio,
         ...(view.deployed === undefined ? {} : { deployed: view.deployed }),
         intents: compactIntentList(record, intents, preferences),

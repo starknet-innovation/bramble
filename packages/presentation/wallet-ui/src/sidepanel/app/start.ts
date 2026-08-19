@@ -277,6 +277,7 @@ export const startWalletUi = async (
       },
       openFunding: async (intent) => {
         await wallet.setActiveAccount(intent.accountId);
+        selectedMultisigId = intent.completeMultisigId ?? selectedMultisigId;
         sendIntent = intent;
         navigate("send");
       },

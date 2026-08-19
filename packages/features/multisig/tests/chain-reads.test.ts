@@ -336,7 +336,7 @@ describe("getArgentMultisigSignerPublicKeys", () => {
         rpcUrls: RPC_URLS,
         signerGuids,
       }),
-    ).resolves.toEqual(expectedKeys);
+    ).resolves.toEqual({ signerPublicKeys: expectedKeys, unsupportedSigners: [] });
     expect(eventFilters).toHaveLength(1);
     expect(eventFilters[0]).toMatchObject({
       address: ADDRESS,
@@ -376,6 +376,45 @@ describe("getArgentMultisigSignerPublicKeys", () => {
         signerGuids: [argentSignerGuid("0x123")],
       }),
     ).rejects.toThrow("Invalid Argent multisig signer event");
+  });
+
+  test("classifies supported non-Stark signer schemes without requesting Stark keys", async () => {
+    const signerGuids = ["0x123", "0x456"];
+    const provider = {
+      async getBlockLatestAccepted() {
+        return { block_hash: BLOCK_HASH, block_number: 1 };
+      },
+      async getClassHashAt() {
+        return ARGENT_MULTISIG_CONTRACT.classHash;
+      },
+      async getEvents() {
+        return {
+          events: signerGuids.map((guid, index) => ({
+            block_hash: BLOCK_HASH,
+            block_number: 1,
+            data: [index === 0 ? "0x2" : "0x4"],
+            from_address: ADDRESS,
+            keys: ["0x1", guid],
+            transaction_hash: "0x789",
+          })),
+        };
+      },
+    } as unknown as RpcProvider;
+
+    await expect(
+      getArgentMultisigSignerPublicKeys({
+        address: ADDRESS,
+        makeProvider: () => provider,
+        rpcUrls: RPC_URLS,
+        signerGuids,
+      }),
+    ).resolves.toEqual({
+      signerPublicKeys: [],
+      unsupportedSigners: [
+        { guid: "0x123", type: "secp256r1" },
+        { guid: "0x456", type: "webauthn" },
+      ],
+    });
   });
 });
 

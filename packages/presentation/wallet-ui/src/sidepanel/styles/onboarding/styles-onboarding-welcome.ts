@@ -200,6 +200,17 @@ export const ONBOARDING_WELCOME_STYLES = `
   @media (hover: hover) and (pointer: fine) {
     .onboarding-launch:hover { color: var(--mc-text); }
   }
+  @media (max-width: 400px) {
+    .orbit-field {
+      --orbit-core-size: min(150px, calc(100vw - 224px));
+      --orbit-inner-size: min(200px, calc(100vw - 180px));
+      --orbit-middle-size: min(250px, calc(100vw - 136px));
+      --orbit-outer-size: min(350px, calc(100vw - 48px));
+      --orbit-wide-size: min(300px, calc(100vw - 92px));
+      height: 100vw;
+      width: 100vw;
+    }
+  }
   @media (max-height: 760px) {
     .onboarding-orbit { min-height: 260px; transform: scale(0.88); }
   }

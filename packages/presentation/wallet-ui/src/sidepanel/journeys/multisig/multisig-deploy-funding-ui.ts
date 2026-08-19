@@ -31,6 +31,8 @@ export const bindDeploymentFunding = (
       void deps
         .openFunding({
           accountId: source,
+          completeMultisigId: `${review.networkId}:${review.address}`,
+          completeTo: "multisig-home",
           destination: "public",
           networkId: review.networkId,
           recipient: review.address,
