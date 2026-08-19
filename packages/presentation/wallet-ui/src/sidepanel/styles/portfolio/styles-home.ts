@@ -322,7 +322,8 @@ export const HOME_STYLES = `
     .drawer-root[data-open="true"] .drawer-list li, .copy-confirm .icon,
     #refresh-button[data-busy] .icon, #activity-refresh[data-busy] .icon,
     #detect-tokens[data-busy] .icon,
-    #swap-confirm-button[data-busy] .icon { animation: none; }
+    #swap-confirm-button[data-busy] .icon,
+    .account-net.degraded .dot { animation: none; }
     button, input, select, textarea {
       transition:
         background ${MOTION.pressMs}ms ${MOTION.ease},

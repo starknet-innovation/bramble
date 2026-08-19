@@ -12,12 +12,7 @@ import { button } from "@mc-wallet/ui-kit/controls";
 import { explorerAccountUrl } from "@mc-wallet/wallet-model/networks";
 import type { DiscoveredNft } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
-import {
-  formatFiat,
-  formatSavedDataLabel,
-  portfolioDelta,
-  portfolioTotal,
-} from "../../shared/fiat";
+import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { actionTile, explorerTile } from "../../shell/wallet-shell";
 import { nftImageMarkup, visibleNftItems } from "../collectibles/nft-views";
@@ -32,8 +27,6 @@ export type MultisigPortfolioData = {
   readonly changes: Readonly<Record<string, number>>;
   readonly currency: DisplayCurrency;
   readonly nfts: readonly DiscoveredNft[] | null;
-  readonly priceAsOf?: number | null;
-  readonly priceStale?: boolean;
   readonly prices: Readonly<Record<string, number>>;
 };
 
@@ -47,8 +40,6 @@ export const EMPTY_MULTISIG_PORTFOLIO: MultisigPortfolioData = {
   currency: "usd",
   nfts: null,
   prices: {},
-  priceAsOf: null,
-  priceStale: false,
 };
 
 const portfolioHero = (
@@ -60,14 +51,6 @@ const portfolioHero = (
   const hasPrices = visible.some((balance) => data.prices[balance.address] !== undefined);
   const total = hasPrices ? portfolioTotal(visible, data.prices) : null;
   const delta = hasPrices ? portfolioDelta(visible, data.prices, data.changes) : null;
-  const saved = [
-    ...(!("error" in data.balances) && data.balances.stale
-      ? [formatSavedDataLabel("balances", data.balances.asOf ?? null)]
-      : []),
-    ...(data.priceStale && hasPrices
-      ? [formatSavedDataLabel("prices", data.priceAsOf ?? null)]
-      : []),
-  ];
   return `<section class="hero multisig-portfolio-hero" aria-label="Shared account balance" data-live-group>
     <p class="hero-total" data-live-key="multisig-total:${escapeHtml(record.id)}" data-live-value="${total ?? "unknown"}">${total === null ? "—" : escapeHtml(formatFiat(total, data.currency))}</p>
     ${
@@ -78,7 +61,6 @@ const portfolioHero = (
           </p>`
         : ""
     }
-    ${saved.length > 0 ? `<p class="hero-stale" role="status">${icon("alert")}<span>${escapeHtml(`Using saved ${saved.join(" · ")}`)}</span></p>` : ""}
   </section>`;
 };
 

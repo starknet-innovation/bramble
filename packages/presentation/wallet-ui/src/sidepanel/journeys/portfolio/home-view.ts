@@ -10,12 +10,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { explorerAccountUrl, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { DiscoveredNft, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
-import {
-  formatFiat,
-  formatSavedDataLabel,
-  portfolioDelta,
-  portfolioTotal,
-} from "../../shared/fiat";
+import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { dockScreen, noAccountEmpty } from "../../shared/parts";
 import { actionTile, deployNotice, explorerTile, pendingCallout } from "../../shell/wallet-shell";
@@ -39,29 +34,6 @@ const heroDelta = (
     </p>`;
 };
 
-const heroDataNotice = (
-  balances: BalanceState,
-  priceStale: boolean,
-  priceAsOf: number | null,
-  hasPrices: boolean,
-): string => {
-  const saved = [
-    ...(!("error" in balances) && balances.stale
-      ? [formatSavedDataLabel("balances", balances.asOf ?? null)]
-      : []),
-    ...(priceStale && hasPrices ? [formatSavedDataLabel("prices", priceAsOf)] : []),
-  ];
-  const message =
-    saved.length > 0
-      ? `Using saved ${saved.join(" · ")}`
-      : priceStale && !hasPrices
-        ? "Live prices unavailable right now"
-        : null;
-  return message
-    ? `<p class="hero-stale" role="status">${icon("alert")}<span>${escapeHtml(message)}</span></p>`
-    : "";
-};
-
 /**
  * Renders the account-scoped Home portfolio without the shared wallet shell.
  */
@@ -75,8 +47,6 @@ export const homeScreen = (
   prices: Readonly<Record<string, number>>,
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
-  priceStale: boolean,
-  priceAsOf: number | null,
   discoveredNfts: readonly DiscoveredNft[],
   privacy: PrivacyDisclosureState,
 ): string => {
@@ -104,9 +74,7 @@ export const homeScreen = (
     <section class="hero" data-live-group>
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${showTotal ? heroDelta(unified, prices, changes, currency) : ""}
-      ${account && !balancesComplete ? '<p class="hero-partial" role="status"><span>Public balances shown; private balances are still refreshing</span></p>' : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
-      ${account !== null ? heroDataNotice(balances, priceStale, priceAsOf, showTotal) : ""}
       ${account ? "" : noAccountEmpty(status)}
       ${deployNotice(account, deployment, fundedForFees)}
     </section>

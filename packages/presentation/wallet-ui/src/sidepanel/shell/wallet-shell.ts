@@ -23,6 +23,7 @@ export const walletHeader = (
   account: AccountRef | null,
   preferences: WalletPreferences | null,
   multisig: ArgentMultisigRecord | null = null,
+  networkIssue: string | null = null,
 ): string => {
   const name = multisig
     ? (multisig.name ?? "Multisig account")
@@ -33,13 +34,16 @@ export const walletHeader = (
   const network = status.network
     .replace(/^Starknet Mainnet$/, "Starknet")
     .replace(/^Starknet\s+/, "");
+  const networkDetail = networkIssue
+    ? `<span id="network-status-detail" class="sr-only">${escapeHtml(networkIssue)}</span>`
+    : "";
   return `
   <header class="wallet-header">
-    <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" title="Manage accounts">
+    <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false"${networkIssue ? ' aria-describedby="network-status-detail"' : ""} title="Manage accounts">
       <span class="brand-mark">${address ? accountAvatar(address) : icon("wallet")}</span>
       <span class="account-meta">
         <span class="account-name"><strong>${escapeHtml(name)}</strong>${icon("chevronDown")}</span>
-        <span class="account-net"><span class="dot"></span>${escapeHtml(network)}${multisig ? " · Argent Multisig" : ""}</span>
+        <span class="account-net${networkIssue ? " degraded" : ""}"${networkIssue ? ` title="${escapeHtml(networkIssue)}"` : ""}><span class="dot" aria-hidden="true"></span><span class="account-network-label">${escapeHtml(network)}</span>${networkDetail}</span>
       </span>
     </button>
     <div class="header-actions">

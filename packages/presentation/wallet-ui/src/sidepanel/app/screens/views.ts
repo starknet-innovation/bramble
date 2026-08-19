@@ -64,6 +64,7 @@ import type { SendIntent } from "../../journeys/send/send-model";
 import { revealFlow } from "../../journeys/settings/reveal-ui";
 import { settingsScreen } from "../../journeys/settings/settings-views";
 import type { BalanceState } from "../../runtime/runtime";
+import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";
 import { accountDrawer } from "../../shell/account-drawer";
 import { walletDock, walletHeader } from "../../shell/wallet-shell";
@@ -315,8 +316,6 @@ export const dashboard = (
       nfts:
         selectedMultisigId !== null && multisigNftId === selectedMultisigId ? multisigNfts : null,
       prices,
-      priceAsOf,
-      priceStale,
     },
     multisigIntents,
     multisigs,
@@ -388,6 +387,22 @@ export const dashboard = (
     activeView === "multisig-home" || activeView === "activity" || activeView === "settings"
       ? selectedMultisig(journeyContext)
       : null;
+  const privacyIssue = privacyDataIssue(
+    activeView,
+    account,
+    status,
+    privacy,
+    sharedIdentity !== null,
+  );
+  const networkIssue = [
+    ...networkDataIssue(
+      sharedIdentity ? selectedPortfolioBalances : balances,
+      priceStale,
+      priceAsOf,
+      Object.keys(prices).length > 0,
+    ),
+    ...(privacyIssue ? [privacyIssue] : []),
+  ].join(" ");
   const screen =
     activeView === "multisig-home"
       ? multisigDetailFlow(
@@ -414,13 +429,11 @@ export const dashboard = (
               prices,
               changes,
               currency,
-              priceStale,
-              priceAsOf,
               discoveredNfts,
               privacy,
             );
   return `
-    ${walletHeader(status, account, preferences, sharedIdentity?.record)}
+    ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}
     ${screen}
     ${walletDock(activeView, pending.length, sharedIdentity !== null)}
     ${accountDrawer(

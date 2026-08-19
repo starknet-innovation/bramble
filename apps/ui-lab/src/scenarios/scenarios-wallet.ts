@@ -91,11 +91,12 @@ export const portfolioScenario: WalletScenario = {
           priceAsOf: 1_787_120_700_000,
           priceStale: true,
           prices: journeyPrices,
+          privacy: { error: null, loading: true, value: null },
         }),
       id: "saved-data",
       label: "Saved data during outage",
       narrative:
-        "Last-known balances and prices remain usable while their capture times make degraded freshness explicit.",
+        "Last-known balances remain usable while the orange network indicator reveals capture times on hover or focus.",
       prepare: bindFixtureHome,
       state: { balances: "saved", pricing: "saved", recovery: "automatic" },
     },

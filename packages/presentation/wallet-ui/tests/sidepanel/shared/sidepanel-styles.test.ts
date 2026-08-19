@@ -122,8 +122,21 @@ describe("sidepanel styles", () => {
   test("reduced motion collapses every lift and press scale", () => {
     const reduced = SIDEPANEL_STYLES.slice(SIDEPANEL_STYLES.indexOf("prefers-reduced-motion"));
     expect(reduced).toContain("animation: none");
+    expect(reduced).toContain(".account-net.degraded .dot");
     expect(reduced).toContain("transition: none");
     expect(reduced).toContain("transform: none");
+  });
+
+  test("keeps network identity on one line and reserves motion for degraded data", () => {
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.account-net \{[^}]*overflow: hidden;[^}]*text-wrap: nowrap;/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.account-network-label \{[^}]*text-overflow: ellipsis;[^}]*text-wrap: nowrap;/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.account-net\.degraded \.dot \{[^}]*network-status-pulse 2400ms[^}]*var\(--mc-warning\)/s,
+    );
   });
 
   test("colors come only from skin tokens, never literals", () => {

@@ -215,8 +215,20 @@ export const BASE_STYLES = `
     font-size: ${TYPE.caption.size};
     gap: 6px;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
   }
-  .account-net .dot { height: 6px; width: 6px; }
+  .account-net .dot { flex: none; height: 6px; width: 6px; }
+  .account-network-label { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .account-net.degraded .dot {
+    animation: network-status-pulse 2400ms var(--ease-in-out) infinite;
+    background: var(--mc-warning);
+  }
+  @keyframes network-status-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.42; }
+  }
   .header-actions { align-items: center; display: flex; flex: none; gap: ${SPACE.xs}; }
 
   /* Portfolio hero: only the value and its time-bound change remain. Account
@@ -253,10 +265,9 @@ export const BASE_STYLES = `
   .hero-change .hero-change-amt { color: var(--mc-positive); }
   .hero-change.down .hero-change-amt { color: var(--mc-danger); }
   .hero-change .hero-change-win { color: var(--mc-muted); font-weight: 500; }
-  /* Degraded-price notice: a muted, low-key line so saved/unavailable prices
-     read as an honest caveat under the total, never as an error state. */
-  .hero-stale,
-  .hero-partial {
+  /* Shielded-balance qualifier stays quiet beneath the total; network
+     freshness now belongs to the persistent header status. */
+  .hero-stale {
     align-items: center;
     color: var(--mc-muted);
     display: inline-flex;

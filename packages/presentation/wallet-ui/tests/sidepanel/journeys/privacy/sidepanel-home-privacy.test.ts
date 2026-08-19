@@ -220,7 +220,9 @@ describe("unified portfolio scope", () => {
     const html = privateDashboard(privateState(true));
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("home-actions"));
 
-    expect(hero).toContain("Public balances shown; private balances are still refreshing");
+    expect(hero).not.toContain("private balances are still refreshing");
+    expect(html).toContain('class="account-net degraded"');
+    expect(html).toContain("Private balances are still refreshing.");
     expect(hero).toContain("$2,500.00");
     expect(hero).toContain('data-total-complete="false"');
     expect(html).toContain("Discovering…");
