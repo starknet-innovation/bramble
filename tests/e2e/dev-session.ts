@@ -21,17 +21,24 @@
  * exactly as a person would, and every derivation, validation, and signature
  * stays inside the extension.
  *
- * Two behaviours differ from a hand-loaded Chrome: the side panel is opened as
- * an ordinary tab (nothing may click the toolbar action), and the browser is
- * Playwright's bundled Chromium rather than your daily Chrome. Toolbar and
- * native side-panel behaviour still need a manually loaded `dist/`.
+ * The session drives whichever wallet surface the browser already has: Chrome
+ * restores a side panel that was open when the profile was last used, and the
+ * extension opens `onboarding.html` itself on a fresh install. Only when there
+ * is neither does this open a tab of its own, so you are not left with a
+ * full-page copy sitting beside the panel.
+ *
+ * Open the side panel once from the toolbar and the profile remembers it: the
+ * script cannot do it for you, because `chrome.sidePanel.open()` is rejected
+ * unless it is handling a real user gesture. The browser is also Playwright's
+ * bundled Chromium rather than your daily Chrome, so toolbar behaviour still
+ * needs a manually loaded `dist/`.
  */
 
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Locator, Page } from "@playwright/test";
-import { launchExtension } from "./extension-fixture";
+import { type LoadedExtension, launchExtension } from "./extension-fixture";
 import {
   IMPORT_MNEMONIC,
   importWalletFromPhrase,
@@ -49,6 +56,12 @@ const profileDir = resolve(repoRoot, ".dev-profile");
 // probing for a state the wallet is not in stays cheap. Only a first run pays
 // it twice, falling through both probes before it starts onboarding.
 const STATE_TIMEOUT_MS = 5_000;
+// How long to let the browser produce a surface of its own — a restored side
+// panel or the install-time onboarding tab — before opening one ourselves.
+const SURFACE_WAIT_MS = 4_000;
+// The background answers as soon as Krusty is up; a cold first compile on a
+// loaded machine is the slow case this covers.
+const STATUS_TIMEOUT_MS = 30_000;
 
 // `||`, not `??`: `MC_DEV_PASSPHRASE= bun run dev:session` is the ordinary way
 // to clear a variable, and an empty string must fall back rather than drive the
@@ -97,6 +110,107 @@ const isVisible = async (locator: Locator): Promise<boolean> => {
   }
 };
 
+const isSidePanel = (page: Page): boolean => page.url().endsWith("/sidepanel.html");
+
+/** Every page belonging to the wallet, panel and tabs alike. */
+const walletPages = (extension: LoadedExtension): readonly Page[] =>
+  extension.context
+    .pages()
+    .filter((page) => page.url().startsWith(`chrome-extension://${extension.extensionId}/`));
+
+/**
+ * The wallet surface to drive, preferring one the browser already has: the side
+ * panel Chrome restores with the profile, then any wallet tab it restored or
+ * the extension opened itself on a fresh install. Opening our own page is the
+ * last resort, because a tab we add sits beside the panel instead of replacing
+ * it.
+ *
+ * Nothing here can open the panel: `chrome.sidePanel.open()` is refused unless
+ * it is handling a real user gesture. Open it once from the toolbar and the
+ * profile remembers it from then on.
+ */
+const walletSurface = async (extension: LoadedExtension): Promise<Page> => {
+  const deadline = Date.now() + SURFACE_WAIT_MS;
+  while (Date.now() < deadline) {
+    const pages = walletPages(extension);
+    const existing = pages.find(isSidePanel) ?? pages[0];
+    if (existing) {
+      return existing;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return extension.openExtensionPage("sidepanel.html");
+};
+
+/**
+ * A wallet page showing `path`, reusing what the browser already has: an exact
+ * match first (the restored side panel counts as `sidepanel.html`), then a
+ * restored tab navigated into place, and only then a new tab. The panel is never
+ * navigated away from, since it is the surface the developer asked to keep.
+ */
+const surfaceShowing = async (extension: LoadedExtension, path: string): Promise<Page> => {
+  const pages = walletPages(extension);
+  const exact = pages.find((page) => page.url().endsWith(`/${path}`));
+  if (exact) {
+    return exact;
+  }
+  const reusableTab = pages.find((page) => !isSidePanel(page));
+  if (reusableTab) {
+    await reusableTab.goto(`chrome-extension://${extension.extensionId}/${path}`);
+    return reusableTab;
+  }
+  return extension.openExtensionPage(path);
+};
+
+/**
+ * Asks the background what the wallet actually is, rather than inferring it from
+ * whichever screen a restored tab happens to be showing — a completed onboarding
+ * tab renders neither the gate nor the home header, which no DOM probe can tell
+ * apart from a wallet that does not exist yet. Polls because the worker may
+ * still be booting Krusty when the first page appears.
+ */
+const readStatus = async (page: Page): Promise<{ hasVault: boolean; locked: boolean }> => {
+  const deadline = Date.now() + STATUS_TIMEOUT_MS;
+  for (;;) {
+    const status = await page.evaluate(async () => {
+      const extensionGlobal = globalThis as typeof globalThis & {
+        readonly chrome?: {
+          readonly runtime?: {
+            readonly sendMessage?: (message: unknown) => Promise<unknown>;
+          };
+        };
+      };
+      return (await extensionGlobal.chrome?.runtime?.sendMessage?.({ type: "wallet.status" })) as
+        | { readonly hasVault?: boolean; readonly locked?: boolean; readonly ready?: boolean }
+        | undefined;
+    });
+    if (status?.ready === true) {
+      return { hasVault: status.hasVault === true, locked: status.locked !== false };
+    }
+    if (Date.now() > deadline) {
+      throw new Error("the wallet background never reported a ready status");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+};
+
+/**
+ * Leaves the panel as the only wallet surface once the session is ready, closing
+ * the blank starter tab and any wallet tab the browser restored. Runs only when
+ * a panel exists, so a profile without one keeps the surface it has.
+ */
+const closeRedundantSurfaces = async (extension: LoadedExtension): Promise<void> => {
+  if (!walletPages(extension).some(isSidePanel)) {
+    return;
+  }
+  for (const page of extension.context.pages()) {
+    if (isSidePanel(page)) {
+      continue;
+    }
+    await page.close().catch(() => undefined);
+  }
+};
+
 const main = async (): Promise<void> => {
   if (!existsSync(resolve(repoRoot, "dist/manifest.json"))) {
     throw new Error("dist/manifest.json is missing; run bun run build before bun run dev:session");
@@ -115,29 +229,28 @@ const main = async (): Promise<void> => {
     // Playwright's emulated 1280px, which is the opposite of the point.
     viewport: null,
   });
-  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  const status = await readStatus(await walletSurface(extension));
 
-  // Locked first: a launch always starts locked, because the unlock session
-  // lives in the extension's session storage area and dies with the browser.
-  // The unlocked branch is kept for the day that stops being true, rather than
-  // paid for as a doomed probe on every run.
-  if (await isVisible(sidepanel.locator("#unlock-form"))) {
-    await unlockWallet(sidepanel, passphrase);
-    // Report what the gate actually did. A wrong passphrase leaves the screen
-    // in place, and the session is more useful left open to retype it than
-    // torn down.
+  if (!status.hasVault) {
+    const onboarding = await surfaceShowing(extension, "onboarding.html");
+    await importWalletFromPhrase(onboarding, mnemonic, passphrase);
+    console.log(`Wallet onboarded into ${profileDir}.`);
+    await switchToSepolia(onboarding);
+  } else if (status.locked) {
+    const gate = await surfaceShowing(extension, "sidepanel.html");
+    await unlockWallet(gate, passphrase);
+    // Report what the gate actually did. A wrong passphrase leaves the screen in
+    // place, and the session is more useful left open to retype it than torn down.
     console.log(
-      (await isVisible(lockButton(sidepanel)))
+      (await isVisible(lockButton(gate)))
         ? "Wallet unlocked."
         : "Unlock rejected — check MC_DEV_PASSPHRASE; the browser is still open.",
     );
-  } else if (await isVisible(lockButton(sidepanel))) {
-    console.log("Wallet already unlocked.");
   } else {
-    await importWalletFromPhrase(sidepanel, mnemonic, passphrase);
-    console.log(`Wallet onboarded into ${profileDir}.`);
-    await switchToSepolia(sidepanel);
+    console.log("Wallet already unlocked.");
   }
+
+  await closeRedundantSurfaces(extension);
 
   console.log(`Extension id: ${extension.extensionId}`);
   console.log(`Side panel:   chrome-extension://${extension.extensionId}/sidepanel.html`);
