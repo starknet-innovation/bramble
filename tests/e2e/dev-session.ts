@@ -110,32 +110,61 @@ const isVisible = async (locator: Locator): Promise<boolean> => {
   }
 };
 
-const isSidePanel = (page: Page): boolean => page.url().endsWith("/sidepanel.html");
+/**
+ * A wallet page paired with what kind of surface it actually is.
+ *
+ * The URL cannot answer this: the side panel and a tab pointed at
+ * `sidepanel.html` are the same address. `chrome.tabs.getCurrent()` resolves to
+ * a tab for a page hosted in one and to undefined in the panel, which is the
+ * only honest way to tell them apart — and the difference matters, because a
+ * tab reported as the panel is exactly the duplicate this session exists to
+ * avoid.
+ */
+type Surface = { readonly isPanel: boolean; readonly page: Page };
 
-/** Every page belonging to the wallet, panel and tabs alike. */
-const walletPages = (extension: LoadedExtension): readonly Page[] =>
-  extension.context
-    .pages()
-    .filter((page) => page.url().startsWith(`chrome-extension://${extension.extensionId}/`));
+const classify = async (page: Page): Promise<Surface> => {
+  const isPanel = await page
+    .evaluate(async () => {
+      const extensionGlobal = globalThis as typeof globalThis & {
+        readonly chrome?: {
+          readonly tabs?: { readonly getCurrent?: () => Promise<unknown> };
+        };
+      };
+      if (!extensionGlobal.chrome?.tabs?.getCurrent) {
+        return false;
+      }
+      return (await extensionGlobal.chrome.tabs.getCurrent()) === undefined;
+    })
+    .catch(() => false);
+  return { isPanel, page };
+};
+
+/** Every surface belonging to the wallet, panel and tabs alike. */
+const walletSurfaces = async (extension: LoadedExtension): Promise<readonly Surface[]> =>
+  Promise.all(
+    extension.context
+      .pages()
+      .filter((page) => page.url().startsWith(`chrome-extension://${extension.extensionId}/`))
+      .map(classify),
+  );
 
 /**
  * The wallet surface to drive, preferring one the browser already has: the side
- * panel Chrome restores with the profile, then any wallet tab it restored or
- * the extension opened itself on a fresh install. Opening our own page is the
- * last resort, because a tab we add sits beside the panel instead of replacing
- * it.
+ * panel Chrome restores with the profile, then any wallet tab it restored or the
+ * extension opened itself on a fresh install. Opening our own page is the last
+ * resort, because a tab we add sits beside the panel instead of replacing it.
  *
- * Nothing here can open the panel: `chrome.sidePanel.open()` is refused unless
- * it is handling a real user gesture. Open it once from the toolbar and the
- * profile remembers it from then on.
+ * Nothing here can open the panel: `chrome.sidePanel.open()` is refused unless it
+ * is handling a real user gesture. Open it once from the toolbar and the profile
+ * remembers it from then on.
  */
 const walletSurface = async (extension: LoadedExtension): Promise<Page> => {
   const deadline = Date.now() + SURFACE_WAIT_MS;
   while (Date.now() < deadline) {
-    const pages = walletPages(extension);
-    const existing = pages.find(isSidePanel) ?? pages[0];
+    const found = await walletSurfaces(extension);
+    const existing = found.find((surface) => surface.isPanel) ?? found[0];
     if (existing) {
-      return existing;
+      return existing.page;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
@@ -143,23 +172,42 @@ const walletSurface = async (extension: LoadedExtension): Promise<Page> => {
 };
 
 /**
- * A wallet page showing `path`, reusing what the browser already has: an exact
- * match first (the restored side panel counts as `sidepanel.html`), then a
- * restored tab navigated into place, and only then a new tab. The panel is never
- * navigated away from, since it is the surface the developer asked to keep.
+ * A wallet page showing `path`, reusing what the browser already has: the panel
+ * first, then a page already at that address, then a tab navigated into place,
+ * and only then a new tab. The panel is never navigated away from, since it is
+ * the surface the developer asked to keep.
  */
 const surfaceShowing = async (extension: LoadedExtension, path: string): Promise<Page> => {
-  const pages = walletPages(extension);
-  const exact = pages.find((page) => page.url().endsWith(`/${path}`));
+  const found = await walletSurfaces(extension);
+  const atPath = (surface: Surface): boolean => surface.page.url().endsWith(`/${path}`);
+  const exact = found.find((surface) => surface.isPanel && atPath(surface)) ?? found.find(atPath);
   if (exact) {
-    return exact;
+    return exact.page;
   }
-  const reusableTab = pages.find((page) => !isSidePanel(page));
+  const reusableTab = found.find((surface) => !surface.isPanel);
   if (reusableTab) {
-    await reusableTab.goto(`chrome-extension://${extension.extensionId}/${path}`);
-    return reusableTab;
+    await reusableTab.page.goto(`chrome-extension://${extension.extensionId}/${path}`);
+    return reusableTab.page;
   }
   return extension.openExtensionPage(path);
+};
+
+/**
+ * Leaves the panel as the only wallet surface, closing the blank starter tab and
+ * any wallet tab the browser restored. Runs only when a panel exists, so a
+ * profile without one keeps the surface it has.
+ */
+const closeRedundantSurfaces = async (extension: LoadedExtension): Promise<void> => {
+  const found = await walletSurfaces(extension);
+  if (!found.some((surface) => surface.isPanel)) {
+    return;
+  }
+  const keep = new Set(found.filter((surface) => surface.isPanel).map((surface) => surface.page));
+  for (const page of extension.context.pages()) {
+    if (!keep.has(page)) {
+      await page.close().catch(() => undefined);
+    }
+  }
 };
 
 /**
@@ -191,23 +239,6 @@ const readStatus = async (page: Page): Promise<{ hasVault: boolean; locked: bool
       throw new Error("the wallet background never reported a ready status");
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-};
-
-/**
- * Leaves the panel as the only wallet surface once the session is ready, closing
- * the blank starter tab and any wallet tab the browser restored. Runs only when
- * a panel exists, so a profile without one keeps the surface it has.
- */
-const closeRedundantSurfaces = async (extension: LoadedExtension): Promise<void> => {
-  if (!walletPages(extension).some(isSidePanel)) {
-    return;
-  }
-  for (const page of extension.context.pages()) {
-    if (isSidePanel(page)) {
-      continue;
-    }
-    await page.close().catch(() => undefined);
   }
 };
 
@@ -252,8 +283,21 @@ const main = async (): Promise<void> => {
 
   await closeRedundantSurfaces(extension);
 
+  const remaining = await walletSurfaces(extension);
+  const panels = remaining.filter((surface) => surface.isPanel).length;
   console.log(`Extension id: ${extension.extensionId}`);
-  console.log(`Side panel:   chrome-extension://${extension.extensionId}/sidepanel.html`);
+  console.log(
+    panels > 0 && panels === remaining.length
+      ? "Surfaces:     side panel only."
+      : `Surfaces:     ${remaining
+          .map(
+            (surface) =>
+              `${new URL(surface.page.url()).pathname.slice(1)}${surface.isPanel ? " (panel)" : " (tab)"}`,
+          )
+          .join(
+            ", ",
+          )}${panels === 0 ? " — open the panel once from the toolbar and the profile will restore it." : ""}`,
+  );
   console.log("Ctrl-C to end the session (the profile is kept).");
   // Resolves when the browser goes away, so closing the window ends the process
   // instead of leaving it wedged with nothing to drive.
