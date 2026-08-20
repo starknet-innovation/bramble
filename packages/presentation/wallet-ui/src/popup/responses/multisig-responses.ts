@@ -33,6 +33,8 @@ export type ArgentMultisigView = {
   readonly config: ArgentMultisigConfig | null;
   /** Fresh deployment status; null or absent means the network read failed. */
   readonly deployed?: boolean | null;
+  /** A deployment hash is known but the account has not been observed on-chain yet. */
+  readonly deploymentPending?: true;
   readonly record: ArgentMultisigRecord;
   readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
 };
@@ -146,6 +148,7 @@ const isView = (value: unknown): value is ArgentMultisigView =>
     "authorityStatus",
     "config",
     "deployed",
+    "deploymentPending",
     "record",
     "unsupportedSigners",
   ]) &&
@@ -157,6 +160,8 @@ const isView = (value: unknown): value is ArgentMultisigView =>
   (value["deployed"] === undefined ||
     value["deployed"] === null ||
     typeof value["deployed"] === "boolean") &&
+  (value["deploymentPending"] === undefined || value["deploymentPending"] === true) &&
+  (value["deploymentPending"] !== true || value["deployed"] === null) &&
   (value["config"] === null || isConfig(value["config"]));
 
 const isIntentPackage = (value: unknown): value is ArgentMultisigIntentPackage =>

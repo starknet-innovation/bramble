@@ -112,6 +112,27 @@ describe("Argent multisig response validators", () => {
         transactionHash: "0x456",
       }),
     ).toBe(false);
+    expect(
+      isArgentMultisigDeployResponse({
+        address: fixture.record.address,
+        multisig: {
+          ...fixture.view,
+          config: null,
+          deployed: null,
+          deploymentPending: true,
+        },
+        ok: true,
+        transactionHash: "0x456",
+      }),
+    ).toBe(true);
+    expect(
+      isArgentMultisigDeployResponse({
+        address: fixture.record.address,
+        multisig: { ...fixture.view, deployed: false, deploymentPending: true },
+        ok: true,
+        transactionHash: "0x456",
+      }),
+    ).toBe(false);
   });
 });
 

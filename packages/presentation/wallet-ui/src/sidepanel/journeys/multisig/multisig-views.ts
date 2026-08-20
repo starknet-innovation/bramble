@@ -10,7 +10,7 @@ import type {
   ArgentMultisigSigningIntent,
 } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { preparedArgentMultisigFee } from "@mc-wallet/starknet/multisig-invoke";
 import { verificationContext, verifyCalls } from "@mc-wallet/transactions/verify";
 import { emptyState, pill, receipt } from "@mc-wallet/ui-kit/content";
@@ -351,8 +351,14 @@ const intentList = (
   intents: readonly ArgentMultisigSigningIntent[],
   status: WalletStatus,
   preferences: WalletPreferences | null,
+  selectedIntentId: string | null,
 ): string => {
-  const scoped = intents.filter((intent) => intent.accountId === record.id);
+  const scoped = intents.filter(
+    (intent) =>
+      intent.accountId === record.id && (!selectedIntentId || intent.id === selectedIntentId),
+  );
+  if (selectedIntentId && scoped[0]) return intentCard(scoped[0], view, status, preferences);
+  if (selectedIntentId) return emptyState("This signing intent is no longer available.");
   const submitted = scoped.find((intent) => intent.state === "submitted");
   if (submitted) return intentCard(submitted, view, status, preferences);
   const awaiting = scoped.filter(
@@ -391,7 +397,10 @@ const compactIntentList = (
                 : `<span class="multisig-intent-assets" aria-hidden="true">${assets.map((asset) => tokenGlyph(asset.address, asset.symbol)).join("")}</span>`;
             return `<li class="multisig-intent-row${assets.length === 0 ? "" : " has-assets"}">${menuRow(
               {
-                attributes: { "data-view": "multisig-detail" },
+                attributes: {
+                  "data-ms-intent-account": record.id,
+                  "data-ms-open-intent": intent.id,
+                },
                 icon: "users",
                 label: intent.summary,
                 supportingText: `${intent.state === "ready" ? "Ready to submit" : "Awaiting signatures"} · ${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
@@ -422,6 +431,7 @@ export const multisigDetailFlow = (
   preferences: WalletPreferences | null = null,
   screen: "multisig-detail" | "multisig-home" = "multisig-detail",
   portfolio: MultisigPortfolioData = EMPTY_MULTISIG_PORTFOLIO,
+  selectedIntentId: string | null = null,
 ): string => {
   if (!view) {
     return (
@@ -462,7 +472,7 @@ export const multisigDetailFlow = (
       flowHeader(multisigDisplayName(record), status, configLabel(view)) +
       flowScreen(
         screen,
-        `<section class="section multisig-review-flow">${authorityWarning}${intentList(record, view, intents, status, preferences)}</section><p id="multisig-detail-result" role="status"></p>`,
+        `<section class="section multisig-review-flow">${authorityWarning}${intentList(record, view, intents, status, preferences, selectedIntentId)}</section><p id="multisig-detail-result" role="status"></p>`,
       )
     );
   }
@@ -472,9 +482,11 @@ export const multisigDetailFlow = (
       ${multisigPortfolio({
         authorityAvailable: !loadError && view.config !== null,
         ...(effectiveAuthorityIssue ? { authorityMessage: effectiveAuthorityIssue } : {}),
-        canSign: !loadError && options.length > 0 && hasCompleteSignerConfig,
+        canSign:
+          !loadError && view.deployed === true && options.length > 0 && hasCompleteSignerConfig,
         data: portfolio,
         ...(view.deployed === undefined ? {} : { deployed: view.deployed }),
+        ...(view.deploymentPending ? { deploymentPending: true } : {}),
         intents: compactIntentList(record, intents, preferences),
         openCount,
         preferences,
@@ -484,9 +496,3 @@ export const multisigDetailFlow = (
       <p id="multisig-detail-result" role="status"></p>`,
   );
 };
-
-/**
- * Stable contract identity shown beside configuration and review surfaces.
- */
-export const argentMultisigContractLabel = (): string =>
-  `Argent Multisig ${ARGENT_MULTISIG_CONTRACT.version}`;

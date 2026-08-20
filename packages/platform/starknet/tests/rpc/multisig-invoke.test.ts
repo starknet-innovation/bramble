@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import {
   type ArgentMultisigCall,
+  ArgentMultisigFeeExpiredError,
   isPreparedArgentMultisigInvokeV3,
   prepareArgentMultisigInvokeV3WithProvider,
   preparedArgentMultisigFee,
@@ -11,7 +12,7 @@ import {
   submitPreparedArgentMultisigInvokeV3,
 } from "@mc-wallet/starknet/multisig-invoke";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import { RpcProvider } from "starknet";
+import { RpcError, RpcProvider } from "starknet";
 
 const ACCOUNT = {
   accountContractType: "argent-multisig" as const,
@@ -217,6 +218,43 @@ describe("prepared Argent multisig V3 invoke", () => {
         () => provider,
       ),
     ).rejects.toThrow("different transaction hash");
+  });
+
+  test("curates an expired resource-price bound without hiding other RPC errors", async () => {
+    const seen: Seen = { estimates: [], submissions: [] };
+    const provider = fakeProvider(seen);
+    const prepared = await prepareArgentMultisigInvokeV3WithProvider(
+      provider,
+      ACCOUNT,
+      CALLS,
+      CONFIG,
+    );
+    provider.invokeFunction = async () => {
+      throw new RpcError(
+        {
+          code: 55,
+          data: "Resource bounds were not satisfied: Max L1Gas price (166545876311260) is lower than the actual gas price: 197626134159505. Max L1DataGas price (235129044270) is lower than the actual gas price: 863576035385.",
+          message: "Account validation failed",
+        },
+        "starknet_addInvokeTransaction",
+        { invoke_transaction: { type: "INVOKE" } },
+      );
+    };
+
+    const submission = submitPreparedArgentMultisigInvokeV3(
+      {
+        config: CONFIG,
+        prepared,
+        rpcUrls: ["https://one.invalid"],
+        signatures: [
+          { publicKey: "0x123", r: "0x1", s: "0x2" },
+          { publicKey: "0x456", r: "0x3", s: "0x4" },
+        ],
+      },
+      () => provider,
+    );
+    await expect(submission).rejects.toBeInstanceOf(ArgentMultisigFeeExpiredError);
+    await expect(submission).rejects.toThrow("Refresh intent");
   });
 
   test("rechecks live authorization at the final provider write boundary", async () => {

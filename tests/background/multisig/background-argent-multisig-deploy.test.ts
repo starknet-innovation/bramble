@@ -52,7 +52,18 @@ describe("Argent multisig deployment review", () => {
       .deploymentReview;
     await expect(
       harness.handler({ review, type: "wallet.deployArgentMultisig" }, harnessExtensionSender),
-    ).resolves.toMatchObject({ ok: true, transactionHash: "0x7cd" });
+    ).resolves.toMatchObject({
+      multisig: { deployed: null, deploymentPending: true },
+      ok: true,
+      transactionHash: "0x7cd",
+    });
+    expect((await harness.multisigStore.listMultisigs())[0]?.currentConfig).toBeUndefined();
+    await expect(
+      harness.handler({ cached: true, type: "wallet.multisigs" }, harnessExtensionSender),
+    ).resolves.toMatchObject({
+      multisigs: [{ deployed: null, deploymentPending: true }],
+      ok: true,
+    });
     expect(harness.deploymentSubmitCount()).toBe(1);
   });
 
@@ -74,6 +85,36 @@ describe("Argent multisig deployment review", () => {
     const restartedWorker = createArgentMultisigDeploymentReviews(storage);
     expect(await restartedWorker.take(review)).toBe(true);
     expect(await restartedWorker.take(review)).toBe(false);
+  });
+
+  test("replaces pending deployment state after fresh authority is observed", async () => {
+    const harness = await makeMultisigHarness({ watchedOnly: true });
+    const reviewed = await harness.handler(
+      {
+        expectedAddress: HARNESS_MULTISIG_ID.split(":")[1],
+        networkId: "SN_MAIN",
+        salt: "0x0",
+        signerAccountId: harnessAccountA.id,
+        signerPublicKeys: HARNESS_KEYS,
+        threshold: 2,
+        type: "wallet.reviewArgentMultisigDeployment",
+      },
+      harnessExtensionSender,
+    );
+    const review = (reviewed as { readonly deploymentReview: Record<string, unknown> })
+      .deploymentReview;
+    await harness.handler({ review, type: "wallet.deployArgentMultisig" }, harnessExtensionSender);
+
+    await expect(
+      harness.handler({ type: "wallet.multisigs" }, harnessExtensionSender),
+    ).resolves.toMatchObject({
+      multisigs: [{ authorityStatus: "available", deployed: true }],
+      ok: true,
+    });
+    expect((await harness.multisigStore.listMultisigs())[0]?.currentConfig).toEqual({
+      signerPublicKeys: HARNESS_KEYS,
+      threshold: 2,
+    });
   });
 
   test("reports funding before broadcasting an unfunded multisig", async () => {

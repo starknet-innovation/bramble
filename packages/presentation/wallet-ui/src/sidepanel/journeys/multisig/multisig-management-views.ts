@@ -1,7 +1,7 @@
 /** Focused add, signer, receive, and intent-import screens for Argent multisig. */
 import { escapeHtml } from "@mc-wallet/core/html";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
 import { selectField, textareaField, textField } from "@mc-wallet/ui-kit/fields";
@@ -20,7 +20,10 @@ import {
 } from "../../shared/parts";
 import { receiveAddressView } from "../send/receive-view";
 import { type MultisigParticipantOption, multisigParticipantScreen } from "./multisig-participant";
-import { argentMultisigContractLabel, multisigDisplayName } from "./multisig-views";
+import { multisigDisplayName } from "./multisig-views";
+
+const argentMultisigContractLabel = (): string =>
+  `Argent Multisig ${ARGENT_MULTISIG_CONTRACT.version}`;
 
 type SignerIdentity = {
   readonly address: string;

@@ -2,13 +2,19 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { isStarknetNetworkId, STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { ETransactionVersion3, type RpcProvider, transaction } from "starknet";
+import {
+  ETransactionVersion3,
+  type ResourceBoundsOverhead,
+  type RpcProvider,
+  transaction,
+} from "starknet";
 import {
   ARGENT_MULTISIG_CONTRACT,
   type ArgentMultisigConfig,
   normalizeArgentMultisigConfig,
   serializeArgentMultisigSignature,
 } from "../accounts/account-contracts";
+import { argentMultisigFeeExpiredError } from "./multisig-fee-error";
 import {
   argentMultisigRpcResourceBounds,
   argentMultisigTransactionHash,
@@ -27,11 +33,17 @@ import {
 } from "./multisig-invoke-types";
 import {
   argentQueryAccount,
+  createRpcProvider,
   matchingAcceptedRpcWriteHash,
   withRpcFallback,
   withRpcWrite,
 } from "./provider";
 
+export {
+  ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE,
+  ArgentMultisigFeeExpiredError,
+  isArgentMultisigFeeExpiredMessage,
+} from "./multisig-fee-error";
 /**
  * Re-exports strict guards and fee/comparison helpers for untrusted prepared
  * transaction records. They fail closed without accessing RPC or key material.
@@ -59,11 +71,27 @@ export {
   type SubmitPreparedArgentMultisigInvokeV3Input,
 } from "./multisig-invoke-types";
 
+// Multisig handoffs can take hours. Use starknet.js's estimate parser to apply
+// lane-specific price headroom before the bounds are normalized, displayed,
+// hashed, and signed. Amounts and L2 retain the library's 50% default; the
+// volatile L1 price lanes reproduce 3x / 7.5x raw-price ceilings.
+const ARGENT_MULTISIG_RESOURCE_BOUNDS_OVERHEAD = {
+  l1_data_gas: { max_amount: 50, max_price_per_unit: 650 },
+  l1_gas: { max_amount: 50, max_price_per_unit: 200 },
+  l2_gas: { max_amount: 50, max_price_per_unit: 50 },
+} satisfies ResourceBoundsOverhead;
+
+const createArgentMultisigProvider = (nodeUrl: string): RpcProvider =>
+  createRpcProvider(nodeUrl, {
+    resourceBoundsOverhead: ARGENT_MULTISIG_RESOURCE_BOUNDS_OVERHEAD,
+  });
+
 /**
  * Provider-level preparation seam for tests and already selected read paths.
  * It estimates with an Argent-shaped F3 query signature and freezes the
  * corresponding production V3 hash without KMS access. Most callers should
- * use {@link prepareArgentMultisigInvokeV3} with RPC URLs.
+ * use {@link prepareArgentMultisigInvokeV3} with RPC URLs. The supplied
+ * provider owns estimate overhead; this seam stores its returned bounds as-is.
  */
 export const prepareArgentMultisigInvokeV3WithProvider = async (
   provider: RpcProvider,
@@ -149,7 +177,7 @@ export const prepareArgentMultisigInvokeV3 = async (
   withRpcFallback(
     rpcUrls,
     (provider) => prepareArgentMultisigInvokeV3WithProvider(provider, account, calls, config),
-    makeProvider,
+    makeProvider ?? createArgentMultisigProvider,
   );
 
 /**
@@ -170,33 +198,37 @@ export const submitPreparedArgentMultisigInvokeV3 = async (
     throw new WalletError("Invalid prepared Argent multisig transaction");
   }
   const signature = serializeArgentMultisigSignature(signatures, config);
-  return withRpcWrite(
-    rpcUrls,
-    prepared.chainId,
-    async (provider) => {
-      if (isAuthorized?.() === false) {
-        throw new WalletError("wallet locked");
-      }
-      const submitted = await provider.invokeFunction(
-        {
-          calldata: [...prepared.calldata],
-          contractAddress: prepared.senderAddress,
-          signature: [...signature],
-        },
-        {
-          accountDeploymentData: [...prepared.accountDeploymentData],
-          feeDataAvailabilityMode: prepared.feeDataAvailabilityMode,
-          nonce: prepared.nonce,
-          nonceDataAvailabilityMode: prepared.nonceDataAvailabilityMode,
-          paymasterData: [...prepared.paymasterData],
-          resourceBounds: argentMultisigRpcResourceBounds(prepared.resourceBounds),
-          tip: prepared.tip,
-          version: prepared.version,
-        },
-      );
-      matchingAcceptedRpcWriteHash(submitted.transaction_hash, prepared.transactionHash);
-      return prepared.transactionHash;
-    },
-    makeProvider,
-  );
+  try {
+    return await withRpcWrite(
+      rpcUrls,
+      prepared.chainId,
+      async (provider) => {
+        if (isAuthorized?.() === false) {
+          throw new WalletError("wallet locked");
+        }
+        const submitted = await provider.invokeFunction(
+          {
+            calldata: [...prepared.calldata],
+            contractAddress: prepared.senderAddress,
+            signature: [...signature],
+          },
+          {
+            accountDeploymentData: [...prepared.accountDeploymentData],
+            feeDataAvailabilityMode: prepared.feeDataAvailabilityMode,
+            nonce: prepared.nonce,
+            nonceDataAvailabilityMode: prepared.nonceDataAvailabilityMode,
+            paymasterData: [...prepared.paymasterData],
+            resourceBounds: argentMultisigRpcResourceBounds(prepared.resourceBounds),
+            tip: prepared.tip,
+            version: prepared.version,
+          },
+        );
+        matchingAcceptedRpcWriteHash(submitted.transaction_hash, prepared.transactionHash);
+        return prepared.transactionHash;
+      },
+      makeProvider,
+    );
+  } catch (error) {
+    throw argentMultisigFeeExpiredError(error) ?? error;
+  }
 };

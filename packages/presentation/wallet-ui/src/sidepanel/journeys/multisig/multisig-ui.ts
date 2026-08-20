@@ -12,7 +12,8 @@ import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
-import { parseArgentMultisigIntentPackage, parseArgentMultisigSignature } from "./multisig-model";
+import { bindMultisigIntentCards } from "./multisig-intent-ui";
+import { parseArgentMultisigIntentPackage } from "./multisig-model";
 import { bindMultisigSignerManagement } from "./multisig-signer-management-ui";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
@@ -129,95 +130,6 @@ const bindList = (deps: MultisigUiDeps): void => {
         }
         deps.openList();
         return "Argent multisig removed from this wallet";
-      });
-    });
-  });
-};
-
-const copyText = async (
-  button: HTMLButtonElement,
-  value: string,
-  message: string,
-): Promise<void> => {
-  const clipboard = button.ownerDocument.defaultView?.navigator.clipboard;
-  if (!clipboard) throw new Error("Clipboard unavailable");
-  await clipboard.writeText(value);
-  showToast(message, "success", button);
-};
-
-const intentById = async (deps: MultisigUiDeps, id: string) => {
-  const loaded = await deps.multisig.loadMultisigs();
-  return loaded === "error" ? null : (loaded.intents.find((intent) => intent.id === id) ?? null);
-};
-
-const bindIntentCards = (deps: MultisigUiDeps): void => {
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-copy-package]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const id = button.dataset["msCopyPackage"];
-      if (!id) return;
-      void intentById(deps, id)
-        .then((intent) => {
-          if (!intent) throw new Error("Signing intent unavailable");
-          return copyText(
-            button,
-            JSON.stringify({ intent, kind: "mc-wallet.argent-multisig-intent", version: 1 }),
-            "Intent package copied",
-          );
-        })
-        .catch((error: unknown) => showToast(errorMessage(error, "Copy failed"), "error", button));
-    });
-  });
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-copy-signature]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const id = button.dataset["msCopySignature"];
-      const index = Number(button.dataset["msSignatureIndex"]);
-      if (!id || !Number.isSafeInteger(index)) return;
-      void intentById(deps, id)
-        .then((intent) => {
-          const signature = intent?.signatures[index];
-          if (!signature) throw new Error("Signature fragment unavailable");
-          return copyText(button, JSON.stringify(signature), "Signature fragment copied");
-        })
-        .catch((error: unknown) => showToast(errorMessage(error, "Copy failed"), "error", button));
-    });
-  });
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-sign]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const id = button.dataset["msSign"];
-      const signer = button
-        .closest("[data-ms-intent]")
-        ?.querySelector<HTMLSelectElement>('select[name="signerAccountId"]')?.value;
-      if (!id || !signer) return;
-      run(deps, button, "multisig-intent-result", async () => {
-        const result = await deps.multisig.signIntent(id, signer);
-        return `Exact transaction signed (${result.intent.signatures.length}/${result.intent.configSnapshot.threshold})`;
-      });
-    });
-  });
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-submit]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const id = button.dataset["msSubmit"];
-      if (!id) return;
-      run(deps, button, "multisig-intent-result", async () => {
-        const result = await deps.multisig.submitIntent(id);
-        return `Argent multisig transaction submitted: ${result.transactionHash ?? result.intent.prepared.transactionHash}`;
-      });
-    });
-  });
-  deps.app?.querySelectorAll<HTMLFormElement>("[data-ms-signature-form]").forEach((form) => {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const id = form.dataset["msSignatureForm"];
-      const signature = parseArgentMultisigSignature(
-        String(new FormData(form).get("signature") ?? ""),
-      );
-      if (!id || !signature) {
-        showToast("Signature fragment is invalid", "error", form);
-        return;
-      }
-      run(deps, form.querySelector('button[type="submit"]'), "multisig-intent-result", async () => {
-        await deps.multisig.importSignature(id, signature);
-        return "Signature verified and imported";
       });
     });
   });
@@ -382,9 +294,9 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
       void Promise.resolve()
         .then(() => deps.multisig.prepareIntent(multisigId, [preparedCall(form)]))
         .then(
-          () => {
+          (result) => {
             showToast("Transaction ready for multisig review", "success", button ?? deps.app);
-            deps.openDetail(multisigId, "multisig-detail");
+            deps.openIntent(multisigId, result.intent.id);
           },
           (error: unknown) => {
             showToast(
@@ -413,7 +325,7 @@ const bindImport = (deps: MultisigUiDeps): void => {
     }
     run(deps, button, "multisig-track-result", async () => {
       const result = await deps.multisig.importIntent(intentPackage);
-      deps.openDetail(result.intent.accountId, "multisig-detail");
+      deps.openIntent(result.intent.accountId, result.intent.id);
       return "Intent verified and ready to review";
     });
   });
@@ -465,7 +377,7 @@ const bindTabs = (deps: MultisigUiDeps): void => {
 export const bindMultisigs = (deps: MultisigUiDeps): void => {
   bindAdd(deps);
   bindList(deps);
-  bindIntentCards(deps);
+  bindMultisigIntentCards(deps);
   bindMultisigSignerManagement(deps);
   bindPrepare(deps);
   bindImport(deps);

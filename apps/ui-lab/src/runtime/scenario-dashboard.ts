@@ -49,6 +49,7 @@ export type DashboardOptions = {
   readonly privacy?: PrivacyDisclosureState;
   readonly privacyJourney?: PrivacyJourneyState;
   readonly selectedMultisigId?: string | null;
+  readonly selectedMultisigIntentId?: string | null;
   readonly selectedNftId?: string | null;
   readonly selectedTokenId?: string | null;
   readonly snoozed?: readonly string[];
@@ -62,6 +63,7 @@ export type DashboardOptions = {
  * cannot silently drift into different fixture meanings.
  */
 export const walletDashboard = (options: DashboardOptions = {}): string => {
+  const { selectedMultisigIntentId = null } = options;
   const status = options.status ?? statusFor();
   const account = status.accounts.find((entry) => entry.id === status.activeAccountId) ?? null;
   const privacy = options.privacy ?? {
@@ -113,5 +115,7 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     options.selectedMultisigId ?? null,
     privacy,
     options.privacyJourney ?? { stage: "idle" },
+    null,
+    selectedMultisigIntentId,
   );
 };

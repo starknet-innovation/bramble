@@ -44,12 +44,11 @@ const intentAction = (
   if (intent.state === "stale") {
     return {
       canSign: false,
-      note: "This transaction snapshot is stale. Prepare a replacement before collecting signatures.",
+      note: "Network fees or account state changed. Refreshing preserves the exact calls, but existing signatures cannot carry over.",
       packageIsPrimary: false,
       primary: button({
-        attributes: { "data-view": "multisig-propose" },
-        label: "Prepare replacement intent",
-        variant: "secondary",
+        attributes: { "data-ms-refresh-intent": intent.id },
+        label: "Refresh network fees",
       }),
     };
   }

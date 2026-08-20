@@ -14,6 +14,7 @@ export type MultisigUiDeps = {
   readonly app: Element | null;
   readonly multisig: MultisigClient;
   readonly openDetail: (id: string, destination?: "multisig-detail" | "multisig-home") => void;
+  readonly openIntent: (accountId: string, intentId: string) => void;
   readonly openFunding?: (intent: SendIntent) => Promise<void>;
   readonly openList: () => void;
   readonly render: (status: WalletStatus) => Promise<void>;

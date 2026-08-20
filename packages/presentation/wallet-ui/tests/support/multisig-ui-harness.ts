@@ -92,6 +92,7 @@ export const mountMultisigUi = (
     app,
     multisig: client,
     openDetail() {},
+    openIntent() {},
     openList() {},
     async render() {},
     selectedMultisigId: () => null,

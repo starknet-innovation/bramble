@@ -268,7 +268,7 @@ describe("bindMultisigs frozen-intent forms", () => {
       </form>`,
       client,
       fixture.status,
-      { openDetail: (...args) => opened.push(args) },
+      { openIntent: (...args) => opened.push(args) },
     );
     app.querySelector<HTMLFormElement>("[data-ms-prepare]")?.requestSubmit();
     await flush();
@@ -278,7 +278,7 @@ describe("bindMultisigs frozen-intent forms", () => {
         multisigId: fixture.record.id,
       },
     ]);
-    expect(opened).toEqual([[fixture.record.id, "multisig-detail"]]);
+    expect(opened).toEqual([[fixture.record.id, fixture.intent.id]]);
   });
 
   test("builds a token transfer from recipient, asset, and decimal amount fields", async () => {
@@ -344,12 +344,12 @@ describe("bindMultisigs frozen-intent forms", () => {
       </form>`,
       client,
       fixture.status,
-      { openDetail: (...args) => opened.push(args) },
+      { openIntent: (...args) => opened.push(args) },
     );
     app.querySelector<HTMLFormElement>("#multisig-track-form")?.requestSubmit();
     await flush();
     expect(imported).toEqual([fixture.intentPackage]);
-    expect(opened).toEqual([[fixture.record.id, "multisig-detail"]]);
+    expect(opened).toEqual([[fixture.record.id, fixture.intent.id]]);
   });
 
   test("binds a signature to the frozen intent id and explicitly selected signer", async () => {

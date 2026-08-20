@@ -312,6 +312,6 @@ export const argentSubmittedIntent: ArgentMultisigSigningIntent = {
 };
 
 export const argentStaleIntent: ArgentMultisigSigningIntent = {
-  ...argentCollectingIntent,
+  ...argentReadyIntent,
   state: "stale",
 };

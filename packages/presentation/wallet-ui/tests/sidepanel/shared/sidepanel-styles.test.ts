@@ -222,6 +222,9 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toContain(
       ".toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }",
     );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.toast-text \{[^}]*text-overflow: ellipsis[^}]*text-wrap: nowrap/s,
+    );
     // The swap success moment draws its ring and check in the semantic green
     // and collapses to static marks under reduced motion.
     expect(SIDEPANEL_STYLES).toMatch(/\.swap-success-ring \{[^}]*animation: swap-draw/s);

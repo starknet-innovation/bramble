@@ -13,7 +13,6 @@ import type {
 } from "@mc-wallet/multisig/repository";
 import {
   ARGENT_MULTISIG_CONTRACT,
-  argentSignerGuid,
   normalizeArgentMultisigConfig,
 } from "@mc-wallet/starknet/account-contracts";
 import { isContractNotFoundError } from "@mc-wallet/starknet/provider";
@@ -47,6 +46,12 @@ import {
   readMultisigsInput,
 } from "./multisig-inputs";
 import { handleMultisigSignerOps } from "./multisig-signer-ops";
+import {
+  type ArgentMultisigView,
+  pendingDeploymentIds,
+  storedMultisigView,
+  unresolvedMultisigView,
+} from "./multisig-view-state";
 
 /**
  * Re-export the neutral composition dependency seam.
@@ -196,17 +201,6 @@ const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigIn
 };
 
 /**
- * Fresh, non-persisted view returned to the wallet UI.
- */
-type ArgentMultisigView = {
-  readonly authorityStatus: ArgentMultisigAuthorityStatus;
-  readonly config: ArgentMultisigConfig | null;
-  readonly deployed: boolean | null;
-  readonly record: ArgentMultisigRecord;
-  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
-};
-
-/**
  * Re-exports the fail-closed active-network context used by transaction
  * operations. It contains no signer secret material.
  */
@@ -271,25 +265,55 @@ export const currentConfigFor = async (
   };
 };
 
-const storedMultisigView = (record: ArgentMultisigRecord): ArgentMultisigView => {
-  const stored = storedArgentPublicConfig(record);
-  return {
-    authorityStatus: record.currentConfig
-      ? "available"
-      : record.deployment
-        ? "undeployed"
-        : "network-unavailable",
-    config: stored
-      ? {
-          classHash: record.classHash,
-          signerGuids: stored.signerPublicKeys.map(argentSignerGuid),
-          threshold: stored.threshold,
-        }
-      : null,
-    deployed: record.currentConfig ? true : record.deployment ? false : null,
-    record,
-    unsupportedSigners: [],
-  };
+const reconciledMultisigView = async (
+  deps: MultisigOpsDeps,
+  active: ActiveAccountContext & { readonly error?: never },
+  preferences: Awaited<ReturnType<MultisigOpsDeps["preferencesStore"]["read"]>>,
+  record: ArgentMultisigRecord,
+  config: ArgentMultisigConfig,
+  rpcUrls: readonly string[],
+): Promise<ArgentMultisigView> => {
+  try {
+    const reconciled = await reconcileArgentCurrentConfig(deps, record, config);
+    const refreshed = await enrichArgentAddressOnlyWatch(
+      deps,
+      active,
+      preferences,
+      reconciled,
+      config,
+      rpcUrls,
+    );
+    await markObservedArgentIntentOutcomes(deps, refreshed.record);
+    await markChangedIntentsStale(deps.multisigStore, record.id, config);
+    return {
+      authorityStatus:
+        refreshed.unsupportedSigners.length > 0 ? "unsupported-signers" : "available",
+      config,
+      deployed: true,
+      record: refreshed.record,
+      unsupportedSigners: refreshed.unsupportedSigners,
+    };
+  } catch {
+    return { authorityStatus: "available", config, deployed: true, record, unsupportedSigners: [] };
+  }
+};
+
+const freshMultisigView = async (
+  deps: MultisigOpsDeps,
+  active: ActiveAccountContext & { readonly error?: never },
+  preferences: Awaited<ReturnType<MultisigOpsDeps["preferencesStore"]["read"]>>,
+  record: ArgentMultisigRecord,
+  deploymentPending: ReadonlySet<string>,
+): Promise<ArgentMultisigView> => {
+  if (record.currentConfig) {
+    await markObservedArgentIntentOutcomes(deps, record);
+    return storedMultisigView(record);
+  }
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences);
+  const authority = await readAuthority(deps, record.address, rpcUrls);
+  return authority.config
+    ? reconciledMultisigView(deps, active, preferences, record, authority.config, rpcUrls)
+    : unresolvedMultisigView(record, authority.status, deploymentPending.has(record.id));
 };
 
 const listMultisigs = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
@@ -298,64 +322,28 @@ const listMultisigs = async (deps: MultisigOpsDeps, message: unknown): Promise<R
   const active = await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (active.error !== undefined) return { error: active.error };
   const preferences = await deps.preferencesStore.read();
-  const records = (await deps.multisigStore.listMultisigs()).filter(
-    (record) => record.networkId === active.networkId,
-  );
+  const [storedRecords, storedIntents, operations] = await Promise.all([
+    deps.multisigStore.listMultisigs(),
+    deps.multisigStore.listIntents(),
+    deps.multisigStore.listOperations(),
+  ]);
+  const records = storedRecords.filter((record) => record.networkId === active.networkId);
   const accountIds = new Set(records.map((record) => record.id));
-  const intents = (await deps.multisigStore.listIntents()).filter((intent) =>
-    accountIds.has(intent.accountId),
-  );
+  const intents = storedIntents.filter((intent) => accountIds.has(intent.accountId));
+  const deploymentPending = pendingDeploymentIds(operations);
   if (input.cached) {
-    return { intents, multisigs: records.map(storedMultisigView), ok: true };
+    return {
+      intents,
+      multisigs: records.map((record) =>
+        storedMultisigView(record, deploymentPending.has(record.id)),
+      ),
+      ok: true,
+    };
   }
   const multisigs: ArgentMultisigView[] = await Promise.all(
-    records.map(async (record) => {
-      if (record.currentConfig) {
-        await markObservedArgentIntentOutcomes(deps, record);
-        return storedMultisigView(record);
-      }
-      const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences);
-      const authority = await readAuthority(deps, record.address, rpcUrls);
-      const config = authority.config;
-      if (!config) {
-        return {
-          authorityStatus: authority.status,
-          config: null,
-          deployed: authority.status === "undeployed" ? false : null,
-          record,
-          unsupportedSigners: [],
-        };
-      }
-      try {
-        const reconciled = await reconcileArgentCurrentConfig(deps, record, config);
-        const refreshed = await enrichArgentAddressOnlyWatch(
-          deps,
-          active,
-          preferences,
-          reconciled,
-          config,
-          rpcUrls,
-        );
-        await markObservedArgentIntentOutcomes(deps, refreshed.record);
-        await markChangedIntentsStale(deps.multisigStore, record.id, config);
-        return {
-          authorityStatus:
-            refreshed.unsupportedSigners.length > 0 ? "unsupported-signers" : "available",
-          config,
-          deployed: true,
-          record: refreshed.record,
-          unsupportedSigners: refreshed.unsupportedSigners,
-        };
-      } catch {
-        return {
-          authorityStatus: "available",
-          config,
-          deployed: true,
-          record,
-          unsupportedSigners: [],
-        };
-      }
-    }),
+    records.map((record) =>
+      freshMultisigView(deps, active, preferences, record, deploymentPending),
+    ),
   );
   return { intents, multisigs, ok: true };
 };
@@ -422,6 +410,9 @@ const refreshMultisig = async (
   const authority = await readAuthority(deps, context.record.address, context.rpcUrls);
   const config = authority.config;
   if (!config) {
+    const pending = pendingDeploymentIds(await deps.multisigStore.listOperations()).has(
+      context.record.id,
+    );
     const intents = (await deps.multisigStore.listIntents()).filter(
       (intent) => intent.accountId === context.record.id,
     );
@@ -430,7 +421,8 @@ const refreshMultisig = async (
       multisig: {
         authorityStatus: authority.status,
         config: null,
-        deployed: authority.status === "undeployed" ? false : null,
+        deployed: pending ? null : authority.status === "undeployed" ? false : null,
+        ...(pending ? { deploymentPending: true as const } : {}),
         record: context.record,
         unsupportedSigners: [],
       },

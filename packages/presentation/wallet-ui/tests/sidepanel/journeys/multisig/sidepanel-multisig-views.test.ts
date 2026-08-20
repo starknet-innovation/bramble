@@ -177,7 +177,8 @@ describe("Argent multisig list and exact-intent detail", () => {
       null,
       "multisig-home",
     );
-    expect(home).toContain('data-view="multisig-detail"');
+    expect(home).toContain(`data-ms-open-intent="${fixture.readyIntent.id}"`);
+    expect(home).toContain(`data-ms-intent-account="${fixture.record.id}"`);
     expect(home).toContain("Ready to submit · 1 of 1");
     expect(home).toContain("Awaiting verification &amp; signature");
     expect(home).toContain(`href="https://starkscan.co/contract/${fixture.record.address}"`);
@@ -194,6 +195,29 @@ describe("Argent multisig list and exact-intent detail", () => {
     );
     expect(detail).toContain('data-ms-submit="');
     expect(detail).not.toContain('data-ms-home-tab="assets"');
+  });
+
+  test("shows only the intent selected from the account queue", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const other = {
+      ...fixture.intent,
+      id: `${fixture.intent.id}:other`,
+      summary: "Another pending transaction",
+    };
+    const detail = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [other, fixture.readyIntent],
+      false,
+      null,
+      "multisig-detail",
+      undefined,
+      fixture.readyIntent.id,
+    );
+    expect(detail).toContain(fixture.readyIntent.summary);
+    expect(detail).not.toContain(other.summary);
+    expect(detail).not.toContain("multisig-intent-stack");
   });
 
   test("replaces disabled Prepare with a resumable deployment action", async () => {
@@ -231,6 +255,29 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(deployment).toContain('name="threshold"');
     expect(deployment).toContain('value="0x5"');
     expect(deployment).toContain(`value="${signer.id}"`);
+  });
+
+  test("keeps deployment unavailable while a submitted transaction confirms", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const pending = {
+      ...fixture.view,
+      authorityStatus: "undeployed",
+      config: null,
+      deployed: null,
+      deploymentPending: true,
+    } as const;
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      pending,
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(home).not.toContain('data-view="multisig-deploy"');
+    expect(home).toContain('data-view="multisig-propose" type="button" disabled');
+    expect(home).toContain("Deployment submitted");
   });
 
   test("turns an undeployed address-only watch into a verified deployment setup", async () => {

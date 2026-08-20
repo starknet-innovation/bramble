@@ -61,8 +61,8 @@ const toastCopyButton = (doc: Document, message: string): HTMLButtonElement => {
   const copy = doc.createElement("button");
   copy.className = "icon-button toast-copy";
   copy.type = "button";
-  copy.setAttribute("aria-label", "Copy error message");
-  copy.title = "Copy error message";
+  copy.setAttribute("aria-label", "Copy error details");
+  copy.title = "Copy error details";
   copy.innerHTML = icon("copy");
   copy.addEventListener("click", () => {
     const clipboard = copy.ownerDocument.defaultView?.navigator.clipboard;
@@ -183,12 +183,14 @@ const TOAST_SPRING = resolveSpring("momentum");
  * Anatomy is a fixed scannable heuristic: a leading tone chip (green check /
  * red alert) the eye reads before any text, then the message, then every
  * error's copy control. It springs in with a little momentum, can be swiped
- * away, and error toasts stay longer.
+ * away, and error toasts stay longer. `details` lets a compact display line
+ * retain the complete diagnostic behind its copy control.
  */
 export const showToast = (
   message: string,
   tone: ToastTone,
   context: Document | Element | null | undefined,
+  details: string = message,
 ): void => {
   const doc = documentFor(context);
   const stackId = "toast-stack";
@@ -212,7 +214,7 @@ export const showToast = (
   text.textContent = friendly ? friendly.message : message;
   toast.append(text);
   if (tone === "error") {
-    toast.append(toastCopyButton(doc, friendly?.message ?? message));
+    toast.append(toastCopyButton(doc, details));
   }
   stack.append(toast);
   animate(

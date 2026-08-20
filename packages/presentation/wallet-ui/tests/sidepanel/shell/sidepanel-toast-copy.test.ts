@@ -12,9 +12,9 @@ import { registerDom, unregisterDom } from "../../support/groups-harness";
 beforeAll(registerDom);
 afterAll(unregisterDom);
 
-// A copyable error: friendlyError marks unrecognized technical text copyable, so
-// the toast renders its copy button.
 const TECHNICAL_ERROR = "strk20 private submission unavailable: relay rejected 0x2a";
+const FEE_ERROR =
+  "RPC: starknet_addInvokeTransaction with params {...} 55: Account validation failed: Resource bounds were not satisfied: Max L1DataGas price (235129044270) is lower than the actual gas price: 863576035385.";
 
 const captures: unknown[] = [];
 
@@ -46,7 +46,24 @@ describe("error toast copy control", () => {
 
     expect(
       toastEl().querySelector<HTMLButtonElement>(".toast-copy")?.getAttribute("aria-label"),
-    ).toBe("Copy error message");
+    ).toBe("Copy error details");
+  });
+
+  test("shows the fee failure as one line and copies the complete RPC diagnostic", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+
+    showToast("Fees changed. Refresh intent.", "error", document, FEE_ERROR);
+    expect(toastEl().querySelector(".toast-text")?.textContent).toBe(
+      "Fees changed. Refresh intent.",
+    );
+    toastEl().querySelector<HTMLButtonElement>(".toast-copy")?.click();
+    await Promise.resolve();
+
+    expect(copied).toEqual([FEE_ERROR]);
   });
 
   test("renders in the document that owns the triggering control", () => {

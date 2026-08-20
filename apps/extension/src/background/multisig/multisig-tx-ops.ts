@@ -8,6 +8,7 @@ import {
 } from "@mc-wallet/multisig/repository";
 import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import {
+  ArgentMultisigFeeExpiredError,
   preparedArgentMultisigFee,
   samePreparedArgentMultisigInvokeV3,
 } from "@mc-wallet/starknet/multisig-invoke";
@@ -91,7 +92,6 @@ const sortedSignatures = (values: readonly StarkSignature[]): readonly StarkSign
   [...values].sort((left, right) =>
     BigInt(argentSignerGuid(left.publicKey)) < BigInt(argentSignerGuid(right.publicKey)) ? -1 : 1,
   );
-
 const persistSignature = async (
   deps: MultisigOpsDeps,
   intent: ArgentMultisigSigningIntent,
@@ -438,8 +438,11 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
       isAuthorized: submission.authorized.isCurrent,
     });
   } catch (error) {
-    if (!(error instanceof IndeterminateRpcWriteError)) {
+    if (!(error instanceof IndeterminateRpcWriteError))
       await deps.multisigStore.releaseOperation(submission.operationId);
+    if (error instanceof ArgentMultisigFeeExpiredError) {
+      await deps.multisigStore.upsertIntent({ ...submission.intent, state: "stale" });
+      return { error: error.details };
     }
     throw error;
   }
@@ -483,7 +486,6 @@ const HANDLERS: Readonly<Record<string, IntentHandler>> = {
   "wallet.signArgentMultisigIntent": signIntent,
   "wallet.submitArgentMultisigIntent": submitIntent,
 };
-
 /**
  * Dispatches privileged exact-intent Argent messages.
  */

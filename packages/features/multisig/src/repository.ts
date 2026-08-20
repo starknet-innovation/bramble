@@ -177,12 +177,14 @@ const upsertMultisigIn = (shape: StoredShape, record: ArgentMultisigRecord): Sha
   const existing = shape.multisigs.findIndex((stored) => stored.id === record.id);
   if (existing >= 0) {
     const current = shape.multisigs[existing];
+    const incomingConfig = effectiveCurrentConfig(record);
     const enrichesAddressOnlyWatch =
       current !== undefined &&
       current.deployment === undefined &&
       effectiveCurrentConfig(current) === undefined &&
-      record.currentConfig !== undefined &&
-      (record.deployment === undefined ||
+      incomingConfig !== undefined &&
+      (record.currentConfig === undefined ||
+        record.deployment === undefined ||
         sameCurrentConfig(record.currentConfig, record.deployment));
     if (
       !current ||

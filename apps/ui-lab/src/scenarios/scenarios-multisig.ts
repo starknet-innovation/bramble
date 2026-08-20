@@ -104,6 +104,7 @@ const bindFixtureMultisig = (
     app: context.app,
     multisig: createMultisigClient(runtime),
     openDetail: () => undefined,
+    openIntent: () => undefined,
     openList: () => undefined,
     render: async () => undefined,
     selectedMultisigId: () => argentMultisig.record.id,
@@ -250,6 +251,15 @@ const undeployedMultisig: ArgentMultisigView = {
   authorityStatus: "undeployed",
   config: null,
   deployed: false,
+};
+const { currentConfig: _pendingConfig, ...pendingDeploymentRecord } = argentMultisig.record;
+const pendingDeploymentMultisig: ArgentMultisigView = {
+  ...argentMultisig,
+  authorityStatus: "undeployed",
+  config: null,
+  deployed: null,
+  deploymentPending: true,
+  record: pendingDeploymentRecord,
 };
 const {
   currentConfig: _currentConfig,
@@ -406,6 +416,13 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     { multisigs: [watchedUndeployedMultisig], view: "multisig-home" },
     { action: "complete setup", deployed: false },
   ),
+  checkpoint(
+    "home-deployment-pending",
+    "Deployment confirming",
+    "A submitted deployment cannot reappear as a second deployment action while Starknet confirms it.",
+    { multisigs: [pendingDeploymentMultisig], view: "multisig-home" },
+    { action: "wait for confirmation", deployed: null },
+  ),
   {
     ...checkpoint(
       "deploy-recover",
@@ -475,7 +492,18 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     "intent-ready",
     "Ready to submit",
     "Submission appears only after the verified threshold is complete and fresh authority still matches.",
-    { multisigIntents: [argentReadyIntent], view: "multisig-detail" },
+    {
+      multisigIntents: [
+        {
+          ...argentCollectingIntent,
+          id: `${argentCollectingIntent.id}:other`,
+          summary: "Another pending transaction",
+        },
+        argentReadyIntent,
+      ],
+      selectedMultisigIntentId: argentReadyIntent.id,
+      view: "multisig-detail",
+    },
     { signatures: 2, state: "ready", threshold: 2 },
     true,
   ),

@@ -131,7 +131,18 @@ export const enrichArgentAddressOnlyWatch = async (
 }> => {
   const stored = storedArgentPublicConfig(record);
   if (stored && matchesArgentPublicConfig(stored, config)) {
-    return { record, unsupportedSigners: [] };
+    if (record.currentConfig) return { record, unsupportedSigners: [] };
+    const observed = {
+      ...record,
+      currentConfig: {
+        signerPublicKeys: stored.signerPublicKeys,
+        threshold: stored.threshold,
+      },
+    };
+    return {
+      record: (await deps.multisigStore.upsertMultisig(observed)) === "stored" ? observed : record,
+      unsupportedSigners: [],
+    };
   }
   const discovered = await discoverArgentSigners(
     deps,

@@ -17,6 +17,7 @@ import {
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
 import type { RpcProvider } from "starknet";
+import { withPinnedBlock } from "./chain-pinned-read";
 
 /**
  * Public signer metadata returned only after an untrusted account address is
@@ -50,6 +51,29 @@ const oneFelt = (response: readonly string[], label: string): string => {
   return requireFelt(response[0], label);
 };
 
+const argentOwnerAt = async (
+  provider: RpcProvider,
+  account: string,
+  blockHash: string,
+): Promise<string> => {
+  const [owner, ownerType] = await Promise.all([
+    provider.callContract(
+      { calldata: [], contractAddress: account, entrypoint: "get_owner" },
+      blockHash,
+    ),
+    provider.callContract(
+      { calldata: [], contractAddress: account, entrypoint: "get_owner_type" },
+      blockHash,
+    ),
+  ]);
+  if (ownerType.length !== 1 || !sameFelt(ownerType[0] ?? "", "0x0")) {
+    throw new WalletError(
+      "This Argent account does not use a Stark public-key owner. Ask the participant to share a supported public key.",
+    );
+  }
+  return oneFelt(owner, "Argent signer public key");
+};
+
 /**
  * Resolves the public Stark signer of a pinned OpenZeppelin or Argent account.
  * Unknown, undeployed, non-Stark, and malformed accounts fail closed; an
@@ -64,52 +88,36 @@ export const getMultisigSignerAccount = async ({
   try {
     return await withRpcFallback(
       rpcUrls,
-      async (provider) => {
-        const latest = await provider.getBlockLatestAccepted();
-        const blockHash = requireFelt(latest.block_hash, "accepted block hash");
-        const classHash = await provider.getClassHashAt(account, blockHash);
-        if (typeof classHash !== "string" || !isStarkFieldElement(classHash)) {
-          throw new WalletError("Invalid signer account class response");
-        }
-        if (sameFelt(classHash, OPENZEPPELIN_ACCOUNT_CLASS_HASH)) {
-          return {
-            accountContractType: "openzeppelin",
-            address: account,
-            publicKeyX: oneFelt(
-              await provider.callContract(
-                { calldata: [], contractAddress: account, entrypoint: "get_public_key" },
-                blockHash,
-              ),
-              "OpenZeppelin signer public key",
-            ),
-          };
-        }
-        if (sameFelt(classHash, ARGENT_ACCOUNT_CONTRACT.classHash)) {
-          const [owner, ownerType] = await Promise.all([
-            provider.callContract(
-              { calldata: [], contractAddress: account, entrypoint: "get_owner" },
-              blockHash,
-            ),
-            provider.callContract(
-              { calldata: [], contractAddress: account, entrypoint: "get_owner_type" },
-              blockHash,
-            ),
-          ]);
-          if (ownerType.length !== 1 || !sameFelt(ownerType[0] ?? "", "0x0")) {
-            throw new WalletError(
-              "This Argent account does not use a Stark public-key owner. Ask the participant to share a supported public key.",
-            );
+      async (provider) =>
+        withPinnedBlock(provider, async ({ blockHash }) => {
+          const classHash = await provider.getClassHashAt(account, blockHash);
+          if (typeof classHash !== "string" || !isStarkFieldElement(classHash)) {
+            throw new WalletError("Invalid signer account class response");
           }
-          return {
-            accountContractType: "argent",
-            address: account,
-            publicKeyX: oneFelt(owner, "Argent signer public key"),
-          };
-        }
-        throw new WalletError(
-          "This account type cannot provide a signer key automatically. Ask the participant to copy their public key from Receive.",
-        );
-      },
+          if (sameFelt(classHash, OPENZEPPELIN_ACCOUNT_CLASS_HASH)) {
+            return {
+              accountContractType: "openzeppelin",
+              address: account,
+              publicKeyX: oneFelt(
+                await provider.callContract(
+                  { calldata: [], contractAddress: account, entrypoint: "get_public_key" },
+                  blockHash,
+                ),
+                "OpenZeppelin signer public key",
+              ),
+            };
+          }
+          if (sameFelt(classHash, ARGENT_ACCOUNT_CONTRACT.classHash)) {
+            return {
+              accountContractType: "argent",
+              address: account,
+              publicKeyX: await argentOwnerAt(provider, account, blockHash),
+            };
+          }
+          throw new WalletError(
+            "This account type cannot provide a signer key automatically. Ask the participant to copy their public key from Receive.",
+          );
+        }),
       makeProvider ?? createRpcProvider,
     );
   } catch (error) {

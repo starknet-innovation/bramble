@@ -27,6 +27,7 @@ import {
   readReviewDeploymentInput,
 } from "./multisig-inputs";
 import { resolveArgentDeployment } from "./multisig-operation-recovery";
+import { storedMultisigView } from "./multisig-view-state";
 
 type DeployableArgentRecord = ArgentMultisigRecord & {
   readonly deployment: NonNullable<ArgentMultisigRecord["deployment"]>;
@@ -41,10 +42,6 @@ const recordForReview = (review: ArgentMultisigDeploymentReview): DeployableArge
   accountContractType: "argent-multisig",
   address: review.address,
   classHash: ARGENT_MULTISIG_CONTRACT.classHash,
-  currentConfig: {
-    signerPublicKeys: review.signerPublicKeys,
-    threshold: review.threshold,
-  },
   deployment: {
     salt: review.salt,
     signerPublicKeys: review.signerPublicKeys,
@@ -53,18 +50,6 @@ const recordForReview = (review: ArgentMultisigDeploymentReview): DeployableArge
   id: `${review.networkId}:${review.address}`,
   ...(review.name === undefined ? {} : { name: review.name }),
   networkId: review.networkId,
-});
-
-const deploymentView = (record: DeployableArgentRecord) => ({
-  authorityStatus: "undeployed" as const,
-  config: {
-    classHash: record.classHash,
-    signerGuids: record.deployment.signerPublicKeys.map(argentSignerGuid),
-    threshold: record.deployment.threshold,
-  },
-  deployed: false,
-  record,
-  unsupportedSigners: [],
 });
 
 const checkedDeploymentRecord = async (
@@ -106,7 +91,7 @@ const claimDeployment = async (
   if (existing?.transactionHash) {
     return {
       address: record.address,
-      multisig: deploymentView(record),
+      multisig: storedMultisigView(record, true),
       ok: true,
       transactionHash: existing.transactionHash,
     };
@@ -131,7 +116,7 @@ const resolveClaimedDeployment = async (
   if (resolution.kind === "deployed") {
     return {
       address: record.address,
-      multisig: deploymentView(record),
+      multisig: storedMultisigView(record, true),
       ok: true,
       ...(resolution.transactionHash === null
         ? {}
@@ -354,7 +339,7 @@ const submitDeployment = async (
   });
   return {
     address: record.address,
-    multisig: deploymentView(record),
+    multisig: storedMultisigView(record, true),
     ok: true,
     transactionHash,
   };

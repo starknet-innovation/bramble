@@ -185,6 +185,20 @@ export const HomeDeploymentRequired: LabStory = {
     await expect(body?.querySelector('[data-view="multisig-propose"]')).not.toBeInTheDocument();
   },
 };
+export const HomeDeploymentPending: LabStory = {
+  args: { checkpointId: "home-deployment-pending", scenarioId: "multisig" },
+  name: "Home · deployment confirming",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector('[data-view="multisig-deploy"]')).not.toBeInTheDocument();
+    await expect(body?.querySelector('[data-view="multisig-propose"]')).toBeDisabled();
+    await expect(body?.querySelector(".multisig-action-note")).toHaveTextContent(
+      "Deployment submitted",
+    );
+  },
+};
 export const DeployRecover: LabStory = {
   args: { checkpointId: "deploy-recover", scenarioId: "multisig" },
   name: "Deployment · watched address",
@@ -255,9 +269,7 @@ export const HomeIntents: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
-    await expect(
-      body?.querySelector('.multisig-intent-list [data-view="multisig-detail"]'),
-    ).toBeVisible();
+    await expect(body?.querySelector(".multisig-intent-list [data-ms-open-intent]")).toBeVisible();
     await expect(body?.querySelector(".multisig-intent-assets .token-logo")).toBeVisible();
     await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
   },
@@ -283,6 +295,8 @@ export const IntentReady: LabStory = {
     await expect(body?.querySelector("[data-ms-sign]")).not.toBeInTheDocument();
     await expect(body?.querySelectorAll(".multisig-intent-action > button")).toHaveLength(1);
     await expect(body?.querySelector(".multisig-collaboration")).not.toHaveAttribute("open");
+    await expect(body).not.toHaveTextContent("Another pending transaction");
+    await expect(body?.querySelector(".multisig-intent-stack")).not.toBeInTheDocument();
   },
 };
 export const IntentHandoff: LabStory = {
@@ -345,7 +359,20 @@ export const IntentNoLocalSigner: LabStory = {
     ).toBeVisible();
   },
 };
-export const IntentStale = checkpointStory("Stale transaction", "multisig", "intent-stale");
+export const IntentStale: LabStory = {
+  args: { checkpointId: "intent-stale", scenarioId: "multisig" },
+  name: "Stale transaction",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("[data-ms-intent]")).toHaveTextContent(/Signatures\s*2 of 2/);
+    await expect(body?.querySelector("[data-ms-refresh-intent]")).toHaveTextContent(
+      "Refresh network fees",
+    );
+    await expect(body?.querySelector("[data-ms-submit]")).not.toBeInTheDocument();
+  },
+};
 export const AuthorityUnavailable = checkpointStory(
   "Authority unavailable",
   "multisig",

@@ -129,6 +129,7 @@ export const multisigPortfolio = (input: {
   readonly canSign: boolean;
   readonly data: MultisigPortfolioData;
   readonly deployed?: boolean | null;
+  readonly deploymentPending?: boolean;
   readonly openCount: number;
   readonly preferences: WalletPreferences | null;
   readonly intents: string;
@@ -138,25 +139,27 @@ export const multisigPortfolio = (input: {
   ${portfolioHero(input.record, input.preferences, input.data)}
   <section class="home-actions multisig-primary-actions" aria-label="Multisig actions">
     <div class="action-row">
-      ${input.deployed === false ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Prepare", "plus", input.canSign)}
+      ${input.deployed === false && !input.deploymentPending ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Prepare", "plus", input.canSign)}
       ${actionTile("multisig-receive", "Receive", "qrCode", true)}
       ${actionTile("multisig-signers", "Signers", "users", true)}
       ${explorerTile(explorerAccountUrl(input.record.networkId, input.record.address))}
     </div>
     ${
-      input.deployed === false
-        ? input.record.deployment
-          ? '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Deploy this saved account on Starknet before preparing a transaction.</p>'
-          : '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Open Deploy and enter the original signer set, threshold, and salt; review will verify this address.</p>'
-        : input.authorityMessage
-          ? `<p class="hint multisig-action-note">${escapeHtml(input.authorityMessage)}</p>`
-          : !input.authorityAvailable
-            ? '<p class="hint multisig-action-note">Deployment and signer authority could not be verified. Retry when network access is restored.</p>'
-            : input.canSign
-              ? ""
-              : input.signerKnown
-                ? `<div class="multisig-action-recovery"><p class="hint multisig-action-note"><strong>Signer found.</strong> Add the remaining public signer keys before preparing a transaction.</p>${button({ attributes: { "data-view": "multisig-signers" }, label: "Complete signer setup", size: "small", variant: "secondary" })}</div>`
-                : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
+      input.deploymentPending
+        ? '<p class="hint multisig-action-note"><strong>Deployment submitted.</strong> Awaiting Starknet confirmation before preparing a transaction.</p>'
+        : input.deployed === false
+          ? input.record.deployment
+            ? '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Deploy this saved account on Starknet before preparing a transaction.</p>'
+            : '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Open Deploy and enter the original signer set, threshold, and salt; review will verify this address.</p>'
+          : input.authorityMessage
+            ? `<p class="hint multisig-action-note">${escapeHtml(input.authorityMessage)}</p>`
+            : !input.authorityAvailable
+              ? '<p class="hint multisig-action-note">Deployment and signer authority could not be verified. Retry when network access is restored.</p>'
+              : input.canSign
+                ? ""
+                : input.signerKnown
+                  ? `<div class="multisig-action-recovery"><p class="hint multisig-action-note"><strong>Signer found.</strong> Add the remaining public signer keys before preparing a transaction.</p>${button({ attributes: { "data-view": "multisig-signers" }, label: "Complete signer setup", size: "small", variant: "secondary" })}</div>`
+                  : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>
   <section class="home-tabs multisig-portfolio-tabs" data-active-tab="assets" aria-label="Shared account">

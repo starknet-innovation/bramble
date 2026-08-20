@@ -92,6 +92,7 @@ type JourneyContext = {
   /** A pre-configured send from a shield or unshield shortcut. */
   readonly sendIntent?: SendIntent | null;
   readonly selectedMultisigId: string | null;
+  readonly selectedMultisigIntentId: string | null;
   readonly selectedNftId: string | null;
   readonly selectedTokenId: string | null;
   readonly status: WalletStatus;
@@ -153,6 +154,7 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
       context.preferences,
       activeView,
       context.multisigPortfolio,
+      context.selectedMultisigIntentId,
     );
   }
   if (activeView === "multisig-signers") {
@@ -295,6 +297,7 @@ export const dashboard = (
   },
   privacyJourney: PrivacyJourneyState = { stage: "idle" },
   sendIntent: SendIntent | null = null,
+  selectedMultisigIntentId: string | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -325,6 +328,7 @@ export const dashboard = (
     privacy,
     privacyJourney,
     selectedMultisigId,
+    selectedMultisigIntentId,
     selectedNftId,
     selectedTokenId,
     ...(sendIntent ? { sendIntent } : {}),

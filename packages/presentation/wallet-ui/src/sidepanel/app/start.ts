@@ -61,8 +61,7 @@ import { startRefreshLifecycle } from "./sync/lifecycle";
 import { createMutationRuntime } from "./sync/runtime-refresh";
 
 /**
- * Starts the wallet surface with an injected browser-owned Ledger capability.
- * Startup fails closed when the extension runtime or required DOM root is absent.
+ * Starts the wallet with injected Ledger; fails closed without its runtime or root.
  */
 export const startWalletUi = async (
   ledgerConnector: LedgerConnector,
@@ -78,6 +77,7 @@ export const startWalletUi = async (
   let activeView: WalletView = "home";
   let selectedNftId: string | null = null;
   let selectedMultisigId: string | null = null;
+  let selectedMultisigIntentId: string | null = null;
   let lastAccountId: string | null = null;
   let lastNetworkId = "SN_MAIN";
   let lastScene = "";
@@ -238,7 +238,6 @@ export const startWalletUi = async (
       app,
       balances: () => cache.balances,
       currency: () => cache.preferences?.displayCurrency ?? "usd",
-      // Never yank a user who left while the swap completed.
       navigateHome: () => {
         if (activeView === "swap") {
           navigate("home");
@@ -269,7 +268,13 @@ export const startWalletUi = async (
       multisig,
       openDetail: (id, destination = "multisig-home") => {
         selectedMultisigId = id;
+        selectedMultisigIntentId = null;
         navigate(destination);
+      },
+      openIntent: (accountId, intentId) => {
+        selectedMultisigId = accountId;
+        selectedMultisigIntentId = intentId;
+        navigate("multisig-detail");
       },
       openList: () => {
         selectedMultisigId = null;
@@ -297,11 +302,6 @@ export const startWalletUi = async (
     const { status } = cache;
     lastNetworkId = status.networkId;
     lastAccountId = status.activeAccountId;
-    // A shortcut's configuration seeds Send's first render and nothing else. Any
-    // paint of another view means it was abandoned, so it cannot resurface on a
-    // later visit to Send. Enforced here because this is the one place every view
-    // transition passes through — five of the six assign activeView directly, and
-    // guarding only `navigate` let a closed shield leak into the next send.
     if (activeView !== "send") {
       sendIntent = null;
     }
@@ -391,6 +391,7 @@ export const startWalletUi = async (
                 privacy.disclosure(),
                 privacy.journey(),
                 sendIntent,
+                selectedMultisigIntentId,
               );
     lastActiveView = activeView;
     if (!animate && content === lastContent) {
@@ -444,8 +445,6 @@ export const startWalletUi = async (
     cache.preferences = nextPreferences;
     if (!status.hasVault || status.locked) {
       privacy.reset();
-      // Reset every view-scoped field from one source so stale state cannot leak
-      // across a lock; preserve the status/pending/preferences just refreshed.
       Object.assign(cache, emptyRenderCache(), {
         pending: cache.pending,
         preferences: cache.preferences,
@@ -473,12 +472,12 @@ export const startWalletUi = async (
       paint,
     });
   };
-
   const navigate = (view: WalletView): void => {
     if (view !== activeView) {
       viewHistory = pushView(viewHistory, activeView);
     }
     activeView = view;
+    if (view !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
     void wallet.loadStatus().then(render);
@@ -488,6 +487,7 @@ export const startWalletUi = async (
     viewHistory = popped.history;
     forcedDirection = "back";
     activeView = popped.view;
+    if (activeView !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
     void wallet.loadStatus().then(render);

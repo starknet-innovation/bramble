@@ -481,6 +481,12 @@ ${SIGN_REQUEST_STYLES}
   .toast.success .toast-icon { background: var(--mc-positive-soft); color: var(--mc-positive); }
   .toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }
   .toast-icon .icon { height: 16px; width: 16px; }
-  .toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .toast-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
   button.toast-copy { height: 30px; min-height: 30px; width: 30px; }
 `;
