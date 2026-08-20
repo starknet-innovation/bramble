@@ -117,6 +117,26 @@ export const importWalletFromPhrase = async (
 };
 
 /**
+ * Sends one background message from a wallet page and returns its response.
+ *
+ * The single place this suite reaches the privileged background from a page:
+ * `chrome` is untyped inside `evaluate`, so keeping one narrow shape here stops
+ * that cast from being rewritten at each call site. Rejects if the page is gone
+ * or the background never answers — callers decide what that means.
+ */
+export const sendRuntimeMessage = async <T>(page: Page, message: unknown): Promise<T | undefined> =>
+  page.evaluate(async (payload) => {
+    const extensionGlobal = globalThis as typeof globalThis & {
+      readonly chrome?: {
+        readonly runtime?: {
+          readonly sendMessage?: (message: unknown) => Promise<unknown>;
+        };
+      };
+    };
+    return (await extensionGlobal.chrome?.runtime?.sendMessage?.(payload)) as T | undefined;
+  }, message);
+
+/**
  * Submits the passphrase on the "Welcome back" gate screen.
  *
  * Returns once the click lands, not once the vault has opened: the caller must

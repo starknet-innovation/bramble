@@ -37,11 +37,12 @@
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { type LoadedExtension, launchExtension } from "./extension-fixture";
 import {
   IMPORT_MNEMONIC,
   importWalletFromPhrase,
+  sendRuntimeMessage,
   unlockWallet,
   VAULT_PASSPHRASE,
 } from "./wallet-helpers";
@@ -52,10 +53,9 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // A different worktree simply onboards again on its first run; add a `key`
 // locally if you want one profile shared across checkouts.
 const profileDir = resolve(repoRoot, ".dev-profile");
-// Long enough for the panel to boot Krusty on a cold start, short enough that
-// probing for a state the wallet is not in stays cheap. Only a first run pays
-// it twice, falling through both probes before it starts onboarding.
-const STATE_TIMEOUT_MS = 5_000;
+// Budget for the one screen assertion left: confirming an unlock landed. State
+// itself comes from the background, not the DOM.
+const STATE_TIMEOUT_MS = 15_000;
 // How long to let the browser produce a surface of its own — a restored side
 // panel or the install-time onboarding tab — before opening one ourselves.
 const SURFACE_WAIT_MS = 4_000;
@@ -70,31 +70,29 @@ const mnemonic = process.env["MC_DEV_MNEMONIC"] || IMPORT_MNEMONIC;
 const passphrase = process.env["MC_DEV_PASSPHRASE"] || VAULT_PASSPHRASE;
 
 /**
- * Moves the wallet off mainnet after onboarding created a mainnet account from
- * a publicly published phrase. Uses the background message rather than the
- * settings UI so no new selector is introduced; a failure is reported loudly
- * because staying on SN_MAIN is the unsafe outcome.
+ * Moves the wallet off mainnet after onboarding created a mainnet account from a
+ * publicly published phrase.
+ *
+ * Never throws: staying on SN_MAIN is the unsafe outcome, so a failure has to be
+ * reported rather than propagated into an exit that prints nothing. Confirms
+ * against a re-read status instead of the switch's own reply, because a switch
+ * requested before the vault is unlocked updates only the preference and still
+ * answers with the new network id.
  */
-const switchToSepolia = async (sidepanel: Page): Promise<void> => {
-  const ok = await sidepanel.evaluate(async () => {
-    const extensionGlobal = globalThis as typeof globalThis & {
-      readonly chrome?: {
-        readonly runtime?: {
-          readonly sendMessage?: (message: unknown) => Promise<unknown>;
-        };
-      };
-    };
-    const response = (await extensionGlobal.chrome?.runtime?.sendMessage?.({
-      networkId: "SN_SEPOLIA",
-      type: "wallet.setActiveNetwork",
-    })) as { readonly networkId?: string } | undefined;
-    return response?.networkId === "SN_SEPOLIA";
-  });
-  console.log(
-    ok
-      ? "Switched to SN_SEPOLIA."
-      : "WARNING: could not leave SN_MAIN — this wallet's key is public. Switch networks before use.",
-  );
+const switchToSepolia = async (page: Page): Promise<void> => {
+  try {
+    await sendRuntimeMessage(page, { networkId: "SN_SEPOLIA", type: "wallet.setActiveNetwork" });
+    const status = await readStatus(page);
+    console.log(
+      status.networkId === "SN_SEPOLIA"
+        ? "Switched to SN_SEPOLIA."
+        : `WARNING: wallet is on ${status.networkId} — this key is public. Switch networks before use.`,
+    );
+  } catch (error) {
+    console.log(
+      `WARNING: could not leave SN_MAIN (${String(error)}) — this key is public. Switch networks before use.`,
+    );
+  }
 };
 
 /** The home header's lock control, and so the marker that the panel is unlocked. */
@@ -131,20 +129,32 @@ const classify = async (page: Page): Promise<Surface> => {
         };
       };
       if (!extensionGlobal.chrome?.tabs?.getCurrent) {
-        return false;
+        return true;
       }
       return (await extensionGlobal.chrome.tabs.getCurrent()) === undefined;
     })
-    .catch(() => false);
+    // Fails closed: an unreadable surface is treated as the panel, so the worst
+    // case is opening a tab we did not need rather than navigating the
+    // developer's panel away.
+    .catch(() => true);
   return { isPanel, page };
 };
+
+// The two surfaces this session drives. Other extension pages — the Ledger
+// grant window, the popup, a sandbox frame — are surfaces of their own and must
+// never be navigated away or counted as the wallet.
+const WALLET_PATHS = ["sidepanel.html", "onboarding.html"] as const;
 
 /** Every surface belonging to the wallet, panel and tabs alike. */
 const walletSurfaces = async (extension: LoadedExtension): Promise<readonly Surface[]> =>
   Promise.all(
     extension.context
       .pages()
-      .filter((page) => page.url().startsWith(`chrome-extension://${extension.extensionId}/`))
+      .filter((page) =>
+        WALLET_PATHS.some(
+          (path) => page.url() === `chrome-extension://${extension.extensionId}/${path}`,
+        ),
+      )
       .map(classify),
   );
 
@@ -202,41 +212,55 @@ const closeRedundantSurfaces = async (extension: LoadedExtension): Promise<void>
   if (!found.some((surface) => surface.isPanel)) {
     return;
   }
-  const keep = new Set(found.filter((surface) => surface.isPanel).map((surface) => surface.page));
-  for (const page of extension.context.pages()) {
-    if (!keep.has(page)) {
-      await page.close().catch(() => undefined);
+  // Wallet tabs only. The blank starter tab is the window the panel lives in —
+  // closing it takes the panel down with it — and any other tab is the
+  // developer's, not ours to close.
+  for (const surface of found) {
+    if (!surface.isPanel) {
+      await surface.page.close().catch(() => undefined);
     }
   }
+};
+
+type WalletState = {
+  readonly hasVault: boolean;
+  readonly locked: boolean;
+  readonly networkId: string;
 };
 
 /**
  * Asks the background what the wallet actually is, rather than inferring it from
  * whichever screen a restored tab happens to be showing — a completed onboarding
  * tab renders neither the gate nor the home header, which no DOM probe can tell
- * apart from a wallet that does not exist yet. Polls because the worker may
- * still be booting Krusty when the first page appears.
+ * apart from a wallet that does not exist yet.
+ *
+ * Retries until the deadline: the worker may still be booting Krusty, a page may
+ * still be navigating, and either state rejects the message rather than
+ * answering. The deadline is enforced against the wait itself, so a background
+ * that never replies fails with this error instead of hanging forever.
  */
-const readStatus = async (page: Page): Promise<{ hasVault: boolean; locked: boolean }> => {
+const readStatus = async (page: Page): Promise<WalletState> => {
   const deadline = Date.now() + STATUS_TIMEOUT_MS;
   for (;;) {
-    const status = await page.evaluate(async () => {
-      const extensionGlobal = globalThis as typeof globalThis & {
-        readonly chrome?: {
-          readonly runtime?: {
-            readonly sendMessage?: (message: unknown) => Promise<unknown>;
-          };
-        };
-      };
-      return (await extensionGlobal.chrome?.runtime?.sendMessage?.({ type: "wallet.status" })) as
-        | { readonly hasVault?: boolean; readonly locked?: boolean; readonly ready?: boolean }
-        | undefined;
-    });
-    if (status?.ready === true) {
-      return { hasVault: status.hasVault === true, locked: status.locked !== false };
-    }
-    if (Date.now() > deadline) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
       throw new Error("the wallet background never reported a ready status");
+    }
+    const status = await Promise.race([
+      sendRuntimeMessage<{
+        readonly hasVault?: boolean;
+        readonly locked?: boolean;
+        readonly networkId?: string;
+        readonly ready?: boolean;
+      }>(page, { type: "wallet.status" }).catch(() => undefined),
+      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), remaining)),
+    ]);
+    if (status?.ready === true) {
+      return {
+        hasVault: status.hasVault === true,
+        locked: status.locked !== false,
+        networkId: status.networkId ?? "unknown",
+      };
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
@@ -265,6 +289,14 @@ const main = async (): Promise<void> => {
   if (!status.hasVault) {
     const onboarding = await surfaceShowing(extension, "onboarding.html");
     await importWalletFromPhrase(onboarding, mnemonic, passphrase);
+    // importWalletFromPhrase returns as soon as the last click lands when it is
+    // handed an onboarding page, so vault creation is still in flight here. Wait
+    // for the screen that only renders once it finished, or the Sepolia switch
+    // races a wallet that does not exist yet and lands as a preference-only
+    // change that reports success.
+    await expect(onboarding.getByRole("heading", { name: "You’re all set" })).toBeVisible({
+      timeout: STATE_TIMEOUT_MS,
+    });
     console.log(`Wallet onboarded into ${profileDir}.`);
     await switchToSepolia(onboarding);
   } else if (status.locked) {
@@ -279,6 +311,18 @@ const main = async (): Promise<void> => {
     );
   } else {
     console.log("Wallet already unlocked.");
+  }
+
+  // Only onboarding switches networks, so a profile that failed the switch once
+  // would stay on mainnet silently forever. Say so on every later run instead,
+  // without overriding a network the developer chose on purpose.
+  if (
+    status.hasVault &&
+    (await readStatus(await walletSurface(extension))).networkId === "SN_MAIN"
+  ) {
+    console.log(
+      "WARNING: wallet is on SN_MAIN. If this key came from the repo fixture, it is public.",
+    );
   }
 
   await closeRedundantSurfaces(extension);
@@ -299,6 +343,11 @@ const main = async (): Promise<void> => {
           )}${panels === 0 ? " — open the panel once from the toolbar and the profile will restore it." : ""}`,
   );
   console.log("Ctrl-C to end the session (the profile is kept).");
+  // Close through Playwright on Ctrl-C rather than letting the process die: the
+  // whole point of keeping this profile is that the vault survives, and an
+  // abrupt kill can lose the writes that let the next run skip onboarding.
+  process.on("SIGINT", () => void extension.close().then(() => process.exit(0)));
+  process.on("SIGTERM", () => void extension.close().then(() => process.exit(0)));
   // Resolves when the browser goes away, so closing the window ends the process
   // instead of leaving it wedged with nothing to drive.
   await extension.context.waitForEvent("close", { timeout: 0 });
