@@ -4,6 +4,7 @@
 
 import type { ArgentUnsupportedSigner } from "@mc-wallet/multisig/chain";
 import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
+import type { MultisigSignerAccount } from "@mc-wallet/multisig/signer-account";
 import { createPreferencesStore } from "@mc-wallet/settings/preferences";
 import {
   ARGENT_ACCOUNT_CONTRACT,
@@ -101,6 +102,7 @@ export type MultisigHarnessOptions = {
     readonly signerPublicKeys: readonly string[];
     readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
   };
+  readonly resolveSignerAccount?: () => MultisigSignerAccount;
   readonly multisigStore?: MultisigStore;
   readonly getNonce?: () => string;
   readonly getTransactionStatuses?: (
@@ -264,6 +266,15 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
             input.account,
             input.calls,
             input.config,
+          );
+        },
+        async resolveSignerAccount() {
+          return (
+            options.resolveSignerAccount?.() ?? {
+              accountContractType: "argent",
+              address: harnessAccountA.address,
+              publicKeyX: harnessAccountA.publicKeyX,
+            }
           );
         },
         async submitPreparedInvoke(input) {

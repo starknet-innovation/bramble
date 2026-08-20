@@ -69,9 +69,9 @@ describe("sidepanel views", () => {
 
     expect(html).toContain('id="wallet-screen-receive"');
     expect(html).toContain(account.address);
+    expect(html).toContain(`data-copy="${account.publicKeyX}"`);
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
-    expect(html).not.toContain("wallet-dock");
-    expect(html).not.toContain('role="tablist"');
+    expect(html).not.toMatch(/wallet-dock|role="tablist"/);
     expect(html).not.toContain('id="lock-button"');
   });
 

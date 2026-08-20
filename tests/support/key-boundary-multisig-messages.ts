@@ -24,6 +24,14 @@ export const MULTISIG_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   {
+    message: {
+      address: account.address,
+      networkId: "SN_MAIN",
+      type: "wallet.resolveMultisigSigner",
+    },
+    sender: extensionSender,
+  },
+  {
     live: async (ids) => ({ multisigId: ids.multisigId }),
     message: { multisigId: "", type: "wallet.refreshMultisig" },
     sender: extensionSender,

@@ -16,6 +16,7 @@ import {
 import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
+import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
@@ -88,6 +89,15 @@ export type ArgentMultisigDeployResponse = {
   readonly multisig: ArgentMultisigView;
   readonly ok: true;
   readonly transactionHash: string;
+};
+
+/**
+ * Public participant metadata accepted only after strict runtime validation.
+ */
+export type MultisigSignerAccount = {
+  readonly accountContractType: AccountContractType;
+  readonly address: string;
+  readonly publicKeyX: string;
 };
 
 const canonicalNonZeroFelt = (value: unknown): value is string =>
@@ -289,6 +299,23 @@ export const isArgentMultisigClassStatusResponse = (
   hasOnlyKnownKeys(value, ["declared", "ok"]) &&
   value["ok"] === true &&
   typeof value["declared"] === "boolean";
+
+/**
+ * Validates the untrusted runtime response before public signer metadata enters UI state.
+ */
+export const isMultisigSignerResponse = (
+  value: unknown,
+): value is { readonly ok: true; readonly signer: MultisigSignerAccount } =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["ok", "signer"]) &&
+  value["ok"] === true &&
+  isRecord(value["signer"]) &&
+  hasOnlyKnownKeys(value["signer"], ["accountContractType", "address", "publicKeyX"]) &&
+  (value["signer"]["accountContractType"] === "argent" ||
+    value["signer"]["accountContractType"] === "openzeppelin") &&
+  canonicalNonZeroFelt(value["signer"]["address"]) &&
+  canonicalNonZeroFelt(value["signer"]["publicKeyX"]);
 
 /**
  * Validates the exact acknowledgement returned by removal.

@@ -6,6 +6,7 @@ import {
   isArgentMultisigIntentResponse,
   isArgentMultisigResponse,
   isArgentMultisigsResponse,
+  isMultisigSignerResponse,
 } from "../../../../src/popup/responses/multisig-responses";
 import { createMultisigClient } from "../../../../src/sidepanel/journeys/multisig/multisig-runtime";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
@@ -29,6 +30,12 @@ describe("Argent multisig response validators", () => {
         intent: fixture.intent,
         intentPackage: fixture.intentPackage,
         ok: true,
+      }),
+    ).toBe(true);
+    expect(
+      isMultisigSignerResponse({
+        ok: true,
+        signer: { accountContractType: "argent", address: "0x123", publicKeyX: "0x456" },
       }),
     ).toBe(true);
   });
@@ -133,6 +140,12 @@ describe("createMultisigClient", () => {
         if (type === "wallet.signArgentMultisigIntent") {
           return { intent: fixture.intent, ok: true };
         }
+        if (type === "wallet.resolveMultisigSigner") {
+          return {
+            ok: true,
+            signer: { accountContractType: "argent", address: "0x123", publicKeyX: "0x456" },
+          };
+        }
         return { error: "unexpected message" };
       },
     });
@@ -167,6 +180,11 @@ describe("createMultisigClient", () => {
     ).resolves.toEqual({
       intent: fixture.intent,
     });
+    await expect(client.resolveSigner("0x123", "SN_MAIN")).resolves.toEqual({
+      accountContractType: "argent",
+      address: "0x123",
+      publicKeyX: "0x456",
+    });
     expect(messages).toEqual([
       { type: "wallet.multisigs" },
       { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
@@ -181,6 +199,7 @@ describe("createMultisigClient", () => {
         signerAccountId: fixture.status.activeAccountId,
         type: "wallet.signArgentMultisigIntent",
       },
+      { address: "0x123", networkId: "SN_MAIN", type: "wallet.resolveMultisigSigner" },
     ]);
   });
 

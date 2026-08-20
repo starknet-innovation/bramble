@@ -13,7 +13,9 @@ import {
   isArgentMultisigIntentResponse,
   isArgentMultisigResponse,
   isArgentMultisigsResponse,
+  isMultisigSignerResponse,
   isOkResponse,
+  type MultisigSignerAccount,
 } from "../../../popup/responses/multisig-responses";
 import { isBalancesResponse, isErrorResponse } from "../../../popup/responses/responses";
 import type { RuntimeApi, ScopedBalanceState } from "../../runtime/runtime";
@@ -166,6 +168,17 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         { calls, multisigId, type: "wallet.prepareArgentMultisigIntent" },
         "prepare Argent multisig intent failed",
       );
+    },
+    async resolveSigner(address: string, networkId: string): Promise<MultisigSignerAccount> {
+      const response = await sendMessage({
+        address,
+        networkId,
+        type: "wallet.resolveMultisigSigner",
+      });
+      if (!isMultisigSignerResponse(response)) {
+        throw responseError(response, "resolve multisig signer account failed");
+      }
+      return response.signer;
     },
     async refreshMultisig(multisigId: string, force = false): Promise<RefreshResult> {
       if (force) refreshes.delete(multisigId);

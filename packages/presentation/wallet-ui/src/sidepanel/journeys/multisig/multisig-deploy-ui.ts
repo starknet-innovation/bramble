@@ -34,6 +34,7 @@ import {
 } from "./multisig-deploy-errors";
 import { bindDeploymentFunding } from "./multisig-deploy-funding-ui";
 import { deploymentFundingStage } from "./multisig-deploy-view";
+import { bindMultisigParticipantPicker, type MultisigParticipant } from "./multisig-participant";
 import type { ArgentMultisigDeploymentSetup, MultisigClient } from "./multisig-runtime";
 
 type MultisigDeployUiDeps = {
@@ -140,15 +141,13 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   const signerKeyInput = form?.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]');
   const signerList = form?.querySelector<HTMLElement>("[data-selected-signers]");
   const signerCount = form?.querySelector<HTMLElement>("[data-signer-count]");
-  const signerDisclosure = form?.querySelector<HTMLElement>(".multisig-signer-sources > summary");
+  const participantPickerButton = form?.querySelector<HTMLButtonElement>(
+    "[data-open-participant-picker]",
+  );
   const continueButton = form?.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]");
   const deploymentSignerStatus = form?.querySelector<HTMLElement>(
     "[data-deployment-signer-status]",
   );
-  const manualSignerInput = form?.querySelector<HTMLInputElement>(
-    "[data-manual-signer-public-key]",
-  );
-  const manualSignerResult = form?.querySelector<HTMLElement>("[data-manual-signer-result]");
   const manualSignerTemplate = form?.querySelector<HTMLTemplateElement>(
     "[data-manual-signer-template]",
   );
@@ -162,7 +161,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     signerList ? [...signerList.querySelectorAll<HTMLElement>("[data-signer-public-key]")] : [];
   const rowForKey = (publicKey: string): HTMLElement | undefined =>
     signerRows().find((row) => sameFelt(row.dataset["signerPublicKey"] ?? "", publicKey));
-  const syncSignerSet = (): void => {
+  const syncSignerSet = (notify = true): void => {
     if (!signerKeyInput) return;
     const selected = signerRows().filter((row) => !row.hidden);
     const selectedKeys = selected.flatMap((row) =>
@@ -172,10 +171,10 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (signerCount) {
       signerCount.textContent = `${selected.length} signer${selected.length === 1 ? "" : "s"}`;
     }
-    form?.querySelectorAll<HTMLButtonElement>("[data-add-signer-public-key]").forEach((choice) => {
-      const sourceChoice = choice;
-      const publicKey = choice.dataset["addSignerPublicKey"];
-      sourceChoice.hidden = Boolean(
+    form?.querySelectorAll<HTMLButtonElement>("[data-participant-key]").forEach((choice) => {
+      const targetChoice = choice;
+      const publicKey = choice.dataset["participantKey"];
+      targetChoice.hidden = Boolean(
         publicKey && selectedKeys.some((candidate) => sameFelt(candidate, publicKey)),
       );
     });
@@ -224,7 +223,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       thresholdInput.value = String(selected.length);
     }
     if (thresholdInput) thresholdInput.max = String(selected.length);
-    notifyInput(signerKeyInput);
+    if (notify) notifyInput(signerKeyInput);
   };
   form?.querySelectorAll<HTMLButtonElement>("[data-deployment-signer]").forEach((choice) => {
     choice.addEventListener("click", () => {
@@ -246,16 +245,6 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       notifyInput(signerAccountInput);
     });
   });
-  form?.querySelectorAll<HTMLButtonElement>("[data-add-signer-public-key]").forEach((choice) => {
-    choice.addEventListener("click", () => {
-      const publicKey = choice.dataset["addSignerPublicKey"];
-      const row = publicKey ? rowForKey(publicKey) : undefined;
-      if (!row?.hidden) return;
-      row.hidden = false;
-      syncSignerSet();
-      signerDisclosure?.focus();
-    });
-  });
   signerList?.addEventListener("click", (event) => {
     const target = event.target;
     const ElementType = signerList.ownerDocument.defaultView?.Element;
@@ -266,50 +255,39 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (row.hasAttribute("data-manual-signer")) row.remove();
     else row.hidden = true;
     syncSignerSet();
-    signerDisclosure?.focus();
+    participantPickerButton?.focus();
   });
-  const addManualSigner = (): void => {
-    if (!manualSignerInput || !manualSignerTemplate || !signerList) return;
-    const publicKey = normalizeFeltInput(manualSignerInput.value);
+  const addParticipant = (participant: MultisigParticipant): string | null => {
+    if (!manualSignerTemplate || !signerList) return "Signer setup is unavailable.";
+    const publicKey = normalizeFeltInput(participant.publicKeyX);
     if (!isNonZeroStarkFieldElement(publicKey)) {
-      if (manualSignerResult) {
-        manualSignerResult.textContent = "Enter a valid non-zero Starknet public key.";
-      }
-      manualSignerInput.focus();
-      return;
+      return "Enter a valid non-zero Starknet public key.";
     }
     const knownRow = rowForKey(publicKey);
     if (knownRow && !knownRow.hidden) {
-      if (manualSignerResult) manualSignerResult.textContent = "That signer is already included.";
-      manualSignerInput.focus();
-      return;
+      return "That participant is already included.";
     }
     if (knownRow) {
       knownRow.hidden = false;
     } else {
       const fragment = manualSignerTemplate.content.cloneNode(true) as DocumentFragment;
       const row = fragment.querySelector<HTMLElement>(".multisig-selected-signer");
+      const name = fragment.querySelector<HTMLElement>("[data-manual-signer-name]");
       const label = fragment.querySelector<HTMLElement>("[data-manual-signer-label]");
       const remove = fragment.querySelector<HTMLButtonElement>("[data-remove-signer-public-key]");
-      if (!row || !label || !remove) return;
+      if (!row || !name || !label || !remove) return "Signer setup is unavailable.";
       row.dataset["signerPublicKey"] = publicKey;
-      label.textContent = `Key ${accountLabel(publicKey)}`;
+      name.textContent = participant.label;
+      label.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · Key ${accountLabel(publicKey)}`;
       remove.dataset["removeSignerPublicKey"] = publicKey;
       signerList.append(fragment);
     }
-    manualSignerInput.value = "";
-    if (manualSignerResult) manualSignerResult.textContent = "Signer added.";
     syncSignerSet();
-    manualSignerInput.focus();
+    return null;
   };
-  form
-    ?.querySelector<HTMLButtonElement>("[data-add-manual-signer]")
-    ?.addEventListener("click", addManualSigner);
-  manualSignerInput?.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    addManualSigner();
-  });
+  if (form)
+    bindMultisigParticipantPicker(form, { multisig: deps.multisig, onSelect: addParticipant });
+  syncSignerSet(false);
   form
     ?.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")
     ?.addEventListener("click", () => {

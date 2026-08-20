@@ -42,9 +42,11 @@ describe("Argent multisig management views", () => {
     expect(ready).not.toContain("multisig-contract-details");
     expect(ready).toContain(`data-deployment-signer="${account?.id}"`);
     expect(ready).toContain('class="option-avatar"');
-    expect(ready).toContain('data-add-signer-public-key="0x999"');
+    expect(ready).toContain('data-participant-key="0x999"');
     expect(ready).toContain("Signer set");
-    expect(ready).toContain("Add signer");
+    expect(ready).toContain("Add participant");
+    expect(ready).toContain("Account address");
+    expect(ready).toContain("Public key");
     expect(ready).toContain('name="signerPublicKeys" type="hidden"');
     expect(ready).not.toContain("Space-separated public keys");
     expect(ready).toContain('name="signerAccountId" type="hidden"');

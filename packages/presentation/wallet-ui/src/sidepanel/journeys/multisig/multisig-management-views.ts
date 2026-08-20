@@ -19,6 +19,7 @@ import {
   noAccountEmpty,
 } from "../../shared/parts";
 import { receiveAddressView } from "../send/receive-view";
+import { type MultisigParticipantOption, multisigParticipantScreen } from "./multisig-participant";
 import { argentMultisigContractLabel, multisigDisplayName } from "./multisig-views";
 
 type SignerIdentity = {
@@ -82,12 +83,11 @@ const signerIdentities = (
         };
   });
 
-const availableSignerOptions = (
+const availableSignerParticipants = (
   currentKeys: readonly string[],
   status: WalletStatus,
   preferences: WalletPreferences | null,
-) => [
-  { label: "Enter a public key", value: "" },
+): readonly MultisigParticipantOption[] => [
   ...status.accounts
     .filter(
       (account) =>
@@ -95,8 +95,10 @@ const availableSignerOptions = (
         !currentKeys.some((key) => sameFelt(key, account.publicKeyX)),
     )
     .map((account) => ({
+      address: account.address,
       label: `${accountDisplayName(account, preferences)} · ${account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"}${account.derivation.kind === "ledger" ? " · Ledger" : ""}`,
-      value: account.publicKeyX,
+      publicKeyX: account.publicKeyX,
+      source: "Wallet account",
     })),
   ...(preferences?.addressBook
     .filter(
@@ -105,8 +107,20 @@ const availableSignerOptions = (
         entry.publicKeyX !== undefined &&
         !currentKeys.some((key) => sameFelt(key, entry.publicKeyX ?? "")),
     )
-    .map((entry) => ({ label: `${entry.label} · Address book`, value: entry.publicKeyX ?? "" })) ??
-    []),
+    .map((entry) => ({
+      address: entry.address,
+      label: entry.label,
+      publicKeyX: entry.publicKeyX ?? "",
+      source: "Saved contact",
+    })) ?? []),
+];
+
+const availableSignerOptions = (participants: readonly MultisigParticipantOption[]) => [
+  { label: "Enter a public key", value: "" },
+  ...participants.map(({ label, publicKeyX, source }) => ({
+    label: `${label} · ${source}`,
+    value: publicKeyX,
+  })),
 ];
 
 const thresholdOptions = (count: number, current: number) =>
@@ -221,16 +235,18 @@ export const multisigSignersFlow = (
   const unresolvedSignerCount = recoverySigners.filter(
     (signer) => !signer.publicKey && !signer.unsupported,
   ).length;
-  const candidates = availableSignerOptions(
+  const participantOptions = availableSignerParticipants(
     completeConfig?.signerPublicKeys ?? [],
     status,
     preferences,
   );
+  const candidates = availableSignerOptions(participantOptions);
   return (
     flowHeader("Signers", status, multisigDisplayName(record)) +
     flowScreen(
       "multisig-signers",
-      `<section class="section multisig-authority-summary">
+      `<div data-participant-origin>
+      <section class="section multisig-authority-summary">
         ${receipt([
           { label: "Contract", value: argentMultisigContractLabel() },
           { label: "Address", value: accountLabel(record.address), valueStyle: "code" },
@@ -333,18 +349,22 @@ export const multisigSignersFlow = (
         completeConfig
           ? `<section class="section multisig-authority-actions">
               <details class="disclosure">
-                <summary><span class="menu-copy"><strong>Add signer</strong><small>Select an account, contact, or public key</small></span><span class="disclosure-mark">${icon("chevronRight")}</span></summary>
+                <summary><span class="menu-copy"><strong>Add participant</strong><small>Use an account address or shared public key</small></span><span class="disclosure-mark">${icon("chevronRight")}</span></summary>
                 <div class="disclosure-body">
-                  <form data-ms-manage="add" data-multisig-id="${escapeHtml(record.id)}">
-                    ${selectField({ label: "Signer", name: "selectedPublicKey", options: candidates })}
-                    ${textField({ className: "mono", label: "Or enter signer public key", name: "publicKey", placeholder: "0x…", spellcheck: false })}
+                  <form data-ms-manage="add" data-current-signer-keys="${escapeHtml(completeConfig.signerPublicKeys.join(" "))}" data-multisig-id="${escapeHtml(record.id)}">
+                    <input name="selectedPublicKey" type="hidden" value="" />
+                    <div class="multisig-participant-selection" data-participant-selection hidden>
+                      <span class="option-avatar">${icon("user")}</span>
+                      <span class="option-copy"><strong data-participant-selection-name></strong><span class="option-sub" data-participant-selection-detail></span></span>
+                    </div>
+                    ${button({ attributes: { "data-open-participant-picker": true }, icon: "plus", label: "Choose participant", variant: "secondary" })}
                     ${selectField({
                       label: "Approvals after adding",
                       name: "threshold",
                       options: thresholdOptions(identities.length + 1, -1),
                       selected: String(completeConfig.threshold),
                     })}
-                    ${button({ label: "Review signer addition", type: "submit" })}
+                    ${button({ disabled: true, label: "Review signer addition", type: "submit" })}
                   </form>
                 </div>
               </details>
@@ -369,7 +389,9 @@ export const multisigSignersFlow = (
       <section class="section">
         <p class="hint">Removing stops local tracking only. It never changes the on-chain account.</p>
         ${button({ attributes: { "data-multisig-remove": record.id }, label: "Stop watching", variant: "ghost" })}
-      </section>`,
+      </section>
+      </div>
+      ${completeConfig ? multisigParticipantScreen(status.networkId, participantOptions) : ""}`,
     )
   );
 };

@@ -116,6 +116,20 @@ export const readAddMultisigInput = (message: unknown): AddArgentMultisigInput |
 };
 
 /**
+ * Parses one wallet-only request to resolve a supported participant account.
+ */
+export const readResolveMultisigSignerInput = (
+  message: unknown,
+): { readonly address: string; readonly networkId: StarknetNetworkId } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["address", "networkId", "type"]) &&
+  message["type"] === "wallet.resolveMultisigSigner" &&
+  isStarknetNetworkId(message["networkId"]) &&
+  isCanonicalNonZeroFelt(message["address"])
+    ? { address: message["address"], networkId: message["networkId"] }
+    : null;
+
+/**
  * Parses an exact multisig id request.
  */
 export const readMultisigIdInput = (

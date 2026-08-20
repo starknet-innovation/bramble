@@ -45,8 +45,9 @@ describe("bindMultisigs frozen-intent forms", () => {
       primary.id,
     );
 
+    app.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
     const addKey = app.querySelector<HTMLButtonElement>(
-      `[data-add-signer-public-key="${secondary.publicKeyX}"]`,
+      `[data-participant-key="${secondary.publicKeyX}"]`,
     );
     addKey?.click();
     expect(app.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]')?.value).toBe(
@@ -72,12 +73,14 @@ describe("bindMultisigs frozen-intent forms", () => {
     );
     expect(threshold.value).toBe("1");
 
-    const manual = app.querySelector<HTMLInputElement>("[data-manual-signer-public-key]");
-    const addManual = app.querySelector<HTMLButtonElement>("[data-add-manual-signer]");
-    if (!manual || !addManual) throw new Error("manual signer controls unavailable");
+    app.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+    app.querySelector<HTMLButtonElement>('[data-participant-method="public-key"]')?.click();
+    const manual = app.querySelector<HTMLInputElement>("[data-participant-key-input]");
+    const addManual = app.querySelector<HTMLButtonElement>("[data-confirm-participant]");
+    if (!manual || !addManual) throw new Error("participant key controls unavailable");
     manual.value = "not-a-key";
     addManual.click();
-    expect(app.querySelector("[data-manual-signer-result]")?.textContent).toContain("valid");
+    expect(app.querySelector("[data-participant-result]")?.textContent).toContain("valid");
     manual.value = "0x999";
     addManual.click();
     expect(app.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]')?.value).toBe(
@@ -162,9 +165,13 @@ describe("bindMultisigs frozen-intent forms", () => {
       fixture.status,
     );
     const form = app.querySelector<HTMLFormElement>('[data-ms-manage="add"]');
-    const key = form?.querySelector<HTMLInputElement>('input[name="publicKey"]');
-    if (!form || !key) throw new Error("guided signer form unavailable");
+    form?.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+    app.querySelector<HTMLButtonElement>('[data-participant-method="public-key"]')?.click();
+    const key = app.querySelector<HTMLInputElement>("[data-participant-key-input]");
+    if (!form || !key) throw new Error("guided participant form unavailable");
     key.value = "0x999";
+    app.querySelector<HTMLButtonElement>("[data-confirm-participant]")?.click();
+    expect(form.querySelector("[data-participant-selection]")?.textContent).toContain("0x999");
     form.requestSubmit();
     await flush();
 

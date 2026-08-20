@@ -83,6 +83,20 @@ const bindFixtureMultisig = (
           transactionHash: "0x456",
         };
       }
+      if (
+        isRecord(message) &&
+        message["type"] === "wallet.resolveMultisigSigner" &&
+        typeof message["address"] === "string"
+      ) {
+        return {
+          ok: true,
+          signer: {
+            accountContractType: "openzeppelin",
+            address: message["address"],
+            publicKeyX: "0x789",
+          },
+        };
+      }
       return { error: "UI Lab blocks non-fixture runtime requests" };
     },
   };
@@ -114,6 +128,26 @@ const prepareDeploymentApproval = async (context: FrameContext): Promise<void> =
   );
   if (!continueButton) throw new Error("Missing production multisig approval action");
   continueButton.click();
+  await nextTurn();
+};
+
+const revealDeploymentParticipant = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context);
+  const open = context.app.querySelector<HTMLButtonElement>("[data-open-participant-picker]");
+  if (!open) throw new Error("Missing production participant picker action");
+  open.click();
+  await nextTurn();
+};
+
+const revealManagementParticipant = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context);
+  const add = [...context.app.querySelectorAll<HTMLDetailsElement>("details.disclosure")].find(
+    (details) => details.textContent?.includes("Add participant"),
+  );
+  if (!add) throw new Error("Missing production signer-management participant action");
+  add.open = true;
+  add.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+  context.app.querySelector<HTMLButtonElement>('[data-participant-method="public-key"]')?.click();
   await nextTurn();
 };
 
@@ -317,6 +351,16 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   },
   {
     ...checkpoint(
+      "deploy-participant",
+      "Add deployment participant",
+      "Known identities stay one tap away while an external participant can be resolved from a deployed account address or added from a shared public key.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { detailType: "account address", step: "participant" },
+    ),
+    prepare: revealDeploymentParticipant,
+  },
+  {
+    ...checkpoint(
       "deploy-approval",
       "Set approval policy",
       "Threshold, deployment signer, and advanced salt form one focused decision after the signer set is complete.",
@@ -512,6 +556,16 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     { view: "multisig-signers" },
     { actions: ["add", "replace", "remove", "threshold"], threshold: 2 },
   ),
+  {
+    ...checkpoint(
+      "signers-participant",
+      "Add signer participant",
+      "Signer management uses the same participant task and returns to threshold review after a public key is selected.",
+      { view: "multisig-signers" },
+      { detailType: "public key", step: "participant" },
+    ),
+    prepare: revealManagementParticipant,
+  },
   {
     ...checkpoint(
       "signers-incomplete",

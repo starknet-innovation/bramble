@@ -12,6 +12,31 @@ import {
 } from "../../support/multisig-harness";
 
 describe("Argent multisig watch", () => {
+  test("resolves a supported participant account on the active network", async () => {
+    const harness = await makeMultisigHarness({
+      resolveSignerAccount: () => ({
+        accountContractType: "argent",
+        address: "0x123",
+        publicKeyX: "0x456",
+      }),
+    });
+    await expect(
+      harness.handler(
+        { address: "0x123", networkId: "SN_MAIN", type: "wallet.resolveMultisigSigner" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      signer: { accountContractType: "argent", address: "0x123", publicKeyX: "0x456" },
+    });
+    await expect(
+      harness.handler(
+        { address: "0x123", networkId: "SN_SEPOLIA", type: "wallet.resolveMultisigSigner" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ error: "switch to the participant account network first" });
+  });
+
   test("records only a complete locally known signer set", async () => {
     const knownSigner = HARNESS_KEYS[0];
     if (!knownSigner) throw new Error("missing multisig signer fixture");

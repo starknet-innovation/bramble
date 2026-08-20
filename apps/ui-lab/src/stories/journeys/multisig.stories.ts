@@ -56,7 +56,7 @@ export const Deploy: LabStory = {
     await expect(body?.querySelector(".multisig-contract-details")).not.toBeInTheDocument();
     await expect(body?.querySelector(".multisig-signer-set")).toBeVisible();
     await expect(body?.querySelector(".multisig-selected-signer:not([hidden])")).toBeVisible();
-    await expect(body?.querySelector(".multisig-signer-sources > summary")).toBeVisible();
+    await expect(body?.querySelector("[data-open-participant-picker]")).toBeVisible();
     await expect(body?.querySelector('input[name="signerPublicKeys"]')).toHaveAttribute(
       "type",
       "hidden",
@@ -67,17 +67,38 @@ export const Deploy: LabStory = {
     );
     await expect(body?.querySelector("[data-multisig-deploy-continue]")).toBeVisible();
     await expect(body?.querySelector(".multisig-deploy-approval-step")).not.toBeVisible();
+    body?.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+    const knownParticipants = body?.querySelector<HTMLDetailsElement>(
+      ".multisig-participant-known",
+    );
+    if (knownParticipants) knownParticipants.open = true;
     const addSigner = body?.querySelector<HTMLButtonElement>(
-      "[data-add-signer-public-key]:not([hidden])",
+      "[data-participant-key]:not([hidden])",
     );
     addSigner?.click();
     await expect(body?.querySelector("[data-signer-count]")).toHaveTextContent("2 signers");
-    const addedKey = addSigner?.dataset["addSignerPublicKey"];
+    const addedKey = addSigner?.dataset["participantKey"];
     const removeSigner = [
       ...(body?.querySelectorAll<HTMLButtonElement>("[data-remove-signer-public-key]") ?? []),
     ].find((control) => control.dataset["removeSignerPublicKey"] === addedKey);
     removeSigner?.click();
     await expect(body?.querySelector("[data-signer-count]")).toHaveTextContent("1 signer");
+  },
+};
+export const DeployParticipant: LabStory = {
+  args: { checkpointId: "deploy-participant", scenarioId: "multisig" },
+  name: "Deployment · add participant",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("[data-participant-screen]")).toBeVisible();
+    await expect(body?.querySelector('[data-participant-method="address"]')).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(body?.querySelector("[data-participant-address-input]")).toBeVisible();
+    await expect(body?.querySelector('[data-participant-method="public-key"]')).toBeVisible();
   },
 };
 export const DeployApproval: LabStory = {
@@ -346,6 +367,21 @@ export const Signers: LabStory = {
     await expect(body?.querySelector('[data-ms-manage="add"]')).toBeInTheDocument();
     await expect(body?.querySelector('[data-ms-manage="threshold"]')).toBeInTheDocument();
     await expect(body?.querySelector(".multisig-signer-roster")).not.toHaveTextContent(/0x\w{20}/);
+  },
+};
+export const SignersParticipant: LabStory = {
+  args: { checkpointId: "signers-participant", scenarioId: "multisig" },
+  name: "Signer management · add participant",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("[data-participant-screen]")).toBeVisible();
+    await expect(body?.querySelector('[data-participant-method="public-key"]')).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(body?.querySelector("[data-participant-key-input]")).toBeVisible();
   },
 };
 export const SignersIncomplete: LabStory = {

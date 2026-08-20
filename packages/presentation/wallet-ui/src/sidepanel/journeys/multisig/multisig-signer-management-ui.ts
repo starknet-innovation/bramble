@@ -6,6 +6,8 @@ import {
 import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { normalizeFeltInput, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { accountLabel } from "../../shared/parts";
+import { bindMultisigParticipantPicker, type MultisigParticipant } from "./multisig-participant";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 const setResult = (deps: MultisigUiDeps, id: string, value: string): void => {
@@ -40,6 +42,36 @@ const signerChangeFrom = (form: HTMLFormElement): ArgentMultisigConfigChange => 
 const bindSignerManagement = (deps: MultisigUiDeps): void => {
   deps.app?.querySelectorAll<HTMLFormElement>("[data-ms-manage]").forEach((form) => {
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (form.dataset["msManage"] === "add") {
+      const selectedKey = form.querySelector<HTMLInputElement>('[name="selectedPublicKey"]');
+      const selection = form.querySelector<HTMLElement>("[data-participant-selection]");
+      const selectionName = form.querySelector<HTMLElement>("[data-participant-selection-name]");
+      const selectionDetail = form.querySelector<HTMLElement>(
+        "[data-participant-selection-detail]",
+      );
+      const currentKeys = (form.dataset["currentSignerKeys"] ?? "").split(/\s+/).filter(Boolean);
+      const selectParticipant = (participant: MultisigParticipant): string | null => {
+        if (currentKeys.some((key) => sameFelt(key, participant.publicKeyX))) {
+          return "That participant is already a current signer.";
+        }
+        if (!selectedKey || !selection || !selectionName || !selectionDetail || !button) {
+          return "Signer management is unavailable.";
+        }
+        selectedKey.value = participant.publicKeyX;
+        selectionName.textContent = participant.label;
+        selectionDetail.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · Key ${accountLabel(participant.publicKeyX)}`;
+        selection.hidden = false;
+        button.disabled = false;
+        return null;
+      };
+      bindMultisigParticipantPicker(
+        form.closest<HTMLElement>("#wallet-screen-multisig-signers") ?? form,
+        {
+          multisig: deps.multisig,
+          onSelect: selectParticipant,
+        },
+      );
+    }
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const multisigId = form.dataset["multisigId"];

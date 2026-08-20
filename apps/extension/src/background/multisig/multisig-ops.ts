@@ -46,6 +46,7 @@ import {
   readMultisigIdInput,
   readMultisigsInput,
 } from "./multisig-inputs";
+import { handleMultisigSignerOps } from "./multisig-signer-ops";
 
 /**
  * Re-export the neutral composition dependency seam.
@@ -485,6 +486,7 @@ export const handleMultisigOps = async (
   }
   return (
     handleMultisigAccountOps(deps, messageType, message) ??
+    handleMultisigSignerOps(deps, messageType, message) ??
     handleMultisigDeployOps(deps, messageType, message)
   );
 };

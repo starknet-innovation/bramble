@@ -11,6 +11,7 @@ import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
 } from "@mc-wallet/multisig/repository";
+import type { MultisigSignerAccount } from "@mc-wallet/multisig/signer-account";
 import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
@@ -470,6 +471,7 @@ export type RuntimeResponse =
   | MultisigClassStatusResponse
   | MultisigDeployResponse
   | MultisigResponse
+  | { readonly ok: true; readonly signer: MultisigSignerAccount }
   | MultisigsResponse
   | { readonly ok: true }
   | PendingApprovalResponse

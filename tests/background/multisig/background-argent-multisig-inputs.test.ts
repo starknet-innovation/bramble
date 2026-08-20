@@ -6,6 +6,7 @@ import {
   readAddMultisigInput,
   readPrepareIntentInput,
   readRemoveMultisigInput,
+  readResolveMultisigSignerInput,
 } from "../../../apps/extension/src/background/multisig/multisig-inputs";
 import { HARNESS_MULTISIG_ID, harnessAccountA } from "../../support/multisig-harness";
 
@@ -54,5 +55,19 @@ describe("Argent multisig message inputs", () => {
         type: "wallet.removeMultisig",
       }),
     ).toBeNull();
+  });
+
+  test("accepts only an exact participant address lookup", () => {
+    const input = {
+      address: "0x123",
+      networkId: "SN_MAIN",
+      type: "wallet.resolveMultisigSigner",
+    };
+    expect(readResolveMultisigSignerInput(input)).toEqual({
+      address: "0x123",
+      networkId: "SN_MAIN",
+    });
+    expect(readResolveMultisigSignerInput({ ...input, address: "0x0123" })).toBeNull();
+    expect(readResolveMultisigSignerInput({ ...input, extra: true })).toBeNull();
   });
 });
