@@ -22,6 +22,11 @@ export {
   type StarkHashSigner,
   type StarknetAccountDescriptor,
 } from "./account-signer";
+export {
+  isBlockNotFoundError,
+  isContractNotFoundError,
+  isTransactionNotFoundError,
+} from "./rpc-not-found";
 
 type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
 
@@ -273,42 +278,6 @@ export const createRpcProvider = (
     nodeUrl,
     specVersion: STARKNET_RPC_SPEC_VERSION,
   });
-
-/**
- * Checks whether an RPC failure means the queried contract is not deployed.
- */
-export const isContractNotFoundError = (error: unknown): boolean => {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  if (/contract not found/i.test(error.message)) {
-    return true;
-  }
-  const baseError = (error as { readonly baseError?: unknown }).baseError;
-  return isRecord(baseError) && baseError["code"] === 20;
-};
-
-/**
- * Checks whether an RPC failure means the node has no record of the queried
- * transaction hash (`TXN_HASH_NOT_FOUND`, JSON-RPC error 29).
- *
- * This is a semantic answer, not a transport failure: the node replied and said
- * it does not know the hash. Callers must still treat a single not-found as
- * noise — a hash can legitimately be unknown to one node moments after
- * broadcast, and a pre-confirmed transaction can disappear when its block
- * proposal fails to commit. Use {@link isTransportRpcError} to keep "we could
- * not ask" apart from "the node says it is gone".
- */
-export const isTransactionNotFoundError = (error: unknown): boolean => {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  if (/transaction hash not found/i.test(error.message)) {
-    return true;
-  }
-  const baseError = (error as { readonly baseError?: unknown }).baseError;
-  return isRecord(baseError) && baseError["code"] === 29;
-};
 
 /**
  * Checks whether an RPC failure is transport-level (node unreachable or

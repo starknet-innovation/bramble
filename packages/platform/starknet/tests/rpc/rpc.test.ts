@@ -16,6 +16,7 @@ import {
   decodeErc20String,
   formatTokenAmount,
   IndeterminateRpcWriteError,
+  isBlockNotFoundError,
   isContractNotFoundError,
   isTransactionNotFoundError,
   isTransportRpcError,
@@ -248,6 +249,27 @@ describe("starknet RPC helpers", () => {
       ),
     ).toBe(false);
     expect(isTransportRpcError(new WalletError("Invalid account address"))).toBe(false);
+  });
+
+  // "This node does not have that block" is routine behind a load-balanced
+  // endpoint, not a chain-state failure: the head read moments earlier can be
+  // unknown to the sibling that answers the next request. It must stay
+  // distinguishable so a pinned read can re-pin instead of reporting an outage.
+  test("classifies block-not-found RPC failures", () => {
+    expect(isBlockNotFoundError(new Error("24: Block not found: undefined"))).toBe(true);
+    expect(
+      isBlockNotFoundError(
+        Object.assign(new Error("RPC error"), { baseError: { code: 24, message: "" } }),
+      ),
+    ).toBe(true);
+    // Neighbouring not-found codes must not be mistaken for it.
+    expect(
+      isBlockNotFoundError(
+        Object.assign(new Error("RPC error"), { baseError: { code: 20, message: "" } }),
+      ),
+    ).toBe(false);
+    expect(isBlockNotFoundError(new Error("connection reset"))).toBe(false);
+    expect(isBlockNotFoundError("Block not found")).toBe(false);
   });
 
   test("classifies contract-not-found RPC failures", () => {

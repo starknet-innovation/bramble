@@ -47,6 +47,7 @@ export {
  */
 export {
   IndeterminateRpcWriteError,
+  isBlockNotFoundError,
   isContractNotFoundError,
   isTransactionNotFoundError,
   isTransportRpcError,
