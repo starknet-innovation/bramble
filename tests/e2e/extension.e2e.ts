@@ -12,7 +12,7 @@ import {
   openPendingWalletSurface,
   resolveConnectionApproval,
   resolvePendingApproval,
-  VAULT_PASSPHRASE,
+  unlockWallet,
 } from "./wallet-helpers";
 
 test("keeps wallet setup out of the side panel", async ({ extension }) => {
@@ -98,8 +98,7 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
     await expect(sidepanel.getByText("Site request waiting")).toBeVisible();
     await expect(sidepanel.getByText(dappServer.origin)).toBeVisible();
 
-    await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
-    await sidepanel.getByRole("button", { name: "Unlock" }).click();
+    await unlockWallet(sidepanel);
 
     await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
 

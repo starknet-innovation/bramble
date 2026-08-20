@@ -26,14 +26,50 @@ const isWalletServiceWorker = (worker: Worker): boolean =>
   worker.url().startsWith("chrome-extension://") && worker.url().endsWith("/background/index.js");
 
 /**
- * Launches bundled Chromium with the built extension loaded from dist/.
+ * Options for {@link launchExtension}. Every field defaults to the E2E suite's
+ * behaviour: a headless browser on a throwaway profile at Playwright's standard
+ * 1280x720 viewport.
  */
-export const launchExtension = async (): Promise<LoadedExtension> => {
-  const userDataDir = await mkdtemp(resolve(tmpdir(), "mc-wallet-e2e-"));
+export type LaunchExtensionOptions = {
+  /** Extra Chromium switches appended to the extension-loading ones. */
+  readonly args?: readonly string[];
+  readonly headless?: boolean;
+  /**
+   * A profile directory to reuse. When supplied it is treated as the caller's
+   * own: it is neither created fresh nor removed on close, so extension storage
+   * (and therefore an onboarded vault) survives across launches.
+   */
+  readonly userDataDir?: string;
+  /**
+   * Pass `null` to size pages by the real browser window instead of Playwright's
+   * emulated viewport, which otherwise lays every page out at 1280x720 however
+   * small the window is.
+   */
+  readonly viewport?: null;
+};
+
+/**
+ * Launches bundled Chromium with the built extension loaded from dist/.
+ *
+ * Throws if the extension's background service worker never appears, which is
+ * how a missing or broken `dist/` surfaces.
+ */
+export const launchExtension = async (
+  options: LaunchExtensionOptions = {},
+): Promise<LoadedExtension> => {
+  const ownedProfile = options.userDataDir === undefined;
+  const userDataDir = options.userDataDir ?? (await mkdtemp(resolve(tmpdir(), "mc-wallet-e2e-")));
   const context = await chromium.launchPersistentContext(userDataDir, {
-    args: [`--disable-extensions-except=${distPath}`, `--load-extension=${distPath}`],
+    args: [
+      `--disable-extensions-except=${distPath}`,
+      `--load-extension=${distPath}`,
+      ...(options.args ?? []),
+    ],
     channel: "chromium",
-    headless: true,
+    headless: options.headless ?? true,
+    // Omitted rather than passed as undefined: Playwright reads the key's
+    // presence, so an explicit undefined would not restore the default.
+    ...(options.viewport === null ? { viewport: null } : {}),
   });
   const serviceWorker =
     context.serviceWorkers().find(isWalletServiceWorker) ??
@@ -49,7 +85,9 @@ export const launchExtension = async (): Promise<LoadedExtension> => {
     }
     closed = true;
     await context.close();
-    await rm(userDataDir, { force: true, recursive: true });
+    if (ownedProfile) {
+      await rm(userDataDir, { force: true, recursive: true });
+    }
   };
 
   return {

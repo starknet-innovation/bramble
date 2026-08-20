@@ -8,6 +8,7 @@ import { actionReferences, isPinnedActionReference, WORKFLOW_DIR } from "./workf
 const MAX_LINES = 500;
 const EXCLUDED = new Set([
   ".claude",
+  ".dev-profile",
   ".git",
   ".impeccable",
   ".playwright-cli",

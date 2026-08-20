@@ -59,9 +59,10 @@ fresh install opens the full-page setup flow; after setup, use the toolbar icon 
 Day to day:
 
 ```bash
-bun run check     # types, lint, standards, unit tests
-bun run format    # Biome autofix
-bun run test:e2e  # Playwright end-to-end (run test:e2e:install once first)
+bun run check       # types, lint, standards, unit tests
+bun run format      # Biome autofix
+bun run test:e2e    # Playwright end-to-end (run test:e2e:install once first)
+bun run dev:session # headed browser on a kept profile, onboards/unlocks itself
 ```
 
 ### Offline checks

@@ -53,9 +53,12 @@ const fillBackupVerify = async (sidepanel: Page, phrase: string): Promise<void> 
   await expect(sidepanel.locator("#verify-result")).toHaveText("Backup confirmed.");
 };
 
-const protectAndSelectAccount = async (sidepanel: Page): Promise<void> => {
-  await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
-  await sidepanel.locator('input[name="vaultPassphraseConfirm"]').fill(VAULT_PASSPHRASE);
+const protectAndSelectAccount = async (
+  sidepanel: Page,
+  passphrase: string = VAULT_PASSPHRASE,
+): Promise<void> => {
+  await sidepanel.locator('input[name="vaultPassphrase"]').fill(passphrase);
+  await sidepanel.locator('input[name="vaultPassphraseConfirm"]').fill(passphrase);
   await sidepanel.getByRole("button", { name: "Review account" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Choose accounts to add" })).toBeVisible();
   await sidepanel.locator("#account-preview").click();
@@ -91,8 +94,14 @@ export const createWalletFromGeneratedPhrase = async (sidepanel: Page): Promise<
 
 /**
  * Creates a wallet by pasting an existing recovery phrase (skips backup verification).
+ *
+ * `passphrase` protects the new vault and must match what a later unlock uses.
  */
-export const importWalletFromPhrase = async (sidepanel: Page, mnemonic: string): Promise<void> => {
+export const importWalletFromPhrase = async (
+  sidepanel: Page,
+  mnemonic: string,
+  passphrase: string = VAULT_PASSPHRASE,
+): Promise<void> => {
   const setup = await fullScreenSetup(sidepanel);
   const onboarding = setup.page;
   await expect(onboarding.getByRole("button", { name: "Add an existing wallet" })).toBeVisible();
@@ -100,11 +109,26 @@ export const importWalletFromPhrase = async (sidepanel: Page, mnemonic: string):
   await onboarding.getByRole("button", { name: "Recovery phrase" }).click();
   await onboarding.locator('input[name="import-word-0"]').fill(mnemonic);
   await onboarding.getByRole("button", { name: "Continue" }).click();
-  await protectAndSelectAccount(onboarding);
+  await protectAndSelectAccount(onboarding, passphrase);
   await setup.finish();
   if (!new URL(sidepanel.url()).pathname.endsWith("/onboarding.html")) {
     await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
   }
+};
+
+/**
+ * Submits the passphrase on the "Welcome back" gate screen.
+ *
+ * Returns once the click lands, not once the vault has opened: the caller must
+ * wait on whatever it expects next. A wrong passphrase leaves the gate in place
+ * with the reason in `#form-result`, so nothing here throws on rejection.
+ */
+export const unlockWallet = async (
+  sidepanel: Page,
+  passphrase: string = VAULT_PASSPHRASE,
+): Promise<void> => {
+  await sidepanel.locator('input[name="vaultPassphrase"]').fill(passphrase);
+  await sidepanel.getByRole("button", { name: "Unlock" }).click();
 };
 
 /**

@@ -16,6 +16,7 @@ bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI 
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
 bun run test:e2e             # Playwright extension E2E (requires dist/)
 bun run package:extension    # writes artifacts/*.zip + .sha256
+bun run dev:session          # headed browser on a kept profile, onboards/unlocks itself
 ```
 
 - `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain;
