@@ -37,14 +37,14 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // first run; add a `key` locally if you want one shared profile.
 const profileDir = resolve(repoRoot, ".dev-profile");
 // Long enough for the panel to boot Krusty on a cold start, short enough that
-// probing for a state the wallet is not in stays cheap — three of these run
-// back to back in the worst case.
+// probing for a state the wallet is not in stays cheap. Only a first run pays
+// it twice, falling through both probes before it starts onboarding.
 const STATE_TIMEOUT_MS = 5_000;
 
 const mnemonic = process.env["MC_DEV_MNEMONIC"] ?? IMPORT_MNEMONIC;
 const passphrase = process.env["MC_DEV_PASSPHRASE"] ?? VAULT_PASSPHRASE;
 
-/** The wallet's home header, and so the marker that the panel is unlocked. */
+/** The home header's lock control, and so the marker that the panel is unlocked. */
 const lockButton = (sidepanel: Page): Locator =>
   sidepanel.getByRole("button", { name: "Lock wallet" });
 

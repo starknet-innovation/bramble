@@ -67,8 +67,9 @@ export const launchExtension = async (
     ],
     channel: "chromium",
     headless: options.headless ?? true,
-    // Omitted rather than passed as undefined: Playwright reads the key's
-    // presence, so an explicit undefined would not restore the default.
+    // Spread conditionally because `exactOptionalPropertyTypes` forbids
+    // assigning `undefined` to an optional property (TS2379). Playwright itself
+    // treats an absent and an undefined viewport identically.
     ...(options.viewport === null ? { viewport: null } : {}),
   });
   const serviceWorker =
