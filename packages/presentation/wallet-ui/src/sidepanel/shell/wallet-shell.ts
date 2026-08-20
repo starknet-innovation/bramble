@@ -13,7 +13,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { type IconName, icon } from "../shared/icons";
 import { accountAvatar, accountDisplayName, type WalletView } from "../shared/parts";
-import { TERMINAL_URL } from "./terminal-link";
+import { STARKSCAN_URL } from "./starkscan-link";
 
 /**
  * Renders the unlocked account header and its trusted destinations.
@@ -54,10 +54,10 @@ export const walletHeader = (
         variant: "ghost",
       })}
       ${iconLink({
-        attributes: { id: "terminal-button" },
-        href: TERMINAL_URL,
-        icon: "terminal",
-        label: "Open trade terminal",
+        attributes: { id: "starkscan-button" },
+        href: STARKSCAN_URL,
+        icon: "externalLink",
+        label: "Open Starkscan",
         target: "_blank",
         variant: "ghost",
       })}

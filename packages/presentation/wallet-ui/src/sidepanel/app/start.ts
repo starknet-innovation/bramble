@@ -458,7 +458,7 @@ export const startWalletUi = async (
       paint();
       return;
     }
-    paint();
+    if (!scopeChanged) paint();
     void ledgerSign.poll();
     await hydrateView({
       status,

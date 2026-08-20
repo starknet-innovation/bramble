@@ -23,10 +23,10 @@ export const HOME_STYLES = `
     width: 36px;
   }
   .tx-kind-icon .icon { height: 18px; width: 18px; }
-  .tx-kind-transfer, .tx-kind-swap, .tx-kind-deploy { background: var(--mc-accent-soft); color: var(--mc-accent); }
-  .tx-kind-stake, .tx-kind-reward { background: var(--mc-positive-soft); color: var(--mc-positive); }
-  .tx-kind-unstake { background: var(--mc-accent-soft); color: var(--mc-accent); }
-  .tx-kind-private, .tx-kind-approval { color: var(--mc-accent); }
+  .tx-kind-icon.accepted { color: var(--mc-positive); }
+  .tx-kind-icon.pending { color: var(--mc-warning); }
+  .tx-kind-icon.preconfirmed { color: var(--mc-positive); opacity: 0.68; }
+  .tx-kind-icon.rejected, .tx-kind-icon.reverted { color: var(--mc-danger); }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger
      block so it cannot be skimmed past. Icon and text share one baseline. */

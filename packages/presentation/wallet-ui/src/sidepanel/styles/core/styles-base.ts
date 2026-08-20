@@ -72,6 +72,7 @@ export const BASE_STYLES = `
     -webkit-font-smoothing: antialiased;
     line-height: ${TYPE.body.line};
     margin: 0;
+    overscroll-behavior-y: none;
     overflow-x: hidden;
   }
   body.popup-surface {
@@ -139,6 +140,12 @@ export const BASE_STYLES = `
   }
   .section > .row:has(> h2) { padding: 0 ${SPACE.sm}; }
   .section-head h2 { font-size: ${TYPE.body.size}; font-weight: 700; }
+  .activity-head h1 {
+    font-size: ${TYPE.display.size};
+    font-weight: ${WEIGHT.bold};
+    letter-spacing: ${TRACKING.display};
+    line-height: ${TYPE.display.line};
+  }
   .eyebrow {
     color: var(--mc-muted);
     font-size: ${TYPE.caption.size};

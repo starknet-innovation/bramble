@@ -228,6 +228,21 @@ describe("unified portfolio scope", () => {
     expect(html).toContain("Discovering…");
   });
 
+  test("a failed discovery keeps the diagnostic out of the portfolio row", () => {
+    const html = privateDashboard({
+      error: "strk20 services unavailable",
+      loading: false,
+      value: null,
+    });
+
+    expect(html).toContain("data-privacy-retry");
+    expect(html).toContain("Private balance");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("strk20 services unavailable");
+    expect(html).not.toContain("Shielded balances unavailable right now.");
+    expect(html).not.toContain("privacy-inline-error");
+  });
+
   test("unified rows preserve the hidden-token filter", () => {
     const hiddenPreferences: WalletPreferences = {
       ...preferences,

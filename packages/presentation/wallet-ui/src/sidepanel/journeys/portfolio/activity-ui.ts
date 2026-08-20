@@ -48,7 +48,9 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
     void wallet
       .loadActivity(accountId, false, true)
       .then(() => wallet.loadStatus())
-      .then(render, () => buttonBusy(refreshButton, false));
+      .then(render)
+      .catch(() => undefined)
+      .finally(() => buttonBusy(refreshButton, false));
   });
 
   exportButton?.addEventListener("click", () => {

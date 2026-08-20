@@ -81,7 +81,7 @@ export const ActivityRows: CatalogStory = {
   render: (args) =>
     catalogFrame(
       "Activity rows",
-      "Activity is account-partitioned in data and concise in presentation: action summary, hash, liveness state, and copy affordance.",
+      "Activity is account-partitioned and concise: the glyph carries state and the summary opens the transaction on Starkscan.",
       catalogGroup(
         "Transaction types",
         "Distinct glyphs make transfers, swaps, staking, and other contract interactions scannable before reading.",

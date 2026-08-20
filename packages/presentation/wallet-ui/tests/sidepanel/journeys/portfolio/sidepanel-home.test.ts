@@ -11,7 +11,7 @@ import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepane
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
-import { TERMINAL_URL } from "../../../../src/sidepanel/shell/terminal-link";
+import { STARKSCAN_URL } from "../../../../src/sidepanel/shell/starkscan-link";
 import { walletHeader } from "../../../../src/sidepanel/shell/wallet-shell";
 
 const status: WalletStatus = {
@@ -46,16 +46,16 @@ describe("sidepanel home", () => {
     expect(drawer).toContain("data-drawer-close");
   });
 
-  test("header keeps ghost shortcuts for sites, terminal, and lock", () => {
+  test("header keeps ghost shortcuts for sites, Starkscan, and lock", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
     const header = html.slice(html.indexOf("wallet-header"), html.indexOf("hero"));
 
     expect(header).toContain('data-view="connected-sites"');
-    expect(header).toContain('id="terminal-button"');
+    expect(header).toContain('id="starkscan-button"');
     expect(header).toContain('class="icon-button ghost"');
-    expect(header).toContain(`href="${TERMINAL_URL}"`);
+    expect(header).toContain(`href="${STARKSCAN_URL}"`);
     expect(header).toContain('target="_blank" rel="noopener noreferrer"');
-    expect(header).toContain('aria-label="Open trade terminal"');
+    expect(header).toContain('aria-label="Open Starkscan"');
     expect(header).toContain('id="lock-button"');
   });
 
@@ -101,14 +101,13 @@ describe("sidepanel home", () => {
     expect(noAccounts).toMatch(/data-view="receive"[^>]*disabled/);
   });
 
-  test("home promotes no Terminal card, only the header shortcut", () => {
+  test("home promotes no Terminal card and keeps the Starkscan shortcut", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).not.toContain("terminal-cta");
     expect(html).not.toContain("Join MC Terminal");
     expect(html).not.toContain("Your homebase for all Starknet activity");
-    // The compact header link is the remaining trusted handoff.
-    expect(html).toContain('id="terminal-button"');
+    expect(html).toContain('id="starkscan-button"');
   });
 
   test("portfolio has two text tabs and one accessible quick-actions menu", () => {

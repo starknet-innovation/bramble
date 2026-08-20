@@ -202,7 +202,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .sparkline-down polyline { stroke: var(--mc-danger); }
   .request-list { gap: ${SPACE.md}; }
   /* Activity list: same de-boxed treatment as the token list — flush rows split
-     by a single hairline divider, description left, semantic status + copy right. */
+     by a single hairline divider, state on the glyph, summary as the explorer link. */
   .tx-list { display: grid; }
   .tx-row {
     align-items: center; border-radius: ${RADIUS.sm}; display: flex; gap: ${SPACE.sm};
@@ -213,30 +213,17 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     li.tx-row:hover { background: var(--mc-hover); }
   }
   .tx-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
-  .tx-copy strong {
+  .tx-copy strong, .tx-summary-link {
+    color: var(--mc-text);
+    display: block;
     font-size: ${TYPE.label.size};
+    font-weight: ${WEIGHT.bold};
     overflow: hidden;
+    text-decoration: none;
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
-  /* Plain semantic status: pending is muted, accepted green, failures danger.
-     Pre-confirmed borrows green, then dims and dots it to remain provisional. */
-  .tx-status {
-    color: var(--mc-muted);
-    flex: none;
-    font-size: 10px;
-    font-weight: ${WEIGHT.bold};
-    letter-spacing: 0.03em;
-    text-align: right;
-    text-transform: uppercase;
-  }
-  .tx-status.accepted { color: var(--mc-positive); }
-  .tx-status.preconfirmed {
-    border-bottom: 1px dotted currentColor;
-    color: var(--mc-positive);
-    opacity: 0.68;
-  }
-  .tx-status.reverted, .tx-status.rejected { color: var(--mc-danger); }
+  .tx-summary-link:hover { text-decoration: underline; text-underline-offset: 3px; }
   .review-panel {
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};

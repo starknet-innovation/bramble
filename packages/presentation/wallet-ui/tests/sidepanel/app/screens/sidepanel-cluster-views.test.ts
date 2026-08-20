@@ -112,7 +112,7 @@ describe("cluster views", () => {
     expect(html).toContain("normally confirms quickly");
     expect(html).toContain("checks immediately");
     expect(html).toContain("fee-bumped, replaced, or cancelled");
-    expect(html).toMatch(/tx-status pending"[^>]*title="/);
+    expect(html).toMatch(/tx-kind-transfer pending"[^>]*title="/);
 
     const settled = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       { ...pendingTx, status: "accepted" as const },

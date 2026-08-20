@@ -113,13 +113,12 @@ const changeBadge = (change: number | undefined): string => {
 
 /**
  * Public/private split shown inside a unified row's dropdown. `unavailable`
- * covers both a failed discovery (with its message) and a network without
- * STRK20 configuration.
+ * stays terse; the copyable retry toast owns the diagnostic.
  */
 export type PrivateBreakdown =
   | { readonly kind: "loading" }
   | { readonly kind: "ready"; readonly balance: string; readonly formatted: string }
-  | { readonly kind: "unavailable"; readonly message: string }
+  | { readonly kind: "unavailable" }
   /** Registration broadcast, not yet visible to the privacy indexer. */
   | { readonly kind: "pending" }
   | { readonly kind: "unregistered" };
@@ -139,7 +138,7 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
         ? "Discovering…"
         : breakdown.kind === "pending"
           ? "Registration pending…"
-          : `<span title="${escapeHtml(breakdown.message)}">Unavailable</span>`;
+          : "Unavailable";
   return `<div class="token-breakdown-row${breakdown.kind === "ready" ? "" : " muted"}">
       <span class="token-breakdown-label">${icon("lock")}Private balance</span>
       <span class="token-breakdown-value">${value}</span>

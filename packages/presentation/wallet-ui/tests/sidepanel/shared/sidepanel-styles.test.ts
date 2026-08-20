@@ -139,6 +139,14 @@ describe("sidepanel styles", () => {
     );
   });
 
+  test("short screens suppress overscroll and activity puts state on the icon", () => {
+    expect(SIDEPANEL_STYLES).toMatch(/body \{[^}]*overscroll-behavior-y: none;/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.activity-head h1 \{[^}]*font-size: 22px;/s);
+    expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.accepted { color: var(--mc-positive); }");
+    expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.pending { color: var(--mc-warning); }");
+    expect(SIDEPANEL_STYLES).not.toContain(".tx-status");
+  });
+
   test("colors come only from skin tokens, never literals", () => {
     // The stylesheet ships zero colour hex literals: every colour is a skin
     // token referenced through var()/color-mix. The near-mono palette adds a
@@ -203,7 +211,7 @@ describe("sidepanel styles", () => {
     // Gains, success, and sparkline direction are meaning, not decoration:
     // they read green/red from the semantic tokens.
     expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--mc-positive); }");
-    expect(SIDEPANEL_STYLES).toContain(".tx-status.accepted { color: var(--mc-positive); }");
+    expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.accepted { color: var(--mc-positive); }");
     expect(SIDEPANEL_STYLES).toContain(".sparkline-up polyline { stroke: var(--mc-positive); }");
     // Toast tone is a leading icon chip — green check on positive-soft for
     // success, red alert on danger-soft for error — a fixed heuristic the eye

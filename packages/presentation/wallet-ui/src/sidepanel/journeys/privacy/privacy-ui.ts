@@ -90,12 +90,14 @@ export const loadPrivacyDisclosure = async (deps: PrivacyUiDeps): Promise<boolea
     return true;
   } catch (error) {
     if (deps.disclosure() === pending && scopeMatches(deps, scope)) {
+      const message = errorMessage(error, "Private balances unavailable");
       deps.setDisclosure({
-        error: errorMessage(error, "Private balances unavailable"),
+        error: message,
         loading: false,
         value: null,
       });
       deps.paint();
+      showToast(message, "error", deps.app);
     }
     return false;
   }
@@ -213,11 +215,12 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
     },
     wallet: deps.wallet,
   });
-  deps.app
-    ?.querySelector<HTMLButtonElement>("[data-privacy-retry]")
-    ?.addEventListener("click", () => {
-      void loadPrivacyDisclosure(deps);
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-privacy-retry]").forEach((button) => {
+    button.addEventListener("click", () => {
+      buttonBusy(button, true);
+      void loadPrivacyDisclosure(deps).finally(() => buttonBusy(button, false));
     });
+  });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-privacy-register]").forEach((button) => {
     button.addEventListener("click", () => {
       const tokenId = button.dataset["privacyRegister"] || defaultTokenId(deps);
