@@ -19,6 +19,11 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 bun run dev:session          # headed browser on a kept profile, onboards/unlocks itself
 ```
 
+- `bun run dev:session` is development-only: it onboards from the repository's published test phrase,
+  so its accounts are public. It switches to Sepolia after onboarding and keeps its wallet in a
+  git-ignored `.dev-profile/`. Read the header of `tests/e2e/dev-session.ts` before overriding
+  `MC_DEV_MNEMONIC`.
+
 - `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain;
   `bun run vendor:argent` needs network access to the pinned official Argent release; and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,

@@ -13,6 +13,7 @@ vendor/krusty-kms/
 vendor/argent-contracts/
 vendor/starknet-privacy/
 *.log
+.env
 .env*.local
 .DS_Store
 /dist.zip

@@ -64,6 +64,11 @@ export const PINNED_RUNTIME_FILES = [
 
 export const EXPECTED_GITIGNORE_ENTRIES = [
   ".claude/*",
+  ".dev-profile/",
+  // Bun auto-loads a bare `.env`, which makes it the natural place a developer
+  // puts MC_DEV_MNEMONIC. Keeping it ignored is what stops a recovery phrase
+  // reaching a commit.
+  ".env",
   "artifacts/",
   "dist/",
   "node_modules/",

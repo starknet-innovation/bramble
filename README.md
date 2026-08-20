@@ -65,6 +65,11 @@ bun run test:e2e    # Playwright end-to-end (run test:e2e:install once first)
 bun run dev:session # headed browser on a kept profile, onboards/unlocks itself
 ```
 
+`dev:session` is development-only. It onboards from a recovery phrase published in this repository,
+so its accounts are public by construction — never send real funds to an address it shows, and read
+the header of `tests/e2e/dev-session.ts` before pointing `MC_DEV_MNEMONIC` at a phrase of your own.
+The wallet it creates is kept in a git-ignored `.dev-profile/`; delete that directory to start over.
+
 ### Offline checks
 
 After `bun install --frozen-lockfile`, the fast PR gates below need only Bun and the checked-out
