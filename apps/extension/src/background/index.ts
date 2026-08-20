@@ -238,6 +238,13 @@ const phishingFeed = (() => {
 })();
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
 void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
+// Fails closed to the stub service when session storage is unavailable, which
+// is the only thing that can throw here (`createStrk20MaturityStore` itself is
+// pure construction). The reason cannot be logged — the standards check bars
+// logging from production sources — so it surfaces where a user can see it
+// instead: `unavailableStrk20Service` reports "no privacy runtime is wired in
+// this build" rather than the generic unavailable line, which is what
+// distinguishes this fallback from a live service that failed.
 const strk20MaturityStore = (() => {
   try {
     return createStrk20MaturityStore(createBrowserSessionStore());

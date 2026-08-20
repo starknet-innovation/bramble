@@ -42,8 +42,15 @@ export type SdkNoteMap = {
  * private state or produce a proof.
  */
 export const requireStrk20Config = (context: Strk20AccountContext): Strk20NetworkConfig => {
-  if (!context.config || context.rpcUrls.length === 0) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  // Split: absent routing and an absent endpoint are different operator
+  // problems, and reporting one line for both hid which was missing.
+  if (!context.config) {
+    throw new WalletError(
+      `${STRK20_SERVICE_UNAVAILABLE}: no privacy routing is configured for this network`,
+    );
+  }
+  if (context.rpcUrls.length === 0) {
+    throw new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: no RPC endpoint is configured`);
   }
   return context.config;
 };
