@@ -13,7 +13,7 @@ import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { preparedArgentMultisigFee } from "@mc-wallet/starknet/multisig-invoke";
 import { verificationContext, verifyCalls } from "@mc-wallet/transactions/verify";
-import { emptyState, pill, receipt } from "@mc-wallet/ui-kit/content";
+import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
@@ -37,12 +37,13 @@ import {
   riskFlagMessages,
 } from "../../shared/review-render";
 import { multisigIntentActions, multisigIntentOutcome } from "./multisig-intent-actions";
+import { compactIntentListView, intentDeleteButton } from "./multisig-intent-list";
 import {
-  compactIntentListView,
-  intentDeleteButton,
+  actionableArgentMultisigIntents,
+  feeReplacementIntentFor,
   isFeeReplacementIntent,
-} from "./multisig-intent-list";
-import { multisigDisplayName } from "./multisig-model";
+  multisigDisplayName,
+} from "./multisig-model";
 import {
   EMPTY_MULTISIG_PORTFOLIO,
   type MultisigPortfolioData,
@@ -98,13 +99,14 @@ export const multisigsFlow = (
 ): string => {
   const scoped = multisigs.filter((view) => view.record.networkId === status.networkId);
   const openCount = (record: ArgentMultisigRecord): number =>
-    intents.filter(
-      (intent) =>
-        intent.accountId === record.id &&
-        (intent.state === "collecting" || intent.state === "ready"),
-    ).length;
+    actionableArgentMultisigIntents(intents.filter((intent) => intent.accountId === record.id))
+      .length;
   return (
-    flowHeader("Argent multisigs", status, `${scoped.length} watched`) +
+    flowHeader(
+      "Shared accounts",
+      status,
+      `${scoped.length} account${scoped.length === 1 ? "" : "s"}`,
+    ) +
     flowScreen(
       "multisigs",
       `${
@@ -114,17 +116,17 @@ export const multisigsFlow = (
       }
       <section class="section">
         <div class="menu-list" role="group" aria-label="Argent multisig actions">
-          ${walletMenuRow("multisig-watch", "Add existing multisig", "plus")}
-          ${walletMenuRow("multisig-deploy", "Deploy new multisig", "users")}
+          ${walletMenuRow("multisig-watch", "Add shared account", "plus")}
+          ${walletMenuRow("multisig-deploy", "Create a multisig", "users")}
         </div>
       </section>
       <section class="section">
-        <p class="eyebrow">Watched accounts</p>
+        <p class="eyebrow">Shared accounts</p>
         ${
           account === null
             ? noAccountEmpty(status)
             : scoped.length === 0
-              ? emptyState("No Argent multisigs are watched on this network yet.")
+              ? emptyState("No shared accounts are saved on this network yet.")
               : `<ul class="allowance-list">${scoped.map((view) => multisigRow(view, openCount(view.record))).join("")}</ul>`
         }
         ${loadError ? button({ attributes: { id: "multisig-list-retry" }, label: "Retry" }) : ""}
@@ -248,10 +250,12 @@ const intentCard = (
   view: ArgentMultisigView,
   status: WalletStatus,
   preferences: WalletPreferences | null,
-  isReplacement = false,
+  accountIntents: readonly ArgentMultisigSigningIntent[],
 ): string => {
   const outcome = multisigIntentOutcome(intent);
   if (outcome) return outcome;
+  const isReplacement = isFeeReplacementIntent(intent, accountIntents);
+  const hasReplacement = feeReplacementIntentFor(intent, accountIntents) !== null;
   const allOptions = localSignerOptions(view, status.accounts, preferences);
   const options = localSignerOptions(
     view,
@@ -273,8 +277,7 @@ const intentCard = (
   return `<article class="allowance-row multisig-intent" data-ms-intent="${escapeHtml(intent.id)}">
     <header class="decision-head">
       <span class="decision-seal">${icon("users")}</span>
-      <span><p class="decision-label">${isReplacement ? "Updated transaction" : "Reviewed intent"}</p><h2>${escapeHtml(intent.summary)}</h2></span>
-      ${pill(intent.state)}
+      <span><p class="decision-label">${isReplacement ? "Fee-updated transaction" : intent.state === "stale" ? "Not submitted" : "Reviewed intent"}</p><h2>${escapeHtml(intent.summary)}</h2></span>
     </header>
     ${reviewCallsList(
       transactionReview.calls.map((call) => call.summary),
@@ -347,7 +350,7 @@ const intentCard = (
         ${intentDeleteButton(intent.id, intent.accountId)}
       </div>
     </details>
-    ${multisigIntentActions(intent, options, allOptions.length > 0, hasFreshAuthority, isReplacement)}
+    ${multisigIntentActions(intent, options, allOptions.length > 0, hasFreshAuthority, isReplacement, hasReplacement)}
   </article>`;
 };
 
@@ -360,12 +363,13 @@ const intentList = (
   selectedIntentId: string | null,
 ): string => {
   const all = intents.filter((intent) => intent.accountId === record.id);
-  const scoped = all.filter((intent) => !selectedIntentId || intent.id === selectedIntentId);
-  if (selectedIntentId && scoped[0])
-    return intentCard(scoped[0], view, status, preferences, isFeeReplacementIntent(scoped[0], all));
+  const scoped = selectedIntentId
+    ? all.filter((intent) => intent.id === selectedIntentId)
+    : actionableArgentMultisigIntents(all);
+  if (selectedIntentId && scoped[0]) return intentCard(scoped[0], view, status, preferences, all);
   if (selectedIntentId) return emptyState("This signing intent is no longer available.");
   const submitted = scoped.find((intent) => intent.state === "submitted");
-  if (submitted) return intentCard(submitted, view, status, preferences);
+  if (submitted) return intentCard(submitted, view, status, preferences, all);
   const awaiting = scoped.filter(
     (intent) => intent.state === "collecting" || intent.state === "ready",
   );
@@ -374,8 +378,8 @@ const intentList = (
     return emptyState("No intents are awaiting verification or signature.");
   }
   return `<div class="multisig-intent-stack">
-    ${awaiting.length === 0 ? "" : `<section><p class="eyebrow">Awaiting verification &amp; signature</p><div class="allowance-list">${awaiting.map((intent) => intentCard(intent, view, status, preferences, isFeeReplacementIntent(intent, all))).join("")}</div></section>`}
-    ${stale.length === 0 ? "" : `<section><p class="eyebrow">Needs attention</p><div class="allowance-list">${stale.map((intent) => intentCard(intent, view, status, preferences)).join("")}</div></section>`}
+    ${awaiting.length === 0 ? "" : `<section><p class="eyebrow">Awaiting verification &amp; signature</p><div class="allowance-list">${awaiting.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
+    ${stale.length === 0 ? "" : `<section><p class="eyebrow">Needs attention</p><div class="allowance-list">${stale.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
   </div><p id="multisig-intent-result" role="status"></p>`;
 };
 
@@ -384,11 +388,8 @@ const compactIntentList = (
   intents: readonly ArgentMultisigSigningIntent[],
   preferences: WalletPreferences | null,
 ): string => {
-  const scoped = intents.filter(
-    (intent) =>
-      intent.accountId === record.id &&
-      (intent.state === "collecting" || intent.state === "ready" || intent.state === "stale"),
-  );
+  const all = intents.filter((intent) => intent.accountId === record.id);
+  const scoped = actionableArgentMultisigIntents(all);
   const heading = scoped.every((intent) => intent.state === "stale")
     ? "Needs attention"
     : scoped.some((intent) => intent.state === "stale")
@@ -402,12 +403,14 @@ const compactIntentList = (
       id: intent.id,
       label: intent.summary,
       supportingText: `${
-        isFeeReplacementIntent(intent, scoped)
-          ? "Updated fees · new signatures"
+        isFeeReplacementIntent(intent, all)
+          ? "Fee updated · fresh approvals"
           : intent.state === "ready"
             ? "Ready to submit"
             : intent.state === "stale"
-              ? "Not submitted · review updated fees"
+              ? intent.signatures.length === intent.configSnapshot.threshold
+                ? "Not submitted · ready to retry"
+                : "Not submitted · needs review"
               : "Awaiting signatures"
       } · ${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
     })),
@@ -449,9 +452,8 @@ export const multisigDetailFlow = (
     storedConfig.signerPublicKeys.every((key, index) =>
       sameFelt(argentSignerGuid(key), view.config?.signerGuids[index] ?? ""),
     );
-  const openCount = intents.filter(
-    (intent) =>
-      intent.accountId === record.id && (intent.state === "collecting" || intent.state === "ready"),
+  const openCount = actionableArgentMultisigIntents(
+    intents.filter((intent) => intent.accountId === record.id),
   ).length;
   const authorityIssue = authorityMessage(view);
   const effectiveAuthorityIssue = loadError

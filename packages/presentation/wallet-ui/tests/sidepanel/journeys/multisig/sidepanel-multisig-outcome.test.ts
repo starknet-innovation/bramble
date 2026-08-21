@@ -6,6 +6,7 @@ import { multisigDetailFlow } from "../../../../src/sidepanel/journeys/multisig/
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
+  deferredMultisigUi,
   flushMultisigUi,
   makeMultisigUiClient,
   mountMultisigUi,
@@ -13,6 +14,52 @@ import {
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
+
+test("keeps Back inside creation and ignores a late deployment review", async () => {
+  const fixture = await makeArgentMultisigFixture();
+  const signer = fixture.status.accounts[0];
+  if (!signer) throw new Error("signer fixture unavailable");
+  const pending = deferredMultisigUi<typeof fixture.deploymentReview>();
+  const app = mountMultisigUi(
+    multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+    await makeMultisigUiClient({ reviewDeployment: () => pending.promise }),
+    fixture.status,
+  );
+  const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+  app.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")?.click();
+  form?.requestSubmit();
+  const headerBack = app.querySelector<HTMLButtonElement>(".flow-header [data-nav-back]");
+  let escaped = false;
+  headerBack?.addEventListener("click", () => {
+    escaped = true;
+  });
+  headerBack?.click();
+  expect(form?.dataset["deploymentStage"]).toBe("participants");
+  expect(escaped).toBe(false);
+
+  pending.resolve(fixture.deploymentReview);
+  await flushMultisigUi();
+  expect(form?.dataset["deploymentStage"]).toBe("participants");
+});
+
+test("returns from the deployment review to Approval", async () => {
+  const fixture = await makeArgentMultisigFixture();
+  const signer = fixture.status.accounts[0];
+  if (!signer) throw new Error("signer fixture unavailable");
+  const app = mountMultisigUi(
+    multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+    await makeMultisigUiClient(),
+    fixture.status,
+  );
+  const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+  app.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")?.click();
+  form?.requestSubmit();
+  await flushMultisigUi();
+  expect(form?.dataset["deploymentStage"]).toBe("deploy");
+  app.querySelector<HTMLButtonElement>(".flow-header [data-nav-back]")?.click();
+  expect(form?.dataset["deploymentStage"]).toBe("approval");
+  expect(app.querySelector("#multisig-deploy-review")?.textContent).toBe("");
+});
 
 test("replaces a submitted intent review with the standard success receipt", async () => {
   const fixture = await makeArgentMultisigFixture();
@@ -27,6 +74,11 @@ test("replaces a submitted intent review with the standard success receipt", asy
         state: "submitted",
       },
     ],
+    false,
+    defaultWalletPreferences(),
+    "multisig-detail",
+    undefined,
+    fixture.readyIntent.id,
   );
 
   expect(html).toContain('class="send-outcome send-success multisig-intent-success"');
@@ -39,6 +91,32 @@ test("replaces a submitted intent review with the standard success receipt", asy
   expect(html).toContain('data-view="multisig-home"');
   expect(html).not.toContain('data-ms-submit="');
   expect(html).not.toContain("Co-signer handoff");
+});
+
+test("returns a submitted intent to the top of its receipt", async () => {
+  const fixture = await makeArgentMultisigFixture();
+  const app = mountMultisigUi(
+    multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [fixture.readyIntent],
+      false,
+      defaultWalletPreferences(),
+      "multisig-detail",
+      undefined,
+      fixture.readyIntent.id,
+    ),
+    await makeMultisigUiClient(),
+    fixture.status,
+  );
+  document.documentElement.scrollTop = 180;
+  document.body.scrollTop = 180;
+  app.querySelector<HTMLButtonElement>("[data-ms-submit]")?.click();
+  await flushMultisigUi();
+
+  expect(document.documentElement.scrollTop).toBe(0);
+  expect(document.body.scrollTop).toBe(0);
 });
 
 test("keeps cached signer authority disabled after its refresh fails", async () => {

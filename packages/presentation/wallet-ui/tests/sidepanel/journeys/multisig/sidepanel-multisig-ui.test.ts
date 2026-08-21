@@ -30,6 +30,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     const primary = fixture.status.accounts[0];
     if (!primary) throw new Error("signer fixture unavailable");
     const secondary = { ...primary, id: `${primary.networkId}:0x456`, publicKeyX: "0x456" };
+    secondary.address = "0x456";
     const status = { ...fixture.status, accountCount: 2, accounts: [primary, secondary] };
     const app = mount(
       multisigDeployFlow(status, primary, true, defaultWalletPreferences()),
@@ -60,8 +61,8 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(app.querySelector<HTMLInputElement>('input[name="signerAccountId"]')?.value).toBe(
       secondary.id,
     );
-    expect(secondarySigner?.getAttribute("aria-pressed")).toBe("true");
-
+    const currentSigner = app.querySelector("[data-deployment-signer-current-copy]");
+    expect(currentSigner?.textContent).toContain("0x456");
     const threshold = app.querySelector<HTMLInputElement>('input[name="threshold"]');
     if (!threshold) throw new Error("threshold field unavailable");
     threshold.value = "2";
@@ -72,7 +73,6 @@ describe("bindMultisigs frozen-intent forms", () => {
       secondary.publicKeyX,
     );
     expect(threshold.value).toBe("1");
-
     app.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
     app.querySelector<HTMLButtonElement>('[data-participant-method="public-key"]')?.click();
     const manual = app.querySelector<HTMLInputElement>("[data-participant-key-input]");
@@ -96,7 +96,28 @@ describe("bindMultisigs frozen-intent forms", () => {
       secondary.id,
     );
   });
-
+  test("keeps approval visible while address and fee review are prepared", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const pending = deferred<typeof fixture.deploymentReview>();
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      await testClient({ reviewDeployment: () => pending.promise }),
+      fixture.status,
+    );
+    const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+    app.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")?.click();
+    form?.requestSubmit();
+    expect(form?.dataset["deploymentStage"]).toBe("approval");
+    expect(app.querySelector("#multisig-deploy-review")?.textContent).toBe("");
+    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
+      "Calculating address and fee",
+    );
+    pending.resolve(fixture.deploymentReview);
+    await flush();
+    expect(form?.dataset["deploymentStage"]).toBe("deploy");
+  });
   test("keeps an unfunded deployment in review instead of offering broadcast", async () => {
     const fixture = await makeArgentMultisigFixture();
     const signer = fixture.status.accounts[0];
@@ -124,8 +145,9 @@ describe("bindMultisigs frozen-intent forms", () => {
 
     expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.hidden).toBe(true);
     expect(app.querySelector("[data-multisig-check-funding]")?.textContent).toContain(
-      "Check funding again",
+      "Check funding",
     );
+    expect(app.querySelector("[data-multisig-check-funding]")?.className).toContain("secondary");
     expect(app.querySelector("#multisig-deploy-result")?.textContent).toBe("");
     const fundingStage = app.querySelector(".multisig-funding-stage");
     expect(fundingStage?.textContent).toContain("Fund this multisig");
@@ -144,7 +166,6 @@ describe("bindMultisigs frozen-intent forms", () => {
       destination: "public",
     });
   });
-
   test("turns guided signer changes into exact reviewed multisig intents", async () => {
     const fixture = await makeArgentMultisigFixture();
     let prepared: { readonly calls: readonly unknown[]; readonly multisigId: string } | undefined;
@@ -186,7 +207,6 @@ describe("bindMultisigs frozen-intent forms", () => {
       multisigId: fixture.record.id,
     });
   });
-
   test("keeps deployment failures in a copyable toast and resets the review action", async () => {
     const fixture = await makeArgentMultisigFixture();
     const signer = fixture.status.accounts[0];
@@ -434,9 +454,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     await flush();
 
     expect(reviewPanel?.innerHTML).toBe(newest);
-    expect(form?.querySelector('button[type="submit"]')?.textContent).toContain(
-      "Deploy reviewed account",
-    );
+    expect(form?.querySelector('button[type="submit"]')?.textContent).toContain("Deploy multisig");
   });
 
   test("links shared-account tabs and supports the standard keyboard order", async () => {

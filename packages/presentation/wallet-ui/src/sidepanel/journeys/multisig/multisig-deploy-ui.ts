@@ -1,4 +1,4 @@
-/** Two-step exact-review binding for stable Argent multisig deployment. */
+/** Linear exact-review binding for stable Argent multisig creation. */
 import { escapeHtml } from "@mc-wallet/core/html";
 import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { button as buttonMarkup } from "@mc-wallet/ui-kit/controls";
@@ -33,7 +33,8 @@ import {
   EXPIRED_DEPLOYMENT_REVIEW,
 } from "./multisig-deploy-errors";
 import { bindDeploymentFunding } from "./multisig-deploy-funding-ui";
-import { deploymentFundingStage } from "./multisig-deploy-view";
+import { bindDeploymentSignerPicker } from "./multisig-deploy-signer-ui";
+import { deploymentFundingStage, type MULTISIG_CREATION_STEPS } from "./multisig-deploy-view";
 import { bindMultisigParticipantPicker, type MultisigParticipant } from "./multisig-participant";
 import type { ArgentMultisigDeploymentSetup, MultisigClient } from "./multisig-runtime";
 
@@ -45,14 +46,14 @@ type MultisigDeployUiDeps = {
   readonly setResult: (id: string, message: string) => void;
 };
 
-type DeploymentStage = "setup" | "approval" | "address" | "fund" | "deploy" | "confirm";
+type CreationStage = (typeof MULTISIG_CREATION_STEPS)[number][0];
+type DeploymentStage = CreationStage | "submitted";
 const DEPLOYMENT_STAGE_ORDER: Readonly<Record<DeploymentStage, number>> = {
-  address: 2,
   approval: 1,
-  confirm: 5,
-  deploy: 4,
-  fund: 3,
-  setup: 0,
+  deploy: 3,
+  fund: 2,
+  participants: 0,
+  submitted: 4,
 };
 
 const setDeploymentStage = (
@@ -61,7 +62,8 @@ const setDeploymentStage = (
   afterUpdate?: () => void,
 ): void => {
   const targetForm = form;
-  const previous = (form.dataset["deploymentStage"] as DeploymentStage | undefined) ?? "setup";
+  const previous =
+    (form.dataset["deploymentStage"] as DeploymentStage | undefined) ?? "participants";
   transitionTaskStage(
     form.ownerDocument,
     previous,
@@ -80,6 +82,8 @@ const setDeploymentStage = (
           const current = DEPLOYMENT_STAGE_ORDER[stage];
           targetStep.dataset["state"] =
             index < current ? "complete" : index === current ? "active" : "pending";
+          if (index === current) targetStep.setAttribute("aria-current", "step");
+          else targetStep.removeAttribute("aria-current");
         });
       afterUpdate?.();
     },
@@ -153,10 +157,18 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   );
   const nameInput = form?.querySelector<HTMLInputElement>('input[name="name"]');
   const thresholdInput = form?.querySelector<HTMLInputElement>('input[name="threshold"]');
-  if (form) setDeploymentStage(form, "setup");
+  if (form) {
+    setDeploymentStage(
+      form,
+      form.dataset["deploymentStage"] === "approval" ? "approval" : "participants",
+    );
+  }
   const notifyInput = (input: HTMLInputElement): void => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   };
+  const syncDeploymentSigner = form
+    ? bindDeploymentSignerPicker(form, signerAccountInput ?? undefined, notifyInput)
+    : (): void => undefined;
   const signerRows = (): readonly HTMLElement[] =>
     signerList ? [...signerList.querySelectorAll<HTMLElement>("[data-signer-public-key]")] : [];
   const rowForKey = (publicKey: string): HTMLElement | undefined =>
@@ -201,6 +213,9 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         choice.setAttribute("aria-pressed", String(choice === next));
       });
     }
+    syncDeploymentSigner(
+      deploymentChoices.find((choice) => choice.getAttribute("aria-pressed") === "true"),
+    );
     const selectedLocalCount = selected.filter((row) =>
       localSignerKeys.some((key) => sameFelt(key, row.dataset["signerPublicKey"] ?? "")),
     ).length;
@@ -225,26 +240,6 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (thresholdInput) thresholdInput.max = String(selected.length);
     if (notify) notifyInput(signerKeyInput);
   };
-  form?.querySelectorAll<HTMLButtonElement>("[data-deployment-signer]").forEach((choice) => {
-    choice.addEventListener("click", () => {
-      const accountId = choice.dataset["deploymentSigner"];
-      if (
-        choice.hidden ||
-        !accountId ||
-        !signerAccountInput ||
-        signerAccountInput.value === accountId
-      )
-        return;
-      signerAccountInput.value = accountId;
-      form.querySelectorAll<HTMLButtonElement>("[data-deployment-signer]").forEach((candidate) => {
-        candidate.setAttribute(
-          "aria-pressed",
-          String(candidate.dataset["deploymentSigner"] === accountId),
-        );
-      });
-      notifyInput(signerAccountInput);
-    });
-  });
   signerList?.addEventListener("click", (event) => {
     const target = event.target;
     const ElementType = signerList.ownerDocument.defaultView?.Element;
@@ -288,15 +283,35 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   if (form)
     bindMultisigParticipantPicker(form, { multisig: deps.multisig, onSelect: addParticipant });
   syncSignerSet(false);
+  const returnToPreviousStage = (event?: Event): boolean => {
+    if (!form) return false;
+    const stage = form.dataset["deploymentStage"] as DeploymentStage | undefined;
+    if (!stage || stage === "participants" || stage === "submitted") return false;
+    event?.preventDefault();
+    event?.stopImmediatePropagation();
+    reviews.delete(form);
+    reviewGenerations.set(form, (reviewGenerations.get(form) ?? 0) + 1);
+    if (reviewRoot) renderFragment(reviewRoot, "");
+    if (button) {
+      button.hidden = false;
+      button.lastChild?.replaceWith("Review deployment");
+      buttonBusy(button, false);
+      button.disabled = form.dataset["classReady"] !== "true" || !signerAccountInput?.value;
+    }
+    deps.setResult("multisig-deploy-result", "");
+    const previous = stage === "approval" ? "participants" : "approval";
+    setDeploymentStage(form, previous, () =>
+      (previous === "participants" ? nameInput : thresholdInput)?.focus({ preventScroll: true }),
+    );
+    return true;
+  };
+  deps.app
+    ?.querySelector<HTMLButtonElement>(".flow-header [data-nav-back]")
+    ?.addEventListener("click", (event) => returnToPreviousStage(event), true);
   form
     ?.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")
     ?.addEventListener("click", () => {
       setDeploymentStage(form, "approval", () => thresholdInput?.focus({ preventScroll: true }));
-    });
-  form
-    ?.querySelector<HTMLButtonElement>("[data-multisig-deploy-back]")
-    ?.addEventListener("click", () => {
-      setDeploymentStage(form, "setup", () => nameInput?.focus({ preventScroll: true }));
     });
   form?.addEventListener("input", (event) => {
     const target = event.target;
@@ -309,7 +324,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (button) button.hidden = false;
     setDeploymentStage(
       form,
-      target.closest(".multisig-deploy-signers-step") ? "setup" : "approval",
+      target.closest(".multisig-deploy-signers-step") ? "participants" : "approval",
     );
     button?.lastChild?.replaceWith("Review deployment");
     if (reviewEnabled) buttonBusy(button, false);
@@ -334,16 +349,17 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     }
     buttonBusy(button, true);
     if (reviewed) {
-      setDeploymentStage(form, "confirm");
       deps.setResult("multisig-deploy-result", "Submitting exact reviewed deployment…");
+      button?.lastChild?.replaceWith("Submitting deployment…");
       reviews.delete(form);
       void deps.multisig.deployMultisig(reviewed).then(
         async (result) => {
           const explorer = explorerTransactionUrl(reviewed.networkId, result.transactionHash);
-          if (reviewRoot) {
-            renderFragment(
-              reviewRoot,
-              `<section class="multisig-deployment-success" role="status" aria-live="polite">
+          setDeploymentStage(form, "submitted", () => {
+            if (reviewRoot) {
+              renderFragment(
+                reviewRoot,
+                `<section class="multisig-deployment-success" role="status" aria-live="polite">
                 <span class="multisig-deployment-success-mark">${icon("check")}</span>
                 <div><p class="context-label">Submitted to Starknet</p><h2>Multisig deployment is in progress</h2></div>
                 <p>The account is saved and the transaction hash will remain available while the network confirms deployment.</p>
@@ -356,14 +372,15 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
                   ${explorer ? `<a class="button secondary" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer">View transaction</a>` : ""}
                 </div>
               </section>`,
-            );
-            bindCopyButtons(reviewRoot);
-            reviewRoot
-              .querySelector<HTMLButtonElement>("[data-open-deployed-multisig]")
-              ?.addEventListener("click", () => deps.openDetail(result.multisig.record.id));
-          }
-          if (button) button.hidden = true;
-          deps.setResult("multisig-deploy-result", "");
+              );
+              bindCopyButtons(reviewRoot);
+              reviewRoot
+                .querySelector<HTMLButtonElement>("[data-open-deployed-multisig]")
+                ?.addEventListener("click", () => deps.openDetail(result.multisig.record.id));
+            }
+            if (button) button.hidden = true;
+            deps.setResult("multisig-deploy-result", "");
+          });
         },
         (error: unknown) => {
           const message = errorMessage(error, "Deployment failed");
@@ -392,7 +409,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       }
     };
     deps.setResult("multisig-deploy-result", "Preparing exact deployment fee…");
-    setDeploymentStage(form, "address");
+    button?.lastChild?.replaceWith("Calculating address and fee…");
     void deps.multisig
       .reviewDeployment(input)
       .then((next) => {
@@ -440,9 +457,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         }
         setDeploymentStage(form, fundingRequired ? "fund" : "deploy");
         if (button) button.hidden = fundingRequired;
-        button?.lastChild?.replaceWith(
-          fundingRequired ? "Review deployment" : "Deploy reviewed account",
-        );
+        button?.lastChild?.replaceWith(fundingRequired ? "Review deployment" : "Deploy multisig");
         deps.setResult("multisig-deploy-result", "");
         buttonBusy(button, false);
       })
@@ -450,6 +465,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         if (!isCurrent()) return;
         const message = deploymentReviewFailure(errorMessage(error, "Deployment review failed"));
         setDeploymentStage(form, "approval");
+        button?.lastChild?.replaceWith("Review deployment");
         deps.setResult(
           "multisig-deploy-result",
           message === ALREADY_DEPLOYED_MESSAGE

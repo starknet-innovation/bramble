@@ -102,6 +102,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const accountId = sendFormInput(form, "accountId")?.value ?? "";
   const completionTarget =
     form.dataset["sendCompleteTo"] === "multisig-deploy" ? "multisig-deploy" : "home";
+  const complete = (): void => {
+    if (completionTarget === "multisig-deploy" && back) back();
+    else navigate?.(completionTarget);
+  };
   if (transferState.fields && transferState.fields.accountId !== accountId) {
     transferEpoch += 1;
     transferState = initialTransferState();
@@ -150,7 +154,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       transferState = initialTransferState();
     }
     if (transferState.transactionHash && completionTarget === "multisig-deploy") {
-      navigate?.("multisig-deploy");
+      complete();
       return;
     }
     if (back) {
@@ -227,7 +231,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   if (homeButton) {
     homeButton.textContent =
       completionTarget === "multisig-deploy" ? "Deploy Multisignature Account" : "Back to home";
-    homeButton.addEventListener("click", () => navigate?.(completionTarget));
+    homeButton.addEventListener("click", complete);
   }
   form
     .querySelector("#send-view-activity")

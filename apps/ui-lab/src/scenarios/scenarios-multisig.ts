@@ -329,7 +329,7 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   checkpoint(
     "empty",
     "No shared accounts",
-    "The first-run state explains the two deliberate paths: deploy a new account or watch an existing address.",
+    "The first-run state explains the two deliberate paths: create a new account or add an existing address.",
     { multisigs: [], selectedMultisigId: null, view: "multisigs" },
     { accounts: 0, task: "choose setup path" },
   ),
@@ -345,7 +345,7 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     "Choose setup path",
     "Creating and watching are separate tasks with explicit trust consequences.",
     { selectedMultisigId: null, view: "multisig-add" },
-    { choices: ["deploy", "watch"] },
+    { choices: ["create", "add"] },
   ),
   checkpoint(
     "watch",
@@ -364,17 +364,17 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   {
     ...checkpoint(
       "deploy-ready",
-      "Choose deployment signers",
-      "The account name and signer identities are resolved before approval and deployment choices appear.",
+      "Choose participants",
+      "The account name and participant identities form the first decision in one four-stage creation flow.",
       { selectedMultisigId: null, view: "multisig-deploy" },
-      { class: "declared", step: "signers" },
+      { class: "declared", step: "participants" },
     ),
     prepare: bindFixtureMultisig,
   },
   {
     ...checkpoint(
       "deploy-participant",
-      "Add deployment participant",
+      "Add participant",
       "Known identities stay one tap away while an external participant can be resolved from a deployed account address or added from a shared public key.",
       { selectedMultisigId: null, view: "multisig-deploy" },
       { detailType: "account address", step: "participant" },
@@ -394,7 +394,7 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   {
     ...checkpoint(
       "deploy-reviewed",
-      "Reviewed deployment",
+      "Review deployment",
       "The predicted address, irreversible authority, fee ceiling, and exact constructor fit the extension surface before confirmation.",
       { selectedMultisigId: null, view: "multisig-deploy" },
       { class: "declared", funding: "ready", threshold: 2 },
@@ -424,7 +424,7 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   checkpoint(
     "home-deployment-required",
     "Deployment required",
-    "A shared counterfactual address can be watched before deployment and replaces the dead Prepare action with the exact recovery step.",
+    "A shared counterfactual address can be watched before deployment and replaces the disabled Send action with the exact recovery step.",
     { multisigs: [watchedUndeployedMultisig], view: "multisig-home" },
     { action: "complete setup", deployed: false },
   ),
@@ -438,7 +438,7 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   {
     ...checkpoint(
       "deploy-recover",
-      "Deploy watched address",
+      "Resume watched address",
       "The wallet collects the missing constructor and binds fee review to the watched address so an incorrect signer set, threshold, or salt cannot deploy a different account.",
       { multisigs: [watchedUndeployedMultisig], view: "multisig-deploy" },
       { constructor: "address-bound", deployed: false },
@@ -454,8 +454,8 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   ),
   checkpoint(
     "deploy-resume",
-    "Resume saved deployment",
-    "The wallet restores the original signer set, threshold, salt, and eligible deployment signer instead of making the user reconstruct them.",
+    "Resume saved setup",
+    "The wallet restores the original signer set, threshold, salt, and eligible deployment signer, then resumes at Approval instead of repeating Participants.",
     { multisigs: [undeployedMultisig], view: "multisig-deploy" },
     { constructor: "restored", deployed: false },
   ),
@@ -465,7 +465,7 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
       "Deployment signer required",
       "A restored external-only signer set cannot advance until one account owned by this wallet is added as the deployment signer.",
       { multisigs: [externalOnlyDeployment], view: "multisig-deploy" },
-      { recovery: "add local signer", step: "signers" },
+      { recovery: "add local signer", step: "participants" },
     ),
     prepare: bindFixtureMultisig,
   },
@@ -494,10 +494,17 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   ),
   checkpoint(
     "home-stale-intent",
-    "Failed attempt on account home",
-    "A fee-rejected attempt remains visible in the compact queue without crowding the portfolio.",
-    { multisigIntents: [argentStaleIntent], view: "multisig-home" },
-    { openIntents: 0, state: "not-submitted", view: "condensed" },
+    "One transaction after a fee change",
+    "Old fee hashes collapse into one logical row, preserving the strongest signed attempt without crowding the portfolio.",
+    {
+      multisigIntents: [
+        argentStaleIntent,
+        argentReplacementIntent,
+        { ...argentReplacementIntent, id: `${argentReplacementIntent.id}:empty`, signatures: [] },
+      ],
+      view: "multisig-home",
+    },
+    { openIntents: 1, state: "not-submitted", view: "condensed" },
     true,
   ),
   checkpoint(
@@ -542,7 +549,11 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     "intent-submitted",
     "Transaction submitted",
     "A completed multisig submission becomes a familiar receipt with direct Activity and shared-account destinations.",
-    { multisigIntents: [argentSubmittedIntent], view: "multisig-detail" },
+    {
+      multisigIntents: [argentSubmittedIntent],
+      selectedMultisigIntentId: argentSubmittedIntent.id,
+      view: "multisig-detail",
+    },
     { outcome: "submitted", state: "receipt" },
     true,
   ),
@@ -572,17 +583,21 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   ),
   checkpoint(
     "intent-stale",
-    "Stale transaction",
-    "A rejected fee attempt stays inspectable, says it was not submitted, and offers one recovery action.",
-    { multisigIntents: [argentStaleIntent], view: "multisig-detail" },
-    { state: "stale" },
+    "Not submitted · retry or update",
+    "A fee-rejected attempt says nothing was sent, makes the existing fee update the recommended next step, and keeps the exact signed retry available as a fallback.",
+    {
+      multisigIntents: [argentStaleIntent, argentReplacementIntent],
+      selectedMultisigIntentId: argentStaleIntent.id,
+      view: "multisig-detail",
+    },
+    { state: "not-submitted" },
     true,
   ),
   {
     ...checkpoint(
       "intent-fee-replacement",
-      "Updated transaction",
-      "A fee-rejected attempt stays retained while its newly reviewed hash clearly restarts signature collection.",
+      "Fee-updated transaction",
+      "The replacement explains that its new hash cannot reuse approvals from the previous attempt.",
       {
         multisigIntents: [argentStaleIntent, argentReplacementIntent],
         selectedMultisigIntentId: argentReplacementIntent.id,

@@ -40,7 +40,7 @@ export const MULTISIG_STYLES = `
   .multisig-deploy-progress {
     align-items: start;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     list-style: none;
     margin: 0;
     padding: 0;
@@ -95,9 +95,9 @@ export const MULTISIG_STYLES = `
   }
   .multisig-deploy-setup { display: grid; gap: ${SPACE.md}; min-width: 0; }
   .multisig-deploy-step-pane { display: grid; gap: ${SPACE.md}; min-width: 0; }
-  #multisig-deploy-form[data-deployment-stage="setup"] .multisig-deploy-approval-step,
+  #multisig-deploy-form[data-deployment-stage="participants"] .multisig-deploy-approval-step,
   #multisig-deploy-form[data-deployment-stage="approval"] .multisig-deploy-signers-step,
-  #multisig-deploy-form:not([data-deployment-stage="setup"]):not([data-deployment-stage="approval"]) .multisig-deploy-stage-frame > .multisig-deploy-setup {
+  #multisig-deploy-form:not([data-deployment-stage="participants"]):not([data-deployment-stage="approval"]) .multisig-deploy-stage-frame > .multisig-deploy-setup {
     display: none;
   }
   .multisig-deploy-actions {
@@ -105,19 +105,9 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.sm};
   }
   .multisig-deploy-actions > button { min-width: 0; width: 100%; }
-  #multisig-deploy-form[data-deployment-stage="setup"] .multisig-deploy-stage-frame > .multisig-deploy-actions,
-  #multisig-deploy-form[data-deployment-stage="fund"] .multisig-deploy-stage-frame > .multisig-deploy-actions { display: none; }
-  #multisig-deploy-form:not([data-deployment-stage="approval"]) [data-multisig-deploy-back] { display: none; }
-  #multisig-deploy-form[data-deployment-stage="approval"] .multisig-deploy-stage-frame > .multisig-deploy-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  #multisig-deploy-form[data-deployment-stage="address"] #multisig-deploy-review:empty::after {
-    color: var(--mc-muted);
-    content: "Calculating the address and deployment fee…";
-    display: block;
-    padding-block: ${SPACE.xl};
-    text-align: center;
-  }
+  #multisig-deploy-form[data-deployment-stage="participants"] .multisig-deploy-stage-frame > .multisig-deploy-actions,
+  #multisig-deploy-form[data-deployment-stage="submitted"] .multisig-deploy-stage-frame > .multisig-deploy-actions { display: none; }
+  .multisig-deploy-section:has(#multisig-deploy-form[data-deployment-stage="submitted"]) .multisig-deploy-progress { display: none; }
   #multisig-deploy-review {
     display: grid;
     gap: ${SPACE.md};
@@ -254,6 +244,15 @@ export const MULTISIG_STYLES = `
     border-top: 1px solid var(--mc-hairline);
   }
   .multisig-deployment-signer-field { display: grid; gap: 6px; min-width: 0; }
+  .multisig-deployment-signer-picker > summary > [data-deployment-signer-current-avatar] { display: inline-flex; flex: none; }
+  .multisig-deployment-signer-picker > summary > [data-deployment-signer-current-avatar][hidden] { display: none; }
+  .multisig-deployment-signer-picker > summary .option-copy { overflow: hidden; }
+  .multisig-deployment-signer-picker > summary .option-name,
+  .multisig-deployment-signer-picker > summary code,
+  .multisig-deployment-signer-picker > summary .option-sub { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .multisig-deployment-signer-picker > .disclosure-body { padding: 0; }
+  .multisig-deployment-signer-picker > .disclosure-body::before { display: none; }
+  .multisig-deployment-signer-picker > .disclosure-body .option-list { border-radius: 0; }
   .multisig-deployment-signer .option-name {
     align-items: center;
     display: flex;

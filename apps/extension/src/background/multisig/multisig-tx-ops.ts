@@ -389,7 +389,7 @@ const resolveSubmission = async (
 ): Promise<ResolvedSubmission> => {
   const authorized = captureSessionAuthorization(deps.session);
   const intent = await deps.multisigStore.getIntent(input.intentId);
-  if (intent?.state !== "ready" && intent?.state !== "submitted") {
+  if (intent?.state !== "ready" && intent?.state !== "stale" && intent?.state !== "submitted") {
     return {
       response: { error: intent ? "Argent multisig intent is not ready" : "intent not found" },
     };

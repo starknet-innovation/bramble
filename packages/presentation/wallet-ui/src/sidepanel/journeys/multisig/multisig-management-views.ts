@@ -155,8 +155,8 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
     `<section class="section">
       ${account ? "" : noAccountEmpty(status)}
       <div class="multisig-setup-options" role="group" aria-label="Argent multisig setup">
-        ${setupOption("multisig-deploy", "users", "Create a new multisig", "Deploy the pinned Argent 0.2 account.")}
-        ${setupOption("multisig-watch", "search", "Add a shared address", "Sync it now or complete deployment.")}
+        ${setupOption("multisig-deploy", "users", "Create a multisig", "Set participants, fund, and deploy.")}
+        ${setupOption("multisig-watch", "search", "Add a shared address", "Sync it or resume setup.")}
       </div>
     </section>`,
   );
@@ -165,7 +165,7 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
  * Renders address-only discovery; authority is read from chain and matched locally.
  */
 export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Add Argent multisig", status, "Sync or complete an undeployed account") +
+  flowHeader("Add shared account", status, "Sync or resume an Argent multisig") +
   flowScreen(
     "multisig-watch",
     `<section class="section">
@@ -181,7 +181,7 @@ export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | nu
           required: true,
           spellcheck: false,
         })}
-        ${button({ disabled: account === null, label: "Add multisig", type: "submit" })}
+        ${button({ disabled: account === null, label: "Add shared account", type: "submit" })}
         <p id="multisig-add-result" role="status"></p>
       </form>
     </section>`,

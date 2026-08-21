@@ -139,18 +139,18 @@ export const multisigPortfolio = (input: {
   ${portfolioHero(input.record, input.preferences, input.data)}
   <section class="home-actions multisig-primary-actions" aria-label="Multisig actions">
     <div class="action-row">
-      ${input.deployed === false && !input.deploymentPending ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Prepare", "plus", input.canSign)}
+      ${input.deployed === false && !input.deploymentPending ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Send", "send", input.canSign)}
       ${actionTile("multisig-receive", "Receive", "qrCode", true)}
       ${actionTile("multisig-signers", "Signers", "users", true)}
       ${explorerTile(explorerAccountUrl(input.record.networkId, input.record.address))}
     </div>
     ${
       input.deploymentPending
-        ? '<p class="hint multisig-action-note"><strong>Deployment submitted.</strong> Awaiting Starknet confirmation before preparing a transaction.</p>'
+        ? '<p class="hint multisig-action-note"><strong>Deployment submitted.</strong> Awaiting Starknet confirmation before sending.</p>'
         : input.deployed === false
           ? input.record.deployment
-            ? '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Deploy this saved account on Starknet before preparing a transaction.</p>'
-            : '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Open Deploy and enter the original signer set, threshold, and salt; review will verify this address.</p>'
+            ? '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Continue the saved setup before sending.</p>'
+            : '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Resume setup to verify and deploy this saved address.</p>'
           : input.authorityMessage
             ? `<p class="hint multisig-action-note">${escapeHtml(input.authorityMessage)}</p>`
             : !input.authorityAvailable
@@ -158,7 +158,7 @@ export const multisigPortfolio = (input: {
               : input.canSign
                 ? ""
                 : input.signerKnown
-                  ? `<div class="multisig-action-recovery"><p class="hint multisig-action-note"><strong>Signer found.</strong> Add the remaining public signer keys before preparing a transaction.</p>${button({ attributes: { "data-view": "multisig-signers" }, label: "Complete signer setup", size: "small", variant: "secondary" })}</div>`
+                  ? `<div class="multisig-action-recovery"><p class="hint multisig-action-note"><strong>Signer found.</strong> Add the remaining public signer keys before sending.</p>${button({ attributes: { "data-view": "multisig-signers" }, label: "Complete signer setup", size: "small", variant: "secondary" })}</div>`
                   : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>

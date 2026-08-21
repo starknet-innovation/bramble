@@ -51,8 +51,26 @@ describe("Argent multisig management views", () => {
     expect(ready).not.toContain("Space-separated public keys");
     expect(ready).toContain('name="signerAccountId" type="hidden"');
     expect(ready).toContain("Continue to approval");
-    expect(ready).toContain("data-multisig-deploy-back");
+    expect(ready).toContain("data-nav-back");
+    expect(ready).not.toContain("data-multisig-deploy-back");
     expect(ready).toContain("Review deployment");
+    expect(ready.match(/data-multisig-deploy-step=/g)).toHaveLength(4);
+    expect(ready).toContain("Participants");
+    expect(ready).not.toContain("<small>Address</small>");
+    expect(ready).not.toContain("<small>Done</small>");
+
+    const saved = multisigDeployFlow(fixture.status, account, true, preferences, {
+      ...fixture.view,
+      authorityStatus: "undeployed",
+      config: null,
+      deployed: false,
+      record: {
+        ...fixture.record,
+        deployment: { salt: "0x0", signerPublicKeys: [account?.publicKeyX ?? ""], threshold: 1 },
+      },
+    });
+    expect(saved).toContain('data-deployment-stage="approval"');
+    expect(saved).toContain('data-stage="approval" data-state="active" aria-current="step"');
   });
 
   test("renders setup, live authority, receive, import, and account-picker states", async () => {
@@ -60,7 +78,7 @@ describe("Argent multisig management views", () => {
     const account = fixture.status.accounts[0] ?? null;
 
     const setup = multisigAddFlow(fixture.status, account);
-    expect(setup).toContain("Create a new multisig");
+    expect(setup).toContain("Create a multisig");
     expect(setup).toContain('class="multisig-setup-options"');
     expect(multisigAddFlow(fixture.status, null)).toContain("No account on");
     expect(multisigSignersFlow(fixture.status, account, null)).toContain("no longer watched");

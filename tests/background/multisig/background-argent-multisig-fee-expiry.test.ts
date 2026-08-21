@@ -19,10 +19,13 @@ const RAW_RPC_ERROR =
   "RPC: starknet_addInvokeTransaction with params {...} 55: Account validation failed: Resource bounds were not satisfied: Max L1DataGas price (235129044270) is lower than the actual gas price: 863576035385.";
 
 describe("Argent multisig fee expiry", () => {
-  test("marks an underpriced ready intent stale and releases its submit claim", async () => {
+  test("keeps an underpriced signed intent retryable after releasing its submit claim", async () => {
+    let attempts = 0;
     const harness = await makeMultisigHarness({
-      async submitPrepared() {
-        throw new ArgentMultisigFeeExpiredError(RAW_RPC_ERROR);
+      async submitPrepared(hash) {
+        attempts += 1;
+        if (attempts === 1) throw new ArgentMultisigFeeExpiredError(RAW_RPC_ERROR);
+        return hash;
       },
     });
     let intent = intentFrom(
@@ -56,6 +59,8 @@ describe("Argent multisig fee expiry", () => {
         { intentId: intent.id, type: "wallet.submitArgentMultisigIntent" },
         harnessExtensionSender,
       ),
-    ).resolves.toEqual({ error: "Argent multisig intent is not ready" });
+    ).resolves.toMatchObject({ intent: { state: "submitted" }, ok: true });
+    expect((await harness.multisigStore.getIntent(intent.id))?.state).toBe("submitted");
+    expect(harness.submitCount()).toBe(2);
   });
 });

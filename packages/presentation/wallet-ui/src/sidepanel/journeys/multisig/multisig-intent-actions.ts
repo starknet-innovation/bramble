@@ -13,6 +13,7 @@ type IntentAction = {
   readonly note: string;
   readonly packageIsPrimary: boolean;
   readonly primary: string;
+  readonly secondary?: string;
 };
 
 const intentAction = (
@@ -20,6 +21,7 @@ const intentAction = (
   availableSigners: readonly SignerOption[],
   hasLocalSigner: boolean,
   hasFreshAuthority: boolean,
+  hasReplacement: boolean,
 ): IntentAction => {
   if (!hasFreshAuthority) {
     return {
@@ -42,14 +44,34 @@ const intentAction = (
     };
   }
   if (intent.state === "stale") {
+    const retryable = intent.signatures.length === intent.configSnapshot.threshold;
+    const approvals = `${intent.configSnapshot.threshold} approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
+    const freshApprovals = `${intent.configSnapshot.threshold} fresh approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
     return {
       canSign: false,
-      note: "This transaction was not submitted because its signed fee limit expired. The transfer details are preserved, but updated fees require new signatures.",
+      note: retryable
+        ? hasReplacement
+          ? `Nothing was sent. Network fees rose above this signed transaction's limit. Continue the fee-updated transaction and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
+          : `Nothing was sent. Network fees rose above this signed transaction's limit. Update the network fee and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
+        : "Nothing was sent. This version is no longer current. Create a current transaction to continue.",
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-ms-refresh-intent": intent.id },
-        label: "Review updated transaction",
+        label: hasReplacement
+          ? "Continue fee-updated transaction"
+          : retryable
+            ? "Update network fee"
+            : "Create current transaction",
       }),
+      ...(retryable
+        ? {
+            secondary: button({
+              attributes: { "data-ms-submit": intent.id },
+              label: "Try unchanged fee again",
+              variant: "secondary",
+            }),
+          }
+        : {}),
     };
   }
   if (intent.state === "collecting" && availableSigners.length > 0) {
@@ -156,9 +178,8 @@ const collaborationTools = (
 };
 
 /**
- * Shows exactly one primary next step for the current intent state. Signature
- * transport remains available under disclosure without competing with signing
- * or submission.
+ * Shows one primary next step and, for failed broadcasts, one explicit fallback.
+ * Signature transport remains under disclosure without competing with submission.
  */
 export const multisigIntentActions = (
   intent: ArgentMultisigSigningIntent,
@@ -166,10 +187,17 @@ export const multisigIntentActions = (
   hasLocalSigner: boolean,
   hasFreshAuthority: boolean,
   isReplacement = false,
+  hasReplacement = false,
 ): string => {
-  const action = intentAction(intent, availableSigners, hasLocalSigner, hasFreshAuthority);
+  const action = intentAction(
+    intent,
+    availableSigners,
+    hasLocalSigner,
+    hasFreshAuthority,
+    hasReplacement,
+  );
   const note = isReplacement
-    ? `Fees were updated after the previous attempt was rejected. This is a new transaction hash, so ${intent.signatures.length} of ${intent.configSnapshot.threshold} new ${intent.configSnapshot.threshold === 1 ? "signature has" : "signatures have"} been collected.`
+    ? `The network fee was updated, which created a different transaction hash. Approvals from the previous attempt cannot authorize this version. ${intent.signatures.length} of ${intent.configSnapshot.threshold} fresh ${intent.configSnapshot.threshold === 1 ? "approval" : "approvals"} collected.`
     : action.note;
   return `${
     action.canSign
@@ -183,6 +211,7 @@ export const multisigIntentActions = (
     <div class="multisig-intent-action" data-live-group data-live-key="multisig-intent:${escapeHtml(intent.id)}:state" data-live-value="${escapeHtml(`${intent.state}:${intent.signatures.length}`)}">
       ${note ? `<p class="multisig-action-note">${escapeHtml(note)}</p>` : ""}
       ${action.primary}
+      ${action.secondary ?? ""}
     </div>
     ${
       intent.state === "stale"

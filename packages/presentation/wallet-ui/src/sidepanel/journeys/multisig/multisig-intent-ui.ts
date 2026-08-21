@@ -5,7 +5,7 @@ import {
   isArgentMultisigFeeExpiredMessage,
 } from "@mc-wallet/starknet/multisig-invoke";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { parseArgentMultisigSignature } from "./multisig-model";
+import { feeReplacementIntentFor, parseArgentMultisigSignature } from "./multisig-model";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 const intentById = async (deps: MultisigUiDeps, id: string) => {
@@ -25,10 +25,14 @@ const copyText = async (
 };
 
 const openUpdatedIntent = async (deps: MultisigUiDeps, id: string): Promise<boolean> => {
-  const stale = await intentById(deps, id);
+  const loaded = await deps.multisig.loadMultisigs();
+  if (loaded === "error") return false;
+  const stale = loaded.intents.find((intent) => intent.id === id);
   if (stale?.state !== "stale") return false;
-  const replacement = await deps.multisig.prepareIntent(stale.accountId, stale.prepared.calls);
-  deps.openIntent(stale.accountId, replacement.intent.id);
+  const existing = feeReplacementIntentFor(stale, loaded.intents);
+  const replacement =
+    existing ?? (await deps.multisig.prepareIntent(stale.accountId, stale.prepared.calls)).intent;
+  deps.openIntent(stale.accountId, replacement.id);
   return true;
 };
 
@@ -36,12 +40,18 @@ const run = (
   deps: MultisigUiDeps,
   button: HTMLButtonElement | null | undefined,
   action: () => Promise<string>,
+  resetScroll = false,
 ): void => {
+  const doc = button?.ownerDocument ?? deps.app?.ownerDocument;
   buttonBusy(button, true);
   void action().then(
     async (message) => {
       showToast(message, "success", button ?? deps.app);
       await deps.render(await deps.wallet.loadStatus());
+      if (resetScroll && doc) {
+        doc.documentElement.scrollTop = 0;
+        doc.body.scrollTop = 0;
+      }
     },
     (error: unknown) => {
       const details = errorMessage(error, "Argent multisig request failed");
@@ -105,18 +115,20 @@ const bindActions = (deps: MultisigUiDeps): void => {
     button.addEventListener("click", () => {
       const id = button.dataset["msSubmit"];
       if (!id) return;
-      run(deps, button, async () => {
-        try {
-          const result = await deps.multisig.submitIntent(id);
-          return `Transaction submitted to Starknet: ${result.transactionHash ?? result.intent.prepared.transactionHash}`;
-        } catch (error) {
-          const details = errorMessage(error, "Argent multisig request failed");
-          if (!isArgentMultisigFeeExpiredMessage(details) || !(await openUpdatedIntent(deps, id))) {
+      run(
+        deps,
+        button,
+        async () => {
+          try {
+            const result = await deps.multisig.submitIntent(id);
+            return `Transaction submitted to Starknet: ${result.transactionHash ?? result.intent.prepared.transactionHash}`;
+          } catch (error) {
             await deps.render(await deps.wallet.loadStatus());
+            throw error;
           }
-          throw error;
-        }
-      });
+        },
+        true,
+      );
     });
   });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-refresh-intent]").forEach((button) => {
@@ -125,7 +137,7 @@ const bindActions = (deps: MultisigUiDeps): void => {
       if (!id) return;
       run(deps, button, async () => {
         if (!(await openUpdatedIntent(deps, id))) throw new Error("Signing intent unavailable");
-        return "Updated transaction ready to review";
+        return "Fee-updated transaction ready to review";
       });
     });
   });

@@ -45,10 +45,65 @@ describe("Argent multisig fee refresh", () => {
       replacement.id,
     );
 
-    expect(html).toContain("Updated transaction");
-    expect(html).toContain("new transaction hash");
-    expect(html).toContain("1 of 1 new signature");
+    expect(html).toContain("Fee-updated transaction");
+    expect(html).toContain("different transaction hash");
+    expect(html).toContain("cannot authorize this version");
+    expect(html).toContain("1 of 1 fresh approval");
     expect(html).toContain("Delete saved intent");
+  });
+
+  test("keeps one logical row and makes the fully signed attempt retryable", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const stale = { ...fixture.readyIntent, state: "stale" as const };
+    const replacement = {
+      ...fixture.intent,
+      id: `${fixture.intent.id}:replacement`,
+      signatures: fixture.readyIntent.signatures.slice(0, 1),
+    };
+    const duplicate = { ...replacement, id: `${replacement.id}:duplicate`, signatures: [] };
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [stale, replacement, duplicate],
+      false,
+      defaultWalletPreferences(),
+      "multisig-home",
+    );
+    const detail = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [stale, replacement, duplicate],
+      false,
+      defaultWalletPreferences(),
+      "multisig-detail",
+      undefined,
+      stale.id,
+    );
+
+    expect(home.match(/data-ms-open-intent=/g)).toHaveLength(1);
+    expect(home).toContain("Not submitted · ready to retry");
+    expect(detail).toContain("Nothing was sent");
+    expect(detail).toContain("Continue the fee-updated transaction and collect 1 fresh approval");
+    expect(detail).toContain(
+      "retry this version with its existing 1 approval if network fees fall",
+    );
+    expect(detail).toContain("Try unchanged fee again");
+    expect(detail).toContain("Continue fee-updated transaction");
+    expect(detail.indexOf("data-ms-refresh-intent")).toBeLessThan(detail.indexOf("data-ms-submit"));
+    expect(detail).not.toContain(">stale<");
+
+    const settled = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [{ ...stale, state: "submitted" }, replacement],
+      false,
+      defaultWalletPreferences(),
+      "multisig-home",
+    );
+    expect(settled).not.toContain("data-ms-open-intent");
   });
 
   test("re-prepares the exact stale calls and opens only the replacement intent", async () => {
@@ -81,15 +136,59 @@ describe("Argent multisig fee refresh", () => {
       { openIntent: (...args) => opened.push(args) },
     );
 
-    expect(app.textContent).toContain("This transaction was not submitted");
-    expect(app.textContent).toContain("Review updated transaction");
+    expect(app.textContent).toContain("Nothing was sent");
+    expect(app.textContent).toContain("Update network fee");
     app.querySelector<HTMLButtonElement>("[data-ms-refresh-intent]")?.click();
     await flushMultisigUi();
     expect(prepared).toEqual([{ calls: stale.prepared.calls, multisigId: stale.accountId }]);
     expect(opened).toEqual([[stale.accountId, replacement.id]]);
   });
 
-  test("opens an updated transaction automatically after a fee-floor rejection", async () => {
+  test("reuses the strongest existing fee replacement without preparing another", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const stale = { ...fixture.readyIntent, state: "stale" as const };
+    const empty = { ...fixture.intent, id: `${fixture.intent.id}:empty` };
+    const replacement = {
+      ...fixture.intent,
+      id: `${fixture.intent.id}:signed`,
+      signatures: fixture.readyIntent.signatures.slice(0, 1),
+    };
+    const prepared: unknown[] = [];
+    const opened: unknown[] = [];
+    const client = await makeMultisigUiClient({
+      loadMultisigs: async () => ({
+        intents: [stale, empty, replacement],
+        multisigs: [fixture.view],
+      }),
+      async prepareIntent(multisigId, calls) {
+        prepared.push({ calls, multisigId });
+        return { intent: empty };
+      },
+    });
+    const app = mountMultisigUi(
+      multisigDetailFlow(
+        fixture.status,
+        fixture.status.accounts[0] ?? null,
+        fixture.view,
+        [stale, empty, replacement],
+        false,
+        defaultWalletPreferences(),
+        "multisig-detail",
+        undefined,
+        stale.id,
+      ),
+      client,
+      fixture.status,
+      { openIntent: (...args) => opened.push(args) },
+    );
+
+    app.querySelector<HTMLButtonElement>("[data-ms-refresh-intent]")?.click();
+    await flushMultisigUi();
+    expect(prepared).toEqual([]);
+    expect(opened).toEqual([[stale.accountId, replacement.id]]);
+  });
+
+  test("does not create a replacement automatically after a fee-floor rejection", async () => {
     const fixture = await makeArgentMultisigFixture();
     const stale = { ...fixture.readyIntent, state: "stale" as const };
     const replacement = { ...fixture.intent, id: `${fixture.intent.id}:replacement` };
@@ -118,8 +217,8 @@ describe("Argent multisig fee refresh", () => {
 
     app.querySelector<HTMLButtonElement>("[data-ms-submit]")?.click();
     await flushMultisigUi();
-    expect(prepared).toEqual([{ calls: stale.prepared.calls, multisigId: stale.accountId }]);
-    expect(opened).toEqual([[stale.accountId, replacement.id]]);
+    expect(prepared).toEqual([]);
+    expect(opened).toEqual([]);
     expect(document.querySelector(".toast.error .toast-text")?.textContent).toBe(
       "Not submitted — network fees changed.",
     );

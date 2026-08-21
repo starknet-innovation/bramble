@@ -307,7 +307,7 @@ describe("Argent multisig list and exact-intent detail", () => {
       "multisig-home",
     );
     expect(home).toContain('data-view="multisig-deploy"');
-    expect(home).toContain("enter the original signer set, threshold, and salt");
+    expect(home).toContain("Resume setup to verify and deploy this saved address");
     expect(home).not.toContain('data-view="multisig-propose"');
 
     const deployment = multisigDeployFlow(fixture.status, signer, true, null, undeployed);
@@ -398,7 +398,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     );
 
     expect(home).toContain("Needs attention");
-    expect(home).toContain("Not submitted · review updated fees");
+    expect(home).toContain("Not submitted · ready to retry");
     expect(home).toContain(`data-ms-open-intent="${stale.id}"`);
   });
 

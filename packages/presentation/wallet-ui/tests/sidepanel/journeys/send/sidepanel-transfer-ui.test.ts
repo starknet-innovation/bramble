@@ -170,7 +170,12 @@ describe("bindTransfer", () => {
       }),
     );
     const views: string[] = [];
-    bindTransfer({ ...deps, navigate: (view) => views.push(view) });
+    const returned: string[] = [];
+    bindTransfer({
+      ...deps,
+      back: () => returned.push("multisig-deploy"),
+      navigate: (view) => views.push(view),
+    });
     setField(app, "amount", "1");
     submit(app);
     await flush();
@@ -181,7 +186,8 @@ describe("bindTransfer", () => {
     expect(app.querySelector("#send-home")?.textContent).toBe("Deploy Multisignature Account");
     app.querySelector<HTMLButtonElement>("#send-home")?.click();
     app.querySelector<HTMLButtonElement>("#send-close")?.click();
-    expect(views).toEqual(["multisig-deploy", "multisig-deploy"]);
+    expect(returned).toEqual(["multisig-deploy", "multisig-deploy"]);
+    expect(views).toEqual([]);
   });
 
   // Back out of the review and the next Review send must show the review again,

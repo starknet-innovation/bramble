@@ -1,9 +1,7 @@
 /** Presentation-only renderer for a shared account's actionable intent queue. */
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import { tokenGlyph } from "../portfolio/token-row";
 
 type CompactIntentItem = {
@@ -25,39 +23,6 @@ export const intentDeleteButton = (id: string, accountId: string): string =>
     tone: "danger",
     variant: "ghost",
   });
-
-const sameCalls = (
-  left: ArgentMultisigSigningIntent,
-  right: ArgentMultisigSigningIntent,
-): boolean =>
-  left.prepared.calls.length === right.prepared.calls.length &&
-  left.prepared.calls.every((call, index) => {
-    const other = right.prepared.calls[index];
-    return (
-      other !== undefined &&
-      call.entrypoint === other.entrypoint &&
-      sameFelt(call.contractAddress, other.contractAddress) &&
-      call.calldata.length === other.calldata.length &&
-      call.calldata.every((value, valueIndex) => sameFelt(value, other.calldata[valueIndex] ?? ""))
-    );
-  });
-
-/**
- * Identifies a newly fee-reviewed version of a retained failed attempt.
- */
-export const isFeeReplacementIntent = (
-  intent: ArgentMultisigSigningIntent,
-  accountIntents: readonly ArgentMultisigSigningIntent[],
-): boolean =>
-  (intent.state === "collecting" || intent.state === "ready") &&
-  accountIntents.some(
-    (candidate) =>
-      candidate.state === "stale" &&
-      candidate.id !== intent.id &&
-      candidate.accountId === intent.accountId &&
-      sameFelt(candidate.prepared.nonce, intent.prepared.nonce) &&
-      sameCalls(candidate, intent),
-  );
 
 /**
  * Renders pre-reviewed rows without handling wallet or signer data.
