@@ -55,6 +55,14 @@ describe("Argent multisig background lifecycle", () => {
       ok: true,
       transactionHash: intent.prepared.transactionHash,
     });
+    expect(await harness.activity.list()).toEqual([
+      expect.objectContaining({
+        accountId: HARNESS_MULTISIG_ID,
+        hash: intent.prepared.transactionHash,
+        networkId: "SN_MAIN",
+        status: "pending",
+      }),
+    ]);
     expect(harness.submitCount()).toBe(1);
     expect(
       await harness.handler(

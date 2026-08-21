@@ -56,9 +56,9 @@ describe("error toast copy control", () => {
       value: { writeText: async (value: string) => copied.push(value) },
     });
 
-    showToast("Fees changed. Refresh intent.", "error", document, FEE_ERROR);
+    showToast("Not submitted — network fees changed.", "error", document, FEE_ERROR);
     expect(toastEl().querySelector(".toast-text")?.textContent).toBe(
-      "Fees changed. Refresh intent.",
+      "Not submitted — network fees changed.",
     );
     toastEl().querySelector<HTMLButtonElement>(".toast-copy")?.click();
     await Promise.resolve();

@@ -320,6 +320,27 @@ describe("Argent multisig serialized store", () => {
     expect(await registry.listOperations()).toEqual([operation]);
   });
 
+  test("deletes one saved intent and its replay claims without removing the account", async () => {
+    const { store } = memoryKv();
+    const registry = createMultisigStore({ store });
+    const intent = await preparedIntent();
+    const claim: ArgentMultisigOperationRecord = {
+      accountId: ACCOUNT_ID,
+      id: argentMultisigOperationId("submit", ACCOUNT_ID, intent.prepared.transactionHash) ?? "",
+      kind: "submit",
+      target: intent.prepared.transactionHash,
+    };
+    await registry.upsertMultisig(record);
+    await registry.upsertIntent(intent);
+    await registry.claimOperation(claim);
+
+    expect(await registry.removeIntent(intent.id)).toBe("removed");
+    expect(await registry.getIntent(intent.id)).toBeNull();
+    expect(await registry.listOperations()).toEqual([]);
+    expect(await registry.listMultisigs()).toEqual([record]);
+    expect(await registry.removeIntent(intent.id)).toBe("missing");
+  });
+
   test("filters old OZ and malformed records and cascades account removal", async () => {
     const { data, store } = memoryKv();
     const intent = await preparedIntent();

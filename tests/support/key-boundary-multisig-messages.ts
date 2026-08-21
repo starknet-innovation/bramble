@@ -69,6 +69,11 @@ export const MULTISIG_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { intentId: "", type: "wallet.submitArgentMultisigIntent" },
     sender: extensionSender,
   },
+  {
+    live: async (ids) => ({ intentId: ids.multisigSignIntentId }),
+    message: { intentId: "", type: "wallet.removeArgentMultisigIntent" },
+    sender: extensionSender,
+  },
   { message: { type: "wallet.argentMultisigClassStatus" }, sender: extensionSender },
   {
     message: {

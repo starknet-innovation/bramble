@@ -216,6 +216,13 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "remove Argent multisig failed");
       }
     },
+    async removeIntent(intentId: string): Promise<void> {
+      invalidateRefreshes();
+      const response = await sendMessage({ intentId, type: "wallet.removeArgentMultisigIntent" });
+      if (!isOkResponse(response)) {
+        throw responseError(response, "remove Argent multisig intent failed");
+      }
+    },
     async reviewDeployment(
       input: ArgentMultisigDeploymentSetup,
     ): Promise<ArgentMultisigDeploymentReview> {

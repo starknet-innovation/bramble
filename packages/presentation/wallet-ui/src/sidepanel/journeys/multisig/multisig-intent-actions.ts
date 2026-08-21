@@ -44,11 +44,11 @@ const intentAction = (
   if (intent.state === "stale") {
     return {
       canSign: false,
-      note: "Network fees or account state changed. Refreshing preserves the exact calls, but existing signatures cannot carry over.",
+      note: "This transaction was not submitted because its signed fee limit expired. The transfer details are preserved, but updated fees require new signatures.",
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-ms-refresh-intent": intent.id },
-        label: "Refresh network fees",
+        label: "Review updated transaction",
       }),
     };
   }
@@ -165,8 +165,12 @@ export const multisigIntentActions = (
   availableSigners: readonly SignerOption[],
   hasLocalSigner: boolean,
   hasFreshAuthority: boolean,
+  isReplacement = false,
 ): string => {
   const action = intentAction(intent, availableSigners, hasLocalSigner, hasFreshAuthority);
+  const note = isReplacement
+    ? `Fees were updated after the previous attempt was rejected. This is a new transaction hash, so ${intent.signatures.length} of ${intent.configSnapshot.threshold} new ${intent.configSnapshot.threshold === 1 ? "signature has" : "signatures have"} been collected.`
+    : action.note;
   return `${
     action.canSign
       ? selectField({
@@ -177,14 +181,18 @@ export const multisigIntentActions = (
       : ""
   }
     <div class="multisig-intent-action" data-live-group data-live-key="multisig-intent:${escapeHtml(intent.id)}:state" data-live-value="${escapeHtml(`${intent.state}:${intent.signatures.length}`)}">
-      ${action.note ? `<p class="multisig-action-note">${escapeHtml(action.note)}</p>` : ""}
+      ${note ? `<p class="multisig-action-note">${escapeHtml(note)}</p>` : ""}
       ${action.primary}
     </div>
-    ${collaborationTools(
-      intent,
-      intent.state === "collecting" && hasFreshAuthority,
-      action.packageIsPrimary,
-    )}`;
+    ${
+      intent.state === "stale"
+        ? ""
+        : collaborationTools(
+            intent,
+            intent.state === "collecting" && hasFreshAuthority,
+            action.packageIsPrimary,
+          )
+    }`;
 };
 
 /**
@@ -214,7 +222,8 @@ export const multisigIntentOutcome = (intent: ArgentMultisigSigningIntent): stri
       </div>
     </div>
     <div class="send-actions">
-      ${button({ attributes: { "data-view": "multisig-home" }, icon: "home", label: "Back to multisig" })}
+      ${button({ attributes: { "data-view": "activity" }, icon: "activity", label: "View in Activity" })}
+      ${button({ attributes: { "data-view": "multisig-home" }, label: "Back to multisig", variant: "secondary" })}
     </div>
   </section>`;
 };

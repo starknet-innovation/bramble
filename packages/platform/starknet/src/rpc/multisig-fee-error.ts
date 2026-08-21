@@ -6,7 +6,7 @@ import { RpcError } from "starknet";
 /**
  * Stable message shown when a frozen intent can no longer enter the mempool.
  */
-export const ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE = "Fees changed. Refresh intent.";
+export const ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE = "Not submitted — network fees changed.";
 
 /**
  * Determinate rejection: the node did not accept the underpriced transaction.

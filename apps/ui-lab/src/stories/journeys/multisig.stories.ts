@@ -274,6 +274,18 @@ export const HomeIntents: LabStory = {
     await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
   },
 };
+export const HomeStaleIntent: LabStory = {
+  args: { checkpointId: "home-stale-intent", scenarioId: "multisig" },
+  name: "Home · failed attempt",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body).toHaveTextContent("Needs attention");
+    await expect(body?.querySelector(".multisig-intent-list")).toHaveTextContent("Not submitted");
+    await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
+  },
+};
 export const IntentCollecting = checkpointStory(
   "Collect signatures",
   "multisig",
@@ -327,6 +339,9 @@ export const IntentSubmitted: LabStory = {
     await expect(body?.querySelector(".multisig-intent-success")).toHaveTextContent(
       "Transaction submitted",
     );
+    await expect(body?.querySelector('[data-view="activity"]')).toHaveTextContent(
+      "View in Activity",
+    );
     await expect(body?.querySelector('[data-view="multisig-home"]')).toHaveTextContent(
       "Back to multisig",
     );
@@ -368,9 +383,27 @@ export const IntentStale: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelector("[data-ms-intent]")).toHaveTextContent(/Signatures\s*2 of 2/);
     await expect(body?.querySelector("[data-ms-refresh-intent]")).toHaveTextContent(
-      "Refresh network fees",
+      "Review updated transaction",
     );
+    await expect(body?.querySelector(".multisig-collaboration")).not.toBeInTheDocument();
     await expect(body?.querySelector("[data-ms-submit]")).not.toBeInTheDocument();
+  },
+};
+export const IntentFeeReplacement: LabStory = {
+  args: { checkpointId: "intent-fee-replacement", scenarioId: "multisig" },
+  name: "Updated fees · new signatures",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector(".decision-label")).toHaveTextContent("Updated transaction");
+    await expect(body?.querySelector(".multisig-action-note")).toHaveTextContent(
+      "1 of 2 new signatures",
+    );
+    await expect(body?.querySelector(".decision-technical")).toHaveAttribute("open");
+    await expect(body?.querySelector("[data-ms-delete-intent]")).toHaveTextContent(
+      "Delete saved intent",
+    );
   },
 };
 export const AuthorityUnavailable = checkpointStory(

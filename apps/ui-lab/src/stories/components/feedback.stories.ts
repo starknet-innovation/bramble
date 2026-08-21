@@ -80,7 +80,7 @@ export const Toasts: CatalogStory = {
         "Errors stay to one scannable line while the copy action retains the complete diagnostic.",
         `<div class="catalog-stack catalog-card-limit">
           ${toast("Transaction submitted. Tracking confirmation now.", "success")}
-          ${toast("Fees changed. Refresh intent.", "error")}
+          ${toast("Not submitted — network fees changed.", "error")}
         </div>`,
       ),
       args.theme,

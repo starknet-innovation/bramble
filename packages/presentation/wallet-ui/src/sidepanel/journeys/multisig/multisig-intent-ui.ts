@@ -24,6 +24,14 @@ const copyText = async (
   showToast(message, "success", button);
 };
 
+const openUpdatedIntent = async (deps: MultisigUiDeps, id: string): Promise<boolean> => {
+  const stale = await intentById(deps, id);
+  if (stale?.state !== "stale") return false;
+  const replacement = await deps.multisig.prepareIntent(stale.accountId, stale.prepared.calls);
+  deps.openIntent(stale.accountId, replacement.intent.id);
+  return true;
+};
+
 const run = (
   deps: MultisigUiDeps,
   button: HTMLButtonElement | null | undefined,
@@ -100,9 +108,12 @@ const bindActions = (deps: MultisigUiDeps): void => {
       run(deps, button, async () => {
         try {
           const result = await deps.multisig.submitIntent(id);
-          return `Argent multisig transaction submitted: ${result.transactionHash ?? result.intent.prepared.transactionHash}`;
+          return `Transaction submitted to Starknet: ${result.transactionHash ?? result.intent.prepared.transactionHash}`;
         } catch (error) {
-          await deps.render(await deps.wallet.loadStatus());
+          const details = errorMessage(error, "Argent multisig request failed");
+          if (!isArgentMultisigFeeExpiredMessage(details) || !(await openUpdatedIntent(deps, id))) {
+            await deps.render(await deps.wallet.loadStatus());
+          }
           throw error;
         }
       });
@@ -113,11 +124,8 @@ const bindActions = (deps: MultisigUiDeps): void => {
       const id = button.dataset["msRefreshIntent"];
       if (!id) return;
       run(deps, button, async () => {
-        const intent = await intentById(deps, id);
-        if (!intent) throw new Error("Signing intent unavailable");
-        const result = await deps.multisig.prepareIntent(intent.accountId, intent.prepared.calls);
-        deps.openIntent(intent.accountId, result.intent.id);
-        return "Network fees refreshed. Review and collect signatures for the new intent.";
+        if (!(await openUpdatedIntent(deps, id))) throw new Error("Signing intent unavailable");
+        return "Updated transaction ready to review";
       });
     });
   });
@@ -143,6 +151,29 @@ const bindSignatureImports = (deps: MultisigUiDeps): void => {
   });
 };
 
+const bindDeletes = (deps: MultisigUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-delete-intent]").forEach((button) => {
+    const control = button;
+    control.addEventListener("click", () => {
+      const id = control.dataset["msDeleteIntent"];
+      const accountId = control.dataset["msIntentAccount"];
+      if (!id || !accountId) return;
+      if (control.dataset["confirm"] !== "true") {
+        control.dataset["confirm"] = "true";
+        control.textContent = "Confirm delete intent";
+        control.setAttribute("aria-label", "Tap again to delete saved intent");
+        control.setAttribute("title", "Tap again to delete saved intent");
+        return;
+      }
+      run(deps, control, async () => {
+        await deps.multisig.removeIntent(id);
+        deps.openDetail(accountId, "multisig-home");
+        return "Saved intent deleted";
+      });
+    });
+  });
+};
+
 /**
  * Binds focused intent navigation, handoff, signing, refresh, and submission.
  */
@@ -157,4 +188,5 @@ export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
   bindCopies(deps);
   bindActions(deps);
   bindSignatureImports(deps);
+  bindDeletes(deps);
 };

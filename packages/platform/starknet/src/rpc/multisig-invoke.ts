@@ -71,13 +71,14 @@ export {
   type SubmitPreparedArgentMultisigInvokeV3Input,
 } from "./multisig-invoke-types";
 
-// Multisig handoffs can take hours. Use starknet.js's estimate parser to apply
-// lane-specific price headroom before the bounds are normalized, displayed,
-// hashed, and signed. Amounts and L2 retain the library's 50% default; the
-// volatile L1 price lanes reproduce 3x / 7.5x raw-price ceilings.
+// Multisig handoffs can take hours or days. Use starknet.js's estimate parser
+// to freeze long-lived L1 price ceilings before the bounds are displayed,
+// hashed, and signed. Starknet charges the block's actual price, not this
+// ceiling; amounts and L2 retain the library's 50% default while the two L1
+// price lanes tolerate a 64x move without invalidating collected signatures.
 const ARGENT_MULTISIG_RESOURCE_BOUNDS_OVERHEAD = {
-  l1_data_gas: { max_amount: 50, max_price_per_unit: 650 },
-  l1_gas: { max_amount: 50, max_price_per_unit: 200 },
+  l1_data_gas: { max_amount: 50, max_price_per_unit: 6_300 },
+  l1_gas: { max_amount: 50, max_price_per_unit: 6_300 },
   l2_gas: { max_amount: 50, max_price_per_unit: 50 },
 } satisfies ResourceBoundsOverhead;
 

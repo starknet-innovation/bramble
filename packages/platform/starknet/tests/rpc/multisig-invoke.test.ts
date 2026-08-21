@@ -254,7 +254,7 @@ describe("prepared Argent multisig V3 invoke", () => {
       () => provider,
     );
     await expect(submission).rejects.toBeInstanceOf(ArgentMultisigFeeExpiredError);
-    await expect(submission).rejects.toThrow("Refresh intent");
+    await expect(submission).rejects.toThrow("Not submitted — network fees changed.");
   });
 
   test("rechecks live authorization at the final provider write boundary", async () => {

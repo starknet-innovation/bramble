@@ -15,6 +15,7 @@ import {
   argentCollectingIntent,
   argentMultisig,
   argentReadyIntent,
+  argentReplacementIntent,
   argentSoftwareAccount,
   argentStaleIntent,
   argentSubmittedIntent,
@@ -82,6 +83,9 @@ const bindFixtureMultisig = (
           ok: true,
           transactionHash: "0x456",
         };
+      }
+      if (isRecord(message) && message["type"] === "wallet.removeArgentMultisigIntent") {
+        return { ok: true };
       }
       if (
         isRecord(message) &&
@@ -178,6 +182,14 @@ const revealCollaboration = async (context: FrameContext): Promise<void> => {
   const collaboration = context.app.querySelector<HTMLDetailsElement>(".multisig-collaboration");
   if (!collaboration) throw new Error("Missing production co-signer handoff");
   collaboration.open = true;
+  await nextTurn();
+};
+
+const revealIntentTechnical = async (context: FrameContext): Promise<void> => {
+  await revealIntentPanel(context);
+  const technical = context.app.querySelector<HTMLDetailsElement>(".decision-technical");
+  if (!technical) throw new Error("Missing production intent inspection");
+  technical.open = true;
   await nextTurn();
 };
 
@@ -481,6 +493,14 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     true,
   ),
   checkpoint(
+    "home-stale-intent",
+    "Failed attempt on account home",
+    "A fee-rejected attempt remains visible in the compact queue without crowding the portfolio.",
+    { multisigIntents: [argentStaleIntent], view: "multisig-home" },
+    { openIntents: 0, state: "not-submitted", view: "condensed" },
+    true,
+  ),
+  checkpoint(
     "intent-collecting",
     "Collect signatures",
     "Human outcome and risk lead; fee ceiling, threshold progress, and exact identity remain verifiable.",
@@ -521,7 +541,7 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   checkpoint(
     "intent-submitted",
     "Transaction submitted",
-    "A completed multisig submission becomes a familiar receipt with one clear return action, not a frozen review card.",
+    "A completed multisig submission becomes a familiar receipt with direct Activity and shared-account destinations.",
     { multisigIntents: [argentSubmittedIntent], view: "multisig-detail" },
     { outcome: "submitted", state: "receipt" },
     true,
@@ -553,11 +573,26 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   checkpoint(
     "intent-stale",
     "Stale transaction",
-    "A stale frozen intent remains inspectable but cannot masquerade as executable work.",
+    "A rejected fee attempt stays inspectable, says it was not submitted, and offers one recovery action.",
     { multisigIntents: [argentStaleIntent], view: "multisig-detail" },
     { state: "stale" },
     true,
   ),
+  {
+    ...checkpoint(
+      "intent-fee-replacement",
+      "Updated transaction",
+      "A fee-rejected attempt stays retained while its newly reviewed hash clearly restarts signature collection.",
+      {
+        multisigIntents: [argentStaleIntent, argentReplacementIntent],
+        selectedMultisigIntentId: argentReplacementIntent.id,
+        view: "multisig-detail",
+      },
+      { lifecycle: "replacement", signatures: 1, threshold: 2 },
+      true,
+    ),
+    prepare: revealIntentTechnical,
+  },
   checkpoint(
     "authority-unavailable",
     "Authority unavailable",

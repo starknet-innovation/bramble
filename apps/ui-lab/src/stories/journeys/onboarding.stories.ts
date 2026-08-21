@@ -103,7 +103,7 @@ export const UnlockFailed: LabStory = {
     ).toHaveTextContent("Vault passphrase is incorrect");
     await expect(
       frame?.contentDocument?.querySelector("#toast-stack .toast.error .toast-copy"),
-    ).toHaveAccessibleName("Copy error message");
+    ).toHaveAccessibleName("Copy error details");
     await expect(canvasElement.ownerDocument.querySelector("#toast-stack")).not.toBeInTheDocument();
   },
 };

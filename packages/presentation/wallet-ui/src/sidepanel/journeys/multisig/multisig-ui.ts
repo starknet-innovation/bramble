@@ -326,7 +326,9 @@ const bindImport = (deps: MultisigUiDeps): void => {
     run(deps, button, "multisig-track-result", async () => {
       const result = await deps.multisig.importIntent(intentPackage);
       deps.openIntent(result.intent.accountId, result.intent.id);
-      return "Intent verified and ready to review";
+      return result.intent.state === "stale"
+        ? "Signed attempt restored — it was not submitted"
+        : "Intent verified and ready to review";
     });
   });
 };

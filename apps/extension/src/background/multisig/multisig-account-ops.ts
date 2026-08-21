@@ -7,7 +7,21 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
 import { contextFor } from "./multisig-context";
 import type { MultisigOpsDeps } from "./multisig-deps";
-import { readMultisigBalancesInput, readRemoveMultisigInput } from "./multisig-inputs";
+import {
+  readMultisigBalancesInput,
+  readRemoveIntentInput,
+  readRemoveMultisigInput,
+} from "./multisig-inputs";
+
+const removeIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
+  const input = readRemoveIntentInput(message);
+  if (!input) return { error: "invalid Argent multisig intent removal request" };
+  const authorized = captureSessionAuthorization(deps.session);
+  const result = await deps.multisigStore.removeIntent(input.intentId, authorized.isCurrent);
+  return result === "removed"
+    ? { ok: true }
+    : { error: result === "missing" ? "Argent multisig intent not found" : "wallet locked" };
+};
 
 const removeMultisig = async (
   deps: MultisigOpsDeps,
@@ -122,6 +136,7 @@ const multisigBalances = async (
 type AccountHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 const HANDLERS: Readonly<Record<string, AccountHandler>> = {
   "wallet.multisigBalances": multisigBalances,
+  "wallet.removeArgentMultisigIntent": removeIntent,
   "wallet.removeMultisig": removeMultisig,
 };
 

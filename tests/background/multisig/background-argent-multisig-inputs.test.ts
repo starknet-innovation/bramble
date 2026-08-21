@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import {
   readAddMultisigInput,
   readPrepareIntentInput,
+  readRemoveIntentInput,
   readRemoveMultisigInput,
   readResolveMultisigSignerInput,
 } from "../../../apps/extension/src/background/multisig/multisig-inputs";
@@ -55,6 +56,13 @@ describe("Argent multisig message inputs", () => {
         type: "wallet.removeMultisig",
       }),
     ).toBeNull();
+  });
+
+  test("accepts only one exact bounded intent deletion", () => {
+    const input = { intentId: "SN_MAIN:0x123:0x456", type: "wallet.removeArgentMultisigIntent" };
+    expect(readRemoveIntentInput(input)).toEqual({ intentId: input.intentId });
+    expect(readRemoveIntentInput({ ...input, extra: true })).toBeNull();
+    expect(readRemoveIntentInput({ ...input, intentId: "" })).toBeNull();
   });
 
   test("accepts only an exact participant address lookup", () => {

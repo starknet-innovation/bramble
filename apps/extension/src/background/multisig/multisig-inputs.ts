@@ -15,6 +15,7 @@ import {
   type ArgentMultisigSigningIntent,
   isArgentMultisigSigningIntent,
 } from "@mc-wallet/multisig/repository";
+import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
@@ -278,6 +279,40 @@ export const locallyDerivedImportedIntent = (
 };
 
 /**
+ * Orders verified signature fragments in Argent's canonical signer order.
+ */
+export const sortedArgentMultisigSignatures = (
+  values: readonly StarkSignature[],
+): readonly StarkSignature[] =>
+  [...values].sort((left, right) =>
+    BigInt(argentSignerGuid(left.publicKey)) < BigInt(argentSignerGuid(right.publicKey)) ? -1 : 1,
+  );
+
+/**
+ * Merges a re-import of the same frozen hash without regressing local state.
+ * Terminal local outcomes remain authoritative; open intents gain only new,
+ * already-validated signer fragments.
+ */
+export const mergeImportedArgentMultisigIntent = (
+  current: ArgentMultisigSigningIntent,
+  incoming: ArgentMultisigSigningIntent,
+): ArgentMultisigSigningIntent => {
+  if (current.state !== "collecting" && current.state !== "ready") return current;
+  const signatures = [...current.signatures];
+  for (const signature of incoming.signatures) {
+    if (!signatures.some((stored) => stored.publicKey === signature.publicKey)) {
+      signatures.push(signature);
+    }
+  }
+  const sorted = sortedArgentMultisigSignatures(signatures);
+  return {
+    ...incoming,
+    signatures: sorted,
+    state: sorted.length === incoming.configSnapshot.threshold ? "ready" : "collecting",
+  };
+};
+
+/**
  * Parses a full frozen intent package without normalizing any signed field.
  */
 export const readImportIntentInput = (
@@ -307,6 +342,19 @@ export const readSubmitIntentInput = (message: unknown): { readonly intentId: st
   message["type"] === "wallet.submitArgentMultisigIntent" &&
   typeof message["intentId"] === "string" &&
   message["intentId"].length > 0
+    ? { intentId: message["intentId"] }
+    : null;
+
+/**
+ * Parses deletion of one exact locally stored intent.
+ */
+export const readRemoveIntentInput = (message: unknown): { readonly intentId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["intentId", "type"]) &&
+  message["type"] === "wallet.removeArgentMultisigIntent" &&
+  typeof message["intentId"] === "string" &&
+  message["intentId"].length > 0 &&
+  message["intentId"].length <= 256
     ? { intentId: message["intentId"] }
     : null;
 

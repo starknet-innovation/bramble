@@ -94,6 +94,7 @@ const MULTISIG_ACTIVE_STATE_MESSAGES = new Set([
   "wallet.importArgentMultisigIntent",
   "wallet.importArgentMultisigSignature",
   "wallet.prepareArgentMultisigIntent",
+  "wallet.removeArgentMultisigIntent",
   "wallet.removeMultisig",
   "wallet.reviewArgentMultisigDeployment",
   "wallet.signArgentMultisigIntent",

@@ -36,8 +36,12 @@ import {
   reviewPanel,
   riskFlagMessages,
 } from "../../shared/review-render";
-import { tokenGlyph } from "../portfolio/token-row";
 import { multisigIntentActions, multisigIntentOutcome } from "./multisig-intent-actions";
+import {
+  compactIntentListView,
+  intentDeleteButton,
+  isFeeReplacementIntent,
+} from "./multisig-intent-list";
 import { multisigDisplayName } from "./multisig-model";
 import {
   EMPTY_MULTISIG_PORTFOLIO,
@@ -244,6 +248,7 @@ const intentCard = (
   view: ArgentMultisigView,
   status: WalletStatus,
   preferences: WalletPreferences | null,
+  isReplacement = false,
 ): string => {
   const outcome = multisigIntentOutcome(intent);
   if (outcome) return outcome;
@@ -268,7 +273,7 @@ const intentCard = (
   return `<article class="allowance-row multisig-intent" data-ms-intent="${escapeHtml(intent.id)}">
     <header class="decision-head">
       <span class="decision-seal">${icon("users")}</span>
-      <span><p class="decision-label">Reviewed intent</p><h2>${escapeHtml(intent.summary)}</h2></span>
+      <span><p class="decision-label">${isReplacement ? "Updated transaction" : "Reviewed intent"}</p><h2>${escapeHtml(intent.summary)}</h2></span>
       ${pill(intent.state)}
     </header>
     ${reviewCallsList(
@@ -339,9 +344,10 @@ const intentCard = (
         )}
         ${configReview && view.record.currentConfig ? configReviewView(configReview, view.record.currentConfig) : ""}
         <ol class="allowance-list">${exactCalls(intent)}</ol>
+        ${intentDeleteButton(intent.id, intent.accountId)}
       </div>
     </details>
-    ${multisigIntentActions(intent, options, allOptions.length > 0, hasFreshAuthority)}
+    ${multisigIntentActions(intent, options, allOptions.length > 0, hasFreshAuthority, isReplacement)}
   </article>`;
 };
 
@@ -353,11 +359,10 @@ const intentList = (
   preferences: WalletPreferences | null,
   selectedIntentId: string | null,
 ): string => {
-  const scoped = intents.filter(
-    (intent) =>
-      intent.accountId === record.id && (!selectedIntentId || intent.id === selectedIntentId),
-  );
-  if (selectedIntentId && scoped[0]) return intentCard(scoped[0], view, status, preferences);
+  const all = intents.filter((intent) => intent.accountId === record.id);
+  const scoped = all.filter((intent) => !selectedIntentId || intent.id === selectedIntentId);
+  if (selectedIntentId && scoped[0])
+    return intentCard(scoped[0], view, status, preferences, isFeeReplacementIntent(scoped[0], all));
   if (selectedIntentId) return emptyState("This signing intent is no longer available.");
   const submitted = scoped.find((intent) => intent.state === "submitted");
   if (submitted) return intentCard(submitted, view, status, preferences);
@@ -369,7 +374,7 @@ const intentList = (
     return emptyState("No intents are awaiting verification or signature.");
   }
   return `<div class="multisig-intent-stack">
-    ${awaiting.length === 0 ? "" : `<section><p class="eyebrow">Awaiting verification &amp; signature</p><div class="allowance-list">${awaiting.map((intent) => intentCard(intent, view, status, preferences)).join("")}</div></section>`}
+    ${awaiting.length === 0 ? "" : `<section><p class="eyebrow">Awaiting verification &amp; signature</p><div class="allowance-list">${awaiting.map((intent) => intentCard(intent, view, status, preferences, isFeeReplacementIntent(intent, all))).join("")}</div></section>`}
     ${stale.length === 0 ? "" : `<section><p class="eyebrow">Needs attention</p><div class="allowance-list">${stale.map((intent) => intentCard(intent, view, status, preferences)).join("")}</div></section>`}
   </div><p id="multisig-intent-result" role="status"></p>`;
 };
@@ -381,42 +386,33 @@ const compactIntentList = (
 ): string => {
   const scoped = intents.filter(
     (intent) =>
-      intent.accountId === record.id && (intent.state === "collecting" || intent.state === "ready"),
+      intent.accountId === record.id &&
+      (intent.state === "collecting" || intent.state === "ready" || intent.state === "stale"),
   );
-  const list =
-    scoped.length === 0
-      ? emptyState(
-          "No intents are awaiting verification or signature. Import one to review it here.",
-        )
-      : `<p class="eyebrow">Awaiting verification &amp; signature</p><ul class="menu-list multisig-intent-list">${scoped
-          .map((intent) => {
-            const assets = intentReviewAssets(intent, record, preferences);
-            const assetGlyphs =
-              assets.length === 0
-                ? ""
-                : `<span class="multisig-intent-assets" aria-hidden="true">${assets.map((asset) => tokenGlyph(asset.address, asset.symbol)).join("")}</span>`;
-            return `<li class="multisig-intent-row${assets.length === 0 ? "" : " has-assets"}">${menuRow(
-              {
-                attributes: {
-                  "data-ms-intent-account": record.id,
-                  "data-ms-open-intent": intent.id,
-                },
-                icon: "users",
-                label: intent.summary,
-                supportingText: `${intent.state === "ready" ? "Ready to submit" : "Awaiting signatures"} · ${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
-              },
-            )}${assetGlyphs}</li>`;
-          })
-          .join("")}</ul>`;
-  return `${list}${button({
-    attributes: { "data-view": "multisig-track" },
-    className: "tab-more",
-    icon: "chevronRight",
-    iconPosition: "after",
-    label: "Import intent",
-    size: "small",
-    variant: "ghost",
-  })}`;
+  const heading = scoped.every((intent) => intent.state === "stale")
+    ? "Needs attention"
+    : scoped.some((intent) => intent.state === "stale")
+      ? "Intents requiring action"
+      : "Awaiting verification &amp; signature";
+  return compactIntentListView(
+    heading,
+    scoped.map((intent) => ({
+      accountId: record.id,
+      assets: intentReviewAssets(intent, record, preferences),
+      id: intent.id,
+      label: intent.summary,
+      supportingText: `${
+        isFeeReplacementIntent(intent, scoped)
+          ? "Updated fees · new signatures"
+          : intent.state === "ready"
+            ? "Ready to submit"
+            : intent.state === "stale"
+              ? "Not submitted · review updated fees"
+              : "Awaiting signatures"
+      } · ${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
+    })),
+    "No intents are awaiting verification or signature. Import one to review it here.",
+  );
 };
 
 /**

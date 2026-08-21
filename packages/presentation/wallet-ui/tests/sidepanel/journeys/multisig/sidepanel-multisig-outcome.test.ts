@@ -34,6 +34,8 @@ test("replaces a submitted intent review with the standard success receipt", asy
   expect(html).not.toContain('class="allowance-list"');
   expect(html).toContain('class="send-success-check"');
   expect(html).toContain("Transaction submitted");
+  expect(html).toContain('data-view="activity"');
+  expect(html).toContain("View in Activity");
   expect(html).toContain('data-view="multisig-home"');
   expect(html).not.toContain('data-ms-submit="');
   expect(html).not.toContain("Co-signer handoff");

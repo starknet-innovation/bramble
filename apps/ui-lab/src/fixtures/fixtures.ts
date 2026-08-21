@@ -6,6 +6,7 @@ import {
   argentSignerGuid,
   normalizeArgentMultisigConfig,
 } from "@mc-wallet/starknet/account-contracts";
+import { argentMultisigTransactionHash } from "@mc-wallet/starknet/multisig-invoke";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
@@ -314,4 +315,22 @@ export const argentSubmittedIntent: ArgentMultisigSigningIntent = {
 export const argentStaleIntent: ArgentMultisigSigningIntent = {
   ...argentReadyIntent,
   state: "stale",
+};
+
+const argentReplacementFields = {
+  ...argentCollectingIntent.prepared,
+  resourceBounds: {
+    ...argentCollectingIntent.prepared.resourceBounds,
+    l1Gas: { maxAmount: "0x2", maxPricePerUnit: "0x110d93016c0000" },
+  },
+};
+const argentReplacementPrepared = {
+  ...argentReplacementFields,
+  transactionHash: argentMultisigTransactionHash(argentReplacementFields),
+};
+export const argentReplacementIntent: ArgentMultisigSigningIntent = {
+  ...argentCollectingIntent,
+  id: `${argentCollectingIntent.accountId}:${argentReplacementPrepared.transactionHash}`,
+  prepared: argentReplacementPrepared,
+  signatures: argentReadyIntent.signatures.slice(0, 1),
 };

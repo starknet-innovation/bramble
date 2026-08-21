@@ -60,6 +60,7 @@ export const makeMultisigUiClient = async (
     loadMultisigs: async () => ({ intents: [fixture.intent], multisigs: [fixture.view] }),
     prepareIntent: async () => ({ intent: fixture.intent }),
     refreshMultisig: async () => ({ intents: [fixture.intent], multisig: fixture.view }),
+    removeIntent: async () => undefined,
     removeMultisig: async () => undefined,
     resolveSigner: async (address) => ({
       accountContractType: "openzeppelin",

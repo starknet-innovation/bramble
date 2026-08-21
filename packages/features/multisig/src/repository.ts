@@ -1,7 +1,6 @@
 /**
- * Serialized local registry for stable Argent accounts, frozen V3 intents, and
- * durable operation claims. Invalid legacy OpenZeppelin records are ignored;
- * they can never become executable Argent intents.
+ * Serialized local registry for stable Argent accounts, frozen V3 intents, and durable operation
+ * claims. Invalid legacy OpenZeppelin records are ignored and can never become executable intents.
  */
 import { isRecord } from "@mc-wallet/core/json";
 import type { KeyValueStore } from "@mc-wallet/store/kv";
@@ -83,9 +82,12 @@ export type MultisigStore = {
   readonly listIntents: () => Promise<readonly ArgentMultisigSigningIntent[]>;
   readonly listMultisigs: () => Promise<readonly ArgentMultisigRecord[]>;
   readonly listOperations: () => Promise<readonly ArgentMultisigOperationRecord[]>;
-  /** Clears restart-abandoned signer claims before this worker accepts messages. */
   readonly recoverSigningClaims: () => Promise<number>;
   readonly releaseOperation: (id: string) => Promise<void>;
+  readonly removeIntent: (
+    id: string,
+    isAuthorized?: () => boolean,
+  ) => Promise<"missing" | "removed" | "unauthorized">;
   readonly removeMultisig: (
     id: string,
     isAuthorized?: () => boolean,
@@ -375,6 +377,23 @@ const createStoreMethods = (
       ...shape,
       operations: shape.operations.filter((record) => record.id !== id),
     });
+  },
+  async removeIntent(id, isAuthorized = () => true) {
+    if (!isAuthorized()) return "unauthorized";
+    const previous = await read();
+    const intent = previous.intents.find((record) => record.id === id);
+    if (!intent) return "missing";
+    if (!isAuthorized()) return "unauthorized";
+    await write({
+      ...previous,
+      intents: previous.intents.filter((record) => record.id !== id),
+      operations: previous.operations.filter(
+        (record) => record.target !== intent.prepared.transactionHash,
+      ),
+    });
+    if (isAuthorized()) return "removed";
+    await write(previous);
+    return "unauthorized";
   },
   async removeMultisig(id, isAuthorized = () => true) {
     if (!isAuthorized()) return "unauthorized";

@@ -28,12 +28,14 @@ import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import {
   argentMultisigIntentPackage,
   locallyDerivedImportedIntent,
+  mergeImportedArgentMultisigIntent,
   normalizedArgentMultisigCalls,
   readImportIntentInput,
   readImportIntentSignatureInput,
   readPrepareIntentInput,
   readSignIntentInput,
   readSubmitIntentInput,
+  sortedArgentMultisigSignatures,
 } from "./multisig-inputs";
 import { currentArgentIntentContext } from "./multisig-intent-context";
 import { recoverSubmittedArgentIntent } from "./multisig-operation-recovery";
@@ -85,13 +87,8 @@ const importedIntentReview = async (deps: MultisigOpsDeps, intent: ArgentMultisi
   const existing = await deps.multisigStore.getIntent(intent.id);
   return existing && !samePreparedArgentMultisigInvokeV3(existing.prepared, intent.prepared)
     ? { error: "conflicting Argent multisig intent id" }
-    : { resolved, review };
+    : { existing, resolved, review };
 };
-
-const sortedSignatures = (values: readonly StarkSignature[]): readonly StarkSignature[] =>
-  [...values].sort((left, right) =>
-    BigInt(argentSignerGuid(left.publicKey)) < BigInt(argentSignerGuid(right.publicKey)) ? -1 : 1,
-  );
 const persistSignature = async (
   deps: MultisigOpsDeps,
   intent: ArgentMultisigSigningIntent,
@@ -115,7 +112,7 @@ const persistSignature = async (
   if (intent.signatures.length >= intent.configSnapshot.threshold) {
     return { error: "Argent multisig intent already has its threshold signatures" };
   }
-  const signatures = sortedSignatures([...intent.signatures, signature]);
+  const signatures = sortedArgentMultisigSignatures([...intent.signatures, signature]);
   const next: ArgentMultisigSigningIntent = {
     ...intent,
     signatures,
@@ -183,7 +180,10 @@ const importIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
   if ("error" in reviewed || !authorized.isCurrent()) {
     return "error" in reviewed ? reviewed : { error: "wallet locked" };
   }
-  const intent = { ...remoteIntent, summary: reviewed.review.summary };
+  const incoming = { ...remoteIntent, summary: reviewed.review.summary };
+  const intent = reviewed.existing
+    ? mergeImportedArgentMultisigIntent(reviewed.existing, incoming)
+    : incoming;
   if (!authorized.isCurrent()) {
     return { error: "wallet locked" };
   }
