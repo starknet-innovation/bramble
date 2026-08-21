@@ -326,16 +326,19 @@ export const walletMenuRow = (
   });
 
 /**
- * Wraps dock screen content in its tab panel container.
+ * Wraps trusted wallet-renderer markup in its dock tab panel. Callers must
+ * escape every dynamic value before composing `trustedMarkup`; raw provider,
+ * dapp, or user text is never accepted here.
  */
-export const dockScreen = (view: WalletView, body: string): string =>
-  `<main class="screen" id="wallet-screen-${view}" role="tabpanel" tabindex="-1">${body}</main>`;
+export const dockScreen = (view: WalletView, trustedMarkup: string): string =>
+  `<main class="screen" id="wallet-screen-${view}" role="tabpanel" tabindex="-1">${trustedMarkup}</main>`;
 
 /**
- * Wraps flow screen content in a focused, dock-free container.
+ * Wraps trusted wallet-renderer markup in a focused, dock-free container.
+ * Callers must escape every dynamic value before composing `trustedMarkup`.
  */
-export const flowScreen = (view: WalletView, body: string): string =>
-  `<main class="screen flow" id="wallet-screen-${view}" tabindex="-1">${body}</main>`;
+export const flowScreen = (view: WalletView, trustedMarkup: string): string =>
+  `<main class="screen flow" id="wallet-screen-${view}" tabindex="-1">${trustedMarkup}</main>`;
 
 /**
  * Renders the header every flow screen starts with: a back control, the goal

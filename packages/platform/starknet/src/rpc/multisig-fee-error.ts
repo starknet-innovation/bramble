@@ -22,14 +22,18 @@ export class ArgentMultisigFeeExpiredError extends WalletError {
   }
 }
 
-const RESOURCE_PRICE_FLOOR =
-  /max\s+(?:l1\s*data|l1|l2)\s*gas\s+price.*lower\s+than\s+the\s+actual\s+gas\s+price/i;
-
 /**
  * Checks a provider diagnostic for an expired signed resource-price ceiling.
  */
-export const isArgentMultisigFeeExpiredMessage = (message: string): boolean =>
-  RESOURCE_PRICE_FLOOR.test(message);
+export const isArgentMultisigFeeExpiredMessage = (message: string): boolean => {
+  const normalized = message.toLowerCase().replace(/\s/g, "");
+  return (
+    normalized.includes("lowerthantheactualgasprice") &&
+    ["maxl1gasprice", "maxl1datagasprice", "maxl2gasprice"].some((label) =>
+      normalized.includes(label),
+    )
+  );
+};
 
 /**
  * Converts only Starknet's resource-price-floor rejection into a safe error.

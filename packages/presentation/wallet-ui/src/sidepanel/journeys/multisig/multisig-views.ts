@@ -485,7 +485,7 @@ export const multisigDetailFlow = (
         data: portfolio,
         ...(view.deployed === undefined ? {} : { deployed: view.deployed }),
         ...(view.deploymentPending ? { deploymentPending: true } : {}),
-        intents: compactIntentList(record, intents, preferences),
+        trustedIntentsMarkup: compactIntentList(record, intents, preferences),
         openCount,
         preferences,
         record,

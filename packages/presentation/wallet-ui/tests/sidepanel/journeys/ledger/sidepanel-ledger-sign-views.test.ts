@@ -113,10 +113,11 @@ describe("ledgerSignScreen", () => {
       expect(html).toContain("Hash shown on your Ledger");
       // Copy hands over the unbroken padded value, never the grouped rendering.
       expect(html).toContain(`data-copy="${padded}"`);
-      // Grouped in fours for character-by-character comparison; stripping the
-      // markup must recover exactly the padded hash the device receives.
+      // Grouped in fours for character-by-character comparison; reading only
+      // those exact groups must recover the padded hash the device receives.
       const value = html.split('<p class="ledger-hash-value">')[1]?.split("</p>")[0] ?? "";
-      expect(value.replace(/<[^>]*>/g, "")).toBe(padded);
+      const rendered = `0x${Array.from(value.matchAll(/<span>([0-9a-f]{4})<\/span>/g), (match) => match[1]).join("")}`;
+      expect(rendered).toBe(padded);
       // 64 digits in groups of four.
       expect(value.match(/<span>[0-9a-f]{4}<\/span>/g)).toHaveLength(16);
     }
@@ -128,6 +129,7 @@ describe("ledgerSignScreen", () => {
       status,
     );
     const value = html.split('<p class="ledger-hash-value">')[1]?.split("</p>")[0] ?? "";
-    expect(value.replace(/<[^>]*>/g, "")).toBe(`0x${"abc".padStart(64, "0")}`);
+    const rendered = `0x${Array.from(value.matchAll(/<span>([0-9a-f]{4})<\/span>/g), (match) => match[1]).join("")}`;
+    expect(rendered).toBe(`0x${"abc".padStart(64, "0")}`);
   });
 });
