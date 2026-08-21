@@ -403,7 +403,7 @@ const validStateTransition = (
       collecting: ["collecting", "ready", "stale"],
       ready: ["accepted", "ready", "rejected", "stale", "submitted"],
       rejected: ["rejected"],
-      stale: ["stale"],
+      stale: ["stale", "submitted"],
       submitted: ["accepted", "rejected", "submitted"],
     };
   return allowed[current].includes(next);

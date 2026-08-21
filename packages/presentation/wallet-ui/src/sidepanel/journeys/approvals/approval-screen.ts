@@ -17,6 +17,8 @@
 import { escapeHtml } from "@mc-wallet/core/html";
 import { button } from "@mc-wallet/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
+import { icon } from "../../shared/icons";
+import { type WalletView, walletViewLabel } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { approvalCard } from "./approval-cards";
 
@@ -39,6 +41,7 @@ export const actionableApprovals = (
 export const approvalTakeover = (
   actionable: readonly PendingApproval[],
   status: WalletStatus,
+  pausedView: WalletView,
 ): string => {
   const first = actionable[0];
   if (!first) {
@@ -48,6 +51,7 @@ export const approvalTakeover = (
     actionable.length > 1
       ? `<p class="takeover-queue">${actionable.length - 1} more request${actionable.length === 2 ? "" : "s"} waiting behind this one.</p>`
       : "";
+  const pausedTask = walletViewLabel(pausedView);
   return `
   <header class="flow-header approval-header">
     <div class="flow-title">
@@ -57,6 +61,10 @@ export const approvalTakeover = (
     <span class="takeover-network"><span class="dot"></span>${escapeHtml(status.network)}</span>
   </header>
   <main class="screen flow approval-takeover" id="wallet-screen-approval-takeover" aria-labelledby="approval-title" tabindex="-1">
+    <section class="takeover-continuity" role="note" aria-label="Paused wallet task">
+      <span class="takeover-continuity-mark">${icon("shield")}</span>
+      <span><strong>${escapeHtml(pausedTask)} paused</strong></span>
+    </section>
     <ul class="request-list">${approvalCard(first, status)}</ul>
     <section class="approval-live" id="approval-live" role="status" aria-live="polite" hidden>
       <span class="approval-live-mark">${liquidDots("approval", true)}${liquidDotsFilter("approval")}</span>

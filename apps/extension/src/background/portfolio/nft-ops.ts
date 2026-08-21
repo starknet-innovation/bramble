@@ -13,7 +13,6 @@ import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { refuseOnPoisonedRecipient, verifyCalls } from "@mc-wallet/transactions/verify";
 import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
-import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
   activeAccountContext,
   networkRpcUrls,
@@ -29,9 +28,11 @@ import {
   type NftTarget,
   readAddNftInput,
   readDiscoverNftsInput,
+  readLoadWatchedNftsInput,
   readReviewNftTransferInput,
   readTransferNftInput,
 } from "./nft-inputs";
+import { cachedNfts } from "./nft-snapshot-cache";
 
 // Bounds how many on-chain ERC721 owner / ERC1155 balance re-proofs run at once
 // during discovery.
@@ -227,16 +228,15 @@ const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<Runt
   if (standard === null) {
     return { error: "this account does not own that NFT" };
   }
-  return {
-    ok: true,
-    preferences: await deps.preferencesStore.addNft({
-      contract: input.contract,
-      ...(input.label === undefined ? {} : { label: input.label }),
-      networkId: input.networkId,
-      owner: context.account.address,
-      tokenId: input.tokenId,
-    }),
-  };
+  const updated = await deps.preferencesStore.addNft({
+    contract: input.contract,
+    ...(input.label === undefined ? {} : { label: input.label }),
+    networkId: input.networkId,
+    owner: context.account.address,
+    tokenId: input.tokenId,
+  });
+  await deps.nftSnapshots?.clear(context.account.id, context.networkId).catch(() => undefined);
+  return { ok: true, preferences: updated };
 };
 
 type NftTransferInput = NonNullable<ReturnType<typeof readTransferNftInput>>;
@@ -366,6 +366,7 @@ const handleTransferNft = async (
     networkId: context.networkId,
     summary: report.calls[0]?.summary ?? `Send NFT #${input.tokenId}`,
   });
+  await deps.nftSnapshots?.clear(context.account.id, context.networkId).catch(() => undefined);
   return { ok: true, transactionHash: result.transactionHash };
 };
 
@@ -392,29 +393,35 @@ const handleDiscoverNfts = async (
   if (owner === undefined) {
     return { error: "multisig not found on the active network" };
   }
-  const preferences = await deps.preferencesStore.read();
-  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
-  const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
-  const candidates = await indexer.listOwnedNfts({
-    address: owner,
-    indexerUrl: preferences.nftIndexerUrl ?? null,
-    networkId: context.networkId,
-  });
-  const watched = watchedCandidates(preferences, context.networkId, owner);
-  const watchedIds = new Set(watched.map((nft) => nft.id));
-  const candidatesToVerify = input.includeWatched
-    ? mergeNftCandidates(candidates, watched)
-    : candidates.filter((nft) => !watchedIds.has(nft.id));
-  // Never trust the indexer's ownership claim: re-prove each token through its
-  // ERC721 owner or ERC1155 balance surface, dropping any the account no longer
-  // owns (or that fail to read) so the gallery only shows verified holdings.
-  const owned = await filterOwnedNfts(deps, candidatesToVerify, owner, rpcUrls);
-  // Only explicitly watched NFTs resolve their token_uri/uri here. This preserves
-  // the gallery's anti-tracking boundary: unsolicited airdrops never make the
-  // extension contact an attacker-controlled metadata host in the background.
-  const hydrated = input.includeWatched
-    ? await enrichWatchedNfts(deps, owned, watchedIds, rpcUrls)
-    : owned;
+  const accountId = input.multisigId ?? context.account.id;
+  const hydrated = await cachedNfts(
+    deps,
+    {
+      accountId,
+      lane: input.includeWatched ? "complete" : "indexed",
+      networkId: context.networkId,
+    },
+    async () => {
+      const preferences = await deps.preferencesStore.read();
+      const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
+      const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
+      const candidates = await indexer.listOwnedNfts({
+        address: owner,
+        indexerUrl: preferences.nftIndexerUrl ?? null,
+        networkId: context.networkId,
+      });
+      const watched = watchedCandidates(preferences, context.networkId, owner);
+      const watchedIds = new Set(watched.map((nft) => nft.id));
+      const candidatesToVerify = input.includeWatched
+        ? mergeNftCandidates(candidates, watched)
+        : candidates.filter((nft) => !watchedIds.has(nft.id));
+      // Indexer ownership remains untrusted: every fresh snapshot re-proves it.
+      const owned = await filterOwnedNfts(deps, candidatesToVerify, owner, rpcUrls);
+      // Unsolicited airdrops still never trigger attacker-controlled metadata.
+      return input.includeWatched ? enrichWatchedNfts(deps, owned, watchedIds, rpcUrls) : owned;
+    },
+    input.cached,
+  );
   return { nfts: hydrated, ok: true };
 };
 
@@ -422,7 +429,8 @@ const handleLoadWatchedNfts = async (
   deps: WalletOpsDeps,
   message: unknown,
 ): Promise<RuntimeResponse> => {
-  if (!readTypeOnlyInput(message, "wallet.loadWatchedNfts")) {
+  const input = readLoadWatchedNftsInput(message);
+  if (!input) {
     return { error: "invalid watched nft request" };
   }
   // Panel-poll traffic: observe the session, never extend it.
@@ -430,15 +438,21 @@ const handleLoadWatchedNfts = async (
   if (context.error !== undefined) {
     return { error: context.error };
   }
-  const preferences = await deps.preferencesStore.read();
-  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
   return {
-    nfts: await loadWatchedNfts(
+    nfts: await cachedNfts(
       deps,
-      preferences,
-      context.networkId,
-      context.account.address,
-      rpcUrls,
+      { accountId: context.account.id, lane: "watched", networkId: context.networkId },
+      async () => {
+        const preferences = await deps.preferencesStore.read();
+        return loadWatchedNfts(
+          deps,
+          preferences,
+          context.networkId,
+          context.account.address,
+          networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
+        );
+      },
+      input.cached,
     ),
     ok: true,
   };

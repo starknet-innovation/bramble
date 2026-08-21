@@ -17,7 +17,7 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 import { withTokenId } from "@mc-wallet/wallet-model/preferences";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { readTypeOnlyInput } from "../routing/message-inputs";
+import { readPricesInput, readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -175,7 +175,8 @@ const handleSetTokenHidden: TokenHandler = async (deps, message) => {
 
 const handlePrices: TokenHandler = async (deps, message) => {
   const { preferencesStore, prices } = deps;
-  if (!readTypeOnlyInput(message, "wallet.prices")) {
+  const input = readPricesInput(message);
+  if (!input) {
     return { error: "invalid prices request" };
   }
   const preferences = await preferencesStore.read();
@@ -185,7 +186,12 @@ const handlePrices: TokenHandler = async (deps, message) => {
     .map((token) => token.address);
   return {
     ok: true,
-    ...(await prices.getPrices({ addresses, currency, networkId: preferences.activeNetworkId })),
+    ...(await prices.getPrices({
+      addresses,
+      ...(input.cached ? { cached: true } : {}),
+      currency,
+      networkId: preferences.activeNetworkId,
+    })),
   };
 };
 

@@ -41,7 +41,7 @@ export const SIGN_REQUEST_STYLES = `
     overflow: auto;
     padding: ${SPACE.sm} ${SPACE.md};
   }
-  .sign-unsigned { border-left: 3px solid var(--mc-danger); }
+  .sign-unsigned { background: var(--mc-danger-soft); }
   .sign-more { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-style: italic; }
   .sign-row { align-items: baseline; display: flex; gap: ${SPACE.md}; justify-content: space-between; }
   .sign-key { color: var(--mc-muted); flex: none; font-size: ${TYPE.caption.size}; }

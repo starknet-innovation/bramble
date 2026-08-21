@@ -8,6 +8,7 @@ const meta: LabMeta = {
 
 export default meta;
 
+export const SavedData = checkpointStory("Portfolio saved data", "portfolio", "saved-data");
 export const Ready = checkpointStory("Portfolio ready", "portfolio", "ready");
 export const MajorActions = checkpointStory(
   "Portfolio · four major actions",
@@ -26,6 +27,11 @@ export const Collectibles = checkpointStory(
 );
 export const AccountDrawer = checkpointStory("Account drawer", "portfolio", "account-drawer");
 export const Undeployed = checkpointStory("Counterfactual account", "portfolio", "undeployed");
+export const DeployAccount = checkpointStory(
+  "Deploy account review",
+  "portfolio",
+  "deploy-account",
+);
 export const PricesOffline = checkpointStory("Prices unavailable", "portfolio", "prices-offline");
 export const BalanceFailed = checkpointStory(
   "Balance refresh failed",

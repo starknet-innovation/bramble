@@ -32,13 +32,17 @@ import {
 describe("address book", () => {
   test("saveAddress forwards the label/address/network and resolves", async () => {
     const { sent, wallet } = captureRuntime(preferencesResponse);
-    await expect(wallet.saveAddress("Alice", "0xabc", "SN_MAIN")).resolves.toBeUndefined();
+    await expect(wallet.saveAddress("Alice", "0xabc", "SN_MAIN", "0xdef")).resolves.toBeUndefined();
     expect(sent[0]).toEqual({
       address: "0xabc",
       label: "Alice",
       networkId: "SN_MAIN",
+      publicKeyX: "0xdef",
       type: "wallet.saveAddress",
     });
+    const withoutKey = captureRuntime(preferencesResponse);
+    await withoutKey.wallet.saveAddress("Bob", "0x123", "SN_MAIN");
+    expect(withoutKey.sent[0]).not.toHaveProperty("publicKeyX");
     await expect(runtimeReturning({}).saveAddress("a", "0x1", "SN_MAIN")).rejects.toThrow(
       "address save failed",
     );

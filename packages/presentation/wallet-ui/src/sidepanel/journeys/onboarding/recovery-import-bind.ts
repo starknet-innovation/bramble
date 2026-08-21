@@ -128,7 +128,7 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
           if (recoveryResult) {
             recoveryResult.textContent = "This recovery phrase is not valid.";
           }
-          showToast("Invalid recovery phrase", "error");
+          showToast("Invalid recovery phrase", "error", recoveryContinue);
           return;
         }
         setMnemonic(phrase);
@@ -152,7 +152,7 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
         if (recoveryResult) {
           recoveryResult.textContent = message;
         }
-        showToast(message, "error");
+        showToast(message, "error", recoveryContinue);
         buttonBusy(recoveryContinue, false);
       },
     );

@@ -7,6 +7,8 @@
 export type RefreshScheduler = {
   /** Schedules an immediate refresh plus confirmation polls after an action. */
   readonly afterAction: () => void;
+  /** Refreshes once without starting transaction-confirmation polling. */
+  readonly refreshNow: () => void;
   /** Starts ambient polling while the wallet surface is visible. */
   readonly start: () => void;
   /** Cancels all timers when the surface is disposed. */
@@ -112,6 +114,10 @@ export const createRefreshScheduler = ({
           void run();
         }, delayMs),
       );
+    },
+    refreshNow() {
+      clearGeneral();
+      void run(true);
     },
     start() {
       stopped = false;

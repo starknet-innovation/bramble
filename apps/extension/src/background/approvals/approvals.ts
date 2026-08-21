@@ -44,11 +44,7 @@ import {
   type WatchAssetToken,
 } from "./approval-snapshot";
 
-/**
- * Queue admission caps and the abandoned-approval TTL. Re-exported here so the
- * queue's limits stay one definition shared by callers and tests; the rest of
- * `./approval-limits` is imported from there directly.
- */
+/** Queue admission caps and the abandoned-approval TTL. */
 export {
   APPROVAL_TTL_MS,
   MAX_PENDING_APPROVALS,
@@ -56,14 +52,12 @@ export {
 } from "./approval-limits";
 
 /**
- * Public approval discriminants and private payload shape used by background
- * executors. Their definitions live with the total payload-reader map.
+ * Public approval discriminants and private payload shape used by background executors.
  */
 export type { ApprovalKind, ApprovalPayload } from "./approval-payload";
 
 /**
- * Display-only approval snapshot types shared with the approval UI, the dapp
- * bridge, and the executors. Their definitions live with the deep copy producing them.
+ * Display-only approval snapshot types shared with the UI and executors.
  */
 export type {
   ApprovalRiskFlag,
@@ -75,24 +69,20 @@ export type {
 type ApprovalEntry = ApprovalRequest & { readonly feeRevision: number; readonly queuedAt: number };
 
 /**
- * Observer invoked with approval ids removed without a user decision: either
- * TTL expiry or fair replacement at the global cap. Whatever holds state keyed
- * by an approval id — above all the waiter registry holding the dapp's parked
- * response — must release it here, otherwise the queue stops bounding that
- * state. Entries are already removed when it runs.
+ * Observer invoked after approval ids are removed without a user decision.
+ * External state keyed by those ids must be released here.
  */
 type ApprovalDropObserver = (ids: readonly string[]) => void;
 
 /**
- * Atomically claimed approval snapshot and its private execution payload. Once
- * returned, the id is no longer pending and cannot be claimed a second time.
+ * Atomically claimed snapshot and private payload. The id cannot be reclaimed.
  */
 export type ApprovalClaim = {
   readonly approval: PendingApproval;
   readonly payload: ApprovalPayload | null;
 };
 /**
- * In-memory dapp approval queue.
+ * In-memory dapp approval queue; all claim and admission failures are explicit.
  */
 export type ApprovalQueue = {
   /**
@@ -136,6 +126,7 @@ export type ApprovalQueue = {
     readonly flags: readonly ApprovalRiskFlag[];
     readonly origin: string;
     readonly proof?: Strk20Proof;
+    readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestSignTypedData: (input: {
@@ -149,6 +140,7 @@ export type ApprovalQueue = {
     readonly kind: Strk20DisclosureApprovalKind;
     readonly origin: string;
     readonly request: Strk20DisclosureRequest;
+    readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestStrk20Invoke: (input: {
@@ -156,6 +148,7 @@ export type ApprovalQueue = {
     readonly context: ApprovalContext;
     readonly origin: string;
     readonly plan: Strk20SubmissionPlan;
+    readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestSwitchChain: (input: {
@@ -188,6 +181,9 @@ export type ApprovalQueueOptions = {
    */
   readonly now?: () => number;
 };
+
+const copyReviewAssets = (assets: NonNullable<PendingApproval["reviewAssets"]>) =>
+  assets.length === 0 ? {} : { reviewAssets: assets.map((asset) => ({ ...asset })) };
 
 /**
  * Creates a deduplicating approval queue. Connection prompts dedupe per origin;
@@ -356,7 +352,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         summaries: [...summaries],
       });
     },
-    requestInvoke({ calls, context, fee, flags, origin, proof, summaries }) {
+    requestInvoke({ calls, context, fee, flags, origin, proof, reviewAssets = [], summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
@@ -373,6 +369,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         kind: "invoke",
         origin,
         ...(proof === undefined ? {} : { proof: cloneApprovalValue(proof) }),
+        ...copyReviewAssets(reviewAssets),
         requiresDeployment: fee.requiresDeployment,
         summaries: [...summaries],
       });
@@ -391,7 +388,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         typedData: cloneApprovalValue(typedData),
       });
     },
-    requestStrk20Disclosure({ context, kind, origin, request, summaries }) {
+    requestStrk20Disclosure({ context, kind, origin, request, reviewAssets = [], summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
@@ -406,11 +403,12 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         id: crypto.randomUUID(),
         kind,
         origin,
+        ...copyReviewAssets(reviewAssets),
         strk20Request: cloneApprovalValue(request),
         summaries: [...summaries],
       });
     },
-    requestStrk20Invoke({ actions, context, origin, plan, summaries }) {
+    requestStrk20Invoke({ actions, context, origin, plan, reviewAssets = [], summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
@@ -422,6 +420,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         id: crypto.randomUUID(),
         kind: "strk20-invoke",
         origin,
+        ...copyReviewAssets(reviewAssets),
         ...("feeAction" in plan ? { relayFeeAction: cloneApprovalValue(plan.feeAction) } : {}),
         strk20Plan: cloneApprovalValue(plan),
         summaries: [...summaries],

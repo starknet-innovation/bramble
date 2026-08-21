@@ -24,6 +24,7 @@ export const SKIN_TOKENS = [
   "--mc-positive",
   "--mc-sunken",
   "--mc-text",
+  "--mc-warning",
 ] as const;
 
 /**

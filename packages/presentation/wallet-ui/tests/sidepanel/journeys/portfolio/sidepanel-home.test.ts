@@ -5,12 +5,14 @@
  * actions live in one overflow menu.
  */
 import { describe, expect, test } from "bun:test";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
-import { TERMINAL_URL } from "../../../../src/sidepanel/shell/terminal-link";
+import { STARKSCAN_URL } from "../../../../src/sidepanel/shell/starkscan-link";
+import { walletHeader } from "../../../../src/sidepanel/shell/wallet-shell";
 
 const status: WalletStatus = {
   accountCount: 2,
@@ -44,17 +46,33 @@ describe("sidepanel home", () => {
     expect(drawer).toContain("data-drawer-close");
   });
 
-  test("header keeps ghost shortcuts for sites, terminal, and lock", () => {
+  test("header keeps ghost shortcuts for sites, Starkscan, and lock", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
     const header = html.slice(html.indexOf("wallet-header"), html.indexOf("hero"));
 
     expect(header).toContain('data-view="connected-sites"');
-    expect(header).toContain('id="terminal-button"');
+    expect(header).toContain('id="starkscan-button"');
     expect(header).toContain('class="icon-button ghost"');
-    expect(header).toContain(`href="${TERMINAL_URL}"`);
+    expect(header).toContain(`href="${STARKSCAN_URL}"`);
     expect(header).toContain('target="_blank" rel="noopener noreferrer"');
-    expect(header).toContain('aria-label="Open trade terminal"');
+    expect(header).toContain('aria-label="Open Starkscan"');
     expect(header).toContain('id="lock-button"');
+  });
+
+  test("header keeps network identity single-purpose for shared accounts", () => {
+    const multisig: ArgentMultisigRecord = {
+      accountContractType: "argent-multisig",
+      address: "0x999",
+      classHash: "0x123",
+      id: "SN_MAIN:0x999",
+      name: "Treasury",
+      networkId: "SN_MAIN",
+    };
+    const html = walletHeader(status, account, preferences, multisig);
+    const network = html.slice(html.indexOf('class="account-net'), html.indexOf("</header>"));
+
+    expect(network).toContain('class="account-network-label">Starknet</span>');
+    expect(network).not.toContain("Argent Multisig");
   });
 
   test("quick actions expose Send, Swap, Receive, and the account explorer", () => {
@@ -83,14 +101,13 @@ describe("sidepanel home", () => {
     expect(noAccounts).toMatch(/data-view="receive"[^>]*disabled/);
   });
 
-  test("home promotes no Terminal card, only the header shortcut", () => {
+  test("home promotes no Terminal card and keeps the Starkscan shortcut", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).not.toContain("terminal-cta");
     expect(html).not.toContain("Join MC Terminal");
     expect(html).not.toContain("Your homebase for all Starknet activity");
-    // The compact header link is the remaining trusted handoff.
-    expect(html).toContain('id="terminal-button"');
+    expect(html).toContain('id="starkscan-button"');
   });
 
   test("portfolio has two text tabs and one accessible quick-actions menu", () => {
@@ -245,23 +262,23 @@ describe("sidepanel home", () => {
       priceAsOf,
     );
 
-  test("stale cached prices render without an error-like notice", () => {
+  test("stale cached prices remain visible with their detail in the network status", () => {
     const html = homeWithPrices({ "0x00aa": 5 }, true, 1752501900000);
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
 
-    expect(hero).not.toContain('class="hero-stale"');
-    expect(hero).not.toContain("Showing last saved prices");
-    expect(hero).not.toContain("14 Jul, 14:05 UTC");
+    expect(hero).not.toContain("Using saved prices");
+    expect(html).toContain('class="account-net degraded"');
+    expect(html).toContain("Using saved prices (14 Jul, 14:05 UTC).");
     // Cached fiat still renders — the total is not blanked to "—".
     expect(hero).not.toMatch(/class="hero-total">—/);
   });
 
-  test("an unreachable host with no cache shows an explicit unavailable hint", () => {
+  test("an unreachable host with no cache explains the degraded network status", () => {
     const html = homeWithPrices({}, true, null);
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
 
-    expect(hero).toContain('class="hero-stale"');
-    expect(hero).toContain("Live prices unavailable right now");
+    expect(hero).not.toContain("Live prices");
+    expect(html).toContain("Live prices are temporarily unavailable.");
     // No prices to convert: the total degrades to the em dash, as before.
     expect(hero).toContain('class="hero-total"');
     expect(hero).toContain('data-live-value="unknown">—');
@@ -273,6 +290,23 @@ describe("sidepanel home", () => {
 
     expect(hero).not.toContain("hero-stale");
     expect(hero).not.toContain("last saved");
+  });
+
+  test("saved balances survive a failed refresh with detail in the network status", () => {
+    const html = dashboard(
+      "home",
+      status,
+      [],
+      preferences,
+      { asOf: 1752501900000, balances: [], stale: true },
+      null,
+      [],
+      [],
+      {},
+    );
+    expect(html).not.toMatch(/class="hero[^>]*>[\s\S]*Using saved balances/);
+    expect(html).toContain('class="account-net degraded"');
+    expect(html).toContain("Using saved balances (14 Jul, 14:05 UTC).");
   });
 
   test("flow screens carry neither the drawer nor the home tabs", () => {

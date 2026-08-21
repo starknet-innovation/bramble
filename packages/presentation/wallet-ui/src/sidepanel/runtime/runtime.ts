@@ -56,7 +56,12 @@ export type RuntimeApi = {
  * Balance loading state rendered by the side panel.
  */
 export type BalanceState =
-  | { readonly balances: readonly TokenBalance[]; readonly error?: never }
+  | {
+      readonly asOf?: number | null;
+      readonly balances: readonly TokenBalance[];
+      readonly error?: never;
+      readonly stale?: boolean;
+    }
   | { readonly balances?: never; readonly error: string };
 /**
  * Successful balances retain the account/network scope proven by the response.
@@ -64,9 +69,11 @@ export type BalanceState =
 export type ScopedBalanceState =
   | {
       readonly accountId: string;
+      readonly asOf?: number | null;
       readonly balances: readonly TokenBalance[];
       readonly error?: never;
       readonly networkId: string;
+      readonly stale?: boolean;
     }
   | {
       readonly accountId?: never;
@@ -180,12 +187,18 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "reveal failed");
     },
-    async loadActivity(accountId?: string): Promise<{
+    async loadActivity(
+      accountId?: string,
+      cached = false,
+      refreshHistory = false,
+    ): Promise<{
       readonly entries: ActivityResponse["activity"];
       readonly historyUnavailable: boolean;
     }> {
       const response = await sendMessage({
         ...(accountId === undefined ? {} : { accountId }),
+        ...(cached ? { cached: true } : {}),
+        ...(refreshHistory ? { refreshHistory: true } : {}),
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {
@@ -246,13 +259,18 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "transfer review failed");
     },
-    async loadBalances(): Promise<ScopedBalanceState> {
-      const response = await sendMessage({ type: "wallet.getBalances" });
+    async loadBalances(cached = false): Promise<ScopedBalanceState> {
+      const response = await sendMessage({
+        ...(cached ? { cached: true } : {}),
+        type: "wallet.getBalances",
+      });
       if (isBalancesResponse(response)) {
         return {
           accountId: response.accountId,
+          ...(response.asOf === undefined ? {} : { asOf: response.asOf }),
           balances: response.balances,
           networkId: response.networkId,
+          ...(response.stale === undefined ? {} : { stale: response.stale }),
         };
       }
       return { error: isErrorResponse(response) ? response.error : "balances unavailable" };
@@ -264,13 +282,16 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "token detection failed");
     },
-    async loadPrices(): Promise<{
+    async loadPrices(cached = false): Promise<{
       readonly asOf: number | null;
       readonly changes: Readonly<Record<string, number>>;
       readonly prices: Readonly<Record<string, number>>;
       readonly stale: boolean;
     }> {
-      const response = await sendMessage({ type: "wallet.prices" });
+      const response = await sendMessage({
+        ...(cached ? { cached: true } : {}),
+        type: "wallet.prices",
+      });
       if (!isPricesResponse(response)) {
         return { asOf: null, changes: {}, prices: {}, stale: false };
       }
@@ -320,8 +341,19 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "wallet unavailable");
     },
-    async saveAddress(label: string, address: string, networkId: string): Promise<void> {
-      const response = await sendMessage({ address, label, networkId, type: "wallet.saveAddress" });
+    async saveAddress(
+      label: string,
+      address: string,
+      networkId: string,
+      publicKeyX?: string,
+    ): Promise<void> {
+      const response = await sendMessage({
+        address,
+        label,
+        networkId,
+        ...(publicKeyX ? { publicKeyX } : {}),
+        type: "wallet.saveAddress",
+      });
       if (isPreferencesResponse(response)) {
         return;
       }

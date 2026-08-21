@@ -155,7 +155,9 @@ export const createOfficialStrk20Service = ({
           throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
         }
         const requirement = await retryStrk20ServiceRead(
-          () => discoverRequirement(input.account.address, input.token),
+          // Invoked ON `transfers`: the SDK method dereferences its receiver
+          // (`this.discoveryProvider`), so a detached call throws a TypeError.
+          () => discoverRequirement.call(transfers, input.account.address, input.token),
           pauseForServiceRetry,
         );
         return readSetupRequirement(sdk.SetupRequirement, requirement);

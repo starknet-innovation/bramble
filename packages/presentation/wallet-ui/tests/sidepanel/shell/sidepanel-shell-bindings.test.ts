@@ -200,27 +200,57 @@ describe("bindDeploy", () => {
   });
 
   const deployMarkup = `<section class="section">
-      <button id="deploy-button" type="button"></button>
-      <p role="status"></p>
+      <section id="deploy-review-stage">
+        <button id="deploy-button" type="button">Review deployment</button>
+        <div id="deploy-review"></div>
+        <p role="status"></p>
+      </section>
+      <section id="deploy-success" hidden><code id="deploy-hash"></code></section>
     </section>`;
+
+  test("shows the decision anatomy before echoing the reviewed deployment fee", async () => {
+    const container = mount(deployMarkup);
+    const calls: unknown[] = [];
+    const reviewedFee = { overallFee: "1000000000000000", unit: "FRI" as const };
+    const wallet = {
+      deployAccount: async (fee?: typeof reviewedFee) => {
+        calls.push(fee);
+        return fee ? "0xdeploytx" : reviewedFee;
+      },
+      loadDeploymentStatus: async (): Promise<DeploymentStatusResponse> => ({
+        accountId: account.id,
+        deployed: true,
+        ok: true,
+      }),
+      loadStatus: async () => status,
+    };
+    bindDeploy({
+      app: container,
+      deploymentScope: () => ({ accountId: account.id, stillCurrent: () => true }),
+      render: async () => undefined,
+      setActiveView: () => undefined,
+      wallet: wallet as unknown as ShellBindingDeps["wallet"],
+    });
+
+    click(container.querySelector("#deploy-button"));
+    await tick();
+    expect(container.querySelector("#deploy-review")?.textContent).toContain(
+      "Maximum cost and constraints",
+    );
+
+    click(container.querySelector("#deploy-button"));
+    await tick();
+    expect(calls).toEqual([undefined, reviewedFee]);
+  });
 
   test("submits a deployment and reports the transaction hash on the status line", async () => {
     const container = mount(deployMarkup);
     let deploys = 0;
-    const deployment: DeploymentStatusResponse = {
-      accountId: account.id,
-      deployed: true,
-      ok: true,
-    };
     const wallet = {
       deployAccount: async () => {
         deploys += 1;
         return "0xdeploytx";
       },
-      // The post-submit watcher calls these; return "already deployed" so the
-      // fire-and-forget watch has a defined shape to consume.
-      loadDeploymentStatus: async (): Promise<DeploymentStatusResponse> => deployment,
-      loadStatus: async () => status,
     };
     bindDeploy({
       app: container,
@@ -233,9 +263,9 @@ describe("bindDeploy", () => {
     await tick();
 
     expect(deploys).toBe(1);
-    expect(container.querySelector('[role="status"]')?.textContent).toBe(
-      "Deployment submitted: 0xdeploytx",
-    );
+    expect(container.querySelector("#deploy-review-stage")?.hasAttribute("hidden")).toBe(true);
+    expect(container.querySelector("#deploy-success")?.hasAttribute("hidden")).toBe(false);
+    expect(container.querySelector("#deploy-hash")?.textContent).toBe("0xdeploytx");
     expect(document.querySelectorAll(".toast.success").length).toBeGreaterThan(0);
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
   });

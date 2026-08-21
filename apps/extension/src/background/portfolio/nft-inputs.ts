@@ -133,11 +133,16 @@ export const readTransferNftInput = (message: unknown): NftTransferRequest | nul
  */
 export const readDiscoverNftsInput = (
   message: unknown,
-): { readonly includeWatched: boolean; readonly multisigId?: string } | null => {
+): {
+  readonly cached: boolean;
+  readonly includeWatched: boolean;
+  readonly multisigId?: string;
+} | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["includeWatched", "multisigId", "type"]) ||
+    !hasOnlyKnownKeys(message, ["cached", "includeWatched", "multisigId", "type"]) ||
     message["type"] !== "wallet.discoverNfts" ||
+    (message["cached"] !== undefined && message["cached"] !== true) ||
     (message["includeWatched"] !== undefined && typeof message["includeWatched"] !== "boolean") ||
     (message["multisigId"] !== undefined &&
       (typeof message["multisigId"] !== "string" ||
@@ -147,10 +152,22 @@ export const readDiscoverNftsInput = (
     return null;
   }
   return {
+    cached: message["cached"] === true,
     includeWatched: message["includeWatched"] !== false,
     ...(typeof message["multisigId"] === "string" ? { multisigId: message["multisigId"] } : {}),
   };
 };
+
+/**
+ * Parses a cached-first watched-NFT request.
+ */
+export const readLoadWatchedNftsInput = (message: unknown): { readonly cached: boolean } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["cached", "type"]) &&
+  message["type"] === "wallet.loadWatchedNfts" &&
+  (message["cached"] === undefined || message["cached"] === true)
+    ? { cached: message["cached"] === true }
+    : null;
 
 /**
  * Parses a remove-NFT request that targets a watched NFT by its id.

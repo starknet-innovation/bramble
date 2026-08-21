@@ -4,11 +4,20 @@
  */
 
 import { untrustedFetch } from "@mc-wallet/core/http-json";
-import { type ArgentMultisigConfigInput, getArgentMultisigConfig } from "@mc-wallet/multisig/chain";
+import {
+  type ArgentMultisigConfigInput,
+  type ArgentSignerDiscoveryInput,
+  getArgentMultisigConfig,
+  getArgentMultisigSignerPublicKeys,
+} from "@mc-wallet/multisig/chain";
 import {
   type ArgentMultisigClassStatusInput,
   isArgentMultisigClassDeclared,
 } from "@mc-wallet/multisig/deploy";
+import {
+  getMultisigSignerAccount,
+  type MultisigSignerAccountInput,
+} from "@mc-wallet/multisig/signer-account";
 import {
   createHttpNftIndexer,
   type NftIndexerHttp,
@@ -84,6 +93,9 @@ type MultisigRpc = {
   readonly getConfig: (
     input: ArgentMultisigConfigInput,
   ) => ReturnType<typeof getArgentMultisigConfig>;
+  readonly getSignerPublicKeys?: (
+    input: ArgentSignerDiscoveryInput,
+  ) => ReturnType<typeof getArgentMultisigSignerPublicKeys>;
   readonly getNonce: (input: {
     readonly address: string;
     readonly rpcUrls: readonly string[];
@@ -94,6 +106,9 @@ type MultisigRpc = {
   readonly prepareInvoke: (
     input: PrepareArgentMultisigInvokeV3Input,
   ) => ReturnType<typeof prepareArgentMultisigInvokeV3>;
+  readonly resolveSignerAccount?: (
+    input: MultisigSignerAccountInput,
+  ) => ReturnType<typeof getMultisigSignerAccount>;
   readonly submitPreparedInvoke: (
     input: SubmitPreparedArgentMultisigInvokeV3Input,
   ) => ReturnType<typeof submitPreparedArgentMultisigInvokeV3>;
@@ -263,9 +278,11 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   getTransactionStatuses,
   multisig: {
     getConfig: getArgentMultisigConfig,
+    getSignerPublicKeys: getArgentMultisigSignerPublicKeys,
     getNonce: getArgentMultisigNonce,
     isClassDeclared: isArgentMultisigClassDeclared,
     prepareInvoke: prepareArgentMultisigInvokeV3,
+    resolveSignerAccount: getMultisigSignerAccount,
     submitPreparedInvoke: submitPreparedArgentMultisigInvokeV3,
   },
   nftIndexer: createHttpNftIndexer(nftIndexerHttp),

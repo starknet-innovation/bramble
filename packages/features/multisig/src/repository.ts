@@ -1,7 +1,6 @@
 /**
- * Serialized local registry for stable Argent accounts, frozen V3 intents, and
- * durable operation claims. Invalid legacy OpenZeppelin records are ignored;
- * they can never become executable Argent intents.
+ * Serialized local registry for stable Argent accounts, frozen V3 intents, and durable operation
+ * claims. Invalid legacy OpenZeppelin records are ignored and can never become executable intents.
  */
 import { isRecord } from "@mc-wallet/core/json";
 import type { KeyValueStore } from "@mc-wallet/store/kv";
@@ -83,9 +82,12 @@ export type MultisigStore = {
   readonly listIntents: () => Promise<readonly ArgentMultisigSigningIntent[]>;
   readonly listMultisigs: () => Promise<readonly ArgentMultisigRecord[]>;
   readonly listOperations: () => Promise<readonly ArgentMultisigOperationRecord[]>;
-  /** Clears restart-abandoned signer claims before this worker accepts messages. */
   readonly recoverSigningClaims: () => Promise<number>;
   readonly releaseOperation: (id: string) => Promise<void>;
+  readonly removeIntent: (
+    id: string,
+    isAuthorized?: () => boolean,
+  ) => Promise<"missing" | "removed" | "unauthorized">;
   readonly removeMultisig: (
     id: string,
     isAuthorized?: () => boolean,
@@ -177,14 +179,24 @@ const upsertMultisigIn = (shape: StoredShape, record: ArgentMultisigRecord): Sha
   const existing = shape.multisigs.findIndex((stored) => stored.id === record.id);
   if (existing >= 0) {
     const current = shape.multisigs[existing];
+    const incomingConfig = effectiveCurrentConfig(record);
+    const enrichesAddressOnlyWatch =
+      current !== undefined &&
+      current.deployment === undefined &&
+      effectiveCurrentConfig(current) === undefined &&
+      incomingConfig !== undefined &&
+      (record.currentConfig === undefined ||
+        record.deployment === undefined ||
+        sameCurrentConfig(record.currentConfig, record.deployment));
     if (
       !current ||
       current.accountContractType !== record.accountContractType ||
       current.address !== record.address ||
       current.classHash !== record.classHash ||
       current.networkId !== record.networkId ||
-      JSON.stringify(current.deployment) !== JSON.stringify(record.deployment) ||
-      !sameCurrentConfig(effectiveCurrentConfig(current), effectiveCurrentConfig(record))
+      (!enrichesAddressOnlyWatch &&
+        (JSON.stringify(current.deployment) !== JSON.stringify(record.deployment) ||
+          !sameCurrentConfig(effectiveCurrentConfig(current), effectiveCurrentConfig(record))))
     ) {
       return { result: "conflict", shape };
     }
@@ -192,7 +204,13 @@ const upsertMultisigIn = (shape: StoredShape, record: ArgentMultisigRecord): Sha
       result: "stored",
       shape: {
         ...shape,
-        multisigs: shape.multisigs.map((stored, index) => (index === existing ? record : stored)),
+        multisigs: shape.multisigs.map((stored, index) =>
+          index === existing && current?.name && record.name === undefined
+            ? { ...record, name: current.name }
+            : index === existing
+              ? record
+              : stored,
+        ),
       },
     };
   }
@@ -359,6 +377,23 @@ const createStoreMethods = (
       ...shape,
       operations: shape.operations.filter((record) => record.id !== id),
     });
+  },
+  async removeIntent(id, isAuthorized = () => true) {
+    if (!isAuthorized()) return "unauthorized";
+    const previous = await read();
+    const intent = previous.intents.find((record) => record.id === id);
+    if (!intent) return "missing";
+    if (!isAuthorized()) return "unauthorized";
+    await write({
+      ...previous,
+      intents: previous.intents.filter((record) => record.id !== id),
+      operations: previous.operations.filter(
+        (record) => record.target !== intent.prepared.transactionHash,
+      ),
+    });
+    if (isAuthorized()) return "removed";
+    await write(previous);
+    return "unauthorized";
   },
   async removeMultisig(id, isAuthorized = () => true) {
     if (!isAuthorized()) return "unauthorized";

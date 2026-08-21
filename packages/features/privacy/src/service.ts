@@ -182,8 +182,11 @@ export type Strk20Service = {
   ) => Promise<{ readonly transactionHash: string }>;
 };
 
+// Names the stub explicitly. A build with no privacy runtime wired otherwise
+// reports the same line as a live service that failed, which sends the reader
+// looking at the backend for a wiring problem.
 const unavailable = (): never => {
-  throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  throw new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: no privacy runtime is wired in this build`);
 };
 
 /**

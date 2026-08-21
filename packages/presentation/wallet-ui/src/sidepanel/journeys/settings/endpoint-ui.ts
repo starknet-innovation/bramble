@@ -45,12 +45,12 @@ const bindEndpointForm = (
     buttonBusy(submitButton, true);
     void submit(value).then(
       async () => {
-        showToast(`${noun} ${value ? "saved" : "reset"}`, "success");
+        showToast(`${noun} ${value ? "saved" : "reset"}`, "success", form);
         await deps.render(await deps.wallet.loadStatus());
       },
       (error: unknown) => {
         const message = errorMessage(error, fail);
-        showToast(message, "error");
+        showToast(message, "error", form);
         if (result) {
           result.textContent = message;
         }
@@ -99,13 +99,13 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
     buttonBusy(submitButton, true);
     void deps.wallet.setStrk20NetworkConfig(deps.networkId(), config).then(
       async () => {
-        showToast(`Privacy services ${config ? "saved" : "disabled"}`, "success");
+        showToast(`Privacy services ${config ? "saved" : "disabled"}`, "success", form);
         deps.onStrk20ConfigChanged?.();
         await deps.render(await deps.wallet.loadStatus());
       },
       (error: unknown) => {
         const message = errorMessage(error, "Privacy service configuration failed");
-        showToast(message, "error");
+        showToast(message, "error", form);
         if (result) {
           result.textContent = message;
         }
@@ -131,12 +131,12 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
     buttonBusy(submitButton, true);
     void deps.wallet.setExplorerFallback(deps.networkId(), enabled).then(
       async () => {
-        showToast(`Explorer fallback ${enabled ? "allowed" : "turned off"}`, "success");
+        showToast(`Explorer fallback ${enabled ? "allowed" : "turned off"}`, "success", form);
         await deps.render(await deps.wallet.loadStatus());
       },
       (error: unknown) => {
         const message = errorMessage(error, "Explorer fallback update failed");
-        showToast(message, "error");
+        showToast(message, "error", form);
         if (result) {
           result.textContent = message;
         }

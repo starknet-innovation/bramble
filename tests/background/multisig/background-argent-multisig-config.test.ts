@@ -88,10 +88,14 @@ describe("Argent multisig configuration intents", () => {
       harnessAccountA,
       harnessAccountB,
     ]);
-    await harness.handler(
+    const firstRefresh = await harness.handler(
       { multisigId: HARNESS_MULTISIG_ID, type: "wallet.refreshMultisig" },
       harnessExtensionSender,
     );
+    expect(firstRefresh).toMatchObject({
+      intents: [{ id: first.id, state: "accepted" }],
+      ok: true,
+    });
     expect((await harness.multisigStore.getIntent(first.id))?.state).toBe("accepted");
     expect((await harness.multisigStore.listMultisigs())[0]?.currentConfig?.threshold).toBe(2);
     threshold = 1;

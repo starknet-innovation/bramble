@@ -23,9 +23,9 @@ export const setSendProgress = (form: HTMLFormElement, stage: TransferStage): vo
   const progress = form.querySelector<HTMLElement>(".send-progress");
   progress?.toggleAttribute("hidden", stage === "recipient" || stage === "asset");
   const activeIndex =
-    stage === "details"
+    stage === "details" || stage === "reviewing"
       ? 0
-      : stage === "review" || stage === "reviewing"
+      : stage === "review"
         ? 1
         : stage === "submitted"
           ? 3
@@ -41,7 +41,7 @@ export const setSendProgress = (form: HTMLFormElement, stage: TransferStage): vo
 };
 
 /**
- * Copy and task states shown while a send is being reviewed or submitted.
+ * Copy and task states shown while a reviewed send is being submitted.
  */
 export type WorkingStatus = {
   readonly copy: string;
@@ -67,23 +67,6 @@ const isPrivate = (fields: TransferFields | null): boolean => fields?.source ===
  * longer than a public fee estimate.
  */
 export const workingStatus = <Review>(state: TransferState<Review>): WorkingStatus => {
-  if (state.stage === "reviewing") {
-    return isPrivate(state.fields)
-      ? {
-          copy: "Checking the recipient's registration, generating the transfer proof, and quoting the relay fee.",
-          labels: ["Prepare private send", "Authorize", "Relay", "Confirm on Starknet"],
-          liveness: "Proving can take a minute. Keep this panel open.",
-          states: ["active", "pending", "pending", "pending"],
-          title: "Preparing private send",
-        }
-      : {
-          copy: "Validating the recipient, decoding the exact call, and estimating the fee.",
-          labels: ["Validate details", "Authorize", "Broadcast", "Confirm on Starknet"],
-          liveness: "This normally takes less than a second.",
-          states: ["active", "pending", "pending", "pending"],
-          title: "Preparing a safe review",
-        };
-  }
   if (state.stage === "broadcasting") {
     return {
       copy: "Device approval passed verification. The locked transaction is being broadcast.",

@@ -71,8 +71,10 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   activeStateCoordinator: ctx.activeStateCoordinator,
   activity: ctx.activity,
   allowanceStore: ctx.allowanceStore,
+  balanceSnapshots: ctx.balanceSnapshots,
   ledgerSignQueue: ctx.ledgerSignQueue,
   multisigStore: ctx.multisigStore,
+  ...(ctx.nftSnapshots ? { nftSnapshots: ctx.nftSnapshots } : {}),
   now: ctx.now,
   preferencesStore: ctx.preferencesStore,
   runtimeRpc: ctx.runtimeRpc,
@@ -92,6 +94,7 @@ const MULTISIG_ACTIVE_STATE_MESSAGES = new Set([
   "wallet.importArgentMultisigIntent",
   "wallet.importArgentMultisigSignature",
   "wallet.prepareArgentMultisigIntent",
+  "wallet.removeArgentMultisigIntent",
   "wallet.removeMultisig",
   "wallet.reviewArgentMultisigDeployment",
   "wallet.signArgentMultisigIntent",
@@ -358,11 +361,16 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
 
 const handlePreferences: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.importPreferences") {
-    return handlePreferenceOps(ctx.preferencesStore, messageType, message);
+    const response = await handlePreferenceOps(ctx.preferencesStore, messageType, message);
+    if (messageType === "wallet.setNftIndexerUrl" && response && "preferences" in response) {
+      await ctx.nftSnapshots?.clearAll().catch(() => undefined);
+    }
+    return response;
   }
   return ctx.activeStateCoordinator.run(async () => {
     const response = await handlePreferenceOps(ctx.preferencesStore, messageType, message);
     if (response && "preferences" in response) {
+      await ctx.nftSnapshots?.clearAll().catch(() => undefined);
       await reconcileUnlockedActiveAccount(ctx.wallet, ctx.session, ctx.preferencesStore);
     }
     return response;

@@ -63,7 +63,6 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   .receipt-row dd code { color: var(--mc-text); overflow-wrap: normal; word-break: normal; }
   .receipt-row dd .icon-button { height: 28px; min-height: 0; width: 28px; }
   .receipt-row dd .icon-button .icon { height: 15px; width: 15px; }
-
   /* Approval request facts use the same receipt grammar, but allow long
      untrusted identifiers to wrap inside the panel instead of widening it. */
   .request-detail {
@@ -103,19 +102,16 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     word-break: break-all;
   }
   .review-calls {
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
     display: grid;
     gap: ${SPACE.sm};
     min-width: 0;
-    padding: ${SPACE.md};
+    padding: 0;
   }
   .review-call {
     min-width: 0;
     overflow-wrap: anywhere;
     word-break: break-word;
   }
-
   /* Segmented control: one recessed track, equal flat options, the active one
      lifted on a soft panel chip. Used for small either/or preferences (theme). */
   .seg {
@@ -184,6 +180,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     padding: ${SPACE.md} ${SPACE.lg} ${SPACE.lg};
     position: relative;
   }
+  details.disclosure:not([open]) > .disclosure-body { display: none; }
   .disclosure-body::before {
     background: var(--mc-hairline);
     content: "";
@@ -210,31 +207,35 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     min-height: 28px;
     text-wrap: nowrap;
   }
-  .approval-takeover { grid-template-rows: minmax(0, 1fr) auto auto; min-height: 0; }
-  .approval-takeover .request-list { min-height: 0; }
+  .approval-takeover { gap: ${SPACE.md}; grid-template-rows: auto minmax(0, 1fr) auto auto; min-height: 0; }
+  .approval-takeover .request-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .approval-takeover .request-card {
     background: transparent;
     border-radius: 0;
     box-shadow: none;
     display: flex;
     flex-direction: column;
+    gap: ${SPACE.sm};
     min-height: 100%;
     padding: 0;
   }
   .approval-takeover .request-site {
     background: var(--mc-panel);
-    border-radius: ${RADIUS.lg};
-    box-shadow: var(--mc-elev-sm);
-    padding: ${SPACE.lg};
+    border-radius: ${RADIUS.md};
+    padding: ${SPACE.sm} ${SPACE.md};
   }
   .approval-takeover .request-site-mark {
     background: var(--mc-accent-soft);
     color: var(--mc-accent);
   }
   .approval-takeover .request-site-copy strong {
-    font-size: ${TYPE.title.size};
+    font-size: ${TYPE.body.size};
     letter-spacing: -0.01em;
   }
+  .approval-takeover .request-copy, .approval-takeover .decision-layer { gap: ${SPACE.xs}; }
+  .approval-takeover .request-token { align-items: center; display: inline-flex; gap: 6px; }
+  .approval-takeover .request-token .token-logo, .approval-takeover .request-token .token-mark { height: 22px; width: 22px; }
+  .approval-takeover .request-token .token-mark { font-size: 8px; letter-spacing: 0; line-height: 1; }
   .approval-takeover .review-panel {
     background: transparent;
     border-radius: 0;
@@ -242,21 +243,21 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     padding: ${SPACE.md} 0 0;
   }
   .approval-takeover .review-flag {
-    align-items: flex-start;
+    align-items: center;
     color: var(--mc-muted);
     display: flex;
     gap: ${SPACE.sm};
     line-height: ${TYPE.caption.line};
   }
-  .approval-takeover .review-flag .icon { color: var(--mc-danger); flex: none; margin-top: 1px; }
+  .approval-takeover .review-flag .icon { color: var(--mc-danger); flex: none; }
   .approval-takeover .button-row {
     grid-template-columns: minmax(0, 1fr) minmax(104px, auto);
     margin-top: auto;
-    padding-top: ${SPACE.xl};
+    padding-top: ${SPACE.sm};
   }
   .takeover-queue { color: var(--mc-muted); font-size: ${TYPE.caption.size}; text-align: center; }
   .takeover-foot { display: grid; gap: ${SPACE.sm}; }
-  .takeover-foot button.ghost { justify-self: center; min-height: ${SPACE.xl}; }
+  .takeover-foot button.ghost { justify-self: center; min-height: ${CONTROL.hitSmall}; }
 
   /* Ledger sign takeover: a keyless-Ledger request parks in the background and
      must be fulfilled from the panel that owns the device, so while one is

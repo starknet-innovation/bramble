@@ -94,4 +94,40 @@ describe("ledgerSignScreen", () => {
     );
     expect(html).not.toContain("Account ");
   });
+
+  test("every phase shows the signing hash at the padded width the device displays", () => {
+    // A realistic full-width hash, not a short stub: the panel must render the
+    // same 64 digits the device is handed, so a narrower rendering would ask the
+    // user to compare two different spellings of one number.
+    // 63 digits — the widest a felt can be under the field prime — so padding to
+    // the device's 64 adds exactly one leading zero.
+    const messageHash = `0x${"3f".repeat(31)}a`;
+    const padded = `0x0${messageHash.slice(2)}`;
+    for (const phase of [
+      { kind: "connect" },
+      { kind: "confirming" },
+      { kind: "verifying" },
+      { kind: "submitting" },
+    ] as const) {
+      const html = ledgerSignScreen({ phase, request: { ...request, messageHash } }, status);
+      expect(html).toContain("Hash shown on your Ledger");
+      // Copy hands over the unbroken padded value, never the grouped rendering.
+      expect(html).toContain(`data-copy="${padded}"`);
+      // Grouped in fours for character-by-character comparison; stripping the
+      // markup must recover exactly the padded hash the device receives.
+      const value = html.split('<p class="ledger-hash-value">')[1]?.split("</p>")[0] ?? "";
+      expect(value.replace(/<[^>]*>/g, "")).toBe(padded);
+      // 64 digits in groups of four.
+      expect(value.match(/<span>[0-9a-f]{4}<\/span>/g)).toHaveLength(16);
+    }
+  });
+
+  test("a short hash is padded rather than shown at its narrow width", () => {
+    const html = ledgerSignScreen(
+      { phase: { kind: "confirming" }, request: { ...request, messageHash: "0xabc" } },
+      status,
+    );
+    const value = html.split('<p class="ledger-hash-value">')[1]?.split("</p>")[0] ?? "";
+    expect(value.replace(/<[^>]*>/g, "")).toBe(`0x${"abc".padStart(64, "0")}`);
+  });
 });
