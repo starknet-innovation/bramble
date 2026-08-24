@@ -3,8 +3,9 @@ import type { ArgentMultisigConfig } from "@mc-wallet/multisig/chain";
 import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
 import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
+import { matchesArgentPublicConfig, storedArgentPublicConfig } from "./multisig-config-reconcile";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
-import { type ArgentMultisigContext, currentConfigFor } from "./multisig-ops";
+import { type ArgentMultisigContext, currentChainConfigFor } from "./multisig-ops";
 
 const contextForIntent = async (
   deps: MultisigOpsDeps,
@@ -46,16 +47,17 @@ export const currentArgentIntentContext = async (
   markStale = true,
 ): Promise<
   | {
-      readonly config: Awaited<ReturnType<typeof currentConfigFor>>;
+      readonly config: ArgentMultisigConfig;
       readonly context: ArgentMultisigContext;
+      readonly publicConfig: ReturnType<typeof storedArgentPublicConfig>;
     }
   | { readonly error: string }
 > => {
   const context = await contextForIntent(deps, intent);
   if ("error" in context) return context;
   try {
-    const config = await currentConfigFor(deps, context);
-    if (!sameConfig(intent.configSnapshot, config.chain)) {
+    const config = await currentChainConfigFor(deps, context);
+    if (!sameConfig(intent.configSnapshot, config)) {
       if (markStale) await deps.multisigStore.upsertIntent({ ...intent, state: "stale" });
       return { error: "Argent multisig intent is stale after a configuration change" };
     }
@@ -67,7 +69,12 @@ export const currentArgentIntentContext = async (
       if (markStale) await deps.multisigStore.upsertIntent({ ...intent, state: "stale" });
       return { error: "Argent multisig intent nonce is no longer current" };
     }
-    return { config, context };
+    const stored = storedArgentPublicConfig(context.record);
+    return {
+      config,
+      context,
+      publicConfig: stored && matchesArgentPublicConfig(stored, config) ? stored : null,
+    };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Argent multisig config unavailable" };
   }

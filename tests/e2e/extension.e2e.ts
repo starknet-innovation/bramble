@@ -73,15 +73,35 @@ test("imports an existing recovery phrase without backup verification", async ({
   await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
 });
 
+// localtest.me is a public name for 127.0.0.1: it resolves if the rule is gone.
+test("blocks egress to external hosts", async ({ extension }) => {
+  const page = await extension.context.newPage();
+  const failure = await page.goto("http://localtest.me/").catch((error: Error) => error.message);
+
+  expect(failure).toContain("ERR_NAME_NOT_RESOLVED");
+});
+
+// Every read fails under the suite-wide blackhole; the panel must say so.
+test("degrades honestly when network reads fail", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
+
+  // Fiat prices are mainnet-only, which a fresh profile selects by default.
+  await expect(sidepanel.getByText("Live prices are temporarily unavailable.")).toBeVisible();
+
+  await sidepanel.getByRole("tab", { name: "Activity" }).click();
+  await expect(sidepanel.getByText(/Couldn't load on-chain history/)).toBeVisible();
+});
+
 test("creates a wallet and approves a dapp connection", async ({ extension }) => {
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);
 
-  const terminalLink = sidepanel.getByRole("link", { name: "Open trade terminal" });
-  await expect(terminalLink).toBeVisible();
-  await expect(terminalLink).toHaveAttribute("href", "https://mc-wallet-terminal.vercel.app");
-  await expect(terminalLink).toHaveAttribute("target", "_blank");
-  await expect(terminalLink).toHaveAttribute("rel", "noopener noreferrer");
+  const starkscanLink = sidepanel.getByRole("link", { name: "Open Starkscan" });
+  await expect(starkscanLink).toBeVisible();
+  await expect(starkscanLink).toHaveAttribute("href", "https://starkscan.co/");
+  await expect(starkscanLink).toHaveAttribute("target", "_blank");
+  await expect(starkscanLink).toHaveAttribute("rel", "noopener noreferrer");
 
   await sidepanel.getByRole("button", { name: "Lock wallet" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Welcome back" })).toBeVisible();
@@ -149,9 +169,9 @@ test("signs SNIP-12 typed data through the injected provider approval", async ({
     await resolvePendingApproval(sidepanel, "Sign request", dappServer.origin, "approve");
 
     await expect(dapp.getByTestId("sign-result")).toContainText('"status":"resolved"');
-    // The default Argent account returns its Stark signer envelope.
+    // The default OpenZeppelin account returns the Stark signature pair directly.
     await expect(dapp.getByTestId("sign-result")).toContainText(
-      /"signature":\["1","0","0x[0-9a-f]+","0x[0-9a-f]+","0x[0-9a-f]+"\]/,
+      /"signature":\["0x[0-9a-f]+","0x[0-9a-f]+"\]/,
     );
   } finally {
     await dappServer.close();

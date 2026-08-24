@@ -58,6 +58,7 @@ const INKS: readonly SkinToken[] = [
   "--mc-accent",
   "--mc-positive",
   "--mc-danger",
+  "--mc-warning",
 ];
 const GROUNDS: readonly SkinToken[] = ["--mc-bg", "--mc-panel", "--mc-elevated", "--mc-sunken"];
 const ACHROMATIC_TOKENS: readonly SkinToken[] = [
@@ -130,14 +131,18 @@ describe.each([
     }
   });
 
-  test("green and red remain reserved semantic signals", () => {
+  test("green, orange, and red remain reserved semantic signals", () => {
     const [positiveRed, positiveGreen, positiveBlue] = token(skin, "--mc-positive");
     const [dangerRed, dangerGreen, dangerBlue] = token(skin, "--mc-danger");
+    const [warningRed, warningGreen, warningBlue] = token(skin, "--mc-warning");
     expect(positiveGreen).toBeGreaterThan(positiveRed);
     expect(positiveGreen).toBeGreaterThan(positiveBlue);
     expect(dangerRed).toBeGreaterThan(dangerGreen);
     expect(dangerRed).toBeGreaterThan(dangerBlue);
+    expect(warningRed).toBeGreaterThan(warningGreen);
+    expect(warningGreen).toBeGreaterThan(warningBlue);
     expect(skin.tokens["--mc-accent"]).not.toBe(skin.tokens["--mc-positive"]);
     expect(skin.tokens["--mc-accent"]).not.toBe(skin.tokens["--mc-danger"]);
+    expect(skin.tokens["--mc-accent"]).not.toBe(skin.tokens["--mc-warning"]);
   });
 });

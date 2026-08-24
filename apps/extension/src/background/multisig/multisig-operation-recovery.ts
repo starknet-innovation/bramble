@@ -12,29 +12,41 @@ import type { MultisigOpsDeps } from "./multisig-deps";
 import { normalizedArgentMultisigCalls } from "./multisig-inputs";
 
 /**
+ * Outcome of checking an exact deterministic submit hash.
+ */
+export type ArgentSubmitResolution =
+  | { readonly intent: ArgentMultisigSigningIntent; readonly kind: "submitted" }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unknown" };
+
+/**
  * Recovers an unresolved submit only from a fresh chain observation of its
- * exact deterministic hash. Missing or failed evidence returns null and never retries a write.
+ * exact deterministic hash. A successful not-found response is distinct from
+ * a failed read so the caller may safely retry only the same frozen payload.
  */
 export const recoverSubmittedArgentIntent = async (
   deps: MultisigOpsDeps,
   intent: ArgentMultisigSigningIntent,
   operationId: string,
-): Promise<ArgentMultisigSigningIntent | null> => {
+): Promise<ArgentSubmitResolution> => {
   const record = (await deps.multisigStore.listMultisigs()).find(
     (candidate) => candidate.id === intent.accountId,
   );
-  if (!record) return null;
+  if (!record) return { kind: "unknown" };
   const preferences = await deps.preferencesStore.read();
-  const reports = await deps.runtimeRpc
-    .getTransactionStatuses({
+  let reports: Awaited<ReturnType<MultisigOpsDeps["runtimeRpc"]["getTransactionStatuses"]>>;
+  try {
+    reports = await deps.runtimeRpc.getTransactionStatuses({
       hashes: [intent.prepared.transactionHash],
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
-    })
-    .catch(() => ({}));
+    });
+  } catch {
+    return { kind: "unknown" };
+  }
   const report = Object.entries(reports).find(([hash]) =>
     sameFelt(hash, intent.prepared.transactionHash),
   )?.[1];
-  if (!report?.found) return null;
+  if (!report?.found) return { kind: "absent" };
   const state =
     report.status === "accepted"
       ? "accepted"
@@ -63,18 +75,35 @@ export const recoverSubmittedArgentIntent = async (
     networkId: record.networkId,
     summary: intent.summary,
   });
-  return recovered;
+  return { intent: recovered, kind: "submitted" };
 };
 
 /**
- * Recovers a deployment hash only from the wallet's validated local activity
- * journal. Missing or malformed evidence returns null and never rebroadcasts.
+ * What a claimed deployment turned out to be. `absent` is a POSITIVE finding —
+ * the chain says nothing was deployed at the counterfactual address — and is
+ * what lets a stuck claim be released; `unknown` is the honest "cannot tell".
  */
-export const recoverArgentDeploymentHash = async (
+export type ArgentDeploymentResolution =
+  | { readonly kind: "deployed"; readonly transactionHash: string | null }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unknown" };
+
+/**
+ * Resolves a claimed deployment without ever rebroadcasting.
+ *
+ * Local activity is consulted first, because it is the only place the exact
+ * transaction hash can come from. When it holds nothing — the case after a
+ * submit whose response was lost, which is exactly when this runs — the chain is
+ * asked instead: a deployment address is fully determined by class hash, salt,
+ * and constructor calldata, so its existence answers the question the missing
+ * hash cannot. A definitive "not deployed" is reported so the caller can release
+ * the claim; only a failed read stays `unknown`.
+ */
+export const resolveArgentDeployment = async (
   deps: MultisigOpsDeps,
   record: ArgentMultisigRecord,
   operationId: string,
-): Promise<string | null> => {
+): Promise<ArgentDeploymentResolution> => {
   const entry = (await deps.activity.list()).find(
     (candidate) =>
       candidate.accountId === record.id &&
@@ -82,7 +111,22 @@ export const recoverArgentDeploymentHash = async (
       candidate.kind === "deploy",
   );
   const hash = entry ? canonicalFelt(entry.hash) : null;
-  if (!hash || BigInt(hash) === 0n) return null;
-  await deps.multisigStore.setOperationHash(operationId, hash).catch(() => {});
-  return hash;
+  if (hash && BigInt(hash) !== 0n) {
+    await deps.multisigStore.setOperationHash(operationId, hash).catch(() => {});
+    return { kind: "deployed", transactionHash: hash };
+  }
+  const preferences = await deps.preferencesStore.read();
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({
+      accountAddress: record.address,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
+    })
+    .then(
+      (value) => value,
+      // A read that failed proves nothing either way, and guessing here would
+      // either strand a live account or release a claim over a real deployment.
+      () => null,
+    );
+  if (deployed === null) return { kind: "unknown" };
+  return deployed ? { kind: "deployed", transactionHash: null } : { kind: "absent" };
 };

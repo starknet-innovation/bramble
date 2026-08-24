@@ -44,8 +44,8 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
   const passwordRequirement = passwordResult?.closest<HTMLElement>(".password-requirement");
   const ackCheckbox = form?.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
   const button = form?.querySelector<HTMLButtonElement>("#ledger-setup-button");
-  const accountContractSelect = form?.querySelector<HTMLSelectElement>(
-    'select[name="ledgerAccountContractType"]',
+  const accountContractInput = form?.querySelector<HTMLInputElement>(
+    'input[name="ledgerAccountContractType"]',
   );
   const result = form?.querySelector<HTMLElement>("#ledger-passphrase-result");
   const initiallyReady = !(button?.disabled ?? true);
@@ -91,16 +91,16 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
 
   button?.addEventListener("click", () => {
     if (!passphraseOk()) {
-      showToast("Passphrase must be at least 12 characters", "error");
+      showToast("Passphrase must be at least 12 characters", "error", form);
       return;
     }
     if (!ackOk()) {
-      showToast("Acknowledge the real-funds warning first", "error");
+      showToast("Acknowledge the real-funds warning first", "error", form);
       return;
     }
-    const accountContractType = accountContractSelect?.value;
+    const accountContractType = accountContractInput?.value;
     if (!isAccountContractType(accountContractType)) {
-      showToast("Choose a supported account contract", "error");
+      showToast("Choose a supported account contract", "error", form);
       return;
     }
     deps.startLedgerSetup(MAINNET_NETWORK_ID, passphraseInput?.value ?? "", accountContractType);

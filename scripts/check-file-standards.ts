@@ -153,6 +153,12 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-model.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-runtime.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-ui.ts",
+  // Public intent packages and verified public signature fragments only; all
+  // private signing remains inside the privileged background/Krusty boundary.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-intent-ui.ts",
+  // Renders public signature-fragment transport controls only; private signing
+  // remains behind the privileged background accountHashSigner boundary.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-intent-actions.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-views.ts",
   "packages/features/transactions/src/routing/ledger-verify.ts",
   // Pure public-key verification consolidated for Ledger and KMS probe

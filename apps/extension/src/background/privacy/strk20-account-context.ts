@@ -3,7 +3,11 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import { type Strk20Service, unavailableStrk20Service } from "@mc-wallet/privacy/service";
+import {
+  STRK20_SERVICE_UNAVAILABLE,
+  type Strk20Service,
+  unavailableStrk20Service,
+} from "@mc-wallet/privacy/service";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { canonicalFelt, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
@@ -67,15 +71,22 @@ export const strk20AccountContext = (
       // at all, and again before the key is returned, so a lock during
       // derivation revokes it instead of handing it to the SDK.
       requireLiveSession();
+      // Each cause names itself. These three once shared one bare line with
+      // several unrelated failures, and spelled it as a literal rather than the
+      // shared constant, so a search for the constant could not even find them.
       if (!deriveViewingKey) {
-        throw new WalletError("strk20 services unavailable");
+        throw new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: no viewing-key provider is wired`);
       }
       if (!config) {
-        throw new WalletError("strk20 services unavailable");
+        throw new WalletError(
+          `${STRK20_SERVICE_UNAVAILABLE}: no privacy routing is configured for this network`,
+        );
       }
       const poolAddress = canonicalFelt(config.poolAddress);
       if (!poolAddress) {
-        throw new WalletError("strk20 services unavailable");
+        throw new WalletError(
+          `${STRK20_SERVICE_UNAVAILABLE}: the configured pool address is not a valid felt`,
+        );
       }
       const viewingKey = await deriveViewingKey({
         accountId: resolved.account.id,

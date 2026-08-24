@@ -9,15 +9,8 @@ import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
 } from "@mc-wallet/starknet/account-contracts";
+import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@mc-wallet/wallet-model/accounts";
 import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
-
-/**
- * OpenZeppelin `AccountUpgradeable` preset class hash pinned by Krusty KMS
- * (identical on Mainnet and Sepolia). Source of truth: the vendored Krusty KMS
- * manifest documented in README "Account class".
- */
-const OZ_ACCOUNT_UPGRADEABLE_CLASS_HASH =
-  "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381";
 
 /**
  * Normalises a felt-encoded hash to its canonical `0x` hex form so hashes that
@@ -27,7 +20,7 @@ const OZ_ACCOUNT_UPGRADEABLE_CLASS_HASH =
  */
 const buildRegistry = (): ReadonlyMap<string, string> => {
   const entries: readonly (readonly [string, string])[] = [
-    [OZ_ACCOUNT_UPGRADEABLE_CLASS_HASH, "OpenZeppelin (AccountUpgradeable)"],
+    [OPENZEPPELIN_ACCOUNT_CLASS_HASH, "OpenZeppelin (AccountUpgradeable)"],
     [ARGENT_ACCOUNT_CONTRACT.classHash, "Argent Account"],
     [ARGENT_MULTISIG_CONTRACT.classHash, "Argent Multisig"],
   ];

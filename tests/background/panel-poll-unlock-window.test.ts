@@ -242,7 +242,7 @@ describe("panel polling cannot hold the wallet unlocked", () => {
     ]);
 
     expect(lifecycle.split("\n").filter((line) => line.includes("wallet.loadStatus"))).toEqual([
-      "    refresh: withTransactionAlerts(wallet, async () => render(await wallet.loadStatus())),",
+      "    refresh: withTransactionAlerts(document, wallet, async () => render(await wallet.loadStatus())),",
     ]);
     expect(
       transactionAlerts.split("\n").filter((line) => line.includes("wallet.loadTransactionAlerts")),

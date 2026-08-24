@@ -46,12 +46,15 @@ const reviewFeeHtml = (review: TransferReview): string =>
  * renderers.
  */
 export const reviewDetailsHtml = (review: TransferReview): string =>
-  `${reviewCallsList(review.summaries)}${reviewPanel([
-    ...riskFlagMessages(review.flags),
-    ...(review.requiresDeployment
-      ? ["This account is not deployed yet; the first send also submits its deployment."]
-      : []),
-  ])}`;
+  `${reviewCallsList(review.summaries)}${reviewPanel(
+    [
+      ...riskFlagMessages(review.flags),
+      ...(review.requiresDeployment
+        ? ["This account is not deployed yet; the first send also submits its deployment."]
+        : []),
+    ],
+    "No additional wallet warnings were detected. Verify the recipient and decoded action before confirming.",
+  )}`;
 
 /**
  * Renders decoded calls, risk flags, deployment context, and fee state. All

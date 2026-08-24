@@ -271,6 +271,9 @@ const main = async (): Promise<void> => {
     throw new Error("dist/manifest.json is missing; run bun run build before bun run dev:session");
   }
 
+  // The default E2E fixture blocks egress. This manual session deliberately
+  // uses Sepolia, and the flag is scoped to this one launcher process.
+  process.env["MC_E2E_LIVE_NETWORK"] = "1";
   const extension = await launchExtension({
     // Reduced motion collapses the root view transitions to a cut
     // (styles-transitions.ts). Headless never animates them; a headed browser

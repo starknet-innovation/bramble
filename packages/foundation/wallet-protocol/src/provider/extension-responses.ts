@@ -72,6 +72,16 @@ export type WatchAssetToken = {
 };
 
 /**
+ * Trusted token identity referenced by a decoded approval summary. The
+ * background supplies the address alongside the symbol so presentation can
+ * show the bundled mark without inferring token identity from display copy.
+ */
+export type ApprovalReviewAsset = {
+  readonly address: string;
+  readonly symbol: string;
+};
+
+/**
  * One display-only approval snapshot returned by the background.
  */
 export type PendingApproval = {
@@ -89,6 +99,7 @@ export type PendingApproval = {
   readonly kind: ApprovalKind;
   readonly origin: string;
   readonly relayFeeAction?: Strk20WithdrawAction;
+  readonly reviewAssets?: readonly ApprovalReviewAsset[];
   readonly requiresDeployment?: boolean;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;

@@ -62,6 +62,11 @@ describe("transitionSendStage", () => {
     transitionSendStage(view.document, "details", "reviewing", () => {
       updates += 1;
     });
+    expect(view.dataset["sendTransition"]).toBeUndefined();
+
+    transitionSendStage(view.document, "reviewing", "review", () => {
+      updates += 1;
+    });
     expect(view.dataset["sendTransition"]).toBe("forward");
 
     transitionSendStage(view.document, "review", "details", () => {
@@ -75,6 +80,16 @@ describe("transitionSendStage", () => {
     completions[1]?.resolve();
     await Promise.resolve();
     expect(view.dataset["sendTransition"]).toBeUndefined();
-    expect(updates).toBe(2);
+    expect(updates).toBe(3);
+  });
+
+  test("keeps authorization and confirmation on one stable progress surface", () => {
+    const view = fakeDocument(() => Promise.resolve());
+    let updates = 0;
+    transitionSendStage(view.document, "authorizing", "confirming", () => {
+      updates += 1;
+    });
+    expect(updates).toBe(1);
+    expect(view.dataset["sendTransition"]).toBeUndefined();
   });
 });

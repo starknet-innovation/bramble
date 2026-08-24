@@ -29,7 +29,7 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 - **Allowance manager** — see every ERC-20 approval you've granted and revoke it in one tap. An
   approval on a contract the wallet cannot confirm is a token is listed without an amount claim and
   without a revoke control: on an NFT contract the same call would grant rather than revoke.
-- **Liquid Glass UI** — Apple-style glass surfaces, spring motion, and View Transitions, with full reduced-motion support.
+- **Clean Mono UI** — solid achromatic surfaces, purposeful spring motion, and View Transitions, with full reduced-motion support.
 
 Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also available). Mainnet moves real funds. All cryptography runs through the vendored **Krusty KMS** WASM core, and there is no local signing fallback.
 

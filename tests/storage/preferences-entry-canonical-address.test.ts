@@ -64,10 +64,12 @@ describe("entry id builders own the canonical-address invariant", () => {
       address: ETH_MINIMAL,
       label: "Friend",
       networkId: "SN_MAIN",
+      publicKeyX: "0x000abc",
     });
 
     expect(minimal.address).toBe(ETH_PADDED);
     expect(minimal.id).toBe(`SN_MAIN:${ETH_PADDED}`);
+    expect(minimal.publicKeyX).toBe("0xabc");
   });
 
   test("the entry validators reject a non-canonical spelling outright", () => {

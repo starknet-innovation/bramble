@@ -13,6 +13,8 @@ import {
 } from "@mc-wallet/privacy/service";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
@@ -78,6 +80,17 @@ type Strk20OpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
+const actionTokenAddresses = (actions: readonly Strk20Action[]): readonly string[] =>
+  actions.flatMap((action) => ("token" in action ? [action.token] : []));
+
+const reviewAssetsFor = (
+  resolved: ResolvedAccount,
+  addresses: readonly string[],
+): readonly { readonly address: string; readonly symbol: string }[] =>
+  resolved.preferences.tokens
+    .filter((token) => addresses.some((address) => sameFelt(address, token.address)))
+    .map((token) => ({ address: token.address, symbol: token.symbol }));
+
 const queueDisclosure = async (
   deps: Strk20OpsDeps,
   resolved: ResolvedAccount,
@@ -95,6 +108,16 @@ const queueDisclosure = async (
       kind: input.kind,
       origin: input.origin,
       request: input.request,
+      reviewAssets: reviewAssetsFor(
+        resolved,
+        input.request.type === "register"
+          ? [input.request.token]
+          : input.request.type === "balances"
+            ? input.request.tokens
+            : input.request.type === "prepare"
+              ? actionTokenAddresses(input.request.actions)
+              : [],
+      ),
       summaries: input.summaries,
     });
     notifyApprovalsChanged();
@@ -276,6 +299,10 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
       context: await createApprovalContext(resolved.account, payload),
       origin: input.origin,
       plan,
+      reviewAssets: reviewAssetsFor(resolved, [
+        ...actionTokenAddresses(input.actions),
+        ...("feeAction" in plan ? [plan.feeAction.token] : []),
+      ]),
       summaries: [...input.actions.map(summarizeStrk20Action), summarizeStrk20Plan(plan)],
     });
     notifyApprovalsChanged();

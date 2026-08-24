@@ -229,39 +229,45 @@ export const tokenDetailFlow = (
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
         ${
-          registered
-            ? `<div class="private-balance-summary">
+          privacy.error
+            ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
+                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
+                <span class="token-fiat">Try again</span>
+              </button>`
+            : registered
+              ? `<div class="private-balance-summary">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-side">
                   <strong class="token-amount">${escapeHtml(`${compactAmount(privateBalance?.formatted ?? "0")} ${token.symbol}`)}</strong>
                   ${privateFiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(privateFiat, currency))}</span>`}
                 </span>
               </div>`
-            : privacy.value
-              ? `<div class="private-balance-summary muted" title="${registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
+              : privacy.value
+                ? `<div class="private-balance-summary muted" title="${registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-fiat">${registrationPending ? "Registration pending…" : "Register to start shielding"}</span>
               </div>`
-              : ""
+                : ""
         }
         ${
-          registered
-            ? `<div class="token-privacy-actions">${button({
-                attributes: { "data-send-shield": token.id },
-                icon: "shield",
-                label: "Shield",
-              })}${button({
-                attributes: { "data-send-unshield": token.id },
-                label: "Unshield",
-                variant: "secondary",
-              })}</div>`
-            : button({
-                attributes: { "data-privacy-open": token.id },
-                icon: "shield",
-                label: registrationPending ? "Registration pending" : "Go private",
-              })
+          privacy.error
+            ? ""
+            : registered
+              ? `<div class="token-privacy-actions">${button({
+                  attributes: { "data-send-shield": token.id },
+                  icon: "shield",
+                  label: "Shield",
+                })}${button({
+                  attributes: { "data-send-unshield": token.id },
+                  label: "Unshield",
+                  variant: "secondary",
+                })}</div>`
+              : button({
+                  attributes: { "data-privacy-open": token.id },
+                  icon: "shield",
+                  label: registrationPending ? "Registration pending" : "Go private",
+                })
         }
-        ${privacy.error ? `<p class="hint">${escapeHtml(privacy.error)}</p>` : ""}
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>

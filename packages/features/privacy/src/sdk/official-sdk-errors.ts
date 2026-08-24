@@ -224,8 +224,17 @@ export const mapStrk20ProtocolError = (error: unknown): never => {
   if (isRetryableStrk20ServiceError(error)) {
     throw new WalletError(`${STRK20_SERVICE_UNAVAILABLE} (rate limited; retry shortly)`);
   }
-  const message = error instanceof Error ? error.message : "";
-  throw new WalletError(markerFor(message, BASE_MARKERS) ?? STRK20_SERVICE_UNAVAILABLE);
+  // The sanitized cause is appended, exactly as `mapStrk20StageError` does
+  // below. Discarding it made every unrecognised failure — an SDK TypeError, a
+  // shape mismatch, a missing collaborator — arrive as the same bare line that
+  // four unrelated wallet-side checks also produce, so the message identified
+  // nothing and a real integration bug could only be found in a debugger.
+  // `sanitizeStrk20Detail` keeps note material, proofs, secrets, and endpoints
+  // out of it.
+  const text = failureText(error);
+  const base = markerFor(text, BASE_MARKERS) ?? STRK20_SERVICE_UNAVAILABLE;
+  const detail = sanitizeStrk20Detail(text);
+  throw new WalletError(detail === "" ? base : `${base}: ${detail}`);
 };
 
 /**

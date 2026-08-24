@@ -59,8 +59,12 @@ const protectAndSelectAccount = async (
 ): Promise<void> => {
   await sidepanel.locator('input[name="vaultPassphrase"]').fill(passphrase);
   await sidepanel.locator('input[name="vaultPassphraseConfirm"]').fill(passphrase);
-  await sidepanel.getByRole("button", { name: "Review account" }).click();
-  await expect(sidepanel.getByRole("heading", { name: "Choose accounts to add" })).toBeVisible();
+  await sidepanel.getByRole("button", { name: "Choose account contract" }).click();
+  await expect(
+    sidepanel.getByRole("heading", { name: "Choose your account contract" }),
+  ).toBeVisible();
+  await sidepanel.getByRole("button", { name: "Review OpenZeppelin account" }).click();
+  await expect(sidepanel.getByRole("heading", { name: "Review your account" })).toBeVisible();
   await sidepanel.locator("#account-preview").click();
   await acknowledgeMainnetIfPresent(sidepanel);
   await expect(sidepanel.getByRole("button", { name: "Add selected account" })).toBeEnabled();
@@ -215,7 +219,7 @@ export const resolvePendingApproval = async (
   await openPendingWalletSurface(sidepanel, timeout, abort);
   await expect(sidepanel.getByText("Review request")).toBeVisible();
   await expect(sidepanel.getByText(eyebrow, { exact: true }).first()).toBeVisible();
-  // The origin renders in both the takeover header and the request card.
-  await expect(sidepanel.getByText(origin).first()).toBeVisible();
+  // The compact card shows the host while preserving the exact origin as its title.
+  await expect(sidepanel.getByTitle(origin).first()).toBeVisible();
   await sidepanel.locator(`[data-approval-action="${action}"]`).click();
 };

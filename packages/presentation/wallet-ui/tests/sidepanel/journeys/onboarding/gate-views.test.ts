@@ -37,7 +37,11 @@ describe("onboarding gate view", () => {
     expect(html).toContain('data-onboarding-step="method"');
     expect(html).toContain('data-onboarding-step="recovery"');
     expect(html).toContain('data-onboarding-step="password"');
+    expect(html).toContain('data-onboarding-step="account-contract"');
     expect(html).toContain('data-onboarding-step="accounts"');
+    expect(html).toMatch(/data-account-contract="openzeppelin"[^>]*aria-pressed="true"/);
+    expect(html).toMatch(/data-account-contract="argent"[^>]*aria-pressed="false"/);
+    expect(html).toContain('name="accountContractType" type="hidden" value="openzeppelin"');
     expect(html).toContain('aria-pressed="false"');
     expect(html.match(/data-recovery-kind="import"/g)?.length).toBe(24);
   });
@@ -73,6 +77,7 @@ describe("onboarding gate view", () => {
     const html = onboarding(status);
 
     expect(html).toContain('data-onboarding-step="ledger"');
+    expect(html).toContain('data-onboarding-step="ledger-contract"');
     expect(html).toContain("data-ledger-first-run");
     expect(html).toContain('name="ledgerVaultPassphrase"');
     expect(html).toContain('name="ledgerVaultPassphraseConfirm"');
@@ -91,6 +96,11 @@ describe("onboarding gate view", () => {
     expect(ackRow).not.toContain("hidden");
     expect(onboarding(sepolia)).toContain('name="accountContractType"');
     expect(onboarding(sepolia)).toContain('name="ledgerAccountContractType"');
+    expect(onboarding(sepolia)).toContain('data-account-contract="argent"');
+    expect(onboarding(sepolia)).toContain('data-ledger-account-contract="openzeppelin"');
+    expect(onboarding(sepolia)).toContain(
+      'name="ledgerAccountContractType" type="hidden" value="openzeppelin"',
+    );
     expect(onboarding(sepolia)).not.toContain('name="networkId"');
   });
 });

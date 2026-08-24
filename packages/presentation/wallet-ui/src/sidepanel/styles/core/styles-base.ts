@@ -58,7 +58,12 @@ export const BASE_STYLES = `
     --mc-avatar-3: hsl(0 0% 72%);
   }
   * { box-sizing: border-box; }
-  html, body, #app { min-height: 100%; }
+  html, body, #app {
+    max-width: 100%;
+    min-height: 100%;
+    min-width: 0;
+    width: 100%;
+  }
   body {
     background: var(--mc-bg);
     color: var(--mc-text);
@@ -67,6 +72,7 @@ export const BASE_STYLES = `
     -webkit-font-smoothing: antialiased;
     line-height: ${TYPE.body.line};
     margin: 0;
+    overscroll-behavior-y: none;
     overflow-x: hidden;
   }
   body.popup-surface {
@@ -76,17 +82,29 @@ export const BASE_STYLES = `
   body.popup-surface #app { min-height: 600px; }
   h1, h2, h3, p, ul { margin: 0; }
   ul { list-style: none; padding: 0; }
-  h1 { font-size: ${TYPE.title.size}; font-weight: 700; letter-spacing: -0.02em; line-height: ${TYPE.title.line}; }
+  h1 { font-size: ${TYPE.display.size}; font-weight: 700; letter-spacing: -0.02em; line-height: ${TYPE.display.line}; }
   h2 { font-size: ${TYPE.title.size}; font-weight: 700; letter-spacing: -0.01em; line-height: ${TYPE.title.line}; }
   p { color: var(--mc-muted); }
   .shell {
     display: flex;
     flex-direction: column;
     gap: ${SPACE.lg};
+    max-width: 100%;
     min-height: 100vh;
+    min-width: 0;
     padding: ${SPACE.md} ${SPACE.lg} ${SPACE.md};
+    width: 100%;
   }
-  .screen { align-content: start; display: grid; flex: 1; gap: ${SPACE.lg}; }
+  .screen {
+    align-content: start;
+    display: grid;
+    flex: 1;
+    gap: ${SPACE.lg};
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+  .screen > * { max-width: 100%; min-width: 0; }
   /* Dock screens scroll their content UNDER the anchored bottom bar. Reserve
      clearance below the content equal to the bar footprint plus a breathing
      gap, so the last row never hides beneath it at any scroll position. Flow
@@ -122,6 +140,12 @@ export const BASE_STYLES = `
   }
   .section > .row:has(> h2) { padding: 0 ${SPACE.sm}; }
   .section-head h2 { font-size: ${TYPE.body.size}; font-weight: 700; }
+  .activity-head h1 {
+    font-size: ${TYPE.display.size};
+    font-weight: ${WEIGHT.bold};
+    letter-spacing: ${TRACKING.display};
+    line-height: ${TYPE.display.line};
+  }
   .eyebrow {
     color: var(--mc-muted);
     font-size: ${TYPE.caption.size};
@@ -198,8 +222,20 @@ export const BASE_STYLES = `
     font-size: ${TYPE.caption.size};
     gap: 6px;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
   }
-  .account-net .dot { height: 6px; width: 6px; }
+  .account-net .dot { flex: none; height: 6px; width: 6px; }
+  .account-network-label { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .account-net.degraded .dot {
+    animation: network-status-pulse 2400ms var(--ease-in-out) infinite;
+    background: var(--mc-warning);
+  }
+  @keyframes network-status-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.42; }
+  }
   .header-actions { align-items: center; display: flex; flex: none; gap: ${SPACE.xs}; }
 
   /* Portfolio hero: only the value and its time-bound change remain. Account
@@ -236,10 +272,9 @@ export const BASE_STYLES = `
   .hero-change .hero-change-amt { color: var(--mc-positive); }
   .hero-change.down .hero-change-amt { color: var(--mc-danger); }
   .hero-change .hero-change-win { color: var(--mc-muted); font-weight: 500; }
-  /* Degraded-price notice: a muted, low-key line so saved/unavailable prices
-     read as an honest caveat under the total, never as an error state. */
-  .hero-stale,
-  .hero-partial {
+  /* Shielded-balance qualifier stays quiet beneath the total; network
+     freshness now belongs to the persistent header status. */
+  .hero-stale {
     align-items: center;
     color: var(--mc-muted);
     display: inline-flex;
@@ -304,7 +339,7 @@ export const BASE_STYLES = `
     padding: 2px 0 ${SPACE.xs};
   }
   .flow-title { display: grid; flex: 1; gap: 1px; min-width: 0; }
-  .flow-title h1 { font-size: ${TYPE.title.size}; }
+  .flow-title h1 { font-size: ${TYPE.display.size}; }
   .flow-title p {
     color: var(--mc-muted);
     font-size: ${TYPE.caption.size};
