@@ -22,6 +22,11 @@ export {
   type StarkHashSigner,
   type StarknetAccountDescriptor,
 } from "./account-signer";
+export {
+  isBlockNotFoundError,
+  isContractNotFoundError,
+  isTransactionNotFoundError,
+} from "./rpc-not-found";
 
 /**
  * Thrown when no endpoint reports the expected chain. The UI maps this exact
@@ -111,6 +116,25 @@ export class RpcTransportError extends WalletError {
 }
 
 /**
+ * A refusal the endpoint produced BEFORE the node could have seen the request —
+ * a rate limit or gateway rejection answered in place of a JSON-RPC result.
+ *
+ * It extends {@link RpcTransportError} so a read still fails over to the next
+ * configured endpoint, but the broadcast guard treats it as DETERMINATE: the
+ * transaction was never submitted, so there is no ambiguity to preserve and a
+ * retry is safe. That distinction is load-bearing. Classified as ambiguity, a
+ * rate-limited submit leaves a durable operation claim with no transaction hash,
+ * and because a deploy's hash is only ever recovered from local evidence, the
+ * counterfactual address can never be deployed again.
+ */
+export class RpcRefusedError extends RpcTransportError {
+  public constructor(message: string) {
+    super(message);
+    this.name = "RpcRefusedError";
+  }
+}
+
+/**
  * Wall-clock budget for a single Starknet JSON-RPC request. Each request gets
  * its own budget, so a multi-request operation is bounded by its step count and
  * never by one endpoint's willingness to keep a socket open.
@@ -149,6 +173,32 @@ export const RPC_BODY_LIMIT_BYTES = 32 * 1024 * 1024;
 // constants); anything that is not a `WalletError` is already classified as
 // transport and is left exactly as thrown, so no raw transport text is
 // promoted into a displayable wallet message.
+// Longest body still considered a possible refusal note. A gateway saying "no"
+// answers in tens of bytes; bounding the check keeps a multi-megabyte Sierra
+// class from being parsed twice on every read.
+const REFUSAL_BODY_LIMIT_BYTES = 1024;
+
+// Recognizes an answer the ENDPOINT produced instead of the node: an HTTP 429,
+// or a body whose `error` is a bare string. A JSON-RPC error is always an object
+// carrying a numeric `code` (that is what `isTransportRpcError` keys on), so a
+// string there is a gateway speaking for itself. Observed shape from the
+// wallet's own mainnet endpoint under load: HTTP 200 with `{"error":
+// "rate_limited"}`, which is why status alone is not enough.
+const endpointRefusal = (text: string, status: number): boolean => {
+  if (status === 429) {
+    return true;
+  }
+  if (text.length > REFUSAL_BODY_LIMIT_BYTES) {
+    return false;
+  }
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return isRecord(parsed) && typeof parsed["error"] === "string";
+  } catch {
+    return false;
+  }
+};
+
 const boundedRpcResponse = async (response: Response, deadline: AbortSignal): Promise<Response> => {
   if (!response.body) {
     return response;
@@ -158,6 +208,9 @@ const boundedRpcResponse = async (response: Response, deadline: AbortSignal): Pr
       throw error instanceof WalletError ? new RpcTransportError(error.message) : error;
     },
   );
+  if (endpointRefusal(text, response.status)) {
+    throw new RpcRefusedError(RPC_REFUSED_MESSAGE);
+  }
   return new Response(text, {
     headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
     status: response.status,
@@ -233,42 +286,6 @@ export const createRpcProvider = (
   });
 
 /**
- * Checks whether an RPC failure means the queried contract is not deployed.
- */
-export const isContractNotFoundError = (error: unknown): boolean => {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  if (/contract not found/i.test(error.message)) {
-    return true;
-  }
-  const baseError = (error as { readonly baseError?: unknown }).baseError;
-  return isRecord(baseError) && baseError["code"] === 20;
-};
-
-/**
- * Checks whether an RPC failure means the node has no record of the queried
- * transaction hash (`TXN_HASH_NOT_FOUND`, JSON-RPC error 29).
- *
- * This is a semantic answer, not a transport failure: the node replied and said
- * it does not know the hash. Callers must still treat a single not-found as
- * noise — a hash can legitimately be unknown to one node moments after
- * broadcast, and a pre-confirmed transaction can disappear when its block
- * proposal fails to commit. Use {@link isTransportRpcError} to keep "we could
- * not ask" apart from "the node says it is gone".
- */
-export const isTransactionNotFoundError = (error: unknown): boolean => {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  if (/transaction hash not found/i.test(error.message)) {
-    return true;
-  }
-  const baseError = (error as { readonly baseError?: unknown }).baseError;
-  return isRecord(baseError) && baseError["code"] === 29;
-};
-
-/**
  * Checks whether an RPC failure is transport-level (node unreachable or
  * malfunctioning) rather than a semantic contract or execution error.
  *
@@ -301,10 +318,25 @@ const BROADCAST_RPC_METHODS = new Set([
 const PREPARATION_UNAVAILABLE =
   "Transaction could not be prepared. Check your connection or RPC endpoint.";
 
+/**
+ * Curated line for an endpoint that turned a request away before the node could
+ * have seen it. Determinate on purpose: it invites the retry that
+ * {@link INDETERMINATE_RPC_WRITE_MESSAGE} must not.
+ */
+export const RPC_REFUSED_MESSAGE =
+  "The RPC endpoint refused this request (rate limit or gateway rejection). Nothing was submitted - wait a moment and try again.";
+
 const runRpcBroadcast = async <T>(broadcast: () => Promise<T>): Promise<T> => {
   try {
     return await broadcast();
   } catch (error) {
+    // Checked before the transport rule: a refusal is transport-shaped (so reads
+    // still fail over) but is NOT post-submission ambiguity. Reporting it as
+    // ambiguous permanently burns a counterfactual deploy address, because the
+    // operation claim is kept with no hash that could ever resolve it.
+    if (error instanceof RpcRefusedError) {
+      throw new WalletError(error.message);
+    }
     if (isTransportRpcError(error)) {
       throw new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE);
     }
@@ -386,6 +418,21 @@ export const withRpcFallback = async <T>(
   throw lastError;
 };
 
+// Maps a failed write to what the caller should see. The order is the whole
+// point: post-submission ambiguity is preserved first and never downgraded; a
+// determinate endpoint refusal then keeps its own actionable line instead of
+// collapsing into the generic preparation failure; only an otherwise-transport
+// failure becomes that generic error.
+const writeFailure = (error: unknown): unknown => {
+  if (error instanceof IndeterminateRpcWriteError) {
+    return error;
+  }
+  if (error instanceof RpcRefusedError) {
+    return new WalletError(error.message);
+  }
+  return isTransportRpcError(error) ? new WalletError(PREPARATION_UNAVAILABLE) : error;
+};
+
 /**
  * Selects a chain-matching endpoint with read-only probes, then runs a
  * state-changing operation exactly once. Only the three add-transaction JSON-
@@ -424,12 +471,6 @@ export const withRpcWrite = async <T>(
   try {
     return await run(guardRpcBroadcasts(selected));
   } catch (error) {
-    if (error instanceof IndeterminateRpcWriteError) {
-      throw error;
-    }
-    if (isTransportRpcError(error)) {
-      throw new WalletError(PREPARATION_UNAVAILABLE);
-    }
-    throw error;
+    throw writeFailure(error);
   }
 };

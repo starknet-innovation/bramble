@@ -5,10 +5,45 @@
  * support only — never imported by production code.
  */
 
+import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { account } from "@mc-wallet/testkit/sidepanel";
-import type { WalletStatus } from "../../src/popup/responses/responses";
+import type { TokenBalance, WalletStatus } from "../../src/popup/responses/responses";
+import { sendFlow } from "../../src/sidepanel/app/screens/flows";
+import type { TransferUiDeps } from "../../src/sidepanel/journeys/send/transfer-ui";
 
 const originalSetTimeout = globalThis.setTimeout;
+
+export const TRANSFER_RECIPIENT =
+  "0x02a3f4b1c5d6e7089a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071";
+
+const TOKEN_ADDRESS = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+
+export const transferPreferences: WalletPreferences = {
+  activeNetworkId: "SN_MAIN",
+  addressBook: [],
+  schemaVersion: 1,
+  tokens: [
+    {
+      address: TOKEN_ADDRESS,
+      decimals: 18,
+      id: `SN_MAIN:ETH:${TOKEN_ADDRESS}`,
+      name: "Ether",
+      networkId: "SN_MAIN",
+      symbol: "ETH",
+    },
+  ],
+};
+
+export const transferPublicBalance: TokenBalance = {
+  address: TOKEN_ADDRESS,
+  balance: "100000000000000000000",
+  decimals: 18,
+  formatted: "100",
+  id: `SN_MAIN:ETH:${TOKEN_ADDRESS}`,
+  name: "Ether",
+  networkId: "SN_MAIN",
+  symbol: "ETH",
+};
 
 /**
  * Flushes queued promise jobs on a real macrotask, independent of any
@@ -150,4 +185,44 @@ export const makeWallet = (
     ...overrides,
   };
   return { calls, wallet };
+};
+
+/** Mounts the real Send template with the shared instrumented wallet. */
+export const mountTransferUi = (
+  walletOverrides: Record<string, unknown> = {},
+): { app: HTMLElement; calls: WalletCalls; renderCalls: WalletStatus[]; deps: TransferUiDeps } => {
+  document.body.replaceChildren();
+  const app = document.createElement("div");
+  app.id = "app";
+  paint(app, sendFlow(walletStatus, account, transferPreferences, [transferPublicBalance]));
+  document.body.append(app);
+  const { calls, wallet } = makeWallet(walletOverrides);
+  const renderCalls: WalletStatus[] = [];
+  return {
+    app,
+    calls,
+    deps: {
+      app,
+      publicBalances: () => [transferPublicBalance],
+      render: async (next: WalletStatus) => {
+        renderCalls.push(next);
+      },
+      wallet: wallet as unknown as TransferUiDeps["wallet"],
+    },
+    renderCalls,
+  };
+};
+
+/** Dispatches the Send form's submit event. */
+export const submitTransferForm = (app: HTMLElement): void => {
+  const form = app.querySelector<HTMLFormElement>("#transfer-form");
+  if (!form) throw new Error("transfer form missing");
+  form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+};
+
+/** Sets one named Send field in a mounted form. */
+export const setTransferField = (app: HTMLElement, name: string, value: string): void => {
+  const input = app.querySelector<HTMLInputElement>(`[name="${name}"]`);
+  if (!input) throw new Error(`field ${name} missing`);
+  input.value = value;
 };

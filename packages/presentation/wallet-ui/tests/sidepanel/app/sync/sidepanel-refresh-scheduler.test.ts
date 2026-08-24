@@ -78,6 +78,20 @@ describe("refresh scheduler", () => {
     expect([...test.timers.values()].map((timer) => timer.delayMs)).toEqual([10, 20]);
   });
 
+  test("refreshes focus and local changes once without confirmation timers", async () => {
+    let refreshes = 0;
+    const test = harness(async () => {
+      refreshes += 1;
+    });
+
+    test.scheduler.start();
+    test.scheduler.refreshNow();
+    await flush();
+
+    expect(refreshes).toBe(1);
+    expect([...test.timers.values()].map((timer) => timer.delayMs)).toEqual([100]);
+  });
+
   test("collapses overlapping action ticks into one follow-up refresh", async () => {
     let refreshes = 0;
     const refreshGates: (() => void)[] = [];

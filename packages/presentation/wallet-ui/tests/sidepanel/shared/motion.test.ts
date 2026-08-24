@@ -67,7 +67,7 @@ describe("motion helpers", () => {
   test("prefersReducedMotion is false when matchMedia is unavailable", () => {
     // The test environment has no DOM, so the guard should report no preference
     // rather than throwing on the missing global.
-    expect(prefersReducedMotion()).toBe(false);
+    expect(prefersReducedMotion(null)).toBe(false);
   });
 
   test("projectMomentum carries a flick forward in the velocity's direction", () => {

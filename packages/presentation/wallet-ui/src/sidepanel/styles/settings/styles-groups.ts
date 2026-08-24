@@ -6,7 +6,7 @@
  * before the home layer in ./styles.ts so home's reduced-motion block still
  * wins over everything here.
  */
-import { RADIUS, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, RADIUS, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
 
 /**
  * Group-management stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -25,7 +25,7 @@ export const GROUP_STYLES = `
     font-size: ${TYPE.caption.size};
     font-weight: 650;
     gap: 5px;
-    min-height: 28px;
+    min-height: ${CONTROL.hitSmall};
     padding: 0 ${SPACE.sm};
   }
   button.group-chip .icon { height: 14px; width: 14px; }
@@ -45,7 +45,9 @@ export const GROUP_STYLES = `
      account shows its folder's icon at full ink. */
   button.drawer-assign.is-ungrouped { color: var(--mc-muted); }
   .option-group-item { display: grid; gap: 4px; }
-  .account-groups-line { display: inline-flex; gap: 4px; margin-top: 2px; }
+  .option-name { align-items: center; display: flex; gap: 6px; min-width: 0; }
+  .option-name strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .account-groups-line { display: inline-flex; flex: none; gap: 4px; }
   .account-groups-line .icon { color: var(--mc-muted); height: 13px; width: 13px; }
   .group-assign {
     background: var(--mc-soft);
@@ -64,7 +66,7 @@ export const GROUP_STYLES = `
     display: flex;
     gap: ${SPACE.sm};
     justify-content: flex-start;
-    min-height: 36px;
+    min-height: ${CONTROL.hitSmall};
     padding: 0 ${SPACE.sm};
     width: 100%;
   }
@@ -83,7 +85,7 @@ export const GROUP_STYLES = `
     background: var(--mc-elevated);
     border-radius: ${RADIUS.sm};
     color: var(--mc-text);
-    min-height: 38px;
+    min-height: ${CONTROL.hitSmall};
     padding: 0 ${SPACE.sm};
     width: 100%;
   }
@@ -99,7 +101,7 @@ export const GROUP_STYLES = `
     color: var(--mc-muted);
     display: inline-flex;
     justify-content: center;
-    min-height: 34px;
+    min-height: ${CONTROL.hitSmall};
     padding: 0;
   }
   button.group-icon-option .icon { height: 18px; width: 18px; }

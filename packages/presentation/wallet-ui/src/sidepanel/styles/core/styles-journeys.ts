@@ -9,6 +9,13 @@ import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
  * Journey-specific styles composed after shared component structure.
  */
 export const JOURNEY_STYLES = `
+  #deploy-review { display: grid; gap: ${SPACE.sm}; width: 100%; }
+  .allowance-review {
+    color: var(--mc-text);
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+    margin-top: ${SPACE.xs};
+  }
   .approval-live {
     align-items: center;
     background: var(--mc-panel);

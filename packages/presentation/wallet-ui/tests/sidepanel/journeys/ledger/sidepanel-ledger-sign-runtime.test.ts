@@ -222,6 +222,30 @@ describe("Ledger sign runtime (DOM)", () => {
     expect(h.mount.hidden).toBe(true);
   });
 
+  test("the live overlay shows the padded hash and offers it for copying", async () => {
+    // The comparison against the device screen must survive the real runtime,
+    // not just the template: the overlay lives outside the app root, so the
+    // panel's own copy binding never reaches it.
+    const messageHash = `0x${"3f".repeat(31)}a`;
+    const padded = `0x0${messageHash.slice(2)}`;
+    const h = mountRuntime(
+      {
+        openConnected: () => Promise.resolve(null),
+        request: () => Promise.reject(new Error("x")),
+      },
+      [{ ...PENDING, messageHash }],
+    );
+    await h.poll();
+    await tick();
+
+    expect(h.mount.hidden).toBe(false);
+    const value = h.mount.querySelector(".ledger-hash-value")?.textContent ?? "";
+    expect(value).toBe(padded);
+    // Copy hands over the unbroken value, never the grouped rendering.
+    const copy = h.mount.querySelector<HTMLButtonElement>("[data-copy]");
+    expect(copy?.dataset["copy"]).toBe(padded);
+  });
+
   test("multiple connected devices render a chooser and the selected id is opened", async () => {
     let openedId: string | undefined;
     const h = mountRuntime(

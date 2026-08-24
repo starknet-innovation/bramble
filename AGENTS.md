@@ -14,10 +14,13 @@ bun run vendor:privacy       # required once before check/build (builds pinned o
 bun run check                # types + lint + standards + manifest + vendored pins + tests
 bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI image)
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
-bun run test:e2e             # Playwright extension E2E (requires dist/)
+bun run test:e2e             # Playwright extension E2E (requires dist/; egress blocked)
 bun run package:extension    # writes artifacts/*.zip + .sha256
 ```
 
+- The E2E suite blackholes DNS, so no test can reach a live host; `test:e2e:mainnet` opts back in
+  via `MC_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
+  flag is set.
 - `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain;
   `bun run vendor:argent` needs network access to the pinned official Argent release; and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,

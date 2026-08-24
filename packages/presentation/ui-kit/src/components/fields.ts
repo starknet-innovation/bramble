@@ -25,11 +25,13 @@ export type TextFieldProps = FieldBase & {
   readonly autocapitalize?: "none" | "off";
   readonly inputmode?: "decimal" | "numeric" | "text";
   readonly list?: string;
+  readonly max?: number;
   readonly maxlength?: number;
+  readonly min?: number;
   readonly minlength?: number;
   readonly placeholder?: string;
   readonly spellcheck?: boolean;
-  readonly type?: "file" | "password" | "text" | "url";
+  readonly type?: "file" | "number" | "password" | "text" | "url";
   readonly value?: string;
 };
 
@@ -92,8 +94,10 @@ export const textField = ({
   hint,
   inputmode,
   list,
+  max,
   maxlength,
   label,
+  min,
   minlength,
   name,
   placeholder,
@@ -102,7 +106,7 @@ export const textField = ({
   value,
   spellcheck,
 }: TextFieldProps): string =>
-  `<label><span>${escapeHtml(label)}</span><input${className ? ` class="${uiClassNames(className)}"` : ""} name="${escapeHtml(name)}" type="${type}"${accept ? ` accept="${escapeHtml(accept)}"` : ""}${autocomplete ? ` autocomplete="${escapeHtml(autocomplete)}"` : ""}${autocapitalize ? ` autocapitalize="${autocapitalize}"` : ""}${inputmode ? ` inputmode="${inputmode}"` : ""}${list ? ` list="${escapeHtml(list)}"` : ""}${maxlength === undefined ? "" : ` maxlength="${maxlength}"`}${minlength === undefined ? "" : ` minlength="${minlength}"`}${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}${spellcheck === undefined ? "" : ` spellcheck="${spellcheck}"`}${value === undefined ? "" : ` value="${escapeHtml(value)}"`}${required ? " required" : ""}${disabled ? " disabled" : ""}${uiAttributes(attributes)} />${fieldHint(hint)}</label>`;
+  `<label><span>${escapeHtml(label)}</span><input${className ? ` class="${uiClassNames(className)}"` : ""} name="${escapeHtml(name)}" type="${type}"${accept ? ` accept="${escapeHtml(accept)}"` : ""}${autocomplete ? ` autocomplete="${escapeHtml(autocomplete)}"` : ""}${autocapitalize ? ` autocapitalize="${autocapitalize}"` : ""}${inputmode ? ` inputmode="${inputmode}"` : ""}${list ? ` list="${escapeHtml(list)}"` : ""}${max === undefined ? "" : ` max="${max}"`}${maxlength === undefined ? "" : ` maxlength="${maxlength}"`}${min === undefined ? "" : ` min="${min}"`}${minlength === undefined ? "" : ` minlength="${minlength}"`}${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}${spellcheck === undefined ? "" : ` spellcheck="${spellcheck}"`}${value === undefined ? "" : ` value="${escapeHtml(value)}"`}${required ? " required" : ""}${disabled ? " disabled" : ""}${uiAttributes(attributes)} />${fieldHint(hint)}</label>`;
 
 /**
  * Shared multiline field configuration.

@@ -16,7 +16,7 @@
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { renderFragment } from "../../shared/dom";
+import { bindCopyButtons, renderFragment } from "../../shared/dom";
 import {
   createLedgerSignController,
   type LedgerConnector,
@@ -56,6 +56,9 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
   let controller: LedgerSignController;
 
   const bindControls = (): void => {
+    // The overlay lives outside the app root, so the panel's own copy binding
+    // never reaches it; bind the hash-copy control against this mount instead.
+    bindCopyButtons(mount);
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-connect]")
       ?.addEventListener("click", () => controller.connect());

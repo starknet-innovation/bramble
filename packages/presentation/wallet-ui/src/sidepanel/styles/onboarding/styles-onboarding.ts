@@ -414,7 +414,8 @@ export const ONBOARDING_STYLES = `
   }
   @media (hover: hover) and (pointer: fine) {
     button.onboarding-option:not(:disabled):hover,
-    button.onboarding-account:not(:disabled):hover {
+    button.onboarding-account:not(:disabled):hover,
+    button.onboarding-contract:not(:disabled):hover {
       background: var(--mc-hover);
       color: var(--mc-text);
     }
@@ -444,7 +445,7 @@ export const ONBOARDING_STYLES = `
   }
   @media (prefers-reduced-motion: reduce) {
     .onboarding-step.is-entering { animation: none; }
-    .onboarding-account-check, .password-requirement-bar > span { transition: none; }
+    .onboarding-account-check, .onboarding-contract-check, .password-requirement-bar > span { transition: none; }
     html[data-onboarding-direction]::view-transition-group(onboarding-stage),
     html[data-onboarding-direction]::view-transition-old(onboarding-stage),
     html[data-onboarding-direction]::view-transition-new(onboarding-stage) { animation: none; }

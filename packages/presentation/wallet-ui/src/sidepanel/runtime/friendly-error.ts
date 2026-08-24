@@ -1,8 +1,8 @@
 /**
  * Maps raw internal error strings surfaced by the background and runtime layers
- * to friendly, user-facing copy for toasts and status lines, and decides whether
- * a copy-to-clipboard affordance is warranted. The mapping is a pure lookup with
- * no DOM, clock, or network access so it can be unit-tested in isolation.
+ * to friendly, user-facing copy for toasts and status lines. The mapping is a
+ * pure lookup with no DOM, clock, or network access so it can be unit-tested in
+ * isolation. Error toasts retain the original diagnostic for copying.
  */
 
 import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
@@ -13,12 +13,6 @@ import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
 export interface FriendlyError {
   /** Human-readable message safe to show to the user. */
   message: string;
-  /**
-   * Whether the original error looked genuinely unexpected (internal) and is
-   * therefore worth offering a copy-to-clipboard affordance for a bug report.
-   * Known validation and user-facing conditions are `false`.
-   */
-  copyable: boolean;
 }
 
 const GENERIC_VALIDATION =
@@ -28,14 +22,14 @@ const NETWORK_UNREACHABLE = "Couldn't reach the network. Check your connection a
 const UNEXPECTED_FALLBACK = "Something went wrong. Please try again.";
 
 // Exact raw strings the background/runtime layers throw for recoverable,
-// user-facing conditions. Matching here means we never show a copy control.
+// user-facing conditions.
 const EXACT: ReadonlyMap<string, string> = new Map([
   ["wallet unavailable", WALLET_UNAVAILABLE],
   // Platform fetch/network rejections bubble up with these messages.
   ["failed to fetch", NETWORK_UNREACHABLE],
   ["network error", NETWORK_UNREACHABLE],
   ["load failed", NETWORK_UNREACHABLE],
-  // Swap (AVNU) conditions a user can act on — explained, never copyable.
+  // Swap (AVNU) conditions a user can act on.
   [
     "no swap route available for this pair",
     "No route found for this pair right now. Try a different amount or pair.",
@@ -60,26 +54,25 @@ const EXACT: ReadonlyMap<string, string> = new Map([
 const VALIDATION_REQUEST = /^invalid .+ request$/;
 
 /**
- * Classifies a raw error string into user-facing copy plus whether a
- * copy-to-clipboard affordance should be offered. Unrecognized non-empty
- * strings are treated as genuinely unexpected internal errors: the original
- * text is kept and marked copyable so a user can share it for a bug report.
+ * Classifies a raw error string into user-facing copy. Unrecognized non-empty
+ * strings remain visible while the toast's copy control retains the original
+ * diagnostic for a bug report.
  */
 export const friendlyError = (raw: string): FriendlyError => {
   const trimmed = raw.trim();
   if (trimmed === "") {
-    return { message: UNEXPECTED_FALLBACK, copyable: false };
+    return { message: UNEXPECTED_FALLBACK };
   }
 
   const normalized = trimmed.toLowerCase();
   const exact = EXACT.get(normalized);
   if (exact) {
-    return { message: exact, copyable: false };
+    return { message: exact };
   }
 
   if (VALIDATION_REQUEST.test(normalized)) {
-    return { message: GENERIC_VALIDATION, copyable: false };
+    return { message: GENERIC_VALIDATION };
   }
 
-  return { message: trimmed, copyable: true };
+  return { message: trimmed };
 };

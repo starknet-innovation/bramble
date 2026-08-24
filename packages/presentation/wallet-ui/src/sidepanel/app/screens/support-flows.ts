@@ -77,6 +77,15 @@ export const addressBookFlow = (
             required: true,
             spellcheck: false,
           })}
+          ${textField({
+            autocomplete: "off",
+            className: "mono",
+            hint: "Lets this contact appear in multisig signer pickers.",
+            label: "Signer public key (optional)",
+            name: "publicKeyX",
+            placeholder: "0x…",
+            spellcheck: false,
+          })}
           <span class="hint">Saving an existing address updates its label.</span>
           ${button({
             icon: "check",
@@ -98,8 +107,10 @@ export const addressBookFlow = (
                     <div class="stack-tight">
                       <strong>${escapeHtml(entry.label)}</strong>
                       <code>${escapeHtml(accountLabel(entry.address))}</code>
+                      ${entry.publicKeyX ? `<span class="hint">Signer key ${escapeHtml(accountLabel(entry.publicKeyX))}</span>` : ""}
                     </div>
                     ${copyButton(entry.address, `Copy ${entry.label}`)}
+                    ${entry.publicKeyX ? copyButton(entry.publicKeyX, `Copy ${entry.label} signer public key`) : ""}
                     ${iconButton({
                       attributes: { "data-remove-address": entry.id },
                       icon: "x",

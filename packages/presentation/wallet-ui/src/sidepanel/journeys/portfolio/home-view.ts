@@ -34,11 +34,6 @@ const heroDelta = (
     </p>`;
 };
 
-const heroPriceNotice = (priceStale: boolean, hasPrices: boolean): string =>
-  priceStale && !hasPrices
-    ? `<p class="hero-stale" role="status">${icon("alert")}<span>Live prices unavailable right now</span></p>`
-    : "";
-
 /**
  * Renders the account-scoped Home portfolio without the shared wallet shell.
  */
@@ -52,7 +47,6 @@ export const homeScreen = (
   prices: Readonly<Record<string, number>>,
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
-  priceStale: boolean,
   discoveredNfts: readonly DiscoveredNft[],
   privacy: PrivacyDisclosureState,
 ): string => {
@@ -77,12 +71,10 @@ export const homeScreen = (
   return dockScreen(
     "home",
     `${pendingCallout(pendingCount)}
-    <section class="hero">
+    <section class="hero" data-live-group>
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${showTotal ? heroDelta(unified, prices, changes, currency) : ""}
-      ${account && !balancesComplete ? '<p class="hero-partial" role="status"><span>Public balances shown; private balances are still refreshing</span></p>' : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
-      ${account !== null ? heroPriceNotice(priceStale, showTotal) : ""}
       ${account ? "" : noAccountEmpty(status)}
       ${deployNotice(account, deployment, fundedForFees)}
     </section>

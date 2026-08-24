@@ -14,6 +14,7 @@ import {
  * Re-exported approval and connected-site validators for one import path.
  */
 export {
+  type ApprovalReviewAsset,
   type ConnectedSite,
   type ConnectedSitesResponse,
   isConnectedSitesResponse,

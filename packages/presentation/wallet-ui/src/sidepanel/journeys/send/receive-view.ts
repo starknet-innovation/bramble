@@ -1,7 +1,7 @@
 /** Shared account-address surface used by single-owner and multisig Receive. */
 import { escapeHtml } from "@mc-wallet/core/html";
 import { button } from "@mc-wallet/ui-kit/controls";
-import { copyButton } from "../../shared/parts";
+import { accountLabel, copyButton } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 
@@ -58,27 +58,29 @@ export const privacyPoolNotice = (
 };
 
 /**
- * Renders the canonical Receive card. Only the public address is encoded and
- * copied; callers provide account-type context as escaped presentation copy.
+ * Renders the canonical Receive card. Only the public address is QR-encoded;
+ * an optional signer public key is clearly labelled and copied separately.
  */
 type ReceiveAddressViewOptions = {
   readonly address: string;
   readonly copyLabel: string;
   readonly eyebrow: string;
   readonly hint: string;
+  readonly publicKeyX?: string;
   readonly qrLabel?: string;
   readonly title?: string;
 };
 
 /**
- * Renders the canonical Receive card. Only the public address is encoded and
- * copied; callers provide account-type context as escaped presentation copy.
+ * Renders the canonical Receive card. Callers provide account-type context as
+ * escaped presentation copy and may expose one already-public signer key.
  */
 export const receiveAddressView = ({
   address,
   copyLabel,
   eyebrow,
   hint,
+  publicKeyX,
   qrLabel,
   title,
 }: ReceiveAddressViewOptions): string => `
@@ -91,5 +93,17 @@ export const receiveAddressView = ({
       ${copyButton(address, copyLabel)}
     </div>
     ${button({ attributes: { "data-copy": address }, icon: "copy", label: copyLabel })}
+    ${
+      publicKeyX
+        ? `<div class="receive-public-key">
+            <div><strong>Signer public key</strong><span>Share this when another participant adds you to a multisig.</span></div>
+            <div class="address-line">
+              <code title="${escapeHtml(publicKeyX)}">${escapeHtml(accountLabel(publicKeyX))}</code>
+              ${copyButton(publicKeyX, "Copy signer public key")}
+            </div>
+            ${button({ attributes: { "data-copy": publicKeyX }, icon: "copy", label: "Copy public key", variant: "secondary" })}
+          </div>`
+        : ""
+    }
     <p class="hint">${escapeHtml(hint)}</p>
   </div>`;

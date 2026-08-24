@@ -9,8 +9,8 @@ import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { WalletView } from "../app/screens/views";
 import type { SidepanelWallet } from "../runtime/runtime";
-import { buttonBusy, errorMessage, scopedStatus, showToast } from "../shared/dom";
-import { formatFeeEstimate } from "../shared/review-render";
+import { buttonBusy, errorMessage, renderFragment, scopedStatus, showToast } from "../shared/dom";
+import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
 
 const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
 
@@ -39,11 +39,11 @@ export const bindDashboard = (deps: ShellBindingDeps): void => {
     buttonBusy(lockButton, true);
     void wallet.lockVault().then(
       (status) => {
-        showToast("Vault locked", "success");
+        showToast("Vault locked", "success", lockButton);
         void render(status);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Lock failed"), "error");
+        showToast(errorMessage(error, "Lock failed"), "error", lockButton);
         if (result) {
           result.textContent = errorMessage(error, "Lock failed");
         }
@@ -164,8 +164,11 @@ export const awaitDeployment = async (
  */
 export const bindDeploy = (deps: ShellBindingDeps): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#deploy-button");
+  const reviewPanelRoot = deps.app?.querySelector<HTMLElement>("#deploy-review");
+  const reviewStage = deps.app?.querySelector<HTMLElement>("#deploy-review-stage");
+  const successStage = deps.app?.querySelector<HTMLElement>("#deploy-success");
+  const hash = deps.app?.querySelector<HTMLElement>("#deploy-hash");
   button?.addEventListener("click", () => {
-    const scope = deps.deploymentScope?.() ?? null;
     buttonBusy(button, true);
     scopedStatus(
       button,
@@ -178,21 +181,25 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         if (typeof response !== "string") {
           DEPLOYMENT_FEES.set(button, response);
           const fee = formatFeeEstimate(response);
+          if (reviewPanelRoot) {
+            renderFragment(reviewPanelRoot, reviewConstraints(`Maximum network fee: ${fee}`));
+          }
           scopedStatus(button, `Maximum network fee: ${fee}`);
           button.lastChild?.replaceWith(`Confirm deployment · ${fee}`);
           buttonBusy(button, false);
           return;
         }
-        showToast("Deployment submitted", "success");
-        scopedStatus(button, `Deployment submitted: ${response}`);
+        showToast("Deployment submitted", "success", button);
+        if (hash) hash.textContent = response;
+        reviewStage?.setAttribute("hidden", "");
+        successStage?.removeAttribute("hidden");
+        scopedStatus(button, "");
         buttonBusy(button, false);
-        // Nothing else re-renders after a deploy submit, so watch for the
-        // account going live and clear the "deploy now" banner when it does.
-        if (scope) void watchDeployment(deps, scope);
       },
       (error: unknown) => {
         DEPLOYMENT_FEES.delete(button);
-        showToast(errorMessage(error, "Deployment failed"), "error");
+        if (reviewPanelRoot) renderFragment(reviewPanelRoot, "");
+        showToast(errorMessage(error, "Deployment failed"), "error", button);
         scopedStatus(button, errorMessage(error, "Deployment failed"));
         buttonBusy(button, false);
       },
@@ -224,11 +231,11 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
       void wallet.setActiveNetwork(networkId).then(
         async (status) => {
           setActiveView("settings");
-          showToast("Network switched", "success");
+          showToast("Network switched", "success", button);
           await render(status);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Network switch failed"), "error");
+          showToast(errorMessage(error, "Network switch failed"), "error", button);
           if (result) {
             result.textContent = errorMessage(error, "Network switch failed");
           }
@@ -253,11 +260,11 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
           // Picking an account is "use this account": land on Home showing the
           // now-active account instead of returning to the entry point.
           setActiveView("home");
-          showToast("Account switched", "success");
+          showToast("Account switched", "success", button);
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Account switch failed"), "error");
+          showToast(errorMessage(error, "Account switch failed"), "error", button);
           if (result) {
             result.textContent = errorMessage(error, "Account switch failed");
           }

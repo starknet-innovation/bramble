@@ -1,7 +1,10 @@
 /**
  * Shared deterministic harness for privileged Argent multisig messages.
  */
+
+import type { ArgentUnsupportedSigner } from "@mc-wallet/multisig/chain";
 import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
+import type { MultisigSignerAccount } from "@mc-wallet/multisig/signer-account";
 import { createPreferencesStore } from "@mc-wallet/settings/preferences";
 import {
   ARGENT_ACCOUNT_CONTRACT,
@@ -86,12 +89,20 @@ provider.getEstimateFeeBulk = (async () => [
 export type MultisigHarnessOptions = {
   readonly beforeAccountDeployment?: () => Promise<void> | void;
   readonly beforeSubmitPrepared?: () => Promise<void> | void;
+  readonly deploymentBalance?: string | null;
+  readonly deploymentEstimateError?: Error;
+  readonly deploymentStatus?: boolean | (() => boolean);
   readonly failPreferencesAfterSubmit?: boolean;
   readonly getConfig?: () => {
     readonly classHash: string;
     readonly signerGuids: readonly string[];
     readonly threshold: number;
   };
+  readonly getSignerPublicKeys?: () => {
+    readonly signerPublicKeys: readonly string[];
+    readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
+  };
+  readonly resolveSignerAccount?: () => MultisigSignerAccount;
   readonly multisigStore?: MultisigStore;
   readonly getNonce?: () => string;
   readonly getTransactionStatuses?: (
@@ -103,6 +114,7 @@ export type MultisigHarnessOptions = {
   readonly onSigned?: () => void;
   readonly submitAccountDeployment?: () => Promise<string>;
   readonly submitPrepared?: (transactionHash: string) => Promise<string>;
+  readonly watchedOnly?: boolean;
 };
 
 /**
@@ -192,19 +204,29 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     preferencesStore,
     runtimeRpc: {
       async estimateAccountDeploymentFee() {
+        if (options.deploymentEstimateError) throw options.deploymentEstimateError;
         return { overallFee: "44", unit: "FRI" };
       },
       async estimateInvokeFee() {
         return { overallFee: "44", unit: "FRI" };
       },
       async getDeploymentStatus() {
-        return true;
+        return typeof options.deploymentStatus === "function"
+          ? options.deploymentStatus()
+          : (options.deploymentStatus ?? false);
       },
       async getNftOwner() {
         return harnessAccountA.address;
       },
-      async getTokenBalances() {
-        return [];
+      async getTokenBalances({ tokens }) {
+        const balance = options.deploymentBalance;
+        return balance === null || balance === undefined
+          ? []
+          : tokens.map((token) => ({
+              ...token,
+              balance,
+              formatted: balance,
+            }));
       },
       async getTokenMetadata() {
         return { decimals: 18, name: "Ether", symbol: "ETH" };
@@ -223,6 +245,14 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
             }
           );
         },
+        async getSignerPublicKeys() {
+          return (
+            options.getSignerPublicKeys?.() ?? {
+              signerPublicKeys: HARNESS_KEYS,
+              unsupportedSigners: [],
+            }
+          );
+        },
         async getNonce() {
           return options.getNonce?.() ?? options.nonce ?? "0x7";
         },
@@ -236,6 +266,15 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
             input.account,
             input.calls,
             input.config,
+          );
+        },
+        async resolveSignerAccount() {
+          return (
+            options.resolveSignerAccount?.() ?? {
+              accountContractType: "argent",
+              address: harnessAccountA.address,
+              publicKeyX: harnessAccountA.publicKeyX,
+            }
           );
         },
         async submitPreparedInvoke(input) {
@@ -273,8 +312,12 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     accountContractType: "argent-multisig",
     address: HARNESS_MULTISIG,
     classHash: ARGENT_MULTISIG_CONTRACT.classHash,
-    currentConfig: { signerPublicKeys: HARNESS_KEYS, threshold: 2 },
-    deployment: { salt: "0x0", signerPublicKeys: HARNESS_KEYS, threshold: 2 },
+    ...(options.watchedOnly
+      ? {}
+      : {
+          currentConfig: { signerPublicKeys: HARNESS_KEYS, threshold: 2 },
+          deployment: { salt: "0x0", signerPublicKeys: HARNESS_KEYS, threshold: 2 },
+        }),
     id: HARNESS_MULTISIG_ID,
     networkId: "SN_MAIN",
   });

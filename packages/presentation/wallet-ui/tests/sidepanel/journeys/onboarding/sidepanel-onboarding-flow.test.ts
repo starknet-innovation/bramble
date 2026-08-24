@@ -164,11 +164,13 @@ describe("staged onboarding", () => {
     expect(activeStep(flow.app)).toBe("password");
     setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
     setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#choose-account-contract-button");
+    expect(activeStep(flow.app)).toBe("account-contract");
     click(flow.app, "#review-account-button");
     await tick();
 
     expect(activeStep(flow.app)).toBe("accounts");
-    expect(flow.previews).toEqual([[MNEMONIC, "SN_MAIN", "argent"]]);
+    expect(flow.previews).toEqual([[MNEMONIC, "SN_MAIN", "openzeppelin"]]);
     expect(flow.app.querySelector("#account-preview")?.getAttribute("aria-pressed")).toBe("false");
     expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
 
@@ -185,7 +187,7 @@ describe("staged onboarding", () => {
     flow.app.querySelector<HTMLFormElement>("#create-form")?.requestSubmit();
     await tick();
 
-    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE, "argent"]]);
+    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE, "openzeppelin"]]);
     expect(flow.renders()).toBe(1);
   });
 
@@ -193,7 +195,7 @@ describe("staged onboarding", () => {
     let release: ((value: AccountRef) => void) | undefined;
     const flow = mount({
       previewAccount: (_mnemonic, _networkId, accountContractType) =>
-        accountContractType === "argent"
+        accountContractType === "openzeppelin"
           ? new Promise((resolve) => {
               release = resolve;
             })
@@ -206,25 +208,20 @@ describe("staged onboarding", () => {
     await tick();
     setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
     setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#choose-account-contract-button");
     click(flow.app, "#review-account-button");
-
-    const contract = flow.app.querySelector<HTMLSelectElement>(
-      'select[name="accountContractType"]',
-    );
-    if (!contract) throw new Error("missing account contract selector");
-    contract.value = "openzeppelin";
-    contract.dispatchEvent(new window.Event("change", { bubbles: true }));
-    release?.(argentAccount);
+    click(flow.app, '[data-account-contract="argent"]');
+    release?.(accountFor("openzeppelin"));
     await tick();
 
-    expect(activeStep(flow.app)).toBe("password");
+    expect(activeStep(flow.app)).toBe("account-contract");
     expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
     click(flow.app, "#review-account-button");
     await tick();
     expect(activeStep(flow.app)).toBe("accounts");
     expect(flow.previews).toEqual([
-      [MNEMONIC, "SN_MAIN", "argent"],
       [MNEMONIC, "SN_MAIN", "openzeppelin"],
+      [MNEMONIC, "SN_MAIN", "argent"],
     ]);
   });
 
@@ -425,8 +422,12 @@ describe("staged onboarding", () => {
     const flow = mount();
     click(flow.app, "#add-existing-button");
     click(flow.app, "#ledger-method-button");
+    expect(activeStep(flow.app)).toBe("ledger-contract");
+    click(flow.app, "#ledger-contract-continue");
     expect(activeStep(flow.app)).toBe("ledger");
     click(flow.app, '[data-onboarding-step="ledger"] [data-onboarding-back]');
+    expect(activeStep(flow.app)).toBe("ledger-contract");
+    click(flow.app, '[data-onboarding-step="ledger-contract"] [data-onboarding-back]');
     expect(activeStep(flow.app)).toBe("method");
   });
 });

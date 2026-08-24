@@ -157,4 +157,18 @@ describe("dashboard token-detail arm", () => {
     expect(html).not.toContain("Go private");
     expect(html).not.toContain("Register to start shielding");
   });
+
+  test("a private-balance failure becomes one compact retry instead of service copy", () => {
+    const html = tokenDetailFlow(status, token, balance, [10, 20, 30], 2_000, "usd", {
+      error: "strk20 services unavailable",
+      loading: false,
+      value: null,
+    });
+
+    expect(html).toContain("data-privacy-retry");
+    expect(html).toContain("Private balance");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("strk20 services unavailable");
+    expect(html).not.toContain("Go private");
+  });
 });
