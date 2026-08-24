@@ -394,7 +394,7 @@ const compactIntentList = (
     ? "Needs attention"
     : scoped.some((intent) => intent.state === "stale")
       ? "Intents requiring action"
-      : "Awaiting verification &amp; signature";
+      : "Awaiting verification & signature";
   return compactIntentListView(
     heading,
     scoped.map((intent) => ({
