@@ -15,11 +15,11 @@ export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@mc-wallet/testkit": "workspace:*",
-  "@biomejs/biome": "2.5.7",
+  "@biomejs/biome": "2.5.8",
   "@playwright/test": "1.62.1",
   "@types/bun": "1.3.14",
   "@types/node": "26.2.0",
-  knip: "6.32.1",
+  knip: "6.32.2",
   madge: "8.0.0",
   typescript: "6.0.3",
 };
