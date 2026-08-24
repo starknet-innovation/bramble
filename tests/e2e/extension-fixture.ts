@@ -22,6 +22,17 @@ export type LoadedExtension = {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const distPath = resolve(repoRoot, "dist");
 
+// MC_E2E_LIVE_NETWORK is set by playwright.mainnet.config.ts and rejected by
+// tests/e2e/global-setup.ts.
+const liveNetworkAllowed = (): boolean => process.env["MC_E2E_LIVE_NETWORK"] === "1";
+
+// Resolver-level, not context.route, whose handler attaches after the worker may
+// already have fetched; Chromium maps IP literals and honours ambient proxies.
+const NETWORK_BLOCK_ARGS = [
+  "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
+  "--no-proxy-server",
+] as const;
+
 const isWalletServiceWorker = (worker: Worker): boolean =>
   worker.url().startsWith("chrome-extension://") && worker.url().endsWith("/background/index.js");
 
@@ -31,7 +42,11 @@ const isWalletServiceWorker = (worker: Worker): boolean =>
 export const launchExtension = async (): Promise<LoadedExtension> => {
   const userDataDir = await mkdtemp(resolve(tmpdir(), "mc-wallet-e2e-"));
   const context = await chromium.launchPersistentContext(userDataDir, {
-    args: [`--disable-extensions-except=${distPath}`, `--load-extension=${distPath}`],
+    args: [
+      `--disable-extensions-except=${distPath}`,
+      `--load-extension=${distPath}`,
+      ...(liveNetworkAllowed() ? [] : NETWORK_BLOCK_ARGS),
+    ],
     channel: "chromium",
     headless: true,
   });
