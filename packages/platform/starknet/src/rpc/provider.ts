@@ -28,6 +28,12 @@ export {
   isTransactionNotFoundError,
 } from "./rpc-not-found";
 
+/**
+ * Thrown when no endpoint reports the expected chain. The UI maps this exact
+ * string, so read it here rather than copying the wording.
+ */
+export const WRONG_CHAIN_MESSAGE = "RPC endpoint returned the wrong Starknet chain";
+
 type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
 
 const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(options);
@@ -442,12 +448,15 @@ export const withRpcWrite = async <T>(
 ): Promise<T> => {
   let selected: RpcProvider | null = null;
   let lastError: unknown = new WalletError("No RPC endpoints configured");
+  // Kept out of `lastError` so a later unreachable endpoint cannot bury it: a
+  // wrong chain is the only outcome here the user can act on.
+  let chainMismatch: WalletError | null = null;
   for (const nodeUrl of rpcUrls) {
     try {
       const provider = makeProvider(nodeUrl);
       const chainId = await provider.getChainId();
       if (!sameFelt(chainId, expectedChainId)) {
-        lastError = new WalletError("RPC endpoint returned the wrong Starknet chain");
+        chainMismatch = new WalletError(WRONG_CHAIN_MESSAGE);
         continue;
       }
       selected = provider;
@@ -457,7 +466,7 @@ export const withRpcWrite = async <T>(
     }
   }
   if (!selected) {
-    throw lastError;
+    throw chainMismatch ?? lastError;
   }
   try {
     return await run(guardRpcBroadcasts(selected));

@@ -10,6 +10,7 @@ import {
   argentAccountAddress,
   argentMultisigAddress,
 } from "@mc-wallet/starknet/account-contracts";
+import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
 import {
   accountDeployment,
   buildErc20TransferCall,
@@ -203,6 +204,30 @@ describe("starknet RPC helpers", () => {
 
     expect(made).toEqual(["https://offline.example", "https://selected.example"]);
     expect(writes).toEqual(["https://selected.example"]);
+  });
+
+  // A wrong chain is actionable; an unreachable endpoint is not. The later
+  // transport failure must not replace it.
+  test("reports a wrong-chain endpoint even when a later endpoint is unreachable", async () => {
+    const provider = (nodeUrl: string) =>
+      ({
+        async getChainId() {
+          if (nodeUrl.includes("offline")) {
+            throw new Error("fetch failed");
+          }
+          return "0x534e5f5345504f4c4941";
+        },
+      }) as unknown as import("starknet").RpcProvider;
+
+    const rejection = await withRpcWrite(
+      ["https://wrongchain.example", "https://offline.example"],
+      "0x534e5f4d41494e",
+      async () => "unreachable",
+      provider,
+    ).catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(WalletError);
+    expect((rejection as Error).message).toBe(WRONG_CHAIN_MESSAGE);
   });
 
   test("marks only add-transaction fetches as status unknown", async () => {

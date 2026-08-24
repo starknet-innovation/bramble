@@ -3,6 +3,7 @@
  * toasts and their copy-to-clipboard affordance.
  */
 import { describe, expect, test } from "bun:test";
+import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
 
 import { friendlyError } from "../../../src/sidepanel/runtime/friendly-error";
 
@@ -17,6 +18,15 @@ describe("friendlyError", () => {
       expect(result.message).not.toBe(raw);
       expect(result.message).not.toContain("invalid");
     }
+  });
+
+  // The raw string names neither cause nor remedy, so the mapping supplies the
+  // fix — and stays network-agnostic, since the guard fires on every network.
+  test("turns the write-path chain guard into an actionable endpoint hint", () => {
+    const result = friendlyError(WRONG_CHAIN_MESSAGE);
+    expect(result.message).toContain("nothing was submitted");
+    expect(result.message).toContain("Advanced");
+    expect(result.message).not.toContain("Devnet");
   });
 
   test("maps 'wallet unavailable' to a friendly message", () => {

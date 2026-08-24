@@ -5,6 +5,8 @@
  * isolation. Error toasts retain the original diagnostic for copying.
  */
 
+import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
+
 /**
  * The result of classifying a raw error string for display.
  */
@@ -40,6 +42,12 @@ const EXACT: ReadonlyMap<string, string> = new Map([
     "Blocked for safety: the swap asked to approve the wrong token. Nothing was signed.",
   ],
   ["token list unavailable", "Couldn't load the token list. Check your connection and try again."],
+  // Fires on every network, so the copy stays endpoint-generic; the devnet-only
+  // `--chain-id SN_DEVNET` flag is stated by the network picker instead.
+  [
+    WRONG_CHAIN_MESSAGE.toLowerCase(),
+    "That endpoint reports a different Starknet chain, so nothing was submitted. Check the endpoint under Network → Advanced.",
+  ],
 ]);
 
 // Every "invalid <...> request" validation string shares one friendly message.

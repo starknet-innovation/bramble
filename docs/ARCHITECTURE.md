@@ -79,6 +79,14 @@ schema, so it cannot be changed after creation.
   manifest `crates/kms/src/oz_account_class_manifest.json` at the commit pinned
   in `scripts/vendor-krusty.ts`. Address derivation matches `accountDeployment`
   in `packages/platform/starknet/src/transactions/deployment.ts` (constructor `constructor(public_key: felt252)`).
+- Devnet: run the node as `starknet-devnet --chain-id SN_DEVNET`, matching `STARKNET_NETWORKS.SN_DEVNET`; a
+  default devnet reports Sepolia's id and the write-path guard rejects it. A local devnet also declares only its
+  OWN account class, so `getOzAccountClassHash` resolves `SN_DEVNET` to the class the node predeclares
+  (`devnet_getConfig` -> `account_contract_class_hash`) — same preset and constructor, derivation unchanged. It is
+  devnet-VERSION specific and pinned by no CI gate. Argent accounts stay unavailable on a devnet that has not
+  declared that class itself. Devnet derives its predeployed accounts' keys from the node seed but deploys them
+  at its own fixed salt, while the OZ path tries only `["0x0", publicKeyX]` (`deployment.ts`) — so importing a
+  predeployed key yields a fresh counterfactual address, not the pre-funded one.
 - Audit: OpenZeppelin Contracts for Cairo audit reports —
   <https://github.com/OpenZeppelin/cairo-contracts/tree/main/audits> (API docs:
   <https://docs.openzeppelin.com/contracts-cairo/3.x/api/account#AccountUpgradeable>).
