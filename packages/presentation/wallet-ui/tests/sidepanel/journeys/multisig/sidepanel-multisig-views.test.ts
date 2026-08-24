@@ -63,6 +63,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     const preferences = defaultWalletPreferences();
     const token = preferences.tokens[0];
     if (!token) throw new Error("default token fixture unavailable");
+    const hostileSummary = 'Looks <img src=x onerror="alert(1)">';
     const fixture = await makeArgentMultisigFixture([
       {
         calldata: ["0x456789abcdef", `0x${(UINT128_LIMIT - 1n).toString(16)}`, "0x0"],
@@ -79,12 +80,12 @@ describe("Argent multisig list and exact-intent detail", () => {
       fixture.status,
       fixture.status.accounts[0] ?? null,
       fixture.view,
-      [{ ...fixture.intent, summary: "Looks harmless" }],
+      [{ ...fixture.intent, summary: hostileSummary }],
       false,
       preferences,
     );
 
-    expect(html).toContain("<h2>Looks harmless</h2>");
+    expect(html).toContain("<h2>Looks &lt;img src=x onerror=&quot;alert(1)&quot;&gt;</h2>");
     expect(html).toContain("effectively unlimited spending allowance");
     expect(html).toContain("0x9876…cdef is not a token or contact this wallet knows");
     expect(html).toContain("Allow 0x4567…cdef to spend");
@@ -96,13 +97,14 @@ describe("Argent multisig list and exact-intent detail", () => {
       fixture.status,
       fixture.status.accounts[0] ?? null,
       fixture.view,
-      [{ ...fixture.intent, summary: "Looks harmless" }],
+      [{ ...fixture.intent, summary: hostileSummary }],
       false,
       preferences,
       "multisig-home",
     );
     expect(home).toContain('class="multisig-intent-assets"');
     expect(home).toContain('class="token-logo"');
+    expect(home).not.toContain("<img src=x");
   });
 
   test("renders exact signer-management authority before collection", async () => {
