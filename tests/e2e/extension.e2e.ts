@@ -97,11 +97,11 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);
 
-  const terminalLink = sidepanel.getByRole("link", { name: "Open trade terminal" });
-  await expect(terminalLink).toBeVisible();
-  await expect(terminalLink).toHaveAttribute("href", "https://mc-wallet-terminal.vercel.app");
-  await expect(terminalLink).toHaveAttribute("target", "_blank");
-  await expect(terminalLink).toHaveAttribute("rel", "noopener noreferrer");
+  const starkscanLink = sidepanel.getByRole("link", { name: "Open Starkscan" });
+  await expect(starkscanLink).toBeVisible();
+  await expect(starkscanLink).toHaveAttribute("href", "https://starkscan.co/");
+  await expect(starkscanLink).toHaveAttribute("target", "_blank");
+  await expect(starkscanLink).toHaveAttribute("rel", "noopener noreferrer");
 
   await sidepanel.getByRole("button", { name: "Lock wallet" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Welcome back" })).toBeVisible();
@@ -170,9 +170,9 @@ test("signs SNIP-12 typed data through the injected provider approval", async ({
     await resolvePendingApproval(sidepanel, "Sign request", dappServer.origin, "approve");
 
     await expect(dapp.getByTestId("sign-result")).toContainText('"status":"resolved"');
-    // The default Argent account returns its Stark signer envelope.
+    // The default OpenZeppelin account returns the Stark signature pair directly.
     await expect(dapp.getByTestId("sign-result")).toContainText(
-      /"signature":\["1","0","0x[0-9a-f]+","0x[0-9a-f]+","0x[0-9a-f]+"\]/,
+      /"signature":\["0x[0-9a-f]+","0x[0-9a-f]+"\]/,
     );
   } finally {
     await dappServer.close();

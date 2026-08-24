@@ -1,6 +1,10 @@
 /** Strict response validators for privileged Argent multisig messages. */
 import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
-import type { ArgentMultisigConfig } from "@mc-wallet/multisig/chain";
+import type {
+  ArgentMultisigAuthorityStatus,
+  ArgentMultisigConfig,
+  ArgentUnsupportedSigner,
+} from "@mc-wallet/multisig/chain";
 import { MULTISIG_LIMITS } from "@mc-wallet/multisig/chain";
 import {
   type ArgentMultisigRecord,
@@ -11,6 +15,8 @@ import {
 } from "@mc-wallet/multisig/repository";
 import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
+import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
@@ -23,8 +29,14 @@ import {
  * Fresh untrusted chain authority paired with one watched account.
  */
 export type ArgentMultisigView = {
+  readonly authorityStatus: ArgentMultisigAuthorityStatus;
   readonly config: ArgentMultisigConfig | null;
+  /** Fresh deployment status; null or absent means the network read failed. */
+  readonly deployed?: boolean | null;
+  /** A deployment hash is known but the account has not been observed on-chain yet. */
+  readonly deploymentPending?: true;
   readonly record: ArgentMultisigRecord;
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
 };
 
 /**
@@ -42,6 +54,7 @@ export type ArgentMultisigIntentPackage = {
 export type ArgentMultisigDeploymentReview = {
   readonly address: string;
   readonly fee: FeeEstimate;
+  readonly feeAffordability: FeeAffordability;
   readonly name?: string;
   readonly networkId: StarknetNetworkId;
   readonly salt: string;
@@ -80,6 +93,15 @@ export type ArgentMultisigDeployResponse = {
   readonly transactionHash: string;
 };
 
+/**
+ * Public participant metadata accepted only after strict runtime validation.
+ */
+export type MultisigSignerAccount = {
+  readonly accountContractType: AccountContractType;
+  readonly address: string;
+  readonly publicKeyX: string;
+};
+
 const canonicalNonZeroFelt = (value: unknown): value is string =>
   typeof value === "string" && isNonZeroStarkFieldElement(value) && canonicalFelt(value) === value;
 
@@ -102,10 +124,44 @@ const isConfig = (value: unknown): value is ArgentMultisigConfig => {
   );
 };
 
+const AUTHORITY_STATUSES: readonly ArgentMultisigAuthorityStatus[] = [
+  "available",
+  "invalid-config",
+  "network-unavailable",
+  "undeployed",
+  "unsupported-class",
+  "unsupported-signers",
+];
+
+const isUnsupportedSigner = (value: unknown): value is ArgentUnsupportedSigner =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["guid", "type"]) &&
+  canonicalNonZeroFelt(value["guid"]) &&
+  (value["type"] === "eip191" ||
+    value["type"] === "secp256k1" ||
+    value["type"] === "secp256r1" ||
+    value["type"] === "webauthn");
+
 const isView = (value: unknown): value is ArgentMultisigView =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["config", "record"]) &&
+  hasOnlyKnownKeys(value, [
+    "authorityStatus",
+    "config",
+    "deployed",
+    "deploymentPending",
+    "record",
+    "unsupportedSigners",
+  ]) &&
+  AUTHORITY_STATUSES.includes(value["authorityStatus"] as ArgentMultisigAuthorityStatus) &&
   isArgentMultisigRecord(value["record"]) &&
+  Array.isArray(value["unsupportedSigners"]) &&
+  value["unsupportedSigners"].every(isUnsupportedSigner) &&
+  (value["authorityStatus"] === "unsupported-signers") === value["unsupportedSigners"].length > 0 &&
+  (value["deployed"] === undefined ||
+    value["deployed"] === null ||
+    typeof value["deployed"] === "boolean") &&
+  (value["deploymentPending"] === undefined || value["deploymentPending"] === true) &&
+  (value["deploymentPending"] !== true || value["deployed"] === null) &&
   (value["config"] === null || isConfig(value["config"]));
 
 const isIntentPackage = (value: unknown): value is ArgentMultisigIntentPackage =>
@@ -191,6 +247,7 @@ export const isArgentMultisigDeploymentReviewResponse = (
     hasOnlyKnownKeys(review, [
       "address",
       "fee",
+      "feeAffordability",
       "name",
       "networkId",
       "salt",
@@ -200,6 +257,9 @@ export const isArgentMultisigDeploymentReviewResponse = (
     ]) &&
     canonicalNonZeroFelt(review["address"]) &&
     isFeeEstimate(review["fee"]) &&
+    (review["feeAffordability"] === "insufficient" ||
+      review["feeAffordability"] === "ok" ||
+      review["feeAffordability"] === "unknown") &&
     (review["name"] === undefined ||
       (typeof review["name"] === "string" &&
         review["name"].length > 0 &&
@@ -244,6 +304,23 @@ export const isArgentMultisigClassStatusResponse = (
   hasOnlyKnownKeys(value, ["declared", "ok"]) &&
   value["ok"] === true &&
   typeof value["declared"] === "boolean";
+
+/**
+ * Validates the untrusted runtime response before public signer metadata enters UI state.
+ */
+export const isMultisigSignerResponse = (
+  value: unknown,
+): value is { readonly ok: true; readonly signer: MultisigSignerAccount } =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["ok", "signer"]) &&
+  value["ok"] === true &&
+  isRecord(value["signer"]) &&
+  hasOnlyKnownKeys(value["signer"], ["accountContractType", "address", "publicKeyX"]) &&
+  (value["signer"]["accountContractType"] === "argent" ||
+    value["signer"]["accountContractType"] === "openzeppelin") &&
+  canonicalNonZeroFelt(value["signer"]["address"]) &&
+  canonicalNonZeroFelt(value["signer"]["publicKeyX"]);
 
 /**
  * Validates the exact acknowledgement returned by removal.

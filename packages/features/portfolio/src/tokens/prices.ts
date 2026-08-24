@@ -1,18 +1,4 @@
-/**
- * Cached fiat price service for tracked Starknet tokens.
- *
- * The outward CoinGecko conversation — request URLs and untrusted body parsing,
- * under a size cap and a deadline — lives in `./prices-feed`; this module owns
- * what the wallet keeps and what it serves. Network access is injected (`http`)
- * so this module stays pure at its edges and testable without a real network;
- * the background worker wires the real `fetch`. Prices are cached under
- * `mc-wallet:prices` and 7-day charts under `mc-wallet:charts` with a TTL clock
- * injected the way the activity store takes one. Every failure degrades to
- * cached-or-empty: when the host is unreachable the last-known-good prices are
- * still served, flagged `stale` with the `asOf` capture time so the UI can
- * present them as saved values (or an explicit "unavailable" hint when nothing
- * is cached) instead of vanishing.
- */
+/** Cached fiat prices and charts with bounded, last-known-good storage. */
 import type { BoundedHttpFetch, BoundedHttpResponse } from "@mc-wallet/core/http-json";
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import type { KeyValueStore } from "@mc-wallet/store/kv";
@@ -31,9 +17,7 @@ import {
 
 export { PRICE_CHART_POINT_LIMIT } from "./prices-feed";
 
-/**
- * Browser storage key for the fiat price cache.
- */
+/** Browser storage key for the fiat price cache. */
 const PRICES_STORE_KEY = "mc-wallet:prices";
 
 /**
@@ -42,10 +26,9 @@ const PRICES_STORE_KEY = "mc-wallet:prices";
 export const CHARTS_STORE_KEY = "mc-wallet:charts";
 
 const PRICE_TTL_MS = 5 * 60 * 1000;
+const PRICE_RETRY_BACKOFF_MS = 60_000;
 const CHART_TTL_MS = 30 * 60 * 1000;
 const MAX_ADDRESSES = 50;
-// Bounds the persisted chart cache so a churn of one-off token views cannot grow
-// storage without limit; the oldest-fetched entries are evicted first.
 const MAX_CHART_ENTRIES = 50;
 
 /**
@@ -68,6 +51,7 @@ export type HttpFetch = BoundedHttpFetch;
  */
 export type TokenPriceInput = {
   readonly addresses: readonly string[];
+  readonly cached?: true;
   readonly currency: DisplayCurrency;
   readonly networkId: StarknetNetworkId;
 };
@@ -112,22 +96,121 @@ export type PriceService = {
   readonly getTokenChart: (input: TokenChartInput) => Promise<TokenChart>;
 };
 
-// `checked` records every address queried at `fetchedAt`, priced or not, so an
-// address CoinGecko never prices (custom/spam tokens) still counts as covered
-// until the TTL lapses instead of forcing a refetch on every call.
 type PriceCache = {
+  readonly attempted?: Readonly<Record<string, number>>;
   readonly changes?: Readonly<Record<string, number>>;
   readonly checked?: readonly string[];
   readonly fetchedAt: number;
   readonly prices: Readonly<Record<string, PriceEntry>>;
 };
-type ChartEntry = { readonly fetchedAt: number; readonly points: readonly number[] };
+type ChartEntry = {
+  readonly attemptedAt?: number;
+  readonly fetchedAt: number;
+  readonly points: readonly number[];
+};
 type ChartCache = Readonly<Record<string, ChartEntry>>;
 
 const CURRENCIES: readonly DisplayCurrency[] = ["eur", "gbp", "usd"];
 
-// The epoch a cached snapshot was captured, or null when nothing has ever been
-// stored (a zero clock means "never fetched", so there is no last-known time).
+const parseChartEntry = (value: unknown): ChartEntry | null => {
+  if (
+    !isRecord(value) ||
+    !isFinitePriceNumber(value["fetchedAt"]) ||
+    (value["attemptedAt"] !== undefined && !isFinitePriceNumber(value["attemptedAt"])) ||
+    !Array.isArray(value["points"])
+  ) {
+    return null;
+  }
+  return {
+    ...(value["attemptedAt"] === undefined ? {} : { attemptedAt: value["attemptedAt"] }),
+    fetchedAt: value["fetchedAt"],
+    points: value["points"].filter(isFinitePriceNumber).slice(0, PRICE_CHART_POINT_LIMIT),
+  };
+};
+
+const recentPriceAttempt = (
+  cache: PriceCache,
+  wanted: readonly string[],
+  currentTime: number,
+): boolean =>
+  wanted.every((address) => {
+    const attemptedAt = cache.attempted?.[address];
+    return (
+      attemptedAt !== undefined &&
+      attemptedAt <= currentTime &&
+      currentTime - attemptedAt < PRICE_RETRY_BACKOFF_MS
+    );
+  });
+
+const reusablePrices = (input: {
+  readonly addresses: readonly string[];
+  readonly cache: PriceCache;
+  readonly cachedOnly: boolean;
+  readonly currency: DisplayCurrency;
+  readonly currentTime: number;
+  readonly wanted: readonly string[];
+}): TokenPrices | null => {
+  const { addresses, cache, cachedOnly, currency, currentTime, wanted } = input;
+  if (wanted.length === 0) {
+    return projectPrices({
+      addresses,
+      asOf: null,
+      changes: cache.changes ?? {},
+      currency,
+      prices: cache.prices,
+      stale: false,
+    });
+  }
+  if (cachedOnly) {
+    return projectPrices({
+      addresses,
+      asOf: snapshotAsOf(cache.fetchedAt),
+      changes: cache.changes ?? {},
+      currency,
+      prices: cache.prices,
+      stale: !isCacheFresh(cache, currentTime),
+    });
+  }
+  if (isCacheFresh(cache, currentTime) && cacheCovers(cache, wanted)) {
+    return projectPrices({
+      addresses,
+      asOf: snapshotAsOf(cache.fetchedAt),
+      changes: cache.changes ?? {},
+      currency,
+      prices: cache.prices,
+      stale: false,
+    });
+  }
+  if (!recentPriceAttempt(cache, wanted, currentTime)) return null;
+  return projectPrices({
+    addresses,
+    asOf: snapshotAsOf(cache.fetchedAt),
+    changes: cache.changes ?? {},
+    currency,
+    prices: cache.prices,
+    stale: true,
+  });
+};
+
+const cachedChartPoints = (
+  platform: string | null,
+  cached: ChartEntry | undefined,
+  currentTime: number,
+): readonly number[] | null => {
+  if (!platform) return cached?.points ?? [];
+  if (cached && cached.fetchedAt > 0 && currentTime - cached.fetchedAt < CHART_TTL_MS) {
+    return cached.points;
+  }
+  if (
+    cached?.attemptedAt !== undefined &&
+    cached.attemptedAt <= currentTime &&
+    currentTime - cached.attemptedAt < PRICE_RETRY_BACKOFF_MS
+  ) {
+    return cached.points;
+  }
+  return null;
+};
+
 const snapshotAsOf = (fetchedAt: number): number | null => (fetchedAt > 0 ? fetchedAt : null);
 
 const isPriceEntry = (value: unknown): value is PriceEntry =>
@@ -136,10 +219,14 @@ const isPriceEntry = (value: unknown): value is PriceEntry =>
 const isCheckedList = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === "string");
 
+const isTimestampMap = (value: unknown): value is Readonly<Record<string, number>> =>
+  isRecord(value) && Object.values(value).every(isFinitePriceNumber);
+
 const isPriceCache = (value: unknown): value is PriceCache =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["changes", "checked", "fetchedAt", "prices"]) &&
+  hasOnlyKnownKeys(value, ["attempted", "changes", "checked", "fetchedAt", "prices"]) &&
   isFinitePriceNumber(value["fetchedAt"]) &&
+  (value["attempted"] === undefined || isTimestampMap(value["attempted"])) &&
   (value["checked"] === undefined || isCheckedList(value["checked"])) &&
   (value["changes"] === undefined ||
     (isRecord(value["changes"]) && Object.values(value["changes"]).every(isFinitePriceNumber))) &&
@@ -161,7 +248,6 @@ const sliceCurrency = (
   return slice;
 };
 
-// Maps cached 24h changes back onto the caller's original address keys.
 const sliceChanges = (
   changes: Readonly<Record<string, number>>,
   addresses: readonly string[],
@@ -179,15 +265,11 @@ const sliceChanges = (
 const isCacheFresh = (cache: PriceCache, nowMs: number): boolean =>
   nowMs - cache.fetchedAt < PRICE_TTL_MS;
 
-// Whether every wanted address is covered by the cache — priced OR queried at
-// the last fetch and simply unlisted; both valid until the TTL ends.
 const cacheCovers = (cache: PriceCache, wanted: readonly string[]): boolean => {
   const known = new Set([...Object.keys(cache.prices), ...(cache.checked ?? [])]);
   return wanted.every((address) => known.has(address));
 };
 
-// Merges freshly answered prices/changes over the cache and records every
-// answered address as checked.
 const mergeAnsweredPrices = (
   cache: PriceCache,
   answered: readonly PriceOutcome[],
@@ -213,7 +295,6 @@ const mergeAnsweredPrices = (
   };
 };
 
-// Projects a price snapshot back onto the caller's original address keys.
 const projectPrices = (input: {
   readonly addresses: readonly string[];
   readonly asOf: number | null;
@@ -250,27 +331,15 @@ export const createPriceService = ({
 
   const readChartCache = async (): Promise<ChartCache> => {
     const stored = await store.get(CHARTS_STORE_KEY).catch(() => undefined);
-    if (!isRecord(stored)) {
-      return {};
-    }
+    if (!isRecord(stored)) return {};
     const entries: Record<string, ChartEntry> = {};
     for (const [key, value] of Object.entries(stored)) {
-      if (
-        isRecord(value) &&
-        isFinitePriceNumber(value["fetchedAt"]) &&
-        Array.isArray(value["points"])
-      ) {
-        entries[key] = {
-          fetchedAt: value["fetchedAt"],
-          points: value["points"].filter(isFinitePriceNumber).slice(0, PRICE_CHART_POINT_LIMIT),
-        };
-      }
+      const parsed = parseChartEntry(value);
+      if (parsed) entries[key] = parsed;
     }
     return entries;
   };
 
-  // Keeps only the most recently fetched entries so the persisted chart cache
-  // stays bounded regardless of how many distinct tokens are ever viewed.
   const capChartCache = (
     entries: Readonly<Record<string, ChartEntry>>,
   ): Record<string, ChartEntry> => {
@@ -284,9 +353,6 @@ export const createPriceService = ({
     return Object.fromEntries(kept);
   };
 
-  // Fetches every wanted address in parallel, writes the merged snapshot to the
-  // cache, and projects the result. Reached only when the cache did not already
-  // cover the request.
   const fetchAndStorePrices = async (
     cache: PriceCache,
     platform: string,
@@ -294,13 +360,17 @@ export const createPriceService = ({
     addresses: readonly string[],
     currency: DisplayCurrency,
   ): Promise<TokenPrices> => {
+    const attemptedAt = now();
+    const attempted = {
+      ...(cache.attempted ?? {}),
+      ...Object.fromEntries(wanted.map((address) => [address, attemptedAt])),
+    };
     const outcomes = await Promise.all(
       wanted.map((address) => fetchAddressPrices(http, platform, address)),
     );
     const answered = outcomes.filter((outcome) => outcome.ok);
     if (answered.length === 0) {
-      // The host was unreachable for every address: fall back to the
-      // last-known-good cache, flagged stale (or empty as an "unavailable" hint).
+      await store.set(PRICES_STORE_KEY, { ...cache, attempted }).catch(() => undefined);
       return projectPrices({
         addresses,
         asOf: snapshotAsOf(cache.fetchedAt),
@@ -314,22 +384,18 @@ export const createPriceService = ({
     const answeredAddresses = new Set(answered.map((outcome) => outcome.address));
     await store
       .set(PRICES_STORE_KEY, {
+        attempted,
         changes: mergedChanges,
         checked,
-        fetchedAt: now(),
+        fetchedAt: attemptedAt,
         prices: mergedPrices,
       })
       .catch(() => undefined);
-    // A partial fetch mixes just-fetched prices with older cached ones for the
-    // failed addresses, so it is flagged stale and dated to the OLDEST capture
-    // that still contributes (the cache time when a served price for a failed
-    // address is cached, otherwise now()). Failed addresses with nothing cached
-    // stay absent from `prices`, exactly as in the all-fail path.
     const unanswered = wanted.filter((address) => !answeredAddresses.has(address));
     if (unanswered.length === 0) {
       return projectPrices({
         addresses,
-        asOf: now(),
+        asOf: attemptedAt,
         changes: mergedChanges,
         currency,
         prices: mergedPrices,
@@ -339,7 +405,7 @@ export const createPriceService = ({
     const servesCachedPrice = unanswered.some((address) => mergedPrices[address] !== undefined);
     return projectPrices({
       addresses,
-      asOf: servesCachedPrice ? snapshotAsOf(cache.fetchedAt) : now(),
+      asOf: servesCachedPrice ? snapshotAsOf(cache.fetchedAt) : attemptedAt,
       changes: mergedChanges,
       currency,
       prices: mergedPrices,
@@ -348,12 +414,12 @@ export const createPriceService = ({
   };
 
   return {
-    async getPrices({ addresses, currency, networkId }) {
+    async getPrices({ addresses, cached, currency, networkId }) {
       const platform = priceFeedPlatform(networkId);
       const wanted = [...new Set(addresses.map(normalizePriceAddress))].slice(0, MAX_ADDRESSES);
       const cache = await readPriceCache();
-      // Off mainnet and empty requests carry no fiat by design (not "stale").
-      if (!platform || wanted.length === 0) {
+      const currentTime = now();
+      if (!platform) {
         return projectPrices({
           addresses,
           asOf: null,
@@ -363,17 +429,15 @@ export const createPriceService = ({
           stale: false,
         });
       }
-      // A fresh, fully-covered cache is a confirmed-current hit.
-      if (isCacheFresh(cache, now()) && cacheCovers(cache, wanted)) {
-        return projectPrices({
-          addresses,
-          asOf: snapshotAsOf(cache.fetchedAt),
-          changes: cache.changes ?? {},
-          currency,
-          prices: cache.prices,
-          stale: false,
-        });
-      }
+      const reusable = reusablePrices({
+        addresses,
+        cache,
+        cachedOnly: cached === true,
+        currency,
+        currentTime,
+        wanted,
+      });
+      if (reusable) return reusable;
       return fetchAndStorePrices(cache, platform, wanted, addresses, currency);
     },
     async getTokenChart({ address, currency, networkId }) {
@@ -381,25 +445,40 @@ export const createPriceService = ({
       const key = `${normalizePriceAddress(address)}:${currency}`;
       const cache = await readChartCache();
       const cached = cache[key];
-      if (!platform) {
-        return { currency, points: cached?.points ?? [] };
-      }
-      if (cached && now() - cached.fetchedAt < CHART_TTL_MS) {
-        return { currency, points: cached.points };
-      }
+      const currentTime = now();
+      const available = cachedChartPoints(platform, cached, currentTime);
+      if (!platform) return { currency, points: available ?? [] };
+      if (available) return { currency, points: available };
+      const retainAfterFailure = async (): Promise<readonly number[]> => {
+        const points = cached?.points ?? [];
+        await store
+          .set(
+            CHARTS_STORE_KEY,
+            capChartCache({
+              ...cache,
+              [key]: { attemptedAt: currentTime, fetchedAt: cached?.fetchedAt ?? 0, points },
+            }),
+          )
+          .catch(() => undefined);
+        return points;
+      };
       try {
         const points = await fetchChartPoints(http, platform, address, currency);
-        // Never cache an empty series: caching [] would suppress retries until
-        // the TTL and hide a chart that a transient failure merely omitted.
         if (points.length === 0) {
-          return { currency, points: cached?.points ?? [] };
+          return { currency, points: await retainAfterFailure() };
         }
         await store
-          .set(CHARTS_STORE_KEY, capChartCache({ ...cache, [key]: { fetchedAt: now(), points } }))
+          .set(
+            CHARTS_STORE_KEY,
+            capChartCache({
+              ...cache,
+              [key]: { attemptedAt: currentTime, fetchedAt: currentTime, points },
+            }),
+          )
           .catch(() => undefined);
         return { currency, points };
       } catch {
-        return { currency, points: cached?.points ?? [] };
+        return { currency, points: await retainAfterFailure() };
       }
     },
   };

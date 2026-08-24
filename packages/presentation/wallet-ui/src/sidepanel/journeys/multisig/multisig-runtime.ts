@@ -13,29 +13,34 @@ import {
   isArgentMultisigIntentResponse,
   isArgentMultisigResponse,
   isArgentMultisigsResponse,
+  isMultisigSignerResponse,
   isOkResponse,
+  type MultisigSignerAccount,
 } from "../../../popup/responses/multisig-responses";
 import { isBalancesResponse, isErrorResponse } from "../../../popup/responses/responses";
 import type { RuntimeApi, ScopedBalanceState } from "../../runtime/runtime";
 import { responseError } from "../../runtime/runtime-errors";
 
 /**
- * Current public authority required to register a stable Argent multisig.
+ * Address and active network required to sync an existing Argent multisig.
  */
 export type ArgentMultisigSetup = {
   readonly address: string;
-  readonly name?: string;
   readonly networkId: string;
-  readonly signerAccountId: string;
-  readonly signerPublicKeys: readonly string[];
-  readonly threshold: number;
+  readonly signerPublicKeys?: readonly string[];
 };
 
 /**
  * Constructor authority required to review a new Argent multisig deployment.
  */
-export type ArgentMultisigDeploymentSetup = Omit<ArgentMultisigSetup, "address"> & {
+export type ArgentMultisigDeploymentSetup = {
+  readonly expectedAddress?: string;
+  readonly name?: string;
+  readonly networkId: string;
   readonly salt: string;
+  readonly signerAccountId: string;
+  readonly signerPublicKeys: readonly string[];
+  readonly threshold: number;
 };
 
 /**
@@ -58,10 +63,20 @@ export type MultisigClient = ReturnType<typeof createMultisigClient>;
  */
 export const createMultisigClient = (runtime?: RuntimeApi) => {
   const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
+  type RefreshResult =
+    | {
+        readonly intents: readonly ArgentMultisigSigningIntent[];
+        readonly multisig: ArgentMultisigView;
+      }
+    | "error";
+  const refreshes = new Map<string, Promise<RefreshResult>>();
+  const invalidateRefreshes = (): void => refreshes.clear();
   const intentResult = async (
     message: unknown,
     fallback: string,
   ): Promise<ArgentMultisigIntentResult> => {
+    // Transaction boundaries still force a fresh background authority check.
+    invalidateRefreshes();
     const response = await sendMessage(message);
     if (!isArgentMultisigIntentResponse(response)) {
       throw responseError(response, fallback);
@@ -76,6 +91,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
 
   return {
     async addMultisig(input: ArgentMultisigSetup): Promise<ArgentMultisigView> {
+      invalidateRefreshes();
       const response = await sendMessage({ ...input, type: "wallet.addMultisig" });
       if (!isArgentMultisigResponse(response)) {
         throw responseError(response, "add Argent multisig failed");
@@ -83,6 +99,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       return response.multisig;
     },
     async deployMultisig(review: ArgentMultisigDeploymentReview) {
+      invalidateRefreshes();
       const response = await sendMessage({ review, type: "wallet.deployArgentMultisig" });
       if (!isArgentMultisigDeployResponse(response)) {
         throw responseError(response, "deploy Argent multisig failed");
@@ -101,13 +118,19 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         "import Argent multisig signature failed",
       );
     },
-    async loadBalances(multisigId: string): Promise<ScopedBalanceState> {
-      const response = await sendMessage({ multisigId, type: "wallet.multisigBalances" });
+    async loadBalances(multisigId: string, cached = false): Promise<ScopedBalanceState> {
+      const response = await sendMessage({
+        ...(cached ? { cached: true } : {}),
+        multisigId,
+        type: "wallet.multisigBalances",
+      });
       if (isBalancesResponse(response) && response.accountId === multisigId) {
         return {
           accountId: response.accountId,
+          ...(response.asOf === undefined ? {} : { asOf: response.asOf }),
           balances: response.balances,
           networkId: response.networkId,
+          ...(response.stale === undefined ? {} : { stale: response.stale }),
         };
       }
       return {
@@ -122,7 +145,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         return "error";
       }
     },
-    async loadMultisigs(): Promise<
+    async loadMultisigs(cached = false): Promise<
       | {
           readonly intents: readonly ArgentMultisigSigningIntent[];
           readonly multisigs: readonly ArgentMultisigView[];
@@ -130,10 +153,12 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       | "error"
     > {
       try {
-        const response = await sendMessage({ type: "wallet.multisigs" });
-        return isArgentMultisigsResponse(response)
-          ? { intents: response.intents, multisigs: response.multisigs }
-          : "error";
+        const response = await sendMessage({
+          ...(cached ? { cached: true } : {}),
+          type: "wallet.multisigs",
+        });
+        if (!isArgentMultisigsResponse(response)) return "error";
+        return { intents: response.intents, multisigs: response.multisigs };
       } catch {
         return "error";
       }
@@ -144,7 +169,44 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         "prepare Argent multisig intent failed",
       );
     },
+    async resolveSigner(address: string, networkId: string): Promise<MultisigSignerAccount> {
+      const response = await sendMessage({
+        address,
+        networkId,
+        type: "wallet.resolveMultisigSigner",
+      });
+      if (!isMultisigSignerResponse(response)) {
+        throw responseError(response, "resolve multisig signer account failed");
+      }
+      return response.signer;
+    },
+    async refreshMultisig(multisigId: string, force = false): Promise<RefreshResult> {
+      if (force) refreshes.delete(multisigId);
+      const existing = refreshes.get(multisigId);
+      if (existing) return existing;
+      const refresh = sendMessage({ multisigId, type: "wallet.refreshMultisig" })
+        .then(
+          (response): RefreshResult =>
+            isArgentMultisigResponse(response)
+              ? { intents: response.intents, multisig: response.multisig }
+              : "error",
+        )
+        .catch((): RefreshResult => "error");
+      refreshes.set(multisigId, refresh);
+      // A successful confirmed authority is stable until a multisig action.
+      // Failed reads remain retryable when the network recovers.
+      void refresh.then((result) => {
+        if (
+          (result === "error" || result.multisig.authorityStatus === "network-unavailable") &&
+          refreshes.get(multisigId) === refresh
+        ) {
+          refreshes.delete(multisigId);
+        }
+      });
+      return refresh;
+    },
     async removeMultisig(multisigId: string, confirmHistoryRemoval = false): Promise<void> {
+      invalidateRefreshes();
       const response = await sendMessage({
         ...(confirmHistoryRemoval ? { confirmHistoryRemoval: true } : {}),
         multisigId,
@@ -154,9 +216,17 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "remove Argent multisig failed");
       }
     },
+    async removeIntent(intentId: string): Promise<void> {
+      invalidateRefreshes();
+      const response = await sendMessage({ intentId, type: "wallet.removeArgentMultisigIntent" });
+      if (!isOkResponse(response)) {
+        throw responseError(response, "remove Argent multisig intent failed");
+      }
+    },
     async reviewDeployment(
       input: ArgentMultisigDeploymentSetup,
     ): Promise<ArgentMultisigDeploymentReview> {
+      invalidateRefreshes();
       const response = await sendMessage({
         ...input,
         type: "wallet.reviewArgentMultisigDeployment",

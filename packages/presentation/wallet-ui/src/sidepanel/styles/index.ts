@@ -14,17 +14,13 @@
  * Read top-to-bottom. Each value is ms after render or interaction.
  *
  *   0ms   shell mounts; layout is stable from the first frame
- *  90ms   hover and press feedback settles — a quiet background shift plus a
- *         subtle 0.92–1.0 press scale on the strong ease-out curve (never an
- *         overshoot on the press-down frame)
- * 200ms   a newly opened screen slides in along the navigation direction via
- *         the View Transitions API (cross-fade fallback); the hero, action
- *         tiles, and first six token rows follow in a small 30–40ms stagger
- * ~260ms  the high-contrast tab underline glides to the active tab on the snappy
- *         spring while the incoming panel cross-fades; toasts slide into the
- *         fixed stack above the anchored dock
- * 260ms   the account drawer settles in over a dimmed backdrop, its rows
- *         cascading in behind it
+ *  90ms   hover and press feedback settles through color and a restrained
+ *         0.96–1.0 press scale
+ * 160ms   a dismissed token sheet settles down and restores trigger focus
+ * 200ms   a newly opened screen moves along navigation direction; token sheets
+ *         rise into protected focus; a dapp takeover names the paused task
+ * 220ms   semantic live values and toasts settle without animating unchanged data
+ * 260ms   the account drawer follows gesture momentum into its resting edge
  *
  * Motion is calm, small, fast (<300ms), GPU-only (transform/opacity), on strong
  * curves, and everything collapses to a cut under prefers-reduced-motion.
@@ -44,13 +40,16 @@
 import { BASE_STYLES } from "./core/styles-base";
 import { COMPONENT_STYLES } from "./core/styles-components";
 import { CONTROL_STYLES } from "./core/styles-controls";
+import { DECISION_STYLES } from "./core/styles-decisions";
 import { DOCK_STYLES } from "./core/styles-dock";
 import { JOURNEY_STYLES } from "./core/styles-journeys";
 import { PROGRESS_STYLES } from "./core/styles-progress";
 import { STRUCTURE_STYLES } from "./core/styles-structure";
 import { TRANSITION_STYLES } from "./core/styles-transitions";
 import { MULTISIG_STYLES } from "./multisig/styles-multisig";
+import { MULTISIG_PARTICIPANT_STYLES } from "./multisig/styles-multisig-participant";
 import { ONBOARDING_STYLES } from "./onboarding/styles-onboarding";
+import { ONBOARDING_CONTRACT_STYLES } from "./onboarding/styles-onboarding-contract";
 import { ONBOARDING_WELCOME_STYLES } from "./onboarding/styles-onboarding-welcome";
 import { HOME_STYLES } from "./portfolio/styles-home";
 import { TOKEN_STYLES } from "./portfolio/styles-tokens";
@@ -63,5 +62,5 @@ import { SWAP_STYLES } from "./swap/styles-swap";
 /**
  * Skin-token-only stylesheet injected by the side panel entrypoint.
  */
-export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${DOCK_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${SWAP_STYLES}${PROGRESS_STYLES}${PRIVACY_STYLES}${SEND_STYLES}${SEND_COMPOSE_STYLES}${COMPONENT_STYLES}${JOURNEY_STYLES}${MULTISIG_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
-${HOME_STYLES}${ONBOARDING_STYLES}${ONBOARDING_WELCOME_STYLES}`;
+export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${DOCK_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${DECISION_STYLES}${SWAP_STYLES}${PROGRESS_STYLES}${PRIVACY_STYLES}${SEND_STYLES}${SEND_COMPOSE_STYLES}${COMPONENT_STYLES}${JOURNEY_STYLES}${MULTISIG_STYLES}${MULTISIG_PARTICIPANT_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
+${HOME_STYLES}${ONBOARDING_CONTRACT_STYLES}${ONBOARDING_STYLES}${ONBOARDING_WELCOME_STYLES}`;

@@ -58,7 +58,8 @@ export const applyTransferUi = (
 ): void => {
   const currentForm = form;
   const previousStage = currentForm.dataset["stage"];
-  const working = ["authorizing", "broadcasting", "confirming", "reviewing"].includes(state.stage);
+  const working = ["authorizing", "broadcasting", "confirming"].includes(state.stage);
+  const visibleStage = state.stage === "reviewing" ? "details" : state.stage;
   currentForm.dataset["stage"] = state.stage;
   currentForm.toggleAttribute("aria-busy", working);
   const stageIds: Readonly<Record<string, TransferStage>> = {
@@ -71,7 +72,7 @@ export const applyTransferUi = (
     "send-success": "submitted",
   };
   for (const [id, stage] of Object.entries(stageIds)) {
-    form.querySelector(`#${id}`)?.toggleAttribute("hidden", state.stage !== stage);
+    form.querySelector(`#${id}`)?.toggleAttribute("hidden", visibleStage !== stage);
   }
   form.querySelector("#send-working")?.toggleAttribute("hidden", !working);
   setText(form.ownerDocument, "send-header-title", transferStageTitle(state.stage));
@@ -79,6 +80,10 @@ export const applyTransferUi = (
   restoreTransferFields(form, state.fields);
 
   const confirmButton = form.querySelector<HTMLButtonElement>("#send-confirm-button");
+  buttonBusy(
+    form.querySelector<HTMLButtonElement>("#send-review-button"),
+    state.stage === "reviewing",
+  );
   buttonBusy(confirmButton, state.stage === "authorizing");
   if (confirmButton && state.stage === "review") {
     confirmButton.disabled = state.review?.feeEstimateFailed === true;

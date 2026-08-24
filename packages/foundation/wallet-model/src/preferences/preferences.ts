@@ -15,6 +15,7 @@ import {
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalAddress,
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
@@ -41,6 +42,7 @@ export type AddressBookEntry = {
   readonly id: string;
   readonly label: string;
   readonly networkId: StarknetNetworkId;
+  readonly publicKeyX?: string;
 };
 
 /**
@@ -157,7 +159,14 @@ export const withTokenId = (token: Omit<TokenConfig, "id">): TokenConfig => {
  */
 export const withAddressBookId = (entry: Omit<AddressBookEntry, "id">): AddressBookEntry => {
   const address = entryAddress(entry.address);
-  return { ...entry, address, id: addressBookEntryId(entry.networkId, address) };
+  const { publicKeyX: inputPublicKeyX, ...contact } = entry;
+  const publicKeyX = inputPublicKeyX && (canonicalFelt(inputPublicKeyX) ?? inputPublicKeyX);
+  return {
+    ...contact,
+    address,
+    id: addressBookEntryId(entry.networkId, address),
+    ...(publicKeyX ? { publicKeyX } : {}),
+  };
 };
 
 /**
@@ -189,13 +198,17 @@ export const isTokenConfig = (value: unknown): value is TokenConfig =>
  */
 export const isAddressBookEntry = (value: unknown): value is AddressBookEntry =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["address", "id", "label", "networkId"]) &&
+  hasOnlyKnownKeys(value, ["address", "id", "label", "networkId", "publicKeyX"]) &&
   typeof value["address"] === "string" &&
   isNonZeroStarkFieldElement(value["address"]) &&
   canonicalAddress(value["address"]) === value["address"] &&
   typeof value["id"] === "string" &&
   isLabel(value["label"]) &&
   isStarknetNetworkId(value["networkId"]) &&
+  (value["publicKeyX"] === undefined ||
+    (typeof value["publicKeyX"] === "string" &&
+      isNonZeroStarkFieldElement(value["publicKeyX"]) &&
+      canonicalFelt(value["publicKeyX"]) === value["publicKeyX"])) &&
   value["id"] === addressBookEntryId(value["networkId"], value["address"]);
 
 /**

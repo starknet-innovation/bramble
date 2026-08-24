@@ -3,6 +3,7 @@
  */
 import {
   type ArgentMultisigConfigReview,
+  type ArgentMultisigPublicConfig,
   MULTISIG_LIMITS,
   requireSafeArgentMultisigCalls,
   reviewArgentMultisigConfigChange,
@@ -18,7 +19,7 @@ import {
 } from "@mc-wallet/transactions/verify";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { MultisigOpsDeps } from "./multisig-deps";
-import type { ArgentMultisigContext, currentConfigFor } from "./multisig-ops";
+import type { ArgentMultisigContext } from "./multisig-ops";
 
 /**
  * Trusted local description of one validated frozen call set. Invalid or
@@ -39,7 +40,7 @@ export const reviewArgentMultisigCalls = async (
   deps: MultisigOpsDeps,
   context: ArgentMultisigContext,
   calls: ArgentMultisigSigningIntent["prepared"]["calls"],
-  currentConfig: Awaited<ReturnType<typeof currentConfigFor>>,
+  currentConfig: ArgentMultisigPublicConfig | null,
 ): Promise<{ readonly error: string } | ArgentMultisigCallReview> => {
   const normalized = normalizedArgentMultisigCalls(calls);
   requireSafeArgentMultisigCalls(context.record.address, normalized);
@@ -47,6 +48,11 @@ export const reviewArgentMultisigCalls = async (
     sameFelt(call.contractAddress, context.record.address),
   );
   if (selfCall) {
+    if (!currentConfig) {
+      return {
+        error: "Signer-management intents require the complete current public signer configuration",
+      };
+    }
     const review = reviewArgentMultisigConfigChange(
       context.record.address,
       {

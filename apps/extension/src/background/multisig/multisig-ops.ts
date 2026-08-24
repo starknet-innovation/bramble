@@ -1,17 +1,23 @@
 /**
- * Privileged Argent multisig registry and fresh chain-config operations.
+ * Privileged Argent multisig registry and authority operations.
  */
-import type { ArgentMultisigConfig } from "@mc-wallet/multisig/chain";
+import type {
+  ArgentMultisigAuthorityStatus,
+  ArgentMultisigConfig,
+  ArgentUnsupportedSigner,
+} from "@mc-wallet/multisig/chain";
 import type {
   ArgentMultisigConfigSnapshot,
   ArgentMultisigRecord,
   MultisigStore,
 } from "@mc-wallet/multisig/repository";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import type { TokenBalance } from "@mc-wallet/starknet/rpc";
+import {
+  ARGENT_MULTISIG_CONTRACT,
+  normalizeArgentMultisigConfig,
+} from "@mc-wallet/starknet/account-contracts";
+import { isContractNotFoundError } from "@mc-wallet/starknet/provider";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { readTypeOnlyInput } from "../routing/message-inputs";
+import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import {
   type ActiveAccountContext,
   activeAccountContext,
@@ -20,20 +26,32 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
+import { handleMultisigAccountOps } from "./multisig-account-ops";
 import {
+  discoverArgentSigners,
+  enrichArgentAddressOnlyWatch,
+  markChangedIntentsStale,
   markObservedArgentIntentOutcomes,
+  matchesArgentPublicConfig,
   reconcileArgentCurrentConfig,
-  sameArgentSignerGuids,
   storedArgentPublicConfig,
 } from "./multisig-config-reconcile";
+import { type ArgentMultisigContext, contextFor } from "./multisig-context";
 import { handleMultisigDeployOps } from "./multisig-deploy-ops";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import {
   type AddArgentMultisigInput,
   readAddMultisigInput,
   readMultisigIdInput,
-  readRemoveMultisigInput,
+  readMultisigsInput,
 } from "./multisig-inputs";
+import { handleMultisigSignerOps } from "./multisig-signer-ops";
+import {
+  type ArgentMultisigView,
+  pendingDeploymentIds,
+  storedMultisigView,
+  unresolvedMultisigView,
+} from "./multisig-view-state";
 
 /**
  * Re-export the neutral composition dependency seam.
@@ -49,9 +67,14 @@ const addRecord = async (
   readonly result: Awaited<ReturnType<MultisigStore["upsertMultisig"]>>;
 }> => {
   const existing = (await store.listMultisigs()).find((candidate) => candidate.id === record.id);
+  if (!isAuthorized()) return { record, result: "unauthorized" };
   if (!existing) return { record, result: await store.upsertMultisig(record, isAuthorized) };
+  if (!record.currentConfig) return { record: existing, result: "stored" };
   const expected = storedArgentPublicConfig(existing);
-  if (!expected || !record.currentConfig) return { record, result: "invalid" };
+  if (!expected) {
+    const result = await store.upsertMultisig(record, isAuthorized);
+    return { record: result === "stored" ? record : existing, result };
+  }
   const returned = { ...existing, currentConfig: record.currentConfig };
   const result = await store.updateCurrentConfig(
     existing.id,
@@ -60,6 +83,87 @@ const addRecord = async (
     isAuthorized,
   );
   return { record: returned, result };
+};
+
+const readAuthority = async (
+  deps: MultisigOpsDeps,
+  address: string,
+  rpcUrls: readonly string[],
+): Promise<{
+  readonly config: ArgentMultisigConfig | null;
+  readonly status: ArgentMultisigAuthorityStatus;
+}> => {
+  try {
+    return {
+      config: await multisigRpc(deps).getConfig({ address, rpcUrls }),
+      status: "available",
+    };
+  } catch (error) {
+    if (isContractNotFoundError(error)) return { config: null, status: "undeployed" };
+    const message = error instanceof Error ? error.message : "";
+    if (message === "Account is not the pinned Argent Multisig 0.2 class") {
+      return { config: null, status: "unsupported-class" };
+    }
+    if (/^Invalid Argent multisig/.test(message)) {
+      return { config: null, status: "invalid-config" };
+    }
+    return { config: null, status: "network-unavailable" };
+  }
+};
+
+const unavailableAddError = (status: ArgentMultisigAuthorityStatus): string =>
+  ({
+    available: "Argent multisig authority could not be verified",
+    "invalid-config": "This Argent multisig returned an invalid signer configuration",
+    "network-unavailable":
+      "Argent multisig authority could not be verified. Check the network and retry",
+    undeployed: "Signer keys cannot be verified until the multisig is deployed",
+    "unsupported-class": "This address is not the pinned Argent Multisig 0.2 account",
+    "unsupported-signers": "This Argent multisig uses unsupported signer types",
+  })[status];
+
+const signersForAdd = async (
+  deps: MultisigOpsDeps,
+  active: ActiveAccountContext & { readonly error?: never },
+  preferences: Awaited<ReturnType<MultisigOpsDeps["preferencesStore"]["read"]>>,
+  input: AddArgentMultisigInput,
+  config: ArgentMultisigConfig,
+  rpcUrls: readonly string[],
+): Promise<{
+  readonly signerPublicKeys: readonly string[];
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
+} | null> => {
+  try {
+    return input.signerPublicKeys
+      ? {
+          signerPublicKeys: normalizeArgentMultisigConfig({
+            signerPublicKeys: input.signerPublicKeys,
+            threshold: config.threshold,
+          }).signerPublicKeys,
+          unsupportedSigners: [],
+        }
+      : await discoverArgentSigners(deps, active, preferences, input.address, config, rpcUrls);
+  } catch {
+    return null;
+  }
+};
+
+const addWithoutConfig = (
+  status: ArgentMultisigAuthorityStatus,
+  input: AddArgentMultisigInput,
+  authorized: ReturnType<typeof captureSessionAuthorization>,
+) => {
+  if (status !== "undeployed") return { error: unavailableAddError(status) };
+  if (input.signerPublicKeys) {
+    return { error: "Signer keys cannot be verified until the multisig is deployed" };
+  }
+  return {
+    authorityStatus: status,
+    authorized,
+    config: null,
+    signerPublicKeys: [],
+    unsupportedSigners: [],
+  } as const;
 };
 
 const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigInput) => {
@@ -71,67 +175,36 @@ const addChainContext = async (deps: MultisigOpsDeps, input: AddArgentMultisigIn
   if (active.networkId !== input.networkId) {
     return { error: "switch to the multisig network first" } as const;
   }
-  const signer = active.accounts.find(
-    (account) => account.id === input.signerAccountId && account.networkId === input.networkId,
-  );
-  if (!signer) {
-    return { error: "selected signer account is unavailable on this network" } as const;
-  }
   const preferences = await deps.preferencesStore.read();
-  const config = await multisigRpc(deps).getConfig({
-    address: input.address,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences),
-  });
-  const matches =
-    config.signerGuids.includes(argentSignerGuid(signer.publicKeyX)) &&
-    config.threshold === input.threshold &&
-    sameArgentSignerGuids(config.signerGuids, input.signerPublicKeys.map(argentSignerGuid));
-  return matches
-    ? { authorized, config }
-    : { error: "Argent multisig current config or selected signer does not match chain state" };
-};
-
-/**
- * Fresh, non-persisted view returned to the wallet UI.
- */
-type ArgentMultisigView = {
-  readonly config: ArgentMultisigConfig | null;
-  readonly record: ArgentMultisigRecord;
-};
-
-/**
- * Resolved watched account and active-network RPC scope.
- */
-export type ArgentMultisigContext = {
-  readonly active: ActiveAccountContext & { readonly error?: never };
-  readonly record: ArgentMultisigRecord;
-  readonly rpcUrls: readonly string[];
-};
-
-const contextFor = async (
-  deps: MultisigOpsDeps,
-  active: ActiveAccountContext,
-  multisigId: string,
-): Promise<ArgentMultisigContext | { readonly error: string }> => {
-  if (active.error !== undefined) {
-    return { error: active.error };
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
+  const authority = await readAuthority(deps, input.address, rpcUrls);
+  const config = authority.config;
+  if (!config) return addWithoutConfig(authority.status, input, authorized);
+  const discovered = await signersForAdd(deps, active, preferences, input, config, rpcUrls);
+  if (!discovered) {
+    return { error: "Signer public keys are invalid or duplicated" };
   }
-  const record = (await deps.multisigStore.listMultisigs()).find(
-    (candidate) => candidate.id === multisigId,
-  );
-  if (!record) {
-    return { error: "Argent multisig not found" };
+  const { signerPublicKeys, unsupportedSigners } = discovered;
+  if (
+    input.signerPublicKeys &&
+    !matchesArgentPublicConfig({ signerPublicKeys, threshold: config.threshold }, config)
+  ) {
+    return { error: "A supplied public key is not a current Stark signer for this multisig" };
   }
-  if (record.networkId !== active.networkId) {
-    return { error: "switch to the multisig network first" };
-  }
-  const preferences = await deps.preferencesStore.read();
   return {
-    active,
-    record,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
+    authorityStatus: unsupportedSigners.length > 0 ? "unsupported-signers" : authority.status,
+    authorized,
+    config,
+    signerPublicKeys,
+    unsupportedSigners,
   };
 };
+
+/**
+ * Re-exports the fail-closed active-network context used by transaction
+ * operations. It contains no signer secret material.
+ */
+export type { ArgentMultisigContext } from "./multisig-context";
 
 /**
  * Resolves one explicit single-signer wallet account inside a context.
@@ -154,10 +227,20 @@ export const configSnapshot = (config: ArgentMultisigConfig): ArgentMultisigConf
 });
 
 /**
- * Requires fresh chain authority to match the constructor public keys retained
- * by this wallet. Signer GUIDs are one-way, so a changed signer set cannot be
- * safely prepared until its public keys are imported through a future config
- * package rather than guessed locally.
+ * Reads the fresh signer authority for one pinned Argent multisig.
+ */
+export const currentChainConfigFor = async (
+  deps: MultisigOpsDeps,
+  context: Pick<ArgentMultisigContext, "record" | "rpcUrls">,
+): Promise<ArgentMultisigConfig> =>
+  multisigRpc(deps).getConfig({
+    address: context.record.address,
+    rpcUrls: context.rpcUrls,
+  });
+
+/**
+ * Requires fresh chain authority to match the public keys retained by this
+ * wallet. Preparation and signer-management review must not guess those keys.
  */
 export const currentConfigFor = async (
   deps: MultisigOpsDeps,
@@ -171,12 +254,8 @@ export const currentConfigFor = async (
   if (!current) {
     throw new Error("Argent multisig public signer configuration is unavailable");
   }
-  const chain = await multisigRpc(deps).getConfig({
-    address: context.record.address,
-    rpcUrls: context.rpcUrls,
-  });
-  const guids = current.signerPublicKeys.map(argentSignerGuid);
-  if (chain.threshold !== current.threshold || !sameArgentSignerGuids(chain.signerGuids, guids)) {
+  const chain = await currentChainConfigFor(deps, context);
+  if (!matchesArgentPublicConfig(current, chain)) {
     throw new Error("Argent multisig signer configuration changed on-chain");
   }
   return {
@@ -186,54 +265,85 @@ export const currentConfigFor = async (
   };
 };
 
-const markChangedIntentsStale = async (
-  store: MultisigStore,
-  accountId: string,
+const reconciledMultisigView = async (
+  deps: MultisigOpsDeps,
+  active: ActiveAccountContext & { readonly error?: never },
+  preferences: Awaited<ReturnType<MultisigOpsDeps["preferencesStore"]["read"]>>,
+  record: ArgentMultisigRecord,
   config: ArgentMultisigConfig,
-): Promise<void> => {
-  for (const intent of await store.listIntents()) {
-    if (
-      intent.accountId === accountId &&
-      (intent.state === "collecting" || intent.state === "ready") &&
-      (intent.configSnapshot.threshold !== config.threshold ||
-        !sameArgentSignerGuids(intent.configSnapshot.signerGuids, config.signerGuids))
-    ) {
-      await store.upsertIntent({ ...intent, state: "stale" });
-    }
+  rpcUrls: readonly string[],
+): Promise<ArgentMultisigView> => {
+  try {
+    const reconciled = await reconcileArgentCurrentConfig(deps, record, config);
+    const refreshed = await enrichArgentAddressOnlyWatch(
+      deps,
+      active,
+      preferences,
+      reconciled,
+      config,
+      rpcUrls,
+    );
+    await markObservedArgentIntentOutcomes(deps, refreshed.record);
+    await markChangedIntentsStale(deps.multisigStore, record.id, config);
+    return {
+      authorityStatus:
+        refreshed.unsupportedSigners.length > 0 ? "unsupported-signers" : "available",
+      config,
+      deployed: true,
+      record: refreshed.record,
+      unsupportedSigners: refreshed.unsupportedSigners,
+    };
+  } catch {
+    return { authorityStatus: "available", config, deployed: true, record, unsupportedSigners: [] };
   }
 };
 
+const freshMultisigView = async (
+  deps: MultisigOpsDeps,
+  active: ActiveAccountContext & { readonly error?: never },
+  preferences: Awaited<ReturnType<MultisigOpsDeps["preferencesStore"]["read"]>>,
+  record: ArgentMultisigRecord,
+  deploymentPending: ReadonlySet<string>,
+): Promise<ArgentMultisigView> => {
+  if (record.currentConfig) {
+    await markObservedArgentIntentOutcomes(deps, record);
+    return storedMultisigView(record);
+  }
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences);
+  const authority = await readAuthority(deps, record.address, rpcUrls);
+  return authority.config
+    ? reconciledMultisigView(deps, active, preferences, record, authority.config, rpcUrls)
+    : unresolvedMultisigView(record, authority.status, deploymentPending.has(record.id));
+};
+
 const listMultisigs = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
-  if (!readTypeOnlyInput(message, "wallet.multisigs")) {
-    return { error: "invalid Argent multisig list request" };
-  }
+  const input = readMultisigsInput(message);
+  if (!input) return { error: "invalid Argent multisig list request" };
   const active = await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (active.error !== undefined) {
-    return { error: active.error };
-  }
+  if (active.error !== undefined) return { error: active.error };
   const preferences = await deps.preferencesStore.read();
-  const records = (await deps.multisigStore.listMultisigs()).filter(
-    (record) => record.networkId === active.networkId,
-  );
-  const multisigs: ArgentMultisigView[] = await Promise.all(
-    records.map(async (record) => {
-      try {
-        const config = await multisigRpc(deps).getConfig({
-          address: record.address,
-          rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
-        });
-        const refreshed = await reconcileArgentCurrentConfig(deps, record, config);
-        await markObservedArgentIntentOutcomes(deps, refreshed);
-        await markChangedIntentsStale(deps.multisigStore, record.id, config);
-        return { config, record: refreshed };
-      } catch {
-        return { config: null, record };
-      }
-    }),
-  );
+  const [storedRecords, storedIntents, operations] = await Promise.all([
+    deps.multisigStore.listMultisigs(),
+    deps.multisigStore.listIntents(),
+    deps.multisigStore.listOperations(),
+  ]);
+  const records = storedRecords.filter((record) => record.networkId === active.networkId);
   const accountIds = new Set(records.map((record) => record.id));
-  const intents = (await deps.multisigStore.listIntents()).filter((intent) =>
-    accountIds.has(intent.accountId),
+  const intents = storedIntents.filter((intent) => accountIds.has(intent.accountId));
+  const deploymentPending = pendingDeploymentIds(operations);
+  if (input.cached) {
+    return {
+      intents,
+      multisigs: records.map((record) =>
+        storedMultisigView(record, deploymentPending.has(record.id)),
+      ),
+      ok: true,
+    };
+  }
+  const multisigs: ArgentMultisigView[] = await Promise.all(
+    records.map((record) =>
+      freshMultisigView(deps, active, preferences, record, deploymentPending),
+    ),
   );
   return { intents, multisigs, ok: true };
 };
@@ -250,12 +360,15 @@ const addMultisig = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
     accountContractType: "argent-multisig",
     address,
     classHash: ARGENT_MULTISIG_CONTRACT.classHash,
-    currentConfig: {
-      signerPublicKeys: input.signerPublicKeys,
-      threshold: input.threshold,
-    },
+    ...(context.config && context.signerPublicKeys.length === context.config.signerGuids.length
+      ? {
+          currentConfig: {
+            signerPublicKeys: context.signerPublicKeys,
+            threshold: context.config.threshold,
+          },
+        }
+      : {}),
     id: `${input.networkId}:${address}`,
-    ...(input.name === undefined ? {} : { name: input.name }),
     networkId: input.networkId,
   };
   if (!context.authorized.isCurrent()) {
@@ -264,7 +377,17 @@ const addMultisig = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   const stored = await addRecord(deps.multisigStore, record, context.authorized.isCurrent);
   if (stored.result === "unauthorized") return { error: "wallet locked" };
   return stored.result === "stored"
-    ? { intents: [], multisig: { config: context.config, record: stored.record }, ok: true }
+    ? {
+        intents: [],
+        multisig: {
+          authorityStatus: context.authorityStatus,
+          config: context.config,
+          deployed: context.config !== null,
+          record: stored.record,
+          unsupportedSigners: context.unsupportedSigners,
+        },
+        ok: true,
+      }
     : { error: `Argent multisig registry ${stored.result}` };
 };
 
@@ -284,101 +407,52 @@ const refreshMultisig = async (
   if ("error" in context) {
     return context;
   }
-  const config = await multisigRpc(deps).getConfig({
-    address: context.record.address,
-    rpcUrls: context.rpcUrls,
-  });
-  const refreshed = await reconcileArgentCurrentConfig(deps, context.record, config);
-  await markObservedArgentIntentOutcomes(deps, refreshed);
+  const authority = await readAuthority(deps, context.record.address, context.rpcUrls);
+  const config = authority.config;
+  if (!config) {
+    const pending = pendingDeploymentIds(await deps.multisigStore.listOperations()).has(
+      context.record.id,
+    );
+    const intents = (await deps.multisigStore.listIntents()).filter(
+      (intent) => intent.accountId === context.record.id,
+    );
+    return {
+      intents,
+      multisig: {
+        authorityStatus: authority.status,
+        config: null,
+        deployed: pending ? null : authority.status === "undeployed" ? false : null,
+        ...(pending ? { deploymentPending: true as const } : {}),
+        record: context.record,
+        unsupportedSigners: [],
+      },
+      ok: true,
+    };
+  }
+  const reconciled = await reconcileArgentCurrentConfig(deps, context.record, config);
+  const refreshed = await enrichArgentAddressOnlyWatch(
+    deps,
+    context.active,
+    await deps.preferencesStore.read(),
+    reconciled,
+    config,
+    context.rpcUrls,
+  );
+  await markObservedArgentIntentOutcomes(deps, refreshed.record);
   await markChangedIntentsStale(deps.multisigStore, context.record.id, config);
   const intents = (await deps.multisigStore.listIntents()).filter(
     (intent) => intent.accountId === context.record.id,
   );
-  return { intents, multisig: { config, record: refreshed }, ok: true };
-};
-
-const removeMultisig = async (
-  deps: MultisigOpsDeps,
-  message: unknown,
-): Promise<RuntimeResponse> => {
-  const input = readRemoveMultisigInput(message);
-  if (!input) {
-    return { error: "invalid Argent multisig removal request" };
-  }
-  const authorized = captureSessionAuthorization(deps.session);
-  const context = await contextFor(
-    deps,
-    await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
-    input.multisigId,
-  );
-  if ("error" in context || !authorized.isCurrent()) {
-    return "error" in context ? context : { error: "wallet locked" };
-  }
-  const intents = (await deps.multisigStore.listIntents()).filter(
-    (intent) => intent.accountId === context.record.id,
-  );
-  const operations = (await deps.multisigStore.listOperations()).filter(
-    (operation) => operation.accountId === context.record.id,
-  );
-  const terminalIntentHashes = intents
-    .filter(
-      (intent) => !(["collecting", "ready", "submitted"] as const).includes(intent.state as never),
-    )
-    .map((intent) => intent.prepared.transactionHash);
-  if (
-    intents.some((intent) =>
-      (["collecting", "ready", "submitted"] as const).includes(intent.state as never),
-    ) ||
-    operations.some(
-      (operation) =>
-        operation.transactionHash === undefined &&
-        !(
-          operation.kind === "sign" &&
-          terminalIntentHashes.some((hash) => sameFelt(hash, operation.target))
-        ),
-    )
-  ) {
-    return { error: "Argent multisig has a pending or unresolved operation" };
-  }
-  if ((intents.length > 0 || operations.length > 0) && !input.confirmHistoryRemoval) {
-    return { error: "confirm removal of terminal Argent multisig history" };
-  }
-  if (!authorized.isCurrent()) {
-    return { error: "wallet locked" };
-  }
-  return (await deps.multisigStore.removeMultisig(context.record.id, authorized.isCurrent)) ===
-    "removed"
-    ? { ok: true }
-    : { error: "wallet locked" };
-};
-
-const multisigBalances = async (
-  deps: MultisigOpsDeps,
-  message: unknown,
-): Promise<RuntimeResponse> => {
-  const input = readMultisigIdInput(message, "wallet.multisigBalances");
-  if (!input) {
-    return { error: "invalid Argent multisig balances request" };
-  }
-  const context = await contextFor(
-    deps,
-    await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore),
-    input.multisigId,
-  );
-  if ("error" in context) {
-    return context;
-  }
-  const balances: readonly TokenBalance[] = await deps.runtimeRpc.getTokenBalances({
-    accountAddress: context.record.address,
-    rpcUrls: context.rpcUrls,
-    tokens: (await deps.preferencesStore.read()).tokens.filter(
-      (token) => token.networkId === context.record.networkId,
-    ),
-  });
   return {
-    accountId: context.record.id,
-    balances,
-    networkId: context.record.networkId,
+    intents,
+    multisig: {
+      authorityStatus:
+        refreshed.unsupportedSigners.length > 0 ? "unsupported-signers" : "available",
+      config,
+      deployed: true,
+      record: refreshed.record,
+      unsupportedSigners: refreshed.unsupportedSigners,
+    },
     ok: true,
   };
 };
@@ -386,10 +460,8 @@ const multisigBalances = async (
 type RegistryHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 const HANDLERS: Readonly<Record<string, RegistryHandler>> = {
   "wallet.addMultisig": addMultisig,
-  "wallet.multisigBalances": multisigBalances,
   "wallet.multisigs": listMultisigs,
   "wallet.refreshMultisig": refreshMultisig,
-  "wallet.removeMultisig": removeMultisig,
 };
 
 /**
@@ -404,5 +476,9 @@ export const handleMultisigOps = async (
   if (handler) {
     return handler(deps, message);
   }
-  return handleMultisigDeployOps(deps, messageType, message);
+  return (
+    handleMultisigAccountOps(deps, messageType, message) ??
+    handleMultisigSignerOps(deps, messageType, message) ??
+    handleMultisigDeployOps(deps, messageType, message)
+  );
 };

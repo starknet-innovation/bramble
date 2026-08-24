@@ -46,6 +46,10 @@ describe("onboarding views", () => {
     expect(html).toContain("OpenZeppelin Ledger Account");
     expect(html).toContain("Import from private key");
     expect(html).toContain("Argent Multisig");
+    expect(html.indexOf('data-add-kind="openzeppelin"')).toBeLessThan(
+      html.indexOf('data-add-kind="argent"'),
+    );
+    expect(html).toContain("Recommended · Create the next account");
     expect(html).toMatch(/data-add-continue[^>]*disabled/);
     expect(addAccountChooser("argent")).toMatch(/data-add-kind="argent"[^>]*aria-pressed="true"/);
   });

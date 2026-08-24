@@ -6,6 +6,7 @@ import {
   isArgentMultisigIntentResponse,
   isArgentMultisigResponse,
   isArgentMultisigsResponse,
+  isMultisigSignerResponse,
 } from "../../../../src/popup/responses/multisig-responses";
 import { createMultisigClient } from "../../../../src/sidepanel/journeys/multisig/multisig-runtime";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
@@ -29,6 +30,12 @@ describe("Argent multisig response validators", () => {
         intent: fixture.intent,
         intentPackage: fixture.intentPackage,
         ok: true,
+      }),
+    ).toBe(true);
+    expect(
+      isMultisigSignerResponse({
+        ok: true,
+        signer: { accountContractType: "argent", address: "0x123", publicKeyX: "0x456" },
       }),
     ).toBe(true);
   });
@@ -72,6 +79,13 @@ describe("Argent multisig response validators", () => {
         ok: true,
       }),
     ).toBe(false);
+    expect(
+      isArgentMultisigResponse({
+        intents: [],
+        multisig: { ...fixture.view, authorityStatus: "unsupported-signers" },
+        ok: true,
+      }),
+    ).toBe(false);
   });
 
   test("validates deployment review and requires the deployed address to match the record", async () => {
@@ -98,6 +112,27 @@ describe("Argent multisig response validators", () => {
         transactionHash: "0x456",
       }),
     ).toBe(false);
+    expect(
+      isArgentMultisigDeployResponse({
+        address: fixture.record.address,
+        multisig: {
+          ...fixture.view,
+          config: null,
+          deployed: null,
+          deploymentPending: true,
+        },
+        ok: true,
+        transactionHash: "0x456",
+      }),
+    ).toBe(true);
+    expect(
+      isArgentMultisigDeployResponse({
+        address: fixture.record.address,
+        multisig: { ...fixture.view, deployed: false, deploymentPending: true },
+        ok: true,
+        transactionHash: "0x456",
+      }),
+    ).toBe(false);
   });
 });
 
@@ -112,6 +147,9 @@ describe("createMultisigClient", () => {
         if (type === "wallet.multisigs") {
           return { intents: [fixture.intent], multisigs: [fixture.view], ok: true };
         }
+        if (type === "wallet.refreshMultisig") {
+          return { intents: [fixture.intent], multisig: fixture.view, ok: true };
+        }
         if (type === "wallet.prepareArgentMultisigIntent") {
           return {
             feeReview: { overallFee: "44", unit: "FRI" },
@@ -123,6 +161,12 @@ describe("createMultisigClient", () => {
         if (type === "wallet.signArgentMultisigIntent") {
           return { intent: fixture.intent, ok: true };
         }
+        if (type === "wallet.resolveMultisigSigner") {
+          return {
+            ok: true,
+            signer: { accountContractType: "argent", address: "0x123", publicKeyX: "0x456" },
+          };
+        }
         return { error: "unexpected message" };
       },
     });
@@ -130,6 +174,14 @@ describe("createMultisigClient", () => {
     await expect(client.loadMultisigs()).resolves.toEqual({
       intents: [fixture.intent],
       multisigs: [fixture.view],
+    });
+    await expect(client.refreshMultisig(fixture.record.id)).resolves.toEqual({
+      intents: [fixture.intent],
+      multisig: fixture.view,
+    });
+    await expect(client.refreshMultisig(fixture.record.id)).resolves.toEqual({
+      intents: [fixture.intent],
+      multisig: fixture.view,
     });
     await expect(
       client.prepareIntent(fixture.record.id, [
@@ -140,23 +192,35 @@ describe("createMultisigClient", () => {
       intent: fixture.intent,
       intentPackage: fixture.intentPackage,
     });
+    await expect(client.refreshMultisig(fixture.record.id)).resolves.toEqual({
+      intents: [fixture.intent],
+      multisig: fixture.view,
+    });
     await expect(
       client.signIntent(fixture.intent.id, fixture.status.activeAccountId ?? ""),
     ).resolves.toEqual({
       intent: fixture.intent,
     });
+    await expect(client.resolveSigner("0x123", "SN_MAIN")).resolves.toEqual({
+      accountContractType: "argent",
+      address: "0x123",
+      publicKeyX: "0x456",
+    });
     expect(messages).toEqual([
       { type: "wallet.multisigs" },
+      { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
       {
         calls: [{ calldata: ["0x1"], contractAddress: "0xdef", entrypoint: "transfer" }],
         multisigId: fixture.record.id,
         type: "wallet.prepareArgentMultisigIntent",
       },
+      { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
       {
         intentId: fixture.intent.id,
         signerAccountId: fixture.status.activeAccountId,
         type: "wallet.signArgentMultisigIntent",
       },
+      { address: "0x123", networkId: "SN_MAIN", type: "wallet.resolveMultisigSigner" },
     ]);
   });
 
@@ -166,5 +230,41 @@ describe("createMultisigClient", () => {
     await expect(client.submitIntent("intent-id")).rejects.toThrow(
       "submit Argent multisig intent failed",
     );
+  });
+
+  test("never treats a cached registry view as a fresh authority refresh", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const messages: unknown[] = [];
+    const client = createMultisigClient({
+      async sendMessage(message) {
+        messages.push(message);
+        return (message as { type?: string }).type === "wallet.multisigs"
+          ? { intents: [], multisigs: [fixture.view], ok: true }
+          : { intents: [], multisig: fixture.view, ok: true };
+      },
+    });
+    await client.loadMultisigs(true);
+    await client.refreshMultisig(fixture.record.id);
+    expect(messages).toEqual([
+      { cached: true, type: "wallet.multisigs" },
+      { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
+    ]);
+  });
+
+  test("bypasses an ambient authority cache for signing-critical views", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    let requests = 0;
+    const client = createMultisigClient({
+      async sendMessage() {
+        requests += 1;
+        return { intents: [], multisig: fixture.view, ok: true };
+      },
+    });
+
+    await client.refreshMultisig(fixture.record.id);
+    await client.refreshMultisig(fixture.record.id);
+    await client.refreshMultisig(fixture.record.id, true);
+
+    expect(requests).toBe(2);
   });
 });

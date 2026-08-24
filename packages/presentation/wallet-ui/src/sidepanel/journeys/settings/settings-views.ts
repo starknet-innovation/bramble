@@ -35,40 +35,49 @@ export const settingsScreen = (
     "settings",
     `<h2>Settings</h2>
     <section class="section">
-      <p class="eyebrow">Wallet</p>
-      <div class="menu-list" role="group" aria-label="Wallet settings">
+      <p class="eyebrow">Accounts & networks</p>
+      <div class="menu-list" role="group" aria-label="Accounts and networks">
         ${walletMenuRow("account", "Accounts & groups", "wallet")}
         ${walletMenuRow("network", "Network", "globe", status.network)}
         ${walletMenuRow("address-book", "Address book", "book")}
+        ${walletMenuRow("multisigs", "Shared accounts", "users")}
       </div>
     </section>
     <section class="section">
-      <p class="eyebrow">Experience</p>
-      <div class="menu-list" role="group" aria-label="Wallet experience">
-        ${walletMenuRow(
-          "appearance",
-          "Appearance & currency",
-          "settings",
-          (preferences?.displayCurrency ?? "usd").toUpperCase(),
-        )}
+      <p class="eyebrow">Access & permissions</p>
+      <div class="menu-list" role="group" aria-label="Access and permissions">
+        ${walletMenuRow("connected-sites", "Connected sites", "link")}
+        ${walletMenuRow("allowances", "Token allowances", "coins")}
         ${walletMenuRow(
           "request-settings",
-          "Wallet requests",
+          "Request display",
           "activity",
           (preferences?.approvalSurface ?? "side-panel") === "popup" ? "Popup" : "Side panel",
         )}
       </div>
     </section>
     <section class="section">
-      <p class="eyebrow">Trust & recovery</p>
-      <div class="menu-list" role="group" aria-label="Trust and recovery">
-        ${walletMenuRow("security", "Security & permissions", "shield")}
+      <p class="eyebrow">Backup & recovery</p>
+      <div class="menu-list" role="group" aria-label="Backup and recovery">
+        ${walletMenuRow("backup", "Backup & restore", "shield")}
+        ${walletMenuRow("reveal", "Reveal recovery secrets", "lock")}
+      </div>
+    </section>
+    <section class="section">
+      <p class="eyebrow">Preferences</p>
+      <div class="menu-list" role="group" aria-label="Wallet preferences">
+        ${walletMenuRow(
+          "appearance",
+          "Appearance & currency",
+          "settings",
+          (preferences?.displayCurrency ?? "usd").toUpperCase(),
+        )}
       </div>
     </section>
     <section class="section">
       <div class="menu-list">
         ${menuLink({
-          href: "https://github.com/mc-wallet/mc-wallet#readme",
+          href: "https://github.com/starknet-innovation/mc-wallet#readme",
           icon: "book",
           label: "Help & docs",
           target: "_blank",
@@ -123,20 +132,20 @@ export const requestSettingsFlow = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
 ): string =>
-  flowHeader("Wallet requests", status, "Where a dApp asks for approval") +
+  flowHeader("Request display", status, "Where a site asks for approval") +
   flowScreen(
     "request-settings",
     `<section class="section">
-      <p class="lede">New requests always take focus so they cannot hide behind another wallet screen.</p>
+      <p class="lede">A new request opens in front so it cannot hide, while your current wallet task stays paused for a predictable return.</p>
       ${segmentedControl(
         "Wallet request surface",
         (["side-panel", "popup"] as const).map((surface) => ({
           attributes: { "data-approval-surface": surface },
-          label: surface === "side-panel" ? "Side panel" : "Toolbar popup",
+          label: surface === "side-panel" ? "Wallet panel" : "Compact popup",
           pressed: (preferences?.approvalSurface ?? "side-panel") === surface,
         })),
       )}
-      <p class="hint">Side panel keeps the request beside the site. Popup opens a compact wallet window above the current tab.</p>
+      <p class="hint">Wallet panel keeps the request beside the site. Compact popup opens above the current tab. Both preserve the task you were doing.</p>
     </section>
     <p id="display-result" role="status"></p>`,
   );

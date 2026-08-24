@@ -29,11 +29,8 @@ export const activityScreen = (
 ): string =>
   dockScreen(
     "activity",
-    `<div class="section-head"${multisig ? ` data-activity-account-id="${escapeHtml(multisig.id)}"` : ""}>
-      <div>
-        <h2>Activity</h2>
-        <p class="hint">Only ${escapeHtml(status.network)} activity for ${multisig ? escapeHtml(multisig.name ?? "this multisig") : "the active account"}.</p>
-      </div>
+    `<div class="section-head activity-head"${multisig ? ` data-activity-account-id="${escapeHtml(multisig.id)}"` : ""}>
+      <h1 aria-label="Activity on ${escapeHtml(status.network)}">Activity</h1>
       <div class="header-actions">
         ${iconButton({
           attributes: { id: "activity-export" },

@@ -92,22 +92,24 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
 
   const applyGate = (): void => {
     const view = deps.route();
+    const incomplete = !(sendFormInput(form, "amount")?.value.trim() ?? "");
+    const blocked = incomplete ? undefined : view.blocked;
     for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
       const bucket = readBucket(form, legOf(button));
       button.textContent = LABELS[bucket];
       button.dataset["bucket"] = bucket;
       button.title = HINTS[bucket];
     }
-    container?.classList.toggle("muted", view.blocked !== undefined);
-    container?.setAttribute("title", view.blocked?.reason ?? "Choose where the value moves");
+    container?.classList.toggle("muted", blocked !== undefined);
+    container?.setAttribute("title", blocked?.reason ?? "Choose where the value moves");
     if (reason) {
       // Spelled out beside the controls: a disabled action whose only
       // explanation was a title tooltip read as a broken control.
-      reason.textContent = view.blocked?.reason ?? "";
-      reason.hidden = view.blocked === undefined;
+      reason.textContent = blocked?.reason ?? "";
+      reason.hidden = blocked === undefined;
     }
     if (retry) {
-      retry.hidden = view.blocked === undefined || deps.retryable?.() !== true;
+      retry.hidden = blocked === undefined || deps.retryable?.() !== true;
     }
   };
 

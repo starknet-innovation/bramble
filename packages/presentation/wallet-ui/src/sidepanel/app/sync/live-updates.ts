@@ -28,6 +28,7 @@ export const animateLiveValueChanges = (
   root: Element | null,
   previous: LiveValueSnapshot,
 ): void => {
+  const animated = new Set<HTMLElement>();
   root?.querySelectorAll<HTMLElement>("[data-live-key]").forEach((element) => {
     const key = element.dataset["liveKey"];
     const value = element.dataset["liveValue"];
@@ -35,13 +36,14 @@ export const animateLiveValueChanges = (
     if (prior === undefined || value === undefined || prior === value) {
       return;
     }
-    animate(
-      element,
-      [
-        { opacity: 0.62, transform: "translateY(-2px)" },
-        { opacity: 1, transform: "translateY(0)" },
-      ],
-      { duration: 180, id: "live-value-change" },
-    );
+    const target = element.closest<HTMLElement>("[data-live-group]") ?? element;
+    if (animated.has(target)) {
+      return;
+    }
+    animated.add(target);
+    animate(target, [{ opacity: 0.78 }, { opacity: 1 }], {
+      duration: 120,
+      id: "live-value-change",
+    });
   });
 };

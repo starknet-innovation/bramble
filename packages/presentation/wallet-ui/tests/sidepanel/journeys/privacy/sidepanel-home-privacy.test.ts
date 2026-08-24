@@ -220,10 +220,27 @@ describe("unified portfolio scope", () => {
     const html = privateDashboard(privateState(true));
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("home-actions"));
 
-    expect(hero).toContain("Public balances shown; private balances are still refreshing");
+    expect(hero).not.toContain("private balances are still refreshing");
+    expect(html).toContain('class="account-net degraded"');
+    expect(html).toContain("Private balances are still refreshing.");
     expect(hero).toContain("$2,500.00");
     expect(hero).toContain('data-total-complete="false"');
     expect(html).toContain("Discovering…");
+  });
+
+  test("a failed discovery keeps the diagnostic out of the portfolio row", () => {
+    const html = privateDashboard({
+      error: "strk20 services unavailable",
+      loading: false,
+      value: null,
+    });
+
+    expect(html).toContain("data-privacy-retry");
+    expect(html).toContain("Private balance");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("strk20 services unavailable");
+    expect(html).not.toContain("Shielded balances unavailable right now.");
+    expect(html).not.toContain("privacy-inline-error");
   });
 
   test("unified rows preserve the hidden-token filter", () => {

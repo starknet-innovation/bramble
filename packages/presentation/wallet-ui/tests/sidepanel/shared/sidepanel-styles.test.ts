@@ -5,7 +5,7 @@
  * the side panel UI.
  */
 import { describe, expect, test } from "bun:test";
-import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE, TYPE } from "@mc-wallet/ui-kit/tokens";
 import { SIDEPANEL_STYLES } from "../../../src/sidepanel/styles/index";
 
 describe("sidepanel styles", () => {
@@ -122,8 +122,29 @@ describe("sidepanel styles", () => {
   test("reduced motion collapses every lift and press scale", () => {
     const reduced = SIDEPANEL_STYLES.slice(SIDEPANEL_STYLES.indexOf("prefers-reduced-motion"));
     expect(reduced).toContain("animation: none");
+    expect(reduced).toContain(".account-net.degraded .dot");
     expect(reduced).toContain("transition: none");
     expect(reduced).toContain("transform: none");
+  });
+
+  test("keeps network identity on one line and reserves motion for degraded data", () => {
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.account-net \{[^}]*overflow: hidden;[^}]*text-wrap: nowrap;/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.account-network-label \{[^}]*text-overflow: ellipsis;[^}]*text-wrap: nowrap;/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.account-net\.degraded \.dot \{[^}]*network-status-pulse 2400ms[^}]*var\(--mc-warning\)/s,
+    );
+  });
+
+  test("short screens suppress overscroll and activity puts state on the icon", () => {
+    expect(SIDEPANEL_STYLES).toMatch(/body \{[^}]*overscroll-behavior-y: none;/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.activity-head h1 \{[^}]*font-size: 22px;/s);
+    expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.accepted { color: var(--mc-positive); }");
+    expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.pending { color: var(--mc-warning); }");
+    expect(SIDEPANEL_STYLES).not.toContain(".tx-status");
   });
 
   test("colors come only from skin tokens, never literals", () => {
@@ -190,7 +211,7 @@ describe("sidepanel styles", () => {
     // Gains, success, and sparkline direction are meaning, not decoration:
     // they read green/red from the semantic tokens.
     expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--mc-positive); }");
-    expect(SIDEPANEL_STYLES).toContain(".tx-status.accepted { color: var(--mc-positive); }");
+    expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.accepted { color: var(--mc-positive); }");
     expect(SIDEPANEL_STYLES).toContain(".sparkline-up polyline { stroke: var(--mc-positive); }");
     // Toast tone is a leading icon chip — green check on positive-soft for
     // success, red alert on danger-soft for error — a fixed heuristic the eye
@@ -200,6 +221,9 @@ describe("sidepanel styles", () => {
     );
     expect(SIDEPANEL_STYLES).toContain(
       ".toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }",
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.toast-text \{[^}]*text-overflow: ellipsis[^}]*text-wrap: nowrap/s,
     );
     // The swap success moment draws its ring and check in the semantic green
     // and collapses to static marks under reduced motion.
@@ -302,15 +326,18 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toContain("terminal-cta");
   });
 
-  test("the icon-only dock uses white and grey focus without icon containers", () => {
-    // The dock removes persistent text labels but retains names in accessible
-    // tooltip copy. White and muted grey distinguish state without a surface.
+  test("the labelled dock uses white and grey focus without icon containers", () => {
+    // Persistent labels make every destination recognizable; white and muted
+    // grey distinguish state without adding an active-state surface.
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--mc-text\)/,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*background/);
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*box-shadow/);
-    expect(SIDEPANEL_STYLES).toMatch(/\.nav-tooltip \{[^}]*opacity: 0;[^}]*visibility: hidden/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      new RegExp(`\\.nav-label \\{[^}]*font-size: ${TYPE.micro.size}`, "s"),
+    );
+    expect(SIDEPANEL_STYLES).not.toContain(".nav-tooltip");
     expect(SIDEPANEL_STYLES).not.toMatch(/\.tab-icon[^{}]*\{[^}]*background/s);
   });
 
@@ -342,5 +369,17 @@ describe("sidepanel styles", () => {
       /\.onboarding-wizard > \.onboarding-step \{[^}]*position: absolute/s,
     );
     expect(SIDEPANEL_STYLES).toContain("button.onboarding-option:not(:disabled):hover");
+  });
+
+  test("onboarding orbit nodes stay inside compact side panels", () => {
+    expect(SIDEPANEL_STYLES).toMatch(
+      /@media \(max-width: 400px\) \{[\s\S]*--orbit-outer-size: min\(350px, calc\(100vw - 48px\)\)/,
+    );
+  });
+
+  test("the selected onboarding contract keeps readable supporting copy", () => {
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.onboarding-contract\[aria-pressed="true"\] \.onboarding-contract-copy > span:last-child \{\s*color: var\(--mc-text\)/,
+    );
   });
 });

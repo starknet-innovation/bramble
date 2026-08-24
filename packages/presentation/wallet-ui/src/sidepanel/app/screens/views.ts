@@ -64,6 +64,7 @@ import type { SendIntent } from "../../journeys/send/send-model";
 import { revealFlow } from "../../journeys/settings/reveal-ui";
 import { settingsScreen } from "../../journeys/settings/settings-views";
 import type { BalanceState } from "../../runtime/runtime";
+import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";
 import { accountDrawer } from "../../shell/account-drawer";
 import { walletDock, walletHeader } from "../../shell/wallet-shell";
@@ -91,6 +92,7 @@ type JourneyContext = {
   /** A pre-configured send from a shield or unshield shortcut. */
   readonly sendIntent?: SendIntent | null;
   readonly selectedMultisigId: string | null;
+  readonly selectedMultisigIntentId: string | null;
   readonly selectedNftId: string | null;
   readonly selectedTokenId: string | null;
   readonly status: WalletStatus;
@@ -129,6 +131,7 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
       context.account,
       context.multisigClassDeclared,
       context.preferences,
+      selectedMultisig(context),
     );
   }
   if (
@@ -151,10 +154,11 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
       context.preferences,
       activeView,
       context.multisigPortfolio,
+      context.selectedMultisigIntentId,
     );
   }
   if (activeView === "multisig-signers") {
-    return multisigSignersFlow(context.status, context.account, selected);
+    return multisigSignersFlow(context.status, context.account, selected, context.preferences);
   }
   if (activeView === "multisig-receive") {
     return multisigReceiveFlow(context.status, selected);
@@ -275,7 +279,7 @@ export const dashboard = (
   drawerGroupFilter: string | null = null,
   expandedGroupId: string | null = null,
   priceStale = false,
-  _priceAsOf: number | null = null,
+  priceAsOf: number | null = null,
   discoveredNfts: readonly DiscoveredNft[] = [],
   openAssignId: string | null = null,
   classHashVerification: ClassHashVerification | null = null,
@@ -293,6 +297,7 @@ export const dashboard = (
   },
   privacyJourney: PrivacyJourneyState = { stage: "idle" },
   sendIntent: SendIntent | null = null,
+  selectedMultisigIntentId: string | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -323,6 +328,7 @@ export const dashboard = (
     privacy,
     privacyJourney,
     selectedMultisigId,
+    selectedMultisigIntentId,
     selectedNftId,
     selectedTokenId,
     ...(sendIntent ? { sendIntent } : {}),
@@ -334,7 +340,7 @@ export const dashboard = (
   // explicitly snooze it back to Activity after seeing it.
   const actionable = actionableApprovals(pending, snoozedApprovalIds);
   if (actionable.length > 0) {
-    return approvalTakeover(actionable, status);
+    return approvalTakeover(actionable, status, activeView);
   }
   if (activeView === "requests") {
     return requestsFlow(pending, status);
@@ -385,6 +391,22 @@ export const dashboard = (
     activeView === "multisig-home" || activeView === "activity" || activeView === "settings"
       ? selectedMultisig(journeyContext)
       : null;
+  const privacyIssue = privacyDataIssue(
+    activeView,
+    account,
+    status,
+    privacy,
+    sharedIdentity !== null,
+  );
+  const networkIssue = [
+    ...networkDataIssue(
+      sharedIdentity ? selectedPortfolioBalances : balances,
+      priceStale,
+      priceAsOf,
+      Object.keys(prices).length > 0,
+    ),
+    ...(privacyIssue ? [privacyIssue] : []),
+  ].join(" ");
   const screen =
     activeView === "multisig-home"
       ? multisigDetailFlow(
@@ -411,12 +433,11 @@ export const dashboard = (
               prices,
               changes,
               currency,
-              priceStale,
               discoveredNfts,
               privacy,
             );
   return `
-    ${walletHeader(status, account, preferences, sharedIdentity?.record)}
+    ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}
     ${screen}
     ${walletDock(activeView, pending.length, sharedIdentity !== null)}
     ${accountDrawer(

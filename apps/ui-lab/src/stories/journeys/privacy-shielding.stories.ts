@@ -13,3 +13,8 @@ const meta: LabMeta = {
 export default meta;
 
 export const AssetEntry = checkpointStory("Asset privacy action", "privacy", "asset-entry");
+export const AssetServiceFailed = checkpointStory(
+  "Asset privacy unavailable",
+  "privacy",
+  "asset-service-failed",
+);

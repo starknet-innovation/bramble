@@ -98,11 +98,11 @@ const bindAddForm = (deps: NftUiDeps): void => {
       )
       .then(
         async () => {
-          showToast("NFT added", "success");
+          showToast("NFT added", "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Add NFT failed"), "error");
+          showToast(errorMessage(error, "Add NFT failed"), "error", deps.app);
           if (result) {
             result.textContent = errorMessage(error, "Add NFT failed");
           }
@@ -207,7 +207,7 @@ const bindSendForm = (deps: NftUiDeps): void => {
             const message = friendlyReviewError(error);
             form.dataset["stage"] = "failed";
             form.removeAttribute("aria-busy");
-            showToast(message, "error");
+            showToast(message, "error", deps.app);
             if (result) {
               result.textContent = message;
             }
@@ -233,7 +233,7 @@ const bindSendForm = (deps: NftUiDeps): void => {
       )
       .then(
         (transactionHash) => {
-          showToast("NFT transfer submitted", "success");
+          showToast("NFT transfer submitted", "success", deps.app);
           form.dataset["stage"] = "submitted";
           form.removeAttribute("aria-busy");
           if (reviewPanel) {
@@ -270,7 +270,7 @@ const bindSendForm = (deps: NftUiDeps): void => {
           const message = errorMessage(error, "NFT transfer failed");
           form.dataset["stage"] = "failed";
           form.removeAttribute("aria-busy");
-          showToast(message, "error");
+          showToast(message, "error", deps.app);
           if (result) {
             result.textContent = `${message} Nothing was submitted; review the recipient and try again.`;
           }
@@ -341,11 +341,11 @@ const bindHideDiscovered = (deps: NftUiDeps): void => {
         .then(() => deps.wallet.setNftSpam(id, true))
         .then(
           async () => {
-            showToast("NFT hidden", "success");
+            showToast("NFT hidden", "success", deps.app);
             await rerender(deps);
           },
           (error: unknown) => {
-            showToast(errorMessage(error, "NFT update failed"), "error");
+            showToast(errorMessage(error, "NFT update failed"), "error", deps.app);
             buttonBusy(button, false);
           },
         );
@@ -375,7 +375,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "NFT update failed"), "error");
+          showToast(errorMessage(error, "NFT update failed"), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -391,11 +391,11 @@ const bindRowActions = (deps: NftUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.removeNft(id).then(
         async () => {
-          showToast("NFT removed", "success");
+          showToast("NFT removed", "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "NFT removal failed"), "error");
+          showToast(errorMessage(error, "NFT removal failed"), "error", deps.app);
           buttonBusy(button, false);
         },
       );

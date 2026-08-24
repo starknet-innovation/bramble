@@ -90,10 +90,12 @@ describe("bindActivity", () => {
 
   test("refresh reloads status and renders it", async () => {
     const { app, calls, renderCalls } = mountActivity();
-    app.querySelector<HTMLButtonElement>("#activity-refresh")?.click();
+    const button = app.querySelector<HTMLButtonElement>("#activity-refresh");
+    button?.click();
     await flush();
     expect(calls.loadStatus).toBe(1);
     expect(renderCalls).toHaveLength(1);
+    expect(button?.hasAttribute("data-busy")).toBe(false);
   });
 
   test("refresh failure clears the busy state without rendering", async () => {

@@ -56,12 +56,12 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
       .then(
         async () => {
           form.reset();
-          showToast("Account imported", "success");
+          showToast("Account imported", "success", form);
           await deps.render(await deps.refresh());
         },
         (error: unknown) => {
           const message = errorMessage(error, "Import failed");
-          showToast(message, "error");
+          showToast(message, "error", form);
           if (result) {
             result.textContent = message;
           }

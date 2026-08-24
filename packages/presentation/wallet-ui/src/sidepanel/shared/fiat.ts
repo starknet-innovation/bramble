@@ -67,6 +67,14 @@ export const formatPriceTimestamp = (asOf: number | null): string | null => {
 };
 
 /**
+ * Compact label for one last-known public-data source.
+ */
+export const formatSavedDataLabel = (label: string, asOf: number | null): string => {
+  const timestamp = formatPriceTimestamp(asOf);
+  return timestamp ? `${label} (${timestamp})` : label;
+};
+
+/**
  * Computes the fiat value of a token holding from its formatted decimal
  * balance and unit price. Returns null when no price is available.
  */

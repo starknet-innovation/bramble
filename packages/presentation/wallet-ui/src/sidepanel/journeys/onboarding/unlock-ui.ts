@@ -24,11 +24,11 @@ export const bindUnlock = (
     void deps.wallet.unlockVault(vaultPassphrase).then(
       async (status) => {
         onUnlocked();
-        showToast("Vault unlocked", "success");
+        showToast("Vault unlocked", "success", form);
         await deps.render(status);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Unlock failed"), "error");
+        showToast(errorMessage(error, "Unlock failed"), "error", form);
         if (result) {
           result.textContent = errorMessage(error, "Unlock failed");
         }

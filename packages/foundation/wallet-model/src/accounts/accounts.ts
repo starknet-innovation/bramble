@@ -23,6 +23,13 @@ import {
 export type AccountContractType = "argent" | "openzeppelin";
 
 /**
+ * Pinned OpenZeppelin AccountUpgradeable 3.0 class understood by the account
+ * model. The value is identical on the supported Mainnet and Sepolia networks.
+ */
+export const OPENZEPPELIN_ACCOUNT_CLASS_HASH =
+  "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381";
+
+/**
  * Pinned Argent Account 0.4 class understood by the account model. The
  * platform descriptor reuses this value for deployment and supply checks.
  */

@@ -33,6 +33,7 @@ const DETAIL_VIEWS: readonly WalletView[] = [
   "multisig-watch",
   "multisig-propose",
   "multisig-deploy",
+  "deploy-account",
 ];
 
 // A selected multisig is a first-class portfolio identity, so its home sits at

@@ -31,11 +31,11 @@ export const bindConnectedSites = ({ app, render, wallet }: ConnectedSitesUiDeps
       buttonBusy(button, true);
       void wallet.revokeOrigin(origin).then(
         async () => {
-          showToast("Access revoked", "success");
+          showToast("Access revoked", "success", button);
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Revoke failed"), "error");
+          showToast(errorMessage(error, "Revoke failed"), "error", button);
           if (result) {
             result.textContent = errorMessage(error, "Revoke failed");
           }

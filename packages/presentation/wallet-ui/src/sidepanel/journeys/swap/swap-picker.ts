@@ -20,6 +20,7 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { errorMessage, showToast } from "../../shared/dom";
 import { icon } from "../../shared/icons";
+import { animate } from "../../shared/motion";
 import { accountLabel } from "../../shared/parts";
 import { compactAmount, tokenGlyph } from "../portfolio/token-row";
 import type { SwapCatalogTokenView, SwapClient } from "./swap-client";
@@ -39,6 +40,24 @@ export type SwapPickerDeps = {
 
 const QUICK_CHIP_SYMBOLS = ["ETH", "STRK", "USDC"];
 
+/* ─────────────────────────────────────────────────────────
+ * TOKEN PICKER STORYBOARD
+ *
+ *   0ms   open: sheet rises 12px → 0px while opacity reaches 1
+ *   0ms   close: sheet settles 0px → 12px while opacity reaches 0
+ * 160ms   close: sheet becomes hidden and focus returns to its trigger
+ * ───────────────────────────────────────────────────────── */
+const PICKER_TIMING = {
+  enterMs: 200,
+  exitMs: 160,
+} as const;
+const PICKER_FRAME = {
+  offsetY: 12,
+} as const;
+const PICKER_MOTION_ID = "swap-picker-sheet";
+const FOCUSABLE =
+  'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
 type PickerSide = "buy" | "sell";
 
 let picking: PickerSide | null = null;
@@ -50,17 +69,16 @@ let catalogError: string | null = null;
 // A selected token that first needs tracking; resolved to a token id on the
 // bind that follows the add-token render.
 let pendingAdd: { readonly address: string; readonly side: PickerSide } | null = null;
-
-/**
- * Which side the sheet is currently picking for, or null when closed.
- */
-export const pickerSide = (): PickerSide | null => picking;
+let pickerMotionSerial = 0;
 
 /**
  * Opens the sheet for one side (fetching the catalog on first use) or closes
  * it. Search resets on open so every pick starts from the full list.
  */
 export const setPickerSide = (side: PickerSide | null): void => {
+  if (side !== null) {
+    pickerMotionSerial += 1;
+  }
   picking = side;
   searchText = "";
 };
@@ -205,12 +223,29 @@ const entryRow = (
 // address with no catalog hit.
 const applyPickerUi = (deps: SwapPickerDeps, root: Element): void => {
   const sheet = root.querySelector<HTMLElement>("#swap-picker");
+  const edit = root.querySelector<HTMLElement>("#swap-edit");
   if (!sheet) {
     return;
   }
-  sheet.hidden = picking === null;
   if (picking === null) {
+    sheet.hidden = true;
+    delete sheet.dataset["closing"];
+    edit?.removeAttribute("inert");
     return;
+  }
+  edit?.setAttribute("inert", "");
+  const opening = sheet.hidden;
+  sheet.hidden = false;
+  delete sheet.dataset["closing"];
+  if (opening) {
+    animate(
+      sheet,
+      [
+        { opacity: 0, transform: `translateY(${PICKER_FRAME.offsetY}px)` },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      { duration: PICKER_TIMING.enterMs, id: PICKER_MOTION_ID },
+    );
   }
   const title = sheet.querySelector("#swap-picker-title");
   if (title) {
@@ -277,6 +312,39 @@ export const repaintSwapPicker = (deps: SwapPickerDeps, root: Element): void => 
   applyPickerUi(deps, root);
 };
 
+const closePicker = (deps: SwapPickerDeps, root: Element, afterClose?: () => void): void => {
+  const side = picking;
+  const sheet = root.querySelector<HTMLElement>("#swap-picker");
+  if (!side || !sheet) {
+    return;
+  }
+  const serial = ++pickerMotionSerial;
+  sheet.dataset["closing"] = "true";
+  const finish = (): void => {
+    if (serial !== pickerMotionSerial) {
+      return;
+    }
+    picking = null;
+    searchText = "";
+    applyPickerUi(deps, root);
+    root.querySelector<HTMLElement>(`#swap-${side}-token`)?.focus();
+    afterClose?.();
+  };
+  const motion = animate(
+    sheet,
+    [
+      { opacity: 1, transform: "translateY(0)" },
+      { opacity: 0, transform: `translateY(${PICKER_FRAME.offsetY}px)` },
+    ],
+    { duration: PICKER_TIMING.exitMs, id: PICKER_MOTION_ID },
+  );
+  if (!motion) {
+    finish();
+    return;
+  }
+  void motion.finished.then(finish, finish);
+};
+
 /**
  * Binds the picker sheet and repaints it from module state. `onSelect`
  * receives the chosen TRACKED token id for the side being picked; untracked
@@ -300,8 +368,33 @@ export const bindSwapPicker = (
   }
 
   root.querySelector("#swap-picker-close")?.addEventListener("click", () => {
-    setPickerSide(null);
-    applyPickerUi(deps, root);
+    closePicker(deps, root);
+  });
+  root.querySelector<HTMLElement>("#swap-picker")?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closePicker(deps, root);
+      return;
+    }
+    if (event.key !== "Tab") {
+      return;
+    }
+    const controls = [
+      ...(event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>(FOCUSABLE),
+    ];
+    const first = controls[0];
+    const last = controls.at(-1);
+    if (!first || !last) {
+      return;
+    }
+    const active = (event.currentTarget as HTMLElement).ownerDocument.activeElement;
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
   });
   root
     .querySelector<HTMLInputElement>("#swap-picker-search")
@@ -317,35 +410,35 @@ export const bindSwapPicker = (
       return;
     }
     const tracked = trackedByAddress(deps, address);
-    setPickerSide(null);
-    applyPickerUi(deps, root);
-    if (tracked) {
-      onSelect(side, tracked.id);
-      return;
-    }
-    // Untracked pick: add it through the on-chain-validated token flow, then
-    // deliver the selection from the refreshed preferences. Delivery happens
-    // right here — a content-identical repaint can skip re-binding, so the
-    // bind-time pendingAdd path below is only a fallback.
-    pendingAdd = { address, side };
-    setResultText(root, "Adding token…");
-    deps.wallet
-      .addToken(address)
-      .then(async () => {
-        await deps.render(await deps.wallet.loadStatus());
-        const added = trackedByAddress(deps, address);
-        if (added && pendingAdd && sameFelt(pendingAdd.address, address)) {
-          const target = pendingAdd.side;
+    closePicker(deps, root, () => {
+      if (tracked) {
+        onSelect(side, tracked.id);
+        return;
+      }
+      // Untracked pick: add it through the on-chain-validated token flow, then
+      // deliver the selection from the refreshed preferences. Delivery happens
+      // right here — a content-identical repaint can skip re-binding, so the
+      // bind-time pendingAdd path below is only a fallback.
+      pendingAdd = { address, side };
+      setResultText(root, "Adding token…");
+      deps.wallet
+        .addToken(address)
+        .then(async () => {
+          await deps.render(await deps.wallet.loadStatus());
+          const added = trackedByAddress(deps, address);
+          if (added && pendingAdd && sameFelt(pendingAdd.address, address)) {
+            const target = pendingAdd.side;
+            pendingAdd = null;
+            onSelect(target, added.id);
+          }
+        })
+        .catch((error: unknown) => {
           pendingAdd = null;
-          onSelect(target, added.id);
-        }
-      })
-      .catch((error: unknown) => {
-        pendingAdd = null;
-        showToast(errorMessage(error, "Could not add that token"), "error");
-        setResultText(root, errorMessage(error, "Could not add that token"));
-        applyPickerUi(deps, root);
-      });
+          showToast(errorMessage(error, "Could not add that token"), "error", root);
+          setResultText(root, errorMessage(error, "Could not add that token"));
+          applyPickerUi(deps, root);
+        });
+    });
   });
 };
 

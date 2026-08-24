@@ -22,6 +22,7 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.removeAddress",
   "wallet.removeGroup",
   "wallet.removeNft",
+  "wallet.removeArgentMultisigIntent",
   "wallet.removeMultisig",
   "wallet.renameGroup",
   "wallet.revokeAllowance",
@@ -50,6 +51,25 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.swapExecute",
 ]);
 
+/**
+ * Refresh intensity after a successful runtime mutation.
+ */
+export type MutationRefresh = "burst" | "once";
+
+// Only submissions whose chain state settles asynchronously earn repeated
+// confirmation polls. Local preferences, labels, imports, and prepared intents
+// repaint once instead of amplifying every change into six full hydrations.
+const CHAIN_SETTLING_MESSAGES: ReadonlySet<string> = new Set([
+  "wallet.approveOrigin",
+  "wallet.deployAccount",
+  "wallet.deployArgentMultisig",
+  "wallet.revokeAllowance",
+  "wallet.submitArgentMultisigIntent",
+  "wallet.swapExecute",
+  "wallet.transfer",
+  "wallet.transferNft",
+]);
+
 type SendRuntime = {
   readonly sendMessage: (message: unknown) => Promise<unknown>;
 };
@@ -58,7 +78,7 @@ type SendRuntime = {
  * Wraps runtime messaging with a replaceable successful-mutation listener.
  */
 export const createMutationRuntime = (runtime?: SendRuntime) => {
-  let listener = (): void => undefined;
+  let listener = (_refresh: MutationRefresh): void => undefined;
   return {
     async sendMessage(message: unknown): Promise<unknown> {
       const response = await runtime?.sendMessage(message);
@@ -71,11 +91,11 @@ export const createMutationRuntime = (runtime?: SendRuntime) => {
         response !== null &&
         typeof (response as Record<string, unknown>)["error"] === "string";
       if (typeof type === "string" && MUTATING_MESSAGES.has(type) && !failed) {
-        listener();
+        listener(CHAIN_SETTLING_MESSAGES.has(type) ? "burst" : "once");
       }
       return response;
     },
-    setListener(next: () => void): void {
+    setListener(next: (refresh: MutationRefresh) => void): void {
       listener = next;
     },
   };

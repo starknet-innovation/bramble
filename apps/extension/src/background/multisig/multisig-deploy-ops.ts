@@ -7,6 +7,7 @@ import {
 } from "@mc-wallet/multisig/repository";
 import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
+import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { signerForContext } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
@@ -18,26 +19,29 @@ import {
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { readStrkBalance } from "../transactions/fee-guard";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import {
   type ArgentMultisigDeploymentReview,
   readDeployMultisigInput,
   readReviewDeploymentInput,
 } from "./multisig-inputs";
-import { recoverArgentDeploymentHash } from "./multisig-operation-recovery";
+import { resolveArgentDeployment } from "./multisig-operation-recovery";
+import { storedMultisigView } from "./multisig-view-state";
 
 type DeployableArgentRecord = ArgentMultisigRecord & {
   readonly deployment: NonNullable<ArgentMultisigRecord["deployment"]>;
 };
 
+const ALREADY_DEPLOYED_ERROR = "Argent multisig is already deployed";
+
+const isAlreadyDeployedError = (error: unknown): boolean =>
+  /already deployed/i.test(error instanceof Error ? error.message : String(error));
+
 const recordForReview = (review: ArgentMultisigDeploymentReview): DeployableArgentRecord => ({
   accountContractType: "argent-multisig",
   address: review.address,
   classHash: ARGENT_MULTISIG_CONTRACT.classHash,
-  currentConfig: {
-    signerPublicKeys: review.signerPublicKeys,
-    threshold: review.threshold,
-  },
   deployment: {
     salt: review.salt,
     signerPublicKeys: review.signerPublicKeys,
@@ -46,15 +50,6 @@ const recordForReview = (review: ArgentMultisigDeploymentReview): DeployableArge
   id: `${review.networkId}:${review.address}`,
   ...(review.name === undefined ? {} : { name: review.name }),
   networkId: review.networkId,
-});
-
-const deploymentView = (record: DeployableArgentRecord) => ({
-  config: {
-    classHash: record.classHash,
-    signerGuids: record.deployment.signerPublicKeys.map(argentSignerGuid),
-    threshold: record.deployment.threshold,
-  },
-  record,
 });
 
 const checkedDeploymentRecord = async (
@@ -93,21 +88,62 @@ const claimDeployment = async (
       : { error: `Argent multisig deployment claim ${claim}` };
   }
   const existing = await deps.multisigStore.getOperation(operationId);
-  const transactionHash =
-    existing?.transactionHash ?? (await recoverArgentDeploymentHash(deps, record, operationId));
-  return transactionHash
-    ? {
-        address: record.address,
-        multisig: deploymentView(record),
-        ok: true,
-        transactionHash,
-      }
-    : { error: "Argent multisig deployment outcome is unresolved" };
+  if (existing?.transactionHash) {
+    return {
+      address: record.address,
+      multisig: storedMultisigView(record, true),
+      ok: true,
+      transactionHash: existing.transactionHash,
+    };
+  }
+  return resolveClaimedDeployment(deps, record, operationId);
+};
+
+/**
+ * Settles a deployment whose claim already exists but carries no hash — the
+ * state a lost submit response leaves behind. Returns the operation id when the
+ * caller may broadcast, or a terminal response.
+ */
+const resolveClaimedDeployment = async (
+  deps: MultisigOpsDeps,
+  record: DeployableArgentRecord,
+  operationId: string,
+): Promise<RuntimeResponse | string> => {
+  const resolution = await resolveArgentDeployment(deps, record, operationId);
+  if (resolution.kind === "unknown") {
+    return { error: "Argent multisig deployment outcome is unresolved" };
+  }
+  if (resolution.kind === "deployed") {
+    return {
+      address: record.address,
+      multisig: storedMultisigView(record, true),
+      ok: true,
+      ...(resolution.transactionHash === null
+        ? {}
+        : { transactionHash: resolution.transactionHash }),
+    };
+  }
+  // The chain is certain nothing was deployed at this deterministic address, so
+  // the claim guards nothing: release it and take a fresh one so THIS attempt
+  // broadcasts. Without it a single lost response burned the address
+  // permanently, because a deploy's hash is only ever recovered from local
+  // evidence that a lost response never produced. Re-claiming keeps the guard
+  // intact for the new attempt; if it cannot be retaken, nothing is sent.
+  await deps.multisigStore.releaseOperation(operationId).catch(() => {});
+  const reclaimed = await deps.multisigStore.claimOperation({
+    accountId: record.id,
+    id: operationId,
+    kind: "deploy",
+    target: record.address,
+  });
+  return reclaimed === "claimed"
+    ? operationId
+    : { error: "Argent multisig deployment did not reach the network. Try again." };
 };
 
 const deploymentContext = async (
   deps: MultisigOpsDeps,
-  input: Omit<ArgentMultisigDeploymentReview, "address" | "fee">,
+  input: Omit<ArgentMultisigDeploymentReview, "address" | "fee" | "feeAffordability">,
 ) => {
   const authorized = captureSessionAuthorization(deps.session);
   const active = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
@@ -132,7 +168,33 @@ const deploymentContext = async (
   if (!(await multisigRpc(deps).isClassDeclared({ rpcUrls }))) {
     return { error: "stable Argent Multisig 0.2 class is not declared on this network" } as const;
   }
-  return { active, authorized, rpcUrls, signer } as const;
+  return { active, authorized, preferences, rpcUrls, signer } as const;
+};
+
+type DeploymentEstimate = NonNullable<
+  MultisigOpsDeps["runtimeRpc"]["estimateAccountDeploymentFee"]
+>;
+
+const deploymentFeeForReview = async (
+  deps: MultisigOpsDeps,
+  input: Parameters<DeploymentEstimate>[0],
+  isCurrent: () => boolean,
+): Promise<
+  { readonly error: string } | { readonly fee: Awaited<ReturnType<DeploymentEstimate>> }
+> => {
+  const estimate = deps.runtimeRpc.estimateAccountDeploymentFee;
+  if (!estimate) return { error: "Argent multisig deployment review unavailable" };
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({ accountAddress: input.account.address, rpcUrls: input.rpcUrls })
+    .catch(() => false);
+  if (!isCurrent()) return { error: "wallet locked" };
+  if (deployed) return { error: ALREADY_DEPLOYED_ERROR };
+  try {
+    return { fee: await estimate(input) };
+  } catch (error) {
+    if (isAlreadyDeployedError(error)) return { error: ALREADY_DEPLOYED_ERROR };
+    throw error;
+  }
 };
 
 const reviewDeployment = async (
@@ -143,30 +205,69 @@ const reviewDeployment = async (
   if (!input) {
     return { error: "invalid Argent multisig deployment review request" };
   }
-  const context = await deploymentContext(deps, input);
+  const { expectedAddress, ...setup } = input;
+  const address = (await import("@mc-wallet/multisig/deploy")).predictArgentMultisigAddress(setup);
+  if (expectedAddress !== undefined && !sameFelt(address, expectedAddress)) {
+    return {
+      error: "Signer set, threshold, and salt do not reproduce the watched multisig address",
+    };
+  }
+  const context = await deploymentContext(deps, setup);
   if (context.error !== undefined) {
     return { error: context.error };
   }
-  const address = (await import("@mc-wallet/multisig/deploy")).predictArgentMultisigAddress(input);
-  const reviewBase = { ...input, address };
-  const account = recordForReview({ ...reviewBase, fee: { overallFee: "0", unit: "FRI" } });
-  const estimate = deps.runtimeRpc.estimateAccountDeploymentFee;
-  if (!estimate) {
-    return { error: "Argent multisig deployment review unavailable" };
+  const reviewBase = { ...setup, address };
+  const account = recordForReview({
+    ...reviewBase,
+    fee: { overallFee: "0", unit: "FRI" },
+    feeAffordability: "unknown",
+  });
+  const estimated = await deploymentFeeForReview(
+    deps,
+    {
+      account,
+      rpcUrls: context.rpcUrls,
+      signHash: signerForContext(deps, {
+        account: context.signer,
+        vaultPassphrase: context.active.vaultPassphrase,
+      }),
+    },
+    context.authorized.isCurrent,
+  );
+  if ("error" in estimated) return estimated;
+  const { fee } = estimated;
+  if (!context.authorized.isCurrent()) {
+    return { error: "wallet locked" };
   }
-  const fee = await estimate({
-    account,
-    rpcUrls: context.rpcUrls,
-    signHash: signerForContext(deps, {
-      account: context.signer,
-      vaultPassphrase: context.active.vaultPassphrase,
-    }),
+  const feeAffordability = resolveFeeAffordability({
+    balance: await readStrkBalance(
+      deps,
+      { address, networkId: setup.networkId },
+      context.preferences,
+    ),
+    fee,
   });
   if (!context.authorized.isCurrent()) {
     return { error: "wallet locked" };
   }
-  const deploymentReview = { ...reviewBase, fee };
-  deps.multisigDeploymentReviews.put(deploymentReview);
+  const deploymentReview = { ...reviewBase, fee, feeAffordability };
+  const stored = await deps.multisigStore.upsertMultisig(
+    recordForReview(deploymentReview),
+    context.authorized.isCurrent,
+  );
+  if (stored === "unauthorized") {
+    return { error: "wallet locked" };
+  }
+  if (stored !== "stored") {
+    return { error: `Argent multisig registry ${stored}` };
+  }
+  if (feeAffordability !== "insufficient") {
+    try {
+      await deps.multisigDeploymentReviews.put(deploymentReview);
+    } catch {
+      return { error: "Argent multisig deployment review unavailable" };
+    }
+  }
   return { deploymentReview, ok: true };
 };
 
@@ -179,16 +280,25 @@ const submitDeployment = async (
     return { error: "invalid Argent multisig deployment request" };
   }
   const { review } = input;
+  if (review.feeAffordability === "insufficient") {
+    return { error: "Argent multisig deployment address needs STRK before deployment" };
+  }
   const record = await checkedDeploymentRecord(review);
   if (!record) {
     return { error: "Argent multisig deployment review address mismatch" };
   }
-  if (!deps.multisigDeploymentReviews.take(review)) {
-    return { error: "Argent multisig deployment must exactly match a fresh fee review" };
-  }
   const context = await deploymentContext(deps, review);
   if (context.error !== undefined) {
     return { error: context.error };
+  }
+  let reviewAvailable = false;
+  try {
+    reviewAvailable = await deps.multisigDeploymentReviews.take(review);
+  } catch {
+    return { error: "Argent multisig deployment review unavailable" };
+  }
+  if (!reviewAvailable) {
+    return { error: "Argent multisig deployment must exactly match a fresh fee review" };
   }
   const claimed = await claimDeployment(deps, record, context.authorized.isCurrent);
   if (typeof claimed !== "string") {
@@ -229,7 +339,7 @@ const submitDeployment = async (
   });
   return {
     address: record.address,
-    multisig: deploymentView(record),
+    multisig: storedMultisigView(record, true),
     ok: true,
     transactionHash,
   };

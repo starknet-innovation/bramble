@@ -7,12 +7,18 @@ import { WalletError } from "@mc-wallet/core/errors";
 import {
   ARGENT_MULTISIG_CONTRACT,
   ARGENT_MULTISIG_MAX_SIGNERS,
+  argentSignerGuid,
 } from "@mc-wallet/starknet/account-contracts";
 import {
   type ArgentMultisigCall,
   isArgentMultisigCalls,
 } from "@mc-wallet/starknet/multisig-invoke";
-import { createRpcProvider, timedRpcFetch, withRpcFallback } from "@mc-wallet/starknet/provider";
+import {
+  createRpcProvider,
+  isContractNotFoundError,
+  timedRpcFetch,
+  withRpcFallback,
+} from "@mc-wallet/starknet/provider";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -20,6 +26,7 @@ import {
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
 import { hash, type RpcProvider } from "starknet";
+import { withPinnedBlock } from "./chain-pinned-read";
 import { parseArgentMultisigConfigChange } from "./config-change";
 
 /**
@@ -63,6 +70,7 @@ export {
   type ArgentMultisigConfigChange,
   type ArgentMultisigConfigReview,
   type ArgentMultisigPublicConfig,
+  argentMultisigConfigChangeCall,
   nextArgentMultisigPublicConfig,
   parseArgentMultisigConfigChange,
   reviewArgentMultisigConfigChange,
@@ -104,6 +112,36 @@ export type ArgentMultisigConfig = {
 };
 
 /**
+ * Fresh authority state exposed without collapsing trust failures. Unknown or
+ * malformed values are rejected at the response boundary.
+ */
+export type ArgentMultisigAuthorityStatus =
+  | "available"
+  | "invalid-config"
+  | "network-unavailable"
+  | "undeployed"
+  | "unsupported-class"
+  | "unsupported-signers";
+
+/**
+ * Non-Stark signer linked by the pinned account. The GUID is untrusted until
+ * matched to accepted contract events; this wallet never signs for this type.
+ */
+export type ArgentUnsupportedSigner = {
+  readonly guid: string;
+  readonly type: "eip191" | "secp256k1" | "secp256r1" | "webauthn";
+};
+
+/**
+ * Signer material recovered from accepted `SignerLinked` events. Invalid event
+ * data fails closed instead of returning a partial signer identity.
+ */
+export type ArgentSignerDiscovery = {
+  readonly signerPublicKeys: readonly string[];
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
+};
+
+/**
  * Inputs for reading one Argent multisig account's authority configuration.
  */
 export type ArgentMultisigConfigInput = {
@@ -117,6 +155,13 @@ export type ArgentMultisigConfigInput = {
  */
 export type ArgentSignerMembershipInput = ArgentMultisigConfigInput & {
   readonly signerGuid: string;
+};
+
+/**
+ * Inputs for recovering current Stark signer public keys from linked events.
+ */
+export type ArgentSignerDiscoveryInput = ArgentMultisigConfigInput & {
+  readonly signerGuids: readonly string[];
 };
 
 const requireAddress = (value: string): string => {
@@ -160,13 +205,220 @@ const actionableReadError = (error: unknown): never => {
   throw error;
 };
 
-const latestAcceptedBlockHash = async (provider: RpcProvider): Promise<string> => {
-  const latest = await provider.getBlockLatestAccepted();
-  const blockHash = canonicalFelt(latest.block_hash);
-  if (blockHash === null || !isNonZeroStarkFieldElement(blockHash)) {
-    throw new WalletError("Invalid Argent multisig accepted block response");
+const firstDeploymentBlock = async (
+  provider: RpcProvider,
+  account: string,
+  latestBlockHash: string,
+  latestBlock: number,
+): Promise<number> => {
+  const currentClassHash = await provider.getClassHashAt(account, latestBlockHash);
+  if (
+    typeof currentClassHash !== "string" ||
+    !isStarkFieldElement(currentClassHash) ||
+    !sameFelt(currentClassHash, ARGENT_MULTISIG_CONTRACT.classHash)
+  ) {
+    throw new WalletError("Account is not the pinned Argent Multisig 0.2 class");
   }
-  return blockHash;
+  let low = 0;
+  let high = latestBlock;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    try {
+      const classHash = await provider.getClassHashAt(account, middle);
+      if (typeof classHash !== "string" || !isStarkFieldElement(classHash)) {
+        throw new WalletError("Invalid Argent multisig class response");
+      }
+      high = middle;
+    } catch (error) {
+      if (!isContractNotFoundError(error)) throw error;
+      low = middle + 1;
+    }
+  }
+  return low;
+};
+
+type LinkedSigner =
+  | { readonly guid: string; readonly publicKey: string; readonly type: "starknet" }
+  | ({ readonly guid: string } & ArgentUnsupportedSigner);
+
+const SIGNER_TYPES: Readonly<Record<string, ArgentUnsupportedSigner["type"]>> = {
+  "0x1": "secp256k1",
+  "0x2": "secp256r1",
+  "0x3": "eip191",
+  "0x4": "webauthn",
+};
+
+const linkedSigner = (
+  keys: readonly string[],
+  data: readonly string[],
+  signerGuids: readonly string[],
+): LinkedSigner | null => {
+  const guid = feltAt(keys, 1, "signer event");
+  if (!signerGuids.includes(guid)) return null;
+  const discriminator = feltAt(data, 0, "signer event");
+  if (discriminator !== "0x0") {
+    const type = SIGNER_TYPES[discriminator];
+    if (!type) throw new WalletError("Invalid Argent multisig signer event");
+    return { guid, type };
+  }
+  const publicKey = feltAt(data, 1, "signer event");
+  if (!isNonZeroStarkFieldElement(publicKey) || !sameFelt(argentSignerGuid(publicKey), guid)) {
+    throw new WalletError("Invalid Argent multisig signer event");
+  }
+  return { guid, publicKey, type: "starknet" };
+};
+
+const rememberLinkedSigner = (
+  byGuid: Map<string, LinkedSigner>,
+  signer: LinkedSigner | null,
+): void => {
+  if (!signer) return;
+  const existing = byGuid.get(signer.guid);
+  if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(signer)) {
+    throw new WalletError("Conflicting Argent multisig signer events");
+  }
+  byGuid.set(signer.guid, signer);
+};
+
+const signerKeysFromEvents = async (
+  provider: RpcProvider,
+  account: string,
+  signerGuids: readonly string[],
+  deploymentBlock: number,
+  acceptedBlockHash: string,
+): Promise<ArgentSignerDiscovery> => {
+  const byGuid = new Map<string, LinkedSigner>();
+  let continuationToken: string | undefined;
+  let pages = 0;
+  do {
+    const chunk = await provider.getEvents({
+      address: account,
+      chunk_size: 100,
+      ...(continuationToken === undefined ? {} : { continuation_token: continuationToken }),
+      from_block: { block_number: deploymentBlock },
+      keys: [[hash.getSelectorFromName("SignerLinked")], [...signerGuids]],
+      to_block: { block_hash: acceptedBlockHash },
+    });
+    pages += 1;
+    if (pages > 256) {
+      throw new WalletError("Argent multisig signer history is too large to verify");
+    }
+    for (const event of chunk.events) {
+      rememberLinkedSigner(byGuid, linkedSigner(event.keys, event.data, signerGuids));
+    }
+    continuationToken = chunk.continuation_token;
+  } while (continuationToken !== undefined);
+  const signers = signerGuids.flatMap((guid) => {
+    const signer = byGuid.get(guid);
+    return signer ? [signer] : [];
+  });
+  return {
+    signerPublicKeys: signers.flatMap((signer) =>
+      signer.type === "starknet" ? [signer.publicKey] : [],
+    ),
+    unsupportedSigners: signers.flatMap((signer) => (signer.type === "starknet" ? [] : [signer])),
+  };
+};
+
+/**
+ * Recovers current Stark signer public keys from the pinned contract's
+ * accepted `SignerLinked` history. Every recovered Stark key is re-derived
+ * against the fresh GUID input; other supported Argent schemes are classified
+ * so callers never ask the user for an impossible Stark key.
+ */
+export const getArgentMultisigSignerPublicKeys = async ({
+  address,
+  makeProvider,
+  rpcUrls,
+  signerGuids,
+}: ArgentSignerDiscoveryInput): Promise<ArgentSignerDiscovery> => {
+  const account = requireAddress(address);
+  const guids = signerGuids.map(requireGuid);
+  if (
+    guids.length < 1 ||
+    guids.length > MULTISIG_LIMITS.signers ||
+    new Set(guids).size !== guids.length
+  ) {
+    throw new WalletError("Invalid Argent signer GUIDs");
+  }
+  try {
+    return await withRpcFallback(
+      rpcUrls,
+      async (provider) =>
+        withPinnedBlock(provider, async ({ blockHash, blockNumber }) => {
+          const deploymentBlock = await firstDeploymentBlock(
+            provider,
+            account,
+            blockHash,
+            blockNumber,
+          );
+          return signerKeysFromEvents(provider, account, guids, deploymentBlock, blockHash);
+        }),
+      makeProvider ?? multisigReadProvider,
+    );
+  } catch (error) {
+    return actionableReadError(error);
+  }
+};
+
+/**
+ * Reads class hash, threshold, and signer GUIDs at ONE pinned block, so the
+ * threshold and the signer set can never describe two different states.
+ */
+const argentMultisigConfigAtBlock = async (
+  provider: RpcProvider,
+  account: string,
+  blockHash: string,
+): Promise<ArgentMultisigConfig> => {
+  const classHash = await provider.getClassHashAt(account, blockHash);
+  if (
+    typeof classHash !== "string" ||
+    !isStarkFieldElement(classHash) ||
+    !sameFelt(classHash, ARGENT_MULTISIG_CONTRACT.classHash)
+  ) {
+    throw new WalletError("Account is not the pinned Argent Multisig 0.2 class");
+  }
+  const [thresholdResponse, signersResponse] = await Promise.all([
+    provider.callContract(
+      { calldata: [], contractAddress: account, entrypoint: "get_threshold" },
+      blockHash,
+    ),
+    provider.callContract(
+      { calldata: [], contractAddress: account, entrypoint: "get_signer_guids" },
+      blockHash,
+    ),
+  ]);
+  if (thresholdResponse.length !== 1) {
+    throw new WalletError("Invalid Argent multisig threshold response");
+  }
+  const threshold = boundedNumberAt(thresholdResponse, 0, "threshold");
+  const count = boundedNumberAt(signersResponse, 0, "signers");
+  if (
+    count === 0 ||
+    count > MULTISIG_LIMITS.signers ||
+    threshold === 0 ||
+    threshold > count ||
+    signersResponse.length !== count + 1
+  ) {
+    throw new WalletError("Invalid Argent multisig signers response");
+  }
+  const signerGuids = Array.from({ length: count }, (_, index) =>
+    feltAt(signersResponse, index + 1, "signers"),
+  );
+  if (
+    signerGuids.some((guid) => !isNonZeroStarkFieldElement(guid)) ||
+    new Set(signerGuids).size !== signerGuids.length
+  ) {
+    throw new WalletError("Invalid Argent multisig signers response");
+  }
+  signerGuids.sort((left, right) =>
+    BigInt(left) < BigInt(right) ? -1 : BigInt(left) > BigInt(right) ? 1 : 0,
+  );
+  return {
+    classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+    signerGuids,
+    threshold,
+  };
 };
 
 /**
@@ -182,58 +434,10 @@ export const getArgentMultisigConfig = async ({
   try {
     return await withRpcFallback(
       rpcUrls,
-      async (provider) => {
-        const blockHash = await latestAcceptedBlockHash(provider);
-        const classHash = await provider.getClassHashAt(account, blockHash);
-        if (
-          typeof classHash !== "string" ||
-          !isStarkFieldElement(classHash) ||
-          !sameFelt(classHash, ARGENT_MULTISIG_CONTRACT.classHash)
-        ) {
-          throw new WalletError("Account is not the pinned Argent Multisig 0.2 class");
-        }
-        const [thresholdResponse, signersResponse] = await Promise.all([
-          provider.callContract(
-            { calldata: [], contractAddress: account, entrypoint: "get_threshold" },
-            blockHash,
-          ),
-          provider.callContract(
-            { calldata: [], contractAddress: account, entrypoint: "get_signer_guids" },
-            blockHash,
-          ),
-        ]);
-        if (thresholdResponse.length !== 1) {
-          throw new WalletError("Invalid Argent multisig threshold response");
-        }
-        const threshold = boundedNumberAt(thresholdResponse, 0, "threshold");
-        const count = boundedNumberAt(signersResponse, 0, "signers");
-        if (
-          count === 0 ||
-          count > MULTISIG_LIMITS.signers ||
-          threshold === 0 ||
-          threshold > count ||
-          signersResponse.length !== count + 1
-        ) {
-          throw new WalletError("Invalid Argent multisig signers response");
-        }
-        const signerGuids = Array.from({ length: count }, (_, index) =>
-          feltAt(signersResponse, index + 1, "signers"),
-        );
-        if (
-          signerGuids.some((guid) => !isNonZeroStarkFieldElement(guid)) ||
-          new Set(signerGuids).size !== signerGuids.length
-        ) {
-          throw new WalletError("Invalid Argent multisig signers response");
-        }
-        signerGuids.sort((left, right) =>
-          BigInt(left) < BigInt(right) ? -1 : BigInt(left) > BigInt(right) ? 1 : 0,
-        );
-        return {
-          classHash: ARGENT_MULTISIG_CONTRACT.classHash,
-          signerGuids,
-          threshold,
-        };
-      },
+      async (provider) =>
+        withPinnedBlock(provider, ({ blockHash }) =>
+          argentMultisigConfigAtBlock(provider, account, blockHash),
+        ),
       makeProvider ?? multisigReadProvider,
     );
   } catch (error) {

@@ -359,6 +359,9 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
           input.config,
         );
       },
+      async resolveSignerAccount({ address }) {
+        return { accountContractType: "openzeppelin", address, publicKeyX: account.publicKeyX };
+      },
       async submitPreparedInvoke(input) {
         return input.prepared.transactionHash;
       },

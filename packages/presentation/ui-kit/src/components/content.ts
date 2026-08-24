@@ -113,4 +113,4 @@ export type ToastTone = "error" | "success";
  * audited side-panel DOM boundary.
  */
 export const toast = (message: string, tone: ToastTone): string =>
-  `<div class="toast ${tone}" role="status"><span class="toast-icon">${icon(tone === "success" ? "check" : "alert")}</span><span class="toast-text">${escapeHtml(message)}</span></div>`;
+  `<div class="toast ${tone}" role="status"><span class="toast-icon">${icon(tone === "success" ? "check" : "alert")}</span><span class="toast-text">${escapeHtml(message)}</span>${tone === "error" ? iconButton({ className: "toast-copy", icon: "copy", label: "Copy error details" }) : ""}</div>`;

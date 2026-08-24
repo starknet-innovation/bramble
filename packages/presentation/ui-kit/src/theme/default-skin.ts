@@ -4,7 +4,7 @@
  * theme preference. Every structural and interactive role is achromatic:
  * hierarchy comes from contrast, weight, space, and motion rather than a brand
  * hue. Green is reserved for positive/success semantics and red for
- * danger/failure. Quiet-luxury minimalism — flat and legible, not glass.
+ * danger/failure; orange is reserved for degraded data. Quiet-luxury minimalism — flat and legible, not glass.
  *
  * Surfaces step in three quiet tiers: `--mc-sunken` for recessed group
  * containers, `--mc-panel` (pure white) for cards, and `--mc-elevated` for
@@ -36,5 +36,6 @@ export const defaultSkin: Skin = {
     "--mc-positive": "#087a4b",
     "--mc-sunken": "#f0f0f0",
     "--mc-text": "#171717",
+    "--mc-warning": "#9a3412",
   },
 };

@@ -8,6 +8,7 @@ import {
 } from "@mc-wallet/multisig/repository";
 import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import {
+  ArgentMultisigFeeExpiredError,
   preparedArgentMultisigFee,
   samePreparedArgentMultisigInvokeV3,
 } from "@mc-wallet/starknet/multisig-invoke";
@@ -27,12 +28,14 @@ import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import {
   argentMultisigIntentPackage,
   locallyDerivedImportedIntent,
+  mergeImportedArgentMultisigIntent,
   normalizedArgentMultisigCalls,
   readImportIntentInput,
   readImportIntentSignatureInput,
   readPrepareIntentInput,
   readSignIntentInput,
   readSubmitIntentInput,
+  sortedArgentMultisigSignatures,
 } from "./multisig-inputs";
 import { currentArgentIntentContext } from "./multisig-intent-context";
 import { recoverSubmittedArgentIntent } from "./multisig-operation-recovery";
@@ -78,20 +81,14 @@ const importedIntentReview = async (deps: MultisigOpsDeps, intent: ArgentMultisi
     deps,
     resolved.context,
     intent.prepared.calls,
-    resolved.config,
+    resolved.publicConfig,
   );
   if (review && "error" in review) return review;
   const existing = await deps.multisigStore.getIntent(intent.id);
   return existing && !samePreparedArgentMultisigInvokeV3(existing.prepared, intent.prepared)
     ? { error: "conflicting Argent multisig intent id" }
-    : { resolved, review };
+    : { existing, resolved, review };
 };
-
-const sortedSignatures = (values: readonly StarkSignature[]): readonly StarkSignature[] =>
-  [...values].sort((left, right) =>
-    BigInt(argentSignerGuid(left.publicKey)) < BigInt(argentSignerGuid(right.publicKey)) ? -1 : 1,
-  );
-
 const persistSignature = async (
   deps: MultisigOpsDeps,
   intent: ArgentMultisigSigningIntent,
@@ -115,7 +112,7 @@ const persistSignature = async (
   if (intent.signatures.length >= intent.configSnapshot.threshold) {
     return { error: "Argent multisig intent already has its threshold signatures" };
   }
-  const signatures = sortedSignatures([...intent.signatures, signature]);
+  const signatures = sortedArgentMultisigSignatures([...intent.signatures, signature]);
   const next: ArgentMultisigSigningIntent = {
     ...intent,
     signatures,
@@ -183,7 +180,10 @@ const importIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
   if ("error" in reviewed || !authorized.isCurrent()) {
     return "error" in reviewed ? reviewed : { error: "wallet locked" };
   }
-  const intent = { ...remoteIntent, summary: reviewed.review.summary };
+  const incoming = { ...remoteIntent, summary: reviewed.review.summary };
+  const intent = reviewed.existing
+    ? mergeImportedArgentMultisigIntent(reviewed.existing, incoming)
+    : incoming;
   if (!authorized.isCurrent()) {
     return { error: "wallet locked" };
   }
@@ -222,7 +222,7 @@ const resolveLocalSigning = async (
     return { error: "selected signer account is unavailable on this network" };
   }
   const guid = argentSignerGuid(signer.publicKeyX);
-  if (!resolved.config.chain.signerGuids.includes(guid)) {
+  if (!resolved.config.signerGuids.includes(guid)) {
     return { error: "selected account is not a current Argent multisig signer" };
   }
   if (intent.signatures.some((existing) => argentSignerGuid(existing.publicKey) === guid)) {
@@ -323,15 +323,64 @@ const existingSubmissionResponse = async (
   deps: MultisigOpsDeps,
   intent: ArgentMultisigSigningIntent,
   operationId: string,
-): Promise<RuntimeResponse> => {
+): Promise<RuntimeResponse | null> => {
   const existing = await deps.multisigStore.getOperation(operationId);
-  const recovered = existing?.transactionHash
+  const transactionHash = existing?.transactionHash ?? intent.broadcastTransactionHash;
+  if (transactionHash) return { intent, ok: true, transactionHash };
+  const recovered = await recoverSubmittedArgentIntent(deps, intent, operationId);
+  if (recovered.kind === "submitted") {
+    return {
+      intent: recovered.intent,
+      ok: true,
+      transactionHash: recovered.intent.prepared.transactionHash,
+    };
+  }
+  if (recovered.kind === "unknown") {
+    return { error: "Argent multisig submission outcome is unresolved" };
+  }
+  await deps.multisigStore.releaseOperation(operationId);
+  const reclaimed = await deps.multisigStore.claimOperation({
+    accountId: intent.accountId,
+    id: operationId,
+    kind: "submit",
+    target: intent.prepared.transactionHash,
+  });
+  return reclaimed === "claimed"
     ? null
-    : await recoverSubmittedArgentIntent(deps, intent, operationId);
-  const transactionHash = existing?.transactionHash ?? recovered?.prepared.transactionHash;
-  return transactionHash
-    ? { intent: recovered ?? intent, ok: true, transactionHash }
-    : { error: "Argent multisig submission outcome is unresolved" };
+    : { error: "The previous submission did not reach Starknet. Try again." };
+};
+
+const claimSubmission = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+  operationId: string,
+): Promise<RuntimeResponse | null> => {
+  const claim = await deps.multisigStore.claimOperation({
+    accountId: intent.accountId,
+    id: operationId,
+    kind: "submit",
+    target: intent.prepared.transactionHash,
+  });
+  if (claim === "exists") return existingSubmissionResponse(deps, intent, operationId);
+  return claim === "claimed" ? null : { error: `Argent multisig submission claim ${claim}` };
+};
+
+const knownSubmissionResponse = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+  operationId: string,
+): Promise<RuntimeResponse | null> => {
+  const transactionHash =
+    intent.broadcastTransactionHash ??
+    (await deps.multisigStore.getOperation(operationId))?.transactionHash;
+  if (!transactionHash) return null;
+  const submitted: ArgentMultisigSigningIntent = {
+    ...intent,
+    broadcastTransactionHash: transactionHash,
+    state: intent.state === "accepted" || intent.state === "rejected" ? intent.state : "submitted",
+  };
+  await deps.multisigStore.upsertIntent(submitted).catch(() => "invalid" as const);
+  return { intent: submitted, ok: true, transactionHash };
 };
 
 const resolveSubmission = async (
@@ -340,7 +389,7 @@ const resolveSubmission = async (
 ): Promise<ResolvedSubmission> => {
   const authorized = captureSessionAuthorization(deps.session);
   const intent = await deps.multisigStore.getIntent(input.intentId);
-  if (intent?.state !== "ready" && intent?.state !== "submitted") {
+  if (intent?.state !== "ready" && intent?.state !== "stale" && intent?.state !== "submitted") {
     return {
       response: { error: intent ? "Argent multisig intent is not ready" : "intent not found" },
     };
@@ -353,31 +402,17 @@ const resolveSubmission = async (
   if (!operationId) {
     return { response: { error: "invalid Argent multisig submission claim" } };
   }
-  const claim = await deps.multisigStore.claimOperation({
-    accountId: intent.accountId,
-    id: operationId,
-    kind: "submit",
-    target: intent.prepared.transactionHash,
-  });
-  if (claim === "exists") {
-    return { response: await existingSubmissionResponse(deps, intent, operationId) };
-  }
-  if (claim !== "claimed") {
-    return { response: { error: `Argent multisig submission claim ${claim}` } };
-  }
+  const known = await knownSubmissionResponse(deps, intent, operationId);
+  if (known) return { response: known };
   const resolved = await currentArgentIntentContext(deps, intent);
-  if ("error" in resolved) {
-    await deps.multisigStore.releaseOperation(operationId);
-    return { response: resolved };
-  }
-  if (!authorized.isCurrent()) {
-    await deps.multisigStore.releaseOperation(operationId);
-    return { response: { error: "wallet locked" } };
+  if ("error" in resolved || !authorized.isCurrent()) {
+    return { response: "error" in resolved ? resolved : { error: "wallet locked" } };
   }
   if (intent.signatures.length !== intent.configSnapshot.threshold) {
-    await deps.multisigStore.releaseOperation(operationId);
     return { response: { error: "Argent multisig threshold is not satisfied" } };
   }
+  const response = await claimSubmission(deps, intent, operationId);
+  if (response) return { response };
   return { authorized, intent, operationId, resolved };
 };
 
@@ -394,7 +429,7 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
   try {
     transactionHash = await multisigRpc(deps).submitPreparedInvoke({
       config: {
-        signerPublicKeys: submission.resolved.config.signerPublicKeys,
+        signerPublicKeys: submission.intent.signatures.map((signature) => signature.publicKey),
         threshold: submission.resolved.config.threshold,
       },
       prepared: submission.intent.prepared,
@@ -403,8 +438,11 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
       isAuthorized: submission.authorized.isCurrent,
     });
   } catch (error) {
-    if (!(error instanceof IndeterminateRpcWriteError)) {
+    if (!(error instanceof IndeterminateRpcWriteError))
       await deps.multisigStore.releaseOperation(submission.operationId);
+    if (error instanceof ArgentMultisigFeeExpiredError) {
+      await deps.multisigStore.upsertIntent({ ...submission.intent, state: "stale" });
+      return { error: error.details };
     }
     throw error;
   }
@@ -448,7 +486,6 @@ const HANDLERS: Readonly<Record<string, IntentHandler>> = {
   "wallet.signArgentMultisigIntent": signIntent,
   "wallet.submitArgentMultisigIntent": submitIntent,
 };
-
 /**
  * Dispatches privileged exact-intent Argent messages.
  */

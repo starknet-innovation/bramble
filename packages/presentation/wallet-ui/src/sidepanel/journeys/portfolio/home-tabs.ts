@@ -15,12 +15,12 @@ import type {
 import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button, iconButton, iconLink } from "@mc-wallet/ui-kit/controls";
+import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import { explorerTransactionUrl } from "@mc-wallet/wallet-model/networks";
 import type { DiscoveredNft, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
-import { icon } from "../../shared/icons";
+import { type IconName, icon } from "../../shared/icons";
 import {
   type NftGalleryItem,
   nftImageMarkup,
@@ -146,6 +146,35 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
   preconfirmed: "pre-confirmed",
 };
 
+const activityAppearance = (
+  entry: ActivityEntry,
+): { readonly icon: IconName; readonly label: string; readonly type: string } => {
+  const summary = entry.summary.toLowerCase();
+  if (/\bswap(ped|ping)?\b/.test(summary)) return { icon: "swap", label: "Swap", type: "swap" };
+  if (/\bunstak(e|ed|ing)\b|\bundelegat(e|ed|ing)\b/.test(summary))
+    return { icon: "piggyBankBroken", label: "Unstake", type: "unstake" };
+  if (
+    /\b(claim|claimed|claiming)\b.*\brewards?\b|\brewards?\b.*\b(claim|claimed|claiming)\b/.test(
+      summary,
+    )
+  )
+    return { icon: "blackberry", label: "Claim rewards", type: "reward" };
+  if (/\bstak(e|ed|ing)\b|\bdelegat(e|ed|ing)\b/.test(summary))
+    return { icon: "piggyBank", label: "Stake", type: "stake" };
+  if (/\b(un)?shield(ed|ing)?\b|\bprivate\b/.test(summary))
+    return { icon: "maskedFace", label: "Private transaction", type: "private" };
+  if (/\b(approve|approved|revoke|revoked)\b/.test(summary))
+    return { icon: "lock", label: "Approval", type: "approval" };
+  if (entry.kind === "transfer") {
+    const received = /\b(receive|received)\b/.test(summary);
+    return { icon: received ? "receive" : "send", label: "Transfer", type: "transfer" };
+  }
+  if (entry.kind === "deploy") return { icon: "rocket", label: "Deployment", type: "deploy" };
+  if (entry.kind === "declare")
+    return { icon: "terminal", label: "Contract declaration", type: "declare" };
+  return { icon: "activity", label: "Contract interaction", type: "other" };
+};
+
 /**
  * Renders one recorded transaction row for the account-partitioned Activity
  * dock and its design-system specimen. A provisional status carries an
@@ -155,34 +184,22 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
 export const transactionRow = (entry: ActivityEntry): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
   const label = STATUS_LABEL[entry.status] ?? entry.status;
+  const appearance = activityAppearance(entry);
   // Devnet has no explorer, so the outbound link is simply absent there rather
   // than pointing somewhere that cannot resolve the hash.
   const explorer = explorerTransactionUrl(entry.networkId, entry.hash);
+  const statusLabel = `${appearance.label}, ${label}`;
+  const summary = escapeHtml(entry.summary);
   return `
   <li class="tx-row">
+    <span class="tx-kind-icon tx-kind-${appearance.type} ${entry.status}" aria-label="${escapeHtml(statusLabel)}" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(appearance.icon)}</span>
     <div class="tx-copy">
-      <strong>${escapeHtml(entry.summary)}</strong>
-      <code>${escapeHtml(`${entry.hash.slice(0, 10)}…${entry.hash.slice(-6)}`)}</code>
-      ${hint ? `<span class="tx-hint">${escapeHtml(hint)}</span>` : ""}
+      ${
+        explorer
+          ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${summary}. ${escapeHtml(label)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${summary}</a>`
+          : `<strong>${summary}<span class="sr-only">. ${escapeHtml(label)}.</span></strong>`
+      }
     </div>
-    <span class="tx-status ${entry.status}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${escapeHtml(label)}</span>
-    ${iconButton({
-      attributes: { "data-copy": entry.hash },
-      icon: "copy",
-      label: "Copy transaction hash",
-    })}
-    ${
-      explorer
-        ? iconLink({
-            attributes: { "data-tx-explorer": entry.hash },
-            href: explorer,
-            icon: "externalLink",
-            label: "View transaction on Starkscan",
-            target: "_blank",
-            variant: "ghost",
-          })
-        : ""
-    }
   </li>`;
 };
 
@@ -207,7 +224,7 @@ const privateBreakdownFor = (
   tokenId: string,
 ): PrivateBreakdown => {
   if (privacy.error) {
-    return { kind: "unavailable", message: privacy.error };
+    return { kind: "unavailable" };
   }
   if (privacy.loading || !privacy.value) {
     return { kind: "loading" };
@@ -225,18 +242,6 @@ const privateBreakdownFor = (
     kind: "ready",
   };
 };
-
-const privacyErrorLine = (privacy: PrivacyDisclosureState): string =>
-  privacy.error
-    ? `<div class="privacy-inline-error" role="alert"><span>Shielded balances unavailable right now.</span>${button(
-        {
-          attributes: { "data-privacy-retry": true },
-          label: "Try again",
-          size: "small",
-          variant: "ghost",
-        },
-      )}</div>`
-    : "";
 
 const tokensPanel = (
   state: BalanceState,
@@ -263,8 +268,15 @@ const tokensPanel = (
               }),
             )
             .join("")}</ul>`;
-  return `${privacyErrorLine(privacy)}
-    ${body}
+  return `${body}
+    ${
+      privacy.error
+        ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
+            <span class="private-balance-label">${icon("lock")}<span>Private balances</span></span>
+            <span class="token-fiat">Try again</span>
+          </button>`
+        : ""
+    }
     ${
       hiddenCount > 0
         ? menuRow({
