@@ -457,7 +457,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(form?.querySelector('button[type="submit"]')?.textContent).toContain("Deploy multisig");
   });
 
-  test("links shared-account tabs and supports the standard keyboard order", async () => {
+  test("bounds the intent count and links shared-account tabs in keyboard order", async () => {
     const fixture = await makeArgentMultisigFixture();
     const client = await testClient();
     const app = mount(
@@ -466,7 +466,7 @@ describe("bindMultisigs frozen-intent forms", () => {
         canSign: true,
         data: EMPTY_MULTISIG_PORTFOLIO,
         trustedIntentsMarkup: "<p>Intent panel</p>",
-        openCount: 1,
+        openCount: '" autofocus onfocus="alert(1)' as unknown as number,
         preferences: null,
         record: fixture.record,
         signerKnown: true,
@@ -476,6 +476,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     );
     const tabs = Array.from(app.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]"));
     const panels = Array.from(app.querySelectorAll<HTMLElement>("[data-ms-home-panel]"));
+    expect(tabs[2]?.getAttribute("aria-label")).toBe("Signing intents, 0 open");
     const selectedTab = tabs[1];
     if (!selectedTab) throw new Error("collectibles tab unavailable");
     expect(tabs.map((tab) => tab.getAttribute("aria-controls"))).toEqual(

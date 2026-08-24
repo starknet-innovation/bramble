@@ -331,14 +331,14 @@ export const walletMenuRow = (
  * dapp, or user text is never accepted here.
  */
 export const dockScreen = (view: WalletView, trustedMarkup: string): string =>
-  `<main class="screen" id="wallet-screen-${view}" role="tabpanel" tabindex="-1">${trustedMarkup}</main>`;
+  `<main class="screen" id="wallet-screen-${escapeHtml(view)}" role="tabpanel" tabindex="-1">${trustedMarkup}</main>`;
 
 /**
  * Wraps trusted wallet-renderer markup in a focused, dock-free container.
  * Callers must escape every dynamic value before composing `trustedMarkup`.
  */
 export const flowScreen = (view: WalletView, trustedMarkup: string): string =>
-  `<main class="screen flow" id="wallet-screen-${view}" tabindex="-1">${trustedMarkup}</main>`;
+  `<main class="screen flow" id="wallet-screen-${escapeHtml(view)}" tabindex="-1">${trustedMarkup}</main>`;
 
 /**
  * Renders the header every flow screen starts with: a back control, the goal
