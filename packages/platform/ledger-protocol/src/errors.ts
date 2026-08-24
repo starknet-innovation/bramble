@@ -36,6 +36,10 @@ export type LedgerRejectionCode =
   | "signature-verify-failed"
   | "worker-evicted"
   | "chain-failed"
+  | "management-refused"
+  | "management-unreadable"
+  | "dashboard-restore-failed"
+  | "starknet-reopen-failed"
   | "unexpected-device-error";
 
 const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
@@ -44,6 +48,8 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   "blind-signing-disabled":
     "Turn on Blind signing in the Starknet app settings on your Ledger, then retry.",
   "chain-failed": "Your transaction was submitted but failed on-chain.",
+  "dashboard-restore-failed":
+    "Your Ledger didn't return to its home screen for a compatibility check. Unlock it, leave it on the Starknet app, then try again.",
   "deploy-unfunded":
     "This account isn't deployed yet, and there's no STRK to cover the first transaction. Fund it with STRK, then try again.",
   "device-busy":
@@ -52,6 +58,10 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   "disconnected-mid-sign": "Your Ledger disconnected. Nothing was submitted.",
   "locked-mid-sign":
     "Your Ledger locked itself. Unlock it, then press Confirm again - you'll see the same request.",
+  "management-refused":
+    "Your Ledger refused a standard compatibility check. Unlock it, make sure the Starknet app is open and no other app (Ledger Live) is using it, then try again.",
+  "management-unreadable":
+    "Your Ledger replied to a compatibility check in a format this wallet doesn't recognize yet - most likely a device or app version newer than this build. Nothing was signed. Please report this so we can add support.",
   "multiple-devices": "Select the Ledger for this account.",
   "network-mismatch":
     "This Ledger account was set up for another network. Switch networks or pick a matching account.",
@@ -65,6 +75,8 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   "rejected-on-device": "You rejected the request on your Ledger. Nothing was submitted.",
   replug: "Reconnect your Ledger, then try again.",
   "sign-timeout": "Still waiting for you to confirm on your Ledger.",
+  "starknet-reopen-failed":
+    "Your Ledger left the Starknet app for a compatibility check and couldn't reopen it. Open the Starknet app on your device, then try again. Nothing was signed.",
   "signature-verify-failed":
     "We couldn't verify the signature from your Ledger, so nothing was submitted. Try again.",
   "unexpected-device-error":

@@ -19,9 +19,15 @@ export const MULTISIG_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: {
       address: KEY_BOUNDARY_MULTISIG,
       networkId: "SN_MAIN",
-      signerAccountId: account.id,
-      ...KEY_BOUNDARY_MULTISIG_CONFIG,
       type: "wallet.addMultisig",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      address: account.address,
+      networkId: "SN_MAIN",
+      type: "wallet.resolveMultisigSigner",
     },
     sender: extensionSender,
   },
@@ -61,6 +67,11 @@ export const MULTISIG_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   {
     live: async (ids) => ({ intentId: ids.multisigSubmitIntentId }),
     message: { intentId: "", type: "wallet.submitArgentMultisigIntent" },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ intentId: ids.multisigSignIntentId }),
+    message: { intentId: "", type: "wallet.removeArgentMultisigIntent" },
     sender: extensionSender,
   },
   { message: { type: "wallet.argentMultisigClassStatus" }, sender: extensionSender },

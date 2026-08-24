@@ -31,6 +31,7 @@ export type RenderData = {
   allowances: Awaited<ReturnType<SidepanelWallet["loadAllowances"]>>;
   multisigs: LoadedMultisigs;
   multisigsError: boolean;
+  multisigsNetworkId: string | null;
   multisigClassDeclared: boolean | "error" | null;
   multisigBalanceId: string | null;
   multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
@@ -100,6 +101,7 @@ export const updateRenderScope = (
           multisigNftId: null,
           multisigNfts: [],
           multisigsError: false,
+          ...(networkChanged ? { multisigsNetworkId: null } : {}),
         }
       : {}),
   });
@@ -116,6 +118,7 @@ export const emptyRenderCache = (): RenderData => ({
   allowances: [],
   multisigs: { intents: [], multisigs: [] },
   multisigsError: false,
+  multisigsNetworkId: null,
   multisigClassDeclared: null,
   multisigBalanceId: null,
   multisigBalances: { error: "multisig balances unavailable" },

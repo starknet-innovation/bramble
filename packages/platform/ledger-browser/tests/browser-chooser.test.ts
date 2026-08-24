@@ -72,7 +72,7 @@ describe("Ledger browser chooser activation", () => {
     await expect(pending).rejects.toBe(failure);
   });
 
-  test("requests only Ledger APDU HID before yielding", async () => {
+  test("offers every Ledger by vendor id, so an open app cannot hide the device", async () => {
     let rejectPicker: ((reason: unknown) => void) | undefined;
     const picker = new Promise<never>((_resolve, reject) => {
       rejectPicker = reject;
@@ -89,8 +89,11 @@ describe("Ledger browser chooser activation", () => {
     });
 
     const pending = requestTransportRaw("hid");
+    // Vendor id ONLY. Filtering the picker by the APDU usage page made a Ledger
+    // with the Starknet app open invisible, while the same device appeared from
+    // the dashboard; the APDU collection is preferred after selection instead.
     expect(requestOptions).toEqual({
-      filters: [{ usagePage: 0xffa0, vendorId: 0x2c97 }],
+      filters: [{ vendorId: 0x2c97 }],
     });
 
     const failure = new DOMException("No device selected", "NotFoundError");

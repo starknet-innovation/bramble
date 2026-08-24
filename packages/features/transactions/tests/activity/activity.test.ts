@@ -31,6 +31,23 @@ const makeLog = () => {
 };
 
 describe("createActivityLog", () => {
+  test("persists history attempt state by account scope", async () => {
+    const store = createMemoryStore();
+    const log = createActivityLog({ store });
+    await log.markHistorySynced?.(MAIN_SCOPE, 42, true);
+
+    expect(await createActivityLog({ store }).historySync?.(MAIN_SCOPE)).toEqual({
+      syncedAt: 42,
+      unavailable: true,
+    });
+    expect(
+      await createActivityLog({ store }).historySync?.({
+        accountId: OTHER_ACCOUNT_ID,
+        networkId: "SN_MAIN",
+      }),
+    ).toBeNull();
+  });
+
   test("records submissions as pending and lists newest first", async () => {
     const log = makeLog();
     await log.record({

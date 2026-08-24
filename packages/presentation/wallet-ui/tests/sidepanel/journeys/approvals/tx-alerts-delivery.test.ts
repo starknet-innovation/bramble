@@ -22,6 +22,7 @@ describe("transaction alert delivery", () => {
     document.body.replaceChildren();
     const order: string[] = [];
     const refresh = withTransactionAlerts(
+      document,
       {
         async loadTransactionAlerts() {
           order.push("drain");
@@ -43,6 +44,7 @@ describe("transaction alert delivery", () => {
   test("shows nothing when no transaction failed", async () => {
     document.body.replaceChildren();
     await withTransactionAlerts(
+      document,
       {
         async loadTransactionAlerts() {
           return [];
@@ -56,6 +58,7 @@ describe("transaction alert delivery", () => {
   test("survives a failed drain so the poll loop keeps running", async () => {
     document.body.replaceChildren();
     const refresh = withTransactionAlerts(
+      document,
       {
         async loadTransactionAlerts() {
           throw new Error("background unavailable");

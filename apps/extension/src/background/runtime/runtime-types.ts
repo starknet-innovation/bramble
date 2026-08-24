@@ -2,11 +2,16 @@
  * Shared background runtime response and service types.
  */
 
-import type { ArgentMultisigConfig } from "@mc-wallet/multisig/chain";
+import type {
+  ArgentMultisigAuthorityStatus,
+  ArgentMultisigConfig,
+  ArgentUnsupportedSigner,
+} from "@mc-wallet/multisig/chain";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
 } from "@mc-wallet/multisig/repository";
+import type { MultisigSignerAccount } from "@mc-wallet/multisig/signer-account";
 import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
@@ -118,9 +123,11 @@ type PreferencesResponse = {
  */
 type BalancesResponse = {
   readonly accountId: string;
+  readonly asOf: number | null;
   readonly balances: readonly TokenBalance[];
   readonly networkId: StarknetNetworkId;
   readonly ok: true;
+  readonly stale: boolean;
 };
 
 /**
@@ -355,8 +362,11 @@ type RequestAccountsResponse =
  * Fresh chain view paired with immutable Argent account provenance.
  */
 type ArgentMultisigView = {
+  readonly authorityStatus: ArgentMultisigAuthorityStatus;
   readonly config: ArgentMultisigConfig | null;
+  readonly deployed: boolean | null;
   readonly record: ArgentMultisigRecord;
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
 };
 
 /** Watched Argent accounts and frozen intents for the active network. */
@@ -407,9 +417,11 @@ type MultisigDeployResponse = {
 /** Token balances scoped to a watched shared account. */
 type MultisigBalancesResponse = {
   readonly accountId: string;
+  readonly asOf: number | null;
   readonly balances: readonly TokenBalance[];
   readonly networkId: StarknetNetworkId;
   readonly ok: true;
+  readonly stale: boolean;
 };
 
 /**
@@ -459,6 +471,7 @@ export type RuntimeResponse =
   | MultisigClassStatusResponse
   | MultisigDeployResponse
   | MultisigResponse
+  | { readonly ok: true; readonly signer: MultisigSignerAccount }
   | MultisigsResponse
   | { readonly ok: true }
   | PendingApprovalResponse

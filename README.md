@@ -29,7 +29,7 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 - **Allowance manager** — see every ERC-20 approval you've granted and revoke it in one tap. An
   approval on a contract the wallet cannot confirm is a token is listed without an amount claim and
   without a revoke control: on an NFT contract the same call would grant rather than revoke.
-- **Liquid Glass UI** — Apple-style glass surfaces, spring motion, and View Transitions, with full reduced-motion support.
+- **Clean Mono UI** — solid achromatic surfaces, purposeful spring motion, and View Transitions, with full reduced-motion support.
 
 Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also available). Mainnet moves real funds. All cryptography runs through the vendored **Krusty KMS** WASM core, and there is no local signing fallback.
 
@@ -59,10 +59,16 @@ fresh install opens the full-page setup flow; after setup, use the toolbar icon 
 Day to day:
 
 ```bash
-bun run check     # types, lint, standards, unit tests
-bun run format    # Biome autofix
-bun run test:e2e  # Playwright end-to-end (run test:e2e:install once first)
+bun run check       # types, lint, standards, unit tests
+bun run format      # Biome autofix
+bun run test:e2e    # Playwright end-to-end (run test:e2e:install once first)
+bun run dev:session # headed browser on a kept profile, onboards/unlocks itself
 ```
+
+`dev:session` is development-only. It onboards from a recovery phrase published in this repository,
+so its accounts are public by construction — never send real funds to an address it shows, and read
+the header of `tests/e2e/dev-session.ts` before pointing `MC_DEV_MNEMONIC` at a phrase of your own.
+The wallet it creates is kept in a git-ignored `.dev-profile/`; delete that directory to start over.
 
 ### Offline checks
 

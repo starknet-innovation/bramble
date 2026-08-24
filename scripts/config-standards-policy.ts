@@ -15,11 +15,11 @@ export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@mc-wallet/testkit": "workspace:*",
-  "@biomejs/biome": "2.5.7",
+  "@biomejs/biome": "2.5.8",
   "@playwright/test": "1.62.1",
   "@types/bun": "1.3.14",
   "@types/node": "26.2.0",
-  knip: "6.32.1",
+  knip: "6.32.2",
   madge: "8.0.0",
   typescript: "6.0.3",
 };
@@ -64,6 +64,11 @@ export const PINNED_RUNTIME_FILES = [
 
 export const EXPECTED_GITIGNORE_ENTRIES = [
   ".claude/*",
+  ".dev-profile/",
+  // Bun auto-loads a bare `.env`, which makes it the natural place a developer
+  // puts MC_DEV_MNEMONIC. Keeping it ignored is what stops a recovery phrase
+  // reaching a commit.
+  ".env",
   "artifacts/",
   "dist/",
   "node_modules/",
@@ -123,6 +128,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:workspaces":
     "bun run --filter './packages/foundation/**' check && bun run --filter './packages/platform/**' check && bun run --filter './packages/features/**' check && bun run --filter './packages/presentation/**' check && bun run --filter './packages/testing/**' check && bun run --filter @mc-wallet/extension check && bun run --filter @mc-wallet/terminal check && bun run --filter @mc-wallet/ui-lab check:static",
   changelog: "bun run scripts/generate-changelog.ts",
+  "dev:session": "bun run tests/e2e/dev-session.ts",
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
   "release:publish": "bun run scripts/publish-chrome-web-store.ts",

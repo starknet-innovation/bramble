@@ -31,9 +31,7 @@ const sites = [{ accountCount: 1, origin: "https://dapp.example" }];
 describe("connected-sites views", () => {
   test("settings links to the connected-sites flow", () => {
     const html = dashboard("settings", status, [], preferences, { balances: [] });
-    expect(html).toMatch(/menu-row" data-view="security"/);
-    const security = dashboard("security", status, [], preferences, { balances: [] });
-    expect(security).toMatch(/menu-row" data-view="connected-sites"/);
+    expect(html).toMatch(/menu-row" data-view="connected-sites"/);
   });
 
   test("connected-sites flow lists origins with revoke controls and back nav", () => {

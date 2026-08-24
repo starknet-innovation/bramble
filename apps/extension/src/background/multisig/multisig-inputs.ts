@@ -15,8 +15,9 @@ import {
   type ArgentMultisigSigningIntent,
   isArgentMultisigSigningIntent,
 } from "@mc-wallet/multisig/repository";
-import { normalizeArgentMultisigConfig } from "@mc-wallet/starknet/account-contracts";
+import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
@@ -84,55 +85,50 @@ const deployConfigFrom = (value: Record<string, unknown>): ArgentMultisigDeployC
  */
 export type AddArgentMultisigInput = {
   readonly address: string;
-  readonly name?: string;
   readonly networkId: StarknetNetworkId;
-  readonly signerAccountId: string;
-  readonly signerPublicKeys: readonly string[];
-  readonly threshold: number;
+  readonly signerPublicKeys?: readonly string[];
 };
 
 /**
- * Parses explicit current public authority for an existing pinned account.
+ * Parses address-only discovery for an existing pinned account.
  */
 export const readAddMultisigInput = (message: unknown): AddArgentMultisigInput | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, [
-      "address",
-      "name",
-      "networkId",
-      "signerAccountId",
-      "signerPublicKeys",
-      "threshold",
-      "type",
-    ]) ||
+    !hasOnlyKnownKeys(message, ["address", "networkId", "signerPublicKeys", "type"]) ||
     message["type"] !== "wallet.addMultisig" ||
     !isStarknetNetworkId(message["networkId"]) ||
-    !isAccountId(message["signerAccountId"]) ||
-    !isName(message["name"]) ||
     !isCanonicalNonZeroFelt(message["address"]) ||
-    !Array.isArray(message["signerPublicKeys"]) ||
-    !message["signerPublicKeys"].every((key) => typeof key === "string") ||
-    !Number.isSafeInteger(message["threshold"])
+    (message["signerPublicKeys"] !== undefined &&
+      (!Array.isArray(message["signerPublicKeys"]) ||
+        message["signerPublicKeys"].length === 0 ||
+        message["signerPublicKeys"].length > MULTISIG_LIMITS.signers ||
+        !message["signerPublicKeys"].every(isCanonicalNonZeroFelt)))
   ) {
     return null;
   }
-  try {
-    const config = normalizeArgentMultisigConfig({
-      signerPublicKeys: message["signerPublicKeys"] as readonly string[],
-      threshold: Number(message["threshold"]),
-    });
-    return {
-      address: message["address"],
-      ...config,
-      ...(message["name"] === undefined ? {} : { name: message["name"] }),
-      networkId: message["networkId"],
-      signerAccountId: message["signerAccountId"],
-    };
-  } catch {
-    return null;
-  }
+  return {
+    address: message["address"],
+    networkId: message["networkId"],
+    ...(message["signerPublicKeys"] === undefined
+      ? {}
+      : { signerPublicKeys: message["signerPublicKeys"] as readonly string[] }),
+  };
 };
+
+/**
+ * Parses one wallet-only request to resolve a supported participant account.
+ */
+export const readResolveMultisigSignerInput = (
+  message: unknown,
+): { readonly address: string; readonly networkId: StarknetNetworkId } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["address", "networkId", "type"]) &&
+  message["type"] === "wallet.resolveMultisigSigner" &&
+  isStarknetNetworkId(message["networkId"]) &&
+  isCanonicalNonZeroFelt(message["address"])
+    ? { address: message["address"], networkId: message["networkId"] }
+    : null;
 
 /**
  * Parses an exact multisig id request.
@@ -146,6 +142,31 @@ export const readMultisigIdInput = (
   message["type"] === type &&
   isAccountId(message["multisigId"])
     ? { multisigId: message["multisigId"] }
+    : null;
+
+/**
+ * Parses a multisig balance read, optionally from the durable snapshot.
+ */
+export const readMultisigBalancesInput = (
+  message: unknown,
+): { readonly cached: boolean; readonly multisigId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["cached", "multisigId", "type"]) &&
+  message["type"] === "wallet.multisigBalances" &&
+  isAccountId(message["multisigId"]) &&
+  (message["cached"] === undefined || message["cached"] === true)
+    ? { cached: message["cached"] === true, multisigId: message["multisigId"] }
+    : null;
+
+/**
+ * Parses the watched-multisig reader's optional stored-snapshot request.
+ */
+export const readMultisigsInput = (message: unknown): { readonly cached: boolean } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["cached", "type"]) &&
+  message["type"] === "wallet.multisigs" &&
+  (message["cached"] === undefined || message["cached"] === true)
+    ? { cached: message["cached"] === true }
     : null;
 
 /**
@@ -258,6 +279,40 @@ export const locallyDerivedImportedIntent = (
 };
 
 /**
+ * Orders verified signature fragments in Argent's canonical signer order.
+ */
+export const sortedArgentMultisigSignatures = (
+  values: readonly StarkSignature[],
+): readonly StarkSignature[] =>
+  [...values].sort((left, right) =>
+    BigInt(argentSignerGuid(left.publicKey)) < BigInt(argentSignerGuid(right.publicKey)) ? -1 : 1,
+  );
+
+/**
+ * Merges a re-import of the same frozen hash without regressing local state.
+ * Terminal local outcomes remain authoritative; open intents gain only new,
+ * already-validated signer fragments.
+ */
+export const mergeImportedArgentMultisigIntent = (
+  current: ArgentMultisigSigningIntent,
+  incoming: ArgentMultisigSigningIntent,
+): ArgentMultisigSigningIntent => {
+  if (current.state !== "collecting" && current.state !== "ready") return current;
+  const signatures = [...current.signatures];
+  for (const signature of incoming.signatures) {
+    if (!signatures.some((stored) => stored.publicKey === signature.publicKey)) {
+      signatures.push(signature);
+    }
+  }
+  const sorted = sortedArgentMultisigSignatures(signatures);
+  return {
+    ...incoming,
+    signatures: sorted,
+    state: sorted.length === incoming.configSnapshot.threshold ? "ready" : "collecting",
+  };
+};
+
+/**
  * Parses a full frozen intent package without normalizing any signed field.
  */
 export const readImportIntentInput = (
@@ -291,11 +346,25 @@ export const readSubmitIntentInput = (message: unknown): { readonly intentId: st
     : null;
 
 /**
+ * Parses deletion of one exact locally stored intent.
+ */
+export const readRemoveIntentInput = (message: unknown): { readonly intentId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["intentId", "type"]) &&
+  message["type"] === "wallet.removeArgentMultisigIntent" &&
+  typeof message["intentId"] === "string" &&
+  message["intentId"].length > 0 &&
+  message["intentId"].length <= 256
+    ? { intentId: message["intentId"] }
+    : null;
+
+/**
  * Exact deployment review echoed from review to submit.
  */
 export type ArgentMultisigDeploymentReview = ArgentMultisigDeployConfig & {
   readonly address: string;
   readonly fee: FeeEstimate;
+  readonly feeAffordability: FeeAffordability;
   readonly name?: string;
   readonly networkId: StarknetNetworkId;
   readonly signerAccountId: string;
@@ -307,6 +376,7 @@ const readDeploymentReview = (value: unknown): ArgentMultisigDeploymentReview | 
     !hasOnlyKnownKeys(value, [
       "address",
       "fee",
+      "feeAffordability",
       "name",
       "networkId",
       "salt",
@@ -316,6 +386,9 @@ const readDeploymentReview = (value: unknown): ArgentMultisigDeploymentReview | 
     ]) ||
     !isCanonicalNonZeroFelt(value["address"]) ||
     !isFeeEstimate(value["fee"]) ||
+    (value["feeAffordability"] !== "insufficient" &&
+      value["feeAffordability"] !== "ok" &&
+      value["feeAffordability"] !== "unknown") ||
     !isName(value["name"]) ||
     !isStarknetNetworkId(value["networkId"]) ||
     !isAccountId(value["signerAccountId"]) ||
@@ -327,6 +400,7 @@ const readDeploymentReview = (value: unknown): ArgentMultisigDeploymentReview | 
     address: value["address"],
     ...deployConfigFrom(value),
     fee: value["fee"],
+    feeAffordability: value["feeAffordability"],
     ...(value["name"] === undefined ? {} : { name: value["name"] }),
     networkId: value["networkId"],
     signerAccountId: value["signerAccountId"],
@@ -338,12 +412,17 @@ const readDeploymentReview = (value: unknown): ArgentMultisigDeploymentReview | 
  */
 export const readReviewDeploymentInput = (
   message: unknown,
-): Omit<ArgentMultisigDeploymentReview, "address" | "fee"> | null => {
+):
+  | (Omit<ArgentMultisigDeploymentReview, "address" | "fee" | "feeAffordability"> & {
+      readonly expectedAddress?: string;
+    })
+  | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "name",
       "networkId",
+      "expectedAddress",
       "salt",
       "signerAccountId",
       "signerPublicKeys",
@@ -351,6 +430,8 @@ export const readReviewDeploymentInput = (
       "type",
     ]) ||
     message["type"] !== "wallet.reviewArgentMultisigDeployment" ||
+    (message["expectedAddress"] !== undefined &&
+      !isCanonicalNonZeroFelt(message["expectedAddress"])) ||
     !isName(message["name"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !isAccountId(message["signerAccountId"]) ||
@@ -360,6 +441,9 @@ export const readReviewDeploymentInput = (
   }
   return {
     ...deployConfigFrom(message),
+    ...(message["expectedAddress"] === undefined
+      ? {}
+      : { expectedAddress: message["expectedAddress"] }),
     ...(message["name"] === undefined ? {} : { name: message["name"] }),
     networkId: message["networkId"],
     signerAccountId: message["signerAccountId"],

@@ -43,10 +43,13 @@ import {
   createApprovalSurfaceOpener,
 } from "./approvals/approval-surface";
 import { createApprovalQueue } from "./approvals/approvals";
+import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
 import {
   type OnboardingSurfaceBrowser,
   openOnboardingOnInstall,
 } from "./onboarding/onboarding-surface";
+import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
+import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createMessageHandler } from "./routing/messages";
 import type { RuntimeSender } from "./routing/senders";
 import { walletEventBroadcasts } from "./runtime/events";
@@ -115,6 +118,7 @@ const sessionStore = (() => {
     return undefined;
   }
 })();
+const multisigDeploymentReviews = createArgentMultisigDeploymentReviews(sessionStore);
 // The vault store is created up front so the unlock session can drop its
 // cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
 // operations for the life of an unlock rather than re-derived every time.
@@ -181,6 +185,10 @@ const activityLog = (() => {
     return undefined;
   }
 })();
+// Public chain data only. The adapter is restricted to trusted extension
+// contexts at startup; wallet secrets remain exclusively in the encrypted vault.
+const balanceSnapshots = createBalanceSnapshotStore(createBrowserLocalStore());
+const nftSnapshots = createNftSnapshotStore(createBrowserLocalStore());
 const originHistory = (() => {
   try {
     return createOriginHistoryStore({ now: systemClock, store: createBrowserLocalStore() });
@@ -230,6 +238,13 @@ const phishingFeed = (() => {
 })();
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
 void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
+// Fails closed to the stub service when session storage is unavailable, which
+// is the only thing that can throw here (`createStrk20MaturityStore` itself is
+// pure construction). The reason cannot be logged — the standards check bars
+// logging from production sources — so it surfaces where a user can see it
+// instead: `unavailableStrk20Service` reports "no privacy runtime is wired in
+// this build" rather than the generic unavailable line, which is what
+// distinguishes this fallback from a live service that failed.
 const strk20MaturityStore = (() => {
   try {
     return createStrk20MaturityStore(createBrowserSessionStore());
@@ -262,6 +277,8 @@ const runtimeReady = sessionReady.then(async () => {
 const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   activeStateCoordinator,
   approvals,
+  balanceSnapshots,
+  nftSnapshots,
   session,
   preferencesStore: preferenceStore,
   runtimeRpc,
@@ -271,6 +288,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   prices: priceService,
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
+  multisigDeploymentReviews,
   multisigStore: multisigLog,
 });
 

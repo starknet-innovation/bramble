@@ -5,8 +5,20 @@
  * state confirmation before the next APDU is allowed. Transport ownership and
  * device matching stay in `webhid-impl.js`; this module contains only the
  * deterministic protocol state machine.
+ *
+ * Every failure here throws a typed {@link LedgerRejection} naming the step that
+ * failed, never a bare `Error`. These run before any signing, on hardware this
+ * build may never have seen, so an unclassified throw would reach the user as
+ * the `unexpected-device-error` catch-all ("make sure the Starknet app is
+ * open") — advice that is actively wrong when the wallet itself is the thing
+ * that closed the app, and which hides which step actually broke.
  */
+import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
 
+/**
+ * The step a transition is currently on, emitted for progress display only.
+ * Presentation never gates the hardware decision on it.
+ */
 export type LedgerTransitionPhase =
   | "checking-device"
   | "returning-to-dashboard"
@@ -88,6 +100,44 @@ export const exactLedgerDevice = <Device extends LedgerDeviceIdentity>(
   return null;
 };
 
+/**
+ * Ledger's vendor-defined APDU HID usage page. The same physical Ledger can also
+ * expose a FIDO collection at 0xF1D0, which cannot carry APDUs.
+ */
+export const LEDGER_HID_APDU_USAGE_PAGE = 0xffa0;
+
+/**
+ * A WebHID device as far as collection selection is concerned. Structural so the
+ * pure selection can be exercised without a browser.
+ */
+export type LedgerHidDevice = {
+  // Explicitly admits `undefined`: a granted device whose descriptors the browser
+  // has not surfaced reports no collections at all, and that device must still
+  // reach the user rather than being typed out of existence.
+  readonly collections?: readonly { readonly usagePage?: unknown }[] | undefined;
+};
+
+/**
+ * Narrows granted WebHID devices to the ones exposing Ledger's APDU collection,
+ * so a FIDO collection of the same Ledger is never bound as a transport.
+ *
+ * Fails OPEN: when no device reports the APDU collection — the descriptors are
+ * unavailable, or this firmware/app labels the collection differently — the full
+ * list is returned rather than an empty one. Hiding a device the user can
+ * physically see is the worse failure: presenting the APDU page as a *picker
+ * filter* made a Ledger sitting in the Starknet app invisible while the same
+ * device appeared from the dashboard, which reads as broken hardware. Selection
+ * is a preference, never a gate; the transport open is the real check.
+ */
+export const ledgerApduHidDevices = <Device extends LedgerHidDevice>(
+  devices: readonly Device[],
+): readonly Device[] => {
+  const apdu = devices.filter((device) =>
+    device.collections?.some((collection) => collection.usagePage === LEDGER_HID_APDU_USAGE_PAGE),
+  );
+  return apdu.length > 0 ? apdu : devices;
+};
+
 const APDU_OK = 0x9000;
 const APP_STATE_APDU = { cla: 0xb0, ins: 0x01, p1: 0, p2: 0 };
 const OS_VERSION_APDU = { cla: 0xe0, ins: 0x01, p1: 0, p2: 0 };
@@ -101,8 +151,11 @@ const MAX_VERSION_BYTES = 32;
 const MAX_FLAGS_BYTES = 64;
 const MAX_TRAILING_FIELD_BYTES = 64;
 const MAX_OS_TRAILING_FIELDS = 5;
+const MAX_APP_STATE_TRAILING_FIELDS = 5;
 
-const malformedResponse = (): Error => new Error("Malformed Ledger management response");
+// A reply this build cannot parse. Never carries the raw bytes or any decoded
+// device string: the catalog copy is the whole user-facing surface.
+const malformedResponse = (): LedgerRejection => new LedgerRejection("management-unreadable");
 
 const byteAt = (response: Uint8Array, offset: number): number => {
   const value = response[offset];
@@ -121,8 +174,9 @@ const statusOffsetOf = (response: Uint8Array): number => {
     throw malformedResponse();
   }
   const offset = response.length - 2;
-  if ((byteAt(response, offset) << 8) + byteAt(response, offset + 1) !== APDU_OK) {
-    throw new Error("Ledger management command failed");
+  const statusWord = (byteAt(response, offset) << 8) + byteAt(response, offset + 1);
+  if (statusWord !== APDU_OK) {
+    throw new LedgerRejection("management-refused", statusWord);
   }
   return offset;
 };
@@ -164,12 +218,20 @@ const parseAppState = (
   }
   const name = readLv(response, 1, statusOffset, MAX_APP_NAME_BYTES);
   const version = readLv(response, name.nextOffset, statusOffset, MAX_VERSION_BYTES);
+  // Flags and anything after them are tolerated the same way the OS envelope
+  // tolerates its trailing fields: only the leading name/version are load-bearing
+  // here, and firmware is free to append fields this build has never seen.
+  // Requiring an exact end-of-envelope once cost the OS parser a hardware-only
+  // P1 that every fixture passed — this parser must not repeat it. The count is
+  // still bounded, so a garbage reply cannot loop or be read as valid.
   let offset = version.nextOffset;
-  if (offset < statusOffset) {
+  let trailingFields = 0;
+  while (offset < statusOffset) {
+    trailingFields += 1;
+    if (trailingFields > MAX_APP_STATE_TRAILING_FIELDS) {
+      throw malformedResponse();
+    }
     offset = readLv(response, offset, statusOffset, MAX_FLAGS_BYTES).nextOffset;
-  }
-  if (offset !== statusOffset) {
-    throw malformedResponse();
   }
   return { name: decode(name.value), version: decode(version.value) };
 };
@@ -270,7 +332,7 @@ export const readLedgerOsAndRestoreStarknet = async (
     );
     const dashboard = await appState(port);
     if (!DASHBOARD_NAMES.has(dashboard.name)) {
-      throw new Error("Ledger did not return to the dashboard");
+      throw new LedgerRejection("dashboard-restore-failed");
     }
   }
 
@@ -294,7 +356,7 @@ export const readLedgerOsAndRestoreStarknet = async (
     emit(onPhase, "confirming-starknet");
     const restored = await appState(port);
     if (restored.name !== STARKNET_APP_NAME) {
-      throw new Error("Ledger did not open Starknet");
+      throw new LedgerRejection("starknet-reopen-failed");
     }
   } catch (error) {
     if (osError === undefined) {

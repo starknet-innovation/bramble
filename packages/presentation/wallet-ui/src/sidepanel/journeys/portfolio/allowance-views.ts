@@ -15,7 +15,7 @@ import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
-import { accountLabel, flowHeader, flowScreen } from "../../shared/parts";
+import { accountLabel, contextHelp, flowHeader, flowScreen } from "../../shared/parts";
 import { compactAmount } from "./token-row";
 
 // A record the wallet can only bound from below (an increase applied on top of
@@ -60,6 +60,7 @@ const allowanceRow = (allowance: AllowanceView): string => `
       <code>${escapeHtml(accountLabel(allowance.spender))}</code>
       <p class="hint">${escapeHtml(amountLabel(allowance))} of ${escapeHtml(accountLabel(allowance.token))} · ${escapeHtml(SOURCE_LABELS[allowance.source])}</p>
       ${allowance.unconfirmedToken ? `<p class="hint">${escapeHtml(UNCONFIRMED_TOKEN_NOTE)}</p>` : ""}
+      <p class="allowance-review" data-allowance-review-for="${escapeHtml(allowance.id)}" role="status" hidden></p>
     </div>
     ${
       allowance.source === "multisig" || allowance.unconfirmedToken
@@ -96,7 +97,12 @@ export const allowancesFlow = (
     flowScreen(
       "allowances",
       `<section class="section">
-        <p class="hint">Outstanding ERC-20 token approvals for this account: those you granted here plus any discovered on-chain. Revoking sets the spender's allowance to zero. An amount shown as "at least" is one this wallet could only bound from below, because part of the allowance was granted elsewhere. NFT collection approvals are not token allowances and are not listed here — revoke those from the marketplace that asked for them, and an approval on a contract this wallet cannot confirm is a token keeps no Revoke control, because the call that clears an ERC-20 allowance grants an NFT instead.</p>
+        <p class="lede">Review who can move your tokens. Revoking sets one spender's allowance to zero after you confirm its network fee.</p>
+        ${contextHelp(
+          "allowance-scan-scope",
+          "What this list includes",
+          "It includes approvals granted here and approvals discovered on-chain for tracked ERC-20 tokens. 'At least' means the wallet can only prove a lower bound. NFT approvals and untracked tokens are outside this scan; unconfirmed contracts keep no revoke control because an ERC-20 revoke call could grant an NFT instead.",
+        )}
         ${
           account === null
             ? emptyState("Unlock an account on this network to manage allowances.")

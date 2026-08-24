@@ -33,13 +33,32 @@ const ownValue = (record: Record<string, unknown>, field: string): unknown => {
   return descriptor?.enumerable === true && "value" in descriptor ? descriptor.value : undefined;
 };
 
+// The OZ `AccountUpgradeable` class `starknet-devnet` predeclares. Krusty keys
+// its hashes by declaring chain and has no devnet entry, and a devnet declares
+// only its own build, so Krusty's hash fails estimation there. Same preset and
+// `constructor(public_key: felt252)`, so derivation is unchanged. Devnet-VERSION
+// specific and pinned by no CI gate — re-read `devnet_getConfig` after upgrades.
+const DEVNET_OZ_ACCOUNT_CLASS_HASH =
+  "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564";
+
 /**
- * Reads the OpenZeppelin account class hash from Krusty for a network.
+ * Reads the OpenZeppelin account class hash: Krusty's declaration for the real
+ * chains, the node's own predeclared class for devnet. Declaredness is not
+ * proven here, so a devnet on a different build — or an Argent account on any
+ * devnet — still fails at fee estimation.
  */
 export const getOzAccountClassHash = async (
   kms: KmsPort,
   networkId: StarknetNetworkId,
 ): Promise<string> => {
+  if (networkId === "SN_DEVNET") {
+    // Validated like Krusty's value below, since the constant is hand-updated.
+    if (!isNonZeroStarkFieldElement(DEVNET_OZ_ACCOUNT_CLASS_HASH)) {
+      throw new WalletError("Devnet account class hash is invalid");
+    }
+    return canonicalFelt(DEVNET_OZ_ACCOUNT_CLASS_HASH) as string;
+  }
+
   const hashes = parseClassHashes(await kms.getAccountClassHashes());
   const ozHashes = isRecord(hashes) ? ownValue(hashes, "oz") : null;
   if (!isRecord(ozHashes)) {

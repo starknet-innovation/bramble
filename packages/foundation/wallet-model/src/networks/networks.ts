@@ -78,7 +78,8 @@ export const STARKNET_NETWORKS = {
     // network above and makes `networkIdForChainId` non-deterministic. We use a
     // distinct sentinel — the short-string encoding of "SN_DEVNET" — so devnet
     // resolves unambiguously and chain switching cannot silently alias Sepolia.
-    // Nothing in the wallet depends on the literal devnet chain id.
+    // The node must agree: start it with `--chain-id SN_DEVNET`. The write path
+    // checks this against `starknet_chainId` and fails closed otherwise.
     chainId: "0x534e5f4445564e4554",
     id: "SN_DEVNET",
     name: "Local Devnet",
@@ -335,6 +336,30 @@ export const canonicalFelt = (value: string): string | null => {
 };
 
 /**
+ * Renders a felt at its full 64-hex-digit width: lowercase, `0x`-prefixed, and
+ * left-padded with zeros. Returns null when the value is not a field element.
+ *
+ * This is the spelling a felt takes once serialized to its fixed 32-byte form,
+ * which is also what a Ledger is handed — and therefore displays — when it is
+ * asked to blind-sign a hash: the device library strips `0x` and any leading
+ * zeros, then left-pads back to exactly this width before the APDU. The panel renders
+ * the same form so a user comparing the wallet against the device screen is
+ * comparing identical characters, not two spellings of one number. Zero is
+ * accepted here (unlike {@link canonicalAddress}) because a hash is not an
+ * address and carries no non-zero invariant.
+ *
+ * The one shared padding helper: {@link canonicalAddress} builds on it rather
+ * than re-deriving the width, so a stored address and a displayed hash can never
+ * drift apart on how many digits a felt has. Do not re-derive the padding.
+ */
+export const paddedFelt = (value: string): string | null => {
+  const lower = `${value}`.trim().toLowerCase();
+  return isStarkFieldElement(lower)
+    ? `0x${BigInt(lower).toString(16).padStart(MAX_STARK_FIELD_HEX_DIGITS, "0")}`
+    : null;
+};
+
+/**
  * Canonicalizes a contract or recipient address to the single spelling every
  * stored record uses: lowercase, zero-padded to 64 hex digits. Returns null
  * when the input is not a non-zero field element, so a caller that receives a
@@ -351,9 +376,7 @@ export const canonicalAddress = (address: string): string | null => {
   // non-string field. Anything that is not a felt reports null and fails the
   // entry validators, instead of throwing out of an id builder.
   const lower = `${address}`.trim().toLowerCase();
-  return isNonZeroStarkFieldElement(lower)
-    ? `0x${BigInt(lower).toString(16).padStart(MAX_STARK_FIELD_HEX_DIGITS, "0")}`
-    : null;
+  return isNonZeroStarkFieldElement(lower) ? paddedFelt(lower) : null;
 };
 
 /**

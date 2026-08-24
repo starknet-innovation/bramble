@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   readAddNftInput,
   readDiscoverNftsInput,
+  readLoadWatchedNftsInput,
   readReviewNftTransferInput,
   readTransferNftInput,
 } from "../../../apps/extension/src/background/portfolio/nft-inputs";
@@ -104,9 +105,11 @@ describe("NFT transfer inputs", () => {
 describe("readDiscoverNftsInput", () => {
   test("defaults to a complete response and accepts the indexed-only fast path", () => {
     expect(readDiscoverNftsInput({ type: "wallet.discoverNfts" })).toEqual({
+      cached: false,
       includeWatched: true,
     });
     expect(readDiscoverNftsInput({ includeWatched: false, type: "wallet.discoverNfts" })).toEqual({
+      cached: false,
       includeWatched: false,
     });
     expect(
@@ -115,9 +118,21 @@ describe("readDiscoverNftsInput", () => {
         type: "wallet.discoverNfts",
       }),
     ).toEqual({
+      cached: false,
       includeWatched: true,
       multisigId: "SN_MAIN:0x456",
     });
+  });
+
+  test("accepts only the explicit cached snapshot mode", () => {
+    expect(readDiscoverNftsInput({ cached: true, type: "wallet.discoverNfts" })).toEqual({
+      cached: true,
+      includeWatched: true,
+    });
+    expect(readLoadWatchedNftsInput({ cached: true, type: "wallet.loadWatchedNfts" })).toEqual({
+      cached: true,
+    });
+    expect(readLoadWatchedNftsInput({ cached: false, type: "wallet.loadWatchedNfts" })).toBeNull();
   });
 
   test("rejects unknown keys and non-boolean modes", () => {

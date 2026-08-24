@@ -1,4 +1,11 @@
-import { checkpointStory, LAB_META, type LabMeta } from "../../runtime/story-helpers";
+import { expect } from "storybook/test";
+import {
+  assertCheckpointReady,
+  checkpointStory,
+  LAB_META,
+  type LabMeta,
+  type LabStory,
+} from "../../runtime/story-helpers";
 
 const meta: LabMeta = {
   ...LAB_META,
@@ -17,7 +24,18 @@ export const PrivateInvoke = checkpointStory(
   "approvals",
   "private-invoke",
 );
-export const WatchAsset = checkpointStory("Approval · watch asset", "approvals", "watch-asset");
+export const WatchAsset: LabStory = {
+  args: { checkpointId: "watch-asset", scenarioId: "approvals" },
+  name: "Approval · watch asset",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const mark = body?.querySelector<HTMLElement>(".request-token .token-mark");
+    await expect(mark).toBeVisible();
+    expect(mark?.scrollWidth ?? 1).toBeLessThanOrEqual(mark?.clientWidth ?? 0);
+  },
+};
 export const SwitchChain = checkpointStory("Approval · switch chain", "approvals", "switch-chain");
 export const AddChain = checkpointStory("Approval · add chain", "approvals", "add-chain");
 export const Declare = checkpointStory("Approval · declare", "approvals", "declare");

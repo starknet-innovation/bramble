@@ -13,16 +13,28 @@ import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
 import { explorerFallbackAllowed, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import { button } from "@mc-wallet/ui-kit/controls";
 import { checkboxField, textField } from "@mc-wallet/ui-kit/fields";
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { isStarknetNetworkId, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
+import { contextHelp, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { strk20ServicesForm } from "../privacy/privacy-settings-view";
 
 const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   preferences && isStarknetNetworkId(status.networkId)
     ? (preferences.rpcOverrides?.[status.networkId] ?? "")
     : "";
+
+// Devnet is the one network the user hosts, so state what the wallet will dial
+// and the chain id the write-path guard checks before a write fails on it.
+const devnetHint = (status: WalletStatus, preferences: WalletPreferences | null): string => {
+  if (status.networkId !== "SN_DEVNET") {
+    return "";
+  }
+  const override = rpcOverrideFor(status, preferences);
+  const endpoint = escapeHtml(override || STARKNET_NETWORKS.SN_DEVNET.rpcUrls[0]);
+  const elsewhere = override ? "" : " Running yours elsewhere? Set a custom RPC under Advanced.";
+  return `<p class="hint">Expects a node at ${endpoint} started with --chain-id SN_DEVNET.${elsewhere}</p>`;
+};
 
 const strk20ConfigFor = (
   status: WalletStatus,
@@ -107,6 +119,7 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
           .join("")}
       </div>
       <p class="hint">Switching selects or derives an account on the target network.</p>
+      ${devnetHint(status, preferences)}
       <p id="picker-result" role="status"></p>
     </section>
     <section class="section">
@@ -139,6 +152,11 @@ export const advancedNetworkFlow = (
       "advanced-network",
       `<section class="section">
       <p class="review-flag" role="note">Custom endpoints can observe requests made through them. Leave a field empty to use the wallet default or keep that integration off.</p>
+      ${contextHelp(
+        "advanced-endpoint-privacy",
+        "What an endpoint can learn",
+        "An RPC, indexer, prover, or relay can observe the requests sent to it, including account or transaction context needed for that service. Configure only infrastructure you trust; clearing a field restores the wallet default or disables the optional integration.",
+      )}
       <div class="disclosure-stack">
         ${endpointDisclosure(
           "rpc",

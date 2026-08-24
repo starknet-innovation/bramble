@@ -32,6 +32,7 @@ describe("createPreferencesStore", () => {
       address: "0x123",
       label: "Treasury",
       networkId: "SN_DEVNET",
+      publicKeyX: "0x000abc",
     });
 
     // Stored in the one canonical spelling every entry id is derived from
@@ -40,9 +41,17 @@ describe("createPreferencesStore", () => {
     await expect(preferences.read()).resolves.toMatchObject({
       activeNetworkId: "SN_DEVNET",
       addressBook: [
-        { address: CANONICAL_123, id: `SN_DEVNET:${CANONICAL_123}`, label: "Treasury" },
+        {
+          address: CANONICAL_123,
+          id: `SN_DEVNET:${CANONICAL_123}`,
+          label: "Treasury",
+          publicKeyX: "0xabc",
+        },
       ],
     });
+
+    await preferences.saveAddress({ address: "0x123", label: "Vault", networkId: "SN_DEVNET" });
+    expect((await preferences.read()).addressBook[0]?.publicKeyX).toBe("0xabc");
   });
 
   test("rejects malformed stored preferences", async () => {

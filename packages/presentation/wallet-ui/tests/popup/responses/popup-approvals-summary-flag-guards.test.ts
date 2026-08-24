@@ -39,6 +39,15 @@ describe("pending-approval summary guard (isSummaryText)", () => {
   });
 });
 
+describe("pending-approval review asset guard", () => {
+  test("accepts address-bound token marks and rejects symbol-only guesses", () => {
+    expect(
+      isPendingApprovalsResponse(invoke({ reviewAssets: [{ address: "0x123", symbol: "USDC" }] })),
+    ).toBe(true);
+    expect(isPendingApprovalsResponse(invoke({ reviewAssets: [{ symbol: "USDC" }] }))).toBe(false);
+  });
+});
+
 describe("pending-approval risk-flag guard (isApprovalRiskFlag)", () => {
   test("accepts an invoke prompt with a well-formed risk flag", () => {
     expect(

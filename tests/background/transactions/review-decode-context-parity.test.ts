@@ -24,7 +24,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
-import { flushHeld } from "../../support/held";
+import { waitForPendingApprovals } from "../../support/held";
 
 const account: AccountRef = {
   accountContractType: "openzeppelin",
@@ -150,13 +150,15 @@ describe("Send vs dApp invoke decode-risk CONTEXT parity (#19)", () => {
       { calls: [transferCall], origin, type: "wallet.addInvokeTransaction" },
       contentSender,
     );
-    await flushHeld();
-    const listed = (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
-      readonly pending: readonly { readonly flags?: readonly { readonly code: string }[] }[];
-    };
-    const dappFlags = listed.pending.at(-1)?.flags ?? [];
+    const listed = await waitForPendingApprovals<{
+      readonly flags?: readonly { readonly code: string }[];
+      readonly id: string;
+      readonly reviewAssets?: readonly { readonly address: string; readonly symbol: string }[];
+    }>(handler, extensionSender);
+    const dappFlags = listed.at(-1)?.flags ?? [];
 
     expect(codes(dappFlags)).toEqual(codes(sendReport.flags));
+    expect(listed.at(-1)?.reviewAssets).toEqual([{ address: ETH, symbol: "ETH" }]);
     // And specifically: the cross-network contact must NOT poison the dApp card.
     expect(dappFlags.some((flag) => flag.code === "address-poisoning")).toBe(false);
   });

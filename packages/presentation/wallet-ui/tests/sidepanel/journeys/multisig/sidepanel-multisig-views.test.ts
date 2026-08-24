@@ -2,15 +2,8 @@
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import { UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
-import { multisigAccountOptions } from "../../../../src/sidepanel/journeys/multisig/multisig-account-options";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
-import {
-  multisigAddFlow,
-  multisigReceiveFlow,
-  multisigSignersFlow,
-  multisigTrackFlow,
-  multisigWatchFlow,
-} from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
+import { multisigWatchFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
 import {
   multisigDetailFlow,
   multisigProposeFlow,
@@ -57,11 +50,12 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("0 STRK");
     expect(html).toContain("transfer");
     expect(html).toContain("0xdef");
-    expect(html).toContain("Decoded exact calls");
-    expect(html).toContain("Locally decoded summary:");
+    expect(html).toContain("What will happen");
+    expect(html).toContain("Maximum cost and constraints");
+    expect(html).toContain("Technical details");
     expect(html).not.toContain("Collaborator note");
     expect(html).toContain('data-ms-sign="');
-    expect(html).toContain("Copy intent package");
+    expect(html).toContain("Copy full intent package");
     expect(html).not.toContain('data-ms-submit="');
   });
 
@@ -69,6 +63,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     const preferences = defaultWalletPreferences();
     const token = preferences.tokens[0];
     if (!token) throw new Error("default token fixture unavailable");
+    const hostileSummary = 'Looks <img src=x onerror="alert(1)">';
     const fixture = await makeArgentMultisigFixture([
       {
         calldata: ["0x456789abcdef", `0x${(UINT128_LIMIT - 1n).toString(16)}`, "0x0"],
@@ -85,16 +80,31 @@ describe("Argent multisig list and exact-intent detail", () => {
       fixture.status,
       fixture.status.accounts[0] ?? null,
       fixture.view,
-      [{ ...fixture.intent, summary: "Looks harmless" }],
+      [{ ...fixture.intent, summary: hostileSummary }],
       false,
       preferences,
     );
 
-    expect(html).toContain("Locally decoded summary:</strong> Looks harmless");
+    expect(html).toContain("<h2>Looks &lt;img src=x onerror=&quot;alert(1)&quot;&gt;</h2>");
     expect(html).toContain("effectively unlimited spending allowance");
     expect(html).toContain("0x9876…cdef is not a token or contact this wallet knows");
     expect(html).toContain("Allow 0x4567…cdef to spend");
     expect(html).toContain("Call opaque_action on 0x9876…cdef");
+    expect(html).toContain('class="review-call-assets"');
+    expect(html).toContain('class="token-logo"');
+
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [{ ...fixture.intent, summary: hostileSummary }],
+      false,
+      preferences,
+      "multisig-home",
+    );
+    expect(home).toContain('class="multisig-intent-assets"');
+    expect(home).toContain('class="token-logo"');
+    expect(home).not.toContain("<img src=x");
   });
 
   test("renders exact signer-management authority before collection", async () => {
@@ -129,21 +139,269 @@ describe("Argent multisig list and exact-intent detail", () => {
       [fixture.readyIntent],
     );
     expect(html).toContain('data-ms-submit="');
+    expect(html).toContain("Submit transaction");
+    expect(html).not.toContain('data-ms-sign="');
+    expect(html).toContain("Co-signer handoff");
+    expect(html).toContain("Copy full intent package");
+    expect(html).toContain("Individual signature fragments");
     expect(html).toContain("1 of 1");
+  });
+
+  test("makes package sharing primary when no eligible local signer is available", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const observer = {
+      ...signer,
+      id: "SN_MAIN:0x999",
+      publicKeyX: "0x999",
+    };
+    const html = multisigDetailFlow(
+      { ...fixture.status, accountCount: 1, accounts: [observer], activeAccountId: observer.id },
+      observer,
+      fixture.view,
+      [fixture.intent],
+    );
+    expect(html).toContain("No eligible signer is available in this wallet");
+    expect(html).toContain('class="multisig-intent-action"');
+    expect(html).toContain('data-ms-copy-package="');
+    expect(html).not.toContain('data-ms-sign="');
+  });
+
+  test("keeps home intents condensed and moves the full review to the detail flow", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [fixture.readyIntent],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(home).toContain(`data-ms-open-intent="${fixture.readyIntent.id}"`);
+    expect(home).toContain(`data-ms-intent-account="${fixture.record.id}"`);
+    expect(home).toContain("Ready to submit · 1 of 1");
+    expect(home).toContain("Awaiting verification &amp; signature");
+    expect(home).toContain(`href="https://starkscan.co/contract/${fixture.record.address}"`);
+    expect(home).toContain('aria-label="Open this account on the block explorer"');
+    expect(home).toContain('class="ghost small tab-more" data-view="multisig-track"');
+    expect(home).toContain("Import intent");
+    expect(home).not.toContain('data-ms-submit="');
+
+    const detail = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [fixture.readyIntent],
+    );
+    expect(detail).toContain('data-ms-submit="');
+    expect(detail).not.toContain('data-ms-home-tab="assets"');
+  });
+
+  test("shows only the intent selected from the account queue", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const other = {
+      ...fixture.intent,
+      id: `${fixture.intent.id}:other`,
+      summary: "Another pending transaction",
+    };
+    const detail = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [other, fixture.readyIntent],
+      false,
+      null,
+      "multisig-detail",
+      undefined,
+      fixture.readyIntent.id,
+    );
+    expect(detail).toContain(fixture.readyIntent.summary);
+    expect(detail).not.toContain(other.summary);
+    expect(detail).not.toContain("multisig-intent-stack");
+  });
+
+  test("replaces disabled Prepare with a resumable deployment action", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const record = {
+      ...fixture.record,
+      deployment: { salt: "0x5", signerPublicKeys: [signer.publicKeyX], threshold: 1 },
+    };
+    const undeployed = {
+      ...fixture.view,
+      authorityStatus: "undeployed",
+      config: null,
+      deployed: false,
+      record,
+    } as const;
+
+    const home = multisigDetailFlow(
+      fixture.status,
+      signer,
+      undeployed,
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(home).toContain('data-view="multisig-deploy"');
+    expect(home).toContain("Deployment required");
+    expect(home).not.toContain('data-view="multisig-propose"');
+
+    const deployment = multisigDeployFlow(fixture.status, signer, true, null, undeployed);
+    expect(deployment).toContain("Saved setup restored");
+    expect(deployment).toContain(`value="${signer.publicKeyX}"`);
+    expect(deployment).toContain('name="threshold"');
+    expect(deployment).toContain('value="0x5"');
+    expect(deployment).toContain(`value="${signer.id}"`);
+  });
+
+  test("keeps deployment unavailable while a submitted transaction confirms", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const pending = {
+      ...fixture.view,
+      authorityStatus: "undeployed",
+      config: null,
+      deployed: null,
+      deploymentPending: true,
+    } as const;
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      pending,
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(home).not.toContain('data-view="multisig-deploy"');
+    expect(home).toContain('data-view="multisig-propose" type="button" disabled');
+    expect(home).toContain("Deployment submitted");
+  });
+
+  test("turns an undeployed address-only watch into a verified deployment setup", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const {
+      currentConfig: _currentConfig,
+      deployment: _deployment,
+      ...addressOnlyRecord
+    } = fixture.record;
+    const undeployed = {
+      ...fixture.view,
+      authorityStatus: "undeployed",
+      config: null,
+      deployed: false,
+      record: addressOnlyRecord,
+    } as const;
+
+    const home = multisigDetailFlow(
+      fixture.status,
+      signer,
+      undeployed,
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(home).toContain('data-view="multisig-deploy"');
+    expect(home).toContain("Resume setup to verify and deploy this saved address");
+    expect(home).not.toContain('data-view="multisig-propose"');
+
+    const deployment = multisigDeployFlow(fixture.status, signer, true, null, undeployed);
+    expect(deployment).toContain("reproduce the watched address");
+    expect(deployment).toContain('name="expectedAddress" type="hidden"');
+    expect(deployment).toContain(`value="${fixture.record.address}"`);
+    expect(deployment).not.toContain("multisig-contract-details");
   });
 
   test("disables signing when fresh on-chain authority is unavailable", async () => {
     const fixture = await makeArgentMultisigFixture();
+    const account = fixture.status.accounts[0] ?? null;
+    const unavailableView = {
+      ...fixture.view,
+      authorityStatus: "network-unavailable",
+      config: null,
+      deployed: null,
+    } as const;
     const html = multisigDetailFlow(
       fixture.status,
-      fixture.status.accounts[0] ?? null,
-      { config: null, record: fixture.record },
+      account,
+      unavailableView,
       [fixture.intent],
       true,
     );
-    expect(html).toContain("Current on-chain signer authority is unavailable");
+    expect(html).toContain("latest signer-authority refresh failed");
     expect(html).not.toContain('data-ms-sign="');
-    expect(html).toMatch(/data-view="multisig-propose"[^>]*disabled/);
+
+    const home = multisigDetailFlow(
+      fixture.status,
+      account,
+      unavailableView,
+      [fixture.intent],
+      true,
+      null,
+      "multisig-home",
+    );
+    expect(home).not.toContain("Current on-chain signer authority is unavailable");
+    expect(home).toContain("Signer authority could not be refreshed");
+    expect(home).toContain('data-view="multisig-propose" type="button" disabled');
+  });
+
+  test("places the external intent handoff inside the empty Intents tab", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(home).toContain("No intents are awaiting verification or signature");
+    expect(home).toContain('class="ghost small tab-more" data-view="multisig-track"');
+    expect(home.match(/data-view="multisig-track"/g)).toHaveLength(1);
+  });
+
+  test("drops completed intents because their transaction lives in Activity", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const accepted = {
+      ...fixture.readyIntent,
+      broadcastTransactionHash: fixture.readyIntent.prepared.transactionHash,
+      state: "accepted" as const,
+    };
+    const detail = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [accepted],
+    );
+    expect(detail).toContain("No intents are awaiting verification or signature");
+    expect(detail).not.toContain("Transaction complete");
+    expect(detail).not.toContain(accepted.summary);
+  });
+
+  test("keeps a rejected fee attempt visible as not submitted", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const stale = { ...fixture.readyIntent, state: "stale" as const };
+    const home = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [stale],
+      false,
+      null,
+      "multisig-home",
+    );
+
+    expect(home).toContain("Needs attention");
+    expect(home).toContain("Not submitted · ready to retry");
+    expect(home).toContain(`data-ms-open-intent="${stale.id}"`);
   });
 
   test("suppresses every signing action when fresh authority differs from the frozen snapshot", async () => {
@@ -152,12 +410,12 @@ describe("Argent multisig list and exact-intent detail", () => {
       fixture.status,
       fixture.status.accounts[0] ?? null,
       {
+        ...fixture.view,
         config: {
           classHash: fixture.record.classHash,
           signerGuids: [...(fixture.view.config?.signerGuids ?? []), "0x999"],
           threshold: fixture.view.config?.threshold ?? 1,
         },
-        record: fixture.record,
       },
       [fixture.readyIntent],
     );
@@ -170,77 +428,67 @@ describe("Argent multisig list and exact-intent detail", () => {
 });
 
 describe("Argent frozen-intent composer", () => {
-  test("registers existing accounts by address and current authority, not constructor salt", async () => {
+  test("registers existing accounts by address and derives authority from chain", async () => {
     const fixture = await makeArgentMultisigFixture();
     const html = multisigWatchFlow(fixture.status, fixture.status.accounts[0] ?? null);
     expect(html).toContain('name="address"');
-    expect(html).toContain("Current signer public keys");
+    expect(html).toContain("If deployed, signer authority syncs from Starknet");
+    expect(html).not.toContain('name="signerPublicKeys"');
+    expect(html).not.toContain('name="signerAccountId"');
+    expect(html).not.toContain('name="threshold"');
     expect(html).not.toContain('name="salt"');
   });
 
-  test("states the exact signed fields and binds the selected account id", async () => {
+  test("shows a matched local signer without enabling an incomplete watched setup", async () => {
     const fixture = await makeArgentMultisigFixture();
-    const html = multisigProposeFlow(fixture.status, fixture.view);
-    expect(html).toContain("freezes one exact Starknet V3 transaction");
-    expect(html).toContain("nonce, sender, fee ceiling, chain and transaction hash");
+    const record = { ...fixture.record };
+    delete record.currentConfig;
+    const html = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      { ...fixture.view, record },
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+    expect(html).toContain("Signer found");
+    expect(html).toContain('data-view="multisig-propose" type="button" disabled');
+  });
+
+  test("starts with a familiar token transfer and keeps raw calls advanced", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const preferences = defaultWalletPreferences();
+    const token = preferences.tokens.find((candidate) => candidate.symbol === "STRK");
+    if (!token) throw new Error("STRK fixture unavailable");
+    const html = multisigProposeFlow(fixture.status, fixture.view, preferences, {
+      balances: { balances: [{ ...token, balance: "42000000000000000000", formatted: "42" }] },
+      changes: {},
+      currency: "usd",
+      nfts: [],
+      prices: { [token.address]: 0.5 },
+    });
+    expect(html).toContain("New transaction");
+    expect(html).toContain("Nothing is signed or submitted");
+    expect(html).toContain("<strong>Treasury</strong>");
     expect(html).toContain(`data-multisig-id="${fixture.record.id}"`);
-    expect(html).toContain("Prepare exact transaction");
+    expect(html).toContain("Review transaction");
+    expect(html).toContain("Choose saved recipient");
+    expect(html).toContain("STRK");
+    expect(html).toContain("token-logo");
+    expect(html).toContain("Advanced contract call");
+    expect(html).toContain('data-ms-prepare="contract"');
   });
 
   test("does not render a form without freshly verified authority", async () => {
     const fixture = await makeArgentMultisigFixture();
     const html = multisigProposeFlow(fixture.status, {
+      ...fixture.view,
+      authorityStatus: "network-unavailable",
       config: null,
-      record: fixture.record,
+      deployed: null,
     });
-    expect(html).toContain("Current on-chain signer authority is unavailable");
+    expect(html).toContain("Signer authority could not be refreshed");
     expect(html).not.toContain('id="multisig-propose-form"');
-  });
-});
-
-describe("Argent multisig management views", () => {
-  test("renders deployment availability and exact constructor inputs", async () => {
-    const fixture = await makeArgentMultisigFixture();
-    const account = fixture.status.accounts[0] ?? null;
-
-    expect(multisigDeployFlow(fixture.status, null, true)).toContain("No account on");
-    expect(multisigDeployFlow(fixture.status, account, false)).toContain("not declared");
-    expect(multisigDeployFlow(fixture.status, account, null)).toContain(
-      "Checking the pinned class",
-    );
-    expect(multisigDeployFlow(fixture.status, account, "error")).toContain(
-      "Deployment remains disabled",
-    );
-    const ready = multisigDeployFlow(fixture.status, account, true, defaultWalletPreferences());
-    expect(ready).toContain('id="multisig-deploy-form"');
-    expect(ready).toContain(`value="${account?.publicKeyX}"`);
-    expect(ready).toContain("Review deployment");
-  });
-
-  test("renders setup, live authority, receive, import, and account-picker states", async () => {
-    const fixture = await makeArgentMultisigFixture();
-    const account = fixture.status.accounts[0] ?? null;
-
-    expect(multisigAddFlow(fixture.status, account)).toContain("Create a new multisig");
-    expect(multisigAddFlow(fixture.status, null)).toContain("No account on");
-    expect(multisigSignersFlow(fixture.status, account, null)).toContain("no longer watched");
-    expect(multisigSignersFlow(fixture.status, account, fixture.view)).toContain(
-      fixture.view.config?.signerGuids[0] ?? "missing",
-    );
-    expect(
-      multisigSignersFlow(fixture.status, account, { ...fixture.view, config: null }),
-    ).toContain("Signing is disabled");
-    expect(multisigReceiveFlow(fixture.status, null)).toContain("no longer watched");
-    expect(multisigReceiveFlow(fixture.status, fixture.view)).toContain(fixture.record.address);
-    expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched Argent multisig");
-    expect(multisigTrackFlow(fixture.status, fixture.view)).toContain('id="multisig-track-form"');
-
-    const options = multisigAccountOptions(
-      [fixture.view, { ...fixture.view, config: null }],
-      fixture.record.id,
-    );
-    expect(options).toContain('aria-pressed="true"');
-    expect(options).toContain("1 of 1");
-    expect(options).toContain("authority unavailable");
   });
 });

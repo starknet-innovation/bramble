@@ -82,6 +82,27 @@ export const portfolioScenario: WalletScenario = {
     {
       content: () =>
         walletDashboard({
+          balanceState: {
+            asOf: 1_787_121_000_000,
+            balances: journeyBalances,
+            stale: true,
+          },
+          preferences: journeyPreferences,
+          priceAsOf: 1_787_120_700_000,
+          priceStale: true,
+          prices: journeyPrices,
+          privacy: { error: null, loading: true, value: null },
+        }),
+      id: "saved-data",
+      label: "Saved data during outage",
+      narrative:
+        "Last-known balances remain usable while the orange network indicator reveals capture times on hover or focus.",
+      prepare: bindFixtureHome,
+      state: { balances: "saved", pricing: "saved", recovery: "automatic" },
+    },
+    {
+      content: () =>
+        walletDashboard({
           balanceState: { balances: journeyBalances },
           changes: journeyChanges,
           preferences: journeyPreferences,
@@ -175,6 +196,21 @@ export const portfolioScenario: WalletScenario = {
       content: () =>
         walletDashboard({
           balanceState: { balances: journeyBalances },
+          deployment: false,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+          view: "deploy-account",
+        }),
+      id: "deploy-account",
+      label: "Deploy account review",
+      narrative:
+        "Single-signer deployment uses a dedicated transaction review and receipt rather than expanding Home.",
+      state: { accountDeployment: "required", task: "review deployment" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
           preferences: journeyPreferences,
           priceStale: true,
           prices: {},
@@ -221,7 +257,7 @@ export const portfolioScenario: WalletScenario = {
   id: "portfolio",
   surface: "sidepanel",
   title: "Home and portfolio",
-  views: ["home"],
+  views: ["home", "deploy-account"],
 };
 
 export const assetsScenario: WalletScenario = {

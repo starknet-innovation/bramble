@@ -1,5 +1,9 @@
 import { ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import {
+  type AccountContractType,
+  isAccountContractType,
+  type LedgerAccountRef,
+} from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import {
   addAccountChooser,
@@ -15,7 +19,12 @@ import {
   onboarding,
   onboardingComplete,
 } from "@mc-wallet/wallet-ui/lab";
-import { invokeApproval, ledgerAccount, softwareAccount } from "../fixtures/fixtures";
+import {
+  argentSoftwareAccount,
+  invokeApproval,
+  ledgerAccount,
+  softwareAccount,
+} from "../fixtures/fixtures";
 import { emptyWalletStatus, lockedStatus } from "../fixtures/journey-fixtures";
 import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, WalletScenario } from "../runtime/types";
@@ -36,7 +45,16 @@ const onboardingWallet = (context: FrameContext) =>
         return { ok: true, valid: true };
       }
       if (type === "wallet.previewAccount" || type === "wallet.createAccount") {
-        return { account: softwareAccount, ok: true };
+        const requested =
+          typeof message === "object" &&
+          message !== null &&
+          isAccountContractType(Reflect.get(message, "accountContractType"))
+            ? Reflect.get(message, "accountContractType")
+            : null;
+        return {
+          account: requested === "argent" ? argentSoftwareAccount : softwareAccount,
+          ok: true,
+        };
       }
       if (type === "wallet.status") {
         return emptyWalletStatus;
@@ -81,12 +99,24 @@ const preparePassword = async (context: FrameContext): Promise<void> => {
   await nextTurn();
 };
 
-const prepareAccountSelection =
-  (selected: boolean) =>
+const selectSoftwareContract = (context: FrameContext, contract: AccountContractType): void => {
+  press(context, `[data-account-contract="${contract}"]`);
+};
+
+const prepareSoftwareContract =
+  (contract: AccountContractType) =>
   async (context: FrameContext): Promise<void> => {
     await preparePassword(context);
     updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
     updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
+    press(context, "#choose-account-contract-button");
+    selectSoftwareContract(context, contract);
+  };
+
+const prepareAccountSelection =
+  (contract: AccountContractType, selected: boolean) =>
+  async (context: FrameContext): Promise<void> => {
+    await prepareSoftwareContract(contract)(context);
     press(context, "#review-account-button");
     await nextTurn();
     if (!selected) {
@@ -114,9 +144,18 @@ const prepareGenerated =
     updateForm(context, 'input[name="verify-2"]', "alert");
   };
 
-const prepareLedger = (context: FrameContext): void => {
+const prepareLedgerContract = (
+  context: FrameContext,
+  contract: AccountContractType = "argent",
+): void => {
   prepareMethod(context);
   press(context, "#ledger-method-button");
+  press(context, `[data-ledger-account-contract="${contract}"]`);
+};
+
+const prepareLedger = (context: FrameContext): void => {
+  prepareLedgerContract(context);
+  press(context, "#ledger-contract-continue");
 };
 
 const prepareUnlockFailure = async (context: FrameContext): Promise<void> => {
@@ -167,19 +206,54 @@ export const onboardingScenario: WalletScenario = {
     },
     {
       content: () => onboarding(emptyWalletStatus),
-      id: "accounts",
-      label: "Choose accounts",
+      id: "account-contract-openzeppelin",
+      label: "Choose OpenZeppelin account",
       narrative:
-        "The exact public account is derived without writing a vault and awaits selection.",
-      prepare: prepareAccountSelection(false),
-      state: { persisted: false, selected: 0, visibleAccounts: 1 },
+        "OpenZeppelin is the recommended default while the recovery and signing model stays unchanged.",
+      prepare: prepareSoftwareContract("openzeppelin"),
+      state: { accountContract: "openzeppelin", recommended: true },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "account-contract-argent",
+      label: "Choose Argent account",
+      narrative: "Argent remains an equally supported account-contract choice before derivation.",
+      prepare: prepareSoftwareContract("argent"),
+      state: { accountContract: "argent", recommended: false },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "accounts",
+      label: "Review OpenZeppelin account",
+      narrative:
+        "The recommended OpenZeppelin public account is derived without writing a vault and awaits selection.",
+      prepare: prepareAccountSelection("openzeppelin", false),
+      state: {
+        accountContract: "openzeppelin",
+        persisted: false,
+        selected: 0,
+        visibleAccounts: 1,
+      },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "accounts-argent",
+      label: "Review Argent account",
+      narrative: "The Argent account derives a distinct public address before persistence.",
+      prepare: prepareAccountSelection("argent", false),
+      state: {
+        accountContract: "argent",
+        persisted: false,
+        selected: 0,
+        visibleAccounts: 1,
+      },
     },
     {
       content: () => onboarding(emptyWalletStatus),
       id: "account-selected",
       label: "Account selected",
       narrative: "Selection and real-funds acknowledgement visibly activate the final action.",
-      prepare: prepareAccountSelection(true),
+      prepare: prepareAccountSelection("openzeppelin", true),
       state: { mainnetAcknowledged: true, selected: 1 },
     },
     {
@@ -198,6 +272,22 @@ export const onboardingScenario: WalletScenario = {
         "Requested fixture words prove the offline backup before password setup can continue.",
       prepare: prepareGenerated(true, true),
       state: { phrase: "visible fixture", verification: "passed" },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "ledger-contract-openzeppelin",
+      label: "Choose OpenZeppelin Ledger account",
+      narrative: "The recommended account contract is chosen separately from Ledger key custody.",
+      prepare: (context) => prepareLedgerContract(context, "openzeppelin"),
+      state: { accountContract: "openzeppelin", hardware: "Ledger" },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "ledger-contract-argent",
+      label: "Choose Argent Ledger account",
+      narrative: "Argent remains available without changing the Ledger key boundary.",
+      prepare: (context) => prepareLedgerContract(context, "argent"),
+      state: { accountContract: "argent", hardware: "Ledger" },
     },
     {
       content: () => onboarding(emptyWalletStatus),

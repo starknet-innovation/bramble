@@ -333,6 +333,31 @@ export const SEND_STYLES = `
   .ledger-task-list li[data-state="active"] .ledger-task-mark { background: var(--mc-accent); color: var(--mc-bg); }
   .ledger-task-list li[data-state="done"] { color: var(--mc-text); }
   .ledger-task-list li[data-state="done"] .ledger-task-mark { background: var(--mc-positive-soft); color: var(--mc-positive); }
+  .ledger-hash-check {
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.md};
+    display: grid;
+    gap: ${SPACE.xs};
+    padding: ${SPACE.sm} ${SPACE.md};
+    text-align: left;
+  }
+  .ledger-hash-head { align-items: center; display: flex; justify-content: space-between; gap: ${SPACE.xs}; }
+  .ledger-hash-head .context-label { margin: 0; }
+  .ledger-hash-value { margin: 0; }
+  .ledger-hash-value code {
+    color: var(--mc-text);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: ${TYPE.caption.size};
+    gap: 0 8px;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  .ledger-hash-help { color: var(--mc-muted); font-size: ${TYPE.micro.size}; margin: 0; }
+  /* The comparison is live only while the device is showing its own hash, so
+     the panel lifts to the accent fill for that phase — a fill swap, never a
+     ring: surfaces in this language are de-bordered. */
+  .ledger-progress-card[data-phase="confirming"] .ledger-hash-check { background: var(--mc-accent-soft); }
   .ledger-phase-body {
     display: grid;
     font-size: ${TYPE.body.size};

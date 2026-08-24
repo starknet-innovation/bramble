@@ -6,7 +6,8 @@
   "exports": {
     "./chain": "./src/chain.ts",
     "./deploy": "./src/deploy.ts",
-    "./repository": "./src/repository.ts"
+    "./repository": "./src/repository.ts",
+    "./signer-account": "./src/signer-account.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

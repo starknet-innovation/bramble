@@ -182,7 +182,7 @@ describe("repository sources", () => {
 
   test("the checked-in version matches the v0.9 release line", async () => {
     const packageJson = await readJson("package.json");
-    expect(packageJson["version"]).toBe("0.9.2");
+    expect(packageJson["version"]).toBe("0.9.3");
   });
 });
 
@@ -210,8 +210,8 @@ describe("main (CLI over the real repository sources)", () => {
     expect(code).toBe(0);
     const output = await readFile(outPath, "utf8");
     expect(output).toContain("release=true");
-    expect(output).toContain("version=0.9.2");
-    expect(output).toContain("tag=v0.9.2");
+    expect(output).toContain("version=0.9.3");
+    expect(output).toContain("tag=v0.9.3");
     expect(output).toContain("kind=hotfix");
   });
 

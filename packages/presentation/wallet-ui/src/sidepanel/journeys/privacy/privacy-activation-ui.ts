@@ -42,13 +42,14 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
   button.addEventListener("click", () => {
     const scope = deps.deploymentScope();
     if (!scope) {
-      showToast("No active account is available to deploy", "error");
+      showToast("No active account is available to deploy", "error", button);
       return;
     }
     buttonBusy(button, true);
     showToast(
       DEPLOYMENT_FEES.has(button) ? "Deploying this account…" : "Estimating deployment fee…",
       "success",
+      button,
     );
     const reviewedFee = DEPLOYMENT_FEES.get(button);
     if (reviewedFee) DEPLOYMENT_FEES.delete(button);
@@ -58,7 +59,7 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
           DEPLOYMENT_FEES.set(button, response);
           const fee = formatFeeEstimate(response);
           button.lastChild?.replaceWith(`Confirm deploy · ${fee}`);
-          showToast(`Maximum deployment fee: ${fee}`, "success");
+          showToast(`Maximum deployment fee: ${fee}`, "success", button);
           buttonBusy(button, false);
           return;
         }
@@ -73,6 +74,7 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
           showToast(
             `Deployment ${response.slice(0, 10)}… is still settling. Register once it lands.`,
             "error",
+            button,
           );
           return;
         }
@@ -80,7 +82,7 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
       },
       (error: unknown) => {
         DEPLOYMENT_FEES.delete(button);
-        showToast(errorMessage(error, "Deployment failed"), "error");
+        showToast(errorMessage(error, "Deployment failed"), "error", button);
         buttonBusy(button, false);
       },
     );

@@ -307,4 +307,35 @@ describe("group control focus restoration", () => {
     expect(after?.selectionStart).toBe(11);
     expect(document.documentElement.scrollTop).toBe(184);
   });
+
+  test("keeps a non-secret transaction draft but never carries a passphrase across repaint", () => {
+    const app = paintApp(
+      '<input name="amount" value="0"><input name="vaultPassphrase" type="password" value="">',
+    );
+    const amount = app.querySelector<HTMLInputElement>('[name="amount"]');
+    if (!amount) throw new Error("amount field missing");
+    amount.value = "1.250";
+    amount.focus();
+    amount.setSelectionRange(5, 5);
+    const amountFocus = captureRepaintFocus();
+
+    paintApp(
+      '<input name="amount" value="0"><input name="vaultPassphrase" type="password" value="">',
+    );
+    restoreRepaintFocus(app, amountFocus);
+    const restoredAmount = app.querySelector<HTMLInputElement>('[name="amount"]');
+    expect(restoredAmount?.value).toBe("1.250");
+    expect(restoredAmount?.selectionStart).toBe(5);
+
+    const passphrase = app.querySelector<HTMLInputElement>('[name="vaultPassphrase"]');
+    if (!passphrase) throw new Error("passphrase field missing");
+    passphrase.value = "never carry this";
+    passphrase.focus();
+    const secretFocus = captureRepaintFocus();
+    paintApp(
+      '<input name="amount" value="0"><input name="vaultPassphrase" type="password" value="">',
+    );
+    restoreRepaintFocus(app, secretFocus);
+    expect(app.querySelector<HTMLInputElement>('[name="vaultPassphrase"]')?.value).toBe("");
+  });
 });

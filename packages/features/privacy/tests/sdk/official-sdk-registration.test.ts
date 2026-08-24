@@ -40,6 +40,38 @@ describe("official STRK20 SDK registration discovery", () => {
     await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("registered");
   });
 
+  test("invokes SDK discovery on its receiver rather than detached", async () => {
+    // The real SDK is a class:
+    //   discoverRequirement(t,n){ return this.discoveryProvider.discoverRequirement(this.user, …) }
+    // A plain-object fake whose method closes over its answer cannot notice a
+    // detached call, which is exactly how a receiver-less invocation shipped: it
+    // threw "Cannot read properties of undefined (reading 'discoveryProvider')"
+    // before any request, and that TypeError matches no error marker, so the
+    // only thing the user ever saw was the bare "strk20 services unavailable".
+    class Transfers {
+      public readonly discoveryProvider = { requirement: 3 };
+      public build() {
+        return builder(executeResult());
+      }
+      public async discoverNotes() {
+        return { notes: new Map() };
+      }
+      public async discoverRequirement(recipient: string, selectedToken: string) {
+        expect(recipient).toBe(account.address);
+        expect(selectedToken).toBe(token);
+        // Fails with a TypeError when called without its receiver.
+        return this.discoveryProvider.requirement;
+      }
+      public async executeWithInvocation() {
+        return executeResult();
+      }
+    }
+    const sdk = runtime(() => new Transfers());
+    const service = createOfficialStrk20Service({ providerFor, sdk });
+
+    await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("registered");
+  });
+
   test("reads a recipient from the pool, never from the setup requirement", async () => {
     const subject = "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
     const sdk = runtime(() => ({

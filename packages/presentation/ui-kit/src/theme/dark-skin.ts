@@ -2,7 +2,7 @@
  * Default wallet skin — the "Clean Mono" midnight theme. Every structural and
  * interactive role is achromatic: hierarchy comes from contrast, weight,
  * space, and motion rather than a brand hue. Green is reserved for
- * positive/success semantics and red for danger/failure. Quiet-luxury
+ * positive/success semantics, orange for degraded data, and red for danger/failure. Quiet-luxury
  * minimalism — flat and legible, not glass.
  *
  * Surfaces step in three quiet tiers over the background: `--mc-sunken` for
@@ -37,5 +37,6 @@ export const darkSkin: Skin = {
     "--mc-positive": "#4ade80",
     "--mc-sunken": "#101010",
     "--mc-text": "#f5f5f5",
+    "--mc-warning": "#fb923c",
   },
 };

@@ -10,7 +10,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
@@ -47,10 +47,11 @@ const mountOnboarding = (status: WalletStatus) => {
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
-  const captured: Array<readonly [string, string]> = [];
+  const captured: Array<readonly [string, string, AccountContractType]> = [];
   bindLedgerFirstRun({
     app,
-    startLedgerSetup: (networkId, vaultPassphrase) => captured.push([networkId, vaultPassphrase]),
+    startLedgerSetup: (networkId, vaultPassphrase, accountContractType) =>
+      captured.push([networkId, vaultPassphrase, accountContractType]),
   });
   return { app, captured };
 };
@@ -105,7 +106,7 @@ describe("bindLedgerFirstRun", () => {
     expect(button?.disabled).toBe(false);
 
     click(app, "#ledger-setup-button");
-    expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
+    expect(captured).toEqual([["SN_MAIN", PASSPHRASE, "openzeppelin"]]);
   });
 
   test("shows a passphrase hint for a too-short passphrase", () => {
@@ -127,7 +128,17 @@ describe("bindLedgerFirstRun", () => {
     check(app, 'input[name="ledgerMainnetAck"]');
     click(app, "#ledger-setup-button");
     expect(app.querySelector('select[name="ledgerNetworkId"]')).toBeNull();
-    expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
+    expect(captured).toEqual([["SN_MAIN", PASSPHRASE, "openzeppelin"]]);
+  });
+
+  test("forwards the explicit Argent choice", () => {
+    const { app, captured } = mountOnboarding(mainnetStatus);
+    setValue(app, 'input[name="ledgerAccountContractType"]', "argent");
+    setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
+    check(app, 'input[name="ledgerMainnetAck"]');
+    click(app, "#ledger-setup-button");
+    expect(captured).toEqual([["SN_MAIN", PASSPHRASE, "argent"]]);
   });
 
   test("blocks setup and toasts when the Mainnet ack is missing at click time", () => {

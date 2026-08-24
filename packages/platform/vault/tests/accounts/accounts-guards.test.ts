@@ -43,6 +43,20 @@ describe("getOzAccountClassHash via deriveAccountRef", () => {
       deriveAccountRef(kms, { accountContractType: "openzeppelin", mnemonic }),
     ).rejects.toThrow("Krusty KMS class hashes are missing SN_MAIN");
   });
+
+  // Devnet resolves to the class its node predeclares and never consults
+  // Krusty's map, so an empty map must still yield it.
+  test("resolves devnet to the class the devnet node predeclares", async () => {
+    const kms = withClassHashes(async () => JSON.stringify({ oz: { "3.0.0": {} } }));
+    const account = await deriveAccountRef(kms, {
+      accountContractType: "openzeppelin",
+      mnemonic,
+      networkId: "SN_DEVNET",
+    });
+    expect(account.classHash).toBe(
+      "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564",
+    );
+  });
 });
 
 describe("deriveImportedAccount", () => {

@@ -5,22 +5,26 @@ import {
   type ArgentMultisigConfig,
   type ArgentMultisigConfigChange,
   type ArgentMultisigPublicConfig,
+  type ArgentUnsupportedSigner,
   nextArgentMultisigPublicConfig,
   parseArgentMultisigConfigChange,
 } from "@mc-wallet/multisig/chain";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
+  MultisigStore,
 } from "@mc-wallet/multisig/repository";
+import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { MultisigOpsDeps } from "./multisig-deps";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { type StarknetNetworkId, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 
 /**
  * Compares already-canonical ordered signer GUIDs. Untrusted aliases fail by
  * inequality; this pure comparison never throws or normalizes authority.
  */
-export const sameArgentSignerGuids = (left: readonly string[], right: readonly string[]): boolean =>
+const sameArgentSignerGuids = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length && left.every((value, index) => value === right[index]);
 
 /**
@@ -30,9 +34,139 @@ export const storedArgentPublicConfig = (
   record: ArgentMultisigRecord,
 ): ArgentMultisigPublicConfig | null => record.currentConfig ?? record.deployment ?? null;
 
-const matchesChain = (current: ArgentMultisigPublicConfig, chain: ArgentMultisigConfig): boolean =>
+/**
+ * Checks whether retained public signer keys match one fresh on-chain GUID view.
+ */
+export const matchesArgentPublicConfig = (
+  current: ArgentMultisigPublicConfig,
+  chain: ArgentMultisigConfig,
+): boolean =>
   current.threshold === chain.threshold &&
   sameArgentSignerGuids(current.signerPublicKeys.map(argentSignerGuid), chain.signerGuids);
+
+/**
+ * Marks open intents stale when their frozen authority no longer matches.
+ */
+export const markChangedIntentsStale = async (
+  store: MultisigStore,
+  accountId: string,
+  config: ArgentMultisigConfig,
+): Promise<void> => {
+  for (const intent of await store.listIntents()) {
+    if (
+      intent.accountId === accountId &&
+      (intent.state === "collecting" || intent.state === "ready") &&
+      (intent.configSnapshot.threshold !== config.threshold ||
+        !sameArgentSignerGuids(intent.configSnapshot.signerGuids, config.signerGuids))
+    ) {
+      await store.upsertIntent({ ...intent, state: "stale" });
+    }
+  }
+};
+
+type SignerDiscoveryContext = {
+  readonly accounts: readonly AccountRef[];
+  readonly networkId: StarknetNetworkId;
+};
+
+/**
+ * Resolves current signer keys from accepted linked events, local accounts,
+ * and address-book contacts, preserving fresh on-chain GUID order.
+ */
+export const discoverArgentSigners = async (
+  deps: MultisigOpsDeps,
+  active: SignerDiscoveryContext,
+  preferences: WalletPreferences,
+  address: string,
+  config: ArgentMultisigConfig,
+  rpcUrls: readonly string[],
+): Promise<{
+  readonly signerPublicKeys: readonly string[];
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
+}> => {
+  let linked: readonly string[] = [];
+  let unsupportedSigners: readonly ArgentUnsupportedSigner[] = [];
+  try {
+    const discovered = (await multisigRpc(deps).getSignerPublicKeys?.({
+      address,
+      rpcUrls,
+      signerGuids: config.signerGuids,
+    })) ?? { signerPublicKeys: [], unsupportedSigners: [] };
+    linked = discovered.signerPublicKeys;
+    unsupportedSigners = discovered.unsupportedSigners;
+  } catch {
+    // A watched address remains useful when historical RPC reads are unavailable.
+  }
+  const candidates = [
+    ...linked,
+    ...active.accounts
+      .filter((account) => account.networkId === active.networkId)
+      .map((account) => account.publicKeyX),
+    ...preferences.addressBook
+      .filter((contact) => contact.networkId === active.networkId)
+      .flatMap((contact) => (contact.publicKeyX === undefined ? [] : [contact.publicKeyX])),
+  ];
+  return {
+    signerPublicKeys: config.signerGuids
+      .filter((guid) => !unsupportedSigners.some((unsupported) => sameFelt(unsupported.guid, guid)))
+      .map((guid) => candidates.find((publicKey) => sameFelt(argentSignerGuid(publicKey), guid)))
+      .filter((publicKey): publicKey is string => publicKey !== undefined),
+    unsupportedSigners,
+  };
+};
+
+/**
+ * Persists a complete discovered config for an address-only watch.
+ */
+export const enrichArgentAddressOnlyWatch = async (
+  deps: MultisigOpsDeps,
+  active: SignerDiscoveryContext,
+  preferences: WalletPreferences,
+  record: ArgentMultisigRecord,
+  config: ArgentMultisigConfig,
+  rpcUrls: readonly string[],
+): Promise<{
+  readonly record: ArgentMultisigRecord;
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
+}> => {
+  const stored = storedArgentPublicConfig(record);
+  if (stored && matchesArgentPublicConfig(stored, config)) {
+    if (record.currentConfig) return { record, unsupportedSigners: [] };
+    const observed = {
+      ...record,
+      currentConfig: {
+        signerPublicKeys: stored.signerPublicKeys,
+        threshold: stored.threshold,
+      },
+    };
+    return {
+      record: (await deps.multisigStore.upsertMultisig(observed)) === "stored" ? observed : record,
+      unsupportedSigners: [],
+    };
+  }
+  const discovered = await discoverArgentSigners(
+    deps,
+    active,
+    preferences,
+    record.address,
+    config,
+    rpcUrls,
+  );
+  if (stored) {
+    return { record, unsupportedSigners: discovered.unsupportedSigners };
+  }
+  if (discovered.signerPublicKeys.length !== config.signerGuids.length) {
+    return { record, unsupportedSigners: discovered.unsupportedSigners };
+  }
+  const enriched = {
+    ...record,
+    currentConfig: { signerPublicKeys: discovered.signerPublicKeys, threshold: config.threshold },
+  };
+  return {
+    record: (await deps.multisigStore.upsertMultisig(enriched)) === "stored" ? enriched : record,
+    unsupportedSigners: discovered.unsupportedSigners,
+  };
+};
 
 type ConfigCandidate = {
   readonly change: ArgentMultisigConfigChange;
@@ -54,7 +188,7 @@ const matchingCandidateSuffix = (
       const applied = candidates.slice(start);
       for (const candidate of applied)
         next = nextArgentMultisigPublicConfig(next, candidate.change);
-      if (matchesChain(next, chain)) return { applied, next };
+      if (matchesArgentPublicConfig(next, chain)) return { applied, next };
     } catch {
       // An already-applied prefix may no longer be valid against `current`.
     }
@@ -72,7 +206,7 @@ export const reconcileArgentCurrentConfig = async (
   chain: ArgentMultisigConfig,
 ): Promise<ArgentMultisigRecord> => {
   const current = storedArgentPublicConfig(record);
-  if (!current || matchesChain(current, chain)) return record;
+  if (!current || matchesArgentPublicConfig(current, chain)) return record;
   const accepted = new Set(
     (await deps.activity.list())
       .filter(

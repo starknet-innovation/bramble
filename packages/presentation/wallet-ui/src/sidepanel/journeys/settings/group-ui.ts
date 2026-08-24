@@ -59,7 +59,7 @@ const bindCreateForms = (root: Element, deps: GroupControlDeps): void => {
       const glyph = selectedIcon(form);
       const button = form.querySelector<HTMLButtonElement>("[data-create-group]");
       if (!name || !glyph) {
-        showToast("Enter a group name", "error");
+        showToast("Enter a group name", "error", form);
         return;
       }
       buttonBusy(button, true);
@@ -68,11 +68,11 @@ const bindCreateForms = (root: Element, deps: GroupControlDeps): void => {
       void deps.wallet.createGroup(name, glyph).then(
         async (id) => {
           deps.setExpandedGroup(id);
-          showToast("Group created", "success");
+          showToast("Group created", "success", form);
           await deps.rerender();
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Group create failed"), "error");
+          showToast(errorMessage(error, "Group create failed"), "error", form);
           buttonBusy(button, false);
         },
       );
@@ -89,7 +89,7 @@ const bindEditForms = (root: Element, deps: GroupControlDeps): void => {
       const glyph = selectedIcon(form);
       const button = form.querySelector<HTMLButtonElement>("[data-save-group]");
       if (!id || !name || !glyph) {
-        showToast("Enter a group name", "error");
+        showToast("Enter a group name", "error", form);
         return;
       }
       buttonBusy(button, true);
@@ -98,11 +98,11 @@ const bindEditForms = (root: Element, deps: GroupControlDeps): void => {
         .then(() => deps.wallet.setGroupIcon(id, glyph))
         .then(
           async () => {
-            showToast("Group updated", "success");
+            showToast("Group updated", "success", form);
             await deps.rerender();
           },
           (error: unknown) => {
-            showToast(errorMessage(error, "Group update failed"), "error");
+            showToast(errorMessage(error, "Group update failed"), "error", form);
             buttonBusy(button, false);
           },
         );
@@ -129,11 +129,11 @@ const bindRemoveButtons = (root: Element, deps: GroupControlDeps): void => {
       buttonBusy(el, true);
       void deps.wallet.removeGroup(id).then(
         async () => {
-          showToast("Group deleted", "success");
+          showToast("Group deleted", "success", el);
           await deps.rerender();
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Group delete failed"), "error");
+          showToast(errorMessage(error, "Group delete failed"), "error", el);
           buttonBusy(el, false);
         },
       );
@@ -153,11 +153,11 @@ const bindAssignToggles = (root: Element, deps: GroupControlDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.setAccountInGroup(accountId, groupId, !member).then(
         async () => {
-          showToast(member ? "Removed from group" : "Added to group", "success");
+          showToast(member ? "Removed from group" : "Added to group", "success", button);
           await deps.rerender();
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Group update failed"), "error");
+          showToast(errorMessage(error, "Group update failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -193,11 +193,11 @@ const bindGroupPickers = (root: Element, deps: GroupControlDeps): void => {
           : deps.wallet.setAccountInGroup(accountId, pick, true);
       void op.then(
         async () => {
-          showToast(pick === "none" ? "Removed from folder" : "Moved to folder", "success");
+          showToast(pick === "none" ? "Removed from folder" : "Moved to folder", "success", button);
           await deps.rerender();
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Group update failed"), "error");
+          showToast(errorMessage(error, "Group update failed"), "error", button);
           buttonBusy(button, false);
         },
       );

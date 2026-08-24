@@ -88,12 +88,15 @@ export const makeArgentMultisigFixture = async (
     summary: "Send funds",
   };
   const view: ArgentMultisigView = {
+    authorityStatus: "available",
     config: {
       classHash: ARGENT_MULTISIG_CONTRACT.classHash,
       signerGuids,
       threshold: 1,
     },
+    deployed: true,
     record,
+    unsupportedSigners: [],
   };
   const signature = ec.starkCurve.sign(prepared.transactionHash, PRIVATE_KEY);
   const readyIntent: ArgentMultisigSigningIntent = {
@@ -111,6 +114,7 @@ export const makeArgentMultisigFixture = async (
     deploymentReview: {
       address: record.address,
       fee: { overallFee: "44", unit: "FRI" },
+      feeAffordability: "ok",
       name: "Treasury",
       networkId: record.networkId,
       salt: "0x0",

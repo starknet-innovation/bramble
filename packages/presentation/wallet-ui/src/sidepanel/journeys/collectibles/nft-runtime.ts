@@ -62,15 +62,23 @@ export const createNftRuntimeClient = (sendMessage: (message: unknown) => Promis
       includeWatched = true,
       scopeKey = "current",
       multisigId?: string,
+      cached = false,
     ): Promise<readonly DiscoveredNft[]> {
-      return loadNfts(`discover:${scopeKey}:${includeWatched}:${multisigId ?? "account"}`, {
-        ...(includeWatched ? {} : { includeWatched: false }),
-        ...(multisigId ? { multisigId } : {}),
-        type: "wallet.discoverNfts",
-      });
+      return loadNfts(
+        `discover:${scopeKey}:${includeWatched}:${multisigId ?? "account"}:${cached}`,
+        {
+          ...(includeWatched ? {} : { includeWatched: false }),
+          ...(multisigId ? { multisigId } : {}),
+          ...(cached ? { cached: true } : {}),
+          type: "wallet.discoverNfts",
+        },
+      );
     },
-    async loadWatchedNfts(scopeKey = "current"): Promise<readonly DiscoveredNft[]> {
-      return loadNfts(`watched:${scopeKey}`, { type: "wallet.loadWatchedNfts" });
+    async loadWatchedNfts(scopeKey = "current", cached = false): Promise<readonly DiscoveredNft[]> {
+      return loadNfts(`watched:${scopeKey}:${cached}`, {
+        ...(cached ? { cached: true } : {}),
+        type: "wallet.loadWatchedNfts",
+      });
     },
     async removeNft(id: string): Promise<void> {
       const response = await sendMessage({ id, type: "wallet.removeNft" });
