@@ -143,6 +143,7 @@ if (
   !hasStringList(biomeFiles?.["includes"], [
     "**",
     "!.claude",
+    "!.dev-profile",
     "!.impeccable",
     "!.playwright-cli",
     "!apps/terminal",

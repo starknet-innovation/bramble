@@ -64,6 +64,11 @@ export const PINNED_RUNTIME_FILES = [
 
 export const EXPECTED_GITIGNORE_ENTRIES = [
   ".claude/*",
+  ".dev-profile/",
+  // Bun auto-loads a bare `.env`, which makes it the natural place a developer
+  // puts MC_DEV_MNEMONIC. Keeping it ignored is what stops a recovery phrase
+  // reaching a commit.
+  ".env",
   "artifacts/",
   "dist/",
   "node_modules/",
@@ -123,6 +128,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:workspaces":
     "bun run --filter './packages/foundation/**' check && bun run --filter './packages/platform/**' check && bun run --filter './packages/features/**' check && bun run --filter './packages/presentation/**' check && bun run --filter './packages/testing/**' check && bun run --filter @mc-wallet/extension check && bun run --filter @mc-wallet/terminal check && bun run --filter @mc-wallet/ui-lab check:static",
   changelog: "bun run scripts/generate-changelog.ts",
+  "dev:session": "bun run tests/e2e/dev-session.ts",
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
   "release:publish": "bun run scripts/publish-chrome-web-store.ts",

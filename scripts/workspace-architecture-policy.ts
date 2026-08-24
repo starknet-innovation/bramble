@@ -53,8 +53,11 @@ export const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
  * writes; it is git-ignored, is already skipped by the file-standards and lint
  * gates, and its captured page scripts are not workspace source. Scanning it
  * made this gate fail on any machine that had ever driven the browser locally.
+ * `.dev-profile` is the same story for `bun run dev:session`: a git-ignored
+ * Chrome profile full of caches and singleton symlinks, never workspace source.
  */
 export const EXCLUDED_DIRECTORIES = new Set([
+  ".dev-profile",
   ".git",
   ".playwright-cli",
   "artifacts",

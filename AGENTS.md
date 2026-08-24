@@ -16,7 +16,13 @@ bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI 
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
 bun run test:e2e             # Playwright extension E2E (requires dist/; egress blocked)
 bun run package:extension    # writes artifacts/*.zip + .sha256
+bun run dev:session          # headed browser on a kept profile, onboards/unlocks itself
 ```
+
+- `bun run dev:session` is development-only: it onboards from the repository's published test phrase,
+  so its accounts are public. It switches to Sepolia after onboarding and keeps its wallet in a
+  git-ignored `.dev-profile/`. Read the header of `tests/e2e/dev-session.ts` before overriding
+  `MC_DEV_MNEMONIC`.
 
 - The E2E suite blackholes DNS, so no test can reach a live host; `test:e2e:mainnet` opts back in
   via `MC_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
