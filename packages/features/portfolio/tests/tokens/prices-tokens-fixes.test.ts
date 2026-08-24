@@ -1,7 +1,7 @@
 /**
  * Regression checks for the price cache TTL and chart cache bounds:
  * an unpriced token must not defeat the TTL (A-M5), and the chart cache must
- * stay bounded and never persist an empty series (A-L10).
+ * stay bounded and only retain a short retry marker for an empty series (A-L10).
  */
 import { describe, expect, test } from "bun:test";
 import {
@@ -75,7 +75,7 @@ describe("createPriceService.getPrices unpriced coverage", () => {
 });
 
 describe("createPriceService.getTokenChart cache bounds", () => {
-  test("does not persist an empty chart and retries on the next call", async () => {
+  test("backs off an empty chart briefly and retries after the marker expires", async () => {
     const { calls, clock, service } = makeHarness(() => jsonResponse({ prices: [] }));
 
     const chart = await service.getTokenChart({
@@ -87,7 +87,9 @@ describe("createPriceService.getTokenChart cache bounds", () => {
 
     clock.value += 1000;
     await service.getTokenChart({ address: USDC, currency: "usd", networkId: "SN_MAIN" });
-    // An empty series was never cached, so the next call must fetch again.
+    expect(calls).toHaveLength(1);
+    clock.value += 60_000;
+    await service.getTokenChart({ address: USDC, currency: "usd", networkId: "SN_MAIN" });
     expect(calls).toHaveLength(2);
   });
 

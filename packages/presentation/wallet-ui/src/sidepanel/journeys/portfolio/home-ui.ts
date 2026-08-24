@@ -74,7 +74,7 @@ const bindDrawerDrag = (root: HTMLElement, isOpen: () => boolean, close: () => v
   };
 
   const settle = (dismiss: boolean): void => {
-    if (prefersReducedMotion()) {
+    if (prefersReducedMotion(drawer)) {
       if (dismiss) {
         close();
       }
@@ -242,11 +242,12 @@ const bindDrawer = (deps: HomeUiDeps): void => {
           showToast(
             keepsSharedAccount ? "Multisig signer switched" : "Account switched",
             "success",
+            button,
           );
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Account switch failed"), "error");
+          showToast(errorMessage(error, "Account switch failed"), "error", button);
           buttonBusy(button, false);
         },
       );

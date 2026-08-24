@@ -51,6 +51,53 @@ describe("Argent multisig intent import", () => {
     ).resolves.toEqual({ error: "invalid Argent multisig intent package" });
   });
 
+  test("imports, signs, and submits an ordinary intent for an address-only watch", async () => {
+    const source = await makeMultisigHarness();
+    const prepared = await source.handler(
+      {
+        calls: [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
+        multisigId: HARNESS_MULTISIG_ID,
+        type: "wallet.prepareArgentMultisigIntent",
+      },
+      harnessExtensionSender,
+    );
+    const target = await makeMultisigHarness({ watchedOnly: true });
+    const imported = await target.handler(
+      {
+        package: (prepared as { readonly intentPackage: unknown }).intentPackage,
+        type: "wallet.importArgentMultisigIntent",
+      },
+      harnessExtensionSender,
+    );
+    expect(imported).toMatchObject({ ok: true });
+    let signed = intentFrom(
+      await target.handler(
+        {
+          intentId: intentFrom(imported).id,
+          signerAccountId: harnessAccountA.id,
+          type: "wallet.signArgentMultisigIntent",
+        },
+        harnessExtensionSender,
+      ),
+    );
+    signed = intentFrom(
+      await target.handler(
+        {
+          intentId: signed.id,
+          signerAccountId: harnessAccountB.id,
+          type: "wallet.signArgentMultisigIntent",
+        },
+        harnessExtensionSender,
+      ),
+    );
+    await expect(
+      target.handler(
+        { intentId: signed.id, type: "wallet.submitArgentMultisigIntent" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
   test("cannot remove an account with a collecting intent", async () => {
     const harness = await makeMultisigHarness();
     await harness.handler(
@@ -119,6 +166,53 @@ describe("Argent multisig intent import", () => {
     expect(intentFrom(imported).broadcastTransactionHash).toBeUndefined();
   });
 
+  test("merges a completed re-import and preserves a failed local submission", async () => {
+    const source = await makeMultisigHarness();
+    const prepared = await source.handler(
+      {
+        calls: [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
+        multisigId: HARNESS_MULTISIG_ID,
+        type: "wallet.prepareArgentMultisigIntent",
+      },
+      harnessExtensionSender,
+    );
+    const target = await makeMultisigHarness();
+    await target.handler(
+      {
+        package: (prepared as { readonly intentPackage: unknown }).intentPackage,
+        type: "wallet.importArgentMultisigIntent",
+      },
+      harnessExtensionSender,
+    );
+    let signed = intentFrom(prepared);
+    for (const account of [harnessAccountA, harnessAccountB]) {
+      signed = intentFrom(
+        await source.handler(
+          {
+            intentId: signed.id,
+            signerAccountId: account.id,
+            type: "wallet.signArgentMultisigIntent",
+          },
+          harnessExtensionSender,
+        ),
+      );
+    }
+    const readyPackage = { intent: signed, kind: "mc-wallet.argent-multisig-intent", version: 1 };
+    const completed = await target.handler(
+      { package: readyPackage, type: "wallet.importArgentMultisigIntent" },
+      harnessExtensionSender,
+    );
+    expect(completed).toMatchObject({ intent: { signatures: [{}, {}], state: "ready" }, ok: true });
+
+    await target.multisigStore.upsertIntent({ ...intentFrom(completed), state: "stale" });
+    await expect(
+      target.handler(
+        { package: readyPackage, type: "wallet.importArgentMultisigIntent" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ intent: { signatures: [{}, {}], state: "stale" }, ok: true });
+  });
+
   test("removes terminal history after a completed local signing claim", async () => {
     const harness = await makeMultisigHarness();
     const prepared = await harness.handler(
@@ -150,6 +244,34 @@ describe("Argent multisig intent import", () => {
       ),
     ).resolves.toEqual({ ok: true });
     expect(await harness.multisigStore.listMultisigs()).toEqual([]);
+  });
+
+  test("deletes one exact saved intent without removing the watched account", async () => {
+    const harness = await makeMultisigHarness();
+    const prepared = await harness.handler(
+      {
+        calls: [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
+        multisigId: HARNESS_MULTISIG_ID,
+        type: "wallet.prepareArgentMultisigIntent",
+      },
+      harnessExtensionSender,
+    );
+    const intentId = intentFrom(prepared).id;
+
+    await expect(
+      harness.handler(
+        { intentId, type: "wallet.removeArgentMultisigIntent" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ ok: true });
+    expect(await harness.multisigStore.getIntent(intentId)).toBeNull();
+    expect(await harness.multisigStore.listMultisigs()).toHaveLength(1);
+    await expect(
+      harness.handler(
+        { intentId, type: "wallet.removeArgentMultisigIntent" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ error: "Argent multisig intent not found" });
   });
 
   test("rejects a valid old-nonce package without re-estimating it", async () => {

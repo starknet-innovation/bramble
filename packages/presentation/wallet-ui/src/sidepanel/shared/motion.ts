@@ -16,12 +16,15 @@
 const MOTION_ID = "mc-motion";
 
 /**
- * Reports whether the user has requested reduced motion. Uses the bare
- * `matchMedia` global (guarded for non-DOM contexts such as tests) so callers
- * can branch before starting any imperative motion.
+ * Reports whether the user has requested reduced motion in the element or
+ * document that owns the interaction. This keeps isolated UI Lab frames true
+ * to their own motion setting instead of reading the outer Storybook host.
  */
-export const prefersReducedMotion = (): boolean =>
-  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+export const prefersReducedMotion = (context: Document | Element | null): boolean => {
+  const doc = context ? ("defaultView" in context ? context : context.ownerDocument) : null;
+  const view = doc?.defaultView;
+  return view?.matchMedia("(prefers-reduced-motion: reduce)").matches ?? false;
+};
 
 /**
  * Options for {@link animate}: standard WAAPI timing plus an optional id used to
@@ -48,7 +51,7 @@ export const animate = (
   keyframes: Keyframe[],
   options: MotionOptions = {},
 ): Animation | null => {
-  if (prefersReducedMotion()) {
+  if (prefersReducedMotion(el)) {
     cutToFinal(el, keyframes);
     return null;
   }
@@ -62,7 +65,10 @@ export const animate = (
     easing: "cubic-bezier(0.23, 1, 0.32, 1)",
     fill: "both",
     ...timing,
-  });
+  }) as Animation | null;
+  if (!anim) {
+    return null;
+  }
   anim.id = id;
   return anim;
 };

@@ -38,6 +38,7 @@ import { readStrk20Action, readStrk20Actions } from "@mc-wallet/wallet-protocol/
  * Shared approval and connected-site wire shapes after runtime validation.
  */
 export type {
+  ApprovalReviewAsset,
   ConnectedSite,
   PendingApproval,
   WatchAssetToken,
@@ -69,6 +70,14 @@ const isWatchAssetToken = (value: unknown): value is WatchAssetToken =>
   value["name"].length > 0 &&
   value["name"].length <= 64 &&
   isStarknetNetworkId(value["networkId"]) &&
+  isTokenSymbol(value["symbol"]);
+
+const isApprovalReviewAsset = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["address", "symbol"]) &&
+  typeof value["address"] === "string" &&
+  isStarkFieldElement(value["address"]) &&
+  typeof value["symbol"] === "string" &&
   isTokenSymbol(value["symbol"]);
 
 const isInsightText = (value: unknown): value is string =>
@@ -167,6 +176,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "kind",
       "origin",
       "relayFeeAction",
+      "reviewAssets",
       "requiresDeployment",
       "summaries",
       "token",
@@ -194,6 +204,10 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       !(Array.isArray(value["insights"]) && value["insights"].every(isInsightText))) ||
     (value["summaries"] !== undefined &&
       !(Array.isArray(value["summaries"]) && value["summaries"].every(isSummaryText))) ||
+    (value["reviewAssets"] !== undefined &&
+      !(
+        Array.isArray(value["reviewAssets"]) && value["reviewAssets"].every(isApprovalReviewAsset)
+      )) ||
     (value["flags"] !== undefined &&
       !(Array.isArray(value["flags"]) && value["flags"].every(isApprovalRiskFlag)))
   ) {

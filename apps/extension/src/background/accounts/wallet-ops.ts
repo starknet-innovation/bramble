@@ -7,32 +7,22 @@ import {
   type FeeEstimate,
   parseTokenAmount,
 } from "@mc-wallet/starknet/rpc";
-import {
-  type ActivityEntry,
-  type ActivityLog,
-  type ActivityScope,
-  systemClock,
-} from "@mc-wallet/transactions/activity";
+import { type ActivityLog, systemClock } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import { mergeActivity } from "@mc-wallet/transactions/tx-history";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
 } from "@mc-wallet/transactions/verify";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import {
-  STARKNET_NETWORKS,
-  STRK_TOKEN_ADDRESS,
-  type StarknetNetworkId,
-  sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
-import { currentArgentSignerRecords } from "../multisig/multisig-membership";
+import type { BalanceSnapshotStore } from "../portfolio/balance-snapshots";
+import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
 import {
-  readActivityInput,
+  readBalancesInput,
   readFeeReviewInput,
   readReviewTransferInput,
   readTransferInput,
@@ -54,7 +44,7 @@ import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
 import { failureNoticeMessage } from "../transactions/tx-observation";
-import { reconcileScope } from "../transactions/tx-reconcile";
+import { handleActivity } from "./activity-ops";
 import { submitReviewedAccountDeployment } from "./deployment-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 
@@ -66,6 +56,7 @@ export type WalletOpsDeps = {
   readonly activeStateCoordinator?: ActiveStateCoordinator;
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
+  readonly balanceSnapshots?: BalanceSnapshotStore;
   /**
    * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
    * stubs stay valid; a Ledger signing request with no queue wired fails closed.
@@ -76,6 +67,8 @@ export type WalletOpsDeps = {
    * read-only asset discovery. Signing paths resolve multisigs separately.
    */
   readonly multisigStore?: MultisigStore;
+  /** Public, last-known ownership snapshots; transfer paths still re-prove live ownership. */
+  readonly nftSnapshots?: NftSnapshotStore;
   /**
    * Wall-clock reader used to age transaction observation windows. Injected so
    * reconciliation stays deterministic under test; defaults to the system
@@ -164,8 +157,11 @@ const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
 const passiveAccountContext = (deps: WalletOpsDeps) =>
   observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
 
+const BALANCE_STALE_MS = 60_000;
+
 const handleGetBalances: WalletOpsHandler = async (deps, message) => {
-  if (!readTypeOnlyInput(message, "wallet.getBalances")) {
+  const input = readBalancesInput(message);
+  if (!input) {
     return { error: "invalid balances request" };
   }
   const context = await passiveAccountContext(deps);
@@ -174,12 +170,41 @@ const handleGetBalances: WalletOpsHandler = async (deps, message) => {
   }
   const preferences = await deps.preferencesStore.read();
   const network = STARKNET_NETWORKS[context.networkId];
+  if (input.cached) {
+    const snapshot = await deps.balanceSnapshots
+      ?.read(context.account.id, network.id)
+      .catch(() => null);
+    if (!snapshot) return { error: "balance snapshot unavailable" };
+    const now = (deps.now ?? systemClock)();
+    return {
+      accountId: context.account.id,
+      asOf: snapshot.fetchedAt > 0 ? snapshot.fetchedAt : null,
+      balances: snapshot.balances,
+      networkId: network.id,
+      ok: true,
+      stale:
+        snapshot.fetchedAt <= 0 ||
+        snapshot.fetchedAt > now ||
+        now - snapshot.fetchedAt >= BALANCE_STALE_MS,
+    };
+  }
   const balances = await deps.runtimeRpc.getTokenBalances({
     accountAddress: context.account.address,
     rpcUrls: networkRpcUrls(network, preferences),
     tokens: preferences.tokens.filter((token) => token.networkId === network.id),
   });
-  return { accountId: context.account.id, balances, networkId: network.id, ok: true };
+  const fetchedAt = (deps.now ?? systemClock)();
+  await deps.balanceSnapshots
+    ?.write({ accountId: context.account.id, balances, fetchedAt, networkId: network.id })
+    .catch(() => undefined);
+  return {
+    accountId: context.account.id,
+    asOf: fetchedAt > 0 ? fetchedAt : null,
+    balances,
+    networkId: network.id,
+    ok: true,
+    stale: false,
+  };
 };
 
 const handleDeploymentStatus: WalletOpsHandler = async (deps, message) => {
@@ -327,28 +352,6 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
   return { ok: true, transactionHash: result.transactionHash };
 };
 
-const handleActivity: WalletOpsHandler = async (deps, message) => {
-  const input = readActivityInput(message);
-  if (!input) {
-    return { error: "invalid activity request" };
-  }
-  const context = await passiveAccountContext(deps);
-  if (context.error !== undefined) {
-    return { activity: [], ok: true };
-  }
-  const target = await activityTarget(deps, context, input.accountId);
-  if (!target) {
-    return { error: "activity scope unavailable" };
-  }
-  const local = await reconcileScope(deps, target.scope, (deps.now ?? systemClock)());
-  const history = await accountHistory(deps, target);
-  return {
-    activity: mergeActivity(local, history.onChain),
-    ...(history.unavailable ? { historyUnavailable: true } : {}),
-    ok: true,
-  };
-};
-
 /**
  * Drains the failure notices background reconciliation recorded while the side
  * panel was closed. Each notice is returned exactly once; the activity entry
@@ -426,74 +429,4 @@ export const handleWalletOps = async (
     ? WALLET_OPS_HANDLERS[messageType]
     : undefined;
   return handler ? handler(deps, message) : null;
-};
-
-/**
- * Fetches one authorized account's real on-chain transaction history for the feed.
- * Degrades honestly: with no history source wired or no
- * tracked tokens it yields an empty list with `unavailable: false`, so the feed
- * shows the local log without a false "offline" indicator; a thrown transport
- * error sets `unavailable` so the caller can surface that the history could not
- * be reached.
- */
-const accountHistory = async (
-  deps: WalletOpsDeps,
-  context: {
-    readonly accountId: string;
-    readonly address: string;
-    readonly networkId: StarknetNetworkId;
-  },
-): Promise<{ readonly onChain: readonly ActivityEntry[]; readonly unavailable: boolean }> => {
-  const scan = deps.runtimeRpc.getTransactionHistory;
-  if (!scan) {
-    return { onChain: [], unavailable: false };
-  }
-  const preferences = await deps.preferencesStore.read();
-  const tokens = preferences.tokens.filter((token) => token.networkId === context.networkId);
-  if (tokens.length === 0) {
-    return { onChain: [], unavailable: false };
-  }
-  try {
-    const onChain = await scan({
-      account: context.address,
-      accountId: context.accountId,
-      networkId: context.networkId,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
-      tokens,
-    });
-    return { onChain, unavailable: false };
-  } catch {
-    return { onChain: [], unavailable: true };
-  }
-};
-
-const activityTarget = async (
-  deps: WalletOpsDeps,
-  context: { readonly account: AccountRef; readonly networkId: StarknetNetworkId },
-  requestedAccountId: string | undefined,
-): Promise<{
-  readonly accountId: string;
-  readonly address: string;
-  readonly networkId: StarknetNetworkId;
-  readonly scope: ActivityScope;
-} | null> => {
-  if (requestedAccountId === undefined || requestedAccountId === context.account.id) {
-    return {
-      accountId: context.account.id,
-      address: context.account.address,
-      networkId: context.networkId,
-      scope: { accountId: context.account.id, networkId: context.networkId },
-    };
-  }
-  const record = (await currentArgentSignerRecords(deps, context.account, context.networkId)).find(
-    (stored) => stored.id === requestedAccountId,
-  );
-  return record
-    ? {
-        accountId: record.id,
-        address: record.address,
-        networkId: record.networkId,
-        scope: { accountId: record.id, networkId: record.networkId },
-      }
-    : null;
 };

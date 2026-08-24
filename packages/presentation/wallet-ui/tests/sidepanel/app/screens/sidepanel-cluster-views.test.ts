@@ -112,7 +112,7 @@ describe("cluster views", () => {
     expect(html).toContain("normally confirms quickly");
     expect(html).toContain("checks immediately");
     expect(html).toContain("fee-bumped, replaced, or cancelled");
-    expect(html).toMatch(/tx-status pending"[^>]*title="/);
+    expect(html).toMatch(/tx-kind-transfer pending"[^>]*title="/);
 
     const settled = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       { ...pendingTx, status: "accepted" as const },
@@ -120,13 +120,28 @@ describe("cluster views", () => {
     expect(settled).not.toContain("fee-bumped, replaced, or cancelled");
   });
 
-  test("home links to the NFT gallery and settings links to allowances", () => {
+  test("home and settings expose their task destinations", () => {
     const home = dashboard("home", status, [], preferences, { balances: [] });
     expect(home).toContain('data-view="nfts"');
     const settings = dashboard("settings", status, [], preferences, { balances: [] });
-    expect(settings).toContain('data-view="security"');
-    const security = dashboard("security", status, [], preferences, { balances: [] });
-    expect(security).toContain('data-view="allowances"');
+    expect(settings).toContain('data-view="allowances"');
+    expect(settings).toContain('data-view="reveal"');
+    expect(settings).toContain("Reveal recovery secrets");
+  });
+
+  test("a site request names the paused task without repeating return guidance", () => {
+    const pending = [
+      {
+        id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
+        kind: "connect" as const,
+        origin: "https://dapp.example",
+      },
+    ];
+    const html = dashboard("send", status, pending, preferences, { balances: [] });
+
+    expect(html).toContain("Send paused");
+    expect(html).not.toContain("Finish, deny, or review later to return where you left off.");
+    expect(html).toContain('aria-label="Paused wallet task"');
   });
 
   test("allowance flow lists tracked approvals with a revoke control", () => {

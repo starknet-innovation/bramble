@@ -76,6 +76,28 @@ export const readTypeOnlyInput = (message: unknown, type: string): boolean =>
   isRecord(message) && hasOnlyKnownKeys(message, ["type"]) && message["type"] === type;
 
 /**
+ * Parses the balance reader's optional local-snapshot request.
+ */
+export const readBalancesInput = (message: unknown): { readonly cached: boolean } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["cached", "type"]) &&
+  message["type"] === "wallet.getBalances" &&
+  (message["cached"] === undefined || message["cached"] === true)
+    ? { cached: message["cached"] === true }
+    : null;
+
+/**
+ * Parses the fiat-price reader's optional local-snapshot request.
+ */
+export const readPricesInput = (message: unknown): { readonly cached: boolean } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["cached", "type"]) &&
+  message["type"] === "wallet.prices" &&
+  (message["cached"] === undefined || message["cached"] === true)
+    ? { cached: message["cached"] === true }
+    : null;
+
+/**
  * Parses a wallet-initiated action whose first call requests a fee review and
  * whose confirming call echoes that exact reviewed fee.
  */
@@ -91,24 +113,34 @@ export const readFeeReviewInput = (
         ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
       }
     : null;
-
 /**
  * Parses an activity request for either the active signer or one explicitly
  * selected watched account. The background resolves and authorizes the scope;
  * this boundary accepts only a well-formed account id and no unknown fields.
  */
-export const readActivityInput = (message: unknown): { readonly accountId?: string } | null => {
+export const readActivityInput = (
+  message: unknown,
+): {
+  readonly accountId?: string;
+  readonly cached: boolean;
+  readonly refreshHistory: boolean;
+} | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountId", "type"]) ||
+    !hasOnlyKnownKeys(message, ["accountId", "cached", "refreshHistory", "type"]) ||
     message["type"] !== "wallet.activity" ||
+    (message["cached"] !== undefined && message["cached"] !== true) ||
+    (message["refreshHistory"] !== undefined && message["refreshHistory"] !== true) ||
     (message["accountId"] !== undefined && !isAccountId(message["accountId"]))
   ) {
     return null;
   }
-  return message["accountId"] === undefined ? {} : { accountId: message["accountId"] };
+  return {
+    ...(message["accountId"] === undefined ? {} : { accountId: message["accountId"] }),
+    cached: message["cached"] === true,
+    refreshHistory: message["refreshHistory"] === true,
+  };
 };
-
 /**
  * Parses connected-site revocation messages and normalizes the origin.
  */
@@ -124,7 +156,6 @@ export const readRevokeOriginInput = (message: unknown): { readonly origin: stri
   const origin = normalizeWalletOrigin(message["origin"]);
   return origin ? { origin } : null;
 };
-
 /**
  * Parses account-read messages and optional extension-page passphrases.
  */

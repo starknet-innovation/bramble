@@ -12,14 +12,20 @@ beforeAll(registerDom);
 afterAll(unregisterDom);
 
 describe("live value updates", () => {
-  test("captures keyed values and animates a changed replacement", () => {
+  test("captures keyed values and animates a changed group once", () => {
     const root = document.createElement("div");
-    root.innerHTML = '<span data-live-key="balance" data-live-value="1">1 STRK</span>';
+    root.innerHTML = `<div data-live-group>
+      <span data-live-key="balance" data-live-value="1">1 STRK</span>
+      <span data-live-key="fiat" data-live-value="2">$2</span>
+    </div>`;
     const previous = captureLiveValues(root);
-    root.innerHTML = '<span data-live-key="balance" data-live-value="2">2 STRK</span>';
-    const value = root.querySelector<HTMLElement>("[data-live-key]");
+    root.innerHTML = `<div data-live-group>
+      <span data-live-key="balance" data-live-value="2">2 STRK</span>
+      <span data-live-key="fiat" data-live-value="4">$4</span>
+    </div>`;
+    const group = root.querySelector<HTMLElement>("[data-live-group]");
     let animationCount = 0;
-    Object.assign(value ?? {}, {
+    Object.assign(group ?? {}, {
       animate: () => {
         animationCount += 1;
         return { id: "" };

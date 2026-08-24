@@ -30,11 +30,15 @@ export type TransactionAlertReader = {
  * status either way, which is the durable record.
  */
 export const withTransactionAlerts =
-  (wallet: TransactionAlertReader, refresh: () => Promise<void>): (() => Promise<void>) =>
+  (
+    context: Document | Element | null,
+    wallet: TransactionAlertReader,
+    refresh: () => Promise<void>,
+  ): (() => Promise<void>) =>
   async () => {
     await refresh();
     const alerts = await wallet.loadTransactionAlerts().catch(() => []);
     for (const alert of alerts) {
-      showToast(alert, "error");
+      showToast(alert, "error", context);
     }
   };

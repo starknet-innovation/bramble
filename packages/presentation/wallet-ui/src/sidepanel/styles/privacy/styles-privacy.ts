@@ -137,16 +137,7 @@ export const PRIVACY_STYLES = `
     font-size: ${TYPE.caption.size};
   }
   .send-route-reason[hidden] { display: none; }
-  .privacy-inline-error {
-    align-items: center;
-    color: var(--mc-muted);
-    display: flex;
-    font-size: ${TYPE.caption.size};
-    gap: ${SPACE.sm};
-    justify-content: space-between;
-    padding: ${SPACE.sm} ${SPACE.sm} 0;
-  }
-  .private-balance-summary.muted .token-fiat { color: var(--mc-muted); }
+  .private-balance-summary.muted .token-fiat { color: var(--mc-text); }
   .private-balance-mark,
   .private-balance-label {
     align-items: center;
@@ -164,6 +155,15 @@ export const PRIVACY_STYLES = `
     margin-top: ${SPACE.sm};
     padding-top: ${SPACE.md};
   }
+  button.private-balance-summary {
+    background: transparent;
+    color: var(--mc-text);
+    min-height: ${CONTROL.hitSmall};
+    padding: ${SPACE.md} 0 0;
+    text-align: left;
+    width: 100%;
+  }
+  button.private-balance-summary:not(:disabled):hover { background: transparent; }
   .private-balance-label {
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.medium};

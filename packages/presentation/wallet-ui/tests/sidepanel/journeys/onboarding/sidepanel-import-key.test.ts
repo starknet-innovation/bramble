@@ -126,7 +126,7 @@ describe("Import private key form", () => {
 
     // The key reaches the privileged import request exactly as pasted, tagged
     // with the active network.
-    expect(harness.importCalls).toEqual([["SN_MAIN", PASTED_KEY, "argent", undefined]]);
+    expect(harness.importCalls).toEqual([["SN_MAIN", PASTED_KEY, "openzeppelin", undefined]]);
     // Success re-renders the flow...
     expect(harness.renderCount()).toBe(1);
     // ...and the key no longer lives anywhere in the DOM (form was reset before
@@ -153,6 +153,12 @@ describe("Import private key form", () => {
 
   test("forwards an explicit Argent deployment salt", async () => {
     const harness = mount(() => Promise.resolve(account.id));
+    const contract = harness.container.querySelector<HTMLSelectElement>(
+      'select[name="accountContractType"]',
+    );
+    if (!contract) throw new Error("import contract field missing");
+    contract.value = "argent";
+    contract.dispatchEvent(new window.Event("change", { bubbles: true }));
 
     submitKey(harness.container, PASTED_KEY, "0x777");
     await tick();
@@ -167,6 +173,8 @@ describe("Import private key form", () => {
     );
     const salt = harness.container.querySelector<HTMLInputElement>('input[name="deploymentSalt"]');
     if (!contract || !salt) throw new Error("import contract fields missing");
+    contract.value = "argent";
+    contract.dispatchEvent(new window.Event("change", { bubbles: true }));
     salt.value = "0x777";
     contract.value = "openzeppelin";
     contract.dispatchEvent(new window.Event("change", { bubbles: true }));
@@ -185,7 +193,7 @@ describe("Import private key form", () => {
     submitKey(harness.container, PASTED_KEY);
     await tick();
 
-    expect(harness.importCalls).toEqual([["SN_MAIN", PASTED_KEY, "argent", undefined]]);
+    expect(harness.importCalls).toEqual([["SN_MAIN", PASTED_KEY, "openzeppelin", undefined]]);
     // No re-render on failure — the flow stays put and shows the reason.
     expect(harness.renderCount()).toBe(0);
     expect(harness.container.querySelector("#import-key-result")?.textContent).toBe(

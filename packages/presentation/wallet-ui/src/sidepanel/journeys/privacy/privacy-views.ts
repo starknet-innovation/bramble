@@ -14,7 +14,7 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen, formatFri } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
-import { tokenGlyph } from "../portfolio/token-row";
+import { reviewPanel } from "../../shared/review-render";
 import type { PrivacyJourneyState } from "./privacy-model";
 
 const shortAddress = (value: string): string =>
@@ -26,21 +26,43 @@ const preparationDetails = (
 ): string => {
   const { preparation } = journey;
   return `<section class="privacy-review">
-    <div class="privacy-review-mark">${tokenGlyph(preparation.poolAddress, "P")}</div>
-    <div class="privacy-review-title">
-      <h2>Activate private balances</h2>
-      <p>One-time account registration</p>
-    </div>
-    <details class="send-review-disclosure">
-      <summary><span>Transaction details</span>${icon("chevronDown")}</summary>
+    <header class="decision-head">
+      <span class="decision-seal">${icon("shield")}</span>
+      <span><p class="decision-label">Reviewed intent</p><h2>Activate private balances</h2></span>
+    </header>
+    <section class="decision-layer decision-outcome" aria-label="What will happen">
+      <p class="decision-label">What will happen</p>
+      <p>This one-time registration lets this account discover and use its private notes.</p>
+    </section>
+    ${reviewPanel([
+      "Registration is public. It stores this account's viewing-key commitment on-chain; it does not reveal the viewing key or private balance.",
+    ])}
+    <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
+      <p class="decision-label">Maximum cost and constraints</p>
+      ${receipt([
+        {
+          label: "Maximum network fee",
+          value: preparation.networkFee
+            ? formatFri(preparation.networkFee.overallFee)
+            : preparation.route === "private-relay"
+              ? "Sponsored"
+              : "Unavailable",
+        },
+        ...(preparation.poolFeeFri
+          ? [{ label: "Pool fee", value: `${formatFri(preparation.poolFeeFri)} from public STRK` }]
+          : []),
+        {
+          label: "Submission",
+          value:
+            preparation.route === "private-relay" ? "Private relay" : "Public account transaction",
+        },
+      ])}
+    </section>
+    <details class="send-review-disclosure" data-disclosure="privacy-activation-technical">
+      <summary><span>Technical details</span>${icon("chevronDown")}</summary>
       <div class="send-review-disclosure-body">
     ${receipt([
       { label: "Network", value: status.network },
-      {
-        label: "Submission",
-        value:
-          preparation.route === "private-relay" ? "Private relay" : "Public account transaction",
-      },
       ...(preparation.authorization
         ? [
             {
@@ -59,18 +81,11 @@ const preparationDetails = (
             },
           ]
         : []),
-      ...(preparation.poolFeeFri
-        ? [{ label: "Pool fee", value: `${formatFri(preparation.poolFeeFri)} from public STRK` }]
-        : []),
-      ...(preparation.networkFee
-        ? [{ label: "Network fee", value: formatFri(preparation.networkFee.overallFee) }]
-        : []),
       { label: "Privacy pool", value: shortAddress(preparation.poolAddress), valueStyle: "code" },
     ])}
     <ul class="privacy-facts">
       ${preparation.summaries.map((summary) => `<li>${escapeHtml(summary)}</li>`).join("")}
     </ul>
-    <p class="privacy-warning">Registration is public. It stores the account viewing-key commitment required to discover its private notes.</p>
       </div>
     </details>
     <p id="privacy-review-result" role="status" aria-live="assertive"></p>

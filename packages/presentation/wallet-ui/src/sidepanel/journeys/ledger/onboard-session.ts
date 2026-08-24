@@ -186,7 +186,7 @@ export const createLedgerOnboardController = (
   deps: LedgerOnboardControllerDeps,
 ): LedgerOnboardController => {
   let candidates: readonly LedgerCandidate[] = [];
-  let accountContractType: AccountContractType = "argent";
+  let accountContractType: AccountContractType = "openzeppelin";
   const createdIds = new Set<string>();
   let devices: readonly LedgerDeviceChoice[] = [];
   let selectedDeviceId: string | null = null;
@@ -487,7 +487,7 @@ export const createLedgerOnboardController = (
       resetState();
       deps.render({ kind: "chooser", selected: null });
     },
-    start(contractType = "argent") {
+    start(contractType = "openzeppelin") {
       resetState();
       accountContractType = contractType;
       deps.render({ kind: "connect" });

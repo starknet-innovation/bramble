@@ -110,7 +110,7 @@ const activityScenario: WalletScenario = {
       id: "account-a",
       label: "Daily account",
       narrative: "Only the active account's accepted transactions are rendered.",
-      state: { accountId: softwareAccount.id, entries: 2, scope: "SN_MAIN" },
+      state: { accountId: softwareAccount.id, entries: 5, scope: "SN_MAIN" },
     },
     {
       content: () =>
@@ -142,7 +142,7 @@ const activityScenario: WalletScenario = {
       id: "account-a-restored",
       label: "Switch back",
       narrative: "Returning restores account A without any rows from account B.",
-      state: { accountId: softwareAccount.id, entries: 2, foreignEntries: 0, scope: "SN_MAIN" },
+      state: { accountId: softwareAccount.id, entries: 5, foreignEntries: 0, scope: "SN_MAIN" },
     },
   ],
   description:

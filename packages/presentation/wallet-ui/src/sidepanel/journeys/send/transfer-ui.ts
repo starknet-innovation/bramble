@@ -48,7 +48,7 @@ export type TransferUiDeps = {
   readonly app: Element | null;
   readonly back?: () => void;
   readonly confirmationDelaysMs?: readonly number[];
-  readonly navigate?: (view: "activity" | "home") => void;
+  readonly navigate?: (view: "activity" | "home" | "multisig-deploy") => void;
   /** Invalidates the cached private balance once a private send is accepted. */
   readonly onPrivateSendSettled?: () => void;
   readonly privacy?: () => PrivacyDisclosureState;
@@ -100,6 +100,12 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     transferApp = app;
   }
   const accountId = sendFormInput(form, "accountId")?.value ?? "";
+  const completionTarget =
+    form.dataset["sendCompleteTo"] === "multisig-deploy" ? "multisig-deploy" : "home";
+  const complete = (): void => {
+    if (completionTarget === "multisig-deploy" && back) back();
+    else navigate?.(completionTarget);
+  };
   if (transferState.fields && transferState.fields.accountId !== accountId) {
     transferEpoch += 1;
     transferState = initialTransferState();
@@ -146,6 +152,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     if (transferState.transactionHash === null) {
       transferEpoch += 1;
       transferState = initialTransferState();
+    }
+    if (transferState.transactionHash && completionTarget === "multisig-deploy") {
+      complete();
+      return;
     }
     if (back) {
       back();
@@ -205,19 +215,24 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     form,
     onRouteChange: dropReview,
     ...(deps.reloadPrivacy ? { retry: deps.reloadPrivacy } : {}),
-    retryable: () => deps.privacy?.().error !== null,
+    retryable: () => {
+      const fields = transferFields(form);
+      return (
+        deps.privacy?.().error !== null &&
+        (fields.source === "private" || fields.destination === "private")
+      );
+    },
     route,
   });
 
   form.querySelector("#send-edit")?.addEventListener("click", editDetails);
   form.querySelector("#send-failure-edit")?.addEventListener("click", editDetails);
-  form.querySelector("#send-another")?.addEventListener("click", () => {
-    transferEpoch += 1;
-    form.reset();
-    transferState = initialTransferState();
-    repaint();
-    form.querySelector<HTMLInputElement>("#send-recipient-search")?.focus();
-  });
+  const homeButton = form.querySelector<HTMLButtonElement>("#send-home");
+  if (homeButton) {
+    homeButton.textContent =
+      completionTarget === "multisig-deploy" ? "Deploy Multisignature Account" : "Back to home";
+    homeButton.addEventListener("click", complete);
+  }
   form
     .querySelector("#send-view-activity")
     ?.addEventListener("click", () => navigate?.("activity"));
@@ -248,7 +263,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
               ? { ...transferState, error: "", stage: "submitted" }
               : { ...transferState, error: outcome.message, stage: "failed" };
           repaintActiveTransfer?.();
-          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error");
+          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", form);
           return;
         }
       } catch {
@@ -340,7 +355,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = errorMessage(error, preparationFailure(composed));
-            showToast(message, "error");
+            showToast(message, "error", form);
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             repaintActiveTransfer?.();
           },
@@ -384,7 +399,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = friendlyReviewError(error);
-            showToast(message, "error");
+            showToast(message, "error", form);
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             repaintActiveTransfer?.();
           },
@@ -433,7 +448,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             stage: "failed",
           };
           repaintActiveTransfer?.();
-          showToast("Transaction was not sent", "error");
+          showToast("Transaction was not sent", "error", form);
         },
       );
       return;
@@ -473,7 +488,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             stage: "failed",
           };
           repaintActiveTransfer?.();
-          showToast("Transaction was not sent", "error");
+          showToast("Transaction was not sent", "error", form);
         },
       );
   });

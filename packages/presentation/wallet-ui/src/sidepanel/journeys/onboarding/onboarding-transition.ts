@@ -58,7 +58,7 @@ export const createOnboardingStepTransition = (
     const root = ownerDocument.documentElement;
     const canTransition =
       ownerDocument.body.classList.contains("onboarding-surface") &&
-      !prefersReducedMotion() &&
+      !prefersReducedMotion(ownerDocument) &&
       typeof ownerDocument.startViewTransition === "function";
     if (!canTransition) {
       reveal(next, direction);

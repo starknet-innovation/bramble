@@ -194,9 +194,24 @@ describe("background message parsers", () => {
         address: "0x456",
         label: "Treasury",
         networkId: "SN_SEPOLIA",
+        publicKeyX: "0x789",
         type: "wallet.saveAddress",
       }),
-    ).toEqual({ address: "0x456", label: "Treasury", networkId: "SN_SEPOLIA" });
+    ).toEqual({
+      address: "0x456",
+      label: "Treasury",
+      networkId: "SN_SEPOLIA",
+      publicKeyX: "0x789",
+    });
+    expect(
+      readSaveAddressInput({
+        address: "0x456",
+        label: "Treasury",
+        networkId: "SN_SEPOLIA",
+        publicKeyX: "0x0",
+        type: "wallet.saveAddress",
+      }),
+    ).toBeNull();
     expect(
       readAddInvokeTransactionInput({
         calls: [{ calldata: ["0x1", "2"], contractAddress: "0x123", entrypoint: "transfer" }],

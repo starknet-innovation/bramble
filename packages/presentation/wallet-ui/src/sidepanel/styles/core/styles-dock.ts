@@ -1,7 +1,6 @@
 /**
- * Persistent wallet-dock styling. The dock is intentionally icon-only:
- * high-contrast versus muted ink communicates the selected destination, while
- * hover/focus tooltips preserve names without permanent labels.
+ * Persistent wallet-dock styling. Each root keeps a visible label so users do
+ * not have to memorize icon meaning or discover navigation through hover.
  */
 import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
 
@@ -30,7 +29,9 @@ export const DOCK_STYLES = `
     border-radius: ${RADIUS.full};
     color: var(--mc-muted);
     display: inline-flex;
-    height: ${CONTROL.dockItem};
+    flex-direction: column;
+    gap: 2px;
+    height: ${CONTROL.nav};
     justify-content: center;
     justify-self: center;
     padding: 0;
@@ -38,17 +39,11 @@ export const DOCK_STYLES = `
     transition:
       color ${MOTION.pressMs}ms ${MOTION.ease},
       transform ${MOTION.liftMs}ms var(--ease-out);
-    width: ${CONTROL.dockItem};
+    width: min(84px, 100%);
   }
   @media (hover: hover) and (pointer: fine) {
     button.nav-item:not(:disabled):hover { background: transparent; color: var(--mc-text); }
     button.nav-item[aria-selected="true"]:not(:disabled):hover { color: var(--mc-text); }
-    button.nav-item:not(:disabled):hover .nav-tooltip,
-    button.nav-item:not(:disabled):focus-visible .nav-tooltip {
-      opacity: 1;
-      transform: translate(-50%, 0);
-      visibility: visible;
-    }
   }
   button.nav-item:not(:disabled):active { background: transparent; transform: scale(0.96); }
   button.nav-item[aria-selected="true"] { color: var(--mc-text); }
@@ -61,23 +56,11 @@ export const DOCK_STYLES = `
   }
   .tab-icon .icon { height: ${CONTROL.dockIcon}; stroke-width: 1.8; width: ${CONTROL.dockIcon}; }
   .tab-icon .badge { position: absolute; right: -9px; top: -8px; }
-  .nav-tooltip {
-    background: var(--mc-text);
-    border-radius: ${RADIUS.sm};
-    bottom: calc(100% + ${SPACE.sm});
-    color: var(--mc-bg);
+  .nav-label {
+    color: inherit;
     font-size: ${TYPE.micro.size};
     font-weight: ${WEIGHT.semibold};
-    left: 50%;
-    opacity: 0;
-    padding: ${SPACE.xs} ${SPACE.sm};
-    pointer-events: none;
-    position: absolute;
-    transform: translate(-50%, 4px);
-    transition:
-      opacity ${MOTION.pressMs}ms ${MOTION.ease},
-      transform ${MOTION.liftMs}ms var(--ease-out);
-    visibility: hidden;
+    line-height: ${TYPE.micro.line};
     text-wrap: nowrap;
   }
 `;

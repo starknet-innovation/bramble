@@ -63,6 +63,46 @@ export type ArgentMultisigConfigReview = {
   readonly summary: string;
 };
 
+/**
+ * Builds one canonical stable-0.2 signer-management self-call. The returned
+ * call is parsed again through the same strict decoder used at the background
+ * boundary, so UI conveniences cannot invent a second ABI interpretation.
+ */
+export const argentMultisigConfigChangeCall = (
+  accountAddress: string,
+  change: ArgentMultisigConfigChange,
+): ArgentMultisigCall => {
+  const signer = (publicKey: string): readonly string[] => ["0x0", canonicalSigner(publicKey)];
+  const threshold = (value: number): string => `0x${BigInt(value).toString(16)}`;
+  const call: ArgentMultisigCall =
+    change.kind === "change_threshold"
+      ? {
+          calldata: [threshold(change.threshold)],
+          contractAddress: accountAddress,
+          entrypoint: "change_threshold",
+        }
+      : change.kind === "replace_signer"
+        ? {
+            calldata: [
+              ...signer(change.removeSignerPublicKey),
+              ...signer(change.addSignerPublicKey),
+            ],
+            contractAddress: accountAddress,
+            entrypoint: "replace_signer",
+          }
+        : {
+            calldata: [
+              threshold(change.threshold),
+              threshold(change.signerPublicKeys.length),
+              ...change.signerPublicKeys.flatMap(signer),
+            ],
+            contractAddress: accountAddress,
+            entrypoint: change.kind,
+          };
+  parseArgentMultisigConfigChange(accountAddress, call);
+  return call;
+};
+
 const canonicalSigner = (value: string): string => {
   const canonical = canonicalFelt(value);
   if (canonical === null || !isNonZeroStarkFieldElement(canonical)) {

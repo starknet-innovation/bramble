@@ -210,10 +210,34 @@ describe("Argent multisig serialized store", () => {
     expect(await registry.upsertIntent(intent)).toBe("invalid");
     expect(await registry.upsertMultisig(record)).toBe("stored");
     expect(await registry.upsertMultisig({ ...record, name: "Shared treasury" })).toBe("stored");
+    expect(await registry.upsertMultisig(record)).toBe("stored");
+    expect((await registry.listMultisigs())[0]?.name).toBe("Shared treasury");
     const { deployment: _deployment, ...withoutDeployment } = record;
     expect(await registry.upsertMultisig(withoutDeployment)).toBe("conflict");
     expect(await registry.upsertIntent(intent)).toBe("stored");
     expect(await registry.listIntents()).toEqual([intent]);
+  });
+
+  test("enriches an address-only watch with its exact deployment once", async () => {
+    const { store } = memoryKv();
+    const registry = createMultisigStore({ store });
+    const { currentConfig: _currentConfig, deployment: _deployment, ...addressOnly } = record;
+
+    expect(await registry.upsertMultisig(addressOnly)).toBe("stored");
+    expect(await registry.upsertMultisig(record)).toBe("stored");
+    expect(await registry.listMultisigs()).toEqual([record]);
+    expect(await registry.upsertMultisig(addressOnly)).toBe("conflict");
+  });
+
+  test("enriches an address-only watch with a verified current public config", async () => {
+    const { store } = memoryKv();
+    const registry = createMultisigStore({ store });
+    const { currentConfig: _currentConfig, deployment: _deployment, ...addressOnly } = record;
+    const { deployment: _savedDeployment, ...withCurrentConfig } = record;
+
+    expect(await registry.upsertMultisig(addressOnly)).toBe("stored");
+    expect(await registry.upsertMultisig(withCurrentConfig)).toBe("stored");
+    expect(await registry.listMultisigs()).toEqual([withCurrentConfig]);
   });
 
   test("keeps deployment immutable and updates current config with optimistic authority", async () => {
@@ -294,6 +318,27 @@ describe("Argent multisig serialized store", () => {
       await Promise.all([registry.claimOperation(operation), registry.claimOperation(operation)]),
     ).toEqual(["claimed", "exists"]);
     expect(await registry.listOperations()).toEqual([operation]);
+  });
+
+  test("deletes one saved intent and its replay claims without removing the account", async () => {
+    const { store } = memoryKv();
+    const registry = createMultisigStore({ store });
+    const intent = await preparedIntent();
+    const claim: ArgentMultisigOperationRecord = {
+      accountId: ACCOUNT_ID,
+      id: argentMultisigOperationId("submit", ACCOUNT_ID, intent.prepared.transactionHash) ?? "",
+      kind: "submit",
+      target: intent.prepared.transactionHash,
+    };
+    await registry.upsertMultisig(record);
+    await registry.upsertIntent(intent);
+    await registry.claimOperation(claim);
+
+    expect(await registry.removeIntent(intent.id)).toBe("removed");
+    expect(await registry.getIntent(intent.id)).toBeNull();
+    expect(await registry.listOperations()).toEqual([]);
+    expect(await registry.listMultisigs()).toEqual([record]);
+    expect(await registry.removeIntent(intent.id)).toBe("missing");
   });
 
   test("filters old OZ and malformed records and cascades account removal", async () => {
