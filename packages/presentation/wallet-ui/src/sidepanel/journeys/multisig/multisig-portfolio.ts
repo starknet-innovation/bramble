@@ -137,7 +137,11 @@ export const multisigPortfolio = (input: {
   readonly trustedIntentsMarkup: string;
   readonly record: ArgentMultisigRecord;
   readonly signerKnown: boolean;
-}): string => `
+}): string => {
+  const openCount =
+    Number.isSafeInteger(input.openCount) && input.openCount > 0 ? input.openCount : 0;
+  const openCountText = escapeHtml(String(openCount));
+  return `
   ${portfolioHero(input.record, input.preferences, input.data)}
   <section class="home-actions multisig-primary-actions" aria-label="Multisig actions">
     <div class="action-row">
@@ -169,10 +173,11 @@ export const multisigPortfolio = (input: {
       <div class="tab-set" role="tablist" aria-label="Shared account sections">
         <button class="home-tab" id="multisig-tab-assets" data-ms-home-tab="assets" type="button" role="tab" aria-controls="multisig-panel-assets" aria-selected="true" tabindex="0">Tokens</button>
         <button class="home-tab" id="multisig-tab-collectibles" data-ms-home-tab="collectibles" type="button" role="tab" aria-controls="multisig-panel-collectibles" aria-selected="false" tabindex="-1">Collectibles</button>
-        <button class="home-tab" id="multisig-tab-intents" data-ms-home-tab="intents" type="button" role="tab" aria-controls="multisig-panel-intents" aria-selected="false" aria-label="Signing intents, ${input.openCount} open" tabindex="-1">Intents${input.openCount > 0 ? `<span class="home-tab-count">${input.openCount}</span>` : ""}</button>
+        <button class="home-tab" id="multisig-tab-intents" data-ms-home-tab="intents" type="button" role="tab" aria-controls="multisig-panel-intents" aria-selected="false" aria-label="Signing intents, ${openCountText} open" tabindex="-1">Intents${openCount > 0 ? `<span class="home-tab-count">${openCountText}</span>` : ""}</button>
       </div>
     </div>
     <div id="multisig-panel-assets" data-ms-home-panel="assets" role="tabpanel" aria-labelledby="multisig-tab-assets" tabindex="0">${tokenPanel(input.preferences, input.data)}</div>
     <div id="multisig-panel-collectibles" data-ms-home-panel="collectibles" role="tabpanel" aria-labelledby="multisig-tab-collectibles" tabindex="0" hidden>${collectiblesPanel(input.record, input.preferences, input.data)}</div>
     <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>${input.trustedIntentsMarkup}</div>
   </section>`;
+};
