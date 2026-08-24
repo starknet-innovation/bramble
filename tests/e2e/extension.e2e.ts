@@ -12,7 +12,7 @@ import {
   openPendingWalletSurface,
   resolveConnectionApproval,
   resolvePendingApproval,
-  VAULT_PASSPHRASE,
+  unlockWallet,
 } from "./wallet-helpers";
 
 test("keeps wallet setup out of the side panel", async ({ extension }) => {
@@ -87,7 +87,7 @@ test("degrades honestly when network reads fail", async ({ extension }) => {
   await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
 
   // Fiat prices are mainnet-only, which a fresh profile selects by default.
-  await expect(sidepanel.getByText("Live prices unavailable right now")).toBeVisible();
+  await expect(sidepanel.getByText("Live prices are temporarily unavailable.")).toBeVisible();
 
   await sidepanel.getByRole("tab", { name: "Activity" }).click();
   await expect(sidepanel.getByText(/Couldn't load on-chain history/)).toBeVisible();
@@ -118,8 +118,7 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
     await expect(sidepanel.getByText("Site request waiting")).toBeVisible();
     await expect(sidepanel.getByText(dappServer.origin)).toBeVisible();
 
-    await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
-    await sidepanel.getByRole("button", { name: "Unlock" }).click();
+    await unlockWallet(sidepanel);
 
     await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
 
