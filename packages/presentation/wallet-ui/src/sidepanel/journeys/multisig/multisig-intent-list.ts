@@ -1,4 +1,6 @@
 /** Presentation-only renderer for a shared account's actionable intent queue. */
+
+import { escapeHtml } from "@mc-wallet/core/html";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
@@ -35,7 +37,7 @@ export const compactIntentListView = (
   const list =
     items.length === 0
       ? emptyState(emptyMessage)
-      : `<p class="eyebrow">${heading}</p><ul class="menu-list multisig-intent-list">${items
+      : `<p class="eyebrow">${escapeHtml(heading)}</p><ul class="menu-list multisig-intent-list">${items
           .map((item) => {
             const assetGlyphs =
               item.assets.length === 0

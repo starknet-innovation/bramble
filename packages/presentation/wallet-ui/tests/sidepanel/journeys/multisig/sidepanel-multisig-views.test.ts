@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import { UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
+import { compactIntentListView } from "../../../../src/sidepanel/journeys/multisig/multisig-intent-list";
 import { multisigWatchFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
 import {
   multisigDetailFlow,
@@ -12,6 +13,25 @@ import {
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 
 describe("Argent multisig list and exact-intent detail", () => {
+  test("escapes library-supplied compact-list headings", () => {
+    const html = compactIntentListView(
+      '<img src=x onerror="alert(1)">',
+      [
+        {
+          accountId: "SN_MAIN:0x123",
+          assets: [],
+          id: "intent-1",
+          label: "Review transfer",
+          supportingText: "Awaiting signatures",
+        },
+      ],
+      "No intents",
+    );
+
+    expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    expect(html).not.toContain("<img src=x");
+  });
+
   test("scopes watched accounts and open-intent counts to the active network", async () => {
     const fixture = await makeArgentMultisigFixture();
     const otherNetwork = {
