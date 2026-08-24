@@ -5,6 +5,10 @@
  */
 import { defineConfig } from "@playwright/test";
 
+// The shared fixture blocks egress; this suite must reach mainnet. Set here so
+// every process loading this config sets it, not just the runner.
+process.env["MC_E2E_LIVE_NETWORK"] = "1";
+
 export default defineConfig({
   expect: { timeout: 30_000 },
   forbidOnly: true,

@@ -73,6 +73,26 @@ test("imports an existing recovery phrase without backup verification", async ({
   await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
 });
 
+// localtest.me is a public name for 127.0.0.1: it resolves if the rule is gone.
+test("blocks egress to external hosts", async ({ extension }) => {
+  const page = await extension.context.newPage();
+  const failure = await page.goto("http://localtest.me/").catch((error: Error) => error.message);
+
+  expect(failure).toContain("ERR_NAME_NOT_RESOLVED");
+});
+
+// Every read fails under the suite-wide blackhole; the panel must say so.
+test("degrades honestly when network reads fail", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
+
+  // Fiat prices are mainnet-only, which a fresh profile selects by default.
+  await expect(sidepanel.getByText("Live prices unavailable right now")).toBeVisible();
+
+  await sidepanel.getByRole("tab", { name: "Activity" }).click();
+  await expect(sidepanel.getByText(/Couldn't load on-chain history/)).toBeVisible();
+});
+
 test("creates a wallet and approves a dapp connection", async ({ extension }) => {
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);

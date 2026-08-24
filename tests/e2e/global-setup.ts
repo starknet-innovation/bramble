@@ -14,6 +14,12 @@ const globalSetup = (): void => {
       "dist/manifest.json is missing; run bun run build or bun run test:e2e:build before E2E tests",
     );
   }
+  // Fail closed: a stray flag would silently put this offline suite on production.
+  if (process.env["MC_E2E_LIVE_NETWORK"] !== undefined) {
+    throw new Error(
+      "MC_E2E_LIVE_NETWORK is set; this suite is offline-only. Unset it, or use test:e2e:mainnet",
+    );
+  }
 };
 
 export default globalSetup;
