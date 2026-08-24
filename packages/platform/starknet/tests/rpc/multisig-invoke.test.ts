@@ -5,6 +5,7 @@ import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts"
 import {
   type ArgentMultisigCall,
   ArgentMultisigFeeExpiredError,
+  isArgentMultisigFeeExpiredMessage,
   isPreparedArgentMultisigInvokeV3,
   prepareArgentMultisigInvokeV3WithProvider,
   preparedArgentMultisigFee,
@@ -255,6 +256,19 @@ describe("prepared Argent multisig V3 invoke", () => {
     );
     await expect(submission).rejects.toBeInstanceOf(ArgentMultisigFeeExpiredError);
     await expect(submission).rejects.toThrow("Not submitted — network fees changed.");
+  });
+
+  test("classifies resource-price failures without scanning repeated provider text", () => {
+    expect(
+      isArgentMultisigFeeExpiredMessage(
+        "Max L1 Data Gas price (1)\n is lower than the actual gas price: 2",
+      ),
+    ).toBe(true);
+    expect(
+      isArgentMultisigFeeExpiredMessage(
+        `${"Max L1Gas price ".repeat(10_000)}balance is lower than required`,
+      ),
+    ).toBe(false);
   });
 
   test("rechecks live authorization at the final provider write boundary", async () => {

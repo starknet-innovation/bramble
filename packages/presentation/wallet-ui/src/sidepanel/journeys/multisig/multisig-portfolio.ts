@@ -122,6 +122,8 @@ const collectiblesPanel = (
 /**
  * Renders the familiar wallet-home hierarchy for one multisig: portfolio,
  * multisig-specific primary actions, then Tokens, Collectibles, and intents.
+ * `trustedIntentsMarkup` must be composed by the wallet's intent renderer,
+ * which escapes all provider- and user-controlled values before this boundary.
  */
 export const multisigPortfolio = (input: {
   readonly authorityAvailable: boolean;
@@ -132,7 +134,7 @@ export const multisigPortfolio = (input: {
   readonly deploymentPending?: boolean;
   readonly openCount: number;
   readonly preferences: WalletPreferences | null;
-  readonly intents: string;
+  readonly trustedIntentsMarkup: string;
   readonly record: ArgentMultisigRecord;
   readonly signerKnown: boolean;
 }): string => `
@@ -172,5 +174,5 @@ export const multisigPortfolio = (input: {
     </div>
     <div id="multisig-panel-assets" data-ms-home-panel="assets" role="tabpanel" aria-labelledby="multisig-tab-assets" tabindex="0">${tokenPanel(input.preferences, input.data)}</div>
     <div id="multisig-panel-collectibles" data-ms-home-panel="collectibles" role="tabpanel" aria-labelledby="multisig-tab-collectibles" tabindex="0" hidden>${collectiblesPanel(input.record, input.preferences, input.data)}</div>
-    <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>${input.intents}</div>
+    <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>${input.trustedIntentsMarkup}</div>
   </section>`;

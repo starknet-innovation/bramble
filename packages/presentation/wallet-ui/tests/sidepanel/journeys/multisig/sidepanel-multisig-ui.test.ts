@@ -465,7 +465,7 @@ describe("bindMultisigs frozen-intent forms", () => {
         authorityAvailable: true,
         canSign: true,
         data: EMPTY_MULTISIG_PORTFOLIO,
-        intents: "<p>Intent panel</p>",
+        trustedIntentsMarkup: "<p>Intent panel</p>",
         openCount: 1,
         preferences: null,
         record: fixture.record,
