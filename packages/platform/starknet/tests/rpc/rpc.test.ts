@@ -170,8 +170,9 @@ describe("starknet RPC helpers", () => {
     expect(calls).toEqual(["https://semantic-one.example"]);
   });
 
-  test("cools down a failed read endpoint without changing write selection", async () => {
+  test("cools down a failed read endpoint from the time it fails", async () => {
     let currentTime = 1_000;
+    let delayedFailure = true;
     const attempts: string[] = [];
     const urls = ["https://cooldown-one.example", "https://cooldown-two.example"] as const;
     const read = () =>
@@ -180,7 +181,13 @@ describe("starknet RPC helpers", () => {
         async (provider) => {
           const url = String(provider);
           attempts.push(url);
-          if (url === urls[0]) throw new Error("offline");
+          if (url === urls[0]) {
+            if (delayedFailure) {
+              currentTime += 20_000;
+              delayedFailure = false;
+            }
+            throw new Error("offline");
+          }
           return "ok";
         },
         (nodeUrl) => nodeUrl as unknown as import("starknet").RpcProvider,
@@ -191,7 +198,11 @@ describe("starknet RPC helpers", () => {
     await expect(read()).resolves.toBe("ok");
     expect(attempts).toEqual([urls[0], urls[1], urls[1]]);
 
-    currentTime += 30_000;
+    currentTime += 29_999;
+    await expect(read()).resolves.toBe("ok");
+    expect(attempts.at(-1)).toBe(urls[1]);
+
+    currentTime += 1;
     await expect(read()).resolves.toBe("ok");
     expect(attempts.slice(-2)).toEqual([...urls]);
   });

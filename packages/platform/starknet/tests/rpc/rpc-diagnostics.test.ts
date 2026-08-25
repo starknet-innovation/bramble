@@ -6,6 +6,7 @@ import {
   rpcEndpointClass,
   setRpcDiagnosticsEnabled,
 } from "../../src/rpc/rpc-diagnostics";
+import { timedRpcFetch } from "../../src/rpc/rpc-transport";
 
 afterEach(() => setRpcDiagnosticsEnabled(false));
 
@@ -25,5 +26,26 @@ describe("RPC diagnostics", () => {
 
     setRpcDiagnosticsEnabled(false);
     expect(rpcDiagnosticsSnapshot()).toEqual([]);
+  });
+
+  test("classifies a stalled response body as a timeout", async () => {
+    setRpcDiagnosticsEnabled(true);
+    const rpcFetch = timedRpcFetch(
+      5,
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            pull() {},
+          }),
+        ),
+      () => 0,
+    );
+
+    await expect(rpcFetch("https://wallet.nodes.starknet.org/rpc/mainnet/v0_10")).rejects.toThrow(
+      "Response timed out",
+    );
+    expect(rpcDiagnosticsSnapshot()).toEqual([
+      { count: 1, endpoint: "wallet-gateway", latencyMs: 0, outcome: "timeout" },
+    ]);
   });
 });

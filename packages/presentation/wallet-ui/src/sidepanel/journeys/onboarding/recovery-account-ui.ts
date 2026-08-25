@@ -20,7 +20,9 @@ type RecoveryAccountUiDeps = {
 };
 
 /** Recovery discovery handle started only after phrase and vault checks pass. */
-export type RecoveryAccountUi = { readonly start: () => void };
+export type RecoveryAccountUi = {
+  readonly start: () => void;
+};
 
 const selectionKey = (selection: RecoveryAccountSelection): string =>
   `${selection.accountContractType}:${selection.accountIndex}`;
@@ -52,6 +54,8 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   let candidates: readonly RecoveryAccountCandidate[] = [];
   let complete = false;
   let generation = 0;
+  let restartOnIdle = false;
+  let scanning = false;
   const selected = new Set<string>();
   const seen = new Set<string>();
 
@@ -116,8 +120,13 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   };
 
   const scan = async (manualIndex?: number): Promise<void> => {
+    if (scanning) return;
+    scanning = true;
     const activeGeneration = generation;
-    buttonBusy(manualIndex === undefined ? retry : manualSearch, true);
+    const activeButton = manualIndex === undefined ? retry : manualSearch;
+    const inactiveButton = manualIndex === undefined ? manualSearch : retry;
+    buttonBusy(activeButton, true);
+    if (inactiveButton) inactiveButton.disabled = true;
     try {
       let next: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>;
       do {
@@ -135,11 +144,25 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       if (status) status.textContent = message;
       showToast(message, "error", list);
     } finally {
-      buttonBusy(manualIndex === undefined ? retry : manualSearch, false);
+      scanning = false;
+      buttonBusy(activeButton, false);
+      if (inactiveButton) inactiveButton.disabled = false;
+      if (restartOnIdle) {
+        restartOnIdle = false;
+        void scan();
+      }
     }
   };
 
+  const stop = (): void => {
+    generation += 1;
+    restartOnIdle = false;
+  };
+
   retry?.addEventListener("click", () => void scan());
+  deps.form
+    .querySelector('[data-onboarding-step="recovery-accounts"] [data-onboarding-back]')
+    ?.addEventListener("click", stop);
   manualSearch?.addEventListener("click", () => {
     const index = Number(manual?.value);
     if (!manual?.value || !isRecoveryAccountIndex(index)) {
@@ -185,7 +208,8 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       if (status) status.textContent = "Searching both account types…";
       if (result) result.textContent = "";
       renderCandidates();
-      void scan();
+      if (scanning) restartOnIdle = true;
+      else void scan();
     },
   };
 };

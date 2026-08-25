@@ -66,10 +66,10 @@ const boundedRpcResponse = async (response: Response, deadline: AbortSignal): Pr
   });
 };
 
-const diagnosticOutcome = (error: unknown): RpcOutcome =>
+const diagnosticOutcome = (error: unknown, deadline: AbortSignal): RpcOutcome =>
   error instanceof RpcRefusedError
     ? "rate-limited"
-    : error instanceof DOMException && error.name === "TimeoutError"
+    : deadline.aborted || (error instanceof DOMException && error.name === "TimeoutError")
       ? "timeout"
       : "transport-error";
 
@@ -96,7 +96,7 @@ export const timedRpcFetch =
       recordRpcDiagnostic(endpoint, "ok", now() - startedAt);
       return response;
     } catch (error) {
-      recordRpcDiagnostic(endpoint, diagnosticOutcome(error), now() - startedAt);
+      recordRpcDiagnostic(endpoint, diagnosticOutcome(error, deadline), now() - startedAt);
       throw error;
     }
   };

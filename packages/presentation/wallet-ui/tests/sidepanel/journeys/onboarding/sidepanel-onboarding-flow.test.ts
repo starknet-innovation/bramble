@@ -99,6 +99,7 @@ const activeStep = (root: ParentNode): string | undefined =>
   )?.dataset["onboardingStep"];
 
 const mount = (options?: {
+  readonly discoverRecoveryAccounts?: SidepanelWallet["discoverRecoveryAccounts"];
   readonly generateMnemonic?: () => Promise<string>;
   readonly previewAccount?: (
     mnemonic: string,
@@ -127,7 +128,8 @@ const mount = (options?: {
       return Promise.resolve();
     },
     generateMnemonic: () => options?.generateMnemonic?.() ?? Promise.resolve(MNEMONIC),
-    discoverRecoveryAccounts: () =>
+    discoverRecoveryAccounts: (...args: Parameters<SidepanelWallet["discoverRecoveryAccounts"]>) =>
+      options?.discoverRecoveryAccounts?.(...args) ??
       Promise.resolve({
         candidates: [{ account, deployed: true, funded: false }],
         complete: true,
@@ -206,6 +208,37 @@ describe("staged onboarding", () => {
     expect(flow.recoveries).toEqual([[{ accountContractType: "openzeppelin", accountIndex: 0 }]]);
     expect(flow.creations).toEqual([]);
     expect(flow.renders()).toBe(1);
+  });
+
+  test("stops automatic account discovery after leaving the recovery picker", async () => {
+    let calls = 0;
+    let release:
+      | ((result: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>) => void)
+      | undefined;
+    const flow = mount({
+      discoverRecoveryAccounts: () => {
+        calls += 1;
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      },
+    });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    await tick();
+    setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#choose-account-contract-button");
+    expect(calls).toBe(1);
+
+    click(flow.app, '[data-onboarding-step="recovery-accounts"] [data-onboarding-back]');
+    release?.({ candidates: [], complete: false, nextIndex: 4, ok: true });
+    await tick();
+
+    expect(activeStep(flow.app)).toBe("password");
+    expect(calls).toBe(1);
   });
 
   test("discards a delayed preview after the account contract changes", async () => {

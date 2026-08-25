@@ -1,7 +1,11 @@
 /** Privileged read-only first-run account derivation and mnemonic checks. */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import {
+  defaultWalletPreferences,
+  type TokenConfig,
+  type WalletPreferencesStore,
+} from "@mc-wallet/settings/preferences";
 import { type DerivedAccountRef, isDerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import {
@@ -20,7 +24,6 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { type ActiveStateCoordinator, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
-import { strkToken } from "../transactions/fee-guard";
 import type { RecoveryDiscoveryCache } from "./recovery-cache";
 
 type OnboardingOpsDeps = {
@@ -35,7 +38,7 @@ type OnboardingOpsDeps = {
 const describeRecoveryAccount = async (
   deps: OnboardingOpsDeps,
   account: DerivedAccountRef,
-  preferences: WalletPreferences,
+  tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
 ): Promise<RecoveryAccountCandidate> => {
   const deployed = await deps.runtimeRpc.getDeploymentStatus({
@@ -46,9 +49,13 @@ const describeRecoveryAccount = async (
   const balances = await deps.runtimeRpc.getTokenBalances({
     accountAddress: account.address,
     rpcUrls,
-    tokens: [strkToken(account.networkId, preferences)],
+    tokens,
   });
-  return { account, deployed: false, funded: BigInt(balances[0]?.balance ?? "0") > 0n };
+  return {
+    account,
+    deployed: false,
+    funded: balances.some((balance) => BigInt(balance.balance) > 0n),
+  };
 };
 
 const discoveryFingerprint = (
@@ -66,7 +73,7 @@ const scanRecoveryIndex = async (
   deps: OnboardingOpsDeps,
   input: { readonly mnemonic: string; readonly networkId: StarknetNetworkId },
   accountIndex: number,
-  preferences: WalletPreferences,
+  tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
 ): Promise<readonly RecoveryAccountCandidate[]> =>
   Promise.all(
@@ -80,7 +87,7 @@ const scanRecoveryIndex = async (
       if (!isDerivedAccountRef(account)) {
         throw new WalletError("Account discovery is unavailable");
       }
-      return describeRecoveryAccount(deps, account, preferences, rpcUrls);
+      return describeRecoveryAccount(deps, account, tokens, rpcUrls);
     }),
   );
 
@@ -106,13 +113,16 @@ const discoverRecoveryAccounts = async (
   const manual = input.manualIndex;
   const preferences = await deps.preferencesStore.read();
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
+  const tokens = defaultWalletPreferences().tokens.filter(
+    (token) => token.networkId === input.networkId,
+  );
   const start = manual ?? snapshot.nextIndex;
   const end =
     manual ??
     Math.min(start + RECOVERY_SCAN_LIMITS.batchSize - 1, RECOVERY_SCAN_LIMITS.defaultCount - 1);
   const discovered: RecoveryAccountCandidate[] = [];
   for (let accountIndex = start; accountIndex <= end; accountIndex += 1) {
-    const candidates = await scanRecoveryIndex(deps, input, accountIndex, preferences, rpcUrls);
+    const candidates = await scanRecoveryIndex(deps, input, accountIndex, tokens, rpcUrls);
     discovered.push(
       ...candidates.filter(
         (candidate) =>

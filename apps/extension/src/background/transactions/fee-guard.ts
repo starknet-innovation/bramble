@@ -22,10 +22,7 @@ import { networkRpcUrls } from "../runtime/runtime-state";
  * Returns the canonical STRK token for a network: the tracked entry when one
  * exists, otherwise the same synthetic fee-token configuration.
  */
-export const strkToken = (
-  networkId: StarknetNetworkId,
-  preferences: WalletPreferences,
-): TokenConfig =>
+const strkToken = (networkId: StarknetNetworkId, preferences: WalletPreferences): TokenConfig =>
   preferences.tokens.find(
     (token) => token.networkId === networkId && sameFelt(token.address, STRK_TOKEN_ADDRESS),
   ) ?? {

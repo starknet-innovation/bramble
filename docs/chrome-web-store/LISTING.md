@@ -9,7 +9,7 @@ collected. Chrome's current policy requires prominent disclosure for all data co
 - **Name:** MC Wallet
 - **Category:** Productivity
 - **Primary language:** English
-- **Summary:** A self-custodial Starknet wallet for accounts, dapps, privacy, Ledger and multisig.
+- **Summary:** A self-custodial Starknet wallet for accounts, dapps, privacy and multisig, with a trusted-tester Ledger preview.
 - **Single purpose:** Securely manage Starknet accounts and review, sign, and submit user-approved
   Starknet transactions from Chrome.
 
@@ -19,10 +19,11 @@ MC Wallet is a self-custodial Starknet wallet built for clear transaction review
 use. Create or recover OpenZeppelin and Argent accounts, inspect balances and activity, connect to
 dapps, send assets, swap tokens, and manage shared Argent multisig accounts.
 
-Signing keys stay inside the encrypted local wallet vault or on a connected Ledger. Every dapp
-request is reviewed in a trusted wallet surface before approval. Cached public data keeps the wallet
-useful during temporary network disruption, while visible freshness indicators distinguish saved
-data from current network state.
+Software signing keys stay inside the encrypted local wallet vault. Ledger support remains a
+trusted-testers preview until the physical compatibility matrix is complete. Every dapp request is
+reviewed in a trusted wallet surface before approval. Cached public data keeps the wallet useful
+during temporary network disruption, while visible freshness indicators distinguish saved data from
+current network state.
 
 Reliability diagnostics are optional and off by default. If enabled, MC Wallet keeps only anonymous,
 process-local counts of RPC endpoint classes, outcome classes, and average latency. It never includes

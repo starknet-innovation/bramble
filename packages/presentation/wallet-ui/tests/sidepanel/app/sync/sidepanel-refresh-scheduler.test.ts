@@ -106,6 +106,45 @@ describe("refresh scheduler", () => {
     expect(reasons).toEqual(["action"]);
   });
 
+  test("preserves a scheduled action when the panel hides before reconciliation", async () => {
+    const reasons: string[] = [];
+    const test = harness(async (reason) => {
+      reasons.push(reason);
+    });
+
+    test.scheduler.start();
+    test.scheduler.afterAction();
+    test.setVisible(false);
+    test.scheduler.visibilityChanged();
+    expect(test.timers.size).toBe(0);
+
+    test.setVisible(true);
+    test.scheduler.visibilityChanged();
+    await flush();
+    expect(reasons).toEqual(["action"]);
+  });
+
+  test("does not retain fired burst timers as pending work", async () => {
+    const reasons: string[] = [];
+    const test = harness(async (reason) => {
+      reasons.push(reason);
+    });
+
+    test.scheduler.start();
+    test.scheduler.afterAction();
+    test.fire(10);
+    await flush();
+    test.fire(20);
+    await flush();
+
+    test.setVisible(false);
+    test.scheduler.visibilityChanged();
+    test.setVisible(true);
+    test.scheduler.visibilityChanged();
+    await flush();
+    expect(reasons).toEqual(["action", "action", "ambient"]);
+  });
+
   test("refreshes focus and local changes once without confirmation timers", async () => {
     let refreshes = 0;
     const test = harness(async (reason) => {

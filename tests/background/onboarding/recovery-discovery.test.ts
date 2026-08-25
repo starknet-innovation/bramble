@@ -43,6 +43,7 @@ const accountFor = (input: AccountDerivationInput): DerivedAccountRef => {
 describe("recovery discovery", () => {
   test("checks OZ and Argent in bounded resumable batches", async () => {
     const previewed: Array<readonly [string, number]> = [];
+    const requestedTokenSymbols: string[][] = [];
     const wallet = {
       ...walletStub,
       async previewAccount(input: AccountDerivationInput) {
@@ -63,8 +64,15 @@ describe("recovery discovery", () => {
           accountAddress,
           tokens,
         }: Parameters<typeof defaultRuntimeRpc.getTokenBalances>[0]) {
-          const balance = accountAddress === "0x4" ? "10" : "0";
-          return tokens.map((token) => ({ ...token, balance, formatted: balance }));
+          requestedTokenSymbols.push(tokens.map((token) => token.symbol));
+          return tokens.map((token) => {
+            const balance =
+              (accountAddress === "0x4" && token.symbol === "ETH") ||
+              (accountAddress === "0x6" && token.symbol === "STRK")
+                ? "10"
+                : "0";
+            return { ...token, balance, formatted: balance };
+          });
         },
       },
       session: createUnlockSession(),
@@ -91,9 +99,11 @@ describe("recovery discovery", () => {
         { account: { address: "0x2" }, deployed: false, funded: false },
         { account: { address: "0x3" }, deployed: true, funded: false },
         { account: { address: "0x4" }, deployed: false, funded: true },
+        { account: { address: "0x6" }, deployed: false, funded: true },
       ],
     });
     expect(manual).toMatchObject({ complete: false, nextIndex: 8, ok: true });
+    expect(requestedTokenSymbols.every((symbols) => symbols.join(",") === "ETH,STRK")).toBe(true);
     expect(
       (manual as { readonly candidates: readonly RecoveryAccountCandidate[] }).candidates.map(
         ({ account }) => `${account.accountContractType}:${account.derivation.accountIndex}`,

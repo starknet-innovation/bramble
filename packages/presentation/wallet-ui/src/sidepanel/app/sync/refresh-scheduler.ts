@@ -53,6 +53,12 @@ export const createRefreshScheduler = ({
   let queued: RefreshReason | null = null;
   let stopped = true;
 
+  const queue = (reason: RefreshReason): void => {
+    if (queued === null || reason === "action" || (reason === "event" && queued === "ambient")) {
+      queued = reason;
+    }
+  };
+
   const clearGeneral = (): void => {
     if (generalTimer !== null) {
       clearTimer(generalTimer);
@@ -67,6 +73,15 @@ export const createRefreshScheduler = ({
     burstTimers = [];
   };
 
+  const scheduleBurst = (delayMs: number): ReturnType<typeof setTimeout> => {
+    let timer: ReturnType<typeof setTimeout>;
+    timer = setTimer(() => {
+      burstTimers = burstTimers.filter((candidate) => candidate !== timer);
+      void run("action");
+    }, delayMs);
+    return timer;
+  };
+
   const scheduleGeneral = (): void => {
     clearGeneral();
     if (stopped || !visible()) {
@@ -79,17 +94,23 @@ export const createRefreshScheduler = ({
   };
 
   const run = async (reason: RefreshReason): Promise<void> => {
-    if (stopped || !visible()) {
-      scheduleGeneral();
+    if (stopped) {
+      return;
+    }
+    if (!visible()) {
+      queue(reason);
       return;
     }
     if (running) {
-      queued = reason === "action" || queued === null ? reason : queued;
+      queue(reason);
       return;
     }
+    queue(reason);
+    const activeReason = queued ?? reason;
+    queued = null;
     running = true;
     try {
-      await refresh(reason);
+      await refresh(activeReason);
     } catch {
       // Polling is best-effort; the next event or interval retries.
     } finally {
@@ -108,11 +129,7 @@ export const createRefreshScheduler = ({
     afterAction() {
       clearGeneral();
       clearBurst();
-      burstTimers = burstDelaysMs.map((delayMs) =>
-        setTimer(() => {
-          void run("action");
-        }, delayMs),
-      );
+      burstTimers = burstDelaysMs.map(scheduleBurst);
     },
     refreshNow() {
       clearGeneral();
@@ -130,11 +147,15 @@ export const createRefreshScheduler = ({
     },
     visibilityChanged() {
       if (!visible()) {
+        if (burstTimers.length > 0) queue("action");
         clearGeneral();
         clearBurst();
         return;
       }
-      void run("ambient");
+      const reason = queued ?? "ambient";
+      queued = null;
+      if (reason === "action") clearBurst();
+      void run(reason);
     },
   };
 };

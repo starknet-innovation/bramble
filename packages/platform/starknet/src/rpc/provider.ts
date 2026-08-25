@@ -267,7 +267,7 @@ export const withRpcFallback = async <T>(
         endpointCooldowns.delete(nodeUrl);
         throw error;
       }
-      endpointCooldowns.set(nodeUrl, currentTime + RPC_ENDPOINT_COOLDOWN_MS);
+      endpointCooldowns.set(nodeUrl, now() + RPC_ENDPOINT_COOLDOWN_MS);
       lastError = error;
     }
   }

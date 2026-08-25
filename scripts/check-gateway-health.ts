@@ -1,5 +1,10 @@
 /** Sanitized synthetic health probe for bundled Starknet RPC lanes. */
 
+import {
+  HTTP_BODY_LIMITS,
+  readBoundedText,
+  UNTRUSTED_REQUEST_INIT,
+} from "../packages/foundation/core/src/http-json";
 import { STARKNET_NETWORKS } from "../packages/foundation/wallet-model/src/networks/networks";
 
 type ProbeOutcome = "http-error" | "ok" | "rate-limited" | "timeout" | "transport-error";
@@ -53,20 +58,24 @@ const probe = async (
   options: Required<ProbeOptions>,
 ): Promise<GatewayProbeResult> => {
   const startedAt = options.now();
+  const deadline = AbortSignal.timeout(options.timeoutMs);
   let outcome: ProbeOutcome;
   try {
     const response = await options.fetch(target.url, {
+      ...UNTRUSTED_REQUEST_INIT,
       body: JSON.stringify({ id: 1, jsonrpc: "2.0", method: "starknet_chainId", params: [] }),
       headers: { "content-type": "application/json" },
       method: "POST",
-      signal: AbortSignal.timeout(options.timeoutMs),
+      signal: deadline,
     });
     if (response.status === 429) {
       outcome = "rate-limited";
     } else if (!response.ok) {
       outcome = "http-error";
     } else {
-      const body: unknown = await response.json();
+      const body: unknown = JSON.parse(
+        await readBoundedText(response, HTTP_BODY_LIMITS.errorDetail, deadline),
+      );
       outcome =
         typeof body === "object" &&
         body !== null &&
@@ -77,7 +86,7 @@ const probe = async (
     }
   } catch (error) {
     outcome =
-      error instanceof DOMException && error.name === "TimeoutError"
+      deadline.aborted || (error instanceof DOMException && error.name === "TimeoutError")
         ? "timeout"
         : "transport-error";
   }
