@@ -243,6 +243,39 @@ describe("starknet RPC helpers", () => {
     expect(writes).toEqual(["https://selected.example"]);
   });
 
+  test("shares failed-endpoint cooldowns with write selection", async () => {
+    let currentTime = 1_000;
+    const attempts: string[] = [];
+    const urls = [
+      "https://write-cooldown-one.example",
+      "https://write-cooldown-two.example",
+    ] as const;
+    const provider = (nodeUrl: string) =>
+      ({
+        async getChainId() {
+          attempts.push(nodeUrl);
+          if (nodeUrl === urls[0]) throw new Error("offline");
+          return "0x534e5f4d41494e";
+        },
+      }) as unknown as import("starknet").RpcProvider;
+    const write = () =>
+      withRpcWrite(
+        urls,
+        "0x534e5f4d41494e",
+        async () => "ok",
+        provider,
+        () => currentTime,
+      );
+
+    await expect(write()).resolves.toBe("ok");
+    await expect(write()).resolves.toBe("ok");
+    expect(attempts).toEqual([urls[0], urls[1], urls[1]]);
+
+    currentTime += 30_000;
+    await expect(write()).resolves.toBe("ok");
+    expect(attempts.slice(-2)).toEqual([...urls]);
+  });
+
   // A wrong chain is actionable; an unreachable endpoint is not. The later
   // transport failure must not replace it.
   test("reports a wrong-chain endpoint even when a later endpoint is unreachable", async () => {

@@ -128,7 +128,7 @@ export const appearanceFlow = (
         attributes: { id: "reliability-diagnostics" },
         checked: preferences?.reliabilityDiagnostics ?? false,
         name: "reliabilityDiagnostics",
-        text: "Keep anonymous RPC reliability counters on this device",
+        text: "Keep anonymous RPC and explorer reliability counters on this device",
       })}
       <p class="hint">No addresses, sites, transaction data, endpoint URLs, or raw errors are collected. Nothing is uploaded; you choose whether to export it.</p>
       ${button({ attributes: { id: "diagnostics-export" }, icon: "receive", label: "Download diagnostics" })}

@@ -9,6 +9,7 @@ import {
   readValidateMnemonicInput,
 } from "../../../apps/extension/src/background/accounts/account-creation-inputs";
 import {
+  readActivityInput,
   readAddAccountInput,
   readAddInvokeTransactionInput,
   readApprovalIdInput,
@@ -35,6 +36,17 @@ describe("background message parsers", () => {
     expect(readTypeOnlyInput({ type: "wallet.status" }, "wallet.status")).toBe(true);
     expect(readTypeOnlyInput({ debug: true, type: "wallet.status" }, "wallet.status")).toBe(false);
     expect(readTypeOnlyInput({ type: "wallet.lock" }, "wallet.status")).toBe(false);
+  });
+
+  test("requires an explicit history refresh before a forced explorer scan", () => {
+    expect(readActivityInput({ forceHistory: true, type: "wallet.activity" })).toBeNull();
+    expect(
+      readActivityInput({ forceHistory: true, refreshHistory: true, type: "wallet.activity" }),
+    ).toEqual({
+      cached: false,
+      forceHistory: true,
+      refreshHistory: true,
+    });
   });
 
   test("reject extra fields in runtime messages", () => {

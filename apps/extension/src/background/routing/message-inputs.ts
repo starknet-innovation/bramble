@@ -115,24 +115,23 @@ export const readFeeReviewInput = (
         ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
       }
     : null;
-/**
- * Parses an activity request for either the active signer or one explicitly
- * selected watched account. The background resolves and authorizes the scope;
- * this boundary accepts only a well-formed account id and no unknown fields.
- */
+/** Parses a scoped activity read and its bounded history-refresh intent. */
 export const readActivityInput = (
   message: unknown,
 ): {
   readonly accountId?: string;
   readonly cached: boolean;
+  readonly forceHistory: boolean;
   readonly refreshHistory: boolean;
 } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountId", "cached", "refreshHistory", "type"]) ||
+    !hasOnlyKnownKeys(message, ["accountId", "cached", "forceHistory", "refreshHistory", "type"]) ||
     message["type"] !== "wallet.activity" ||
     (message["cached"] !== undefined && message["cached"] !== true) ||
+    (message["forceHistory"] !== undefined && message["forceHistory"] !== true) ||
     (message["refreshHistory"] !== undefined && message["refreshHistory"] !== true) ||
+    (message["forceHistory"] === true && message["refreshHistory"] !== true) ||
     (message["accountId"] !== undefined && !isAccountId(message["accountId"]))
   ) {
     return null;
@@ -140,6 +139,7 @@ export const readActivityInput = (
   return {
     ...(message["accountId"] === undefined ? {} : { accountId: message["accountId"] }),
     cached: message["cached"] === true,
+    forceHistory: message["forceHistory"] === true,
     refreshHistory: message["refreshHistory"] === true,
   };
 };

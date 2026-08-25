@@ -5,13 +5,14 @@
  * `getStarkscanTransactionHistory`) are the gateway lane and are exported for
  * the fallback wiring and its tests; the two `createRpcFirst*` factories are
  * what production consumes, and they reach the gateway only after the user's own
- * endpoints have failed AND the user's per-network `explorerFallback`
+ * endpoints have failed at the transport layer AND the user's per-network `explorerFallback`
  * preference permits it. The names say which source is tried first on purpose:
  * an earlier spelling ("StarkscanPreferred") outlived the ordering it described
  * and read as an endorsement of the third party.
  */
 
 import { isSafeDecimals } from "@mc-wallet/core/json";
+import { isTransportRpcError } from "@mc-wallet/starknet/provider";
 import {
   type BalanceInput,
   formatTokenAmount,
@@ -208,8 +209,8 @@ const gatewayAllowedFor = async (
 
 /**
  * Serves balances from the user's configured Starknet RPC and falls back to the
- * public explorer gateway only when every configured endpoint fails and the
- * user's `explorerFallback` preference permits that lane for the network.
+ * public explorer gateway only when every configured endpoint has a transport
+ * outage and the user's `explorerFallback` preference permits that lane.
  *
  * The configured endpoints are the user's own trust and privacy choice, and
  * latest-state RPC is authoritative; the gateway is a third party that learns
@@ -229,7 +230,10 @@ export const createRpcFirstBalances =
     try {
       return await getTokenBalances(input, makeProvider);
     } catch (rpcFailure) {
-      if (!(await gatewayAllowedFor(readPreferences, input.tokens[0]?.networkId))) {
+      if (
+        !isTransportRpcError(rpcFailure) ||
+        !(await gatewayAllowedFor(readPreferences, input.tokens[0]?.networkId))
+      ) {
         throw rpcFailure;
       }
       try {
@@ -247,8 +251,9 @@ export const createRpcFirstBalances =
  *
  * Same trust ordering and same `explorerFallback` gate as
  * {@link createRpcFirstBalances}: the gateway sees the account address only
- * when the user's own endpoints cannot answer and the user has not refused the
- * lane. A refused or failed gateway re-throws the RPC failure, so the caller
+ * when the user's own endpoints cannot be reached and the user has not refused
+ * the lane. A semantic RPC answer is never replaced. A refused or failed
+ * gateway re-throws the RPC failure, so the caller
  * still degrades to the local activity log with an honest "history unavailable"
  * indicator rather than a third party's account of the outage.
  */
@@ -258,7 +263,10 @@ export const createRpcFirstHistory =
     try {
       return await scanTransactionHistory(input, makeProvider);
     } catch (rpcFailure) {
-      if (!(await gatewayAllowedFor(readPreferences, input.networkId))) {
+      if (
+        !isTransportRpcError(rpcFailure) ||
+        !(await gatewayAllowedFor(readPreferences, input.networkId))
+      ) {
         throw rpcFailure;
       }
       try {

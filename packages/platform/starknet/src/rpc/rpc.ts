@@ -479,9 +479,10 @@ export const getTransactionStatuses = async (
   withRpcFallback(
     rpcUrls,
     async (provider) => {
+      const uniqueHashes = [...new Set(hashes)];
       const entries: (readonly [string, TransactionStatusReport])[] = [];
-      for (let offset = 0; offset < hashes.length; offset += TRANSACTION_STATUS_CONCURRENCY) {
-        const batch = hashes.slice(offset, offset + TRANSACTION_STATUS_CONCURRENCY);
+      for (let offset = 0; offset < uniqueHashes.length; offset += TRANSACTION_STATUS_CONCURRENCY) {
+        const batch = uniqueHashes.slice(offset, offset + TRANSACTION_STATUS_CONCURRENCY);
         entries.push(
           ...(await Promise.all(
             batch.map((transactionHash) => transactionStatusEntry(provider, transactionHash)),

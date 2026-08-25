@@ -1,4 +1,4 @@
-/** Privacy-safe, process-local RPC reliability counters. */
+/** Privacy-safe, process-local network reliability counters. */
 
 /** Endpoint classes exposed in a diagnostic export. Exact URLs never leave the transport. */
 export type RpcEndpointClass = "custom" | "foundation" | "wallet-gateway";
@@ -14,13 +14,33 @@ export type RpcDiagnosticRow = {
   readonly outcome: RpcOutcome;
 };
 
+/** Explorer API outcomes stay separate from Starknet JSON-RPC outcomes. */
+export type ExplorerOutcome =
+  | "http-error"
+  | "invalid-response"
+  | "ok"
+  | "rate-limited"
+  | "transport-error";
+
+/** One identifier-free aggregate for the optional explorer fallback lane. */
+export type ExplorerDiagnosticRow = {
+  readonly count: number;
+  readonly latencyMs: number;
+  readonly outcome: ExplorerOutcome;
+  readonly service: "starkscan";
+};
+
 const rows = new Map<string, RpcDiagnosticRow>();
+const explorerRows = new Map<string, ExplorerDiagnosticRow>();
 let enabled = false;
 
 /** Enables or clears process-local reliability counters. No diagnostic is transmitted. */
-export const setRpcDiagnosticsEnabled = (next: boolean): void => {
+export const setReliabilityDiagnosticsEnabled = (next: boolean): void => {
   enabled = next;
-  if (!next) rows.clear();
+  if (!next) {
+    rows.clear();
+    explorerRows.clear();
+  }
 };
 
 /** Classifies an endpoint without retaining its URL, host, path, or request. */
@@ -57,4 +77,28 @@ export const recordRpcDiagnostic = (
 export const rpcDiagnosticsSnapshot = (): readonly RpcDiagnosticRow[] =>
   [...rows.values()].sort((left, right) =>
     `${left.endpoint}:${left.outcome}`.localeCompare(`${right.endpoint}:${right.outcome}`),
+  );
+
+/** Records one explorer API result without mixing it into RPC request counts. */
+export const recordExplorerDiagnostic = (
+  service: ExplorerDiagnosticRow["service"],
+  outcome: ExplorerOutcome,
+  latencyMs: number,
+): void => {
+  if (!enabled) return;
+  const key = `${service}:${outcome}`;
+  const previous = explorerRows.get(key);
+  const count = (previous?.count ?? 0) + 1;
+  explorerRows.set(key, {
+    count,
+    latencyMs: Math.round(((previous?.latencyMs ?? 0) * (count - 1) + latencyMs) / count),
+    outcome,
+    service,
+  });
+};
+
+/** Returns explorer-only aggregates; RPC calls are never included. */
+export const explorerDiagnosticsSnapshot = (): readonly ExplorerDiagnosticRow[] =>
+  [...explorerRows.values()].sort((left, right) =>
+    `${left.service}:${left.outcome}`.localeCompare(`${right.service}:${right.outcome}`),
   );

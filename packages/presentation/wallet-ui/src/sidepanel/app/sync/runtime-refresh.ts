@@ -61,7 +61,6 @@ export type MutationRefresh = "burst" | "once";
 // confirmation polls. Local preferences, labels, imports, and prepared intents
 // repaint once instead of amplifying every change into six full hydrations.
 const CHAIN_SETTLING_MESSAGES: ReadonlySet<string> = new Set([
-  "wallet.approveOrigin",
   "wallet.deployAccount",
   "wallet.deployArgentMultisig",
   "wallet.revokeAllowance",

@@ -192,6 +192,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       accountId?: string,
       cached = false,
       refreshHistory = false,
+      forceHistory = false,
     ): Promise<{
       readonly entries: ActivityResponse["activity"];
       readonly historyUnavailable: boolean;
@@ -199,7 +200,8 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({
         ...(accountId === undefined ? {} : { accountId }),
         ...(cached ? { cached: true } : {}),
-        ...(refreshHistory ? { refreshHistory: true } : {}),
+        ...(refreshHistory || forceHistory ? { refreshHistory: true } : {}),
+        ...(forceHistory ? { forceHistory: true } : {}),
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {

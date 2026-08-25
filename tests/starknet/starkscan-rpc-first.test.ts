@@ -6,6 +6,7 @@
  * masks the user's own endpoint failure.
  */
 import { describe, expect, test } from "bun:test";
+import { WalletError } from "@mc-wallet/core/errors";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import type { StarkscanClient } from "@mc-wallet/transactions/starkscan";
 import { createStarkscanClient, type StarkscanHttp } from "@mc-wallet/transactions/starkscan";
@@ -156,6 +157,22 @@ describe("wallet reads prefer the configured RPC", () => {
     const balances = await rpcFirstBalances(client)(balanceInput, failingRpc);
     expect(balances[0]?.balance).toBe("77");
     expect(urls).toHaveLength(1);
+  });
+
+  test("does not disclose the address after a semantic RPC failure", async () => {
+    const { client, urls } = gateway(holdingsBody);
+    await expect(
+      rpcFirstBalances(client)(
+        balanceInput,
+        () =>
+          ({
+            async callContract() {
+              throw new WalletError("Invalid token balance response");
+            },
+          }) as unknown as RpcProvider,
+      ),
+    ).rejects.toThrow("Invalid token balance response");
+    expect(urls).toEqual([]);
   });
 
   test("reports the RPC failure, not the gateway's, when neither answers", async () => {

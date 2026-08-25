@@ -269,6 +269,12 @@ export const isPreferencesResponse = (value: unknown): value is PreferencesRespo
 export type SupportDiagnostics = {
   readonly accountCount: number;
   readonly collectionEnabled: boolean;
+  readonly explorer: readonly {
+    readonly count: number;
+    readonly latencyMs: number;
+    readonly outcome: "http-error" | "invalid-response" | "ok" | "rate-limited" | "transport-error";
+    readonly service: "starkscan";
+  }[];
   readonly hasVault: boolean;
   readonly locked: boolean;
   readonly networkId: string;
@@ -280,6 +286,16 @@ export type SupportDiagnostics = {
     readonly outcome: "ok" | "rate-limited" | "timeout" | "transport-error";
   }[];
 };
+
+const isExplorerDiagnosticRow = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["count", "latencyMs", "outcome", "service"]) &&
+  Number.isInteger(value["count"]) &&
+  Number.isInteger(value["latencyMs"]) &&
+  value["service"] === "starkscan" &&
+  ["http-error", "invalid-response", "ok", "rate-limited", "transport-error"].includes(
+    String(value["outcome"]),
+  );
 
 const isRpcDiagnosticRow = (value: unknown): boolean =>
   isRecord(value) &&
@@ -311,6 +327,7 @@ export const isSupportDiagnosticsResponse = (
     hasOnlyKnownKeys(diagnostics, [
       "accountCount",
       "collectionEnabled",
+      "explorer",
       "hasVault",
       "locked",
       "networkId",
@@ -319,6 +336,8 @@ export const isSupportDiagnosticsResponse = (
     ]) &&
     Number.isInteger(diagnostics["accountCount"]) &&
     typeof diagnostics["collectionEnabled"] === "boolean" &&
+    Array.isArray(diagnostics["explorer"]) &&
+    diagnostics["explorer"].every(isExplorerDiagnosticRow) &&
     typeof diagnostics["hasVault"] === "boolean" &&
     typeof diagnostics["locked"] === "boolean" &&
     typeof diagnostics["networkId"] === "string" &&

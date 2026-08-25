@@ -48,6 +48,27 @@ const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(
 const RPC_ENDPOINT_COOLDOWN_MS = 30_000;
 const endpointCooldowns = new Map<string, number>();
 
+const availableRpcUrls = (rpcUrls: readonly string[], currentTime: number): readonly string[] => {
+  for (const [nodeUrl, retryAt] of endpointCooldowns) {
+    if (retryAt <= currentTime) endpointCooldowns.delete(nodeUrl);
+  }
+  const unique = [...new Set(rpcUrls)];
+  const ready = unique.filter((nodeUrl) => !endpointCooldowns.has(nodeUrl));
+  return ready.length > 0
+    ? ready
+    : unique
+        .sort(
+          (left, right) =>
+            (endpointCooldowns.get(left) ?? currentTime) -
+            (endpointCooldowns.get(right) ?? currentTime),
+        )
+        .slice(0, 1);
+};
+
+const coolDownRpcUrl = (nodeUrl: string, now: () => number): void => {
+  endpointCooldowns.set(nodeUrl, now() + RPC_ENDPOINT_COOLDOWN_MS);
+};
+
 /**
  * Safe marker for a write whose transport failed after submission began. The
  * message is curated for display; no RPC error, request body, or proof material
@@ -242,22 +263,7 @@ export const withRpcFallback = async <T>(
   now: () => number = Date.now,
 ): Promise<T> => {
   let lastError: unknown = new WalletError("No RPC endpoints configured");
-  const currentTime = now();
-  for (const [nodeUrl, retryAt] of endpointCooldowns) {
-    if (retryAt <= currentTime) endpointCooldowns.delete(nodeUrl);
-  }
-  const ready = rpcUrls.filter((nodeUrl) => !endpointCooldowns.has(nodeUrl));
-  const candidates =
-    ready.length > 0
-      ? ready
-      : [...rpcUrls]
-          .sort(
-            (left, right) =>
-              (endpointCooldowns.get(left) ?? currentTime) -
-              (endpointCooldowns.get(right) ?? currentTime),
-          )
-          .slice(0, 1);
-  for (const nodeUrl of candidates) {
+  for (const nodeUrl of availableRpcUrls(rpcUrls, now())) {
     try {
       const result = await run(makeProvider(nodeUrl));
       endpointCooldowns.delete(nodeUrl);
@@ -267,7 +273,7 @@ export const withRpcFallback = async <T>(
         endpointCooldowns.delete(nodeUrl);
         throw error;
       }
-      endpointCooldowns.set(nodeUrl, now() + RPC_ENDPOINT_COOLDOWN_MS);
+      coolDownRpcUrl(nodeUrl, now);
       lastError = error;
     }
   }
@@ -289,6 +295,30 @@ const writeFailure = (error: unknown): unknown => {
   return isTransportRpcError(error) ? new WalletError(PREPARATION_UNAVAILABLE) : error;
 };
 
+const selectWriteProvider = async (
+  rpcUrls: readonly string[],
+  expectedChainId: string,
+  makeProvider: (nodeUrl: string) => RpcProvider,
+  now: () => number,
+): Promise<{ readonly provider: RpcProvider; readonly url: string }> => {
+  let lastError: unknown = new WalletError("No RPC endpoints configured");
+  let chainMismatch: WalletError | null = null;
+  for (const nodeUrl of availableRpcUrls(rpcUrls, now())) {
+    try {
+      const provider = makeProvider(nodeUrl);
+      const chainId = await provider.getChainId();
+      endpointCooldowns.delete(nodeUrl);
+      if (sameFelt(chainId, expectedChainId)) return { provider, url: nodeUrl };
+      chainMismatch = new WalletError(WRONG_CHAIN_MESSAGE);
+    } catch (error) {
+      if (isTransportRpcError(error)) coolDownRpcUrl(nodeUrl, now);
+      else endpointCooldowns.delete(nodeUrl);
+      lastError = error;
+    }
+  }
+  throw chainMismatch ?? lastError;
+};
+
 /**
  * Selects a chain-matching endpoint with read-only probes, then runs a
  * state-changing operation exactly once. Only the three add-transaction JSON-
@@ -301,32 +331,15 @@ export const withRpcWrite = async <T>(
   expectedChainId: string,
   run: (provider: RpcProvider) => Promise<T>,
   makeProvider: (nodeUrl: string) => RpcProvider = createRpcProvider,
+  now: () => number = Date.now,
 ): Promise<T> => {
-  let selected: RpcProvider | null = null;
-  let lastError: unknown = new WalletError("No RPC endpoints configured");
-  // Kept out of `lastError` so a later unreachable endpoint cannot bury it: a
-  // wrong chain is the only outcome here the user can act on.
-  let chainMismatch: WalletError | null = null;
-  for (const nodeUrl of rpcUrls) {
-    try {
-      const provider = makeProvider(nodeUrl);
-      const chainId = await provider.getChainId();
-      if (!sameFelt(chainId, expectedChainId)) {
-        chainMismatch = new WalletError(WRONG_CHAIN_MESSAGE);
-        continue;
-      }
-      selected = provider;
-      break;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  if (!selected) {
-    throw chainMismatch ?? lastError;
-  }
+  const selected = await selectWriteProvider(rpcUrls, expectedChainId, makeProvider, now);
   try {
-    return await run(guardRpcBroadcasts(selected));
+    return await run(guardRpcBroadcasts(selected.provider));
   } catch (error) {
+    if (error instanceof IndeterminateRpcWriteError || isTransportRpcError(error)) {
+      coolDownRpcUrl(selected.url, now);
+    }
     throw writeFailure(error);
   }
 };

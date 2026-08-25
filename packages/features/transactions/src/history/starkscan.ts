@@ -10,6 +10,10 @@ import {
 } from "@mc-wallet/core/http-json";
 import { isRecord } from "@mc-wallet/core/json";
 import { trimTrailingSlashes } from "@mc-wallet/core/service-url";
+import {
+  type ExplorerOutcome,
+  recordExplorerDiagnostic,
+} from "@mc-wallet/starknet/rpc-diagnostics";
 import { canonicalFelt, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import {
   parseStarkscanAddress,
@@ -52,6 +56,7 @@ export type StarkscanClientOptions = {
   readonly apiKey?: string;
   readonly baseUrl: string;
   readonly http?: StarkscanHttp;
+  readonly now?: () => number;
   readonly timeoutMs?: number;
 };
 
@@ -70,6 +75,12 @@ export class StarkscanError extends Error {
     this.name = "StarkscanError";
   }
 }
+
+const explorerOutcome = (error: unknown): ExplorerOutcome => {
+  if (!(error instanceof StarkscanError) || error.status === null) return "transport-error";
+  if (error.status === 429) return "rate-limited";
+  return error.status >= 400 ? "http-error" : "invalid-response";
+};
 
 /**
  * Typed read-only Starkscan endpoints consumed by wallet and terminal adapters.
@@ -252,6 +263,7 @@ export const createStarkscanClient = ({
   apiKey,
   baseUrl,
   http = (url, init) => fetch(url, init),
+  now = () => performance.now(),
   timeoutMs = DEFAULT_TIMEOUT_MS,
 }: StarkscanClientOptions): StarkscanClient => {
   const base = trimTrailingSlashes(baseUrl);
@@ -262,7 +274,15 @@ export const createStarkscanClient = ({
     query?: URLSearchParams,
   ): Promise<T> => {
     const url = `${base}/${chainId}/${route}${query === undefined ? "" : `?${query.toString()}`}`;
-    return parseResponse(await fetchResponse(http, url, apiKey, timeoutMs), parse);
+    const startedAt = now();
+    try {
+      const result = await parseResponse(await fetchResponse(http, url, apiKey, timeoutMs), parse);
+      recordExplorerDiagnostic("starkscan", "ok", now() - startedAt);
+      return result;
+    } catch (error) {
+      recordExplorerDiagnostic("starkscan", explorerOutcome(error), now() - startedAt);
+      throw error;
+    }
   };
 
   return {

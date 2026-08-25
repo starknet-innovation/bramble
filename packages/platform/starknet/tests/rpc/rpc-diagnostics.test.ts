@@ -1,20 +1,23 @@
 /** Privacy-safe RPC diagnostic aggregation behavior. */
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  explorerDiagnosticsSnapshot,
+  recordExplorerDiagnostic,
   recordRpcDiagnostic,
   rpcDiagnosticsSnapshot,
   rpcEndpointClass,
-  setRpcDiagnosticsEnabled,
+  setReliabilityDiagnosticsEnabled,
 } from "../../src/rpc/rpc-diagnostics";
 import { timedRpcFetch } from "../../src/rpc/rpc-transport";
 
-afterEach(() => setRpcDiagnosticsEnabled(false));
+afterEach(() => setReliabilityDiagnosticsEnabled(false));
 
 describe("RPC diagnostics", () => {
   test("retains only bounded endpoint and outcome aggregates when opted in", () => {
-    setRpcDiagnosticsEnabled(true);
+    setReliabilityDiagnosticsEnabled(true);
     recordRpcDiagnostic("wallet-gateway", "ok", 10);
     recordRpcDiagnostic("wallet-gateway", "ok", 20);
+    recordExplorerDiagnostic("starkscan", "ok", 30);
 
     expect(rpcDiagnosticsSnapshot()).toEqual([
       { count: 2, endpoint: "wallet-gateway", latencyMs: 15, outcome: "ok" },
@@ -23,13 +26,17 @@ describe("RPC diagnostics", () => {
       "wallet-gateway",
     );
     expect(rpcEndpointClass("https://mainnet.nodes.starknet.org/rpc/v0_10")).toBe("foundation");
+    expect(explorerDiagnosticsSnapshot()).toEqual([
+      { count: 1, latencyMs: 30, outcome: "ok", service: "starkscan" },
+    ]);
 
-    setRpcDiagnosticsEnabled(false);
+    setReliabilityDiagnosticsEnabled(false);
     expect(rpcDiagnosticsSnapshot()).toEqual([]);
+    expect(explorerDiagnosticsSnapshot()).toEqual([]);
   });
 
   test("classifies a stalled response body as a timeout", async () => {
-    setRpcDiagnosticsEnabled(true);
+    setReliabilityDiagnosticsEnabled(true);
     const rpcFetch = timedRpcFetch(
       5,
       async () =>

@@ -3,6 +3,7 @@ import type { MultisigStore } from "@mc-wallet/multisig/repository";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import {
   type ActivityEntry,
+  type ActivityHistoryState,
   type ActivityLog,
   type ActivityScope,
   activityForScope,
@@ -35,6 +36,20 @@ type ActivityTarget = {
   readonly networkId: StarknetNetworkId;
   readonly scope: ActivityScope;
 };
+
+const HISTORY_FRESH_MS = 5 * 60_000;
+const HISTORY_RETRY_MS = 60_000;
+
+const historyRefreshDue = (sync: ActivityHistoryState | null, now: number): boolean =>
+  sync === null ||
+  sync.syncedAt > now ||
+  now - sync.syncedAt >= (sync.unavailable ? HISTORY_RETRY_MS : HISTORY_FRESH_MS);
+
+const shouldScanHistory = (
+  input: { readonly forceHistory: boolean; readonly refreshHistory: boolean },
+  sync: ActivityHistoryState | null,
+  now: number,
+): boolean => input.refreshHistory && (input.forceHistory || historyRefreshDue(sync, now));
 
 const activityTarget = async (
   deps: ActivityOpsDeps,
@@ -111,7 +126,7 @@ export const handleActivity = async (
   // History discovery is intentionally screen-driven. Ambient Home refreshes
   // reconcile only transactions still under observation; entering Activity or
   // pressing its refresh control opts into the larger event scan explicitly.
-  const scanHistory = input.refreshHistory;
+  const scanHistory = shouldScanHistory(input, previousSync ?? null, now);
   const history = scanHistory
     ? await accountHistory(deps, target)
     : { onChain: [], unavailable: previousSync?.unavailable ?? false };

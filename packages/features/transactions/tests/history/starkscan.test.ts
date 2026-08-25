@@ -1,7 +1,12 @@
 /**
  * Starkscan transport and parser boundary checks using representative payloads.
  */
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import {
+  explorerDiagnosticsSnapshot,
+  rpcDiagnosticsSnapshot,
+  setReliabilityDiagnosticsEnabled,
+} from "@mc-wallet/starknet/rpc-diagnostics";
 import { createStarkscanClient, StarkscanError } from "@mc-wallet/transactions/starkscan";
 
 const ACCOUNT = "0x6c16710431efd3962d3c6f55faf00d8c855188029acb42781b9ac77c438ade5";
@@ -13,12 +18,17 @@ const jsonResponse = (value: unknown, init?: ResponseInit): Response =>
     ...init,
   });
 
+afterEach(() => setReliabilityDiagnosticsEnabled(false));
+
 describe("Starkscan client boundary", () => {
   test("normalizes an adversarial trailing-slash run before requesting", async () => {
+    setReliabilityDiagnosticsEnabled(true);
+    let currentTime = 0;
     let requested = "";
     const client = createStarkscanClient({
       baseUrl: `https://api.starkscan.test/v1${"/".repeat(8_192)}`,
       async http(url) {
+        currentTime = 12;
         requested = url;
         return jsonResponse({
           address: ACCOUNT,
@@ -32,10 +42,15 @@ describe("Starkscan client boundary", () => {
           deployedByAddress: null,
         });
       },
+      now: () => currentTime,
     });
 
     await client.getAddress("SN_MAIN", ACCOUNT);
     expect(requested).toBe(`https://api.starkscan.test/v1/SN_MAIN/address/${ACCOUNT}`);
+    expect(explorerDiagnosticsSnapshot()).toEqual([
+      { count: 1, latencyMs: 12, outcome: "ok", service: "starkscan" },
+    ]);
+    expect(rpcDiagnosticsSnapshot()).toEqual([]);
   });
 
   test("builds authenticated routes and parses complete token holdings", async () => {

@@ -339,10 +339,10 @@ describe("activity feed", () => {
     expect(sent[0]).toEqual({ accountId: "SN_MAIN:0x999", type: "wallet.activity" });
   });
 
-  test("loadActivity requests history only when the screen explicitly refreshes it", async () => {
+  test("loadActivity can force an explicit history refresh", async () => {
     const { sent, wallet } = captureRuntime({ activity: [activityEntry], ok: true });
-    await wallet.loadActivity(undefined, false, true);
-    expect(sent[0]).toEqual({ refreshHistory: true, type: "wallet.activity" });
+    await wallet.loadActivity(undefined, false, true, true);
+    expect(sent[0]).toEqual({ forceHistory: true, refreshHistory: true, type: "wallet.activity" });
   });
 
   test("loadActivity defaults historyUnavailable to false when omitted", async () => {
@@ -426,6 +426,7 @@ describe("token and preference wrappers", () => {
     const diagnostics = {
       accountCount: 2,
       collectionEnabled: true,
+      explorer: [{ count: 1, latencyMs: 30, outcome: "ok", service: "starkscan" }],
       hasVault: true,
       locked: false,
       networkId: "SN_MAIN",

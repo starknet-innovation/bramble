@@ -26,9 +26,10 @@ during temporary network disruption, while visible freshness indicators distingu
 current network state.
 
 Reliability diagnostics are optional and off by default. If enabled, MC Wallet keeps only anonymous,
-process-local counts of RPC endpoint classes, outcome classes, and average latency. It never includes
-addresses, sites, hashes, calldata, endpoint URLs, or raw errors, and nothing is uploaded
-automatically. The user may download the report and decide whether to share it with support.
+separate process-local counts for RPC endpoint classes and the optional Starkscan explorer service,
+with outcome classes and average latency. It never includes addresses, sites, hashes, calldata,
+endpoint URLs, or raw errors, and nothing is uploaded automatically. The user may download the
+report and decide whether to share it with support.
 
 MC Wallet is non-custodial software. Keep your recovery phrase offline. No maintainer or support
 agent will ask for it.

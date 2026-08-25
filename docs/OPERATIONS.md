@@ -51,15 +51,17 @@ bun run scripts/check-gateway-health.ts
 ## Privacy-safe diagnostics
 
 Reliability counters are disabled by default. A user may enable them under **Settings → Appearance
-& currency → Reliability diagnostics**. The service worker then keeps process-local aggregate
-counts for fixed endpoint classes, outcomes, and average latency. Disabling the setting clears the
-counters. No diagnostic is uploaded automatically.
+& currency → Reliability diagnostics**. The service worker then keeps separate process-local
+aggregate rows for Starknet JSON-RPC endpoints and the optional Starkscan explorer lane, using only
+fixed service/endpoint classes, outcomes, and average latency. Disabling the setting clears both
+sets of counters. No diagnostic is uploaded automatically.
 
 **Download diagnostics** creates a JSON file containing build metadata, coarse wallet state
-(network, locked/ready/vault booleans, and account count), and the aggregate RPC rows. Exact URLs,
-addresses, origins, hashes, calldata, RPC methods, raw errors, bodies, secrets, device identities,
-and timestamps are structurally absent. A support responder must ask the user to inspect the file
-and share it voluntarily; support must never ask for any other wallet export.
+(network, locked/ready/vault booleans, and account count), plus distinct `rpc` and `explorer`
+aggregate rows. Explorer traffic is never counted as RPC. Exact URLs, addresses, origins, hashes,
+calldata, RPC methods, raw errors, bodies, secrets, device identities, and timestamps are
+structurally absent. A support responder must ask the user to inspect the file and share it
+voluntarily; support must never ask for any other wallet export.
 
 ## Incident procedure
 

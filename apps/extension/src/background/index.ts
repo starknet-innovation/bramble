@@ -20,7 +20,7 @@ import {
   createPreferencesStore,
   type WalletPreferences,
 } from "@mc-wallet/settings/preferences";
-import { setRpcDiagnosticsEnabled } from "@mc-wallet/starknet/rpc-diagnostics";
+import { setReliabilityDiagnosticsEnabled } from "@mc-wallet/starknet/rpc-diagnostics";
 import { createActivityLog, systemClock } from "@mc-wallet/transactions/activity";
 import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { createSwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
@@ -167,14 +167,14 @@ const preferences = storageReady
   .catch(() => null);
 const preferenceStore = createBackgroundPreferences({
   onApprovalSurface: updateApprovalSurface,
-  onReliabilityDiagnostics: setRpcDiagnosticsEnabled,
+  onReliabilityDiagnostics: setReliabilityDiagnosticsEnabled,
   store: preferences,
 });
 void preferences
   .then(async (store) => {
     const stored = await store?.read();
     updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
-    setRpcDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
+    setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
   })
   .catch(() => undefined);
 // The read-only slice of the fail-closed adapter above, handed to collaborators

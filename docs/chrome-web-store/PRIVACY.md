@@ -36,11 +36,12 @@ The phishing feed supplies a public denylist; MC Wallet does not send the curren
 ## Reliability diagnostics
 
 Reliability diagnostics are off by default and require affirmative in-product opt-in. When enabled,
-MC Wallet keeps process-local aggregate counts by coarse endpoint class, outcome class, and average
-latency. The report contains no address, site, transaction hash, calldata, RPC method, exact endpoint
-URL, raw error, raw response, timestamp, secret, or hardware identity. It is never uploaded
-automatically. A user may download it and choose whether to share that specific file with support.
-Disabling diagnostics clears the counters.
+MC Wallet keeps separate process-local aggregate rows for Starknet JSON-RPC and the optional
+Starkscan explorer lane, using only coarse endpoint or service classes, outcome classes, and average
+latency. Explorer requests are never counted as RPC. The report contains no address, site,
+transaction hash, calldata, RPC method, exact endpoint URL, raw error, raw response, timestamp,
+secret, or hardware identity. It is never uploaded automatically. A user may download it and choose
+whether to share that specific file with support. Disabling diagnostics clears the counters.
 
 ## Collection, sharing, and retention
 

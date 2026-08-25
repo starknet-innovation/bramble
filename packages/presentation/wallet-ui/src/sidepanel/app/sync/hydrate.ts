@@ -303,18 +303,23 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     multisigNftView,
   );
   const primaryJobs: Promise<unknown>[] = [];
-  const deferredJobs: Promise<unknown>[] = [];
+  const deferredJobs: Array<() => Promise<unknown>> = [];
   const streamingJobs: Promise<unknown>[] = [];
-  const fill = <T>(load: Promise<T>, assign: (value: T) => void, deferred = false): void => {
-    (deferred ? deferredJobs : primaryJobs).push(
-      load
+  const fill = <T>(
+    load: Promise<T> | (() => Promise<T>),
+    assign: (value: T) => void,
+    deferred = false,
+  ): void => {
+    const start = () =>
+      (typeof load === "function" ? load() : load)
         .then((value) => {
           if (isCurrent()) {
             assign(value);
           }
         })
-        .catch(() => undefined),
-    );
+        .catch(() => undefined);
+    if (deferred) deferredJobs.push(start);
+    else primaryJobs.push(start());
   };
   const stream = <T>(load: Promise<T>, assign: (value: T) => void): void => {
     streamingJobs.push(
@@ -352,7 +357,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (activeView === "home") {
     fill(
-      deployment.load(status, activeView),
+      () => deployment.load(status, activeView),
       (value) => {
         cache.deployment = value;
       },
@@ -361,11 +366,12 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (activityView) {
     fill(
-      wallet.loadActivity(
-        activeView === "home" ? undefined : (selectedMultisigId ?? undefined),
-        false,
-        activeView === "activity" && refreshReason !== "ambient",
-      ),
+      () =>
+        wallet.loadActivity(
+          activeView === "home" ? undefined : (selectedMultisigId ?? undefined),
+          false,
+          activeView === "activity" && refreshReason !== "ambient",
+        ),
       (value) => {
         cache.transactions = value.entries;
         cache.historyUnavailable = value.historyUnavailable;
@@ -398,7 +404,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
     });
     fill(
-      wallet.discoverNfts(false, nftScope),
+      () => wallet.discoverNfts(false, nftScope),
       (value) => {
         cache.indexedNfts = value;
         cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
@@ -481,6 +487,6 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     }
   };
   await flush(primaryJobs);
-  await flush(deferredJobs);
+  await flush(deferredJobs.map((start) => start()));
   await Promise.all(streamingJobs);
 };
