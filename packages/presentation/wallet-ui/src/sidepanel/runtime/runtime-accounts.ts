@@ -1,7 +1,12 @@
 /** Account-creation runtime messages kept together so every path carries its contract type. */
 
 import type { AccountContractType, AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { RecoveryAccountSelection } from "@mc-wallet/wallet-model/recovery";
 import { isCreateAccountResponse } from "../../popup/responses/responses";
+import {
+  isRecoveredAccountsResponse,
+  isRecoveryDiscoveryResponse,
+} from "../../popup/responses/responses-onboarding";
 import { responseError } from "./runtime-errors";
 
 const isMatchingAccountResponse = (
@@ -64,6 +69,16 @@ export const createAccountRuntimeClient = (
     }
     throw responseError(response, "import account failed");
   },
+  async discoverRecoveryAccounts(mnemonic: string, networkId: string, manualIndex?: number) {
+    const response = await sendMessage({
+      ...(manualIndex === undefined ? {} : { manualIndex }),
+      mnemonic,
+      networkId,
+      type: "wallet.discoverRecoveryAccounts",
+    });
+    if (isRecoveryDiscoveryResponse(response)) return response;
+    throw responseError(response, "account discovery unavailable");
+  },
   async previewAccount(
     mnemonic: string,
     networkId: string,
@@ -80,5 +95,21 @@ export const createAccountRuntimeClient = (
       return response.account;
     }
     throw responseError(response, "account preview unavailable");
+  },
+  async recoverAccounts(
+    mnemonic: string,
+    networkId: string,
+    vaultPassphrase: string,
+    selections: readonly RecoveryAccountSelection[],
+  ): Promise<readonly AccountRef[]> {
+    const response = await sendMessage({
+      mnemonic,
+      networkId,
+      selections,
+      type: "wallet.recoverAccounts",
+      vaultPassphrase,
+    });
+    if (isRecoveredAccountsResponse(response)) return response.accounts;
+    throw responseError(response, "account recovery unavailable");
   },
 });

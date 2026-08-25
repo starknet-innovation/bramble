@@ -14,10 +14,16 @@ describe("readSetDisplayInput", () => {
       readSetDisplayInput({
         approvalSurface: "popup",
         displayCurrency: "eur",
+        reliabilityDiagnostics: true,
         theme: "dark",
         type: "wallet.setDisplay",
       }),
-    ).toEqual({ approvalSurface: "popup", displayCurrency: "eur", theme: "dark" });
+    ).toEqual({
+      approvalSurface: "popup",
+      displayCurrency: "eur",
+      reliabilityDiagnostics: true,
+      theme: "dark",
+    });
   });
 
   test("rejects a non-record, wrong-type, or unknown-key envelope", () => {
@@ -34,6 +40,9 @@ describe("readSetDisplayInput", () => {
     ).toBeNull();
     expect(readSetDisplayInput({ displayCurrency: "jpy", type: "wallet.setDisplay" })).toBeNull();
     expect(readSetDisplayInput({ theme: "solarized", type: "wallet.setDisplay" })).toBeNull();
+    expect(
+      readSetDisplayInput({ reliabilityDiagnostics: "yes", type: "wallet.setDisplay" }),
+    ).toBeNull();
   });
 });
 

@@ -15,7 +15,7 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 
 ## Features
 
-- **Accounts & transfers** — choose an OpenZeppelin or Argent account backed by either the encrypted software vault or a Ledger hardware wallet, with deploy/send/receive and network switching.
+- **Accounts & transfers** — choose an OpenZeppelin or Argent account backed by the encrypted software vault, with deploy/send/receive and network switching. Ledger hardware support is available to trusted testers while its physical compatibility matrix is completed.
 - **Onboarding & recovery** — a dedicated full-page first-install flow for creating, importing, or connecting a Ledger; seed-phrase backup includes on-screen verification, while Ledger accounts stay keyless.
 - **dApp connect** — injects `window.starknet_mcWallet` (get-starknet compatible), with per-origin grants so connected sites never see each other.
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
@@ -88,7 +88,7 @@ vendored outputs; Playwright needs its Chromium install once per machine.
 
 ## Built with
 
-Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · [Starknet Privacy SDK](https://github.com/starkware-libs/starknet-privacy) · Biome · Krusty KMS (WASM) · Ledger Web Bluetooth/WebUSB/WebHID · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
+Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · [Starknet Privacy SDK](https://github.com/starkware-libs/starknet-privacy) · Biome · Krusty KMS (WASM) · Ledger hardware preview · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
 
 ## Architecture
 

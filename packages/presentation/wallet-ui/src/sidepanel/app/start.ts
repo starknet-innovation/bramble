@@ -58,11 +58,10 @@ import { dashboard, type WalletView } from "./screens/views";
 import { createDeploymentCache } from "./sync/deployment-cache";
 import { hydrateView } from "./sync/hydrate";
 import { startRefreshLifecycle } from "./sync/lifecycle";
+import type { RefreshReason } from "./sync/refresh-scheduler";
 import { createMutationRuntime } from "./sync/runtime-refresh";
 
-/**
- * Starts the wallet with injected Ledger; fails closed without its runtime or root.
- */
+/** Starts the wallet with injected Ledger; fails closed without its runtime or root. */
 export const startWalletUi = async (
   ledgerConnector: LedgerConnector,
   extensionApi?: WalletUiBrowser,
@@ -415,7 +414,7 @@ export const startWalletUi = async (
     wallet,
   });
   let renderGeneration = 0;
-  const render = async (status: WalletStatus): Promise<void> => {
+  const render = async (status: WalletStatus, refreshReason?: RefreshReason): Promise<void> => {
     const generation = ++renderGeneration;
     const isCurrent = (): boolean => generation === renderGeneration;
     const scopeChanged = updateRenderScope(cache, status);
@@ -468,6 +467,7 @@ export const startWalletUi = async (
       wallet,
       multisig,
       deployment,
+      ...(refreshReason ? { refreshReason } : {}),
       isCurrent,
       paint,
     });

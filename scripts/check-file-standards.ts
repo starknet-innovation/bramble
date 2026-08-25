@@ -31,6 +31,7 @@ const EXCLUDED = new Set([
  * and browser-global boundaries. Skipping by path keeps the extension scanned.
  */
 const EXCLUDED_PATHS = new Set(["apps/terminal", "apps/ui-lab"]);
+const BINARY_EXTENSIONS = [".jpg", ".png", ".wasm", ".webp", ".zip"] as const;
 const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/background/index.ts",
   "apps/extension/src/content/index.ts",
@@ -137,6 +138,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
+  // Recovery discovery keeps the phrase and vault credential only in the
+  // first-run DOM closure and forwards them to the privileged background.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-account-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-import-bind.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-word-assist.ts",
   // Locked-gate UI forwards the passphrase to the privileged background and
@@ -200,6 +204,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
   "packages/platform/vault/src/accounts/network-account.ts",
   "packages/platform/vault/src/service/reveal.ts",
+  // Atomic recovery re-derives selected accounts and writes their protected
+  // keys directly into the encrypted vault; no secret is returned or logged.
+  "packages/platform/vault/src/service/recovery.ts",
   "packages/platform/vault/src/service/service.ts",
   "packages/platform/vault/src/service/service-types.ts",
 ]);
@@ -265,11 +272,11 @@ const isProductionTypeScript = (file: string): boolean =>
 
 const hasExportDoc = (lines: readonly string[], index: number): boolean => {
   for (let previous = index - 1; previous >= 0; previous -= 1) {
-    const line = lines[previous]?.trim();
+    const line = lines[previous]?.trim() ?? "";
     if (line === "") {
       continue;
     }
-    return line === "*/";
+    return line === "*/" || (line.startsWith("/**") && line.endsWith("*/"));
   }
   return false;
 };
@@ -286,7 +293,10 @@ const walk = async (dir: string): Promise<string[]> => {
 
     if (entry.isDirectory()) {
       files.push(...(await walk(path)));
-    } else if (entry.isFile()) {
+    } else if (
+      entry.isFile() &&
+      !BINARY_EXTENSIONS.some((extension) => entry.name.endsWith(extension))
+    ) {
       files.push(path);
     }
   }

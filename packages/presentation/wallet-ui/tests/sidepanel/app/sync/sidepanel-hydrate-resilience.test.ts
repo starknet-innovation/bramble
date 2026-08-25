@@ -18,6 +18,95 @@ const status: WalletStatus = {
 };
 
 describe("cached hydration resilience", () => {
+  test("discovers history on Activity entry but not on ambient refresh", async () => {
+    const calls: Array<readonly [string | undefined, boolean | undefined, boolean | undefined]> =
+      [];
+    const run = async (refreshReason: "ambient" | undefined) => {
+      const cache = emptyRenderCache();
+      cache.multisigsNetworkId = "SN_MAIN";
+      await hydrateView({
+        activeView: "activity",
+        cache,
+        deployment: {},
+        multisig: {},
+        paint: () => undefined,
+        ...(refreshReason ? { refreshReason } : {}),
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          loadActivity: async (accountId?: string, cached?: boolean, refreshHistory?: boolean) => {
+            calls.push([accountId, cached, refreshHistory]);
+            return { entries: [], historyUnavailable: false };
+          },
+        },
+      } as never);
+    };
+
+    await run(undefined);
+    await run("ambient");
+    expect(calls).toEqual([
+      [undefined, true, undefined],
+      [undefined, false, true],
+      [undefined, true, undefined],
+      [undefined, false, false],
+    ]);
+  });
+
+  test("skips allowance discovery on ambient ticks and refreshes it on entry", async () => {
+    let reads = 0;
+    const run = (refreshReason: "ambient" | undefined) =>
+      hydrateView({
+        activeView: "allowances",
+        cache: emptyRenderCache(),
+        deployment: {},
+        multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
+        paint: () => undefined,
+        ...(refreshReason ? { refreshReason } : {}),
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          loadAllowances: async () => {
+            reads += 1;
+            return [];
+          },
+        },
+      } as never);
+
+    await run("ambient");
+    expect(reads).toBe(0);
+    await run(undefined);
+    expect(reads).toBe(1);
+  });
+
+  test("forces the affected balance lane only for action reconciliation", async () => {
+    const calls: Array<readonly [boolean | undefined, boolean | undefined]> = [];
+    await hydrateView({
+      activeView: "tokens",
+      cache: emptyRenderCache(),
+      deployment: {},
+      multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
+      paint: () => undefined,
+      refreshReason: "action",
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        loadBalances: async (cached?: boolean, refresh?: boolean) => {
+          calls.push([cached, refresh]);
+          return { accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" };
+        },
+        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+      },
+    } as never);
+
+    expect(calls).toEqual([
+      [true, undefined],
+      [false, true],
+    ]);
+  });
+
   test("keeps a saved balance snapshot when the fresh RPC read fails", async () => {
     const cache = emptyRenderCache();
     await hydrateView({

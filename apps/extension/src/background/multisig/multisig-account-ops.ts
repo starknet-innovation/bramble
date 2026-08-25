@@ -2,6 +2,7 @@
 import type { TokenBalance } from "@mc-wallet/starknet/rpc";
 import { systemClock } from "@mc-wallet/transactions/activity";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { cachedBalances } from "../portfolio/balance-snapshots";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
@@ -91,45 +92,32 @@ const multisigBalances = async (
     input.multisigId,
   );
   if ("error" in context) return context;
-  if (input.cached) {
-    const snapshot = await deps.balanceSnapshots
-      ?.read(context.record.id, context.record.networkId)
-      .catch(() => null);
-    if (!snapshot) return { error: "multisig balance snapshot unavailable" };
-    const now = (deps.now ?? systemClock)();
-    return {
+  const snapshot = await cachedBalances(
+    deps.balanceSnapshots,
+    {
       accountId: context.record.id,
-      asOf: snapshot.fetchedAt > 0 ? snapshot.fetchedAt : null,
-      balances: snapshot.balances,
+      cachedOnly: input.cached,
+      force: input.refresh,
       networkId: context.record.networkId,
-      ok: true,
-      stale:
-        snapshot.fetchedAt <= 0 || snapshot.fetchedAt > now || now - snapshot.fetchedAt >= 60_000,
-    };
-  }
-  const balances: readonly TokenBalance[] = await deps.runtimeRpc.getTokenBalances({
-    accountAddress: context.record.address,
-    rpcUrls: context.rpcUrls,
-    tokens: (await deps.preferencesStore.read()).tokens.filter(
-      (token) => token.networkId === context.record.networkId,
-    ),
-  });
-  const fetchedAt = (deps.now ?? systemClock)();
-  await deps.balanceSnapshots
-    ?.write({
-      accountId: context.record.id,
-      balances,
-      fetchedAt,
-      networkId: context.record.networkId,
-    })
-    .catch(() => undefined);
+      now: (deps.now ?? systemClock)(),
+    },
+    async (): Promise<readonly TokenBalance[]> =>
+      deps.runtimeRpc.getTokenBalances({
+        accountAddress: context.record.address,
+        rpcUrls: context.rpcUrls,
+        tokens: (await deps.preferencesStore.read()).tokens.filter(
+          (token) => token.networkId === context.record.networkId,
+        ),
+      }),
+  );
+  if (!snapshot) return { error: "multisig balance snapshot unavailable" };
   return {
     accountId: context.record.id,
-    asOf: fetchedAt > 0 ? fetchedAt : null,
-    balances,
+    asOf: snapshot.fetchedAt > 0 ? snapshot.fetchedAt : null,
+    balances: snapshot.balances,
     networkId: context.record.networkId,
     ok: true,
-    stale: false,
+    stale: snapshot.stale,
   };
 };
 

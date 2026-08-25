@@ -36,8 +36,6 @@ type ActivityTarget = {
   readonly scope: ActivityScope;
 };
 
-const HISTORY_SYNC_TTL_MS = 60_000;
-
 const activityTarget = async (
   deps: ActivityOpsDeps,
   context: { readonly account: AccountRef; readonly networkId: StarknetNetworkId },
@@ -110,14 +108,13 @@ export const handleActivity = async (
   const now = (deps.now ?? systemClock)();
   const local = await reconcileScope(deps, target.scope, now);
   const previousSync = await deps.activity.historySync?.(target.scope).catch(() => null);
-  const scanHistory =
-    input.refreshHistory ||
-    previousSync == null ||
-    previousSync.syncedAt > now ||
-    now - previousSync.syncedAt >= HISTORY_SYNC_TTL_MS;
+  // History discovery is intentionally screen-driven. Ambient Home refreshes
+  // reconcile only transactions still under observation; entering Activity or
+  // pressing its refresh control opts into the larger event scan explicitly.
+  const scanHistory = input.refreshHistory;
   const history = scanHistory
     ? await accountHistory(deps, target)
-    : { onChain: [], unavailable: previousSync.unavailable };
+    : { onChain: [], unavailable: previousSync?.unavailable ?? false };
   const merged = mergeActivity(local, history.onChain);
   if (!history.unavailable) {
     await deps.activity.replaceScope?.(merged, target.scope).catch(() => undefined);

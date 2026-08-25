@@ -1,6 +1,4 @@
-/**
- * Typed extension message handling for the background service worker.
- */
+/** Typed extension message handling for the background service worker. */
 
 import { activeAccountSecrets } from "@mc-wallet/vault/service";
 import { DEFAULT_NETWORK } from "@mc-wallet/wallet-model/networks";
@@ -38,6 +36,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import { createUnlockSession } from "../runtime/session";
 import { handleOriginOps } from "../settings/origins-ops";
 import { handlePreferenceOps } from "../settings/preference-ops";
+import { supportDiagnosticsResponse } from "../support/diagnostics";
 import { handleChainOps } from "../transactions/chain-ops";
 import { handleDeclareOps } from "../transactions/declare-ops";
 import { handleSwapOps } from "../transactions/swap-ops";
@@ -329,6 +328,13 @@ const handleStatus: RouterHandler = async (ctx, messageType, message) => {
   return statusResponse(ctx.wallet, ctx.session, ctx.preferencesStore);
 };
 
+const handleDiagnostics: RouterHandler = async (ctx, messageType, message) => {
+  if (messageType !== "wallet.diagnostics") return null;
+  return readTypeOnlyInput(message, "wallet.diagnostics")
+    ? supportDiagnosticsResponse(ctx.wallet, ctx.session, ctx.preferencesStore)
+    : { error: "invalid diagnostics request" };
+};
+
 const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.unlock") {
     return null;
@@ -425,9 +431,10 @@ const HANDLERS: readonly RouterHandler[] = [
   handleImportAccount,
   (ctx, messageType, message) => handleApprovalDecision(ctx, messageType, message),
   handleGenerateMnemonic,
-  (ctx, messageType, message) => handleOnboardingOps(ctx.wallet, messageType, message),
+  (ctx, messageType, message) => handleOnboardingOps(ctx, messageType, message),
   handleRevealSecrets,
   handleGetGrantedAccounts,
+  handleDiagnostics,
   handlePendingApprovals,
   handleRequestAccounts,
   handleSetActiveAccount,
@@ -472,9 +479,7 @@ const runtimeErrorResponse = (
   error: revealError && error instanceof Error ? error.message : "wallet request failed",
 });
 
-/**
- * Creates the trusted background runtime message dispatcher.
- */
+/** Creates the trusted background runtime message dispatcher. */
 export const createMessageHandler = (
   wallet: WalletStatusReader,
   extensionId: string,

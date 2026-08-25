@@ -195,7 +195,6 @@ describe("wallet operations", () => {
     expect(review.summaries[0]).toContain("Send 1.5 ETH");
     expect(review.flags.map((flag) => flag.code)).toContain("self-transfer");
   });
-
   test("review reports separate invoke and deployment fees when undeployed", async () => {
     const { handler } = makeHarness({ deployed: false });
     const response = await handler(
@@ -319,7 +318,6 @@ describe("wallet operations", () => {
       },
       extensionSender,
     );
-
     const response = await handler({ type: "wallet.activity" }, extensionSender);
     expect(response).toMatchObject({ ok: true });
     const activity = (
@@ -371,7 +369,6 @@ describe("wallet operations", () => {
       { "0x7ab": { status: "preconfirmed" } },
       { accountId: account.id, networkId: "SN_MAIN" },
     );
-
     expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
       alerts: [],
       ok: true,
@@ -401,7 +398,6 @@ describe("wallet operations", () => {
       { "0x8ab": { failureNotice: "pending", status: "reverted" } },
       { accountId: OTHER_ACCOUNT_ID, networkId: "SN_MAIN" },
     );
-
     expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
       alerts: [],
       ok: true,
@@ -455,9 +451,12 @@ describe("wallet operations", () => {
       },
       extensionSender,
     );
+    const idle = (await handler({ type: "wallet.activity" }, extensionSender)) as ActivityResponse;
+    expect(idle.activity.map((entry) => entry.hash)).toEqual(["0x7ab"]);
+    expect(historyRequests()).toBe(0);
 
     const response = (await handler(
-      { type: "wallet.activity" },
+      { refreshHistory: true, type: "wallet.activity" },
       extensionSender,
     )) as ActivityResponse;
     expect(response.activity.map((entry) => entry.hash)).toEqual(["0xc4a1", "0x7ab"]);
@@ -472,6 +471,7 @@ describe("wallet operations", () => {
     await handler({ refreshHistory: true, type: "wallet.activity" }, extensionSender);
     expect(historyRequests()).toBe(2);
   });
+
   test("degrades to the local feed with an indicator when history is unreachable", async () => {
     const { handler, historyRequests } = makeHarness({ historyThrows: true });
     await handler(
@@ -485,9 +485,8 @@ describe("wallet operations", () => {
       },
       extensionSender,
     );
-
     const response = (await handler(
-      { type: "wallet.activity" },
+      { refreshHistory: true, type: "wallet.activity" },
       extensionSender,
     )) as ActivityResponse;
     expect(response.historyUnavailable).toBe(true);

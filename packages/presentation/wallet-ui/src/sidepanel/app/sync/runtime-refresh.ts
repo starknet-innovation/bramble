@@ -24,6 +24,7 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.removeNft",
   "wallet.removeArgentMultisigIntent",
   "wallet.removeMultisig",
+  "wallet.recoverAccounts",
   "wallet.renameGroup",
   "wallet.revokeAllowance",
   "wallet.revokeOrigin",

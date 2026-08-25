@@ -135,6 +135,41 @@ describe("account lifecycle wrappers", () => {
     ).rejects.toThrow("account preview unavailable");
   });
 
+  test("discovers and restores an exact confirmed recovery selection", async () => {
+    const discovery = {
+      candidates: [{ account, deployed: true, funded: false }],
+      complete: false,
+      nextIndex: 4,
+      ok: true as const,
+    };
+    const discovered = captureRuntime(discovery);
+    await expect(
+      discovered.wallet.discoverRecoveryAccounts("seed words", "SN_SEPOLIA", 12),
+    ).resolves.toEqual(discovery);
+    expect(discovered.sent[0]).toEqual({
+      manualIndex: 12,
+      mnemonic: "seed words",
+      networkId: "SN_SEPOLIA",
+      type: "wallet.discoverRecoveryAccounts",
+    });
+
+    const restored = captureRuntime({ accounts: [account], ok: true });
+    const selections = [{ accountContractType: "openzeppelin" as const, accountIndex: 0 }];
+    await expect(
+      restored.wallet.recoverAccounts("seed words", "SN_SEPOLIA", "pass", selections),
+    ).resolves.toEqual([account]);
+    expect(restored.sent[0]).toEqual({
+      mnemonic: "seed words",
+      networkId: "SN_SEPOLIA",
+      selections,
+      type: "wallet.recoverAccounts",
+      vaultPassphrase: "pass",
+    });
+    await expect(runtimeReturning({}).discoverRecoveryAccounts("seed", "SN_MAIN")).rejects.toThrow(
+      "account discovery unavailable",
+    );
+  });
+
   test("rejects account replies outside the requested network or contract", async () => {
     const wallet = runtimeReturning(createAccountResponse);
     await expect(wallet.addAccount("SN_MAIN", "openzeppelin")).rejects.toThrow(
@@ -304,6 +339,12 @@ describe("activity feed", () => {
     expect(sent[0]).toEqual({ accountId: "SN_MAIN:0x999", type: "wallet.activity" });
   });
 
+  test("loadActivity requests history only when the screen explicitly refreshes it", async () => {
+    const { sent, wallet } = captureRuntime({ activity: [activityEntry], ok: true });
+    await wallet.loadActivity(undefined, false, true);
+    expect(sent[0]).toEqual({ refreshHistory: true, type: "wallet.activity" });
+  });
+
   test("loadActivity defaults historyUnavailable to false when omitted", async () => {
     expect(await runtimeReturning({ activity: [activityEntry], ok: true }).loadActivity()).toEqual({
       entries: [activityEntry],
@@ -365,18 +406,41 @@ describe("token and preference wrappers", () => {
       wallet.setDisplay({
         approvalSurface: "popup",
         displayCurrency: "eur",
+        reliabilityDiagnostics: true,
         theme: "dark",
       }),
     ).resolves.toBeUndefined();
     expect(sent[0]).toEqual({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      reliabilityDiagnostics: true,
       theme: "dark",
       type: "wallet.setDisplay",
     });
     await expect(runtimeReturning({}).setDisplay({ theme: "light" })).rejects.toThrow(
       "display update failed",
     );
+  });
+
+  test("loadDiagnostics accepts only the sanitized report shape", async () => {
+    const diagnostics = {
+      accountCount: 2,
+      collectionEnabled: true,
+      hasVault: true,
+      locked: false,
+      networkId: "SN_MAIN",
+      ready: true,
+      rpc: [{ count: 3, endpoint: "wallet-gateway", latencyMs: 42, outcome: "ok" }],
+    } as const;
+    await expect(runtimeReturning({ diagnostics, ok: true }).loadDiagnostics()).resolves.toEqual(
+      diagnostics,
+    );
+    await expect(
+      runtimeReturning({
+        diagnostics: { ...diagnostics, address: "0x123" },
+        ok: true,
+      }).loadDiagnostics(),
+    ).rejects.toThrow("diagnostic export failed");
   });
 
   test("setRpcOverride resolves on preferences and throws otherwise", async () => {

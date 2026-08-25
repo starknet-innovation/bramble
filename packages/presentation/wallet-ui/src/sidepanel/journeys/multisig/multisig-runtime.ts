@@ -118,9 +118,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         "import Argent multisig signature failed",
       );
     },
-    async loadBalances(multisigId: string, cached = false): Promise<ScopedBalanceState> {
+    async loadBalances(
+      multisigId: string,
+      cached = false,
+      refresh = false,
+    ): Promise<ScopedBalanceState> {
       const response = await sendMessage({
         ...(cached ? { cached: true } : {}),
+        ...(refresh ? { refresh: true } : {}),
         multisigId,
         type: "wallet.multisigBalances",
       });

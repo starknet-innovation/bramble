@@ -183,6 +183,7 @@ await cp(join(publicRoot, "onboarding.html"), join(outdir, "onboarding.html"));
 await cp(join(publicRoot, "popup.html"), join(outdir, "popup.html"));
 await cp(join(publicRoot, "sidepanel.html"), join(outdir, "sidepanel.html"));
 await cp(join(publicRoot, "ledger-grant.html"), join(outdir, "ledger-grant.html"));
+await cp(join(publicRoot, "icons"), join(outdir, "icons"), { recursive: true });
 await mkdir(join(outdir, "sandbox"), { recursive: true });
 await cp(join(publicRoot, "sandbox/render.html"), join(outdir, "sandbox/render.html"));
 await mkdir(vendorOutdir, { recursive: true });

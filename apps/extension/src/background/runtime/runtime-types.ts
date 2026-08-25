@@ -1,7 +1,4 @@
-/**
- * Shared background runtime response and service types.
- */
-
+/** Shared background runtime response and service types. */
 import type {
   ArgentMultisigAuthorityStatus,
   ArgentMultisigConfig,
@@ -23,6 +20,7 @@ import type { RiskFlag } from "@mc-wallet/transactions/verify";
 import type { ConnectedSite } from "@mc-wallet/vault/service";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import type { RecoveryAccountCandidate } from "@mc-wallet/wallet-model/recovery";
 import type { WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
 import type { PendingApproval } from "../approvals/approvals";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
@@ -38,16 +36,10 @@ import type {
   Strk20WalletPreparationResponse,
   Strk20WalletStateResponse,
 } from "../privacy/runtime-strk20-types";
+import type { SupportDiagnosticsResponse } from "../support/diagnostics";
 import type { SwapPreparationReview } from "../transactions/swap-preparations";
 
-/**
- * Shared wallet status and network response shapes returned to extension pages.
- */
-export type { NetworkOption, WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
-
-/**
- * Successful account-import response.
- */
+/** Successful account-import response. */
 type CreateAccountResponse = {
   readonly account: AccountRef;
   readonly ok: true;
@@ -424,9 +416,6 @@ type MultisigBalancesResponse = {
   readonly stale: boolean;
 };
 
-/**
- * Pending device-sign requests returned to the side panel Ledger transport.
- */
 type LedgerSignPendingResponse = {
   readonly ok: true;
   readonly pending: readonly PendingLedgerSign[];
@@ -459,6 +448,12 @@ export type RuntimeResponse =
   | DeploymentStatusResponse
   | DetectTokensResponse
   | DiscoverNftsResponse
+  | {
+      readonly candidates: readonly RecoveryAccountCandidate[];
+      readonly complete: boolean;
+      readonly nextIndex: number;
+      readonly ok: true;
+    }
   | FeeReviewResponse
   | SupportedVersionsResponse
   | TransferReviewResponse
@@ -487,6 +482,7 @@ export type RuntimeResponse =
   | Strk20SubaccountCommitmentResponse
   | Strk20WalletPreparationResponse
   | Strk20WalletStateResponse
+  | SupportDiagnosticsResponse
   | SwapQuoteResponse
   | SwapPreparationResponse
   | SwapTokensResponse

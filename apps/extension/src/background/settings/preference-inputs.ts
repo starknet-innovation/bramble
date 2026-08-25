@@ -158,37 +158,66 @@ export const readSetAccountInGroupInput = (
 /**
  * Parses display and approval-surface preference updates from extension pages.
  */
-export const readSetDisplayInput = (
-  message: unknown,
-): {
+type DisplayPreferenceInput = {
   readonly approvalSurface?: "popup" | "side-panel";
   readonly displayCurrency?: "eur" | "gbp" | "usd";
+  readonly reliabilityDiagnostics?: boolean;
   readonly theme?: "dark" | "light";
-} | null => {
+};
+
+const hasValidDisplayValues = (
+  message: Record<string, unknown>,
+): message is Record<string, unknown> & DisplayPreferenceInput => {
+  if (
+    message["approvalSurface"] !== undefined &&
+    !isApprovalSurfacePreference(message["approvalSurface"])
+  ) {
+    return false;
+  }
+  if (message["displayCurrency"] !== undefined && !isDisplayCurrency(message["displayCurrency"])) {
+    return false;
+  }
+  if (
+    message["reliabilityDiagnostics"] !== undefined &&
+    typeof message["reliabilityDiagnostics"] !== "boolean"
+  ) {
+    return false;
+  }
+  return (
+    message["theme"] === undefined || message["theme"] === "dark" || message["theme"] === "light"
+  );
+};
+
+/** Parses exact display-preference updates from an untrusted runtime message. */
+export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | null => {
   if (!isRecord(message)) {
     return null;
   }
-  if (!hasOnlyKnownKeys(message, ["approvalSurface", "displayCurrency", "theme", "type"])) {
+  if (
+    !hasOnlyKnownKeys(message, [
+      "approvalSurface",
+      "displayCurrency",
+      "reliabilityDiagnostics",
+      "theme",
+      "type",
+    ])
+  ) {
     return null;
   }
   if (message["type"] !== "wallet.setDisplay") {
     return null;
   }
+  if (!hasValidDisplayValues(message)) {
+    return null;
+  }
   const approvalSurface = message["approvalSurface"];
   const displayCurrency = message["displayCurrency"];
+  const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
-  if (approvalSurface !== undefined && !isApprovalSurfacePreference(approvalSurface)) {
-    return null;
-  }
-  if (displayCurrency !== undefined && !isDisplayCurrency(displayCurrency)) {
-    return null;
-  }
-  if (theme !== undefined && theme !== "dark" && theme !== "light") {
-    return null;
-  }
   return {
     ...(approvalSurface === undefined ? {} : { approvalSurface }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
+    ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),
     ...(theme === undefined ? {} : { theme }),
   };
 };

@@ -84,3 +84,28 @@ the v4 `accountSecrets` collection only.
 - Can privacy warnings, service routing, fee actions, or proofs bypass review or target a
   non-configured contract?
 - Can a build or release include an undeclared file or unpinned input?
+
+## Executable test coverage
+
+This map is maintained with the threat model. Paths name the adversarial check that must fail if
+the corresponding boundary regresses; the scheduled nightly workflow also runs the high-severity
+dependency audit.
+
+| Threat / review question | Named executable coverage |
+| --- | --- |
+| Forged source, origin, request ID, response, or message type | `tests/background/routing/privileged-messages.test.ts`; `tests/property/security-boundaries.test.ts` — “never accepts one site's sender as another claimed origin” |
+| Privileged handlers reached from a page or foreign extension | `tests/background/routing/key-boundary.test.ts`; `tests/background/routing/privileged-messages.test.ts` |
+| Approval differs from executed account, network, payload, origin, or fee | `tests/background/approvals/background-invoke-approval.test.ts`; `tests/background/reviewed-fee-binding.test.ts` |
+| Lock, restart, navigation, race, duplicate, or replay reuses authority | `tests/background/session-auto-lock-privilege.test.ts`; `tests/background/routing/background-messages.test.ts` — “failed claimed approval is terminal”; `tests/background/approval-queue-bounds.test.ts` |
+| Malformed storage or RPC data changes a key, call, class hash, or recipient | `tests/property/security-boundaries.test.ts` — vault, message, felt, and Krusty properties; `tests/starknet/starknet-rpc-assets.test.ts` |
+| Dynamic text or metadata reaches an executable DOM sink | `scripts/check-file-standards.ts`; `tests/conformance/shared-helper-single-source.test.ts` |
+| Remote metadata changes executable behavior | `tests/background/portfolio/background-nft-discovery.test.ts`; `tests/background/portfolio/token-ops-addtoken-spam.test.ts` |
+| Privacy route, fee, proof, or pool bypasses exact review | `tests/background/strk20-subaccount-sdk-boundary.test.ts`; `tests/background/privacy/strk20-wallet-preparations.test.ts`; `tests/background/strk20-vault-sign-lock-revocation.test.ts` |
+| Build or release admits undeclared or unpinned input | `tests/scripts/workflow-action-pinning.test.ts`; `tests/scripts/vendor-execution-policy.test.ts`; `tests/scripts/krusty-provenance-pin.test.ts`; `tests/conformance/release-version-single-source.test.ts` |
+
+The dapp-reachable negative corpus explicitly covers hostile and overflowing calldata in
+`tests/property/security-boundaries.test.ts` and
+`tests/provider/bridge/provider-bridge-results-guards.test.ts`, origin spoofing in
+`tests/background/provider/add-chain-ops-sender-mismatch.test.ts`, and duplicate/replayed approvals
+in `tests/background/approval-queue-bounds.test.ts` and
+`tests/background/routing/background-messages.test.ts`.

@@ -29,6 +29,7 @@ import type {
   WalletStatus as VaultStatus,
   WalletVaultService,
 } from "@mc-wallet/vault/service";
+import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
 import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 
@@ -66,6 +67,8 @@ export type WalletStatusReader = {
   readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
+  /** Atomically restores a confirmed set of phrase-derived accounts. */
+  readonly recoverAccounts?: (input: RecoverVaultAccountsInput) => Promise<readonly AccountRef[]>;
   /**
    * Krusty mnemonic check for onboarding. Optional only for partial test stubs;
    * production fails closed when absent.
@@ -133,6 +136,9 @@ export const createWalletReader = (
     },
     async previewAccount(input) {
       return (await required()).previewAccount(input);
+    },
+    async recoverAccounts(input) {
+      return (await required()).recoverAccounts(input);
     },
     async validateMnemonic(mnemonic) {
       return (await required()).validateMnemonic(mnemonic);

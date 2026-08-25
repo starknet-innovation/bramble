@@ -19,7 +19,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
-import type { BalanceSnapshotStore } from "../portfolio/balance-snapshots";
+import { type BalanceSnapshotStore, cachedBalances } from "../portfolio/balance-snapshots";
 import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
 import {
   readBalancesInput,
@@ -157,8 +157,6 @@ const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
 const passiveAccountContext = (deps: WalletOpsDeps) =>
   observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
 
-const BALANCE_STALE_MS = 60_000;
-
 const handleGetBalances: WalletOpsHandler = async (deps, message) => {
   const input = readBalancesInput(message);
   if (!input) {
@@ -170,40 +168,30 @@ const handleGetBalances: WalletOpsHandler = async (deps, message) => {
   }
   const preferences = await deps.preferencesStore.read();
   const network = STARKNET_NETWORKS[context.networkId];
-  if (input.cached) {
-    const snapshot = await deps.balanceSnapshots
-      ?.read(context.account.id, network.id)
-      .catch(() => null);
-    if (!snapshot) return { error: "balance snapshot unavailable" };
-    const now = (deps.now ?? systemClock)();
-    return {
+  const snapshot = await cachedBalances(
+    deps.balanceSnapshots,
+    {
       accountId: context.account.id,
-      asOf: snapshot.fetchedAt > 0 ? snapshot.fetchedAt : null,
-      balances: snapshot.balances,
+      cachedOnly: input.cached,
+      force: input.refresh,
       networkId: network.id,
-      ok: true,
-      stale:
-        snapshot.fetchedAt <= 0 ||
-        snapshot.fetchedAt > now ||
-        now - snapshot.fetchedAt >= BALANCE_STALE_MS,
-    };
-  }
-  const balances = await deps.runtimeRpc.getTokenBalances({
-    accountAddress: context.account.address,
-    rpcUrls: networkRpcUrls(network, preferences),
-    tokens: preferences.tokens.filter((token) => token.networkId === network.id),
-  });
-  const fetchedAt = (deps.now ?? systemClock)();
-  await deps.balanceSnapshots
-    ?.write({ accountId: context.account.id, balances, fetchedAt, networkId: network.id })
-    .catch(() => undefined);
+      now: (deps.now ?? systemClock)(),
+    },
+    () =>
+      deps.runtimeRpc.getTokenBalances({
+        accountAddress: context.account.address,
+        rpcUrls: networkRpcUrls(network, preferences),
+        tokens: preferences.tokens.filter((token) => token.networkId === network.id),
+      }),
+  );
+  if (!snapshot) return { error: "balance snapshot unavailable" };
   return {
     accountId: context.account.id,
-    asOf: fetchedAt > 0 ? fetchedAt : null,
-    balances,
+    asOf: snapshot.fetchedAt > 0 ? snapshot.fetchedAt : null,
+    balances: snapshot.balances,
     networkId: network.id,
     ok: true,
-    stale: false,
+    stale: snapshot.stale,
   };
 };
 

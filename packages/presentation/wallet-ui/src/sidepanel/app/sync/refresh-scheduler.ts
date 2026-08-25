@@ -5,7 +5,7 @@
  */
 
 export type RefreshScheduler = {
-  /** Schedules an immediate refresh plus confirmation polls after an action. */
+  /** Schedules one bounded reconciliation after an action. */
   readonly afterAction: () => void;
   /** Refreshes once without starting transaction-confirmation polling. */
   readonly refreshNow: () => void;
@@ -17,6 +17,9 @@ export type RefreshScheduler = {
   readonly visibilityChanged: () => void;
 };
 
+/** Why the visible surface is being refreshed. */
+export type RefreshReason = "action" | "ambient" | "event";
+
 /**
  * Timers, visibility state, cadence, and refresh work injected at the boundary.
  */
@@ -24,13 +27,13 @@ export type RefreshSchedulerOptions = {
   readonly burstDelaysMs?: readonly number[];
   readonly clearTimer?: (handle: ReturnType<typeof setTimeout>) => void;
   readonly pollIntervalMs?: number;
-  readonly refresh: () => Promise<void>;
+  readonly refresh: (reason: RefreshReason) => Promise<void>;
   readonly setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   readonly visible: () => boolean;
 };
 
-const DEFAULT_BURST_DELAYS_MS = [100, 350, 750, 1_500, 3_000] as const;
-const DEFAULT_POLL_INTERVAL_MS = 15_000;
+const DEFAULT_BURST_DELAYS_MS = [3_000] as const;
+const DEFAULT_POLL_INTERVAL_MS = 60_000;
 
 /**
  * Creates the adaptive side-panel polling loop. Hidden surfaces do no work,
@@ -47,7 +50,7 @@ export const createRefreshScheduler = ({
   let generalTimer: ReturnType<typeof setTimeout> | null = null;
   let burstTimers: readonly ReturnType<typeof setTimeout>[] = [];
   let running = false;
-  let queued = false;
+  let queued: RefreshReason | null = null;
   let stopped = true;
 
   const clearGeneral = (): void => {
@@ -71,29 +74,30 @@ export const createRefreshScheduler = ({
     }
     generalTimer = setTimer(() => {
       generalTimer = null;
-      void run();
+      void run("ambient");
     }, pollIntervalMs);
   };
 
-  const run = async (allowHidden = false): Promise<void> => {
-    if (stopped || (!allowHidden && !visible())) {
+  const run = async (reason: RefreshReason): Promise<void> => {
+    if (stopped || !visible()) {
       scheduleGeneral();
       return;
     }
     if (running) {
-      queued = true;
+      queued = reason === "action" || queued === null ? reason : queued;
       return;
     }
     running = true;
     try {
-      await refresh();
+      await refresh(reason);
     } catch {
       // Polling is best-effort; the next event or interval retries.
     } finally {
       running = false;
-      if (queued) {
-        queued = false;
-        void run();
+      if (queued !== null) {
+        const next = queued;
+        queued = null;
+        void run(next);
       } else {
         scheduleGeneral();
       }
@@ -104,20 +108,15 @@ export const createRefreshScheduler = ({
     afterAction() {
       clearGeneral();
       clearBurst();
-      // Runtime events can arrive while Chrome is moving focus from the dapp
-      // to the wallet surface. Hydrate once regardless of visibility so the
-      // request is current when that surface appears; follow-up polls remain
-      // visible-only.
-      void run(true);
       burstTimers = burstDelaysMs.map((delayMs) =>
         setTimer(() => {
-          void run();
+          void run("action");
         }, delayMs),
       );
     },
     refreshNow() {
       clearGeneral();
-      void run(true);
+      void run("event");
     },
     start() {
       stopped = false;
@@ -125,7 +124,7 @@ export const createRefreshScheduler = ({
     },
     stop() {
       stopped = true;
-      queued = false;
+      queued = null;
       clearGeneral();
       clearBurst();
     },
@@ -135,7 +134,7 @@ export const createRefreshScheduler = ({
         clearBurst();
         return;
       }
-      void run();
+      void run("ambient");
     },
   };
 };

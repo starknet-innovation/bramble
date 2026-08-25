@@ -160,6 +160,7 @@ describe("settings UI bindings", () => {
        <button data-theme-id="light" aria-pressed="false">Light</button>
        <button data-theme-id="dark" aria-pressed="true">Selected</button>
        <select id="currency-select"><option value="eur" selected>EUR</option></select>
+       <input id="reliability-diagnostics" type="checkbox" checked />
        <p id="display-result"></p>`,
       {
         setDisplay: async (input) => {
@@ -174,14 +175,18 @@ describe("settings UI bindings", () => {
     app.querySelector<HTMLButtonElement>('[data-theme-id="light"]')?.click();
     app.querySelector<HTMLButtonElement>('[data-theme-id="dark"]')?.click();
     app.querySelector<HTMLSelectElement>("#currency-select")?.dispatchEvent(new Event("change"));
+    app
+      .querySelector<HTMLInputElement>("#reliability-diagnostics")
+      ?.dispatchEvent(new Event("change"));
     await tick();
 
     expect(updates).toEqual([
       { approvalSurface: "side-panel" },
       { theme: "light" },
       { displayCurrency: "eur" },
+      { reliabilityDiagnostics: true },
     ]);
-    expect(calls.render).toBe(3);
+    expect(calls.render).toBe(4);
   });
 
   test("restores display controls when each preference mutation rejects", async () => {

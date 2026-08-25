@@ -210,6 +210,8 @@ const parseUint256Response = (response: readonly string[]): bigint => {
   return value;
 };
 
+const BALANCE_READ_CONCURRENCY = 4;
+
 /**
  * Builds an ERC20 transfer call without signing or broadcasting it.
  */
@@ -241,24 +243,29 @@ export const getTokenBalances = async (
   return withRpcFallback(
     rpcUrls,
     async (provider) => {
-      const balances = await Promise.all(
-        tokens.map(async (token) => {
-          const response = await provider.callContract(
-            {
-              calldata: CallData.compile([accountAddress]),
-              contractAddress: token.address,
-              entrypoint: "balanceOf",
-            },
-            "latest",
-          );
-          const balance = parseUint256Response(response);
-          return {
-            ...token,
-            balance: balance.toString(),
-            formatted: formatTokenAmount(balance, token.decimals),
-          };
-        }),
-      );
+      const balances: TokenBalance[] = [];
+      for (let index = 0; index < tokens.length; index += BALANCE_READ_CONCURRENCY) {
+        balances.push(
+          ...(await Promise.all(
+            tokens.slice(index, index + BALANCE_READ_CONCURRENCY).map(async (token) => {
+              const response = await provider.callContract(
+                {
+                  calldata: CallData.compile([accountAddress]),
+                  contractAddress: token.address,
+                  entrypoint: "balanceOf",
+                },
+                "latest",
+              );
+              const balance = parseUint256Response(response);
+              return {
+                ...token,
+                balance: balance.toString(),
+                formatted: formatTokenAmount(balance, token.decimals),
+              };
+            }),
+          )),
+        );
+      }
       return balances;
     },
     makeProvider,

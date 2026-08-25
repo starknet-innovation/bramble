@@ -4,6 +4,10 @@
 export const EXPECTED_RUNTIME_FILES = [
   "background/index.js",
   "content/index.js",
+  "icons/icon-128.png",
+  "icons/icon-16.png",
+  "icons/icon-32.png",
+  "icons/icon-48.png",
   "ledger-grant.html",
   "ledger-grant/index.js",
   "manifest.json",

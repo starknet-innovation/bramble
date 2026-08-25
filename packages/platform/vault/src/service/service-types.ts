@@ -19,6 +19,10 @@ import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 import type { AccountDerivationInput } from "../accounts/accounts";
 import type { Vault } from "../schema/schema";
+import type { RecoverVaultAccountsInput } from "./recovery";
+
+/** Atomic recovery input re-exported for privileged runtime boundaries. */
+export type { RecoverVaultAccountsInput } from "./recovery";
 
 /**
  * Public wallet status shown to popup and provider callers.
@@ -227,6 +231,10 @@ export type WalletVaultService = {
     vaultPassphrase: string,
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  /** Restores a confirmed bounded set in one encrypted-vault commit. */
+  readonly recoverAccounts: (
+    input: RecoverVaultAccountsInput,
+  ) => Promise<readonly DerivedAccountRef[]>;
   readonly revokeOrigin: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;

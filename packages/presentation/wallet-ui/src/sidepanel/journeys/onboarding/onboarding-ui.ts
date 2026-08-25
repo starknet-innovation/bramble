@@ -9,26 +9,19 @@ import { bindAccountContractChoices } from "./account-contract-bind";
 import { verifyBackupWords } from "./backup-verify";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
+import { bindRecoveryAccountUi } from "./recovery-account-ui";
 import { bindRecoveryImportControls } from "./recovery-import-bind";
 import { bindRecoveryWordAssist } from "./recovery-word-assist";
 import { fillRecoveryWords, recoveryWordsFrom, setRecoveryWordCount } from "./recovery-word-state";
 
-/**
- * Dependencies the onboarding binding closes over.
- */
+/** Dependencies the onboarding binding closes over. */
 export type OnboardingUiDeps = {
   readonly app: Element | null;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly wallet: SidepanelWallet;
 };
 
-/**
- * Binds the staged first-run journey. Recovery material stays in this page and
- * is sent only to the privileged KMS-backed validate/preview/create messages.
- * Import Continue asks Krusty to validate the phrase before the passphrase
- * step; preview returns public account metadata and writes nothing; creation
- * remains the final, explicitly confirmed step.
- */
+/** Binds the staged first-run journey without retaining recovery material. */
 export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const { app, wallet } = deps;
   const form = app?.querySelector<HTMLFormElement>("#create-form");
@@ -232,6 +225,14 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   };
 
   const selectedNetworkId = (): string => MAINNET_NETWORK_ID;
+  const recoveryAccounts = bindRecoveryAccountUi({
+    form,
+    mnemonic: () => mnemonic,
+    networkId: selectedNetworkId,
+    render: deps.render,
+    vaultPassphrase: () => passphraseInput?.value ?? "",
+    wallet,
+  });
   const ackSatisfied = (): boolean =>
     mainnetAckSatisfied(selectedNetworkId(), ackCheckbox?.checked ?? false);
 
@@ -288,6 +289,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     refreshRecovery,
     setMnemonic: (phrase) => {
       mnemonic = phrase;
+      chooseAccountContract?.lastChild?.replaceWith("Find my accounts");
     },
     showPasswordStep: () => showStep("password"),
     wallet,
@@ -305,6 +307,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           return;
         }
         mnemonic = generated.trim();
+        chooseAccountContract?.lastChild?.replaceWith("Choose account contract");
         requiresVerification = true;
         generatedWasRevealed = false;
         setGeneratedPhraseMasked(true);
@@ -363,7 +366,11 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   confirmationInput?.addEventListener("input", refreshPassword);
   chooseAccountContract?.addEventListener("click", () => {
     if (passwordOk()) {
-      showStep("account-contract");
+      if (requiresVerification) showStep("account-contract");
+      else {
+        showStep("recovery-accounts");
+        recoveryAccounts.start();
+      }
     }
   });
   ackCheckbox?.addEventListener("change", refreshAccountGate);

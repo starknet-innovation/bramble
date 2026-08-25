@@ -4,7 +4,6 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import { readBoundedText } from "@mc-wallet/core/http-json";
 import { isRecord } from "@mc-wallet/core/json";
 import {
   isNonZeroStarkFieldElement,
@@ -12,6 +11,7 @@ import {
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
 import { RpcProvider, type RpcProviderOptions } from "starknet";
+import { RpcRefusedError, RpcTransportError, timedRpcFetch } from "./rpc-transport";
 
 export {
   type AccountHashSigner,
@@ -27,6 +27,14 @@ export {
   isContractNotFoundError,
   isTransactionNotFoundError,
 } from "./rpc-not-found";
+export {
+  RPC_BODY_LIMIT_BYTES,
+  RPC_REFUSED_MESSAGE,
+  RPC_REQUEST_TIMEOUT_MS,
+  RpcRefusedError,
+  RpcTransportError,
+  timedRpcFetch,
+} from "./rpc-transport";
 
 /**
  * Thrown when no endpoint reports the expected chain. The UI maps this exact
@@ -37,6 +45,8 @@ export const WRONG_CHAIN_MESSAGE = "RPC endpoint returned the wrong Starknet cha
 type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
 
 const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(options);
+const RPC_ENDPOINT_COOLDOWN_MS = 30_000;
+const endpointCooldowns = new Map<string, number>();
 
 /**
  * Safe marker for a write whose transport failed after submission began. The
@@ -89,172 +99,6 @@ export const matchingAcceptedRpcWriteHash = (value: unknown, signedHash: unknown
   }
   return accepted;
 };
-
-/**
- * Marker for a JSON-RPC exchange that failed at the transport rather than at
- * the node's application layer: a body past {@link RPC_BODY_LIMIT_BYTES}, a
- * body that stalled past the request's deadline, or one that could not be read
- * at all.
- *
- * It exists because {@link isTransportRpcError} classifies by exclusion — a
- * {@link WalletError} means "the wallet decided this", anything else means "the
- * endpoint failed us" — and the response-budget failures the wallet's own
- * transport raises are `WalletError`s that mean the opposite. Today starknet.js
- * rewraps whatever `baseFetch` throws into a plain `Error` before any wallet
- * code sees it, so those failures happen to classify correctly; that is a
- * property of a dependency, not of this wallet. Marking them explicitly makes
- * read failover and accepted-write ambiguity hold on the wallet's own terms.
- *
- * The message is one of the transport's own curated constants; no endpoint body
- * or request material is retained on the instance.
- */
-export class RpcTransportError extends WalletError {
-  public constructor(message: string) {
-    super(message);
-    this.name = "RpcTransportError";
-  }
-}
-
-/**
- * A refusal the endpoint produced BEFORE the node could have seen the request —
- * a rate limit or gateway rejection answered in place of a JSON-RPC result.
- *
- * It extends {@link RpcTransportError} so a read still fails over to the next
- * configured endpoint, but the broadcast guard treats it as DETERMINATE: the
- * transaction was never submitted, so there is no ambiguity to preserve and a
- * retry is safe. That distinction is load-bearing. Classified as ambiguity, a
- * rate-limited submit leaves a durable operation claim with no transaction hash,
- * and because a deploy's hash is only ever recovered from local evidence, the
- * counterfactual address can never be deployed again.
- */
-export class RpcRefusedError extends RpcTransportError {
-  public constructor(message: string) {
-    super(message);
-    this.name = "RpcRefusedError";
-  }
-}
-
-/**
- * Wall-clock budget for a single Starknet JSON-RPC request. Each request gets
- * its own budget, so a multi-request operation is bounded by its step count and
- * never by one endpoint's willingness to keep a socket open.
- */
-export const RPC_REQUEST_TIMEOUT_MS = 15_000;
-
-/**
- * Byte budget for one Starknet JSON-RPC response body.
- *
- * The RPC endpoint is the wallet's largest untrusted boundary and a dapp can
- * propose one through `wallet_addStarknetChain`, so a deadline alone is not a
- * bound: at any real link speed starknet.js's `response.json()` will buffer
- * hundreds of megabytes into the service worker before the clock runs out. This
- * is deliberately generous — the biggest legitimate answer is a Sierra class
- * from `starknet_getClass`, a few megabytes — because a body past it is hostile
- * or broken, never merely large. It lives here rather than in
- * `shared/http-json`'s `HTTP_BODY_LIMITS` because those are per-boundary
- * budgets for JSON reads the wallet performs itself; this one bounds a body
- * that starknet.js reads, and the enforcement point is the transport.
- */
-export const RPC_BODY_LIMIT_BYTES = 32 * 1024 * 1024;
-
-// Re-presents an RPC response with its body already read under the byte budget
-// and the request's own deadline, so starknet.js's `.json()` can only ever see
-// bytes the wallet agreed to hold. A transport that exposes no body stream is
-// passed through untouched: only in-process test doubles are wired that way,
-// because the wallet — never the remote node — chooses the transport.
-//
-// An oversized or stalled body throws a `WalletError` from the shared bounded
-// reader, and a `WalletError` is exactly what `isTransportRpcError` treats as
-// "the wallet refused this for a reason of its own". It is re-marked as an
-// `RpcTransportError` here, at the one place that knows the failure came from
-// the endpoint, so read failover and accepted-write ambiguity do not depend on
-// the class starknet.js happens to rewrap a `baseFetch` rejection into. The
-// message is carried across unchanged (each is one of the reader's own curated
-// constants); anything that is not a `WalletError` is already classified as
-// transport and is left exactly as thrown, so no raw transport text is
-// promoted into a displayable wallet message.
-// Longest body still considered a possible refusal note. A gateway saying "no"
-// answers in tens of bytes; bounding the check keeps a multi-megabyte Sierra
-// class from being parsed twice on every read.
-const REFUSAL_BODY_LIMIT_BYTES = 1024;
-
-// Recognizes an answer the ENDPOINT produced instead of the node: an HTTP 429,
-// or a body whose `error` is a bare string. A JSON-RPC error is always an object
-// carrying a numeric `code` (that is what `isTransportRpcError` keys on), so a
-// string there is a gateway speaking for itself. Observed shape from the
-// wallet's own mainnet endpoint under load: HTTP 200 with `{"error":
-// "rate_limited"}`, which is why status alone is not enough.
-const endpointRefusal = (text: string, status: number): boolean => {
-  if (status === 429) {
-    return true;
-  }
-  if (text.length > REFUSAL_BODY_LIMIT_BYTES) {
-    return false;
-  }
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return isRecord(parsed) && typeof parsed["error"] === "string";
-  } catch {
-    return false;
-  }
-};
-
-const boundedRpcResponse = async (response: Response, deadline: AbortSignal): Promise<Response> => {
-  if (!response.body) {
-    return response;
-  }
-  const text = await readBoundedText(response, RPC_BODY_LIMIT_BYTES, deadline).catch(
-    (error: unknown): never => {
-      throw error instanceof WalletError ? new RpcTransportError(error.message) : error;
-    },
-  );
-  if (endpointRefusal(text, response.status)) {
-    throw new RpcRefusedError(RPC_REFUSED_MESSAGE);
-  }
-  return new Response(text, {
-    headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
-    status: response.status,
-    statusText: response.statusText,
-  });
-};
-
-/**
- * Wraps a fetch transport so every JSON-RPC request it carries aborts after
- * `timeoutMs`.
- *
- * Without this a hung or slow-loris endpoint parks the operation forever:
- * reads never resolve, and a submit path holds its worker state (and any parked
- * signing request) open with it. An abort surfaces as a transport error, which
- * is exactly what {@link withRpcFallback} needs to move to the next configured
- * endpoint and what {@link withRpcWrite} needs to fail a preparation step
- * closed.
- *
- * The deadline is composed with any caller-supplied `signal` rather than
- * deferring to it, so a caller can only ever make a request abort *sooner*:
- * passing a plain `AbortController` signal cannot silently remove the deadline
- * from every RPC request in the wallet. `baseFetch` is the test seam and
- * defaults to the global fetch.
- *
- * Note what this costs on the write path. The deadline also covers
- * `starknet_addInvokeTransaction` and its siblings, so a broadcast the node
- * accepted but answered slowly is aborted here and classified by
- * {@link withRpcWrite} as an {@link IndeterminateRpcWriteError}: the wallet's
- * own timer becomes a source of submission ambiguity that a purely
- * node-governed transport did not have. That is the safe direction — the
- * transaction is never replayed against another endpoint — but it is a real
- * trade, and {@link RPC_REQUEST_TIMEOUT_MS} is the (maintainer-owned) number
- * that decides how often it happens.
- */
-export const timedRpcFetch =
-  (
-    timeoutMs: number = RPC_REQUEST_TIMEOUT_MS,
-    baseFetch: NonNullable<RpcProviderOptions["baseFetch"]> = (input, init) => fetch(input, init),
-  ): NonNullable<RpcProviderOptions["baseFetch"]> =>
-  async (input, init) => {
-    const deadline = AbortSignal.timeout(timeoutMs);
-    const signal = init?.signal ? AbortSignal.any([init.signal, deadline]) : deadline;
-    return boundedRpcResponse(await baseFetch(input, { ...init, signal }), deadline);
-  };
 
 /**
  * Builds an RPC provider pinned to {@link STARKNET_RPC_SPEC_VERSION}.
@@ -317,14 +161,6 @@ const BROADCAST_RPC_METHODS = new Set([
 ]);
 const PREPARATION_UNAVAILABLE =
   "Transaction could not be prepared. Check your connection or RPC endpoint.";
-
-/**
- * Curated line for an endpoint that turned a request away before the node could
- * have seen it. Determinate on purpose: it invites the retry that
- * {@link INDETERMINATE_RPC_WRITE_MESSAGE} must not.
- */
-export const RPC_REFUSED_MESSAGE =
-  "The RPC endpoint refused this request (rate limit or gateway rejection). Nothing was submitted - wait a moment and try again.";
 
 const runRpcBroadcast = async <T>(broadcast: () => Promise<T>): Promise<T> => {
   try {
@@ -403,15 +239,35 @@ export const withRpcFallback = async <T>(
   rpcUrls: readonly string[],
   run: (provider: RpcProvider) => Promise<T>,
   makeProvider: (nodeUrl: string) => RpcProvider = createRpcProvider,
+  now: () => number = Date.now,
 ): Promise<T> => {
   let lastError: unknown = new WalletError("No RPC endpoints configured");
-  for (const nodeUrl of rpcUrls) {
+  const currentTime = now();
+  for (const [nodeUrl, retryAt] of endpointCooldowns) {
+    if (retryAt <= currentTime) endpointCooldowns.delete(nodeUrl);
+  }
+  const ready = rpcUrls.filter((nodeUrl) => !endpointCooldowns.has(nodeUrl));
+  const candidates =
+    ready.length > 0
+      ? ready
+      : [...rpcUrls]
+          .sort(
+            (left, right) =>
+              (endpointCooldowns.get(left) ?? currentTime) -
+              (endpointCooldowns.get(right) ?? currentTime),
+          )
+          .slice(0, 1);
+  for (const nodeUrl of candidates) {
     try {
-      return await run(makeProvider(nodeUrl));
+      const result = await run(makeProvider(nodeUrl));
+      endpointCooldowns.delete(nodeUrl);
+      return result;
     } catch (error) {
       if (!isTransportRpcError(error)) {
+        endpointCooldowns.delete(nodeUrl);
         throw error;
       }
+      endpointCooldowns.set(nodeUrl, currentTime + RPC_ENDPOINT_COOLDOWN_MS);
       lastError = error;
     }
   }

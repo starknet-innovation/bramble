@@ -357,8 +357,11 @@ ${SIGN_REQUEST_STYLES}
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.medium};
     gap: 6px;
+    max-width: 100%;
     min-height: 28px;
+    overflow: hidden;
     padding: 3px ${SPACE.md};
+    text-overflow: ellipsis;
     text-wrap: nowrap;
   }
   /* Hardware-wallet badge: a compact accent-tinted pill marking a Ledger

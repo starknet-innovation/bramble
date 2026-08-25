@@ -96,6 +96,24 @@ type WalletPreferencesStoreOptions = {
  */
 export { isWalletPreferences } from "./preferences-stored";
 
+const isValidDisplayInput = (
+  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
+): boolean => {
+  if (input.approvalSurface !== undefined && !isApprovalSurfacePreference(input.approvalSurface)) {
+    return false;
+  }
+  if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
+    return false;
+  }
+  if (
+    input.reliabilityDiagnostics !== undefined &&
+    typeof input.reliabilityDiagnostics !== "boolean"
+  ) {
+    return false;
+  }
+  return input.theme === undefined || isThemeChoice(input.theme);
+};
+
 /**
  * Creates default non-secret wallet preferences.
  */
@@ -110,6 +128,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   groups: [],
   hiddenTokens: [],
   nfts: [],
+  reliabilityDiagnostics: false,
   rpcOverrides: {},
   schemaVersion: 1,
   strk20Networks: DEFAULT_STRK20_NETWORKS,
@@ -350,12 +369,7 @@ export const createPreferencesStore = ({
         return next;
       },
       async setDisplay(input) {
-        if (
-          (input.approvalSurface !== undefined &&
-            !isApprovalSurfacePreference(input.approvalSurface)) ||
-          (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) ||
-          (input.theme !== undefined && !isThemeChoice(input.theme))
-        ) {
+        if (!isValidDisplayInput(input)) {
           throw new WalletError("Invalid display preference");
         }
         const preferences = await read();
@@ -367,6 +381,9 @@ export const createPreferencesStore = ({
           ...(input.displayCurrency === undefined
             ? {}
             : { displayCurrency: input.displayCurrency }),
+          ...(input.reliabilityDiagnostics === undefined
+            ? {}
+            : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
           ...(input.theme === undefined ? {} : { theme: input.theme }),
         };
         await writePreferences(store, next);

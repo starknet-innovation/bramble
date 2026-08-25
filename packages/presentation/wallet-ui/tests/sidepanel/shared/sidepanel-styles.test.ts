@@ -135,6 +135,9 @@ describe("sidepanel styles", () => {
       /\.account-network-label \{[^}]*text-overflow: ellipsis;[^}]*text-wrap: nowrap;/s,
     );
     expect(SIDEPANEL_STYLES).toMatch(
+      /\.pill \{[^}]*max-width: 100%;[^}]*text-overflow: ellipsis;/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
       /\.account-net\.degraded \.dot \{[^}]*network-status-pulse 2400ms[^}]*var\(--mc-warning\)/s,
     );
   });

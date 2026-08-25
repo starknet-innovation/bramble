@@ -6,6 +6,7 @@
 
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { checkboxField, inputControl, textField } from "@mc-wallet/ui-kit/fields";
+import { RECOVERY_SCAN_LIMITS } from "@mc-wallet/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
@@ -312,6 +313,39 @@ const accountContractStep = (): string => `
     </div>
   </section>`;
 
+const recoveryAccountsStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
+    ${flowBack("Back to passphrase")}
+    ${stepHead("wallet", "Find your accounts", "MC Wallet checks the first 20 account indices for both OpenZeppelin and Argent accounts. Accounts with on-chain activity are selected automatically.")}
+    <div class="onboarding-fields">
+      <div class="section-head">
+        <p id="recovery-scan-status" class="hint" role="status">Ready to search.</p>
+        ${iconButton({ attributes: { id: "recovery-scan-retry" }, icon: "refresh", label: "Retry account search" })}
+      </div>
+      <ul class="allowance-list" id="recovery-account-list" aria-label="Recovered accounts"></ul>
+      <details class="disclosure">
+        <summary>Advanced manual index</summary>
+        <div class="disclosure-body onboarding-fields">
+          ${textField({ inputmode: "numeric", label: "Account index", max: RECOVERY_SCAN_LIMITS.maxIndex, min: 0, name: "recoveryManualIndex", type: "number" })}
+          ${button({ attributes: { id: "recovery-manual-search" }, label: "Check this index", variant: "secondary" })}
+        </div>
+      </details>
+      ${mainnetAcknowledgement(
+        "recoveryMainnetAck",
+        "recovery-mainnet-ack",
+        "I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet.",
+      )}
+      <p id="recovery-accounts-result" role="status"></p>
+    </div>
+    <div class="onboarding-step-cta">
+      ${button({
+        attributes: { id: "recover-accounts-button" },
+        disabled: true,
+        label: "Restore selected accounts",
+      })}
+    </div>
+  </section>`;
+
 const accountStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="accounts" hidden>
     ${flowBack("Back to account contract")}
@@ -406,6 +440,7 @@ export const onboardingWizard = (status: WalletStatus): string => `
       ${generatedStep()}
       ${verifyStep()}
       ${passwordStep()}
+      ${recoveryAccountsStep()}
       ${accountContractStep()}
       ${accountStep()}
     </form>

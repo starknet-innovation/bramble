@@ -119,6 +119,9 @@ export const walletStub = {
   async previewAccount() {
     return account;
   },
+  async recoverAccounts() {
+    return [account];
+  },
   async validateMnemonic() {
     return true;
   },

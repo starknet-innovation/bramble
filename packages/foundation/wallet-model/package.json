@@ -10,6 +10,7 @@
     "./networks": "./src/networks/networks.ts",
     "./passphrase": "./src/preferences/passphrase.ts",
     "./preferences": "./src/preferences/preferences.ts",
+    "./recovery": "./src/accounts/recovery.ts",
     "./signing": "./src/accounts/signing.ts"
   },
   "scripts": {

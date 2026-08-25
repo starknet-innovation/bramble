@@ -7,7 +7,7 @@
 import { escapeHtml } from "@mc-wallet/core/html";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { button, segmentedControl } from "@mc-wallet/ui-kit/controls";
-import { selectField, textField } from "@mc-wallet/ui-kit/fields";
+import { checkboxField, selectField, textField } from "@mc-wallet/ui-kit/fields";
 import { menuLink } from "@mc-wallet/ui-kit/navigation";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
@@ -121,6 +121,17 @@ export const appearanceFlow = (
         })),
         selected: preferences?.displayCurrency ?? "usd",
       })}
+    </section>
+    <section class="section">
+      <p class="eyebrow">Reliability diagnostics</p>
+      ${checkboxField({
+        attributes: { id: "reliability-diagnostics" },
+        checked: preferences?.reliabilityDiagnostics ?? false,
+        name: "reliabilityDiagnostics",
+        text: "Keep anonymous RPC reliability counters on this device",
+      })}
+      <p class="hint">No addresses, sites, transaction data, endpoint URLs, or raw errors are collected. Nothing is uploaded; you choose whether to export it.</p>
+      ${button({ attributes: { id: "diagnostics-export" }, icon: "receive", label: "Download diagnostics" })}
     </section>
     <p id="display-result" role="status"></p>`,
   );

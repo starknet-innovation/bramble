@@ -203,7 +203,7 @@ Create the item once (via the dashboard) and note its **item/extension ID**
 
 - **Icons:** 128×128 PNG store icon (the manifest also ships action icons).
 - **Screenshots:** at least one, 1280×800 or 640×400 PNG/JPEG.
-- **Promo images (optional):** small tile 440×280; marquee 1400×560.
+- **Promo images:** required small tile 440×280; optional marquee 1400×560.
 - **Text:** name, short description (≤132 chars), detailed description,
   category, primary language.
 
@@ -220,6 +220,11 @@ Required before review will pass:
   transaction reconciliation, and side-panel/storage usage. Vague or missing
   justifications are the most common rejection reason.
 - A **privacy policy** URL if any user data is handled.
+
+Reviewed listing copy, privacy policy, permission justifications, and asset requirements live in
+`docs/chrome-web-store/`. Chrome's August 2026 disclosure policy requires every data collection to
+be disclosed before collection, including local-only diagnostic collection; keep the dashboard,
+listing, privacy policy, and in-product opt-in copy aligned.
 
 ## 5. Chrome Web Store — API credentials and secrets
 

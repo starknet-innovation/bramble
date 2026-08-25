@@ -34,6 +34,10 @@ import {
   createArgentMultisigDeploymentReviews,
 } from "../multisig/multisig-deployment-reviews";
 import {
+  createRecoveryDiscoveryCache,
+  type RecoveryDiscoveryCache,
+} from "../onboarding/recovery-cache";
+import {
   type BalanceSnapshotStore,
   memoryBalanceSnapshotStore,
 } from "../portfolio/balance-snapshots";
@@ -74,6 +78,7 @@ export type RouterContext = {
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
   readonly prices: PriceService;
+  readonly recoveryDiscovery: RecoveryDiscoveryCache;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly swap: SwapService;
@@ -106,6 +111,7 @@ export type MessageHandlerOptions = {
   readonly originHistory?: OriginHistoryStore;
   readonly preferencesStore?: WalletPreferencesStore;
   readonly prices?: PriceService;
+  readonly recoveryDiscovery?: RecoveryDiscoveryCache;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
@@ -155,6 +161,10 @@ const nftSnapshotsFor = (
 ): Pick<RouterContext, "nftSnapshots"> | Record<string, never> =>
   provided ? { nftSnapshots: provided } : {};
 
+const recoveryDiscoveryFor = (
+  provided: RecoveryDiscoveryCache | undefined,
+): RecoveryDiscoveryCache => provided ?? createRecoveryDiscoveryCache();
+
 /**
  * Resolves every optional collaborator into the fully wired router context.
  * Absent collaborators fall back to in-memory or explicitly-unavailable
@@ -192,6 +202,7 @@ export const routerContext = (
     originHistory: options.originHistory ?? memoryOriginHistory(),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
+    recoveryDiscovery: recoveryDiscoveryFor(options.recoveryDiscovery),
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
     session,
     swap: options.swap ?? unavailableSwapService,

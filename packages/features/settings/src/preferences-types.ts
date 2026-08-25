@@ -40,6 +40,8 @@ export type WalletPreferences = {
   readonly nftIndexerUrl?: string;
   readonly nfts?: readonly WatchedNft[];
   readonly rpcOverrides?: RpcOverrides;
+  /** Opt-in process-local aggregate RPC counters; never uploaded automatically. */
+  readonly reliabilityDiagnostics?: boolean;
   readonly schemaVersion: 1;
   readonly strk20Networks?: Strk20NetworkConfigs;
   /** @deprecated Legacy incomplete prover-only setting retained for backup compatibility. */
@@ -101,6 +103,7 @@ export type WalletPreferencesStore = {
   readonly setDisplay: (input: {
     readonly approvalSurface?: ApprovalSurfacePreference;
     readonly displayCurrency?: DisplayCurrency;
+    readonly reliabilityDiagnostics?: boolean;
     readonly theme?: ThemeChoice;
   }) => Promise<WalletPreferences>;
   readonly setRpcOverride: (input: {

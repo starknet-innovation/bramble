@@ -59,6 +59,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "nftIndexerUrl",
   "nfts",
   "rpcOverrides",
+  "reliabilityDiagnostics",
   "schemaVersion",
   "strk20Networks",
   "strk20ProverUrl",
@@ -80,6 +81,8 @@ const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
+  (value["reliabilityDiagnostics"] === undefined ||
+    typeof value["reliabilityDiagnostics"] === "boolean") &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
 const hasValidUrlAndNftFields = (value: Record<string, unknown>): boolean =>

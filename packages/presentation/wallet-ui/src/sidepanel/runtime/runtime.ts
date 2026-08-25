@@ -25,6 +25,7 @@ import {
   isPreferencesResponse,
   isPricesResponse,
   isRevealSecretsResponse,
+  isSupportDiagnosticsResponse,
   isTokenChartResponse,
   isTransactionAlertsResponse,
   isTransferResponse,
@@ -259,9 +260,10 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "transfer review failed");
     },
-    async loadBalances(cached = false): Promise<ScopedBalanceState> {
+    async loadBalances(cached = false, refresh = false): Promise<ScopedBalanceState> {
       const response = await sendMessage({
         ...(cached ? { cached: true } : {}),
+        ...(refresh ? { refresh: true } : {}),
         type: "wallet.getBalances",
       });
       if (isBalancesResponse(response)) {
@@ -391,6 +393,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     async setDisplay(input: {
       readonly approvalSurface?: "popup" | "side-panel";
       readonly displayCurrency?: "eur" | "gbp" | "usd";
+      readonly reliabilityDiagnostics?: boolean;
       readonly theme?: "dark" | "light";
     }): Promise<void> {
       const response = await sendMessage({ ...input, type: "wallet.setDisplay" });
@@ -398,6 +401,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return;
       }
       throw responseError(response, "display update failed");
+    },
+    async loadDiagnostics() {
+      const response = await sendMessage({ type: "wallet.diagnostics" });
+      if (isSupportDiagnosticsResponse(response)) return response.diagnostics;
+      throw responseError(response, "diagnostic export failed");
     },
     async setExplorerFallback(networkId: string, enabled: boolean): Promise<void> {
       const response = await sendMessage({

@@ -103,6 +103,7 @@ jobs:
       vendor: ${{ steps.vendor.outcome }}
       build: ${{ steps.build.outcome }}
       audit: ${{ steps.audit.outcome }}
+      properties: ${{ steps.properties.outcome }}
       e2e_install: ${{ steps.e2e_install.outcome }}
       e2e: ${{ steps.e2e.outcome }}
     runs-on:
@@ -174,13 +175,10 @@ jobs:
         id: e2e
         continue-on-error: true
         run: bun run test:e2e
-      - name: Performance / regression suite (placeholder)
-        id: perf
-        run: |
-          echo "No performance, fuzz, or standalone regression suite exists in this"
-          echo "repo yet. This step is an intentional NO-OP placeholder (see"
-          echo "DEVELOPMENT.md). It asserts nothing and must NOT be read as a"
-          echo "passing perf/regression gate. Wire a real suite here when one exists."
+      - name: Deterministic security property suite
+        id: properties
+        continue-on-error: true
+        run: bun test tests/property
 
       - name: Categorized summary
         if: always()
@@ -189,6 +187,7 @@ jobs:
           VENDOR: ${{ steps.vendor.outcome }}
           BUILD: ${{ steps.build.outcome }}
           AUDIT: ${{ steps.audit.outcome }}
+          PROPERTIES: ${{ steps.properties.outcome }}
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
         run: |
@@ -197,6 +196,7 @@ jobs:
             ["Vendor toolchain (krusty+argent)"]="$VENDOR"
             ["Extension build"]="$BUILD"
             ["Dependency audit (bun audit)"]="$AUDIT"
+            ["Security property suite"]="$PROPERTIES"
             ["E2E browser install"]="$E2E_INSTALL"
             ["Full E2E (Playwright)"]="$E2E"
           )
@@ -251,11 +251,12 @@ jobs:
           VENDOR: ${{ steps.vendor.outcome }}
           BUILD: ${{ steps.build.outcome }}
           AUDIT: ${{ steps.audit.outcome }}
+          PROPERTIES: ${{ steps.properties.outcome }}
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
         run: |
           set -euo pipefail
-          for o in "$VENDOR" "$BUILD" "$AUDIT" "$E2E_INSTALL" "$E2E"; do
+          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E"; do
             if [ "$o" != "success" ]; then
               echo "At least one nightly gate did not pass — failing the job."
               exit 1
@@ -281,6 +282,7 @@ jobs:
           VENDOR: ${{ needs.nightly.outputs.vendor }}
           BUILD: ${{ needs.nightly.outputs.build }}
           AUDIT: ${{ needs.nightly.outputs.audit }}
+          PROPERTIES: ${{ needs.nightly.outputs.properties }}
           E2E_INSTALL: ${{ needs.nightly.outputs.e2e_install }}
           E2E: ${{ needs.nightly.outputs.e2e }}
         with:
@@ -291,6 +293,7 @@ jobs:
               ["Vendor toolchain (krusty+argent)", process.env.VENDOR],
               ["Extension build", process.env.BUILD],
               ["Dependency audit (bun audit)", process.env.AUDIT],
+              ["Security property suite", process.env.PROPERTIES],
               ["E2E browser install", process.env.E2E_INSTALL],
               ["Full E2E (Playwright)", process.env.E2E],
             ];

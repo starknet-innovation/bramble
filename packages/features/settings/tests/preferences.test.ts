@@ -257,6 +257,7 @@ describe("createPreferencesStore", () => {
     await preferences.setDisplay({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      reliabilityDiagnostics: true,
       theme: "dark",
     });
     await preferences.saveAddress({ address: "0x123", label: "Ada", networkId: "SN_MAIN" });
@@ -266,6 +267,7 @@ describe("createPreferencesStore", () => {
     expect(stored.accountLabels?.[accountId]).toBe("Savings");
     expect(stored.approvalSurface).toBe("popup");
     expect(stored.displayCurrency).toBe("eur");
+    expect(stored.reliabilityDiagnostics).toBe(true);
     expect(stored.theme).toBe("dark");
     expect(stored.addressBook).toEqual([]);
 

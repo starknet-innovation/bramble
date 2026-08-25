@@ -73,7 +73,9 @@ unlock screen. Enter your vault passphrase to reach the dashboard.
 Choose **Add an existing wallet**, then **Ledger hardware wallet**. Ledger
 accounts are keyless in MC Wallet: the private key never leaves the device, and
 recovery is handled by the Ledger's own recovery phrase, not by an MC Wallet
-software recovery phrase.
+software recovery phrase. This is a trusted-testers preview until the physical
+device and transport matrix in issue #224 is complete; no model or connection
+method is advertised as production-validated yet.
 
 ---
 

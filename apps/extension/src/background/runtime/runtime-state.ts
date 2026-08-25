@@ -18,9 +18,9 @@ import {
   type StarknetNetwork,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
+import type { NetworkOption, WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { runGuardedNetworkMutation } from "./active-network-mutation";
-import type { NetworkOption, WalletStatus } from "./runtime-types";
 import {
   captureSessionAuthorization,
   type PassiveUnlockSession,

@@ -1,6 +1,4 @@
-/**
- * Wallet vault service: privileged account metadata persistence behind encryption.
- */
+/** Wallet vault service: privileged account metadata persistence behind encryption. */
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { isWalletOrigin } from "@mc-wallet/core/origin";
@@ -40,6 +38,7 @@ import { CURRENT_SCHEMA_VERSION, isVaultV7, type Vault } from "../schema/schema"
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
+import { recoverVaultAccounts } from "./recovery";
 import type { WalletVaultService } from "./service-types";
 
 export { activeAccountSecrets } from "./reveal";
@@ -397,6 +396,8 @@ export const createWalletVaultService = ({
       );
     },
     readVault,
+    recoverAccounts: (input) =>
+      serialized(() => recoverVaultAccounts(encryptedStore, kms, readVaultSnapshot, input)),
     async revokeOrigin(input) {
       if (!isWalletOrigin(input.origin)) {
         throw new WalletError("Invalid origin");

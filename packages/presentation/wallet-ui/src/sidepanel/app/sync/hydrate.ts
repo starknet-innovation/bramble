@@ -12,6 +12,7 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import type { RenderData } from "../rendering/render-cache";
 import type { WalletView } from "../screens/views";
 import type { DeploymentCache } from "./deployment-cache";
+import type { RefreshReason } from "./refresh-scheduler";
 
 /**
  * Inputs `hydrateView` needs: the current status/view, the shared render cache,
@@ -28,6 +29,7 @@ export type HydrateDeps = {
   readonly multisig: MultisigClient;
   readonly deployment: DeploymentCache;
   readonly paint: () => void;
+  readonly refreshReason?: RefreshReason;
 };
 
 const hydrateMultisigs = async (
@@ -253,6 +255,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     wallet,
     multisig,
     deployment,
+    refreshReason,
     isCurrent = () => true,
     paint,
   } = deps;
@@ -327,7 +330,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   };
   if (priceView) {
     if (walletBalanceView) {
-      fill(wallet.loadBalances(), (value) => {
+      fill(wallet.loadBalances(false, refreshReason === "action"), (value) => {
         if ("balances" in value) {
           cache.balances =
             value.accountId !== status.activeAccountId || value.networkId !== status.networkId
@@ -358,7 +361,11 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (activityView) {
     fill(
-      wallet.loadActivity(activeView === "home" ? undefined : (selectedMultisigId ?? undefined)),
+      wallet.loadActivity(
+        activeView === "home" ? undefined : (selectedMultisigId ?? undefined),
+        false,
+        activeView === "activity" && refreshReason !== "ambient",
+      ),
       (value) => {
         cache.transactions = value.entries;
         cache.historyUnavailable = value.historyUnavailable;
@@ -376,7 +383,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.connectedSites = value;
     });
   }
-  if (activeView === "allowances") {
+  if (activeView === "allowances" && refreshReason !== "ambient") {
     fill(wallet.loadAllowances(), (value) => {
       cache.allowances = value;
     });
@@ -431,7 +438,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     );
   }
   if (multisigBalanceView && selectedMultisigId) {
-    fill(multisig.loadBalances(selectedMultisigId), (value) => {
+    fill(multisig.loadBalances(selectedMultisigId, false, refreshReason === "action"), (value) => {
       cache.multisigBalanceId = selectedMultisigId;
       if ("balances" in value) {
         cache.multisigBalances =

@@ -159,7 +159,7 @@ describe("starknet RPC helpers", () => {
     const calls: string[] = [];
     await expect(
       withRpcFallback(
-        ["https://one.example", "https://two.example"],
+        ["https://semantic-one.example", "https://semantic-two.example"],
         async (provider) => {
           calls.push(String(provider));
           throw semantic;
@@ -167,7 +167,33 @@ describe("starknet RPC helpers", () => {
         (nodeUrl) => nodeUrl as unknown as import("starknet").RpcProvider,
       ),
     ).rejects.toBe(semantic);
-    expect(calls).toEqual(["https://one.example"]);
+    expect(calls).toEqual(["https://semantic-one.example"]);
+  });
+
+  test("cools down a failed read endpoint without changing write selection", async () => {
+    let currentTime = 1_000;
+    const attempts: string[] = [];
+    const urls = ["https://cooldown-one.example", "https://cooldown-two.example"] as const;
+    const read = () =>
+      withRpcFallback(
+        urls,
+        async (provider) => {
+          const url = String(provider);
+          attempts.push(url);
+          if (url === urls[0]) throw new Error("offline");
+          return "ok";
+        },
+        (nodeUrl) => nodeUrl as unknown as import("starknet").RpcProvider,
+        () => currentTime,
+      );
+
+    await expect(read()).resolves.toBe("ok");
+    await expect(read()).resolves.toBe("ok");
+    expect(attempts).toEqual([urls[0], urls[1], urls[1]]);
+
+    currentTime += 30_000;
+    await expect(read()).resolves.toBe("ok");
+    expect(attempts.slice(-2)).toEqual([...urls]);
   });
 
   test("does not classify a callback preflight failure as an ambiguous broadcast", async () => {

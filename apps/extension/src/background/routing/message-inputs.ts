@@ -1,6 +1,4 @@
-/**
- * Pure parsers for untrusted background runtime messages.
- */
+/** Pure parsers for untrusted background runtime messages. */
 
 import { isUuid } from "@mc-wallet/core/ids";
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@mc-wallet/core/json";
@@ -11,12 +9,12 @@ import {
   isAccountContractType,
   isAccountId,
 } from "@mc-wallet/wallet-model/accounts";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import {
   isHexChainId,
   isStarkFieldElement,
   isStarknetNetworkId,
   STARK_FIELD_PRIME,
+  type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
 import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
 import { INVOKE_LIMITS } from "@mc-wallet/wallet-protocol/invoke-limits";
@@ -78,12 +76,16 @@ export const readTypeOnlyInput = (message: unknown, type: string): boolean =>
 /**
  * Parses the balance reader's optional local-snapshot request.
  */
-export const readBalancesInput = (message: unknown): { readonly cached: boolean } | null =>
+export const readBalancesInput = (
+  message: unknown,
+): { readonly cached: boolean; readonly refresh: boolean } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["cached", "type"]) &&
+  hasOnlyKnownKeys(message, ["cached", "refresh", "type"]) &&
   message["type"] === "wallet.getBalances" &&
-  (message["cached"] === undefined || message["cached"] === true)
-    ? { cached: message["cached"] === true }
+  (message["cached"] === undefined || message["cached"] === true) &&
+  (message["refresh"] === undefined || message["refresh"] === true) &&
+  !(message["cached"] === true && message["refresh"] === true)
+    ? { cached: message["cached"] === true, refresh: message["refresh"] === true }
     : null;
 
 /**
@@ -479,9 +481,7 @@ export const readRevealSecretsInput = (
   return { vaultPassphrase: message["vaultPassphrase"] };
 };
 
-/**
- * Re-exported preference input readers so callers keep one import path.
- */
+/** Re-exported preference input readers so callers keep one import path. */
 export {
   readCreateGroupInput,
   readImportPreferencesInput,

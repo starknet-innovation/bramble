@@ -233,6 +233,12 @@ if (import.meta.main) {
     "http://localhost:5050/*",
   ];
   const expectedActionTitle = "Open MC Wallet";
+  const expectedIcons = {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png",
+  } as const;
   const expectedSidePanel = "sidepanel.html";
   const expectedProviderResource = "provider/inpage.js";
   const expectedContentScript = "content/index.js";
@@ -276,6 +282,7 @@ if (import.meta.main) {
       "content_scripts",
       "description",
       "host_permissions",
+      "icons",
       "manifest_version",
       "name",
       "permissions",
@@ -297,6 +304,14 @@ if (import.meta.main) {
   // permission warning.
   if (!hasOnly(manifest["permissions"], ["alarms", "sidePanel", "storage"])) {
     failures.push("manifest permissions must stay alarms, sidePanel, and storage only");
+  }
+
+  const icons = hasOnlyKeys(manifest["icons"], ["16", "32", "48", "128"])
+    ? manifest["icons"]
+    : null;
+  for (const [size, path] of Object.entries(expectedIcons)) {
+    if (icons?.[size] !== path) failures.push(`manifest ${size}px icon must stay ${path}`);
+    await requireFile(`${publicRoot}/${path}`);
   }
 
   const hostPermissions = manifest["host_permissions"];

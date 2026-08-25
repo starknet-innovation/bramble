@@ -19,6 +19,7 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@playwright/test": "1.62.1",
   "@types/bun": "1.3.14",
   "@types/node": "26.2.0",
+  "fast-check": "4.9.0",
   knip: "6.32.2",
   madge: "8.0.0",
   typescript: "6.0.3",
@@ -47,6 +48,10 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
 export const PINNED_RUNTIME_FILES = [
   "background/index.js",
   "content/index.js",
+  "icons/icon-128.png",
+  "icons/icon-16.png",
+  "icons/icon-32.png",
+  "icons/icon-48.png",
   "ledger-grant.html",
   "ledger-grant/index.js",
   "manifest.json",

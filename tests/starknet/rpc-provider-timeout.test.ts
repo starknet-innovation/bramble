@@ -107,7 +107,7 @@ describe("Starknet RPC request deadlines", () => {
   });
 });
 
-describe("one RPC transport, not one per read lane", () => {
+describe("one shared RPC transport, not one per read lane", () => {
   /**
    * MCW-V09-122 (follow-up): a lane that needs a tighter deadline than the
    * wallet-wide default must override the NUMBER, never write its own transport.
@@ -116,10 +116,13 @@ describe("one RPC transport, not one per read lane", () => {
    * pinned above simply did not hold there. Whoever adds the next lane inherits
    * that guarantee only if they reach for the shared helper.
    */
-  test("no module outside provider.ts builds its own provider transport", async () => {
+  test("no module outside the provider transport boundary builds its own transport", async () => {
     const offenders: string[] = [];
     for (const file of workspaceSourceFiles()) {
-      if (file.endsWith(join("rpc", "provider.ts"))) {
+      if (
+        file.endsWith(join("rpc", "provider.ts")) ||
+        file.endsWith(join("rpc", "rpc-transport.ts"))
+      ) {
         continue;
       }
       const text = await readFile(file, "utf8");

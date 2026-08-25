@@ -20,6 +20,7 @@ import {
   createPreferencesStore,
   type WalletPreferences,
 } from "@mc-wallet/settings/preferences";
+import { setRpcDiagnosticsEnabled } from "@mc-wallet/starknet/rpc-diagnostics";
 import { createActivityLog, systemClock } from "@mc-wallet/transactions/activity";
 import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { createSwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
@@ -48,6 +49,7 @@ import {
   type OnboardingSurfaceBrowser,
   openOnboardingOnInstall,
 } from "./onboarding/onboarding-surface";
+import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createMessageHandler } from "./routing/messages";
@@ -119,6 +121,7 @@ const sessionStore = (() => {
   }
 })();
 const multisigDeploymentReviews = createArgentMultisigDeploymentReviews(sessionStore);
+const recoveryDiscovery = createRecoveryDiscoveryCache(sessionStore);
 // The vault store is created up front so the unlock session can drop its
 // cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
 // operations for the life of an unlock rather than re-derived every time.
@@ -164,11 +167,14 @@ const preferences = storageReady
   .catch(() => null);
 const preferenceStore = createBackgroundPreferences({
   onApprovalSurface: updateApprovalSurface,
+  onReliabilityDiagnostics: setRpcDiagnosticsEnabled,
   store: preferences,
 });
 void preferences
   .then(async (store) => {
-    updateApprovalSurface((await store?.read())?.approvalSurface ?? "side-panel");
+    const stored = await store?.read();
+    updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
+    setRpcDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
   })
   .catch(() => undefined);
 // The read-only slice of the fail-closed adapter above, handed to collaborators
@@ -286,6 +292,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   ...(activityLog ? { activity: activityLog } : {}),
   ...(originHistory ? { originHistory } : {}),
   prices: priceService,
+  recoveryDiscovery,
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
   multisigDeploymentReviews,
