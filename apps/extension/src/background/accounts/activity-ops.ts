@@ -121,7 +121,10 @@ export const handleActivity = async (
     return { activity: activityForScope(await deps.activity.list(), target.scope), ok: true };
   }
   const now = (deps.now ?? systemClock)();
-  const local = await reconcileScope(deps, target.scope, now);
+  // Ambient panel reads cover only unresolved transactions. L2-accepted rows
+  // stay on the monitor's 15-minute lane unless the user opens or refreshes
+  // Activity, avoiding a duplicate finality poll on every visible-panel tick.
+  const local = await reconcileScope(deps, target.scope, now, input.refreshHistory);
   const previousSync = await deps.activity.historySync?.(target.scope).catch(() => null);
   // History discovery is intentionally screen-driven. Ambient Home refreshes
   // reconcile only transactions still under observation; entering Activity or

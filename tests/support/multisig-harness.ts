@@ -93,11 +93,17 @@ export type MultisigHarnessOptions = {
   readonly deploymentEstimateError?: Error;
   readonly deploymentStatus?: boolean | (() => boolean);
   readonly failPreferencesAfterSubmit?: boolean;
-  readonly getConfig?: () => {
-    readonly classHash: string;
-    readonly signerGuids: readonly string[];
-    readonly threshold: number;
-  };
+  readonly getConfig?: () =>
+    | {
+        readonly classHash: string;
+        readonly signerGuids: readonly string[];
+        readonly threshold: number;
+      }
+    | Promise<{
+        readonly classHash: string;
+        readonly signerGuids: readonly string[];
+        readonly threshold: number;
+      }>;
   readonly getSignerPublicKeys?: () => {
     readonly signerPublicKeys: readonly string[];
     readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
@@ -238,7 +244,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
       multisig: {
         async getConfig() {
           return (
-            options.getConfig?.() ?? {
+            (await options.getConfig?.()) ?? {
               classHash: ARGENT_MULTISIG_CONTRACT.classHash,
               signerGuids: HARNESS_KEYS.map(argentSignerGuid),
               threshold: 2,

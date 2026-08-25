@@ -109,7 +109,7 @@ describe("home hydration priority", () => {
     await flush();
     expect(paints).toBe(2);
     expect(cache.prices).toEqual({ "0x1": 2 });
-    expect(deferredStarts).toEqual(["deployment", "activity", "nfts"]);
+    expect(deferredStarts).toEqual(["deployment", "activity"]);
 
     deployment.resolve(true);
     activity.resolve({ entries: [], historyUnavailable: false });
@@ -157,7 +157,7 @@ describe("home hydration priority", () => {
     expect(cache.discoveredNfts).toHaveLength(1);
   });
 
-  test("paints watched artwork before slow portfolio and indexer jobs finish", async () => {
+  test("paints watched artwork before slower portfolio jobs finish", async () => {
     const balances = deferred<Awaited<ReturnType<SidepanelWallet["loadBalances"]>>>();
     const prices = deferred<Awaited<ReturnType<SidepanelWallet["loadPrices"]>>>();
     const indexed = deferred<Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>>();

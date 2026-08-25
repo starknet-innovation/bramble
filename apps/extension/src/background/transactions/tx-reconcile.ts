@@ -145,6 +145,7 @@ export const reconcileScope = async (
   deps: ReconcileDeps,
   scope: ActivityScope,
   nowMs: number,
+  includeSlow = false,
 ): Promise<readonly ActivityEntry[]> => {
   // A background alarm may be waiting through multiple RPC fallbacks. The
   // Activity view must remain responsive: return its current durable snapshot
@@ -154,7 +155,9 @@ export const reconcileScope = async (
   }
   return runReconciliation(async () => {
     const entries = activityForScope(await deps.activity.list(), scope);
-    const due = entries.filter((entry) => isObserved(entry, nowMs));
+    const due = entries.filter((entry) =>
+      includeSlow ? isObserved(entry, nowMs) : isObservedAt(entry, "fast", nowMs),
+    );
     const outcomes = { ...expiredOutcomes(entries, nowMs), ...(await chainOutcomes(deps, due)) };
     return Object.keys(outcomes).length === 0
       ? entries

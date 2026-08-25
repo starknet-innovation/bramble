@@ -118,6 +118,16 @@ describe("background reconciliation", () => {
     expect(polled).toEqual([["0xabc"]]);
   });
 
+  test("keeps accepted transactions off ambient panel polling", async () => {
+    const { deps, polled } = makeDeps([entry({ status: "accepted" })], {
+      "0xabc": found("accepted", true),
+    });
+    await reconcileScope(deps, { accountId: ACCOUNT, networkId: "SN_MAIN" }, 1_000);
+    expect(polled).toEqual([]);
+    await reconcileScope(deps, { accountId: ACCOUNT, networkId: "SN_MAIN" }, 1_000, true);
+    expect(polled).toEqual([["0xabc"]]);
+  });
+
   test("records a notice when an accepted transaction later reverts", async () => {
     const { deps } = makeDeps([entry({ status: "accepted" })], { "0xabc": found("reverted") });
     await reconcileObserved(deps, "slow", 1_000);

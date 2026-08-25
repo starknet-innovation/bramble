@@ -80,6 +80,41 @@ describe("cached hydration resilience", () => {
     expect(reads).toBe(1);
   });
 
+  test("runs live NFT discovery only when entering an NFT surface", async () => {
+    const calls: boolean[] = [];
+    const run = (activeView: "home" | "nfts", refreshReason?: "ambient") =>
+      hydrateView({
+        activeView,
+        cache: emptyRenderCache(),
+        deployment: { load: async () => true },
+        multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
+        paint: () => undefined,
+        ...(refreshReason ? { refreshReason } : {}),
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          discoverNfts: async (...input: readonly unknown[]) => {
+            calls.push(input[3] === true);
+            return [];
+          },
+          loadActivity: async () => ({ entries: [], historyUnavailable: false }),
+          loadBalances: async () => ({
+            accountId: "SN_MAIN:0x1",
+            balances: [],
+            networkId: "SN_MAIN",
+          }),
+          loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+          loadWatchedNfts: async () => [],
+        },
+      } as never);
+
+    await run("home");
+    await run("nfts", "ambient");
+    await run("nfts");
+    expect(calls).toEqual([true, true, true, false]);
+  });
+
   test("forces the affected balance lane only for action reconciliation", async () => {
     const calls: Array<readonly [boolean | undefined, boolean | undefined]> = [];
     await hydrateView({
@@ -166,6 +201,7 @@ describe("cached hydration resilience", () => {
       ],
     };
     let refreshes = 0;
+    const nftReads: boolean[] = [];
 
     await hydrateView({
       activeView: "multisig-home",
@@ -180,16 +216,21 @@ describe("cached hydration resilience", () => {
         },
       },
       paint: () => undefined,
+      refreshReason: "ambient",
       selectedMultisigId: multisigId,
       selectedTokenId: null,
       status,
       wallet: {
-        discoverNfts: async () => [],
+        discoverNfts: async (...input: readonly unknown[]) => {
+          nftReads.push(input[3] === true);
+          return [];
+        },
         loadActivity: async () => ({ entries: [], historyUnavailable: false }),
         loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
       },
     } as never);
 
     expect(refreshes).toBe(0);
+    expect(nftReads).toEqual([true]);
   });
 });

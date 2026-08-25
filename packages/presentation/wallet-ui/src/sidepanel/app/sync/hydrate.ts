@@ -394,7 +394,10 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.allowances = value;
     });
   }
-  if (walletNftView) {
+  // Home paints the last verified NFT snapshot from the cached phase above.
+  // Full indexer discovery can fan out into many ownership proofs, so only NFT
+  // surfaces refresh it live instead of turning an idle dashboard into a scan.
+  if (walletNftView && activeView !== "home" && refreshReason !== "ambient") {
     const nftScope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
     // Explicitly watched NFTs take the fast lane: no indexer wait, immediate
     // repaint when their verified metadata lands, and no wait for balances,
@@ -409,7 +412,6 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
         cache.indexedNfts = value;
         cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
       },
-      activeView === "home",
     );
   }
   if (registryView) {
@@ -458,7 +460,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       }
     });
   }
-  if (activeView === "multisig-home" && selectedMultisigId) {
+  if (activeView === "multisig-home" && selectedMultisigId && refreshReason !== "ambient") {
     const multisigNftScope = `${status.networkId}:${selectedMultisigId}`;
     stream(wallet.discoverNfts(true, multisigNftScope, selectedMultisigId), (value) => {
       cache.multisigNftId = selectedMultisigId;
