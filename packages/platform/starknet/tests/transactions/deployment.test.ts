@@ -279,7 +279,7 @@ describe("estimateAccountDeploymentFee", () => {
         rpcUrls: ["https://rpc.example"],
         signHash: async () => {
           signed = true;
-          return { publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
+          return { kind: "stark", publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
         },
       },
       () => makeProvider(false),
@@ -320,7 +320,7 @@ describe("submitAccountDeployment", () => {
           account,
           reviewedFee: REVIEWED_DEPLOYMENT,
           rpcUrls: ["https://rpc.example"],
-          signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+          signHash: async () => ({ kind: "stark", publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
         },
         () => makeProvider(true),
       ),
@@ -334,7 +334,7 @@ describe("submitAccountDeployment", () => {
           account,
           reviewedFee: REVIEWED_DEPLOYMENT,
           rpcUrls: ["https://rpc.example"],
-          signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+          signHash: async () => ({ kind: "stark", publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
         },
         () => makeProvider(false),
         (_provider, _stored, guardedSignHash) =>
@@ -360,7 +360,7 @@ describe("submitAccountDeployment", () => {
           account,
           reviewedFee: REVIEWED_DEPLOYMENT,
           rpcUrls: ["https://rpc.example"],
-          signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+          signHash: async () => ({ kind: "stark", publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
         },
         () => makeProvider(false),
         (_provider, _stored, guardedSignHash) =>
@@ -391,7 +391,7 @@ describe("submitAccountDeployment", () => {
           rpcUrls: ["https://rpc.example"],
           signHash: async () => {
             authorized = false;
-            return { publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
+            return { kind: "stark", publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
           },
         },
         () => makeProvider(false),

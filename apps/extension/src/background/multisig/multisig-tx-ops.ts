@@ -16,7 +16,7 @@ import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
 import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
 import { verificationContext } from "@mc-wallet/transactions/verify";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import { requireStarkSignature, type StarkSignature } from "@mc-wallet/wallet-model/signing";
 import { signerForContext } from "../accounts/wallet-ops";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
@@ -272,7 +272,7 @@ const signIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Runt
     const response = await persistSignature(
       deps,
       signing.intent,
-      signature,
+      requireStarkSignature(signature),
       signing.authorized.isCurrent,
     );
     if ("error" in response) {

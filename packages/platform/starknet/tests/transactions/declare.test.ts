@@ -111,8 +111,8 @@ const contractClass = {
   sierra_program: ["0x1"],
 };
 const contractClassHash = hash.computeContractClassHash(contractClass as CompiledContract);
-const signHash = async () => ({ publicKey: account.publicKeyX, r: "0x1", s: "0x2" });
-
+const SIGNATURE = { kind: "stark", publicKey: account.publicKeyX, r: "0x1", s: "0x2" } as const;
+const signHash = async () => SIGNATURE;
 describe("submitDeclareTransaction", () => {
   test("estimates with validation skipped and never invokes the signer", async () => {
     estimateCalls.length = 0;
@@ -127,7 +127,7 @@ describe("submitDeclareTransaction", () => {
         rpcUrls: ["https://rpc.example"],
         signHash: async () => {
           signed = true;
-          return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+          return SIGNATURE;
         },
       },
       makeProvider,
@@ -191,7 +191,7 @@ describe("submitDeclareTransaction", () => {
           rpcUrls: ["https://rpc.example"],
           signHash: async () => {
             signed = true;
-            return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+            return SIGNATURE;
           },
         },
         makeProvider,
@@ -288,7 +288,7 @@ describe("submitDeclareTransaction", () => {
       rpcUrls: ["https://rpc.example"],
       signHash: async () => {
         signed += 1;
-        return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+        return SIGNATURE;
       },
     };
 

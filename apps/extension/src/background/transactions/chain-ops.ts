@@ -14,6 +14,7 @@ import {
   STARKNET_NETWORKS,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
+import { requireStarkSignature } from "@mc-wallet/wallet-model/signing";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
@@ -133,7 +134,10 @@ export const executeSignApproval = async (
     const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
     return {
       ok: true,
-      signature: serializeAccountSignature(account.accountContractType, signature),
+      signature: serializeAccountSignature(
+        account.accountContractType,
+        requireStarkSignature(signature),
+      ),
     };
   } catch (error) {
     return { error: walletErrorMessage(error, "sign typed data request failed") };

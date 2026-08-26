@@ -26,6 +26,7 @@ describe("vault hash signer is bound to its unlock session", () => {
     );
 
     await expect(signHash(MESSAGE_HASH)).resolves.toEqual({
+      kind: "stark",
       publicKey: "0xabc",
       r: "0x1",
       s: "0x2",

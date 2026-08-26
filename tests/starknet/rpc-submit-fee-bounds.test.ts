@@ -153,7 +153,7 @@ const submit = async (
       rpcUrls: ["https://rpc.example"],
       async signHash(messageHash) {
         seen.signedHash = messageHash;
-        return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+        return { kind: "stark", publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
       },
       ...(speed === undefined ? {} : { speed }),
     },

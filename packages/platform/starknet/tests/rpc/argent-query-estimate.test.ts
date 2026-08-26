@@ -142,7 +142,7 @@ test("Argent submission settles validation-inclusive bounds before private signi
       signHash: async (messageHash) => {
         privatelySigned += 1;
         signedHash = messageHash;
-        return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+        return { kind: "stark" as const, publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
       },
     },
     () => provider,
@@ -168,7 +168,7 @@ test("Argent invoke estimate and submission reject a different live class before
     rpcUrls: ["https://rpc.invalid"],
     signHash: async () => {
       privatelySigned += 1;
-      return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+      return { kind: "stark" as const, publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
     },
   };
 
@@ -190,7 +190,7 @@ test("Argent operations reject a changed owner at the same accepted block", asyn
     rpcUrls: ["https://rpc.invalid"],
     signHash: async () => {
       privatelySigned += 1;
-      return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+      return { kind: "stark" as const, publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
     },
   };
 
@@ -217,7 +217,7 @@ test("Argent operations reject a guardian at the same accepted block", async () 
     rpcUrls: ["https://rpc.invalid"],
     signHash: async () => {
       privatelySigned += 1;
-      return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+      return { kind: "stark" as const, publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
     },
   };
 
@@ -250,7 +250,7 @@ test("Argent operations reject a non-Starknet owner type before signing", async 
     rpcUrls: ["https://rpc.invalid"],
     signHash: async () => {
       privatelySigned += 1;
-      return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+      return { kind: "stark" as const, publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
     },
   };
 
@@ -284,7 +284,7 @@ test("Argent operations accept an equivalent zero guardian encoding", async () =
     rpcUrls: ["https://rpc.invalid"],
     signHash: async (messageHash: string) => {
       signedHash = messageHash;
-      return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+      return { kind: "stark" as const, publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
     },
   };
 

@@ -11,7 +11,7 @@ import {
 } from "@mc-wallet/starknet/account-contracts";
 import { argentQueryAccount, krustyAccount } from "@mc-wallet/starknet/provider";
 import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { AccountSignature } from "@mc-wallet/wallet-model/signing";
 import { EDataAvailabilityMode, ETransactionVersion3, RpcProvider, type Signature } from "starknet";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -33,9 +33,9 @@ const provider = new RpcProvider({ nodeUrl: "https://rpc.invalid" });
 // observable, and returns a fixed signature.
 const recordingSignHash = () => {
   const signed: string[] = [];
-  const signHash = async (messageHash: string): Promise<StarkSignature> => {
+  const signHash = async (messageHash: string): Promise<AccountSignature> => {
     signed.push(messageHash);
-    return { publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
+    return { kind: "stark", publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
   };
   return { signHash, signed };
 };
@@ -148,7 +148,7 @@ describe("krustyAccount signer", () => {
           classHash: account.classHash,
           networkId: account.networkId,
         },
-        async () => ({ publicKey: "0x123", r: "0x1", s: "0x2" }),
+        async () => ({ kind: "stark", publicKey: "0x123", r: "0x1", s: "0x2" }),
         { multisig: { signerPublicKeys: ["0x123"], threshold: 1 } },
       ),
     ).toThrow("class hash does not match");
@@ -199,7 +199,7 @@ describe("krustyAccount signer", () => {
     const starknetAccount = krustyAccount(
       provider,
       multisig,
-      async () => ({ publicKey: "0x456", r: "0x3", s: "0x4" }),
+      async () => ({ kind: "stark", publicKey: "0x456", r: "0x3", s: "0x4" }),
       { multisig: { signerPublicKeys: ["0x456", "0x123"], threshold: 2 } },
     );
 

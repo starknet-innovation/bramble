@@ -9,6 +9,7 @@ import { serializeAccountSignature } from "@mc-wallet/starknet/account-contracts
 import { createRpcProvider } from "@mc-wallet/starknet/provider";
 import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@mc-wallet/starknet/rpc-submit";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { requireStarkSignature } from "@mc-wallet/wallet-model/signing";
 import type { Call, RpcProvider, TypedData } from "starknet";
 import { num, typedData } from "starknet";
 import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "../paymaster/paymaster";
@@ -256,10 +257,7 @@ export const createOfficialStrk20Service = ({
               isAuthorized: input.isAuthorized,
               proof: callAndProof.proof,
               rpcUrls: input.rpcUrls,
-              signHash: async (messageHash) => {
-                const signature = await input.signHash(messageHash);
-                return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
-              },
+              signHash: input.signHash,
             });
             return { allowanceGrants, transactionHash: result.transactionHash };
           } catch (error) {
@@ -389,10 +387,7 @@ export const createOfficialStrk20Service = ({
                 proof: callAndProof.proof,
                 reviewedFee,
                 rpcUrls: input.rpcUrls,
-                signHash: async (messageHash) => {
-                  const signature = await input.signHash(messageHash);
-                  return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
-                },
+                signHash: input.signHash,
               });
               return { allowanceGrants, transactionHash: result.transactionHash };
             } catch (error) {
@@ -449,7 +444,10 @@ export const createOfficialStrk20Service = ({
                 input.account.address,
               );
               const signature = await input.signHash(messageHash);
-              return serializeAccountSignature(input.account.accountContractType, signature);
+              return serializeAccountSignature(
+                input.account.accountContractType,
+                requireStarkSignature(signature),
+              );
             },
           })),
         }),
@@ -486,10 +484,7 @@ export const createOfficialStrk20Service = ({
             proof: prepared.proof,
             ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
             rpcUrls: prepared.rpcUrls,
-            signHash: async (messageHash) => {
-              const signature = await prepared.signHash(messageHash);
-              return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
-            },
+            signHash: prepared.signHash,
           });
           return { transactionHash: result.transactionHash };
         },

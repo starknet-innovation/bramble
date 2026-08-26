@@ -3,7 +3,11 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { isStarkFieldElement, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import {
+  type AccountSignature,
+  requireStarkSignature,
+  type StarkSignature,
+} from "@mc-wallet/wallet-model/signing";
 import {
   Account,
   type DeployAccountSignerDetails,
@@ -23,16 +27,20 @@ import {
 } from "../accounts/account-contracts";
 
 /**
- * Function that signs one Stark transaction hash through the vault service.
+ * Function that signs one transaction hash through the vault service, a hardware
+ * device, or a paired signer. The result is scheme-tagged: a consumer that can
+ * only serialize `(r, s)` must narrow with `requireStarkSignature` and fail
+ * closed on anything else.
  */
-export type StarkHashSigner = (messageHash: string) => Promise<StarkSignature>;
+export type StarkHashSigner = (messageHash: string) => Promise<AccountSignature>;
 
 /**
  * Hash signer for either one account signer or a collected multisig aggregate.
+ * The aggregate stays Stark-only — Argent multisig validates `(r, s)` members.
  */
 export type AccountHashSigner = (
   messageHash: string,
-) => Promise<StarkSignature | readonly StarkSignature[]>;
+) => Promise<AccountSignature | readonly StarkSignature[]>;
 
 /**
  * Signer metadata required for an Argent multisig adapter.
@@ -58,14 +66,16 @@ export type StarknetAccountDescriptor = AccountRef | ArgentMultisigAccountDescri
 
 type ContractKind = StarknetAccountDescriptor["accountContractType"];
 
-const exactlyOneSignature = (value: StarkSignature | readonly StarkSignature[]): StarkSignature => {
+const exactlyOneSignature = (
+  value: AccountSignature | readonly StarkSignature[],
+): StarkSignature => {
   if (Array.isArray(value)) {
     if (value.length !== 1 || !value[0]) {
       throw new WalletError("Account deployment requires exactly one signature");
     }
     return value[0];
   }
-  return value as StarkSignature;
+  return requireStarkSignature(value as AccountSignature);
 };
 
 class FixedContractStarknetSigner extends Signer {
@@ -102,7 +112,7 @@ class FixedContractStarknetSigner extends Signer {
       }
       return [
         ...serializeArgentMultisigSignature(
-          Array.isArray(signed) ? signed : [signed as StarkSignature],
+          Array.isArray(signed) ? signed : [requireStarkSignature(signed as AccountSignature)],
           this.multisig,
         ),
       ];
@@ -202,13 +212,14 @@ export const argentQueryAccount = (
   if (inputs.kind === "openzeppelin") {
     throw new WalletError("Query signer is only available for Argent accounts");
   }
-  const mockSign = async (): Promise<StarkSignature | readonly StarkSignature[]> => {
+  const mockSign = async (): Promise<AccountSignature | readonly StarkSignature[]> => {
     const publicKeys = inputs.multisig
       ? inputs.multisig.signerPublicKeys.slice(0, inputs.multisig.threshold)
       : [inputs.publicKey];
     return publicKeys.map((publicKey) => ({ publicKey, r: "0x1", s: "0x1" }));
   };
-  const mockDeploySign = async (): Promise<StarkSignature> => ({
+  const mockDeploySign = async (): Promise<AccountSignature> => ({
+    kind: "stark",
     publicKey: inputs.publicKey,
     r: "0x1",
     s: "0x1",

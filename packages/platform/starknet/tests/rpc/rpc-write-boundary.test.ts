@@ -152,7 +152,7 @@ const submitWithFailure = async (
       rpcUrls: ["https://rpc.example"],
       signHash: async (messageHash) => {
         signedHash = messageHash;
-        return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+        return { kind: "stark", publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
       },
     },
     () => accountProvider(failAt, fetches, () => signedHash),
@@ -201,7 +201,7 @@ describe("invoke RPC write boundary", () => {
         signHash: async (messageHash) => {
           signed = true;
           signedHash = messageHash;
-          return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+          return { kind: "stark", publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
         },
       },
       () => accountProvider("", fetches, () => signedHash),
@@ -225,7 +225,7 @@ describe("invoke RPC write boundary", () => {
         rpcUrls: ["https://rpc.example"],
         signHash: async (messageHash) => {
           signedHashes.push(messageHash);
-          return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+          return { kind: "stark", publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
         },
       },
       () => accountProvider("", fetches, () => signedHashes.at(-1), false),

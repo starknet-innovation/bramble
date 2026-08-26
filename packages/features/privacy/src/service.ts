@@ -10,7 +10,7 @@ import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { REVIEWED_FEE_REQUIRED } from "@mc-wallet/starknet/rpc-submit";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { AccountSignature } from "@mc-wallet/wallet-model/signing";
 import type {
   Strk20Action,
   Strk20BalanceEntry,
@@ -69,7 +69,7 @@ export type Strk20AccountContext = {
   /** Live unlock authorization checked at the final public-account write. */
   readonly isAuthorized: () => boolean;
   readonly rpcUrls: readonly string[];
-  readonly signHash: (messageHash: string) => Promise<StarkSignature>;
+  readonly signHash: (messageHash: string) => Promise<AccountSignature>;
   readonly viewingKey: () => Promise<string>;
 };
 

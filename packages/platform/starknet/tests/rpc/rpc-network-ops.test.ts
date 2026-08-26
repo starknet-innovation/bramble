@@ -51,7 +51,7 @@ const eth: TokenConfig = {
 let latestSignedHash = "0x0";
 const signHash = async (messageHash = "0x0") => {
   latestSignedHash = messageHash;
-  return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+  return { kind: "stark" as const, publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
 };
 
 // A provider fake for the read paths that call provider.callContract /

@@ -7,6 +7,7 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { requireStarkSignature } from "@mc-wallet/wallet-model/signing";
 import type { Signature } from "starknet";
 import { Strk20CallSetSigner } from "../policy/call-set-signer";
 import { STRK20_SERVICE_UNAVAILABLE, type Strk20AccountContext } from "../service";
@@ -17,7 +18,7 @@ const signatureFor = async (
   context: Strk20AccountContext,
   messageHash: string,
 ): Promise<Signature> => {
-  const signature = await context.signHash(messageHash);
+  const signature = requireStarkSignature(await context.signHash(messageHash));
   return [signature.r, signature.s];
 };
 

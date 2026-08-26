@@ -114,7 +114,7 @@ test("validates a 2-of-2 Argent multisig deployment with one query signature", a
       rpcUrls: RPC_URLS,
       signHash: async () => {
         signed = true;
-        return { publicKey: "0x123", r: "0x1", s: "0x2" };
+        return { kind: "stark" as const, publicKey: "0x123", r: "0x1", s: "0x2" };
       },
     },
     () => provider,
@@ -138,7 +138,12 @@ test("settles ordinary Argent deployment bounds with validated query signing", a
         account,
         reviewedFee: { overallFee: "1000", unit: "FRI" },
         rpcUrls: RPC_URLS,
-        signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+        signHash: async () => ({
+          kind: "stark" as const,
+          publicKey: PUBLIC_KEY,
+          r: "0x1",
+          s: "0x2",
+        }),
       },
       () => provider,
       (_provider, _stored, guardedSignHash) =>
@@ -169,7 +174,7 @@ test("Argent deployment estimate and submission reject a different live class", 
     rpcUrls: RPC_URLS,
     signHash: async () => {
       signed += 1;
-      return { publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
+      return { kind: "stark" as const, publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
     },
   };
 

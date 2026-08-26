@@ -110,7 +110,7 @@ const submit = async (
       rpcUrls: ["https://rpc.example"],
       async signHash(messageHash) {
         signedHashes.push(messageHash);
-        return { publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
+        return { kind: "stark", publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
       },
     },
     () => provider,

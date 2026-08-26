@@ -15,6 +15,7 @@ vendor/starknet-privacy/
 .env
 .env*.local
 .DS_Store
+.idea
 /dist.zip
 .claude/*
 !.claude/skills

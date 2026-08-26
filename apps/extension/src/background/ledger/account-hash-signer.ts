@@ -80,6 +80,6 @@ export const accountHashSigner = (
     if (!sameFelt(signed.publicKey, account.publicKeyX)) {
       throw new WalletError("Krusty KMS signature key mismatch");
     }
-    return signed;
+    return { kind: "stark", ...signed };
   };
 };

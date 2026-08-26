@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { requireStarkSignature } from "@mc-wallet/wallet-model/signing";
 import { ec } from "starknet";
 import {
   type LedgerSignRequest,
@@ -45,7 +46,7 @@ describe("ledgerStarkHashSigner", () => {
       return deviceSignOf(PRIVATE_KEY)(request);
     });
 
-    const signature = await sign("0x1e240");
+    const signature = requireStarkSignature(await sign("0x1e240"));
 
     expect(seen).toHaveLength(1);
     expect(seen[0]).toEqual({

@@ -54,5 +54,5 @@ export const ledgerStarkHashSigner =
     if (!verifyStarkSignature({ hash: messageHash, publicKeyX: account.publicKeyX, signature })) {
       throw new WalletError("Ledger signature verification failed");
     }
-    return { publicKey: account.publicKeyX, r: signature.r, s: signature.s };
+    return { kind: "stark", publicKey: account.publicKeyX, r: signature.r, s: signature.s };
   };
