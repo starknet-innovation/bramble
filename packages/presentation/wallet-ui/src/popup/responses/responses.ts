@@ -272,7 +272,13 @@ export type SupportDiagnostics = {
   readonly explorer: readonly {
     readonly count: number;
     readonly latencyMs: number;
-    readonly outcome: "http-error" | "invalid-response" | "ok" | "rate-limited" | "transport-error";
+    readonly outcome:
+      | "http-error"
+      | "invalid-response"
+      | "ok"
+      | "rate-limited"
+      | "timeout"
+      | "transport-error";
     readonly service: "starkscan";
   }[];
   readonly hasVault: boolean;
@@ -293,7 +299,7 @@ const isExplorerDiagnosticRow = (value: unknown): boolean =>
   Number.isInteger(value["count"]) &&
   Number.isInteger(value["latencyMs"]) &&
   value["service"] === "starkscan" &&
-  ["http-error", "invalid-response", "ok", "rate-limited", "transport-error"].includes(
+  ["http-error", "invalid-response", "ok", "rate-limited", "timeout", "transport-error"].includes(
     String(value["outcome"]),
   );
 

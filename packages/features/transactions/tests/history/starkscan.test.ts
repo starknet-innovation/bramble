@@ -326,6 +326,132 @@ describe("Starkscan client boundary", () => {
     }
   });
 
+  test("honors explorer Retry-After without repeating the HTTP request", async () => {
+    let currentTime = 0;
+    let wallClock = Date.parse("2026-08-25T10:00:00.000Z");
+    let requests = 0;
+    const client = createStarkscanClient({
+      baseUrl: "https://starkscan.test/v1",
+      async http() {
+        requests += 1;
+        if (requests === 1) {
+          return jsonResponse(
+            { message: "Too many requests" },
+            {
+              headers: { "retry-after": "Tue, 25 Aug 2026 10:01:00 GMT" },
+              status: 429,
+            },
+          );
+        }
+        return jsonResponse({
+          address: ACCOUNT,
+          totalActivityCount: 0,
+          latestActivityBlock: null,
+          activityCountExact: true,
+          classHash: null,
+          isAccount: true,
+          createdOnIso: null,
+          deployedAtTxHash: null,
+          deployedByAddress: null,
+        });
+      },
+      now: () => currentTime,
+      wallClock: () => wallClock,
+    });
+
+    await expect(client.getAddress("SN_MAIN", ACCOUNT)).rejects.toMatchObject({ status: 429 });
+    await expect(client.getAddress("SN_MAIN", ACCOUNT)).rejects.toMatchObject({ status: 429 });
+    expect(requests).toBe(1);
+
+    currentTime += 60_000;
+    wallClock += 60_000;
+    await expect(client.getAddress("SN_MAIN", ACCOUNT)).resolves.toMatchObject({
+      address: ACCOUNT,
+    });
+    expect(requests).toBe(2);
+  });
+
+  test("keeps the longest explorer cooldown across concurrent requests", async () => {
+    let currentTime = 0;
+    let requests = 0;
+    let resolveFailure = (_response: Response): void => undefined;
+    let resolveSuccess = (_response: Response): void => undefined;
+    const address = () =>
+      jsonResponse({
+        address: ACCOUNT,
+        totalActivityCount: 0,
+        latestActivityBlock: null,
+        activityCountExact: true,
+        classHash: null,
+        isAccount: true,
+        createdOnIso: null,
+        deployedAtTxHash: null,
+        deployedByAddress: null,
+      });
+    const client = createStarkscanClient({
+      baseUrl: "https://starkscan.test/v1",
+      async http() {
+        requests += 1;
+        if (requests === 1) {
+          return jsonResponse(
+            { message: "Too many requests" },
+            { headers: { "retry-after": "60" }, status: 429 },
+          );
+        }
+        if (requests === 2) {
+          return new Promise<Response>((resolve) => {
+            resolveFailure = resolve;
+          });
+        }
+        if (requests === 3) {
+          return new Promise<Response>((resolve) => {
+            resolveSuccess = resolve;
+          });
+        }
+        return address();
+      },
+      now: () => currentTime,
+    });
+
+    const limited = client.getAddress("SN_MAIN", ACCOUNT);
+    const failing = client.getAddress("SN_MAIN", ACCOUNT);
+    const succeeding = client.getAddress("SN_MAIN", ACCOUNT);
+    await expect(limited).rejects.toMatchObject({ status: 429 });
+    resolveFailure(jsonResponse({ message: "Unavailable" }, { status: 503 }));
+    await expect(failing).rejects.toMatchObject({ status: 503 });
+    resolveSuccess(address());
+    await expect(succeeding).resolves.toMatchObject({ address: ACCOUNT });
+
+    currentTime += 30_000;
+    await expect(client.getAddress("SN_MAIN", ACCOUNT)).rejects.toMatchObject({ status: 429 });
+    expect(requests).toBe(3);
+
+    currentTime += 30_000;
+    await expect(client.getAddress("SN_MAIN", ACCOUNT)).resolves.toMatchObject({
+      address: ACCOUNT,
+    });
+    expect(requests).toBe(4);
+  });
+
+  test("records an explorer timeout in the explorer lane", async () => {
+    setReliabilityDiagnosticsEnabled(true);
+    const client = createStarkscanClient({
+      baseUrl: "https://starkscan.test/v1",
+      http: async (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        }),
+      now: () => 0,
+      timeoutMs: 5,
+    });
+
+    await expect(client.getAddress("SN_MAIN", ACCOUNT)).rejects.toThrow("timed out");
+    expect(explorerDiagnosticsSnapshot()).toEqual([
+      { count: 1, latencyMs: 0, outcome: "timeout", service: "starkscan" },
+    ]);
+    expect(rpcDiagnosticsSnapshot()).toEqual([]);
+  });
+
   test("rejects invalid path inputs before transport", async () => {
     let called = false;
     const client = createStarkscanClient({

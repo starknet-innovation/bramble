@@ -20,6 +20,7 @@ export type ExplorerOutcome =
   | "invalid-response"
   | "ok"
   | "rate-limited"
+  | "timeout"
   | "transport-error";
 
 /** One identifier-free aggregate for the optional explorer fallback lane. */

@@ -22,7 +22,10 @@ export class RpcTransportError extends WalletError {
  * accepted the request. Reads may fail over; broadcasts may be retried by the user.
  */
 export class RpcRefusedError extends RpcTransportError {
-  public constructor(message: string) {
+  public constructor(
+    message: string,
+    public readonly retryAfter: string | null = null,
+  ) {
     super(message);
     this.name = "RpcRefusedError";
   }
@@ -52,13 +55,19 @@ const endpointRefusal = (text: string, status: number): boolean => {
 };
 
 const boundedRpcResponse = async (response: Response, deadline: AbortSignal): Promise<Response> => {
+  if (response.status === 429) {
+    void response.body?.cancel().catch(() => undefined);
+    throw new RpcRefusedError(RPC_REFUSED_MESSAGE, response.headers.get("retry-after"));
+  }
   if (!response.body) return response;
   const text = await readBoundedText(response, RPC_BODY_LIMIT_BYTES, deadline).catch(
     (error: unknown): never => {
       throw error instanceof WalletError ? new RpcTransportError(error.message) : error;
     },
   );
-  if (endpointRefusal(text, response.status)) throw new RpcRefusedError(RPC_REFUSED_MESSAGE);
+  if (endpointRefusal(text, response.status)) {
+    throw new RpcRefusedError(RPC_REFUSED_MESSAGE, response.headers.get("retry-after"));
+  }
   return new Response(text, {
     headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
     status: response.status,

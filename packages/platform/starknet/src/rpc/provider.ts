@@ -4,6 +4,7 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
+import { parseRetryAfterMilliseconds } from "@mc-wallet/core/http-json";
 import { isRecord } from "@mc-wallet/core/json";
 import {
   isNonZeroStarkFieldElement,
@@ -46,27 +47,62 @@ type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
 
 const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(options);
 const RPC_ENDPOINT_COOLDOWN_MS = 30_000;
-const endpointCooldowns = new Map<string, number>();
+const MAX_RPC_ENDPOINT_COOLDOWN_MS = 5 * 60_000;
+type RpcEndpointCooldown = {
+  readonly retryAt: number;
+  readonly suppressUntilExpiry: boolean;
+};
+const endpointCooldowns = new Map<string, RpcEndpointCooldown>();
+const endpointRecoveryProbes = new Set<string>();
+
+const clearObservedCooldown = (
+  nodeUrl: string,
+  observed: RpcEndpointCooldown | undefined,
+): void => {
+  if (endpointCooldowns.get(nodeUrl) === observed) endpointCooldowns.delete(nodeUrl);
+};
 
 const availableRpcUrls = (rpcUrls: readonly string[], currentTime: number): readonly string[] => {
-  for (const [nodeUrl, retryAt] of endpointCooldowns) {
-    if (retryAt <= currentTime) endpointCooldowns.delete(nodeUrl);
+  for (const [nodeUrl, cooldown] of endpointCooldowns) {
+    if (cooldown.retryAt <= currentTime) endpointCooldowns.delete(nodeUrl);
   }
   const unique = [...new Set(rpcUrls)];
   const ready = unique.filter((nodeUrl) => !endpointCooldowns.has(nodeUrl));
-  return ready.length > 0
-    ? ready
-    : unique
-        .sort(
-          (left, right) =>
-            (endpointCooldowns.get(left) ?? currentTime) -
-            (endpointCooldowns.get(right) ?? currentTime),
-        )
-        .slice(0, 1);
+  if (ready.length > 0) return ready;
+  const recovery = unique
+    .filter((nodeUrl) => endpointCooldowns.get(nodeUrl)?.suppressUntilExpiry === false)
+    .filter((nodeUrl) => !endpointRecoveryProbes.has(nodeUrl))
+    .sort(
+      (left, right) =>
+        (endpointCooldowns.get(left)?.retryAt ?? currentTime) -
+        (endpointCooldowns.get(right)?.retryAt ?? currentTime),
+    )
+    .at(0);
+  if (recovery === undefined) return [];
+  endpointRecoveryProbes.add(recovery);
+  return [recovery];
 };
 
-const coolDownRpcUrl = (nodeUrl: string, now: () => number): void => {
-  endpointCooldowns.set(nodeUrl, now() + RPC_ENDPOINT_COOLDOWN_MS);
+const coolDownRpcUrl = (
+  nodeUrl: string,
+  now: () => number,
+  wallClock: () => number,
+  error: unknown,
+): void => {
+  const currentTime = now();
+  const refused = error instanceof RpcRefusedError;
+  const requestedDelay = refused
+    ? parseRetryAfterMilliseconds(error.retryAfter, wallClock())
+    : null;
+  const stored = endpointCooldowns.get(nodeUrl);
+  const existing = stored && stored.retryAt > currentTime ? stored : undefined;
+  const retryAt =
+    currentTime +
+    Math.min(requestedDelay ?? RPC_ENDPOINT_COOLDOWN_MS, MAX_RPC_ENDPOINT_COOLDOWN_MS);
+  endpointCooldowns.set(nodeUrl, {
+    retryAt: Math.max(existing?.retryAt ?? 0, retryAt),
+    suppressUntilExpiry: refused || existing?.suppressUntilExpiry === true,
+  });
 };
 
 /**
@@ -187,12 +223,12 @@ const runRpcBroadcast = async <T>(broadcast: () => Promise<T>): Promise<T> => {
   try {
     return await broadcast();
   } catch (error) {
-    // Checked before the transport rule: a refusal is transport-shaped (so reads
-    // still fail over) but is NOT post-submission ambiguity. Reporting it as
-    // ambiguous permanently burns a counterfactual deploy address, because the
-    // operation claim is kept with no hash that could ever resolve it.
+    // Keep the typed refusal until `withRpcWrite` records its cooldown, then
+    // `writeFailure` turns it into the same determinate display error. It must
+    // never become post-submission ambiguity: that would permanently burn a
+    // counterfactual deploy address with no hash that could resolve the claim.
     if (error instanceof RpcRefusedError) {
-      throw new WalletError(error.message);
+      throw error;
     }
     if (isTransportRpcError(error)) {
       throw new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE);
@@ -260,21 +296,29 @@ export const withRpcFallback = async <T>(
   rpcUrls: readonly string[],
   run: (provider: RpcProvider) => Promise<T>,
   makeProvider: (nodeUrl: string) => RpcProvider = createRpcProvider,
-  now: () => number = Date.now,
+  now: () => number = () => performance.now(),
+  wallClock: () => number = Date.now,
 ): Promise<T> => {
-  let lastError: unknown = new WalletError("No RPC endpoints configured");
-  for (const nodeUrl of availableRpcUrls(rpcUrls, now())) {
+  const available = availableRpcUrls(rpcUrls, now());
+  let lastError: unknown =
+    rpcUrls.length === 0
+      ? new WalletError("No RPC endpoints configured")
+      : new RpcTransportError("RPC endpoints are temporarily unavailable");
+  for (const nodeUrl of available) {
+    const observedCooldown = endpointCooldowns.get(nodeUrl);
     try {
       const result = await run(makeProvider(nodeUrl));
-      endpointCooldowns.delete(nodeUrl);
+      clearObservedCooldown(nodeUrl, observedCooldown);
       return result;
     } catch (error) {
       if (!isTransportRpcError(error)) {
-        endpointCooldowns.delete(nodeUrl);
+        clearObservedCooldown(nodeUrl, observedCooldown);
         throw error;
       }
-      coolDownRpcUrl(nodeUrl, now);
+      coolDownRpcUrl(nodeUrl, now, wallClock, error);
       lastError = error;
+    } finally {
+      endpointRecoveryProbes.delete(nodeUrl);
     }
   }
   throw lastError;
@@ -300,20 +344,28 @@ const selectWriteProvider = async (
   expectedChainId: string,
   makeProvider: (nodeUrl: string) => RpcProvider,
   now: () => number,
+  wallClock: () => number,
 ): Promise<{ readonly provider: RpcProvider; readonly url: string }> => {
-  let lastError: unknown = new WalletError("No RPC endpoints configured");
+  const available = availableRpcUrls(rpcUrls, now());
+  let lastError: unknown =
+    rpcUrls.length === 0
+      ? new WalletError("No RPC endpoints configured")
+      : new RpcTransportError("RPC endpoints are temporarily unavailable");
   let chainMismatch: WalletError | null = null;
-  for (const nodeUrl of availableRpcUrls(rpcUrls, now())) {
+  for (const nodeUrl of available) {
+    const observedCooldown = endpointCooldowns.get(nodeUrl);
     try {
       const provider = makeProvider(nodeUrl);
       const chainId = await provider.getChainId();
-      endpointCooldowns.delete(nodeUrl);
+      clearObservedCooldown(nodeUrl, observedCooldown);
       if (sameFelt(chainId, expectedChainId)) return { provider, url: nodeUrl };
       chainMismatch = new WalletError(WRONG_CHAIN_MESSAGE);
     } catch (error) {
-      if (isTransportRpcError(error)) coolDownRpcUrl(nodeUrl, now);
-      else endpointCooldowns.delete(nodeUrl);
+      if (isTransportRpcError(error)) coolDownRpcUrl(nodeUrl, now, wallClock, error);
+      else clearObservedCooldown(nodeUrl, observedCooldown);
       lastError = error;
+    } finally {
+      endpointRecoveryProbes.delete(nodeUrl);
     }
   }
   throw chainMismatch ?? lastError;
@@ -331,14 +383,21 @@ export const withRpcWrite = async <T>(
   expectedChainId: string,
   run: (provider: RpcProvider) => Promise<T>,
   makeProvider: (nodeUrl: string) => RpcProvider = createRpcProvider,
-  now: () => number = Date.now,
+  now: () => number = () => performance.now(),
+  wallClock: () => number = Date.now,
 ): Promise<T> => {
-  const selected = await selectWriteProvider(rpcUrls, expectedChainId, makeProvider, now);
+  const selected = await selectWriteProvider(
+    rpcUrls,
+    expectedChainId,
+    makeProvider,
+    now,
+    wallClock,
+  );
   try {
     return await run(guardRpcBroadcasts(selected.provider));
   } catch (error) {
     if (error instanceof IndeterminateRpcWriteError || isTransportRpcError(error)) {
-      coolDownRpcUrl(selected.url, now);
+      coolDownRpcUrl(selected.url, now, wallClock, error);
     }
     throw writeFailure(error);
   }

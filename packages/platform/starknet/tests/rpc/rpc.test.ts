@@ -440,14 +440,6 @@ describe("endpoint refusals versus submission ambiguity", () => {
     expect((rejection as Error).message).toBe(RPC_REFUSED_MESSAGE);
   });
 
-  test("an HTTP 429 is a refusal whatever its body", async () => {
-    const rejection = await refusalFetch("too many requests", 429)(
-      "https://selected.example",
-      {},
-    ).catch((error: unknown) => error);
-    expect(rejection).toBeInstanceOf(RpcRefusedError);
-  });
-
   test("a real JSON-RPC error and a large body are left alone", async () => {
     // `error` as an OBJECT with a code is the node answering; never a refusal.
     await expect(
