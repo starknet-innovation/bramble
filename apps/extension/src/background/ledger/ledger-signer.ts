@@ -9,7 +9,7 @@
  * so it does not weaken "Krusty owns wallet crypto".
  */
 import { WalletError } from "@mc-wallet/core/errors";
-import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
+import type { AccountHashSigner } from "@mc-wallet/starknet/provider";
 import { verifyStarkSignature } from "@mc-wallet/transactions/ledger-verify";
 import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { DeviceSignature } from "@mc-wallet/wallet-model/signing";
@@ -36,14 +36,14 @@ export type LedgerSignRequest = {
 export type LedgerHashSigner = (request: LedgerSignRequest) => Promise<DeviceSignature>;
 
 /**
- * Builds a {@link StarkHashSigner} for a keyless Ledger account. It hands the
+ * Builds a {@link AccountHashSigner} for a keyless Ledger account. It hands the
  * hash to the device via `sign`, verifies the returned `(r, s)` against the
  * account's stored `publicKeyX`, and throws `WalletError` on any mismatch before
  * returning — so every submitting path that uses this signer fails closed rather
  * than broadcasting an unverified signature.
  */
 export const ledgerStarkHashSigner =
-  (account: LedgerAccountRef, sign: LedgerHashSigner): StarkHashSigner =>
+  (account: LedgerAccountRef, sign: LedgerHashSigner): AccountHashSigner =>
   async (messageHash) => {
     const signature = await sign({
       accountId: account.id,

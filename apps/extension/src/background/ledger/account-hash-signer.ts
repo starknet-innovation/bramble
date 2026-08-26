@@ -13,7 +13,7 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
+import type { AccountHashSigner } from "@mc-wallet/starknet/provider";
 import {
   type AccountRef,
   isKeylessAccount,
@@ -44,7 +44,7 @@ export type AccountHashSignerDeps = DeviceSignQueues & {
 };
 
 /**
- * Builds the {@link StarkHashSigner} for a resolved account without exposing any
+ * Builds the {@link AccountHashSigner} for a resolved account without exposing any
  * vault secret to the caller. A keyless account is signed on its device (via
  * that device's queue) and verified against the key the account enrolled — a
  * Ledger against `publicKeyX`, a paired phone against its ML-DSA `publicKey`;
@@ -61,7 +61,7 @@ export const accountHashSigner = (
   deps: AccountHashSignerDeps,
   account: AccountRef,
   vaultPassphrase: string,
-): StarkHashSigner => {
+): AccountHashSigner => {
   if (isLedgerAccount(account)) {
     const queue = deps.ledgerSignQueue;
     if (!queue) {

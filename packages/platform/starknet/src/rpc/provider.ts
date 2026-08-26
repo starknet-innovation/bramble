@@ -17,10 +17,10 @@ import { RpcRefusedError, RpcTransportError, timedRpcFetch } from "./rpc-transpo
 export {
   type AccountHashSigner,
   type AccountSignerOptions,
+  type AggregateHashSigner,
   type ArgentMultisigAccountDescriptor,
   argentQueryAccount,
   krustyAccount,
-  type StarkHashSigner,
   type StarknetAccountDescriptor,
 } from "./account-signer";
 export {

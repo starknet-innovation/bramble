@@ -9,9 +9,9 @@ import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
 import { type Call, CallData, cairo, type RpcProvider, shortString } from "starknet";
 import type { FeeEstimate } from "./fee-bounds";
 import {
+  type AccountHashSigner,
   isTransactionNotFoundError,
   isTransportRpcError,
-  type StarkHashSigner,
   withRpcFallback,
 } from "./provider";
 import { decodeUint256Response } from "./rpc-assets";
@@ -46,6 +46,7 @@ export {
  * Re-exported provider helpers so existing callers keep one import path.
  */
 export {
+  type AccountHashSigner,
   IndeterminateRpcWriteError,
   isBlockNotFoundError,
   isContractNotFoundError,
@@ -53,7 +54,6 @@ export {
   isTransportRpcError,
   RPC_REFUSED_MESSAGE,
   RpcRefusedError,
-  type StarkHashSigner,
   timedRpcFetch,
   withRpcFallback,
   withRpcWrite,
@@ -117,7 +117,7 @@ export type TransferInput = {
   /** Reviewed fee ceiling; see {@link InvokeInput.reviewedFee}. */
   readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
-  readonly signHash: StarkHashSigner;
+  readonly signHash: AccountHashSigner;
   readonly speed?: FeeSpeed;
   readonly token: TokenConfig;
 };

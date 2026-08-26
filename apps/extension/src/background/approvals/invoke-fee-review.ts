@@ -16,7 +16,7 @@
  */
 
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
+import type { AccountHashSigner } from "@mc-wallet/starknet/provider";
 import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
 import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
@@ -59,7 +59,7 @@ export type InvokeFeeReviewTarget = {
    * a crash in the message handler; and an undeployed account never estimates
    * at all, so it must never pay for a signer it will not use.
    */
-  readonly signer: () => StarkHashSigner;
+  readonly signer: () => AccountHashSigner;
 };
 
 /**

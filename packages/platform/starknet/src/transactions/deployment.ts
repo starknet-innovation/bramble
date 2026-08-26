@@ -25,8 +25,8 @@ import {
   reviewedSpendFor,
 } from "../rpc/fee-bounds";
 import {
-  type AccountHashSigner,
   type AccountSignerOptions,
+  type AggregateHashSigner,
   type ArgentMultisigAccountDescriptor,
   acceptedRpcWriteHash,
   argentQueryAccount,
@@ -379,7 +379,7 @@ export type DeployAccountInput = {
    */
   readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
-  readonly signHash: AccountHashSigner;
+  readonly signHash: AggregateHashSigner;
 };
 
 /**
@@ -467,7 +467,7 @@ export const submitAccountDeployment = async (
         throw new WalletError("Account is already deployed");
       }
       let signedHash: string | undefined;
-      const authorizedSigner: AccountHashSigner = async (messageHash) => {
+      const authorizedSigner: AggregateHashSigner = async (messageHash) => {
         const signature = await signHash(messageHash);
         if (isAuthorized?.() === false) {
           throw new WalletError("wallet locked");

@@ -16,7 +16,7 @@
  */
 import { WalletError } from "@mc-wallet/core/errors";
 import { verifyMlDsa65Signature } from "@mc-wallet/starknet/ml-dsa-verify";
-import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
+import type { AccountHashSigner } from "@mc-wallet/starknet/provider";
 import type { MobilePqAccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   createDeviceSignQueue,
@@ -80,14 +80,14 @@ export const createMobilePqSignQueue = (
   );
 
 /**
- * Builds a {@link StarkHashSigner} for a paired-phone account. It hands the hash
+ * Builds a {@link AccountHashSigner} for a paired-phone account. It hands the hash
  * to the phone via `sign`, verifies the returned signature against the account's
  * enrolled public key, and throws `WalletError` on any mismatch before
  * returning — so every submitting path that uses this signer fails closed rather
  * than broadcasting an unverified signature.
  */
 export const mobilePqHashSigner =
-  (account: MobilePqAccountRef, sign: MobilePqHashSigner): StarkHashSigner =>
+  (account: MobilePqAccountRef, sign: MobilePqHashSigner): AccountHashSigner =>
   async (messageHash) => {
     const { signature } = await sign({
       accountId: account.id,

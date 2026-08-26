@@ -17,10 +17,10 @@ import {
 } from "./fee-bounds";
 import { estimateExactInvokeFee } from "./invoke-fee";
 import {
+  type AccountHashSigner,
   argentQueryAccount,
   krustyAccount,
   matchingAcceptedRpcWriteHash,
-  type StarkHashSigner,
   withRpcWrite,
 } from "./provider";
 
@@ -57,7 +57,7 @@ export type InvokeInput = {
   /** Separately reviewed ceiling for an automatic account deployment. */
   readonly reviewedDeploymentFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
-  readonly signHash: StarkHashSigner;
+  readonly signHash: AccountHashSigner;
   readonly speed?: FeeSpeed;
 };
 

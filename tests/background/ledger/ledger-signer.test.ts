@@ -1,5 +1,5 @@
 /**
- * The background Ledger StarkHashSigner must hand the device the account's exact
+ * The background Ledger AccountHashSigner must hand the device the account's exact
  * stored path, verify the returned signature against the account's publicKeyX,
  * and fail closed (throw, nothing returned) when the device returns a signature
  * that does not verify — the last gate before a transaction is broadcast.

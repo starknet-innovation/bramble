@@ -1,7 +1,7 @@
 /** Explicit account-deployment fee review and submission. */
 
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate, StarkHashSigner } from "@mc-wallet/starknet/rpc";
+import type { AccountHashSigner, FeeEstimate } from "@mc-wallet/starknet/rpc";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
@@ -28,7 +28,7 @@ export const submitReviewedAccountDeployment = async (
     readonly isAuthorized: () => boolean;
     readonly networkId: StarknetNetworkId;
     readonly reviewedFee?: FeeEstimate;
-    readonly signHash: StarkHashSigner;
+    readonly signHash: AccountHashSigner;
   },
 ): Promise<RuntimeResponse> => {
   const rpcUrls = networkRpcUrls(

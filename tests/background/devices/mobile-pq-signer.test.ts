@@ -1,5 +1,5 @@
 /**
- * The background paired-phone StarkHashSigner must hand the device the account's
+ * The background paired-phone AccountHashSigner must hand the device the account's
  * enrolled key and device id, verify the returned signature against that key for
  * the exact hash handed out, and fail closed (throw, nothing returned) when it
  * does not verify — the last gate before a transaction is broadcast. Driven with

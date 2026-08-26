@@ -32,13 +32,17 @@ import {
  * only serialize `(r, s)` must narrow with `requireStarkSignature` and fail
  * closed on anything else.
  */
-export type StarkHashSigner = (messageHash: string) => Promise<AccountSignature>;
+export type AccountHashSigner = (messageHash: string) => Promise<AccountSignature>;
 
 /**
- * Hash signer for either one account signer or a collected multisig aggregate.
- * The aggregate stays Stark-only — Argent multisig validates `(r, s)` members.
+ * Hash signer that may answer with a collected set of member signatures instead
+ * of one, which only an Argent multisig does. Every {@link AccountHashSigner}
+ * satisfies this — its return type is the narrower half — so a single-signer
+ * path passes its signer straight in and the contract-aware adapter collapses
+ * the set with `exactlyOneSignature` where exactly one is required. The
+ * aggregate half stays Stark-only: Argent multisig validates `(r, s)` members.
  */
-export type AccountHashSigner = (
+export type AggregateHashSigner = (
   messageHash: string,
 ) => Promise<AccountSignature | readonly StarkSignature[]>;
 
@@ -82,7 +86,7 @@ class FixedContractStarknetSigner extends Signer {
   public constructor(
     protected readonly signerPublicKey: string,
     protected readonly contractKind: ContractKind,
-    protected readonly starkSignHash: AccountHashSigner,
+    protected readonly signHash: AggregateHashSigner,
     protected readonly multisig: ArgentMultisigConfig | null,
     private readonly deployment: boolean,
   ) {
@@ -100,7 +104,7 @@ class FixedContractStarknetSigner extends Signer {
     if (!isStarkFieldElement(hash)) {
       throw new WalletError("Invalid transaction hash");
     }
-    const signed = await this.starkSignHash(hash);
+    const signed = await this.signHash(hash);
     if (this.contractKind === "argent-multisig") {
       if (!this.multisig) {
         throw new WalletError("Argent multisig signer configuration is unavailable");
@@ -131,11 +135,11 @@ class ContractStarknetSigner extends FixedContractStarknetSigner {
   public constructor(
     signerPublicKey: string,
     contractKind: ContractKind,
-    starkSignHash: AccountHashSigner,
+    signHash: AggregateHashSigner,
     multisig: ArgentMultisigConfig | null,
-    private readonly deployStarkSignHash: AccountHashSigner = starkSignHash,
+    private readonly deploySignHash: AggregateHashSigner = signHash,
   ) {
-    super(signerPublicKey, contractKind, starkSignHash, multisig, false);
+    super(signerPublicKey, contractKind, signHash, multisig, false);
   }
 
   public override signDeployAccountTransaction(
@@ -144,7 +148,7 @@ class ContractStarknetSigner extends FixedContractStarknetSigner {
     return new FixedContractStarknetSigner(
       this.signerPublicKey,
       this.contractKind,
-      this.deployStarkSignHash,
+      this.deploySignHash,
       this.multisig,
       true,
     ).signDeployAccountTransaction(details);
@@ -187,7 +191,7 @@ const signerInputs = (
 export const krustyAccount = (
   provider: RpcProvider,
   account: StarknetAccountDescriptor,
-  signHash: AccountHashSigner,
+  signHash: AggregateHashSigner,
   options: AccountSignerOptions = {},
 ): Account => {
   const inputs = signerInputs(account, options);

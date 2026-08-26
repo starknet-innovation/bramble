@@ -11,12 +11,12 @@ import {
   isCompatibleAccountDeployed,
 } from "@mc-wallet/starknet/deployment";
 import {
+  type AccountHashSigner,
   acceptedRpcWriteHash,
   argentQueryAccount,
   IndeterminateRpcWriteError,
   krustyAccount,
   matchingAcceptedRpcWriteHash,
-  type StarkHashSigner,
   withRpcFallback,
   withRpcWrite,
 } from "@mc-wallet/starknet/provider";
@@ -67,7 +67,7 @@ export type DeclareInput = {
    */
   readonly reviewedDeploymentFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
-  readonly signHash: StarkHashSigner;
+  readonly signHash: AccountHashSigner;
 };
 
 /**
@@ -272,7 +272,7 @@ export const submitDeclareTransaction = async (
     STARKNET_NETWORKS[account.networkId].chainId,
     async (provider) => {
       const signedHashes: string[] = [];
-      const capturingSigner: StarkHashSigner = async (messageHash) => {
+      const capturingSigner: AccountHashSigner = async (messageHash) => {
         const signature = await signHash(messageHash);
         signedHashes.push(messageHash);
         return signature;
