@@ -391,5 +391,6 @@ export const bindMultisigs = (deps: MultisigUiDeps): void => {
     openFunding:
       deps.openFunding ?? (() => Promise.reject(new Error("Local funding is unavailable"))),
     setResult: (id, message) => setResult(deps, id, message),
+    wallet: deps.wallet,
   });
 };

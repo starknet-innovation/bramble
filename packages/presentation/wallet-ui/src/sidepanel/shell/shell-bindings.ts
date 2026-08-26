@@ -11,6 +11,7 @@ import type { WalletView } from "../app/screens/views";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { buttonBusy, errorMessage, renderFragment, scopedStatus, showToast } from "../shared/dom";
 import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
+import { bindReceiveWalletCard } from "./dashboard-bindings";
 
 const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
 
@@ -32,6 +33,7 @@ export type ShellBindingDeps = {
  */
 export const bindDashboard = (deps: ShellBindingDeps): void => {
   const { app, wallet, render } = deps;
+  bindReceiveWalletCard({ app, render, wallet });
   const lockButton = app?.querySelector<HTMLButtonElement>("#lock-button");
   const result = app?.querySelector<HTMLElement>("#panel-result");
 

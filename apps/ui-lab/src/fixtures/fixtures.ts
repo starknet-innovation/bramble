@@ -109,6 +109,7 @@ export const preferences: WalletPreferences = {
       id: `SN_MAIN:${RECIPIENT_ADDRESS}`,
       label: "Research treasury",
       networkId: "SN_MAIN",
+      nostrPublicKey: "11".repeat(32),
       publicKeyX: "0x7334567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
     },
   ],

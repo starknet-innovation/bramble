@@ -144,6 +144,16 @@ const revealDeploymentParticipant = async (context: FrameContext): Promise<void>
   await nextTurn();
 };
 
+const revealDeploymentWalletCard = async (context: FrameContext): Promise<void> => {
+  await revealDeploymentParticipant(context);
+  const method = context.app.querySelector<HTMLButtonElement>(
+    '[data-participant-method="wallet-card"]',
+  );
+  if (!method) throw new Error("Missing production wallet-card participant method");
+  method.click();
+  await nextTurn();
+};
+
 const revealManagementParticipant = async (context: FrameContext): Promise<void> => {
   bindFixtureMultisig(context);
   const add = [...context.app.querySelectorAll<HTMLDetailsElement>("details.disclosure")].find(
@@ -375,11 +385,21 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     ...checkpoint(
       "deploy-participant",
       "Add participant",
-      "Known identities stay one tap away while an external participant can be resolved from a deployed account address or added from a shared public key.",
+      "Known identities stay one tap away while an external participant can be resolved from an address, added from a public key, or imported as a complete wallet card.",
       { selectedMultisigId: null, view: "multisig-deploy" },
       { detailType: "account address", step: "participant" },
     ),
     prepare: revealDeploymentParticipant,
+  },
+  {
+    ...checkpoint(
+      "deploy-wallet-card",
+      "Add complete wallet contact",
+      "A labelled wallet card adds the Starknet signer and authenticated Nostr coordination identity as one participant, then returns to creation.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { detailType: "wallet card", step: "participant" },
+    ),
+    prepare: revealDeploymentWalletCard,
   },
   {
     ...checkpoint(

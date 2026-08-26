@@ -18,6 +18,7 @@ import type {
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 import type { AccountDerivationInput } from "../accounts/accounts";
+import type { NostrApplicationData } from "../kms-port";
 import type { Vault } from "../schema/schema";
 import type { RecoverVaultAccountsInput } from "./recovery";
 
@@ -48,6 +49,20 @@ export type CreateVaultAccountInput = AccountDerivationInput & {
 export type SignHashInput = {
   readonly accountId?: string;
   readonly messageHash: string;
+  readonly vaultPassphrase: string;
+};
+
+/** Public application payload encrypted to one Nostr recipient inside Krusty. */
+export type WrapNostrApplicationDataInput = {
+  readonly content: string;
+  readonly identifier: string;
+  readonly recipientPublicKey: string;
+  readonly vaultPassphrase: string;
+};
+
+/** Untrusted NIP-59 event opened only after Krusty authenticates it. */
+export type OpenNostrApplicationDataInput = {
+  readonly eventJson: string;
   readonly vaultPassphrase: string;
 };
 
@@ -201,6 +216,12 @@ export type WalletVaultService = {
     readonly poolAddress: string;
     readonly vaultPassphrase: string;
   }) => Promise<string>;
+  /** Derives the wallet-level public Nostr identity without exposing its secret. */
+  readonly nostrPublicKey: (vaultPassphrase: string) => Promise<string>;
+  /** Opens and authenticates one NIP-59 application event inside Krusty. */
+  readonly openNostrApplicationData: (
+    input: OpenNostrApplicationDataInput,
+  ) => Promise<NostrApplicationData>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   /** Removes one retained Ledger viewing-key scope without returning its value. */
   readonly forgetLedgerStrk20ViewingKey: (
@@ -218,6 +239,8 @@ export type WalletVaultService = {
    * phrase and never echoes the input; fails closed when KMS is unavailable.
    */
   readonly validateMnemonic: (mnemonic: string) => Promise<boolean>;
+  /** Creates one recipient-specific NIP-59 event inside Krusty. */
+  readonly wrapNostrApplicationData: (input: WrapNostrApplicationDataInput) => Promise<string>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   /**
    * The wallet's active account when the origin's grant covers it, per

@@ -193,6 +193,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/features/multisig/src/repository-schema.ts",
   "apps/extension/src/background/multisig/multisig-deploy-ops.ts",
   "apps/extension/src/background/multisig/multisig-inputs.ts",
+  // Explicit user-triggered coordination keeps the vault credential inside the
+  // privileged worker while Krusty opens or wraps payloads; it is never stored.
+  "apps/extension/src/background/multisig/multisig-coordination-ops.ts",
   "apps/extension/src/background/multisig/multisig-tx-ops.ts",
   "packages/platform/vault/src/accounts/account-secrets.ts",
   "packages/platform/vault/src/encrypted-store.ts",
@@ -207,6 +210,9 @@ const SECRET_MATERIAL_FILES = new Set([
   // Atomic recovery re-derives selected accounts and writes their protected
   // keys directly into the encrypted vault; no secret is returned or logged.
   "packages/platform/vault/src/service/recovery.ts",
+  // Wallet-level Nostr derivation and application-data crypto stay behind the
+  // same encrypted-vault/Krusty boundary and never return private material.
+  "packages/platform/vault/src/service/nostr.ts",
   "packages/platform/vault/src/service/service.ts",
   "packages/platform/vault/src/service/service-types.ts",
 ]);

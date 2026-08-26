@@ -4,7 +4,7 @@
 
 import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
 import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import { isOkResponse } from "../../popup/responses/multisig-responses";
+import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/multisig-responses";
 import {
   type ActivityResponse,
   type AllowancesResponse,
@@ -321,6 +321,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       // Per-entry: one malformed prompt must not blank the queue (MCW-V09-106).
       return readPendingApprovals(await sendMessage({ type: "wallet.pendingApprovals" })) ?? [];
     },
+    async loadNostrPublicKey(): Promise<string> {
+      const response = await sendMessage({ type: "wallet.nostrPublicKey" });
+      if (isNostrPublicKeyResponse(response)) return response.nostrPublicKey;
+      throw responseError(response, "coordination identity unavailable");
+    },
     async loadPreferences() {
       const response = await sendMessage({ type: "wallet.preferences" });
       if (isPreferencesResponse(response)) {
@@ -350,11 +355,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       address: string,
       networkId: string,
       publicKeyX?: string,
+      nostrPublicKey?: string,
     ): Promise<void> {
       const response = await sendMessage({
         address,
         label,
         networkId,
+        ...(nostrPublicKey ? { nostrPublicKey } : {}),
         ...(publicKeyX ? { publicKeyX } : {}),
         type: "wallet.saveAddress",
       });

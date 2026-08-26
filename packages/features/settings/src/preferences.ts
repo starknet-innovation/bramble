@@ -4,7 +4,6 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { isJson } from "@mc-wallet/core/json";
 import { isWatchedNft, withNftId } from "@mc-wallet/portfolio/watched-nft";
-
 import {
   DEFAULT_STRK20_NETWORKS,
   isStrk20NetworkConfig,
@@ -396,10 +395,15 @@ export const createPreferencesStore = ({
         }
         const preferences = await read();
         const previous = preferences.addressBook.find((stored) => stored.id === nextEntry.id);
-        const savedEntry =
-          nextEntry.publicKeyX || !previous?.publicKeyX
-            ? nextEntry
-            : { ...nextEntry, publicKeyX: previous.publicKeyX };
+        const savedEntry = {
+          ...nextEntry,
+          ...(nextEntry.nostrPublicKey || !previous?.nostrPublicKey
+            ? {}
+            : { nostrPublicKey: previous.nostrPublicKey }),
+          ...(nextEntry.publicKeyX || !previous?.publicKeyX
+            ? {}
+            : { publicKeyX: previous.publicKeyX }),
+        };
         const entries = preferences.addressBook.filter((stored) => stored.id !== nextEntry.id);
         const next = { ...preferences, addressBook: [...entries, savedEntry] };
         await writePreferences(store, next);

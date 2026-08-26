@@ -421,6 +421,7 @@ export const multisigReceiveFlow = (
         copyLabel: "Copy Argent multisig address",
         eyebrow: "Shared account",
         hint: `Send only Starknet assets on ${status.network}.`,
+        networkId: status.networkId,
         title: multisigDisplayName(view.record),
       }),
     )

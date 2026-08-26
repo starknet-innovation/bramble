@@ -1,6 +1,8 @@
 /** Shared account-address surface used by single-owner and multisig Receive. */
 import { escapeHtml } from "@mc-wallet/core/html";
 import { button } from "@mc-wallet/ui-kit/controls";
+import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { walletContactCard } from "@mc-wallet/wallet-model/preferences";
 import { accountLabel, copyButton } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
@@ -58,14 +60,16 @@ export const privacyPoolNotice = (
 };
 
 /**
- * Renders the canonical Receive card. Only the public address is QR-encoded;
- * an optional signer public key is clearly labelled and copied separately.
+ * Renders the canonical Receive card. Its QR carries a versioned public wallet
+ * card; the address and optional signer keys remain separately copyable.
  */
 type ReceiveAddressViewOptions = {
   readonly address: string;
   readonly copyLabel: string;
   readonly eyebrow: string;
   readonly hint: string;
+  readonly networkId: StarknetNetworkId;
+  readonly nostrPublicKey?: string;
   readonly publicKeyX?: string;
   readonly qrLabel?: string;
   readonly title?: string;
@@ -80,19 +84,29 @@ export const receiveAddressView = ({
   copyLabel,
   eyebrow,
   hint,
+  networkId,
+  nostrPublicKey,
   publicKeyX,
   qrLabel,
   title,
-}: ReceiveAddressViewOptions): string => `
-  <div class="stack receive-address-view">
-    <div class="qr-card">${qrSvg(address, qrLabel)}</div>
+}: ReceiveAddressViewOptions): string => {
+  const walletCardReady = !publicKeyX || !!nostrPublicKey;
+  const contactCard = walletContactCard({
+    address,
+    networkId,
+    ...(nostrPublicKey ? { nostrPublicKey } : {}),
+    ...(publicKeyX ? { publicKeyX } : {}),
+  });
+  return `
+  <div class="stack receive-address-view"${publicKeyX ? ` data-receive-wallet-card data-receive-address="${escapeHtml(address)}" data-receive-network="${escapeHtml(networkId)}" data-receive-signer-key="${escapeHtml(publicKeyX)}" data-wallet-card-state="${walletCardReady ? "ready" : "preparing"}"` : ""}>
+    <div class="qr-card" data-receive-qr${walletCardReady ? "" : ' aria-busy="true"'}>${walletCardReady ? qrSvg(contactCard, qrLabel ?? "QR code for wallet contact card") : '<p class="receive-card-pending" role="status">Preparing complete wallet card…</p>'}</div>
     <p class="eyebrow">${escapeHtml(eyebrow)}</p>
     ${title ? `<h2>${escapeHtml(title)}</h2>` : ""}
     <div class="address-line">
       <code>${escapeHtml(address)}</code>
       ${copyButton(address, copyLabel)}
     </div>
-    ${button({ attributes: { "data-copy": address }, icon: "copy", label: copyLabel })}
+    ${button({ attributes: { "data-copy": publicKeyX && !walletCardReady ? "" : publicKeyX ? contactCard : address, ...(publicKeyX ? { "data-wallet-card-copy": true } : {}) }, disabled: !walletCardReady, icon: "copy", label: publicKeyX && !walletCardReady ? "Preparing wallet card…" : publicKeyX ? "Copy wallet card" : copyLabel })}
     ${
       publicKeyX
         ? `<div class="receive-public-key">
@@ -102,8 +116,16 @@ export const receiveAddressView = ({
               ${copyButton(publicKeyX, "Copy signer public key")}
             </div>
             ${button({ attributes: { "data-copy": publicKeyX }, icon: "copy", label: "Copy public key", variant: "secondary" })}
+            <div data-nostr-key-row>
+              <div><strong>Coordination public key</strong><span data-nostr-key-status role="status" aria-live="polite">${nostrPublicKey ? "Authenticates private multisig handoffs from this wallet." : "Preparing secure coordination…"}</span></div>
+              <div class="address-line" data-nostr-key-value${nostrPublicKey ? "" : " hidden"}>
+                <code data-nostr-key title="${escapeHtml(nostrPublicKey ?? "")}">${nostrPublicKey ? escapeHtml(accountLabel(nostrPublicKey)) : ""}</code>
+                ${copyButton(nostrPublicKey ?? "", "Copy coordination public key")}
+              </div>
+            </div>
           </div>`
         : ""
     }
     <p class="hint">${escapeHtml(hint)}</p>
   </div>`;
+};

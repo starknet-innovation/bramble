@@ -54,7 +54,7 @@ const vendorScript = "scripts/vendor-krusty.ts";
 // derives it from the crate's exported API alone (no paths, timestamps, or
 // toolchain strings), so it is reproducible wherever the pinned revision is
 // built. Update it only together with KRUSTY_KMS_REVISION.
-const expectedGlueDigest = "b24a945dbc39fa649e5953e8fa4a64c3e48072f87196a4e16840389ebf14439d";
+const expectedGlueDigest = "14556f6a2f6fb10a83d9bb982c44b42510c26334612d143e2a9af971e03a02b6";
 
 // A published BIP-39 test phrase, never a wallet phrase: it exists so the
 // vectors below are reproducible by anyone auditing a build.
@@ -137,12 +137,25 @@ const viewingKey = await kms.deriveStrk20ViewingKey(
   referenceViewingKeyChainId,
   referenceViewingKeyPool,
 );
+const nostrPublicKey = await kms.deriveNostrPublicKey(mnemonic, 0, 0);
+const giftWrap = await kms.wrapNostrApplicationData(
+  mnemonic,
+  0,
+  0,
+  nostrPublicKey,
+  "mc-wallet.check",
+  "round-trip",
+);
+const opened = await kms.openNostrApplicationData(mnemonic, 0, 0, giftWrap);
 
 if (
   account.networkId !== DEFAULT_NETWORK.id ||
   !isStarkFieldElement(account.address) ||
   !isStarkFieldElement(viewingKey) ||
   BigInt(viewingKey) === 0n ||
+  opened.content !== "round-trip" ||
+  opened.identifier !== "mc-wallet.check" ||
+  opened.senderPublicKey !== nostrPublicKey ||
   ![signature.publicKey, signature.r, signature.s].every(isStarkFieldElement)
 ) {
   throw new Error("Krusty KMS returned an invalid Stark signature");

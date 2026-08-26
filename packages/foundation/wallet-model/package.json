@@ -8,6 +8,7 @@
     "./custom-network": "./src/networks/custom-network.ts",
     "./ledger-path": "./src/accounts/ledger-path.ts",
     "./networks": "./src/networks/networks.ts",
+    "./nostr": "./src/nostr/nostr.ts",
     "./passphrase": "./src/preferences/passphrase.ts",
     "./preferences": "./src/preferences/preferences.ts",
     "./recovery": "./src/accounts/recovery.ts",

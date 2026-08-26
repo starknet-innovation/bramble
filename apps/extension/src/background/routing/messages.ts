@@ -1,5 +1,4 @@
 /** Typed extension message handling for the background service worker. */
-
 import { activeAccountSecrets } from "@mc-wallet/vault/service";
 import { DEFAULT_NETWORK } from "@mc-wallet/wallet-model/networks";
 import { readCreateAccountInput } from "../accounts/account-creation-inputs";
@@ -10,6 +9,7 @@ import { handleApprovalDecision } from "../approvals/approval-decisions";
 import { enrichApprovals } from "../approvals/approval-insights";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { handleLedgerOps } from "../ledger/ledger-ops";
+import { handleMultisigCoordinationOps } from "../multisig/multisig-coordination-ops";
 import { handleMultisigOps, type MultisigOpsDeps } from "../multisig/multisig-ops";
 import { handleMultisigTxOps } from "../multisig/multisig-tx-ops";
 import { handleOnboardingOps } from "../onboarding/onboarding-ops";
@@ -65,7 +65,6 @@ type RouterHandler = (
   message: unknown,
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse | null>;
-
 const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   activeStateCoordinator: ctx.activeStateCoordinator,
   activity: ctx.activity,
@@ -80,11 +79,11 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   session: ctx.session,
   wallet: ctx.wallet,
 });
-
 const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...buildOpsDeps(ctx),
   multisigDeploymentReviews: ctx.multisigDeploymentReviews,
   multisigStore: ctx.multisigStore,
+  now: ctx.now,
 });
 
 const MULTISIG_ACTIVE_STATE_MESSAGES = new Set([
@@ -105,7 +104,8 @@ const handleMultisig: RouterHandler = async (ctx, messageType, message) => {
     const deps = buildMultisigDeps(ctx);
     return (
       (await handleMultisigOps(deps, messageType, message)) ??
-      handleMultisigTxOps(deps, messageType, message)
+      (await handleMultisigTxOps(deps, messageType, message)) ??
+      handleMultisigCoordinationOps(deps, messageType, message)
     );
   };
   return MULTISIG_ACTIVE_STATE_MESSAGES.has(messageType)

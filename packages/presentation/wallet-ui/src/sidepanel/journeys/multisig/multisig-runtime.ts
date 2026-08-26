@@ -14,6 +14,8 @@ import {
   isArgentMultisigResponse,
   isArgentMultisigsResponse,
   isMultisigSignerResponse,
+  isNostrShareResponse,
+  isNostrSyncResponse,
   isOkResponse,
   type MultisigSignerAccount,
 } from "../../../popup/responses/multisig-responses";
@@ -246,6 +248,24 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         { intentId, signerAccountId, type: "wallet.signArgentMultisigIntent" },
         "sign Argent multisig intent failed",
       );
+    },
+    async shareIntent(intentId: string): Promise<{ readonly recipients: number }> {
+      const response = await sendMessage({
+        intentId,
+        type: "wallet.shareArgentMultisigIntent",
+      });
+      if (!isNostrShareResponse(response)) {
+        throw responseError(response, "secure co-signer share failed");
+      }
+      return { recipients: response.recipients };
+    },
+    async syncIntents(): Promise<{ readonly imported: number; readonly received: number }> {
+      invalidateRefreshes();
+      const response = await sendMessage({ type: "wallet.syncArgentMultisigIntents" });
+      if (!isNostrSyncResponse(response)) {
+        throw responseError(response, "co-signer sync failed");
+      }
+      return { imported: response.imported, received: response.received };
     },
     async submitIntent(intentId: string) {
       return intentResult(

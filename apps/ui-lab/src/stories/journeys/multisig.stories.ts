@@ -113,6 +113,22 @@ export const DeployParticipant: LabStory = {
     );
     await expect(body?.querySelector("[data-participant-address-input]")).toBeVisible();
     await expect(body?.querySelector('[data-participant-method="public-key"]')).toBeVisible();
+    await expect(body?.querySelector('[data-participant-method="wallet-card"]')).toBeVisible();
+  },
+};
+export const DeployWalletCard: LabStory = {
+  args: { checkpointId: "deploy-wallet-card", scenarioId: "multisig" },
+  name: "Create · complete wallet contact",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector('[data-participant-method="wallet-card"]')).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(body?.querySelector('[name="participantWalletCard"]')).toBeVisible();
+    await expect(body?.querySelector("[data-participant-label-input]")).toBeVisible();
   },
 };
 export const DeployApproval: LabStory = {
@@ -299,6 +315,9 @@ export const HomeIntents: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelector(".multisig-intent-list [data-ms-open-intent]")).toBeVisible();
     await expect(body?.querySelector(".multisig-intent-assets .token-logo")).toBeVisible();
+    await expect(body?.querySelector("[data-ms-sync-intents]")).toHaveTextContent(
+      "Check for updates",
+    );
     await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
   },
 };
@@ -314,11 +333,18 @@ export const HomeStaleIntent: LabStory = {
     await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
   },
 };
-export const IntentCollecting = checkpointStory(
-  "Collect signatures",
-  "multisig",
-  "intent-collecting",
-);
+export const IntentCollecting: LabStory = {
+  args: { checkpointId: "intent-collecting", scenarioId: "multisig" },
+  name: "Collect signatures",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("[data-ms-share]")).toHaveTextContent(
+      "Share securely with co-signers",
+    );
+  },
+};
 export const IntentReady: LabStory = {
   args: { checkpointId: "intent-ready", scenarioId: "multisig" },
   name: "Ready to submit",

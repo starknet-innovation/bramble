@@ -12,6 +12,7 @@
  */
 
 import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
+import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
 import type { Vault } from "@mc-wallet/vault/schema";
 import type {
   AddDerivedAccountInput,
@@ -22,12 +23,14 @@ import type {
   DeriveLedgerAccountsInput,
   EnsureNetworkAccountInput,
   ImportRawKeyAccountInput,
+  OpenNostrApplicationDataInput,
   OriginGrantInput,
   RevokeOriginInput,
   SetActiveAccountInput,
   SignHashInput,
   WalletStatus as VaultStatus,
   WalletVaultService,
+  WrapNostrApplicationDataInput,
 } from "@mc-wallet/vault/service";
 import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
 import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
@@ -59,6 +62,12 @@ export type WalletStatusReader = {
   }) => Promise<string>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
+  /** Derives only the wallet-level public Nostr identity. */
+  readonly nostrPublicKey?: (vaultPassphrase: string) => Promise<string>;
+  /** Opens one authenticated NIP-59 application event inside Krusty. */
+  readonly openNostrApplicationData?: (
+    input: OpenNostrApplicationDataInput,
+  ) => Promise<NostrApplicationData>;
   /**
    * Imports an account from a raw private key. Optional on this narrow dispatch
    * type so partial test stubs stay valid; the wired vault service always
@@ -85,6 +94,8 @@ export type WalletStatusReader = {
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
   readonly status: () => Promise<VaultStatus>;
+  /** Creates one recipient-specific NIP-59 event inside Krusty. */
+  readonly wrapNostrApplicationData?: (input: WrapNostrApplicationDataInput) => Promise<string>;
 };
 
 /**
@@ -125,6 +136,12 @@ export const createWalletReader = (
     async generateMnemonic() {
       return (await required()).generateMnemonic();
     },
+    async nostrPublicKey(vaultPassphrase) {
+      return (await required()).nostrPublicKey(vaultPassphrase);
+    },
+    async openNostrApplicationData(input) {
+      return (await required()).openNostrApplicationData(input);
+    },
     async getGrantedAccounts(origin, vaultPassphrase) {
       return (await required()).getGrantedAccounts(origin, vaultPassphrase);
     },
@@ -160,6 +177,9 @@ export const createWalletReader = (
       return resolved
         ? resolved.status()
         : { accountCount: 0, activeAccountId: null, hasVault: false, locked: true, ready: false };
+    },
+    async wrapNostrApplicationData(input) {
+      return (await required()).wrapNostrApplicationData(input);
     },
   };
 };

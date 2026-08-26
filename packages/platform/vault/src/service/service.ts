@@ -1,5 +1,4 @@
 /** Wallet vault service: privileged account metadata persistence behind encryption. */
-
 import { WalletError } from "@mc-wallet/core/errors";
 import { isWalletOrigin } from "@mc-wallet/core/origin";
 import { assertStoreAccess, type StoreActor } from "@mc-wallet/store/access";
@@ -37,15 +36,13 @@ import type { KmsPort } from "../kms-port";
 import { CURRENT_SCHEMA_VERSION, isVaultV7, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
+import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
 import { recoverVaultAccounts } from "./recovery";
 import type { WalletVaultService } from "./service-types";
 
 export { activeAccountSecrets } from "./reveal";
-
-/**
- * Re-exports the documented type surface from its size-budget split.
- */
+/** Re-exports the documented type surface from its size-budget split. */
 export type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
@@ -56,6 +53,7 @@ export type {
   EnsureNetworkAccountInput,
   ForgetLedgerStrk20ViewingKeyInput,
   ImportRawKeyAccountInput,
+  OpenNostrApplicationDataInput,
   OriginGrantInput,
   RevealedSecrets,
   RevokeOriginInput,
@@ -64,6 +62,7 @@ export type {
   StoreLedgerStrk20ViewingKeyInput,
   WalletStatus,
   WalletVaultService,
+  WrapNostrApplicationDataInput,
 } from "./service-types";
 
 type WalletVaultServiceOptions = {
@@ -350,6 +349,7 @@ export const createWalletVaultService = ({
     generateMnemonic() {
       return kms.generateMnemonic();
     },
+    ...nostrWalletMethods(kms, readVault),
     previewAccount: (input) => deriveAccountRef(kms, input),
     validateMnemonic: (mnemonic) => kms.validateMnemonic(mnemonic),
     async grantOrigin(input) {

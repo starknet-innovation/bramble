@@ -146,6 +146,9 @@ const rebuiltContact = (value: unknown): AddressBookEntry | null =>
         address: value["address"],
         label: value["label"],
         networkId: value["networkId"],
+        ...(typeof value["nostrPublicKey"] === "string"
+          ? { nostrPublicKey: value["nostrPublicKey"] }
+          : {}),
         ...(typeof value["publicKeyX"] === "string" ? { publicKeyX: value["publicKeyX"] } : {}),
       })
     : null;

@@ -11,6 +11,7 @@ import type { ArgentMultisigDeploymentReviews } from "./multisig-deployment-revi
 export type MultisigOpsDeps = WalletOpsDeps & {
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
+  readonly now: () => number;
 };
 
 /**

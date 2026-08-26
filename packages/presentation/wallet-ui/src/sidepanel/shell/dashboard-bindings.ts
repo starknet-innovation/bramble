@@ -4,10 +4,14 @@
  * from the side panel entrypoint to keep it within the size budget.
  */
 
+import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { parseWalletContactCard, walletContactCard } from "@mc-wallet/wallet-model/preferences";
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { SidepanelWallet } from "../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../shared/dom";
+import { buttonBusy, errorMessage, renderFragment, showToast } from "../shared/dom";
+import { accountLabel } from "../shared/parts";
+import { qrSvg } from "../shared/qr";
 
 /**
  * Shared context: the app root, the runtime client, and a full re-render.
@@ -29,6 +33,39 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
   const result = app?.querySelector<HTMLElement>("#address-result");
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
 
+  const walletCardField = form?.querySelector<HTMLTextAreaElement>('[name="walletCard"]');
+  if (form && walletCardField)
+    walletCardField.addEventListener("change", () => {
+      const value = walletCardField.value.trim();
+      if (!value) {
+        walletCardField.setCustomValidity("");
+        return;
+      }
+      const card = parseWalletContactCard(value);
+      const networkId = form.elements.namedItem("networkId");
+      const currentNetwork = networkId instanceof HTMLInputElement ? networkId.value : "";
+      if (!card || card.networkId !== currentNetwork) {
+        const message = card
+          ? "This wallet card belongs to a different network."
+          : "That wallet card is not recognized.";
+        walletCardField.setCustomValidity(message);
+        if (result) result.textContent = message;
+        return;
+      }
+      walletCardField.setCustomValidity("");
+      for (const [name, value] of [
+        ["address", card.address],
+        ["publicKeyX", card.publicKeyX ?? ""],
+        ["nostrPublicKey", card.nostrPublicKey ?? ""],
+      ] as const) {
+        const input = form.elements.namedItem(name);
+        if (input instanceof HTMLInputElement) input.value = value;
+      }
+      if (result) result.textContent = "Wallet card verified. Add a label, then save.";
+      const label = form.elements.namedItem("label");
+      if (label instanceof HTMLInputElement) label.focus({ preventScroll: true });
+    });
+
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(form);
@@ -39,6 +76,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         String(data.get("address") ?? "").trim(),
         String(data.get("networkId") ?? ""),
         String(data.get("publicKeyX") ?? "").trim() || undefined,
+        String(data.get("nostrPublicKey") ?? "").trim() || undefined,
       )
       .then(
         async () => {
@@ -57,6 +95,60 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         },
       );
   });
+};
+
+/** Saturates the account's public wallet card without putting Nostr derivation in polling. */
+export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => {
+  const root = app?.querySelector<HTMLElement>("[data-receive-wallet-card]");
+  const address = root?.dataset["receiveAddress"];
+  const networkId = root?.dataset["receiveNetwork"];
+  const publicKeyX = root?.dataset["receiveSignerKey"];
+  if (!root || !address || !isStarknetNetworkId(networkId) || !publicKeyX) return;
+  void wallet.loadNostrPublicKey().then(
+    (nostrPublicKey) => {
+      if (!root.isConnected) return;
+      const card = walletContactCard({ address, networkId, nostrPublicKey, publicKeyX });
+      const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
+      const cardCopy = root.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
+      const keyRow = root.querySelector<HTMLElement>("[data-nostr-key-row]");
+      const keyStatus = keyRow?.querySelector<HTMLElement>("[data-nostr-key-status]");
+      const keyValue = keyRow?.querySelector<HTMLElement>("[data-nostr-key-value]");
+      const key = root.querySelector<HTMLElement>("[data-nostr-key]");
+      const keyCopy = keyRow?.querySelector<HTMLButtonElement>("[data-copy]");
+      if (qr) renderFragment(qr, qrSvg(card, "QR code for wallet contact card"));
+      if (qr) qr.removeAttribute("aria-busy");
+      root.dataset["walletCardState"] = "ready";
+      if (cardCopy) {
+        cardCopy.dataset["copy"] = card;
+        cardCopy.disabled = false;
+        if (cardCopy.lastChild) cardCopy.lastChild.textContent = "Copy wallet card";
+      }
+      if (keyStatus)
+        keyStatus.textContent = "Authenticates private multisig handoffs from this wallet.";
+      if (key) {
+        key.textContent = accountLabel(nostrPublicKey);
+        key.title = nostrPublicKey;
+      }
+      if (keyCopy) keyCopy.dataset["copy"] = nostrPublicKey;
+      if (keyValue) keyValue.hidden = false;
+    },
+    () => {
+      if (!root.isConnected) return;
+      const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
+      const cardCopy = root.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
+      const keyStatus = root.querySelector<HTMLElement>("[data-nostr-key-status]");
+      if (qr) {
+        renderFragment(qr, qrSvg(address, "QR code for account address"));
+        qr.removeAttribute("aria-busy");
+      }
+      root.dataset["walletCardState"] = "unavailable";
+      if (cardCopy) cardCopy.hidden = true;
+      if (keyStatus) {
+        keyStatus.textContent =
+          "Secure coordination is unavailable for this vault. Share the account address instead.";
+      }
+    },
+  );
 };
 
 /**

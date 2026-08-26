@@ -27,7 +27,8 @@ describe("qrMatrix", () => {
 
   test("is deterministic and rejects oversized payloads", () => {
     expect(qrMatrix(ADDRESS)).toEqual(qrMatrix(ADDRESS));
-    expect(() => qrMatrix("a".repeat(200))).toThrow("QR payload too long");
+    expect(qrMatrix("a".repeat(200))).toHaveLength(57);
+    expect(() => qrMatrix("a".repeat(252))).toThrow("QR payload too long");
   });
 });
 

@@ -135,6 +135,9 @@ export const walletStub = {
   async generateMnemonic() {
     return SECRET_MNEMONIC;
   },
+  async nostrPublicKey() {
+    return "11".repeat(32);
+  },
   async grantOrigin() {
     return [account];
   },

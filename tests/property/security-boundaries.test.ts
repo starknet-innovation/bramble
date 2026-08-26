@@ -141,6 +141,7 @@ describe("vault migration property boundary", () => {
 });
 
 const validModule = (overrides: Record<string, unknown> = {}) => ({
+  deriveNostrPublicKey: () => ({ public_key: "11".repeat(32) }),
   deriveOzAccountAddress: () => "0xabc",
   deriveStrk20ViewingKey: () => "0x456",
   deriveStarknetKeypair: () => ({
@@ -150,8 +151,24 @@ const validModule = (overrides: Record<string, unknown> = {}) => ({
   }),
   generateMnemonic: () => MNEMONIC,
   getAccountClassHashes: () => "{}",
+  openNostrApplicationData: () =>
+    JSON.stringify({
+      content: "payload",
+      identifier: "mc-wallet.multisig",
+      senderPublicKey: "22".repeat(32),
+    }),
   signStarkHash: () => ({ publicKey: "0xabc", r: "0x1", s: "0x2" }),
   validateMnemonic: () => true,
+  wrapNostrApplicationData: () =>
+    JSON.stringify({
+      content: "ciphertext",
+      created_at: 1,
+      id: "11".repeat(32),
+      kind: 1_059,
+      pubkey: "22".repeat(32),
+      sig: "33".repeat(64),
+      tags: [["p", "44".repeat(32)]],
+    }),
   ...overrides,
 });
 

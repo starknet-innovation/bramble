@@ -45,8 +45,9 @@ describe("Argent multisig management views", () => {
     expect(ready).toContain('data-participant-key="0x999"');
     expect(ready).toContain("Signer set");
     expect(ready).toContain("Add participant");
-    expect(ready).toContain("Account address");
+    expect(ready).toContain("account address");
     expect(ready).toContain("Public key");
+    expect(ready).toContain("Wallet card");
     expect(ready).toContain('name="signerPublicKeys" type="hidden"');
     expect(ready).not.toContain("Space-separated public keys");
     expect(ready).toContain('name="signerAccountId" type="hidden"');

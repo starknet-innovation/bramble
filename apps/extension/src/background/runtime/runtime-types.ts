@@ -38,6 +38,7 @@ import type {
 } from "../privacy/runtime-strk20-types";
 import type { SupportDiagnosticsResponse } from "../support/diagnostics";
 import type { SwapPreparationReview } from "../transactions/swap-preparations";
+import type { NostrCoordinationResponse } from "./nostr-types";
 
 /** Successful account-import response. */
 type CreateAccountResponse = {
@@ -466,6 +467,7 @@ export type RuntimeResponse =
   | MultisigClassStatusResponse
   | MultisigDeployResponse
   | MultisigResponse
+  | NostrCoordinationResponse
   | { readonly ok: true; readonly signer: MultisigSignerAccount }
   | MultisigsResponse
   | { readonly ok: true }

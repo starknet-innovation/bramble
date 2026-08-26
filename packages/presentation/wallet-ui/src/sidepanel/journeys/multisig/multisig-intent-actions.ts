@@ -212,6 +212,16 @@ export const multisigIntentActions = (
       ${note ? `<p class="multisig-action-note">${escapeHtml(note)}</p>` : ""}
       ${action.primary}
       ${action.secondary ?? ""}
+      ${
+        intent.state === "collecting" && hasFreshAuthority
+          ? button({
+              attributes: { "data-ms-share": intent.id },
+              icon: "send",
+              label: "Share securely with co-signers",
+              variant: "secondary",
+            })
+          : ""
+      }
     </div>
     ${
       intent.state === "stale"

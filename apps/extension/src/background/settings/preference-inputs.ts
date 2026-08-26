@@ -12,6 +12,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
+import { isNostrPublicKey } from "@mc-wallet/wallet-model/nostr";
 import {
   isApprovalSurfacePreference,
   isDisplayCurrency,
@@ -32,11 +33,19 @@ export const readSaveAddressInput = (
   readonly address: string;
   readonly label: string;
   readonly networkId: StarknetNetworkId;
+  readonly nostrPublicKey?: string;
   readonly publicKeyX?: string;
 } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["address", "label", "networkId", "publicKeyX", "type"]) ||
+    !hasOnlyKnownKeys(message, [
+      "address",
+      "label",
+      "networkId",
+      "nostrPublicKey",
+      "publicKeyX",
+      "type",
+    ]) ||
     message["type"] !== "wallet.saveAddress" ||
     typeof message["address"] !== "string" ||
     !isStarkFieldElement(message["address"]) ||
@@ -44,6 +53,7 @@ export const readSaveAddressInput = (
     message["label"].trim().length === 0 ||
     message["label"].trim().length > 64 ||
     !isStarknetNetworkId(message["networkId"]) ||
+    (message["nostrPublicKey"] !== undefined && !isNostrPublicKey(message["nostrPublicKey"])) ||
     (message["publicKeyX"] !== undefined &&
       (typeof message["publicKeyX"] !== "string" ||
         !isNonZeroStarkFieldElement(message["publicKeyX"])))
@@ -55,6 +65,9 @@ export const readSaveAddressInput = (
     address: message["address"],
     label: message["label"].trim(),
     networkId: message["networkId"],
+    ...(typeof message["nostrPublicKey"] === "string"
+      ? { nostrPublicKey: message["nostrPublicKey"] }
+      : {}),
     ...(typeof message["publicKeyX"] === "string" ? { publicKeyX: message["publicKeyX"] } : {}),
   };
 };

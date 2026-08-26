@@ -3,6 +3,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import { argentMultisigTransactionHash } from "@mc-wallet/starknet/multisig-invoke";
+import {
+  bindMultisigs,
+  type MultisigUiDeps,
+} from "../../../../src/sidepanel/journeys/multisig/multisig-ui";
 import { multisigDetailFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-views";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -259,5 +263,47 @@ describe("Argent multisig fee refresh", () => {
     await flushMultisigUi();
     expect(removed).toEqual([fixture.intent.id]);
     expect(opened).toEqual([[fixture.intent.accountId, "multisig-home"]]);
+  });
+
+  test("keeps the user in the intents tab after checking for co-signer updates", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const client = await makeMultisigUiClient();
+    const app = document.createElement("div");
+    document.body.replaceChildren(app);
+    const markup = (): string =>
+      multisigDetailFlow(
+        fixture.status,
+        fixture.status.accounts[0] ?? null,
+        fixture.view,
+        [fixture.intent],
+        false,
+        defaultWalletPreferences(),
+        "multisig-home",
+      );
+    const deps = {
+      app,
+      multisig: client,
+      openDetail() {},
+      openIntent() {},
+      openList() {},
+      async render() {
+        app.replaceChildren(document.createRange().createContextualFragment(markup()));
+        bindMultisigs(deps);
+      },
+      selectedMultisigId: () => fixture.record.id,
+      wallet: {
+        loadStatus: async () => fixture.status,
+      } as unknown as MultisigUiDeps["wallet"],
+    } as const;
+    await deps.render();
+    app.querySelector<HTMLButtonElement>('[data-ms-home-tab="intents"]')?.click();
+    app.querySelector<HTMLButtonElement>("[data-ms-sync-intents]")?.click();
+    await flushMultisigUi();
+
+    expect(app.querySelector('[data-ms-home-tab="intents"]')?.getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    expect(app.querySelector<HTMLElement>('[data-ms-home-panel="intents"]')?.hidden).toBe(false);
+    expect(document.activeElement).toBe(app.querySelector("[data-ms-sync-intents]"));
   });
 });

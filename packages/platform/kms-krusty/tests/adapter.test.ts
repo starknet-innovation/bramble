@@ -6,6 +6,9 @@ import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
 import { STARK_CURVE_ORDER } from "@mc-wallet/wallet-model/networks";
 
 const createModule = (signatureR = "0x1") => ({
+  deriveNostrPublicKey() {
+    return { public_key: "11".repeat(32) };
+  },
   deriveOzAccountAddress() {
     return "0xabc";
   },
@@ -25,6 +28,13 @@ const createModule = (signatureR = "0x1") => ({
   getAccountClassHashes() {
     return "{}";
   },
+  openNostrApplicationData() {
+    return JSON.stringify({
+      content: "payload",
+      identifier: "mc-wallet.multisig",
+      senderPublicKey: "22".repeat(32),
+    });
+  },
   signStarkHash() {
     return {
       publicKey: "0xabc",
@@ -34,6 +44,17 @@ const createModule = (signatureR = "0x1") => ({
   },
   validateMnemonic() {
     return true;
+  },
+  wrapNostrApplicationData() {
+    return JSON.stringify({
+      content: "ciphertext",
+      created_at: 1,
+      id: "11".repeat(32),
+      kind: 1_059,
+      pubkey: "22".repeat(32),
+      sig: "33".repeat(64),
+      tags: [["p", "44".repeat(32)]],
+    });
   },
 });
 
@@ -288,5 +309,95 @@ describe("createKrustyKms", () => {
 
     await expect(createKrustyKms(module).validateMnemonic(" ")).rejects.toThrow("Invalid mnemonic");
     expect(validated).toBe(false);
+  });
+
+  test("keeps Nostr key derivation and gift wrapping inside the WASM boundary", async () => {
+    const calls: unknown[][] = [];
+    const module = {
+      ...createModule(),
+      deriveNostrPublicKey(...args: unknown[]) {
+        calls.push(args);
+        return { public_key: "11".repeat(32) };
+      },
+      openNostrApplicationData(...args: unknown[]) {
+        calls.push(args);
+        return JSON.stringify({
+          content: "payload",
+          identifier: "mc-wallet.multisig",
+          senderPublicKey: "22".repeat(32),
+        });
+      },
+      wrapNostrApplicationData(...args: unknown[]) {
+        calls.push(args);
+        return createModule().wrapNostrApplicationData();
+      },
+    };
+    const kms = createKrustyKms(module);
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+    const giftWrap = createModule().wrapNostrApplicationData();
+
+    await expect(kms.deriveNostrPublicKey(mnemonic, 1, 2, "phrase")).resolves.toBe("11".repeat(32));
+    await expect(
+      kms.wrapNostrApplicationData(
+        mnemonic,
+        1,
+        2,
+        "44".repeat(32),
+        "mc-wallet.multisig",
+        "payload",
+        "phrase",
+      ),
+    ).resolves.toBe(giftWrap);
+    await expect(kms.openNostrApplicationData(mnemonic, 1, 2, giftWrap, "phrase")).resolves.toEqual(
+      {
+        content: "payload",
+        identifier: "mc-wallet.multisig",
+        senderPublicKey: "22".repeat(32),
+      },
+    );
+    expect(calls).toEqual([
+      [mnemonic, 1, 2, "phrase"],
+      [mnemonic, 1, 2, "phrase", "44".repeat(32), "mc-wallet.multisig", "payload"],
+      [mnemonic, 1, 2, "phrase", giftWrap],
+    ]);
+  });
+
+  test("rejects malformed Nostr application data before calling WASM", async () => {
+    let wrapped = false;
+    const kms = createKrustyKms({
+      ...createModule(),
+      wrapNostrApplicationData() {
+        wrapped = true;
+        return "{}";
+      },
+    });
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+
+    await expect(
+      kms.wrapNostrApplicationData(mnemonic, 0, 0, "44".repeat(32), "not printable\n", "payload"),
+    ).rejects.toThrow("Invalid Nostr application-data input");
+    await expect(
+      kms.wrapNostrApplicationData(
+        mnemonic,
+        0,
+        0,
+        "44".repeat(32),
+        "mc-wallet.multisig",
+        "🦊".repeat(20_000),
+      ),
+    ).rejects.toThrow("Invalid Nostr application-data input");
+    expect(wrapped).toBe(false);
+
+    const wrongKind = JSON.parse(createModule().wrapNostrApplicationData()) as Record<
+      string,
+      unknown
+    >;
+    wrongKind["kind"] = 1;
+    await expect(
+      createKrustyKms({
+        ...createModule(),
+        wrapNostrApplicationData: () => JSON.stringify(wrongKind),
+      }).wrapNostrApplicationData(mnemonic, 0, 0, "44".repeat(32), "mc-wallet.multisig", "payload"),
+    ).rejects.toThrow("Krusty KMS returned an invalid Nostr gift wrap");
   });
 });
