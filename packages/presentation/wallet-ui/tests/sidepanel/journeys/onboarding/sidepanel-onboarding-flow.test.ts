@@ -173,8 +173,20 @@ describe("staged onboarding", () => {
     document.body.replaceChildren();
   });
 
-  test("discovers and explicitly restores imported phrase accounts", async () => {
-    const flow = mount();
+  test("restores an explicitly selected account when discovery pauses", async () => {
+    let discoveryCalls = 0;
+    const flow = mount({
+      discoverRecoveryAccounts: () => {
+        discoveryCalls += 1;
+        if (discoveryCalls > 1) return Promise.reject(new Error("offline"));
+        return Promise.resolve({
+          candidates: [{ account, deployed: true, funded: false }],
+          complete: false,
+          nextIndex: 1,
+          ok: true as const,
+        });
+      },
+    });
     click(flow.app, "#add-existing-button");
     expect(activeStep(flow.app)).toBe("method");
     click(flow.app, "#recovery-method-button");

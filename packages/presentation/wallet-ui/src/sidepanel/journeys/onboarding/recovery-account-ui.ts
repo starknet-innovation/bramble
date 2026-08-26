@@ -60,7 +60,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const seen = new Set<string>();
 
   const refreshGate = (): void => {
-    if (restore) restore.disabled = !complete || selected.size === 0 || !acknowledgement?.checked;
+    if (restore) restore.disabled = selected.size === 0 || !acknowledgement?.checked;
   };
 
   const renderCandidates = (): void => {
@@ -176,7 +176,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     const selections = candidates
       .map(selectionFor)
       .filter((selection) => selected.has(selectionKey(selection)));
-    if (!complete || selections.length === 0 || !acknowledgement?.checked) return;
+    if (selections.length === 0 || !acknowledgement?.checked) return;
     buttonBusy(restore, true);
     if (result) result.textContent = "Restoring the selected accounts into your encrypted vault…";
     void deps.wallet
