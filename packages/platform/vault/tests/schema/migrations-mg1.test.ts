@@ -7,10 +7,10 @@ import { describe, expect, test } from "bun:test";
 import { CURRENT_SCHEMA_VERSION, migrateVault } from "@mc-wallet/vault/migrations";
 import {
   isVaultV1,
-  isVaultV7,
+  isVaultV8,
   type VaultV1,
   type VaultV2,
-  type VaultV7,
+  type VaultV8,
 } from "@mc-wallet/vault/schema";
 
 const accountA = {
@@ -53,7 +53,7 @@ describe("MG1 migration chain", () => {
 
     const migrated = migrateVault(multiAccountV1);
 
-    expect(isVaultV7(migrated)).toBe(true);
+    expect(isVaultV8(migrated)).toBe(true);
     expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(migrated.mnemonic).toBeNull();
     expect(migrated.accounts).toEqual(
@@ -69,7 +69,7 @@ describe("MG1 migration chain", () => {
   });
 
   test("v0 sources migrate through the full chain to an empty current vault", () => {
-    const expected: VaultV7 = {
+    const expected: VaultV8 = {
       accounts: [],
       accountSecrets: [],
       activeAccountId: null,
@@ -80,7 +80,7 @@ describe("MG1 migration chain", () => {
     };
     for (const source of [null, undefined, {}]) {
       const migrated = migrateVault(source);
-      expect(isVaultV7(migrated)).toBe(true);
+      expect(isVaultV8(migrated)).toBe(true);
       expect(migrated).toEqual(expected);
     }
   });
@@ -90,7 +90,7 @@ describe("MG1 migration chain", () => {
 
     const once = migrateVault(nullMnemonic);
     expect(once).not.toBe(nullMnemonic);
-    expect(isVaultV7(once)).toBe(true);
+    expect(isVaultV8(once)).toBe(true);
     expect(once).toEqual({
       ...nullMnemonic,
       accounts: nullMnemonic.accounts.map((account) => ({
@@ -111,7 +111,7 @@ describe("MG1 migration chain", () => {
     };
 
     const migrated = migrateVault(withMnemonic);
-    expect(isVaultV7(migrated)).toBe(true);
+    expect(isVaultV8(migrated)).toBe(true);
     expect(migrated.mnemonic).toBe("correct horse battery staple");
     expect(migrated).toEqual({
       ...withMnemonic,
@@ -134,7 +134,7 @@ describe("MG1 migration chain", () => {
 
   test("rejects a well-formed current shell carrying a future schema version", () => {
     const future = { ...multiAccountV1, mnemonic: null, schemaVersion: CURRENT_SCHEMA_VERSION + 1 };
-    expect(isVaultV7(future)).toBe(false);
+    expect(isVaultV8(future)).toBe(false);
     expect(() => migrateVault(future)).toThrow("Unsupported vault schema");
   });
 });

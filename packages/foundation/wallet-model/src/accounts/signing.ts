@@ -5,6 +5,7 @@
  * serialize.
  */
 import { WalletError } from "@mc-wallet/core/errors";
+import { isHexBytes } from "../networks/networks";
 
 /**
  * Stark-curve signature returned by an authorized software or hardware signer.
@@ -19,6 +20,22 @@ export type StarkSignature = {
  * Raw two-scalar signature returned by a hardware device.
  */
 export type DeviceSignature = Pick<StarkSignature, "r" | "s">;
+
+/**
+ * Encoded ML-DSA-65 (FIPS 204) public-key length in bytes. Forced by the
+ * platforms rather than chosen: Apple's `SecureEnclave.MLDSA65` and Android
+ * Keystore's ML-DSA-65 are the smallest parameter set either offers. Single
+ * source for every length check on a post-quantum key.
+ */
+export const ML_DSA_65_PUBLIC_KEY_BYTES = 1952;
+
+/**
+ * Checks whether a value is an encoded ML-DSA-65 public key in lowercase hex.
+ * Shape only: a well-formed key is not a key the paired device can sign for, so
+ * enrollment still has to verify a proof of possession before any funds move.
+ */
+export const isMlDsa65PublicKey = (value: unknown): value is string =>
+  isHexBytes(value, ML_DSA_65_PUBLIC_KEY_BYTES);
 
 /**
  * ML-DSA-65 (FIPS 204) signature returned by a post-quantum mobile signer. Both

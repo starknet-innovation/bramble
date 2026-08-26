@@ -2,7 +2,7 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { isWalletOrigin } from "@mc-wallet/core/origin";
 import { assertStoreAccess, type StoreActor } from "@mc-wallet/store/access";
-import { isAccountId, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
+import { isAccountId, isLedgerAccount } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
   isStarkFieldElement,
@@ -33,7 +33,7 @@ import { deriveVaultStrk20ViewingKey } from "../accounts/strk20-viewing-key";
 import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV7, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV8, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { nostrWalletMethods } from "./nostr";
@@ -79,7 +79,7 @@ const writeVault = async (
   vault: Vault,
   vaultPassphrase: string,
 ): Promise<void> => {
-  if (!isVaultV7(vault)) {
+  if (!isVaultV8(vault)) {
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase);
@@ -315,7 +315,7 @@ export const createWalletVaultService = ({
     async forgetLedgerStrk20ViewingKey(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const account = findVaultAccount(vault, input.accountId);
-      if (!isKeylessAccount(account)) {
+      if (!isLedgerAccount(account)) {
         throw new WalletError("Account is not a Ledger account");
       }
       const scope = ledgerStrk20ScopeFor(account, input.chainId, input.poolAddress);
@@ -459,7 +459,7 @@ export const createWalletVaultService = ({
     async storeLedgerStrk20ViewingKey(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const account = findVaultAccount(vault, input.accountId);
-      if (!isKeylessAccount(account)) {
+      if (!isLedgerAccount(account)) {
         throw new WalletError("Account is not a Ledger account");
       }
       const scope = ledgerStrk20ScopeFor(account, input.chainId, input.poolAddress);

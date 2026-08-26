@@ -10,7 +10,7 @@ import {
 } from "@mc-wallet/starknet/account-contracts";
 import { fakeKms } from "@mc-wallet/testkit/fake-kms";
 import { deriveLedgerAccount, deriveLedgerAccountRefs } from "@mc-wallet/vault/accounts";
-import { isVaultV2, isVaultV7, type Vault } from "@mc-wallet/vault/schema";
+import { isVaultV2, isVaultV8, type Vault } from "@mc-wallet/vault/schema";
 import { isAccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 
@@ -150,8 +150,8 @@ describe("keyless account in the vault schema", () => {
   };
 
   test("a current vault admits a keyless Ledger account with no signing key", () => {
-    const vault: Vault = { ...base, schemaVersion: 7 };
-    expect(isVaultV7(vault)).toBe(true);
+    const vault: Vault = { ...base, schemaVersion: 8 };
+    expect(isVaultV8(vault)).toBe(true);
   });
 
   test("a Ledger account is rejected at the legacy v2 schema", () => {
@@ -160,9 +160,9 @@ describe("keyless account in the vault schema", () => {
 
   test("a Ledger account carrying a signing key is rejected", () => {
     expect(
-      isVaultV7({
+      isVaultV8({
         ...base,
-        schemaVersion: 7,
+        schemaVersion: 8,
         signingKeys: [{ accountId: ledgerAccount.id, privateKey: "0x1" }],
       }),
     ).toBe(false);
@@ -180,13 +180,13 @@ describe("keyless account in the vault schema", () => {
       publicKeyY: "0x4",
     };
     expect(
-      isVaultV7({
+      isVaultV8({
         accounts: [hdAccount],
         accountSecrets: [],
         activeAccountId: hdAccount.id,
         mnemonic: null,
         originGrants: [],
-        schemaVersion: 7,
+        schemaVersion: 8,
         signingKeys: [],
       }),
     ).toBe(false);

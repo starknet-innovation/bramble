@@ -3,7 +3,7 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import { isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
+import { isLedgerAccount } from "@mc-wallet/wallet-model/accounts";
 import type { KmsPort } from "../kms-port";
 import type { Vault } from "../schema/schema";
 import { ledgerStrk20ViewingKeyFor } from "./account-secrets";
@@ -22,7 +22,7 @@ export const deriveVaultStrk20ViewingKey = async (
   poolAddress: string,
 ): Promise<string> => {
   const account = findVaultAccount(vault, accountId);
-  if (isKeylessAccount(account)) {
+  if (isLedgerAccount(account)) {
     const viewingKey = ledgerStrk20ViewingKeyFor(
       vault.accountSecrets,
       account.id,

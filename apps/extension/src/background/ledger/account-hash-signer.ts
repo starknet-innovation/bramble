@@ -13,7 +13,7 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
-import { type AccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
+import { type AccountRef, isLedgerAccount } from "@mc-wallet/wallet-model/accounts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
@@ -56,7 +56,7 @@ export const accountHashSigner = (
   account: AccountRef,
   vaultPassphrase: string,
 ): StarkHashSigner => {
-  if (isKeylessAccount(account)) {
+  if (isLedgerAccount(account)) {
     const queue = deps.ledgerSignQueue;
     if (!queue) {
       throw new WalletError("Ledger signing unavailable");

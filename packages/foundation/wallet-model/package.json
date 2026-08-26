@@ -6,6 +6,7 @@
   "exports": {
     "./accounts": "./src/accounts/accounts.ts",
     "./custom-network": "./src/networks/custom-network.ts",
+    "./derivations": "./src/accounts/derivations.ts",
     "./ledger-path": "./src/accounts/ledger-path.ts",
     "./networks": "./src/networks/networks.ts",
     "./nostr": "./src/nostr/nostr.ts",

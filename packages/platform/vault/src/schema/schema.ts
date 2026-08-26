@@ -16,6 +16,7 @@ import {
   type LegacyAccountRef,
   type LegacyV6AccountRef,
 } from "@mc-wallet/wallet-model/accounts";
+import { isKeylessDerivation } from "@mc-wallet/wallet-model/derivations";
 import { canonicalFelt, isStarkPrivateKey, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
 import {
@@ -27,13 +28,14 @@ import {
 /**
  * Current vault schema version accepted by validators and writers.
  *
- * Version 7 retains the exact Argent deployment salt. Version 6 records
+ * Version 8 admits the keyless paired-phone account variant. Version 7 retains
+ * the exact Argent deployment salt. Version 6 records
  * account-contract semantics explicitly. Version 5
  * canonicalized account identities and their dependent references.
  * Version 4 introduced optional account secrets separated from public
  * {@link AccountRef} metadata.
  */
-export const CURRENT_SCHEMA_VERSION = 7;
+export const CURRENT_SCHEMA_VERSION = 8;
 
 /**
  * Encrypted-vault reference from an account id to its private key.
@@ -146,9 +148,17 @@ export type VaultV7 = Omit<VaultV4, "accounts" | "schemaVersion"> & {
 };
 
 /**
+ * Current encrypted vault schema. Admits the keyless paired-phone account
+ * variant, whose ML-DSA key lives in device hardware and therefore has no
+ * vault-held counterpart. Nothing else about a stored record changes, so a v7
+ * vault is already a valid v8 vault once its stamp is bumped.
+ */
+export type VaultV8 = Omit<VaultV7, "schemaVersion"> & { readonly schemaVersion: 8 };
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV7;
+export type Vault = VaultV8;
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -177,7 +187,7 @@ const isOriginGrant = (value: unknown, canonical: boolean): value is OriginGrant
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV7 => ({
+export const emptyVault = (): VaultV8 => ({
   accounts: [],
   accountSecrets: [],
   activeAccountId: null,
@@ -191,10 +201,13 @@ const isRetainedMnemonic = (value: unknown): value is string | null =>
   value === null || isMnemonicText(value);
 
 // Relaxed account↔signingKey bijection: every signing key must map to an
-// account, and every account must hold exactly one signing key UNLESS it is a
-// keyless Ledger account, which must hold none. For key-backed-only vaults
-// (v1/v2, where a Ledger account cannot appear) this is identical to a strict
-// bijection. Extracted so the main validator stays within the complexity budget.
+// account, and every account must hold exactly one signing key UNLESS its
+// derivation names an external device, which must hold none. For key-backed-only
+// vaults (v1/v2, where no keyless account can appear) this is identical to a
+// strict bijection. Extracted so the main validator stays within the complexity
+// budget, and it asks `isKeylessDerivation` rather than naming the kinds here,
+// so a new device kind cannot be admitted by the account model while this
+// validator still demands a key for it.
 const hasValidKeyBindings = (
   accounts: readonly (AccountRef | LegacyAccountRef | LegacyV6AccountRef)[],
   signingKeys: readonly SigningKeyRef[],
@@ -203,7 +216,7 @@ const hasValidKeyBindings = (
   accounts.every(
     (account) =>
       signingKeys.some((key) => key.accountId === account.id) ===
-      (account.derivation.kind !== "ledger"),
+      !isKeylessDerivation(account.derivation),
   );
 
 type VaultReferenceOptions = {
@@ -211,6 +224,8 @@ type VaultReferenceOptions = {
   readonly currentAccounts: boolean;
   readonly legacyV6Accounts?: boolean;
   readonly ledgerAllowed: boolean;
+  /** Paired-phone accounts exist only from v8; earlier versions reject them. */
+  readonly mobilePqAllowed: boolean;
 };
 
 const isVaultAccount = (
@@ -230,6 +245,9 @@ const isVaultAccount = (
     return false;
   }
   const parsed = account as AccountRef | LegacyAccountRef | LegacyV6AccountRef;
+  if (parsed.derivation.kind === "mobile-pq") {
+    return options.mobilePqAllowed;
+  }
   return options.ledgerAllowed || parsed.derivation.kind !== "ledger";
 };
 
@@ -324,6 +342,7 @@ export const isVaultV1 = (value: unknown): value is VaultV1 =>
     canonical: false,
     currentAccounts: false,
     ledgerAllowed: false,
+    mobilePqAllowed: false,
   });
 
 const V2_V3_KEYS = [
@@ -350,6 +369,7 @@ export const isVaultV2 = (value: unknown): value is VaultV2 =>
     canonical: false,
     currentAccounts: false,
     ledgerAllowed: false,
+    mobilePqAllowed: false,
   });
 
 /**
@@ -366,6 +386,7 @@ export const isVaultV3 = (value: unknown): value is VaultV3 =>
     canonical: false,
     currentAccounts: false,
     ledgerAllowed: true,
+    mobilePqAllowed: false,
   });
 
 const V4_KEYS = [...V2_V3_KEYS, "accountSecrets"] as const;
@@ -384,6 +405,7 @@ export const isVaultV4 = (value: unknown): value is VaultV4 =>
     canonical: false,
     currentAccounts: false,
     ledgerAllowed: true,
+    mobilePqAllowed: false,
   }) &&
   hasValidCurrentVaultReferences(value, { canonical: false, currentAccounts: false });
 
@@ -400,6 +422,7 @@ export const isVaultV5 = (value: unknown): value is VaultV5 =>
     canonical: true,
     currentAccounts: false,
     ledgerAllowed: true,
+    mobilePqAllowed: false,
   }) &&
   hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: false });
 
@@ -417,6 +440,7 @@ export const isVaultV6 = (value: unknown): value is VaultV6 =>
     currentAccounts: false,
     legacyV6Accounts: true,
     ledgerAllowed: true,
+    mobilePqAllowed: false,
   }) &&
   hasValidCurrentVaultReferences(value, {
     canonical: true,
@@ -425,9 +449,31 @@ export const isVaultV6 = (value: unknown): value is VaultV6 =>
   });
 
 /**
- * Validates the current schema-v7 vault and all internal references.
+ * Validates legacy schema-v7 vaults for the adjacent v8 migration. Predates the
+ * paired-phone account variant, so one is rejected at this version.
  */
 export const isVaultV7 = (value: unknown): value is VaultV7 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V4_KEYS) &&
+  value["schemaVersion"] === 7 &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, {
+    canonical: true,
+    currentAccounts: true,
+    ledgerAllowed: true,
+    mobilePqAllowed: false,
+  }) &&
+  hasValidAccountContractBindings(value) &&
+  hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: true });
+
+/**
+ * Validates the current schema-v8 vault and all internal references, admitting
+ * both keyless account variants. A paired-phone account must carry no signing
+ * key and no encrypted account secret; the bijection and secret bindings above
+ * enforce both, so a record claiming one is refused rather than decrypted.
+ */
+export const isVaultV8 = (value: unknown): value is VaultV8 =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, V4_KEYS) &&
@@ -437,6 +483,7 @@ export const isVaultV7 = (value: unknown): value is VaultV7 =>
     canonical: true,
     currentAccounts: true,
     ledgerAllowed: true,
+    mobilePqAllowed: true,
   }) &&
   hasValidAccountContractBindings(value) &&
   hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: true });

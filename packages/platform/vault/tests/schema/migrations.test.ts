@@ -8,7 +8,7 @@ import {
   migrateVault,
   VAULT_MIGRATIONS,
 } from "@mc-wallet/vault/migrations";
-import { isVaultV1, isVaultV6, isVaultV7 } from "@mc-wallet/vault/schema";
+import { isVaultV1, isVaultV6, isVaultV8 } from "@mc-wallet/vault/schema";
 import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
 
 const legacyVault = {
@@ -54,7 +54,7 @@ const legacyV6 = {
   })),
   schemaVersion: 6 as const,
 };
-const currentVault = { ...legacyV6, schemaVersion: CURRENT_SCHEMA_VERSION as 7 };
+const currentVault = { ...legacyV6, schemaVersion: CURRENT_SCHEMA_VERSION as 8 };
 
 describe("migrateVault", () => {
   test("declares contiguous migration steps to the current schema", () => {
@@ -85,7 +85,7 @@ describe("migrateVault", () => {
     expect(isVaultV1(legacyVault)).toBe(true);
     const migrated = migrateVault(legacyVault);
 
-    expect(isVaultV7(migrated)).toBe(true);
+    expect(isVaultV8(migrated)).toBe(true);
     expect(migrated).toEqual({
       ...legacyVault,
       accounts: legacyVault.accounts.map((account) => ({
@@ -112,7 +112,7 @@ describe("migrateVault", () => {
       currentVault,
     ]) {
       const migrated = migrateVault(source);
-      expect(isVaultV7(migrated)).toBe(true);
+      expect(isVaultV8(migrated)).toBe(true);
       expect(migrateVault(migrated)).toBe(migrated);
     }
   });
@@ -136,7 +136,7 @@ describe("migrateVault", () => {
       signingKeys: [{ accountId: aliasedId, privateKey: "0x0456" }],
     });
 
-    expect(isVaultV7(migrated)).toBe(true);
+    expect(isVaultV8(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({
       accountContractType: "openzeppelin",
       address: "0x123",
@@ -166,7 +166,7 @@ describe("migrateVault", () => {
     });
 
     expect(isVaultV6({ ...legacyV6, accounts: [argent] })).toBe(true);
-    expect(isVaultV7(migrated)).toBe(true);
+    expect(isVaultV8(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({ deploymentSalt: argent.publicKeyX });
   });
 

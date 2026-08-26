@@ -11,11 +11,31 @@ import {
   sameFelt,
 } from "../networks/networks";
 import {
-  isLedgerAccountIndex,
-  isLedgerAccountPath,
-  LEDGER_EIP2645_APPLICATION,
-  ledgerAccountIndexOfPath,
-} from "./ledger-path";
+  type Bip44Derivation,
+  type ImportedKeyDerivation,
+  isBip44Derivation,
+  isImportedKeyDerivation,
+  isKeylessDerivation,
+  isLedgerDerivation,
+  isMobilePqDerivation,
+  type LedgerDerivation,
+  type MobilePqDerivation,
+} from "./derivations";
+import { isMlDsa65PublicKey } from "./signing";
+
+/**
+ * Account provenance types, re-exported so `./accounts` stays the one import
+ * path for the public account model. Their validators live beside them in
+ * `./derivations`.
+ */
+export type {
+  AccountDerivation,
+  Bip44Derivation,
+  ImportedKeyDerivation,
+  LedgerDerivation,
+  MobilePqDerivation,
+  TransportDescriptor,
+} from "./derivations";
 
 /**
  * Supported contract families for accounts controlled by one wallet signer.
@@ -41,37 +61,6 @@ export const ARGENT_ACCOUNT_CLASS_HASH =
  */
 export const isAccountContractType = (value: unknown): value is AccountContractType =>
   value === "argent" || value === "openzeppelin";
-
-/**
- * BIP-44 provenance for an account derived from the recovery phrase.
- */
-export type Bip44Derivation = {
-  readonly accountIndex: number;
-  readonly addressIndex: number;
-  readonly kind: "starknet-bip44";
-};
-
-/**
- * Provenance for an account imported from a raw Starknet signing key.
- */
-export type ImportedKeyDerivation = {
-  readonly kind: "imported-raw-key";
-};
-
-/**
- * Public coordinates needed to ask a Ledger to sign for an account again.
- */
-export type LedgerDerivation = {
-  readonly accountIndex: number;
-  readonly eip2645application: string;
-  readonly kind: "ledger";
-  readonly path: string;
-};
-
-/**
- * Account provenance discriminated by the signer kind.
- */
-export type AccountDerivation = Bip44Derivation | ImportedKeyDerivation | LedgerDerivation;
 
 type AccountRefIdentity = {
   readonly address: string;
@@ -119,9 +108,25 @@ export type LedgerAccountRef = AccountRefCore & {
 };
 
 /**
+ * Paired-phone account metadata containing no locally held signing key. The
+ * ML-DSA-65 key is 1952 bytes, far past one felt, so `publicKeyX` carries a
+ * Poseidon commitment over it (the value the account contract validates
+ * against) and `publicKey` carries the encoded key itself, which the
+ * verify-before-broadcast gate needs in full.
+ */
+export type MobilePqAccountRef = AccountRefCore & {
+  readonly derivation: MobilePqDerivation;
+  readonly publicKey: string;
+};
+
+/**
  * Public signer-account metadata safe to expose to granted origins.
  */
-export type AccountRef = DerivedAccountRef | ImportedAccountRef | LedgerAccountRef;
+export type AccountRef =
+  | DerivedAccountRef
+  | ImportedAccountRef
+  | LedgerAccountRef
+  | MobilePqAccountRef;
 
 /**
  * Schema-v6 account metadata before Argent deployment salts were retained.
@@ -152,30 +157,8 @@ export type LedgerPubKeyEntry = {
   readonly publicKeyX: string;
 };
 
-const isSafeIndex = (value: unknown): value is number =>
-  Number.isSafeInteger(value) && Number(value) >= 0;
-
 const isNonZeroFelt = (value: unknown): value is string =>
   typeof value === "string" && isNonZeroStarkFieldElement(value);
-
-const isBip44Derivation = (value: unknown): value is Bip44Derivation =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountIndex", "addressIndex", "kind"]) &&
-  value["kind"] === "starknet-bip44" &&
-  isSafeIndex(value["accountIndex"]) &&
-  isSafeIndex(value["addressIndex"]);
-
-const isImportedKeyDerivation = (value: unknown): value is ImportedKeyDerivation =>
-  isRecord(value) && hasOnlyKnownKeys(value, ["kind"]) && value["kind"] === "imported-raw-key";
-
-const isLedgerDerivation = (value: unknown): value is LedgerDerivation =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountIndex", "eip2645application", "kind", "path"]) &&
-  value["kind"] === "ledger" &&
-  isLedgerAccountIndex(value["accountIndex"]) &&
-  value["eip2645application"] === LEDGER_EIP2645_APPLICATION &&
-  isLedgerAccountPath(value["path"]) &&
-  ledgerAccountIndexOfPath(value["path"]) === value["accountIndex"];
 
 /**
  * Returns the one minimal-hex spelling of an account id, accepting historical
@@ -272,6 +255,7 @@ const KEYLESS_ACCOUNT_KEYS = [
   "publicKeyX",
 ] as const;
 const DERIVED_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "publicKeyY"] as const;
+const MOBILE_PQ_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "publicKey"] as const;
 const LEGACY_V6_KEYLESS_ACCOUNT_KEYS = [
   "accountContractType",
   "address",
@@ -306,6 +290,13 @@ const isAccountRefShape = (value: unknown, requireCanonical: boolean): value is 
   if (isImportedKeyDerivation(derivation) || isLedgerDerivation(derivation)) {
     return (
       hasOnlyKnownKeys(value, KEYLESS_ACCOUNT_KEYS) &&
+      hasValidSingleSignerCore(value, requireCanonical)
+    );
+  }
+  if (isMobilePqDerivation(derivation)) {
+    return (
+      hasOnlyKnownKeys(value, MOBILE_PQ_ACCOUNT_KEYS) &&
+      isMlDsa65PublicKey(value["publicKey"]) &&
       hasValidSingleSignerCore(value, requireCanonical)
     );
   }
@@ -433,28 +424,24 @@ export const canonicalAccountRef = (value: unknown): AccountRef | null => {
           publicKeyY,
         };
   }
-  if (value.derivation.kind === "ledger") {
-    const ledger = value as LedgerAccountRef;
-    return {
-      ...contract,
-      address,
-      classHash,
-      derivation: ledger.derivation,
-      id,
-      networkId: value.networkId,
-      publicKeyX,
-    };
-  }
-  const imported = value as ImportedAccountRef;
-  return {
+  // Every non-HD kind carries the same fields, so they share one shape; only a
+  // paired phone adds its full enclave key, which is already validated above.
+  const keyless = {
     ...contract,
     address,
     classHash,
-    derivation: imported.derivation,
     id,
     networkId: value.networkId,
     publicKeyX,
   };
+  if (value.derivation.kind === "mobile-pq") {
+    const mobile = value as MobilePqAccountRef;
+    return { ...keyless, derivation: mobile.derivation, publicKey: mobile.publicKey };
+  }
+  // Same assertion the legacy canonicalizer below makes: one literal cannot be
+  // assigned to a union of record types when only `derivation` differs.
+  const device = value as ImportedAccountRef | LedgerAccountRef;
+  return { ...keyless, derivation: device.derivation } as ImportedAccountRef | LedgerAccountRef;
 };
 
 /**
@@ -488,6 +475,17 @@ export const canonicalLegacyAccountRef = (value: unknown): LegacyAccountRef | nu
 
 /**
  * True when an account delegates every signing request to a Ledger device.
+ * Callers that go on to read a Ledger derivation path, account index, or
+ * viewing-key scope want this one, not {@link isKeylessAccount}.
  */
-export const isKeylessAccount = (account: AccountRef): account is LedgerAccountRef =>
+export const isLedgerAccount = (account: AccountRef): account is LedgerAccountRef =>
   account.derivation.kind === "ledger";
+
+/**
+ * True when the vault holds nothing that can authorize this account, so every
+ * request has to go out to an external device. A caller that assumes the device
+ * is a Ledger must narrow further with {@link isLedgerAccount}.
+ */
+export const isKeylessAccount = (
+  account: AccountRef,
+): account is LedgerAccountRef | MobilePqAccountRef => isKeylessDerivation(account.derivation);

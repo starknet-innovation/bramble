@@ -380,6 +380,18 @@ export const canonicalAddress = (address: string): string | null => {
 };
 
 /**
+ * Checks whether a value is an exact-length lowercase `0x`-hex byte string.
+ * Unlike a felt this carries no numeric bound: post-quantum encodings run to
+ * thousands of bytes, so the exact length is the whole check, and it
+ * is exact — a short or long encoding is a different value, never a padded one.
+ * Shares the one lowercase-hex grammar above; do not re-derive it locally.
+ */
+export const isHexBytes = (value: unknown, byteLength: number): value is string =>
+  typeof value === "string" &&
+  value.length === 2 + 2 * byteLength &&
+  LOWERCASE_HEX_PATTERN.test(value);
+
+/**
  * Checks whether a value is a chain id in lowercase `0x`-hex form. The loose
  * form used when reading an already-canonical chain id off an internal message
  * or a provider event: it accepts any length and `0x0`, matching how the

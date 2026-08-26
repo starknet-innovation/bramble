@@ -6,7 +6,11 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import { type AccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
+import {
+  type AccountRef,
+  isKeylessAccount,
+  isLedgerAccount,
+} from "@mc-wallet/wallet-model/accounts";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { KmsPort } from "../kms-port";
@@ -50,7 +54,7 @@ export const deriveNetworkAccount = async (
   source: AccountRef,
   networkId: StarknetNetworkId,
 ): Promise<{ readonly account: AccountRef; readonly signingKeys: readonly SigningKeyRef[] }> => {
-  if (isKeylessAccount(source)) {
+  if (isLedgerAccount(source)) {
     const account = await deriveLedgerAccount(kms, {
       accountContractType: source.accountContractType,
       accountIndex: source.derivation.accountIndex,
@@ -60,6 +64,13 @@ export const deriveNetworkAccount = async (
       publicKeyX: source.publicKeyX,
     });
     return { account, signingKeys: [] };
+  }
+  if (isKeylessAccount(source)) {
+    // A paired-phone account is not projected: its address is recomputed from
+    // the enclave public key the device supplies at re-pair time, and this
+    // function has no device to ask. Refuse rather than fall through to the
+    // vault lookup, which would report a missing signing key instead.
+    throw new WalletError("Post-quantum accounts cannot be projected onto another network");
   }
   const signingKey = vault.signingKeys.find((stored) => stored.accountId === source.id);
   if (!signingKey) {
