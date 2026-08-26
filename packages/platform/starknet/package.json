@@ -9,6 +9,7 @@
     "./declare": "./src/transactions/declare.ts",
     "./deployment": "./src/transactions/deployment.ts",
     "./fee-bounds": "./src/rpc/fee-bounds.ts",
+    "./ml-dsa-verify": "./src/transactions/ml-dsa-verify.ts",
     "./multisig-invoke": "./src/rpc/multisig-invoke.ts",
     "./provider": "./src/rpc/provider.ts",
     "./rpc-diagnostics": "./src/rpc/rpc-diagnostics.ts",
@@ -28,6 +29,7 @@
     "test": "bun test --preload ../../../tests/support/test-preload.ts ./tests"
   },
   "dependencies": {
+    "@noble/post-quantum": "0.7.0",
     "@mc-wallet/core": "workspace:*",
     "@mc-wallet/wallet-model": "workspace:*",
     "@mc-wallet/wallet-protocol": "workspace:*",

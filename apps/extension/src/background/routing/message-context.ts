@@ -29,6 +29,11 @@ import {
   type SignatureWaiters,
 } from "../approvals/signature-waiters";
 import {
+  createMobilePqSignQueue,
+  type MobilePqSignQueue,
+  type MobilePqSignQueueTimeout,
+} from "../devices/mobile-pq-signer";
+import {
   createLedgerSignQueue,
   type LedgerSignQueue,
   type LedgerSignQueueTimeout,
@@ -76,6 +81,7 @@ export type RouterContext = {
   readonly extensionId: string;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue: LedgerSignQueue;
+  readonly mobilePqSignQueue: MobilePqSignQueue;
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
   readonly nostrCoordinationStore: NostrCoordinationStore;
@@ -106,6 +112,7 @@ export type MessageHandlerOptions = {
   readonly approvals?: ApprovalQueue;
   readonly balanceSnapshots?: BalanceSnapshotStore;
   readonly ledgerSignQueue?: LedgerSignQueue;
+  readonly mobilePqSignQueue?: MobilePqSignQueue;
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
   readonly nostrCoordinationStore?: NostrCoordinationStore;
@@ -129,23 +136,44 @@ export type MessageHandlerOptions = {
   readonly watchAssetAdmission?: WatchAssetAdmission;
 };
 
-// Abandon a parked sign after a generous timeout interval.
+const scheduleSignTimeout = (onElapsed: () => void, ms: number): (() => void) => {
+  const handle = setTimeout(onElapsed, ms);
+  return () => clearTimeout(handle);
+};
+
+// Abandon a parked sign after a generous timeout interval. A Ledger round-trip
+// is a button press on a device already plugged in and unlocked.
 const LEDGER_SIGN_TIMEOUT: LedgerSignQueueTimeout = {
   ms: 300_000,
-  schedule: (onElapsed, ms) => {
-    const handle = setTimeout(onElapsed, ms);
-    return () => clearTimeout(handle);
-  },
+  schedule: scheduleSignTimeout,
 };
+
+// A phone round-trip is not a button press: notice the prompt, pick up the
+// phone, unlock it, open the app, authenticate, confirm. Both this bound and the
+// odds of the unlock session expiring mid-signature rise accordingly, so the
+// Ledger interval chosen for hardware is too short here. Tune from real device
+// timings rather than treating this as settled.
+const MOBILE_PQ_SIGN_TIMEOUT: MobilePqSignQueueTimeout = {
+  ms: 900_000,
+  schedule: scheduleSignTimeout,
+};
+
+const liveGeneration = (session: UnlockSession) => (): number | null =>
+  session.isUnlocked() ? session.generation() : null;
 
 const runtimeLedgerSignQueue = (
   provided: LedgerSignQueue | undefined,
   session: UnlockSession,
 ): LedgerSignQueue =>
   provided ??
-  createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, () =>
-    session.isUnlocked() ? session.generation() : null,
-  );
+  createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, liveGeneration(session));
+
+const runtimeMobilePqSignQueue = (
+  provided: MobilePqSignQueue | undefined,
+  session: UnlockSession,
+): MobilePqSignQueue =>
+  provided ??
+  createMobilePqSignQueue(notifyApprovalsChanged, MOBILE_PQ_SIGN_TIMEOUT, liveGeneration(session));
 
 const strk20PreparationsFor = (
   provided: Strk20WalletPreparationStore | undefined,
@@ -213,6 +241,7 @@ export const routerContext = (
     extensionId,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
+    mobilePqSignQueue: runtimeMobilePqSignQueue(options.mobilePqSignQueue, session),
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
     nostrCoordinationStore: nostrCoordinationStoreFor(options.nostrCoordinationStore),

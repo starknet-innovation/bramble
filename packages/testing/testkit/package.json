@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./fake-kms": "./src/fake-kms.ts",
+    "./ml-dsa-fixtures": "./src/ml-dsa-fixtures.ts",
     "./ledger-management": "./src/ledger-management.ts",
     "./sidepanel": "./src/sidepanel.ts"
   },
@@ -13,6 +14,7 @@
     "check:types": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@noble/post-quantum": "0.7.0",
     "@mc-wallet/settings": "workspace:*",
     "@mc-wallet/wallet-model": "workspace:*"
   }

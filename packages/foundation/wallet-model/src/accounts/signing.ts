@@ -38,6 +38,21 @@ export const isMlDsa65PublicKey = (value: unknown): value is string =>
   isHexBytes(value, ML_DSA_65_PUBLIC_KEY_BYTES);
 
 /**
+ * Encoded ML-DSA-65 (FIPS 204) signature length in bytes — roughly 107 felts of
+ * calldata, against the Stark curve's two. Single source for every length check
+ * on a post-quantum signature.
+ */
+export const ML_DSA_65_SIGNATURE_BYTES = 3309;
+
+/**
+ * Checks whether a value is an encoded ML-DSA-65 signature in lowercase hex.
+ * Shape only: a well-formed signature is not a valid one, so the
+ * verify-before-broadcast gate still has to check it against the enrolled key.
+ */
+export const isMlDsa65Signature = (value: unknown): value is string =>
+  isHexBytes(value, ML_DSA_65_SIGNATURE_BYTES);
+
+/**
  * ML-DSA-65 (FIPS 204) signature returned by a post-quantum mobile signer. Both
  * fields are hex over the raw encodings: `publicKey` is 1952 bytes and
  * `signature` is 3309 bytes over the transaction hash — roughly 107 felts of

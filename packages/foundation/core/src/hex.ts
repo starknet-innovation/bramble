@@ -15,3 +15,23 @@
  */
 export const bytesToHex = (bytes: Uint8Array): string =>
   [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+
+/**
+ * Parses a lowercase `0x`-prefixed hex byte string into its bytes, or null when
+ * the input is not one: a missing prefix, an odd digit count, uppercase, or any
+ * non-hex character. The inverse of {@link bytesToHex} and total in the same
+ * way — no input can throw, so a caller validating an untrusted encoding gets a
+ * decision rather than an exception. It is a decoding, not a hash: the bytes
+ * carry exactly the meaning the digits did.
+ */
+export const hexToBytes = (value: string): Uint8Array | null => {
+  if (!/^0x(?:[0-9a-f]{2})*$/.test(value)) {
+    return null;
+  }
+  const digits = value.slice(2);
+  const bytes = new Uint8Array(digits.length / 2);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(digits.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
+};

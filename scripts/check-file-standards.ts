@@ -81,6 +81,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/ledger/ledger-ops.ts",
   "apps/extension/src/background/ledger/ledger-sign-queue.ts",
   "apps/extension/src/background/ledger/ledger-signer.ts",
+  "apps/extension/src/background/devices/mobile-pq-signer.ts",
   "apps/extension/src/background/approvals/signature-waiters.ts",
   "apps/extension/src/background/index.ts",
   "apps/extension/src/background/routing/message-inputs.ts",
@@ -116,6 +117,7 @@ const SECRET_MATERIAL_FILES = new Set([
   // Pure length policy only; carries no passphrase value across a boundary.
   "packages/foundation/wallet-model/src/preferences/passphrase.ts",
   "packages/testing/testkit/src/fake-kms.ts",
+  "packages/testing/testkit/src/ml-dsa-fixtures.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses-ledger.ts",
   "packages/foundation/wallet-protocol/src/provider/results.ts",
@@ -168,6 +170,7 @@ const SECRET_MATERIAL_FILES = new Set([
   // Pure public-key verification consolidated for Ledger and KMS probe
   // callers; it receives no private key or vault credential.
   "packages/platform/starknet/src/transactions/signature-verify.ts",
+  "packages/platform/starknet/src/transactions/ml-dsa-verify.ts",
   // Public account ABI serialization and signer façades. These files carry
   // public keys/signature fragments; private-key operations remain in Krusty.
   "packages/platform/starknet/src/accounts/account-contracts.ts",

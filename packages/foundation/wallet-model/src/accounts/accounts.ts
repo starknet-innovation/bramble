@@ -296,6 +296,13 @@ const isAccountRefShape = (value: unknown, requireCanonical: boolean): value is 
   if (isMobilePqDerivation(derivation)) {
     return (
       hasOnlyKnownKeys(value, MOBILE_PQ_ACCOUNT_KEYS) &&
+      // Argent's `__validate__` checks Stark ECDSA, which a phone holding an
+      // ML-DSA key cannot produce, so the pair is not a real account. Refusing
+      // it here also keeps fee estimation correct by construction: the estimator
+      // simulates Argent accounts WITH validation enabled against shape-correct
+      // dummy input, and doing that to this account would run a full ML-DSA
+      // verification over garbage and fail the review.
+      value["accountContractType"] === "openzeppelin" &&
       isMlDsa65PublicKey(value["publicKey"]) &&
       hasValidSingleSignerCore(value, requireCanonical)
     );

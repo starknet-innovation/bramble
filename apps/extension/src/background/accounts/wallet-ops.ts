@@ -17,8 +17,8 @@ import {
 } from "@mc-wallet/transactions/verify";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { type DeviceSignQueues, rejectAllDeviceSigns } from "../devices/device-queues";
 import { accountHashSigner } from "../ledger/account-hash-signer";
-import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { type BalanceSnapshotStore, cachedBalances } from "../portfolio/balance-snapshots";
 import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
 import {
@@ -51,17 +51,12 @@ import type { WalletStatusReader } from "./wallet-reader";
 /**
  * Dependencies shared by the wallet, allowance, and NFT operations handlers.
  */
-export type WalletOpsDeps = {
+export type WalletOpsDeps = DeviceSignQueues & {
   /** Serializes network/account selection writes; production always supplies it. */
   readonly activeStateCoordinator?: ActiveStateCoordinator;
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
   readonly balanceSnapshots?: BalanceSnapshotStore;
-  /**
-   * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
-   * stubs stay valid; a Ledger signing request with no queue wired fails closed.
-   */
-  readonly ledgerSignQueue?: LedgerSignQueue;
   /**
    * Watched shared-account registry used only to authorize address-scoped,
    * read-only asset discovery. Signing paths resolve multisigs separately.
@@ -363,18 +358,18 @@ const handleLock: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.lock")) {
     return { error: "invalid lock request" };
   }
-  // A Ledger request may itself hold the active-state coordinator while the
+  // A device request may itself hold the active-state coordinator while the
   // panel/device round-trip is parked. Revoke it before waiting for that
   // coordinator so an explicit lock cannot be held behind the signature it is
   // meant to cancel. Later queued operations stay behind the lock mutation and
   // observe the revoked session.
-  deps.ledgerSignQueue?.rejectAll("wallet locked");
+  rejectAllDeviceSigns(deps, "wallet locked");
   deps.session.lock();
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
     // An unlock that was already inside the coordinator may have completed
     // after the eager revocation. Lock once more at our serialized position so
     // the later user intent wins deterministically.
-    deps.ledgerSignQueue?.rejectAll("wallet locked");
+    rejectAllDeviceSigns(deps, "wallet locked");
     deps.session.lock();
     // Reporting "locked" is a security claim, so only make it once the
     // plaintext session mirror is confirmed erased. A mirror that survived the

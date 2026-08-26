@@ -19,7 +19,7 @@ import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
-import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { type DeviceSignQueues, deviceSignQueues } from "../devices/device-queues";
 import {
   type DeferredStrk20Approval,
   executeStrk20DisclosureApproval,
@@ -50,13 +50,12 @@ import type { SignatureWaiters } from "./signature-waiters";
  * Dependencies for resolving a queued approval into its settled result. These
  * collaborators stay inside the privileged background boundary.
  */
-export type ApprovalDecisionDeps = {
+export type ApprovalDecisionDeps = DeviceSignQueues & {
   readonly activeStateCoordinator: ActiveStateCoordinator;
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
   readonly guard: OriginGuard;
-  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
@@ -146,7 +145,7 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,
-      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...deviceSignQueues(deps),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -172,7 +171,7 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,
-      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...deviceSignQueues(deps),
     },
     {
       actions: payload.actions,
@@ -211,7 +210,7 @@ const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,
-      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...deviceSignQueues(deps),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -231,7 +230,7 @@ const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) =
       preferencesStore: deps.preferencesStore,
       session: deps.session,
       wallet: deps.wallet,
-      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...deviceSignQueues(deps),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -292,7 +291,7 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }, decisio
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,
-      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...deviceSignQueues(deps),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),

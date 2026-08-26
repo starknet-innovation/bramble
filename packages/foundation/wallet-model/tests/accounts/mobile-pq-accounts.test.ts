@@ -7,12 +7,14 @@
 import { expect, test } from "bun:test";
 import {
   type AccountRef,
+  ARGENT_ACCOUNT_CLASS_HASH,
   canonicalAccountRef,
   isAccountRef,
   isKeylessAccount,
   isLedgerAccount,
 } from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
 import { isMlDsa65PublicKey, ML_DSA_65_PUBLIC_KEY_BYTES } from "@mc-wallet/wallet-model/signing";
 
 const publicKey = `0x${"ab".repeat(ML_DSA_65_PUBLIC_KEY_BYTES)}`;
@@ -75,6 +77,21 @@ test("an unreachable transport or unbounded device id is refused", () => {
     isAccountRef({ ...mobile, derivation: { ...derivation, transport: { kind: "relay" } } }),
   ).toBe(false);
   expect(isAccountRef({ ...mobile, derivation: { deviceId: "d", kind: "mobile-pq" } })).toBe(false);
+});
+
+test("a paired phone may not be an Argent account", () => {
+  // Argent validates Stark ECDSA on chain, and the fee estimator sends its
+  // accounts a dummy signature with validation enabled — which for an ML-DSA
+  // account would verify 107 felts of garbage and fail the review.
+  expect(isAccountRef({ ...mobile, accountContractType: "argent" })).toBe(false);
+  expect(
+    isAccountRef({
+      ...mobile,
+      accountContractType: "argent",
+      classHash: canonicalFelt(ARGENT_ACCOUNT_CLASS_HASH) as string,
+      deploymentSalt: "0x77",
+    }),
+  ).toBe(false);
 });
 
 test("keyless covers both devices but only one of them is a Ledger", () => {
