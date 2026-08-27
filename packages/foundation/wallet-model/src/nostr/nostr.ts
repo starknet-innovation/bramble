@@ -3,7 +3,7 @@ import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 
 /** Largest signed event JSON accepted from a relay or Krusty. */
 export const MAX_NOSTR_EVENT_JSON_BYTES = 131_070;
-/** Largest plaintext MC Wallet asks Krusty to wrap. */
+/** Largest raw application payload considered before Krusty validates nested envelope expansion. */
 export const MAX_NOSTR_APPLICATION_DATA_BYTES = 32_768;
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
 

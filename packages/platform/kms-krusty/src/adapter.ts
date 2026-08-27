@@ -24,7 +24,7 @@ const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
 const KRUSTY_RESULT_CLASSES = new Set(["WasmKeypair", "WasmNostrPublicKey", "WasmStarkSignature"]);
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
 const isNostrIdentifier = (value: string): boolean =>
-  value.length > 0 && value.length <= 128 && /^[!-~]+$/.test(value);
+  value.length > 0 && value.length <= 128 && /^[ -~]+$/.test(value);
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   if (typeof value !== "object" || value === null) {

@@ -24,7 +24,7 @@ import { resolve } from "node:path";
 
 const repo = "https://github.com/starknet-innovation/krusty-kms.git";
 const target = "vendor/krusty-kms";
-const KRUSTY_KMS_REVISION = "bb8b5038377c04e20886578490584c73131d4946";
+const KRUSTY_KMS_REVISION = "e0fc8f62f0582329fccdcf8b10fad5587e19a230";
 // Must stay equal to the `toolchain:` every workflow that vendors Krusty pins
 // (.github/workflows/{ci,nightly,release-build,release-integration}.yml). One
 // rustc release across every builder is what makes two builds of the pinned

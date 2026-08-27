@@ -343,7 +343,7 @@ describe("createKrustyKms", () => {
         1,
         2,
         "44".repeat(32),
-        "mc-wallet.multisig",
+        "mc wallet.multisig",
         "payload",
         "phrase",
       ),
@@ -357,7 +357,7 @@ describe("createKrustyKms", () => {
     );
     expect(calls).toEqual([
       [mnemonic, 1, 2, "phrase"],
-      [mnemonic, 1, 2, "phrase", "44".repeat(32), "mc-wallet.multisig", "payload"],
+      [mnemonic, 1, 2, "phrase", "44".repeat(32), "mc wallet.multisig", "payload"],
       [mnemonic, 1, 2, "phrase", giftWrap],
     ]);
   });
