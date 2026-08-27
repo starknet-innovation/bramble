@@ -19,7 +19,7 @@ const enrolled = mlDsa65Fixture(3);
 const impostor = mlDsa65Fixture(4);
 
 const account: MobilePqAccountRef = {
-  accountContractType: "openzeppelin",
+  accountContractType: "ml-dsa",
   address: "0xabc111111",
   classHash: "0x111111",
   derivation: { deviceId: "phone-1", kind: "mobile-pq", transport: { kind: "clipboard" } },

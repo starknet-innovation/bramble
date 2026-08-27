@@ -7,6 +7,7 @@ import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@mc-wallet/walle
 import { parseWalletContactCard } from "@mc-wallet/wallet-model/preferences";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { accountAvatar, accountLabel } from "../../shared/parts";
+import { accountContractLabel } from "../../shell/account-types";
 import type { MultisigClient } from "./multisig-runtime";
 
 /**
@@ -247,7 +248,7 @@ export const bindMultisigParticipantPicker = (
       );
       finish({
         address: signer.address,
-        label: signer.accountContractType === "argent" ? "Argent account" : "OpenZeppelin account",
+        label: `${accountContractLabel(signer.accountContractType)} account`,
         publicKeyX: signer.publicKeyX,
         source: "Account address",
       });

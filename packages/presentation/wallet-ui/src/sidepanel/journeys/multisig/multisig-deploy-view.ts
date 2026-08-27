@@ -1,5 +1,6 @@
 /** Pure stable Argent multisig deployment form. */
 import { escapeHtml } from "@mc-wallet/core/html";
+import { canSignArgentMultisig } from "@mc-wallet/multisig/signer-account";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
@@ -23,6 +24,7 @@ import {
 } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
 import { formatFeeEstimate } from "../../shared/review-render";
+import { accountContractLabel } from "../../shell/account-types";
 import { type MultisigParticipantOption, multisigParticipantScreen } from "./multisig-participant";
 
 /**
@@ -68,7 +70,7 @@ const deploymentSignerCopy = (
   preferences: WalletPreferences | null,
 ): string => `<span class="option-name"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>${hardwareBadge(account)}</span>
     <code>${escapeHtml(accountLabel(account.address))}</code>
-    <span class="option-sub">${account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"} · Key matches</span>`;
+    <span class="option-sub">${accountContractLabel(account.accountContractType)} · Key matches</span>`;
 
 const deploymentSignerIdentity = (
   account: AccountRef,
@@ -95,11 +97,11 @@ const signerKeySources = (
 ): readonly MultisigParticipantOption[] => {
   const seen = new Set<string>();
   return [
-    ...accounts.map((candidate) => ({
+    ...accounts.filter(canSignArgentMultisig).map((candidate) => ({
       address: candidate.address,
       label: accountDisplayName(candidate, preferences),
       publicKeyX: candidate.publicKeyX,
-      source: `${candidate.accountContractType === "argent" ? "Argent" : "OpenZeppelin"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""} account`,
+      source: `${accountContractLabel(candidate.accountContractType)}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""} account`,
     })),
     ...(preferences?.addressBook
       .filter((entry) => entry.publicKeyX !== undefined)
@@ -219,7 +221,7 @@ export const multisigDeployFlow = (
                   label: "Fund from",
                   name: "fundingAccountId",
                   options: accounts.map((candidate) => ({
-                    label: `${accountDisplayName(candidate, preferences)} · ${candidate.accountContractType === "argent" ? "Argent" : "OpenZeppelin"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
+                    label: `${accountDisplayName(candidate, preferences)} · ${accountContractLabel(candidate.accountContractType)}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
                     value: candidate.id,
                   })),
                   selected: account.id,

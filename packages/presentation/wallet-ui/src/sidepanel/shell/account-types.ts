@@ -9,7 +9,10 @@ import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
 } from "@mc-wallet/starknet/account-contracts";
-import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@mc-wallet/wallet-model/accounts";
+import {
+  type AccountContractType,
+  OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+} from "@mc-wallet/wallet-model/accounts";
 import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
 
 /**
@@ -36,6 +39,14 @@ const buildRegistry = (): ReadonlyMap<string, string> => {
 
 const KNOWN_ACCOUNT_TYPES = buildRegistry();
 
+// A full record, so a family added to AccountContractType fails to compile until
+// it is given a name rather than falling into an "everything else" branch.
+const ACCOUNT_CONTRACT_LABELS: Record<AccountContractType, string> = {
+  argent: "Argent",
+  "ml-dsa": "Post-quantum",
+  openzeppelin: "OpenZeppelin",
+};
+
 /**
  * Returns a friendly account-type label for a known class hash, or null for an
  * unknown or unparseable hash. Comparison is felt-based, so differently padded
@@ -46,3 +57,12 @@ export const knownAccountType = (classHash: string): string | null => {
   const key = canonicalFelt(classHash);
   return key === null ? null : (KNOWN_ACCOUNT_TYPES.get(key) ?? null);
 };
+
+/**
+ * Human-readable name for an account's contract family. Single source for the
+ * label, because six sites had grown the same `=== "argent" ? … : …` ternary and
+ * a family added later would have been shown to the user under the wrong name by
+ * every one of them. Presentational only: it never gates signing or deployment.
+ */
+export const accountContractLabel = (accountContractType: AccountContractType): string =>
+  ACCOUNT_CONTRACT_LABELS[accountContractType];

@@ -8,6 +8,7 @@
     "./class-hash-verify": "./src/transactions/class-hash-verify.ts",
     "./declare": "./src/transactions/declare.ts",
     "./deployment": "./src/transactions/deployment.ts",
+    "./deployment-compatibility": "./src/transactions/deployment-compatibility.ts",
     "./fee-bounds": "./src/rpc/fee-bounds.ts",
     "./ml-dsa-verify": "./src/transactions/ml-dsa-verify.ts",
     "./multisig-invoke": "./src/rpc/multisig-invoke.ts",

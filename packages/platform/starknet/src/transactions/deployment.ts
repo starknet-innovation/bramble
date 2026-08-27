@@ -4,9 +4,7 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
-  canonicalFelt,
   isNonZeroStarkFieldElement,
   STARKNET_NETWORKS,
   sameFelt,
@@ -17,6 +15,7 @@ import {
   ARGENT_MULTISIG_CONTRACT,
   argentAccountConstructorCalldata,
   argentMultisigConstructorCalldata,
+  usesValidatedQueryEstimate,
 } from "../accounts/account-contracts";
 import {
   authorizedSpendFor,
@@ -27,17 +26,30 @@ import {
 import {
   type AccountSignerOptions,
   type AggregateHashSigner,
-  type ArgentMultisigAccountDescriptor,
   acceptedRpcWriteHash,
   argentQueryAccount,
   IndeterminateRpcWriteError,
-  isContractNotFoundError,
   isTransportRpcError,
   krustyAccount,
   matchingAcceptedRpcWriteHash,
   withRpcFallback,
   withRpcWrite,
 } from "../rpc/provider";
+import {
+  type ArgentMultisigDeploymentAccount,
+  type DeployableAccount,
+  isAccountDeployed,
+  isCompatibleAccountDeployed,
+} from "./deployment-compatibility";
+
+/**
+ * Account shapes this module can deploy, re-exported so
+ * `@mc-wallet/starknet/deployment` stays the one import path for the deployment
+ * surface. They are defined next to the compatibility checks in
+ * `./deployment-compatibility`, which both halves need and which imports nothing
+ * back from here, so the two modules stay acyclic.
+ */
+export type { ArgentMultisigDeploymentAccount, DeployableAccount };
 
 /**
  * DEPLOY_ACCOUNT parameters for a counterfactual wallet account.
@@ -49,22 +61,6 @@ export type AccountDeployment = {
   readonly contractAddress: string;
 };
 
-/**
- * Counterfactual constructor commitment retained by the multisig feature.
- */
-export type ArgentMultisigDeploymentAccount = ArgentMultisigAccountDescriptor & {
-  readonly deployment: {
-    readonly salt: string;
-    readonly signerPublicKeys: readonly string[];
-    readonly threshold: number;
-  } | null;
-};
-
-/**
- * Any wallet account for which platform code can prove deployment parameters.
- */
-export type DeployableAccount = AccountRef | ArgentMultisigDeploymentAccount;
-
 const signerOptions = (account: DeployableAccount): AccountSignerOptions =>
   account.accountContractType === "argent-multisig" && account.deployment
     ? {
@@ -75,13 +71,14 @@ const signerOptions = (account: DeployableAccount): AccountSignerOptions =>
       }
     : {};
 
-/**
- * Reconstructs pinned DEPLOY_ACCOUNT inputs only when they reproduce the stored address.
- * Throws on invalid class/configuration or an address-commitment mismatch.
- */
-export const accountDeployment = (account: DeployableAccount): AccountDeployment => {
-  let constructorCalldata: readonly string[];
-  let addressSalts: readonly string[];
+// The per-family constructor inputs, extracted so the address-commitment check
+// below stays inside the complexity budget as families are added.
+const deploymentInputs = (
+  account: DeployableAccount,
+): {
+  readonly constructorCalldata: readonly string[];
+  readonly addressSalts: readonly string[];
+} => {
   if (account.accountContractType === "argent-multisig") {
     if (!sameFelt(account.classHash, ARGENT_MULTISIG_CONTRACT.classHash)) {
       throw new WalletError("Argent multisig class hash does not match the pinned release");
@@ -90,21 +87,43 @@ export const accountDeployment = (account: DeployableAccount): AccountDeployment
     if (!deployment) {
       throw new WalletError("Imported Argent multisig has no counterfactual deployment parameters");
     }
-    constructorCalldata = argentMultisigConstructorCalldata({
-      signerPublicKeys: deployment.signerPublicKeys,
-      threshold: deployment.threshold,
-    });
-    addressSalts = [deployment.salt];
-  } else if (account.accountContractType === "argent") {
+    return {
+      addressSalts: [deployment.salt],
+      constructorCalldata: argentMultisigConstructorCalldata({
+        signerPublicKeys: deployment.signerPublicKeys,
+        threshold: deployment.threshold,
+      }),
+    };
+  }
+  if (account.accountContractType === "argent") {
     if (!sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)) {
       throw new WalletError("Argent account class hash does not match the pinned release");
     }
-    constructorCalldata = argentAccountConstructorCalldata(account.publicKeyX);
-    addressSalts = [account.deploymentSalt];
-  } else {
-    constructorCalldata = CallData.compile([account.publicKeyX]);
-    addressSalts = ["0x0", account.publicKeyX];
+    return {
+      addressSalts: [account.deploymentSalt],
+      constructorCalldata: argentAccountConstructorCalldata(account.publicKeyX),
+    };
   }
+  if (account.accountContractType === "ml-dsa") {
+    // TODO: Blocked
+    // Blocked on the account contract track: the constructor takes either the
+    // public-key commitment or the packed key, and the choice decides every
+    // address. Deriving one from OpenZeppelin's shape would strand any funds
+    // sent to it, so refuse until the shape is agreed.
+    throw new WalletError("ML-DSA account deployment parameters are not yet defined");
+  }
+  return {
+    addressSalts: ["0x0", account.publicKeyX],
+    constructorCalldata: CallData.compile([account.publicKeyX]),
+  };
+};
+
+/**
+ * Reconstructs pinned DEPLOY_ACCOUNT inputs only when they reproduce the stored address.
+ * Throws on invalid class/configuration or an address-commitment mismatch.
+ */
+export const accountDeployment = (account: DeployableAccount): AccountDeployment => {
+  const { addressSalts, constructorCalldata } = deploymentInputs(account);
   for (const addressSalt of addressSalts) {
     const computed = hash.calculateContractAddressFromHash(
       addressSalt,
@@ -122,102 +141,6 @@ export const accountDeployment = (account: DeployableAccount): AccountDeployment
     }
   }
   throw new WalletError("Account deployment parameters do not match the stored address");
-};
-
-/**
- * Reads status through the selected RPC; only contract-not-found means undeployed.
- * Propagates every other failure so unknown state cannot be treated as absent.
- */
-export const isAccountDeployed = async (
-  provider: RpcProvider,
-  address: string,
-): Promise<boolean> => {
-  try {
-    await provider.getClassHashAt(address, "latest");
-    return true;
-  } catch (error) {
-    if (isContractNotFoundError(error)) {
-      return false;
-    }
-    throw error;
-  }
-};
-
-const requireCompatibleArgentSigner = async (
-  provider: RpcProvider,
-  account: Extract<DeployableAccount, { readonly accountContractType: "argent" }>,
-  blockIdentifier: string,
-): Promise<void> => {
-  const readSignerState = (entrypoint: "get_guardian" | "get_owner" | "get_owner_type") =>
-    provider.callContract(
-      { calldata: [], contractAddress: account.address, entrypoint },
-      blockIdentifier,
-    );
-  const [owner, ownerType] = await Promise.all([
-    readSignerState("get_owner"),
-    readSignerState("get_owner_type"),
-  ]);
-  const [ownerPublicKey] = owner;
-  if (
-    owner.length !== 1 ||
-    typeof ownerPublicKey !== "string" ||
-    !isNonZeroStarkFieldElement(ownerPublicKey) ||
-    !sameFelt(ownerPublicKey, account.publicKeyX)
-  ) {
-    throw new WalletError("Deployed Argent account owner does not match the wallet signer");
-  }
-  if (ownerType.length !== 1 || !sameFelt(ownerType[0], "0x0")) {
-    throw new WalletError("Deployed Argent account owner type is not supported by this wallet");
-  }
-
-  const guardian = await readSignerState("get_guardian");
-  if (guardian.length !== 1 || !sameFelt(guardian[0], "0x0")) {
-    throw new WalletError("Deployed Argent account guardian is not supported by this wallet");
-  }
-};
-
-/**
- * Verifies pinned Argent class and supported signer state at one accepted block.
- * Rejects malformed/incompatible state before signing or broadcast; OZ is existence-only.
- */
-export const isCompatibleAccountDeployed = async (
-  provider: RpcProvider,
-  account: DeployableAccount,
-): Promise<boolean> => {
-  let classHash: string;
-  let blockIdentifier = "latest";
-  if (account.accountContractType === "argent") {
-    const latest = await provider.getBlockLatestAccepted();
-    const blockHash = canonicalFelt(latest.block_hash);
-    if (blockHash === null || !isNonZeroStarkFieldElement(blockHash)) {
-      throw new WalletError("RPC returned an invalid accepted Starknet block hash");
-    }
-    blockIdentifier = blockHash;
-  }
-  try {
-    classHash = await provider.getClassHashAt(account.address, blockIdentifier);
-  } catch (error) {
-    if (isContractNotFoundError(error)) {
-      return false;
-    }
-    throw error;
-  }
-  if (account.accountContractType === "openzeppelin") {
-    return true;
-  }
-  if (sameFelt(classHash, "0x0")) {
-    return false;
-  }
-  if (!isNonZeroStarkFieldElement(classHash)) {
-    throw new WalletError("RPC returned an invalid Argent account class hash");
-  }
-  if (!sameFelt(classHash, account.classHash)) {
-    throw new WalletError("Deployed Argent account class does not match the pinned release");
-  }
-  if (account.accountContractType === "argent") {
-    await requireCompatibleArgentSigner(provider, account, blockIdentifier);
-  }
-  return true;
 };
 
 /**
@@ -318,8 +241,8 @@ export const ensureAccountDeployed = async (
   }
   let submitted: DeploySubmission | null = null;
   try {
-    const validateArgent = account.accountContractType !== "openzeppelin";
-    const estimatingAccount = validateArgent
+    const validatedQuery = usesValidatedQueryEstimate(account.accountContractType);
+    const estimatingAccount = validatedQuery
       ? argentQueryAccount(provider, account, signerOptions(account))
       : starknetAccount;
     submitted = await deployAccountContract(
@@ -327,7 +250,7 @@ export const ensureAccountDeployed = async (
       account,
       reviewedFee,
       estimatingAccount,
-      !validateArgent,
+      !validatedQuery,
       isAuthorized,
       expectedTransactionHash,
     );
@@ -428,12 +351,12 @@ export const estimateAccountDeploymentFee = async (
   withRpcFallback(
     rpcUrls,
     async (provider) => {
-      if (account.accountContractType !== "openzeppelin") {
+      if (usesValidatedQueryEstimate(account.accountContractType)) {
         await isCompatibleAccountDeployed(provider, account);
       }
       const deployment = accountDeployment(account);
-      const validateArgent = account.accountContractType !== "openzeppelin";
-      const estimatingAccount = validateArgent
+      const validatedQuery = usesValidatedQueryEstimate(account.accountContractType);
+      const estimatingAccount = validatedQuery
         ? argentQueryAccount(provider, account, signerOptions(account))
         : makeAccount(provider, account, signHash, signerOptions(account));
       const estimate = await estimatingAccount.estimateAccountDeployFee(
@@ -443,7 +366,7 @@ export const estimateAccountDeploymentFee = async (
           constructorCalldata: [...deployment.constructorCalldata],
           contractAddress: deployment.contractAddress,
         },
-        { skipValidate: !validateArgent, tip: "0x0" },
+        { skipValidate: !validatedQuery, tip: "0x0" },
       );
       return reviewedSpendFor(estimate, "standard");
     },
@@ -481,15 +404,15 @@ export const submitAccountDeployment = async (
         authorizedSigner,
         signerOptions(account),
       );
-      const validateArgent = account.accountContractType !== "openzeppelin";
+      const validatedQuery = usesValidatedQueryEstimate(account.accountContractType);
       const submitted = await deployAccountContract(
         starknetAccount,
         account,
         reviewedFee,
-        validateArgent
+        validatedQuery
           ? argentQueryAccount(provider, account, signerOptions(account))
           : starknetAccount,
-        !validateArgent,
+        !validatedQuery,
         isAuthorized,
         () => signedHash,
       );

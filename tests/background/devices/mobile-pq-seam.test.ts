@@ -18,7 +18,7 @@ const enrolled = mlDsa65Fixture(11);
 const vaultPassphrase = "correct horse battery staple";
 
 const account: MobilePqAccountRef = {
-  accountContractType: "openzeppelin",
+  accountContractType: "ml-dsa",
   address: "0xabc111111",
   classHash: "0x111111",
   derivation: { deviceId: "phone-1", kind: "mobile-pq", transport: { kind: "clipboard" } },

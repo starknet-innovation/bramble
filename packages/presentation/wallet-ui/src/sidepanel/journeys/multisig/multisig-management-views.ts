@@ -1,5 +1,6 @@
 /** Focused add, signer, receive, and intent-import screens for Argent multisig. */
 import { escapeHtml } from "@mc-wallet/core/html";
+import { canSignArgentMultisig } from "@mc-wallet/multisig/signer-account";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
@@ -18,6 +19,7 @@ import {
   flowScreen,
   noAccountEmpty,
 } from "../../shared/parts";
+import { accountContractLabel } from "../../shell/account-types";
 import { receiveAddressView } from "../send/receive-view";
 import { type MultisigParticipantOption, multisigParticipantScreen } from "./multisig-participant";
 import { multisigDisplayName } from "./multisig-views";
@@ -60,7 +62,7 @@ const signerIdentities = (
   publicKeys.map((publicKey) => {
     const account = status.accounts.find((candidate) => sameFelt(candidate.publicKeyX, publicKey));
     if (account) {
-      const contract = account.accountContractType === "argent" ? "Argent" : "OpenZeppelin";
+      const contract = accountContractLabel(account.accountContractType);
       return {
         address: account.address,
         detail: `${contract}${account.derivation.kind === "ledger" ? " · Ledger" : ""} · Key ${accountLabel(publicKey)}`,
@@ -95,11 +97,12 @@ const availableSignerParticipants = (
     .filter(
       (account) =>
         account.networkId === status.networkId &&
+        canSignArgentMultisig(account) &&
         !currentKeys.some((key) => sameFelt(key, account.publicKeyX)),
     )
     .map((account) => ({
       address: account.address,
-      label: `${accountDisplayName(account, preferences)} · ${account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"}${account.derivation.kind === "ledger" ? " · Ledger" : ""}`,
+      label: `${accountDisplayName(account, preferences)} · ${accountContractLabel(account.accountContractType)}${account.derivation.kind === "ledger" ? " · Ledger" : ""}`,
       publicKeyX: account.publicKeyX,
       source: "Wallet account",
     })),

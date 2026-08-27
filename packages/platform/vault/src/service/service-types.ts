@@ -13,8 +13,8 @@ import type {
   DerivedAccountRef,
   ImportedAccountRef,
   LedgerAccountRef,
-  LedgerPubKeyEntry,
 } from "@mc-wallet/wallet-model/accounts";
+import type { LedgerPubKeyEntry } from "@mc-wallet/wallet-model/ledger-path";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 import type { AccountDerivationInput } from "../accounts/accounts";

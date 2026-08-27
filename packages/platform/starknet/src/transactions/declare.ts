@@ -8,8 +8,8 @@ import {
   accountDeployment,
   type DeploySubmission,
   ensureAccountDeployed,
-  isCompatibleAccountDeployed,
 } from "@mc-wallet/starknet/deployment";
+import { isCompatibleAccountDeployed } from "@mc-wallet/starknet/deployment-compatibility";
 import {
   type AccountHashSigner,
   acceptedRpcWriteHash,

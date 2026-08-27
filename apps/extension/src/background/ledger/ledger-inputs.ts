@@ -7,13 +7,10 @@
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import {
-  type AccountContractType,
-  isAccountContractType,
-  type LedgerPubKeyEntry,
-} from "@mc-wallet/wallet-model/accounts";
+import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
+  type LedgerPubKeyEntry,
   MAX_LEDGER_ACCOUNT_BATCH,
 } from "@mc-wallet/wallet-model/ledger-path";
 import {

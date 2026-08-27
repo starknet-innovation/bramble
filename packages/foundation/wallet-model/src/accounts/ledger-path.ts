@@ -81,3 +81,14 @@ export const ledgerAccountIndexOfPath = (path: unknown): number | null => {
  */
 export const isLedgerAccountPath = (value: unknown): value is string =>
   ledgerAccountIndexOfPath(value) !== null;
+
+/**
+ * Device-enumerated Ledger account index and public-key x-coordinate. This is
+ * public account material; it carries no signing or viewing secret. It lives
+ * beside the path helpers rather than in the account model because it describes
+ * what a device reports while enumerating, not an account the wallet stores.
+ */
+export type LedgerPubKeyEntry = {
+  readonly accountIndex: number;
+  readonly publicKeyX: string;
+};

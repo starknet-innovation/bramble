@@ -7,7 +7,8 @@
  * account index, a derivation path, and a public `(r, s)` signature pair.
  */
 
-import type { AccountContractType, LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
+import type { LedgerPubKeyEntry } from "@mc-wallet/wallet-model/ledger-path";
 import {
   isCreateAccountResponse,
   isErrorResponse,

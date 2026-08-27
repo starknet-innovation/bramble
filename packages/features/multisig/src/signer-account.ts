@@ -75,6 +75,17 @@ const argentOwnerAt = async (
 };
 
 /**
+ * Whether a wallet account can be enrolled as an Argent multisig member. Argent
+ * validates `(r, s)` per member, so an account whose contract validates another
+ * scheme can never satisfy it — offering one would let the user build a multisig
+ * with a threshold it can never reach. Lives here rather than in each picker so a
+ * new contract family cannot be offered by one list and refused by another.
+ */
+export const canSignArgentMultisig = (account: {
+  readonly accountContractType: AccountContractType;
+}): boolean => account.accountContractType !== "ml-dsa";
+
+/**
  * Resolves the public Stark signer of a pinned OpenZeppelin or Argent account.
  * Unknown, undeployed, non-Stark, and malformed accounts fail closed; an
  * account address is never treated as signing authority by itself.

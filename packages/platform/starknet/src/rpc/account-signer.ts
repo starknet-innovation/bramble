@@ -24,6 +24,7 @@ import {
   serializeArgentAccountSignature,
   serializeArgentMultisigDeploySignature,
   serializeArgentMultisigSignature,
+  usesValidatedQueryEstimate,
 } from "../accounts/account-contracts";
 
 /**
@@ -213,7 +214,7 @@ export const argentQueryAccount = (
   options: AccountSignerOptions = {},
 ): Account => {
   const inputs = signerInputs(account, options);
-  if (inputs.kind === "openzeppelin") {
+  if (!usesValidatedQueryEstimate(inputs.kind)) {
     throw new WalletError("Query signer is only available for Argent accounts");
   }
   const mockSign = async (): Promise<AccountSignature | readonly StarkSignature[]> => {

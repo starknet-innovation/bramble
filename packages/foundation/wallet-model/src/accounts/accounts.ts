@@ -39,8 +39,14 @@ export type {
 
 /**
  * Supported contract families for accounts controlled by one wallet signer.
+ * `ml-dsa` names an account whose on-chain `__validate__` checks post-quantum
+ * ML-DSA-65 rather than Stark ECDSA. It is a distinct family, not a flavour of
+ * `openzeppelin`: it derives its address from a different constructor, serializes
+ * roughly 107 felts of calldata instead of two, cannot be a member of an Argent
+ * multisig, and must be named as itself wherever the wallet shows a user what
+ * kind of account they hold.
  */
-export type AccountContractType = "argent" | "openzeppelin";
+export type AccountContractType = "argent" | "ml-dsa" | "openzeppelin";
 
 /**
  * Pinned OpenZeppelin AccountUpgradeable 3.0 class understood by the account
@@ -60,7 +66,7 @@ export const ARGENT_ACCOUNT_CLASS_HASH =
  * Validates the closed set of supported single-signer account contracts.
  */
 export const isAccountContractType = (value: unknown): value is AccountContractType =>
-  value === "argent" || value === "openzeppelin";
+  value === "argent" || value === "ml-dsa" || value === "openzeppelin";
 
 type AccountRefIdentity = {
   readonly address: string;
@@ -77,7 +83,7 @@ type AccountContractMetadata =
       readonly deploymentSalt: string;
     }
   | {
-      readonly accountContractType: "openzeppelin";
+      readonly accountContractType: "ml-dsa" | "openzeppelin";
       readonly deploymentSalt?: never;
     };
 
@@ -147,15 +153,6 @@ export type LegacyAccountRef =
     })
   | (LegacyAccountRefCore & { readonly derivation: ImportedKeyDerivation })
   | (LegacyAccountRefCore & { readonly derivation: LedgerDerivation });
-
-/**
- * Device-enumerated Ledger account index and public-key x-coordinate. This is
- * public account material; it carries no signing or viewing secret.
- */
-export type LedgerPubKeyEntry = {
-  readonly accountIndex: number;
-  readonly publicKeyX: string;
-};
 
 const isNonZeroFelt = (value: unknown): value is string =>
   typeof value === "string" && isNonZeroStarkFieldElement(value);
@@ -228,7 +225,10 @@ const hasValidContractMetadata = (
     return false;
   }
   const deploymentSalt = value["deploymentSalt"];
-  if (value["accountContractType"] === "openzeppelin") {
+  if (
+    value["accountContractType"] === "openzeppelin" ||
+    value["accountContractType"] === "ml-dsa"
+  ) {
     return deploymentSalt === undefined;
   }
   if (!sameFelt(value["classHash"], ARGENT_ACCOUNT_CLASS_HASH)) {
@@ -296,13 +296,7 @@ const isAccountRefShape = (value: unknown, requireCanonical: boolean): value is 
   if (isMobilePqDerivation(derivation)) {
     return (
       hasOnlyKnownKeys(value, MOBILE_PQ_ACCOUNT_KEYS) &&
-      // Argent's `__validate__` checks Stark ECDSA, which a phone holding an
-      // ML-DSA key cannot produce, so the pair is not a real account. Refusing
-      // it here also keeps fee estimation correct by construction: the estimator
-      // simulates Argent accounts WITH validation enabled against shape-correct
-      // dummy input, and doing that to this account would run a full ML-DSA
-      // verification over garbage and fail the review.
-      value["accountContractType"] === "openzeppelin" &&
+      value["accountContractType"] === "ml-dsa" &&
       isMlDsa65PublicKey(value["publicKey"]) &&
       hasValidSingleSignerCore(value, requireCanonical)
     );
@@ -414,7 +408,10 @@ export const canonicalAccountRef = (value: unknown): AccountRef | null => {
   const contract: AccountContractMetadata =
     value.accountContractType === "argent"
       ? { accountContractType: "argent", deploymentSalt: deploymentSalt as string }
-      : { accountContractType: "openzeppelin" };
+      : // Carry the family through rather than naming one: this used to hardcode
+        // "openzeppelin", which silently rewrote any other salt-free family into
+        // an OpenZeppelin account on its way out of the migration boundary.
+        { accountContractType: value.accountContractType };
   if (value.derivation.kind === "starknet-bip44") {
     const derived = value as DerivedAccountRef;
     const publicKeyY = canonicalFelt(derived.publicKeyY);

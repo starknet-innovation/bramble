@@ -25,7 +25,7 @@ import { ML_DSA_65_PUBLIC_KEY_BYTES } from "@mc-wallet/wallet-model/signing";
 const vaultPassphrase = "correct horse battery staple";
 
 const mobileAccount = {
-  accountContractType: "openzeppelin" as const,
+  accountContractType: "ml-dsa" as const,
   address: "0xdef",
   classHash: "0xabc",
   derivation: {

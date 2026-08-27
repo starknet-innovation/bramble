@@ -10,11 +10,11 @@ import type {
   DerivedAccountRef,
   ImportedAccountRef,
   LedgerAccountRef,
-  LedgerPubKeyEntry,
 } from "@mc-wallet/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
   LEDGER_EIP2645_APPLICATION,
+  type LedgerPubKeyEntry,
   ledgerAccountPath,
 } from "@mc-wallet/wallet-model/ledger-path";
 import {

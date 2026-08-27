@@ -96,6 +96,16 @@ export const resolveAccountClassHash = async (
     }
     return ARGENT_ACCOUNT_CONTRACT.classHash;
   }
+  if (input.accountContractType === "ml-dsa") {
+    // TODO: Blocked
+    // No pinned class yet: the account contract is owned by a separate track and
+    // the proof of concept runs a devnet-only stub. An explicit class hash is
+    // required rather than silently inheriting OpenZeppelin's.
+    if (input.classHash === undefined) {
+      throw new WalletError("ML-DSA account class hash is required");
+    }
+    return input.classHash;
+  }
   return input.classHash ?? getOzAccountClassHash(kms, networkId);
 };
 
@@ -104,9 +114,9 @@ const resolvedDeploymentSalt = (
   value: string | undefined,
   publicKeyX: string,
 ): string | undefined => {
-  if (accountContractType === "openzeppelin") {
+  if (accountContractType !== "argent") {
     if (value !== undefined) {
-      throw new WalletError("OpenZeppelin accounts do not accept an Argent deployment salt");
+      throw new WalletError("Only Argent accounts accept a deployment salt");
     }
     return undefined;
   }

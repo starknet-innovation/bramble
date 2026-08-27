@@ -29,12 +29,12 @@ import {
   type LedgerDeviceChoice,
   type LedgerDeviceSession,
 } from "@mc-wallet/ledger-protocol/session";
-import type {
-  AccountContractType,
-  LedgerAccountRef,
-  LedgerPubKeyEntry,
-} from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@mc-wallet/wallet-model/ledger-path";
+import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import {
+  type LedgerPubKeyEntry,
+  ledgerAccountPath,
+  MAX_LEDGER_ACCOUNT_BATCH,
+} from "@mc-wallet/wallet-model/ledger-path";
 
 /**
  * Number of account indices read per enumeration page (a page is `start` …

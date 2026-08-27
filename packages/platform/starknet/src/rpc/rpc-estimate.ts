@@ -2,7 +2,8 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import type { RpcProvider } from "starknet";
-import { isCompatibleAccountDeployed } from "../transactions/deployment";
+import { usesValidatedQueryEstimate } from "../accounts/account-contracts";
+import { isCompatibleAccountDeployed } from "../transactions/deployment-compatibility";
 import { type FeeEstimate, reviewedSpendFor } from "./fee-bounds";
 import { estimateExactInvokeFee } from "./invoke-fee";
 import { argentQueryAccount, krustyAccount, withRpcFallback } from "./provider";
@@ -24,8 +25,8 @@ export const estimateInvokeFee = async (
   return withRpcFallback(
     rpcUrls,
     async (provider) => {
-      const validateArgent = account.accountContractType === "argent";
-      const starknetAccount = validateArgent
+      const validatedQuery = usesValidatedQueryEstimate(account.accountContractType);
+      const starknetAccount = validatedQuery
         ? argentQueryAccount(provider, account)
         : krustyAccount(provider, account, signHash);
       const deployed = await isCompatibleAccountDeployed(provider, account);
@@ -35,7 +36,7 @@ export const estimateInvokeFee = async (
         calls,
         proof,
         deployed,
-        !validateArgent,
+        !validatedQuery,
       );
       return reviewedSpendFor(estimate, speed);
     },

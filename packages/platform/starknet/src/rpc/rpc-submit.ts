@@ -7,7 +7,9 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Account, Call, RpcProvider } from "starknet";
-import { ensureAccountDeployed, isCompatibleAccountDeployed } from "../transactions/deployment";
+import { usesValidatedQueryEstimate } from "../accounts/account-contracts";
+import { ensureAccountDeployed } from "../transactions/deployment";
+import { isCompatibleAccountDeployed } from "../transactions/deployment-compatibility";
 import {
   authorizedSpendFor,
   exceedsReviewedFee,
@@ -125,7 +127,7 @@ const invokeEstimatingAccount = (
   account: AccountRef,
   submittingAccount: Account,
 ): { readonly account: Account; readonly skipValidate: boolean } =>
-  account.accountContractType === "argent"
+  usesValidatedQueryEstimate(account.accountContractType)
     ? { account: argentQueryAccount(provider, account), skipValidate: false }
     : { account: submittingAccount, skipValidate: true };
 

@@ -20,7 +20,7 @@ import { isMlDsa65PublicKey, ML_DSA_65_PUBLIC_KEY_BYTES } from "@mc-wallet/walle
 const publicKey = `0x${"ab".repeat(ML_DSA_65_PUBLIC_KEY_BYTES)}`;
 
 const mobile = {
-  accountContractType: "openzeppelin" as const,
+  accountContractType: "ml-dsa" as const,
   address: "0xdef",
   classHash: "0xabc",
   derivation: {
@@ -36,7 +36,7 @@ const mobile = {
 };
 
 const ledger = {
-  accountContractType: "openzeppelin" as const,
+  accountContractType: "ml-dsa" as const,
   address: "0xdef",
   classHash: "0xabc",
   derivation: {
@@ -79,10 +79,12 @@ test("an unreachable transport or unbounded device id is refused", () => {
   expect(isAccountRef({ ...mobile, derivation: { deviceId: "d", kind: "mobile-pq" } })).toBe(false);
 });
 
-test("a paired phone may not be an Argent account", () => {
-  // Argent validates Stark ECDSA on chain, and the fee estimator sends its
-  // accounts a dummy signature with validation enabled — which for an ML-DSA
-  // account would verify 107 felts of garbage and fail the review.
+test("a paired phone must be an ml-dsa account and nothing else", () => {
+  // Argent and OpenZeppelin both validate Stark ECDSA on chain, which a phone
+  // holding an ML-DSA key cannot produce. Argent is the dangerous one: the fee
+  // estimator simulates its accounts with validation enabled, which here would
+  // verify 107 felts of dummy input and fail every review.
+  expect(isAccountRef({ ...mobile, accountContractType: "openzeppelin" })).toBe(false);
   expect(isAccountRef({ ...mobile, accountContractType: "argent" })).toBe(false);
   expect(
     isAccountRef({
@@ -92,6 +94,8 @@ test("a paired phone may not be an Argent account", () => {
       deploymentSalt: "0x77",
     }),
   ).toBe(false);
+  // And it stores no deployment salt: only Argent derives an address from one.
+  expect(isAccountRef({ ...mobile, deploymentSalt: "0x77" })).toBe(false);
 });
 
 test("keyless covers both devices but only one of them is a Ledger", () => {

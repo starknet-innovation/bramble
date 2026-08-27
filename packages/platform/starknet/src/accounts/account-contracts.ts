@@ -17,6 +17,36 @@ import { hash, shortString } from "starknet";
 const ARGENT_UPSTREAM_COMMIT = "1352198956f36fb35fa544c4e46a3507a3ec20e3";
 
 /**
+ * Every account-contract family the platform can address, including the Argent
+ * multisig family that appears only in deployment and estimate descriptors and
+ * never as a stored {@link AccountContractType}.
+ */
+export type AccountContractFamily = AccountContractType | "argent-multisig";
+
+// Whether a fee estimate for this family must simulate WITH on-chain validation
+// enabled, which requires the Argent query account and its shape-correct dummy
+// signature. A full record rather than a predicate on purpose: adding a family
+// to AccountContractType fails to compile until it is answered here. The four
+// deployment/estimate paths used to ask `accountContractType !== "openzeppelin"`
+// instead, which TypeScript accepts unchanged when a family is added — so a new
+// family silently inherited the validated path, and answering `true` for one
+// whose `__validate__` cannot check the dummy signature fails every review.
+const VALIDATED_QUERY_ESTIMATE: Record<AccountContractFamily, boolean> = {
+  argent: true,
+  "argent-multisig": true,
+  "ml-dsa": false,
+  openzeppelin: false,
+};
+
+/**
+ * Whether this family's fee estimate runs with validation enabled through the
+ * Argent query account. False means the estimate skips validation instead, which
+ * is also what keeps a review from waking an external signing device.
+ */
+export const usesValidatedQueryEstimate = (family: AccountContractFamily): boolean =>
+  VALIDATED_QUERY_ESTIMATE[family];
+
+/**
  * Pinned Argent Account 0.4 declaration from the update-2024Q2 release.
  */
 export const ARGENT_ACCOUNT_CONTRACT = {
@@ -215,6 +245,10 @@ export const serializeAccountSignature = (
 ): readonly string[] => {
   if (accountContractType === "argent") {
     return serializeArgentAccountSignature(signature);
+  }
+  if (accountContractType === "ml-dsa") {
+    // TODO: Blocked
+    throw new WalletError("ML-DSA signature calldata layout is not yet defined");
   }
   const checked = checkedSignature(signature);
   return [checked.r, checked.s];
