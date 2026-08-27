@@ -82,6 +82,8 @@ const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/ledger/ledger-sign-queue.ts",
   "apps/extension/src/background/ledger/ledger-signer.ts",
   "apps/extension/src/background/devices/mobile-pq-signer.ts",
+  "apps/extension/src/background/devices/mobile-pq-inputs.ts",
+  "apps/extension/src/background/devices/mobile-pq-ops.ts",
   "apps/extension/src/background/approvals/signature-waiters.ts",
   "apps/extension/src/background/index.ts",
   "apps/extension/src/background/routing/message-inputs.ts",

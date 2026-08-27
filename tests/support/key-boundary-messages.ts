@@ -18,6 +18,7 @@ import {
   account,
   contentSender,
   extensionSender,
+  KEY_BOUNDARY_ML_DSA_SIGNATURE,
   KEY_BOUNDARY_NFT_CONTRACT,
   KEY_BOUNDARY_ORIGIN,
   KEY_BOUNDARY_RECIPIENT,
@@ -230,6 +231,16 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   {
     live: async (ids) => ({ id: await ids.ledgerSignId() }),
     message: { id: "", r: "0x1", s: "0x2", type: "wallet.completeLedgerSign" },
+    sender: extensionSender,
+  },
+  { message: { type: "wallet.mobilePqSignPending" }, sender: extensionSender },
+  {
+    live: async (ids) => ({ id: await ids.mobilePqSignId() }),
+    message: {
+      id: "",
+      signature: KEY_BOUNDARY_ML_DSA_SIGNATURE,
+      type: "wallet.completeMobilePqSign",
+    },
     sender: extensionSender,
   },
   {

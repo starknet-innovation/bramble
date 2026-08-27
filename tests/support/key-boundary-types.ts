@@ -36,6 +36,8 @@ export type KeyBoundaryLiveIds = {
   readonly groupId: string;
   /** Parks a device signing request and returns its queue id. */
   readonly ledgerSignId: () => Promise<string>;
+  /** Parks a paired-phone signing request and returns its queue id. */
+  readonly mobilePqSignId: () => Promise<string>;
   /** Id of the watched multisig seeded into the multisig registry. */
   readonly multisigId: string;
   /** Fresh exact deploy review consumed by the matching submit request. */

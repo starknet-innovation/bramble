@@ -8,6 +8,7 @@ import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { handleApprovalDecision } from "../approvals/approval-decisions";
 import { enrichApprovals } from "../approvals/approval-insights";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import { handleMobilePqOps } from "../devices/mobile-pq-ops";
 import { handleLedgerOps } from "../ledger/ledger-ops";
 import { handleMultisigCoordinationOps } from "../multisig/multisig-coordination-ops";
 import { handleMultisigOps, type MultisigOpsDeps } from "../multisig/multisig-ops";
@@ -71,6 +72,7 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   allowanceStore: ctx.allowanceStore,
   balanceSnapshots: ctx.balanceSnapshots,
   ledgerSignQueue: ctx.ledgerSignQueue,
+  mobilePqSignQueue: ctx.mobilePqSignQueue,
   multisigStore: ctx.multisigStore,
   ...(ctx.nftSnapshots ? { nftSnapshots: ctx.nftSnapshots } : {}),
   now: ctx.now,
@@ -397,6 +399,7 @@ const handlePreferences: RouterHandler = async (ctx, messageType, message) => {
 const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleWalletOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleLedgerOps(buildOpsDeps(ctx), messageType, message),
+  (ctx, messageType, message) => handleMobilePqOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) =>
     handleSwapOps(
       {

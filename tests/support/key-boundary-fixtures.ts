@@ -15,6 +15,10 @@ import {
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
 import { type TokenConfig, withTokenId } from "@mc-wallet/wallet-model/preferences";
+import {
+  ML_DSA_65_PUBLIC_KEY_BYTES,
+  ML_DSA_65_SIGNATURE_BYTES,
+} from "@mc-wallet/wallet-model/signing";
 import { CallData, ec, hash } from "starknet";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
@@ -27,6 +31,16 @@ export const SECRET_PRIVATE_KEY =
 
 /** Distinct optional account secret that must never enter runtime responses. */
 export const SECRET_VIEWING_KEY = "0x0757ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec";
+
+/**
+ * A shape-valid ML-DSA-65 public key for the paired-phone queue entry. Public
+ * material and not a scanned secret: it exists so the parked request the scan
+ * drives carries a key of the exact enrolled length, the way a real one does.
+ */
+export const KEY_BOUNDARY_ML_DSA_PUBLIC_KEY = `0x${"ab".repeat(ML_DSA_65_PUBLIC_KEY_BYTES)}`;
+
+/** A shape-valid ML-DSA-65 signature for the settle callback the scan drives. */
+export const KEY_BOUNDARY_ML_DSA_SIGNATURE = `0x${"cd".repeat(ML_DSA_65_SIGNATURE_BYTES)}`;
 
 /**
  * Vault passphrase used by the stub vault and secret scan.

@@ -25,6 +25,7 @@ import { createMemoryStore } from "@mc-wallet/store/kv";
 import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { ec } from "starknet";
 import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
+import { createMobilePqSignQueue } from "../../apps/extension/src/background/devices/mobile-pq-signer";
 import { createLedgerSignQueue } from "../../apps/extension/src/background/ledger/ledger-sign-queue";
 import type {
   ArgentMultisigDeploymentReview,
@@ -50,6 +51,7 @@ import {
 import {
   account,
   extensionSender,
+  KEY_BOUNDARY_ML_DSA_PUBLIC_KEY,
   KEY_BOUNDARY_MULTISIG,
   KEY_BOUNDARY_MULTISIG_CONFIG,
   KEY_BOUNDARY_NFT_CONTRACT,
@@ -114,6 +116,7 @@ export const makeKeyBoundaryHarness = async (
   const chainState = makeChainState();
   const approvals = createApprovalQueue();
   const ledgerSignQueue = createLedgerSignQueue();
+  const mobilePqSignQueue = createMobilePqSignQueue();
   const allowanceStore = memoryAllowanceStore();
   const multisigStore = memoryMultisigStore();
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
@@ -121,6 +124,7 @@ export const makeKeyBoundaryHarness = async (
     allowanceStore,
     approvals,
     ledgerSignQueue,
+    mobilePqSignQueue,
     multisigStore,
     preferencesStore,
     runtimeRpc: runtimeRpcFor(chainState),
@@ -224,6 +228,21 @@ export const makeKeyBoundaryHarness = async (
       const parked = ledgerSignQueue.pending().at(-1)?.id;
       if (!parked) {
         throw new Error("ledger sign was not parked");
+      }
+      return parked;
+    },
+    async mobilePqSignId() {
+      park(
+        mobilePqSignQueue.request({
+          accountId: account.id,
+          deviceId: "key-boundary-phone",
+          messageHash: "0x9",
+          publicKey: KEY_BOUNDARY_ML_DSA_PUBLIC_KEY,
+        }),
+      );
+      const parked = mobilePqSignQueue.pending().at(-1)?.id;
+      if (!parked) {
+        throw new Error("mobile sign was not parked");
       }
       return parked;
     },
