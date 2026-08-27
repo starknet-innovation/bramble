@@ -23,7 +23,7 @@ import { walletDashboard } from "../runtime/scenario-dashboard";
 import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, WalletScenario } from "../runtime/types";
 import { approvalsScenario } from "./scenarios-approvals";
-import { mobilePqScenario } from "./scenarios-mobile-pq";
+import { mobilePqOnboardingScenario, mobilePqScenario } from "./scenarios-mobile-pq";
 import { multisigScenario } from "./scenarios-multisig";
 import { ledgerOnboardingScenario, onboardingScenario } from "./scenarios-onboarding";
 import { privacyScenario } from "./scenarios-privacy";
@@ -291,6 +291,7 @@ export const walletScenarios: readonly WalletScenario[] = [
   privacyScenario,
   ledgerScenario,
   ledgerOnboardingScenario,
+  mobilePqOnboardingScenario,
   mobilePqScenario,
   approvalsScenario,
   dappScenario,
