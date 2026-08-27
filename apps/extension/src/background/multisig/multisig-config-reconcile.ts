@@ -14,6 +14,7 @@ import type {
   ArgentMultisigSigningIntent,
   MultisigStore,
 } from "@mc-wallet/multisig/repository";
+import { canSignArgentMultisig } from "@mc-wallet/multisig/signer-account";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
@@ -100,7 +101,7 @@ export const discoverArgentSigners = async (
   const candidates = [
     ...linked,
     ...active.accounts
-      .filter((account) => account.networkId === active.networkId)
+      .filter((account) => account.networkId === active.networkId && canSignArgentMultisig(account))
       .map((account) => account.publicKeyX),
     ...preferences.addressBook
       .filter((contact) => contact.networkId === active.networkId)

@@ -105,11 +105,11 @@ const deploymentInputs = (
     };
   }
   if (account.accountContractType === "ml-dsa") {
-    // TODO: Blocked
     // Blocked on the account contract track: the constructor takes either the
     // public-key commitment or the packed key, and the choice decides every
     // address. Deriving one from OpenZeppelin's shape would strand any funds
     // sent to it, so refuse until the shape is agreed.
+    // TODO: Blocked
     throw new WalletError("ML-DSA account deployment parameters are not yet defined");
   }
   return {

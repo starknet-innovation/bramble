@@ -8,6 +8,7 @@
 import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
 import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { withTokenId } from "@mc-wallet/wallet-model/preferences";
 import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
@@ -173,8 +174,8 @@ export const resolvePrivacyContext = async (
   if (!config) {
     return { error: "Private balances are not configured for this network" };
   }
-  if (active.account.derivation.kind === "ledger") {
-    return { error: "Private balances are not available for Ledger accounts" };
+  if (isKeylessAccount(active.account)) {
+    return { error: "Private balances are not available for device accounts" };
   }
   const token = tokenId
     ? preferences.tokens.find(

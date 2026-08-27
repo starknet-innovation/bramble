@@ -279,14 +279,21 @@ export const formatFri = (fri: string): string => {
 };
 
 /**
- * Renders the hardware-wallet badge for a Ledger account, or an empty string for
- * any other account kind. Keyed off the account's `derivation.kind`, so the badge
- * is a total function of provenance — a software account can never render it.
+ * Renders the hardware-backed badge for an account whose key lives in a device,
+ * or an empty string for a software account. Keyed off the account's
+ * `derivation.kind`, so the badge is a total function of provenance — a software
+ * account can never render it, and a device account always does. Both keyless
+ * kinds qualify: a Ledger and a paired phone each hold a key the vault does not,
+ * and a user reading a list of accounts needs to see which those are.
  */
-export const hardwareBadge = (account: AccountRef): string =>
-  account.derivation.kind === "ledger"
-    ? pill("Hardware", { icon: "shield", tone: "hardware" })
+export const hardwareBadge = (account: AccountRef): string => {
+  if (account.derivation.kind === "ledger") {
+    return pill("Hardware", { icon: "shield", tone: "hardware" });
+  }
+  return account.derivation.kind === "mobile-pq"
+    ? pill("Phone", { icon: "shield", tone: "hardware" })
     : "";
+};
 
 /**
  * Renders an icon button that copies a value to the clipboard.

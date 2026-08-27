@@ -225,10 +225,10 @@ const hasValidContractMetadata = (
     return false;
   }
   const deploymentSalt = value["deploymentSalt"];
-  if (
-    value["accountContractType"] === "openzeppelin" ||
-    value["accountContractType"] === "ml-dsa"
-  ) {
+  if (value["accountContractType"] === "ml-dsa") {
+    return deploymentSalt === undefined && isMobilePqDerivation(value["derivation"]);
+  }
+  if (value["accountContractType"] === "openzeppelin") {
     return deploymentSalt === undefined;
   }
   if (!sameFelt(value["classHash"], ARGENT_ACCOUNT_CLASS_HASH)) {

@@ -8,6 +8,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createMemoryStore } from "@mc-wallet/store/kv";
+import { deriveAccountContractAddress } from "@mc-wallet/vault/accounts";
 import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
 import {
   CURRENT_SCHEMA_VERSION,
@@ -139,5 +140,39 @@ describe("schema version 8", () => {
     expect(recovered.schemaVersion).toBe(8);
     expect(await staging.exists()).toBe(false);
     expect(await readMigratedVault({ primary, staging }, vaultPassphrase)).toEqual(recovered);
+  });
+});
+
+describe("paired-phone address derivation", () => {
+  test("refuses to derive an address rather than reuse another family's recipe", async () => {
+    // The single most consequential branch in the account model. An address is
+    // derived from a class hash and constructor calldata; the ML-DSA constructor
+    // is not agreed yet, and falling through to the OpenZeppelin derivation would
+    // succeed and return a plausible address nobody holds the key for. Funds sent
+    // there would be stranded permanently, with nothing failing loudly first.
+    const kms = {
+      deriveOzAccountAddress: async () => {
+        throw new Error("the OpenZeppelin derivation was reached for an ml-dsa account");
+      },
+    } as never;
+    await expect(
+      deriveAccountContractAddress(kms, {
+        accountContractType: "ml-dsa",
+        classHash: "0xabc",
+        networkId: "SN_MAIN",
+        publicKeyX: "0x456",
+      }),
+    ).rejects.toThrow("ML-DSA account address derivation is not yet defined");
+  });
+
+  test("still requires an explicit class hash, never OpenZeppelin's", async () => {
+    const kms = { deriveOzAccountAddress: async () => "0x1" } as never;
+    await expect(
+      deriveAccountContractAddress(kms, {
+        accountContractType: "ml-dsa",
+        networkId: "SN_MAIN",
+        publicKeyX: "0x456",
+      }),
+    ).rejects.toThrow("ML-DSA account class hash is required");
   });
 });

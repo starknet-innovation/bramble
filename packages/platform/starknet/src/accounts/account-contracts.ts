@@ -38,6 +38,24 @@ const VALIDATED_QUERY_ESTIMATE: Record<AccountContractFamily, boolean> = {
   openzeppelin: false,
 };
 
+// Whether this family pins the class hash deployed at its address, so a submit
+// can refuse a contract it did not expect. A full record for the same reason as
+// the one above: leniency has to be granted deliberately. OpenZeppelin's class is
+// resolved per network and the ML-DSA account contract has no pinned release yet,
+// so for both, existence at the address is the whole check.
+const PINS_DEPLOYED_CLASS: Record<AccountContractFamily, boolean> = {
+  argent: true,
+  "argent-multisig": true,
+  "ml-dsa": false,
+  openzeppelin: false,
+};
+
+/**
+ * Whether a deployed account's class hash is checked against a pinned release.
+ */
+export const pinsDeployedClass = (family: AccountContractFamily): boolean =>
+  PINS_DEPLOYED_CLASS[family];
+
 /**
  * Whether this family's fee estimate runs with validation enabled through the
  * Argent query account. False means the estimate skips validation instead, which

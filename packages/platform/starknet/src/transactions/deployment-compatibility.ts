@@ -20,6 +20,7 @@ import {
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
 import type { RpcProvider } from "starknet";
+import { pinsDeployedClass } from "../accounts/account-contracts";
 import { type ArgentMultisigAccountDescriptor, isContractNotFoundError } from "../rpc/provider";
 
 // These describe an account the wallet could deploy, and both halves of the
@@ -145,10 +146,7 @@ export const isCompatibleAccountDeployed = async (
   // Only the Argent families pin a deployed class. Existence is the whole check
   // for the others: OpenZeppelin's class is network-resolved, and the ML-DSA
   // account contract has no pinned release to compare against yet.
-  if (
-    account.accountContractType !== "argent" &&
-    account.accountContractType !== "argent-multisig"
-  ) {
+  if (!pinsDeployedClass(account.accountContractType)) {
     return true;
   }
   return hasPinnedArgentClass(provider, account, classHash, blockIdentifier);

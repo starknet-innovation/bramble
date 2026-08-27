@@ -98,6 +98,27 @@ test("a paired phone must be an ml-dsa account and nothing else", () => {
   expect(isAccountRef({ ...mobile, deploymentSalt: "0x77" })).toBe(false);
 });
 
+test("the contract family and the derivation must agree in both directions", () => {
+  // The dangerous direction is this one. An ml-dsa contract with a vault-keyed
+  // derivation is a record that HAS a signing key, so the seam routes it to the
+  // vault and it produces a Stark signature its own contract would reject — a
+  // bricked account, shown to the user as post-quantum. It must not validate.
+  const { derivation: _mobile, publicKey: _key, ...core } = mobile;
+  expect(
+    isAccountRef({
+      ...core,
+      derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+      publicKeyY: "0x789",
+    }),
+  ).toBe(false);
+  expect(isAccountRef({ ...core, derivation: { kind: "imported-raw-key" } })).toBe(false);
+  expect(isAccountRef({ ...core, derivation: ledger.derivation })).toBe(false);
+  // Adding the enclave key back does not rescue any of them.
+  expect(isAccountRef({ ...core, derivation: { kind: "imported-raw-key" }, publicKey })).toBe(
+    false,
+  );
+});
+
 test("keyless covers both devices but only one of them is a Ledger", () => {
   expect(isKeylessAccount(mobile as AccountRef)).toBe(true);
   expect(isLedgerAccount(mobile as AccountRef)).toBe(false);

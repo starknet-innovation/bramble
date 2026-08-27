@@ -70,6 +70,7 @@ export const deriveNetworkAccount = async (
     // the enclave public key the device supplies at re-pair time, and this
     // function has no device to ask. Refuse rather than fall through to the
     // vault lookup, which would report a missing signing key instead.
+    // TODO: Blocked
     throw new WalletError("Post-quantum accounts cannot be projected onto another network");
   }
   const signingKey = vault.signingKeys.find((stored) => stored.accountId === source.id);

@@ -97,11 +97,11 @@ export const resolveAccountClassHash = async (
     return ARGENT_ACCOUNT_CONTRACT.classHash;
   }
   if (input.accountContractType === "ml-dsa") {
-    // TODO: Blocked
     // No pinned class yet: the account contract is owned by a separate track and
     // the proof of concept runs a devnet-only stub. An explicit class hash is
     // required rather than silently inheriting OpenZeppelin's.
     if (input.classHash === undefined) {
+      // TODO: Blocked
       throw new WalletError("ML-DSA account class hash is required");
     }
     return input.classHash;
@@ -162,6 +162,18 @@ export const deriveAccountContractAddress = async (
     input.deploymentSalt,
     publicKeyX,
   );
+  if (input.accountContractType === "ml-dsa") {
+    // The one branch here that must never fall through to another family's
+    // recipe. An address is derived from a class hash and constructor calldata,
+    // and the ML-DSA constructor is owned by the account contract track: it
+    // takes either the public-key commitment or the packed key, and that choice
+    // decides the address. Deriving an OpenZeppelin address instead would
+    // succeed and return a plausible address nobody holds the key for, so any
+    // funds sent to it would be stranded permanently — the exact outcome the
+    // proof-of-possession step in registration exists to prevent. Refuse.
+    // TODO: Blocked
+    throw new WalletError("ML-DSA account address derivation is not yet defined");
+  }
   const addressInput =
     input.accountContractType === "argent"
       ? argentAccountAddress(publicKeyX, deploymentSalt)

@@ -49,6 +49,23 @@ export const revealFlow = (status: WalletStatus): string => {
       )
     );
   }
+  // A paired phone holds a hardware-bound key that cannot be exported and was
+  // never derived from this wallet's phrase, so the phrase does not restore it.
+  // Falling through to the reveal form would offer the user a backup that does
+  // not back this account up — the same misdirection the note above prevents for
+  // a Ledger, with a harsher outcome, because losing the phone loses the account.
+  if (activeAccount?.derivation.kind === "mobile-pq") {
+    return (
+      flowHeader("Reveal secrets", status, "Phone account") +
+      flowScreen(
+        "reveal",
+        `<section class="section" role="note">
+          <p class="eyebrow">Recovery</p>
+          <p class="hint">This account is signed by your phone. Its key was generated inside the phone's secure hardware and cannot be exported, so there is no recovery phrase or private key to reveal here — and this wallet's recovery phrase does not restore it. Your phone is the backup: keep the app installed and its key intact. If you lose the phone, this account is lost.</p>
+        </section>`,
+      )
+    );
+  }
   return (
     flowHeader("Reveal secrets", status, "Recovery phrase and active key") +
     flowScreen(

@@ -5,7 +5,6 @@
  */
 
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-
 import {
   quoteStrk20Plan,
   summarizeStrk20Action,
@@ -13,6 +12,7 @@ import {
 } from "@mc-wallet/privacy/service";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
+import { isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -144,8 +144,8 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
   if ("error" in resolved) {
     return resolved;
   }
-  if (resolved.account.derivation.kind === "ledger") {
-    return { error: "Private balances are not available for Ledger accounts" };
+  if (isKeylessAccount(resolved.account)) {
+    return { error: "Private balances are not available for device accounts" };
   }
   const config = resolved.preferences.strk20Networks?.[resolved.account.networkId];
   const token = resolved.preferences.tokens.find(
