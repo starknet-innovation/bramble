@@ -182,6 +182,13 @@ const SECRET_MATERIAL_FILES = new Set([
   // callers; it receives no private key or vault credential.
   "packages/platform/starknet/src/transactions/signature-verify.ts",
   "packages/platform/starknet/src/transactions/ml-dsa-verify.ts",
+  // Per-contract requirements for the ML-DSA account family. Its matches are the
+  // public signature layouts each contract expects — felt counts and calldata
+  // shapes, no key material and no signing.
+  "packages/platform/starknet/src/accounts/ml-dsa-classes.ts",
+  // Which account contract a record claims. Its matches describe the public
+  // signature layouts those contracts validate; nothing here signs or persists.
+  "packages/foundation/wallet-model/src/accounts/contract-metadata.ts",
   // Public account ABI serialization and signer façades. These files carry
   // public keys/signature fragments; private-key operations remain in Krusty.
   "packages/platform/starknet/src/accounts/account-contracts.ts",

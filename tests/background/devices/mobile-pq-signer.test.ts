@@ -20,6 +20,7 @@ const impostor = mlDsa65Fixture(4);
 
 const account: MobilePqAccountRef = {
   accountContractType: "ml-dsa",
+  mlDsaKind: "const",
   address: "0xabc111111",
   classHash: "0x111111",
   derivation: { deviceId: "phone-1", kind: "mobile-pq", transport: { kind: "clipboard" } },

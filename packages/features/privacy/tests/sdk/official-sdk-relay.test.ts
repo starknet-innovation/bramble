@@ -14,6 +14,7 @@ import {
   executeResult,
   STRK20_POOL_ADDRESS as poolAddress,
   sdkRuntime as runtime,
+  STRK20_SDK_ACCOUNT,
   strk20ProviderFor,
   STRK20_SDK_TOKEN as token,
 } from "../support/official-sdk";
@@ -167,10 +168,14 @@ describe("relay quote approvals", () => {
     });
     const argentContext = {
       ...relayContext,
+      // Spread the concrete fixture rather than the context's `AccountRef`
+      // field: a contract family and a signer provenance are paired in the
+      // types now, so overriding the family on the widened union asks for
+      // combinations that no longer exist (an Argent paired-phone account).
       account: {
-        ...relayContext.account,
+        ...STRK20_SDK_ACCOUNT,
         accountContractType: "argent" as const,
-        deploymentSalt: relayContext.account.publicKeyX,
+        deploymentSalt: STRK20_SDK_ACCOUNT.publicKeyX,
       },
     };
     const actions = [{ amount: "0x64", token: STRK_TOKEN_ADDRESS, type: "deposit" as const }];

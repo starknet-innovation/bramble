@@ -8,7 +8,11 @@ import {
 } from "@mc-wallet/starknet/account-contracts";
 import { argentMultisigTransactionHash } from "@mc-wallet/starknet/multisig-invoke";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type {
+  AccountRef,
+  LedgerAccountRef,
+  MobilePqAccountRef,
+} from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
 import { ML_DSA_65_PUBLIC_KEY_BYTES } from "@mc-wallet/wallet-model/signing";
@@ -47,7 +51,7 @@ export const argentSoftwareAccount: AccountRef = {
   id: "SN_MAIN:0x1434567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
 };
 
-export const ledgerAccount: AccountRef = {
+export const ledgerAccount: LedgerAccountRef = {
   accountContractType: "openzeppelin",
   address: LEDGER_ADDRESS,
   classHash: "0x111",
@@ -70,8 +74,9 @@ const MOBILE_PQ_ADDRESS = "0x5234567890abcdef1234567890abcdef1234567890abcdef123
  * enclave key — rendered at real length so a fixture never understates how much
  * the transport actually carries.
  */
-export const mobilePqAccount: AccountRef = {
+export const mobilePqAccount: MobilePqAccountRef = {
   accountContractType: "ml-dsa",
+  mlDsaKind: "const",
   address: MOBILE_PQ_ADDRESS,
   classHash: "0x222",
   derivation: { deviceId: "Pixel 9 Pro", kind: "mobile-pq", transport: { kind: "clipboard" } },

@@ -4,9 +4,9 @@ import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@mc-wallet/core
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
 import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import {
-  type AccountContractType,
-  isAccountContractType,
   isAccountId,
+  isStarkCurveContractType,
+  type StarkCurveContractType,
 } from "@mc-wallet/wallet-model/accounts";
 import {
   isHexChainId,
@@ -316,14 +316,14 @@ export const readSetActiveNetworkInput = (
 export const readAddAccountInput = (
   message: unknown,
 ): {
-  readonly accountContractType: AccountContractType;
+  readonly accountContractType: StarkCurveContractType;
   readonly networkId: StarknetNetworkId;
 } | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["accountContractType", "networkId", "type"]) ||
     message["type"] !== "wallet.addAccount" ||
-    !isAccountContractType(message["accountContractType"]) ||
+    !isStarkCurveContractType(message["accountContractType"]) ||
     !isStarknetNetworkId(message["networkId"])
   ) {
     return null;

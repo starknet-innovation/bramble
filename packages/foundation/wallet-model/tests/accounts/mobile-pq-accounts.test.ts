@@ -6,7 +6,6 @@
  */
 import { expect, test } from "bun:test";
 import {
-  type AccountRef,
   ARGENT_ACCOUNT_CLASS_HASH,
   canonicalAccountRef,
   isAccountRef,
@@ -21,6 +20,7 @@ const publicKey = `0x${"ab".repeat(ML_DSA_65_PUBLIC_KEY_BYTES)}`;
 
 const mobile = {
   accountContractType: "ml-dsa" as const,
+  mlDsaKind: "const" as const,
   address: "0xdef",
   classHash: "0xabc",
   derivation: {
@@ -30,13 +30,12 @@ const mobile = {
   },
   id: "SN_MAIN:0xdef",
   networkId: "SN_MAIN" as const,
-  // The commitment over the key below, not the key itself: this field is one felt.
   publicKey,
   publicKeyX: "0x456",
 };
 
 const ledger = {
-  accountContractType: "ml-dsa" as const,
+  accountContractType: "openzeppelin" as const,
   address: "0xdef",
   classHash: "0xabc",
   derivation: {
@@ -120,10 +119,10 @@ test("the contract family and the derivation must agree in both directions", () 
 });
 
 test("keyless covers both devices but only one of them is a Ledger", () => {
-  expect(isKeylessAccount(mobile as AccountRef)).toBe(true);
-  expect(isLedgerAccount(mobile as AccountRef)).toBe(false);
-  expect(isKeylessAccount(ledger as AccountRef)).toBe(true);
-  expect(isLedgerAccount(ledger as AccountRef)).toBe(true);
+  expect(isKeylessAccount(mobile)).toBe(true);
+  expect(isLedgerAccount(mobile)).toBe(false);
+  expect(isKeylessAccount(ledger)).toBe(true);
+  expect(isLedgerAccount(ledger)).toBe(true);
 });
 
 test("the public-key check is exact on length and lowercase", () => {

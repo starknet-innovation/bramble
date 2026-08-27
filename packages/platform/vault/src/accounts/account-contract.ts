@@ -6,8 +6,9 @@ import {
   ARGENT_ACCOUNT_CONTRACT,
   argentAccountAddress,
 } from "@mc-wallet/starknet/account-contracts";
+import { mlDsaAccountAddress } from "@mc-wallet/starknet/ml-dsa-classes";
 import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { isAccountContractType, type MlDsaKind } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -127,6 +128,34 @@ const resolvedDeploymentSalt = (
   return canonicalFelt(salt) as string;
 };
 
+// The ML-DSA half of the derivation below, extracted to keep that function
+// inside the complexity budget.
+//
+// This must never fall through to another family's recipe: an address is a
+// commitment to a class hash and constructor calldata, so deriving an
+// OpenZeppelin address here would return a plausible address nobody holds the
+// key for, stranding anything sent to it — exactly what the proof-of-possession
+// step in enrollment exists to prevent. `mlDsaAccountAddress` answers per
+// contract: `const` takes no constructor arguments, so its address derives from
+// the class hash alone, and the others refuse by name until the packed-key
+// expansion exists.
+const mlDsaContractAddress = (
+  input: { readonly mlDsaKind?: MlDsaKind; readonly publicKey?: string },
+  classHash: string,
+): string => {
+  if (input.mlDsaKind === undefined) {
+    throw new WalletError("ML-DSA account contract kind is required");
+  }
+  if (input.publicKey === undefined) {
+    throw new WalletError("ML-DSA account public key is required");
+  }
+  const address = mlDsaAccountAddress(input.mlDsaKind, classHash, input.publicKey);
+  if (!isNonZeroStarkFieldElement(address)) {
+    throw new WalletError("Invalid ML-DSA account address");
+  }
+  return canonicalFelt(address) as string;
+};
+
 /**
  * Resolves one supported contract class and counterfactual address from an
  * already-public signer key. Invalid inputs and boundary results fail closed.
@@ -137,7 +166,11 @@ export const deriveAccountContractAddress = async (
     readonly accountContractType: AccountContractType;
     readonly classHash?: string;
     readonly deploymentSalt?: string;
+    /** Which ML-DSA contract, required only for that family. */
+    readonly mlDsaKind?: MlDsaKind;
     readonly networkId: StarknetNetworkId;
+    /** The encoded ML-DSA public key, required only for that family. */
+    readonly publicKey?: string;
     readonly publicKeyX: string;
   },
 ): Promise<{
@@ -163,16 +196,7 @@ export const deriveAccountContractAddress = async (
     publicKeyX,
   );
   if (input.accountContractType === "ml-dsa") {
-    // The one branch here that must never fall through to another family's
-    // recipe. An address is derived from a class hash and constructor calldata,
-    // and the ML-DSA constructor is owned by the account contract track: it
-    // takes either the public-key commitment or the packed key, and that choice
-    // decides the address. Deriving an OpenZeppelin address instead would
-    // succeed and return a plausible address nobody holds the key for, so any
-    // funds sent to it would be stranded permanently — the exact outcome the
-    // proof-of-possession step in registration exists to prevent. Refuse.
-    // TODO: Blocked
-    throw new WalletError("ML-DSA account address derivation is not yet defined");
+    return { address: mlDsaContractAddress(input, classHash), classHash };
   }
   const addressInput =
     input.accountContractType === "argent"

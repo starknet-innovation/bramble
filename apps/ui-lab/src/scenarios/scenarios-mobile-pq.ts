@@ -16,13 +16,12 @@ import type { ScenarioCheckpoint, WalletScenario } from "../runtime/types";
 
 const mobilePqRequest = {
   accountId: mobilePqAccount.id,
-  deviceId:
-    mobilePqAccount.derivation.kind === "mobile-pq" ? mobilePqAccount.derivation.deviceId : "",
+  deviceId: mobilePqAccount.derivation.deviceId,
   id: "mobile-pq-sign-fixture",
   // Full-width: the takeover renders this at the padded 64 digits the phone
   // signs, so a short stub would misrepresent the block's real density.
   messageHash: "0x7d1f4b2c9e8a06d35f1c2b8e4a97d05c3e6f1a2b8c4d9e0f3a5b7c1d2e4f6a8",
-  publicKey: "publicKey" in mobilePqAccount ? mobilePqAccount.publicKey : "",
+  publicKey: mobilePqAccount.publicKey,
 };
 
 const mobilePqCheckpoint = (

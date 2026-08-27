@@ -5,11 +5,11 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
 import type {
-  AccountContractType,
   AccountRef,
   DerivedAccountRef,
   ImportedAccountRef,
   LedgerAccountRef,
+  StarkCurveContractType,
 } from "@mc-wallet/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
@@ -43,7 +43,7 @@ const PUBLIC_KEY_PROBE_HASH = "0x1";
  * Account derivation input accepted by the Krusty-backed wallet boundary.
  */
 export type AccountDerivationInput = {
-  readonly accountContractType: AccountContractType;
+  readonly accountContractType: StarkCurveContractType;
   readonly accountIndex?: number;
   readonly addressIndex?: number;
   readonly classHash?: string;
@@ -65,7 +65,7 @@ export type AccountDerivationResult = {
  * Raw-private-key import input accepted by the Krusty-backed wallet boundary.
  */
 export type ImportedAccountInput = {
-  readonly accountContractType: AccountContractType;
+  readonly accountContractType: StarkCurveContractType;
   readonly classHash?: string;
   readonly deploymentSalt?: string;
   readonly networkId?: StarknetNetworkId;
@@ -182,7 +182,7 @@ export const deriveAccount = async (
  * the one used to enumerate and sign.
  */
 export type LedgerAccountInput = LedgerPubKeyEntry & {
-  readonly accountContractType: AccountContractType;
+  readonly accountContractType: StarkCurveContractType;
   readonly classHash?: string;
   readonly deploymentSalt?: string;
   readonly eip2645application?: string;
@@ -191,7 +191,7 @@ export type LedgerAccountInput = LedgerPubKeyEntry & {
 
 const validatedNetworkClassHash = async (
   kms: KmsPort,
-  accountContractType: AccountContractType,
+  accountContractType: StarkCurveContractType,
   networkId: StarknetNetworkId,
   classHash: string | undefined,
 ): Promise<string> => {
@@ -276,7 +276,7 @@ export const deriveLedgerAccount = async (
 export const deriveLedgerAccountRefs = async (
   kms: KmsPort,
   input: {
-    readonly accountContractType: AccountContractType;
+    readonly accountContractType: StarkCurveContractType;
     readonly classHash?: string;
     readonly deploymentSalt?: string;
     readonly entries: readonly LedgerPubKeyEntry[];

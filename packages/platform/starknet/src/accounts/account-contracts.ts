@@ -265,8 +265,13 @@ export const serializeAccountSignature = (
     return serializeArgentAccountSignature(signature);
   }
   if (accountContractType === "ml-dsa") {
+    // The layouts are known — 905 felts for `const` and `packed`, 1830 for
+    // `split`, which prefixes the 925-felt packed key — but assembling one needs
+    // the verification hints (w, M' and K') computed from the raw signature.
+    // That is shared-Rust-core work, and a guessed layout is rejected on chain
+    // with no useful error, so refuse until the hint math exists.
     // TODO: Blocked
-    throw new WalletError("ML-DSA signature calldata layout is not yet defined");
+    throw new WalletError("ML-DSA signature calldata assembly is not yet available");
   }
   const checked = checkedSignature(signature);
   return [checked.r, checked.s];

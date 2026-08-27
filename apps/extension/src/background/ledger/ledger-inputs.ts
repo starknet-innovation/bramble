@@ -7,7 +7,10 @@
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import {
+  isStarkCurveContractType,
+  type StarkCurveContractType,
+} from "@mc-wallet/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
   type LedgerPubKeyEntry,
@@ -30,7 +33,7 @@ const isNonZeroFeltString = (value: unknown): value is string =>
  * Parsed request to store a keyless Ledger account from a device public key.
  */
 export type AddLedgerAccountRequest = {
-  readonly accountContractType: AccountContractType;
+  readonly accountContractType: StarkCurveContractType;
   readonly accountIndex: number;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
@@ -50,7 +53,7 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
       "type",
     ]) ||
     message["type"] !== "wallet.addLedgerAccount" ||
-    !isAccountContractType(message["accountContractType"]) ||
+    !isStarkCurveContractType(message["accountContractType"]) ||
     !isLedgerAccountIndex(message["accountIndex"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !isNonZeroFeltString(message["publicKeyX"])
@@ -71,7 +74,7 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
  * account registry) plus the device public key and index; no seed is generated.
  */
 export type CreateLedgerVaultRequest = {
-  readonly accountContractType: AccountContractType;
+  readonly accountContractType: StarkCurveContractType;
   readonly accountIndex: number;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
@@ -93,7 +96,7 @@ export const readCreateLedgerVaultInput = (message: unknown): CreateLedgerVaultR
       "vaultPassphrase",
     ]) ||
     message["type"] !== "wallet.createLedgerVault" ||
-    !isAccountContractType(message["accountContractType"]) ||
+    !isStarkCurveContractType(message["accountContractType"]) ||
     !isLedgerAccountIndex(message["accountIndex"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !isNonZeroFeltString(message["publicKeyX"]) ||
@@ -148,7 +151,7 @@ const isPubKeyEntry = (value: unknown): value is LedgerPubKeyEntry =>
  * Parsed request to derive addresses for a batch of enumerated Ledger pairs.
  */
 export type DeriveLedgerAccountsRequest = {
-  readonly accountContractType: AccountContractType;
+  readonly accountContractType: StarkCurveContractType;
   readonly entries: readonly LedgerPubKeyEntry[];
   readonly networkId: StarknetNetworkId;
 };
@@ -163,7 +166,7 @@ export const readDeriveLedgerAccountsInput = (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["accountContractType", "entries", "networkId", "type"]) ||
     message["type"] !== "wallet.deriveLedgerAccounts" ||
-    !isAccountContractType(message["accountContractType"]) ||
+    !isStarkCurveContractType(message["accountContractType"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !Array.isArray(message["entries"]) ||
     message["entries"].length > MAX_LEDGER_ACCOUNT_BATCH ||

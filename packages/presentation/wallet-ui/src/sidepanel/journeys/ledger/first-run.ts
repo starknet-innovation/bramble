@@ -7,7 +7,10 @@
  * passphrase; this module never touches the device or the vault directly.
  */
 
-import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import {
+  isStarkCurveContractType,
+  type StarkCurveContractType,
+} from "@mc-wallet/wallet-model/accounts";
 import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
 import { showToast } from "../../shared/dom";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-ack";
@@ -22,7 +25,7 @@ export type LedgerFirstRunDeps = {
   readonly startLedgerSetup: (
     networkId: string,
     vaultPassphrase: string,
-    accountContractType: AccountContractType,
+    accountContractType: StarkCurveContractType,
   ) => void;
 };
 
@@ -99,7 +102,7 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
       return;
     }
     const accountContractType = accountContractInput?.value;
-    if (!isAccountContractType(accountContractType)) {
+    if (!isStarkCurveContractType(accountContractType)) {
       showToast("Choose a supported account contract", "error", form);
       return;
     }

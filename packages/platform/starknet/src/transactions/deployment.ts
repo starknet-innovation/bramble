@@ -17,6 +17,7 @@ import {
   argentMultisigConstructorCalldata,
   usesValidatedQueryEstimate,
 } from "../accounts/account-contracts";
+import { mlDsaConstructorCalldata } from "../accounts/ml-dsa-classes";
 import {
   authorizedSpendFor,
   exceedsReviewedFee,
@@ -105,12 +106,18 @@ const deploymentInputs = (
     };
   }
   if (account.accountContractType === "ml-dsa") {
-    // Blocked on the account contract track: the constructor takes either the
-    // public-key commitment or the packed key, and the choice decides every
-    // address. Deriving one from OpenZeppelin's shape would strand any funds
-    // sent to it, so refuse until the shape is agreed.
-    // TODO: Blocked
-    throw new WalletError("ML-DSA account deployment parameters are not yet defined");
+    // Per contract, not per family. The `const` contract takes no constructor
+    // arguments at all — its key is compiled into a per-user class — so its
+    // address derives from the class hash alone. The others need the packed key,
+    // and `mlDsaConstructorCalldata` refuses for them by name rather than
+    // deriving an address nobody holds the key for.
+    return {
+      // One class per user, so nothing else distinguishes two accounts of it;
+      // `accountDeployment` rejects the result unless it reproduces the stored
+      // address, so a wrong salt fails loudly rather than silently.
+      addressSalts: ["0x0"],
+      constructorCalldata: mlDsaConstructorCalldata(account.mlDsaKind, account.publicKey),
+    };
   }
   return {
     addressSalts: ["0x0", account.publicKeyX],

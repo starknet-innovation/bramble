@@ -7,7 +7,7 @@ import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
 import type { CreateVaultAccountInput } from "@mc-wallet/vault/service";
 import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
-import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { isStarkCurveContractType } from "@mc-wallet/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -31,18 +31,6 @@ const readOptionalIndex = (value: unknown): number | null | undefined => {
   }
   return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
 };
-
-// The contract families an account derived from a mnemonic or an imported key
-// may claim. `ml-dsa` is a valid family but not a valid answer here: a
-// paired-phone account has no mnemonic and no importable key, and is only ever
-// created by enrolling a device. Accepting it would mean a vault-keyed account
-// labelled post-quantum that can never produce a signature its own contract
-// accepts — the account model refuses that pairing too, so this keeps the
-// refusal at the message boundary where the reason is still legible.
-const isKeyDerivedContractType = (
-  value: unknown,
-): value is Exclude<AccountContractType, "ml-dsa"> =>
-  isAccountContractType(value) && value !== "ml-dsa";
 
 const readDeploymentSalt = (
   value: unknown,
@@ -70,7 +58,7 @@ const readDerivationFields = (
     return null;
   }
   const accountContractType = message["accountContractType"];
-  if (!isKeyDerivedContractType(accountContractType)) {
+  if (!isStarkCurveContractType(accountContractType)) {
     return null;
   }
   const deploymentSalt = readDeploymentSalt(message["deploymentSalt"], accountContractType);

@@ -21,12 +21,14 @@ import {
   VAULT_MIGRATION_STORE_KEY,
   VAULT_STORE_KEY,
 } from "@mc-wallet/vault/store-migration";
+import { canonicalFelt, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import { ML_DSA_65_PUBLIC_KEY_BYTES } from "@mc-wallet/wallet-model/signing";
 
 const vaultPassphrase = "correct horse battery staple";
 
 const mobileAccount = {
   accountContractType: "ml-dsa" as const,
+  mlDsaKind: "const" as const,
   address: "0xdef",
   classHash: "0xabc",
   derivation: {
@@ -144,35 +146,61 @@ describe("schema version 8", () => {
 });
 
 describe("paired-phone address derivation", () => {
-  test("refuses to derive an address rather than reuse another family's recipe", async () => {
-    // The single most consequential branch in the account model. An address is
-    // derived from a class hash and constructor calldata; the ML-DSA constructor
-    // is not agreed yet, and falling through to the OpenZeppelin derivation would
-    // succeed and return a plausible address nobody holds the key for. Funds sent
-    // there would be stranded permanently, with nothing failing loudly first.
-    const kms = {
-      deriveOzAccountAddress: async () => {
-        throw new Error("the OpenZeppelin derivation was reached for an ml-dsa account");
-      },
-    } as never;
-    await expect(
-      deriveAccountContractAddress(kms, {
-        accountContractType: "ml-dsa",
-        classHash: "0xabc",
-        networkId: "SN_MAIN",
-        publicKeyX: "0x456",
-      }),
-    ).rejects.toThrow("ML-DSA account address derivation is not yet defined");
+  // A KMS whose OpenZeppelin derivation throws, so any test that reaches it
+  // fails loudly. Deriving an ML-DSA address from another family's recipe would
+  // otherwise succeed and return a plausible address nobody holds the key for.
+  const kms = {
+    deriveOzAccountAddress: async () => {
+      throw new Error("the OpenZeppelin derivation was reached for an ml-dsa account");
+    },
+  } as never;
+
+  const derive = (extra: Record<string, unknown>) =>
+    deriveAccountContractAddress(kms, {
+      accountContractType: "ml-dsa",
+      networkId: "SN_MAIN",
+      publicKey: mobileAccount.publicKey,
+      publicKeyX: "0x456",
+      ...extra,
+    });
+
+  test("the const contract derives from its per-user class hash alone", async () => {
+    // No constructor arguments, so the class hash is the whole preimage. This is
+    // the one ML-DSA contract whose address the wallet can already compute.
+    const { address, classHash } = await derive({ classHash: "0xabc", mlDsaKind: "const" });
+    expect(classHash).toBe("0xabc");
+    expect(canonicalFelt(address)).toBe(address);
+    expect(isNonZeroStarkFieldElement(address)).toBe(true);
+    // Deterministic, and a function of the class hash: with a per-user class
+    // that is the only thing distinguishing two accounts of this contract.
+    const again = await derive({ classHash: "0xabc", mlDsaKind: "const" });
+    expect(again.address).toBe(address);
+    const other = await derive({ classHash: "0xdef", mlDsaKind: "const" });
+    expect(other.address).not.toBe(address);
+    // The public key is NOT in the preimage for this contract — it is compiled
+    // into the class instead, so the same class gives the same address.
+    const otherKey = await derive({
+      classHash: "0xabc",
+      mlDsaKind: "const",
+      publicKey: `0x${"cd".repeat(1952)}`,
+    });
+    expect(otherKey.address).toBe(address);
   });
 
-  test("still requires an explicit class hash, never OpenZeppelin's", async () => {
-    const kms = { deriveOzAccountAddress: async () => "0x1" } as never;
-    await expect(
-      deriveAccountContractAddress(kms, {
-        accountContractType: "ml-dsa",
-        networkId: "SN_MAIN",
-        publicKeyX: "0x456",
-      }),
-    ).rejects.toThrow("ML-DSA account class hash is required");
+  test("the contracts needing the packed key refuse by name", async () => {
+    for (const mlDsaKind of ["storage", "hashkey"] as const) {
+      await expect(derive({ classHash: "0xabc", mlDsaKind })).rejects.toThrow(
+        `ML-DSA ${mlDsaKind} account deployment parameters are not yet defined`,
+      );
+    }
+  });
+
+  test("an explicit class hash and contract kind are both required", async () => {
+    await expect(derive({ mlDsaKind: "const" })).rejects.toThrow(
+      "ML-DSA account class hash is required",
+    );
+    await expect(derive({ classHash: "0xabc" })).rejects.toThrow(
+      "ML-DSA account contract kind is required",
+    );
   });
 });

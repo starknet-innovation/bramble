@@ -1,6 +1,6 @@
 /** Account-contract choice bindings shared by software and first-run Ledger setup. */
 
-import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { isStarkCurveContractType } from "@mc-wallet/wallet-model/accounts";
 
 type AccountContractChoiceDeps = {
   readonly app: Element | null;
@@ -31,7 +31,7 @@ export const bindAccountContractChoices = ({
   form.querySelectorAll<HTMLButtonElement>("[data-account-contract]").forEach((button) => {
     button.addEventListener("click", () => {
       const contractType = button.dataset["accountContract"];
-      if (!isAccountContractType(contractType) || !softwareInput) return;
+      if (!isStarkCurveContractType(contractType) || !softwareInput) return;
       softwareInput.value = contractType;
       selectChoice(form, "[data-account-contract]", button);
       review?.lastChild?.replaceWith(
@@ -48,7 +48,7 @@ export const bindAccountContractChoices = ({
   app?.querySelectorAll<HTMLButtonElement>("[data-ledger-account-contract]").forEach((button) => {
     button.addEventListener("click", () => {
       const contractType = button.dataset["ledgerAccountContract"];
-      if (!isAccountContractType(contractType) || !ledgerInput || !app) return;
+      if (!isStarkCurveContractType(contractType) || !ledgerInput || !app) return;
       ledgerInput.value = contractType;
       selectChoice(app, "[data-ledger-account-contract]", button);
       ledgerContinue?.lastChild?.replaceWith(

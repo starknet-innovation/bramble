@@ -8,8 +8,12 @@ import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-  sameFelt,
 } from "../networks/networks";
+import {
+  type AccountContractMetadata,
+  canonicalContractMetadata,
+  hasValidContractMetadata,
+} from "./contract-metadata";
 import {
   type Bip44Derivation,
   type ImportedKeyDerivation,
@@ -22,6 +26,22 @@ import {
   type MobilePqDerivation,
 } from "./derivations";
 import { isMlDsa65PublicKey } from "./signing";
+
+/**
+ * Account-contract types, re-exported so `./accounts` stays the one import path
+ * for the public account model. Their validators live beside them in
+ * `./contract-metadata`.
+ */
+export {
+  type AccountContractType,
+  ARGENT_ACCOUNT_CLASS_HASH,
+  isAccountContractType,
+  isMlDsaKind,
+  isStarkCurveContractType,
+  type MlDsaKind,
+  OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+  type StarkCurveContractType,
+} from "./contract-metadata";
 
 /**
  * Account provenance types, re-exported so `./accounts` stays the one import
@@ -37,37 +57,6 @@ export type {
   TransportDescriptor,
 } from "./derivations";
 
-/**
- * Supported contract families for accounts controlled by one wallet signer.
- * `ml-dsa` names an account whose on-chain `__validate__` checks post-quantum
- * ML-DSA-65 rather than Stark ECDSA. It is a distinct family, not a flavour of
- * `openzeppelin`: it derives its address from a different constructor, serializes
- * roughly 107 felts of calldata instead of two, cannot be a member of an Argent
- * multisig, and must be named as itself wherever the wallet shows a user what
- * kind of account they hold.
- */
-export type AccountContractType = "argent" | "ml-dsa" | "openzeppelin";
-
-/**
- * Pinned OpenZeppelin AccountUpgradeable 3.0 class understood by the account
- * model. The value is identical on the supported Mainnet and Sepolia networks.
- */
-export const OPENZEPPELIN_ACCOUNT_CLASS_HASH =
-  "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381";
-
-/**
- * Pinned Argent Account 0.4 class understood by the account model. The
- * platform descriptor reuses this value for deployment and supply checks.
- */
-export const ARGENT_ACCOUNT_CLASS_HASH =
-  "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f";
-
-/**
- * Validates the closed set of supported single-signer account contracts.
- */
-export const isAccountContractType = (value: unknown): value is AccountContractType =>
-  value === "argent" || value === "ml-dsa" || value === "openzeppelin";
-
 type AccountRefIdentity = {
   readonly address: string;
   readonly classHash: string;
@@ -76,25 +65,24 @@ type AccountRefIdentity = {
   readonly publicKeyX: string;
 };
 
-type AccountContractMetadata =
-  | {
-      readonly accountContractType: "argent";
-      /** Exact DEPLOY_ACCOUNT salt used to derive this Argent address. */
-      readonly deploymentSalt: string;
-    }
-  | {
-      readonly accountContractType: "ml-dsa" | "openzeppelin";
-      readonly deploymentSalt?: never;
-    };
+// A contract family and a signer provenance are not independent: an ML-DSA
+// contract can only be signed by a paired phone, and a Stark-curve contract can
+// never be. `hasValidContractMetadata` enforces that at runtime; splitting the
+// core here enforces it in the types too, so a Ledger or HD account cannot even
+// be *described* as ML-DSA and every consumer that narrows to one of these refs
+// knows which family it holds without re-checking.
+type StarkCurveAccountRefCore = AccountRefIdentity &
+  Exclude<AccountContractMetadata, { readonly accountContractType: "ml-dsa" }>;
 
-type AccountRefCore = AccountRefIdentity & AccountContractMetadata;
+type MlDsaAccountRefCore = AccountRefIdentity &
+  Extract<AccountContractMetadata, { readonly accountContractType: "ml-dsa" }>;
 
 type LegacyAccountRefCore = AccountRefIdentity;
 
 /**
  * HD-derived account metadata including its full public-key point.
  */
-export type DerivedAccountRef = AccountRefCore & {
+export type DerivedAccountRef = StarkCurveAccountRefCore & {
   readonly derivation: Bip44Derivation;
   readonly publicKeyY: string;
 };
@@ -102,25 +90,27 @@ export type DerivedAccountRef = AccountRefCore & {
 /**
  * Imported account metadata, which retains no public-key y-coordinate.
  */
-export type ImportedAccountRef = AccountRefCore & {
+export type ImportedAccountRef = StarkCurveAccountRefCore & {
   readonly derivation: ImportedKeyDerivation;
 };
 
 /**
  * Ledger account metadata containing no locally held signing key.
  */
-export type LedgerAccountRef = AccountRefCore & {
+export type LedgerAccountRef = StarkCurveAccountRefCore & {
   readonly derivation: LedgerDerivation;
 };
 
 /**
  * Paired-phone account metadata containing no locally held signing key. The
- * ML-DSA-65 key is 1952 bytes, far past one felt, so `publicKeyX` carries a
- * Poseidon commitment over it (the value the account contract validates
- * against) and `publicKey` carries the encoded key itself, which the
- * verify-before-broadcast gate needs in full.
+ * ML-DSA-65 key is 1952 bytes, far past one felt, so `publicKey` carries the
+ * encoded key itself — which the verify-before-broadcast gate needs in full —
+ * while `publicKeyX` carries whichever single felt this account's contract binds
+ * to it. What that felt is depends on `mlDsaKind`: `split` pins a Poseidon hash
+ * of the packed key, while `const` bakes the key into a per-user class and binds
+ * nothing in the address preimage at all.
  */
-export type MobilePqAccountRef = AccountRefCore & {
+export type MobilePqAccountRef = MlDsaAccountRefCore & {
   readonly derivation: MobilePqDerivation;
   readonly publicKey: string;
 };
@@ -216,34 +206,6 @@ const hasValidSingleSignerCore = (
   (!requireCanonical || canonicalFelt(value["publicKeyX"]) === value["publicKeyX"]) &&
   hasValidAccountCore(value, requireCanonical);
 
-const hasValidContractMetadata = (
-  value: Record<string, unknown>,
-  requireCanonical: boolean,
-  requireArgentSalt: boolean,
-): boolean => {
-  if (!isAccountContractType(value["accountContractType"])) {
-    return false;
-  }
-  const deploymentSalt = value["deploymentSalt"];
-  if (value["accountContractType"] === "ml-dsa") {
-    return deploymentSalt === undefined && isMobilePqDerivation(value["derivation"]);
-  }
-  if (value["accountContractType"] === "openzeppelin") {
-    return deploymentSalt === undefined;
-  }
-  if (!sameFelt(value["classHash"], ARGENT_ACCOUNT_CLASS_HASH)) {
-    return false;
-  }
-  if (!requireArgentSalt && deploymentSalt === undefined) {
-    return true;
-  }
-  return (
-    typeof deploymentSalt === "string" &&
-    canonicalFelt(deploymentSalt) !== null &&
-    (!requireCanonical || canonicalFelt(deploymentSalt) === deploymentSalt)
-  );
-};
-
 const KEYLESS_ACCOUNT_KEYS = [
   "accountContractType",
   "address",
@@ -255,7 +217,7 @@ const KEYLESS_ACCOUNT_KEYS = [
   "publicKeyX",
 ] as const;
 const DERIVED_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "publicKeyY"] as const;
-const MOBILE_PQ_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "publicKey"] as const;
+const MOBILE_PQ_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "mlDsaKind", "publicKey"] as const;
 const LEGACY_V6_KEYLESS_ACCOUNT_KEYS = [
   "accountContractType",
   "address",
@@ -396,56 +358,49 @@ export const canonicalAccountRef = (value: unknown): AccountRef | null => {
   if (address === null || classHash === null) {
     return null;
   }
-  const id = `${value.networkId}:${address}`;
   const publicKeyX = canonicalFelt(value.publicKeyX);
-  const deploymentSalt =
-    value.accountContractType === "argent" && typeof value.deploymentSalt === "string"
-      ? canonicalFelt(value.deploymentSalt)
-      : undefined;
-  if (publicKeyX === null || deploymentSalt === null) {
+  const contract = canonicalContractMetadata(value);
+  if (publicKeyX === null || contract === null) {
     return null;
   }
-  const contract: AccountContractMetadata =
-    value.accountContractType === "argent"
-      ? { accountContractType: "argent", deploymentSalt: deploymentSalt as string }
-      : // Carry the family through rather than naming one: this used to hardcode
-        // "openzeppelin", which silently rewrote any other salt-free family into
-        // an OpenZeppelin account on its way out of the migration boundary.
-        { accountContractType: value.accountContractType };
+  const identity = {
+    address,
+    classHash,
+    id: `${value.networkId}:${address}`,
+    networkId: value.networkId,
+    publicKeyX,
+  };
+  // The family and the derivation are narrowed together, because the record
+  // types now pair them: only a paired phone may be ML-DSA, and only ML-DSA may
+  // be a paired phone. `isAccountRefShape` already refused every other pairing,
+  // so the mismatched branches below are unreachable rather than lenient.
+  if (value.derivation.kind === "mobile-pq") {
+    // `value.derivation.kind` narrows the derivation but not `value` itself: the
+    // ref types are intersections, so the discriminant is nested and TypeScript
+    // will not distribute over it. The cast reads the fields the shape check
+    // already validated.
+    const mobile = value as MobilePqAccountRef;
+    return contract.accountContractType === "ml-dsa"
+      ? { ...identity, ...contract, derivation: mobile.derivation, publicKey: mobile.publicKey }
+      : null;
+  }
+  if (contract.accountContractType === "ml-dsa") {
+    return null;
+  }
   if (value.derivation.kind === "starknet-bip44") {
     const derived = value as DerivedAccountRef;
     const publicKeyY = canonicalFelt(derived.publicKeyY);
     return publicKeyY === null
       ? null
-      : {
-          ...contract,
-          address,
-          classHash,
-          derivation: derived.derivation,
-          id,
-          networkId: value.networkId,
-          publicKeyX,
-          publicKeyY,
-        };
+      : { ...identity, ...contract, derivation: derived.derivation, publicKeyY };
   }
-  // Every non-HD kind carries the same fields, so they share one shape; only a
-  // paired phone adds its full enclave key, which is already validated above.
-  const keyless = {
-    ...contract,
-    address,
-    classHash,
-    id,
-    networkId: value.networkId,
-    publicKeyX,
-  };
-  if (value.derivation.kind === "mobile-pq") {
-    const mobile = value as MobilePqAccountRef;
-    return { ...keyless, derivation: mobile.derivation, publicKey: mobile.publicKey };
-  }
-  // Same assertion the legacy canonicalizer below makes: one literal cannot be
-  // assigned to a union of record types when only `derivation` differs.
+  // One literal cannot be assigned to a union of record types when only
+  // `derivation` differs; the legacy canonicalizer below makes the same
+  // assertion for the same reason.
   const device = value as ImportedAccountRef | LedgerAccountRef;
-  return { ...keyless, derivation: device.derivation } as ImportedAccountRef | LedgerAccountRef;
+  return { ...identity, ...contract, derivation: device.derivation } as
+    | ImportedAccountRef
+    | LedgerAccountRef;
 };
 
 /**
