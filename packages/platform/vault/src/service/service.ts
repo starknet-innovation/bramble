@@ -24,11 +24,8 @@ import {
   deriveLedgerAccountRefs,
   nextAccountIndex,
 } from "../accounts/accounts";
-import {
-  deriveNetworkAccount,
-  findNetworkAccount,
-  selectSourceAccount,
-} from "../accounts/network-account";
+import { storeMobilePqAccount } from "../accounts/mobile-pq-account";
+import { storeNetworkAccount } from "../accounts/network-account";
 import { deriveVaultStrk20ViewingKey } from "../accounts/strk20-viewing-key";
 import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
@@ -46,6 +43,7 @@ export { activeAccountSecrets } from "./reveal";
 export type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
+  AddMobilePqAccountInput,
   ConnectedSite,
   CreateLedgerVaultInput,
   CreateVaultAccountInput,
@@ -200,6 +198,16 @@ export const createWalletVaultService = ({
 
       return account;
     },
+    async addMobilePqAccount(input) {
+      return storeMobilePqAccount(
+        {
+          kms,
+          readVault: readVaultSnapshot,
+          writeVault: (next, vaultPassphrase) => writeVault(encryptedStore, next, vaultPassphrase),
+        },
+        input,
+      );
+    },
     async addLedgerAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const account = await deriveLedgerAccount(kms, {
@@ -274,43 +282,14 @@ export const createWalletVaultService = ({
       );
     },
     async ensureNetworkAccount(input) {
-      const vault = await readVaultSnapshot(input.vaultPassphrase);
-      const source = selectSourceAccount(vault);
-      if (!source) {
-        throw new WalletError("No account selected");
-      }
-      const existing = findNetworkAccount(vault, input.networkId, source);
-      if (existing) {
-        await writeVault(
-          encryptedStore,
-          { ...vault, activeAccountId: existing.id },
-          input.vaultPassphrase,
-        );
-        return existing;
-      }
-
-      // Missing projection key material fails closed in the helper.
-      const { account, signingKeys } = await deriveNetworkAccount(
-        kms,
-        vault,
-        source,
-        input.networkId,
-      );
-      if (vault.accounts.some((stored) => stored.id === account.id)) {
-        throw new WalletError("Account already exists");
-      }
-
-      await writeVault(
-        encryptedStore,
+      return storeNetworkAccount(
         {
-          ...vault,
-          accounts: [...vault.accounts, account],
-          activeAccountId: account.id,
-          signingKeys: [...vault.signingKeys, ...signingKeys],
+          kms,
+          readVault: readVaultSnapshot,
+          writeVault: (next, vaultPassphrase) => writeVault(encryptedStore, next, vaultPassphrase),
         },
-        input.vaultPassphrase,
+        input,
       );
-      return account;
     },
     async forgetLedgerStrk20ViewingKey(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);

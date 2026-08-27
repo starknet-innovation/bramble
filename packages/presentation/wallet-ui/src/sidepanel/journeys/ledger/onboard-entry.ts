@@ -55,11 +55,23 @@ export const createLedgerOnboardEntry = (deps: {
   readonly connector: LedgerConnector;
   readonly mount: HTMLElement;
   readonly openImport: () => void;
+  /** Opens the post-quantum device enrollment journey. */
+  readonly openMobilePq: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: SidepanelWallet;
 }): LedgerOnboardEntry => {
-  const { addHd, cache, connector, mount, openImport, openMultisig, refresh, wallet } = deps;
+  const {
+    addHd,
+    cache,
+    connector,
+    mount,
+    openImport,
+    openMobilePq,
+    openMultisig,
+    refresh,
+    wallet,
+  } = deps;
   let ledgerSetup: {
     readonly accountContractType: AccountContractType;
     readonly networkId: string;
@@ -104,6 +116,7 @@ export const createLedgerOnboardEntry = (deps: {
       ledgerSetup = null;
     },
     openImport,
+    openMobilePq,
     openMultisig,
     refresh,
     wallet,

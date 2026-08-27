@@ -231,6 +231,17 @@ export const makeKeyBoundaryHarness = async (
       }
       return parked;
     },
+    async mobilePqEnrollChallenge() {
+      const response = (await settle(
+        { type: "wallet.mobilePqEnrollChallenge" },
+        extensionSender,
+      )) as { readonly challenge?: string };
+      const challenge = response.challenge;
+      if (challenge === undefined) {
+        throw new Error("enrollment challenge was not issued");
+      }
+      return challenge;
+    },
     async mobilePqSignId() {
       park(
         mobilePqSignQueue.request({

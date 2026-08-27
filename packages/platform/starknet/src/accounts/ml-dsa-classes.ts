@@ -93,6 +93,31 @@ const ML_DSA_CLASSES: Record<MlDsaKind, MlDsaClassSpec> = {
  */
 export const mlDsaClassSpec = (kind: MlDsaKind): MlDsaClassSpec => ML_DSA_CLASSES[kind];
 
+// Bytes of the encoded public key packed into one felt. A felt holds a little
+// under 2^252, so 31 bytes is the largest chunk that always fits.
+const COMMITMENT_BYTES_PER_FELT = 31;
+
+/**
+ * A Poseidon commitment over the encoded ML-DSA public key, used as the
+ * account's single-felt identity in `publicKeyX`.
+ *
+ * This is an **identifier**, not calldata. No contract in this family validates
+ * against it: `const` binds the key inside its class, `storage` holds the key
+ * itself, and `hashkey` commits to the 925-felt *packed* key, which is a
+ * different preimage computed elsewhere. What this value does is give a
+ * paired-phone account one stable felt for the places the account model needs
+ * one — record identity, duplicate detection, and account matching across
+ * networks — without pretending a 1952-byte key fits in a felt.
+ */
+export const mlDsaPublicKeyCommitment = (publicKey: string): string => {
+  const digits = publicKey.replace(/^0x/, "");
+  const felts: string[] = [];
+  for (let index = 0; index < digits.length; index += COMMITMENT_BYTES_PER_FELT * 2) {
+    felts.push(`0x${digits.slice(index, index + COMMITMENT_BYTES_PER_FELT * 2)}`);
+  }
+  return hash.computePoseidonHashOnElements(felts);
+};
+
 /**
  * The DEPLOY_ACCOUNT salt for every ML-DSA account. Zero, and single-sourced so
  * the deployment path and the vault's address derivation cannot disagree: with a

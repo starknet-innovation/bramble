@@ -8,6 +8,7 @@
  * closed in one submitting path while working in another.
  */
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import type { MobilePqEnrollment } from "./mobile-pq-enrollment";
 import type { MobilePqSignQueue } from "./mobile-pq-signer";
 
 /**
@@ -18,6 +19,15 @@ import type { MobilePqSignQueue } from "./mobile-pq-signer";
 export type DeviceSignQueues = {
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly mobilePqSignQueue?: MobilePqSignQueue;
+};
+
+/**
+ * Device collaborators beyond the sign queues. Enrollment is separate because it
+ * runs once per device rather than once per signature, and it holds a challenge
+ * rather than a parked request.
+ */
+export type DeviceEnrollment = {
+  readonly mobilePqEnrollment?: MobilePqEnrollment;
 };
 
 /**

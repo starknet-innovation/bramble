@@ -17,7 +17,7 @@ import { prepareArgentMultisigInvokeV3WithProvider } from "@mc-wallet/starknet/m
 import { avnuRouterAddress, type SwapService } from "@mc-wallet/transactions/avnu";
 import { grantedAccountIdsFor } from "@mc-wallet/vault/origin-grants";
 import type { Vault } from "@mc-wallet/vault/schema";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { LedgerAccountRef, MobilePqAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { ec, RpcProvider } from "starknet";
@@ -25,6 +25,7 @@ import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/run
 import { avnuRouteCalldata } from "./avnu-route-fixture";
 import {
   account,
+  KEY_BOUNDARY_ML_DSA_PUBLIC_KEY,
   KEY_BOUNDARY_MULTISIG_CLASS_HASH,
   KEY_BOUNDARY_MULTISIG_CONFIG,
   KEY_BOUNDARY_ORIGIN,
@@ -78,6 +79,22 @@ const ledgerAccount: LedgerAccountRef = {
   publicKeyX: account.publicKeyX,
 };
 
+const mobilePqAccount: MobilePqAccountRef = {
+  accountContractType: "ml-dsa",
+  address: account.address,
+  classHash: account.classHash,
+  derivation: {
+    deviceId: "key-boundary-phone",
+    kind: "mobile-pq",
+    transport: { kind: "clipboard" },
+  },
+  id: account.id,
+  mlDsaKind: "const",
+  networkId: account.networkId,
+  publicKey: KEY_BOUNDARY_ML_DSA_PUBLIC_KEY,
+  publicKeyX: account.publicKeyX,
+};
+
 /**
  * Running count of account-scoped viewing-key derivations the stub vault has
  * served. Exported so the scan can prove the STRK20 entries really hold the
@@ -94,6 +111,9 @@ export const walletStub = {
   },
   async addLedgerAccount(): Promise<LedgerAccountRef> {
     return ledgerAccount;
+  },
+  async addMobilePqAccount(): Promise<MobilePqAccountRef> {
+    return mobilePqAccount;
   },
   async createAccount() {
     return account;

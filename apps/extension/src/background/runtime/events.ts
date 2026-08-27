@@ -60,6 +60,7 @@ const switchChainBroadcast: BroadcastFactory = (response) =>
 const BROADCAST_FACTORIES: Readonly<Record<string, BroadcastFactory>> = {
   "wallet.addAccount": createAccountBroadcast,
   "wallet.addLedgerAccount": createAccountBroadcast,
+  "wallet.addMobilePqAccount": createAccountBroadcast,
   "wallet.approveOrigin": approveOriginBroadcast,
   "wallet.createAccount": createAccountBroadcast,
   "wallet.createLedgerVault": createAccountBroadcast,

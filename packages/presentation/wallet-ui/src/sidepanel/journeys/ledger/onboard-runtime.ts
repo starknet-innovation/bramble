@@ -12,12 +12,12 @@
 import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { renderFragment } from "../../shared/dom";
+import { isAddAccountRoute } from "../onboarding/add-account-routes";
 import {
   createLedgerOnboardController,
   enumerateLedgerPubKeys,
   LEDGER_PAGE_SIZE,
   type LedgerCandidateState,
-  type LedgerOnboardAddKind,
   type LedgerOnboardController,
   type LedgerOnboardView,
 } from "./onboard-session";
@@ -57,6 +57,8 @@ export type LedgerOnboardRuntimeDeps = {
   readonly networkId: () => string;
   readonly onCancel: () => void;
   readonly openImport: () => void;
+  /** Opens the post-quantum device enrollment journey. */
+  readonly openMobilePq: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: Pick<SidepanelWallet, "deriveLedgerAccounts">;
@@ -72,14 +74,6 @@ export type LedgerOnboardRuntime = {
   readonly start: (accountContractType?: AccountContractType) => void;
   readonly startAddAccount: () => void;
 };
-
-const isAddKind = (value: string | undefined): value is LedgerOnboardAddKind =>
-  value === "argent" ||
-  value === "import" ||
-  value === "ledger-argent" ||
-  value === "ledger-openzeppelin" ||
-  value === "multisig" ||
-  value === "openzeppelin";
 
 /**
  * Creates the DOM-bound Ledger onboarding runtime. The controller persists
@@ -108,7 +102,7 @@ export const createLedgerOnboardRuntime = (
     for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-add-kind]")) {
       button.addEventListener("click", () => {
         const kind = button.dataset["addKind"];
-        if (isAddKind(kind)) {
+        if (isAddAccountRoute(kind)) {
           controller.select(kind);
         }
       });
@@ -189,6 +183,7 @@ export const createLedgerOnboardRuntime = (
     existingIds,
     onCancel,
     openImport: () => deps.openImport(),
+    openMobilePq: () => deps.openMobilePq(),
     openMultisig: () => deps.openMultisig(),
     refresh,
     render,

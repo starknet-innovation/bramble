@@ -12,6 +12,8 @@ import type {
   DerivedAccountRef,
   ImportedAccountRef,
   LedgerAccountRef,
+  MlDsaKind,
+  MobilePqAccountRef,
   StarkCurveContractType,
 } from "@mc-wallet/wallet-model/accounts";
 import type { LedgerPubKeyEntry } from "@mc-wallet/wallet-model/ledger-path";
@@ -147,6 +149,23 @@ export type ImportRawKeyAccountInput = {
  * Input for storing a keyless Ledger account from a device-provided public key.
  * No key material is accepted or retained; the device signs every transaction.
  */
+/**
+ * Enrolling a paired post-quantum device. `classHash` is required: a `const`
+ * account's class is generated from its own public key, so there is no network
+ * default, and the wallet must never fall back to another family's class.
+ */
+export type AddMobilePqAccountInput = {
+  readonly classHash: string;
+  readonly deviceId: string;
+  readonly mlDsaKind: MlDsaKind;
+  readonly networkId: StarknetNetworkId;
+  readonly publicKey: string;
+  readonly vaultPassphrase: string;
+};
+
+/**
+ * Storing a keyless Ledger account from a device-enumerated public key.
+ */
 export type AddLedgerAccountInput = {
   readonly accountContractType: StarkCurveContractType;
   readonly accountIndex: number;
@@ -214,6 +233,7 @@ export type RevealedSecrets = {
 export type WalletVaultService = {
   readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<DerivedAccountRef>;
   readonly addLedgerAccount: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
+  readonly addMobilePqAccount: (input: AddMobilePqAccountInput) => Promise<MobilePqAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<DerivedAccountRef>;
   readonly createLedgerVault: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
   readonly deriveLedgerAccounts: (

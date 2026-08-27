@@ -52,7 +52,9 @@ export {
  * Re-exported paired-phone response validators for one import path.
  */
 export {
+  isMobilePqEnrollChallengeResponse,
   isMobilePqSignPendingResponse,
+  type MobilePqEnrollChallengeResponse,
   type MobilePqSignPendingResponse,
   type MobilePqSignRequestSummary,
 } from "./responses-mobile-pq";

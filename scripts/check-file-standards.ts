@@ -54,6 +54,12 @@ const ENCRYPTED_STORE_WIRING_FILES = new Set([
   "apps/extension/src/background/index.ts",
   "packages/platform/vault/src/encrypted-store.ts",
 ]);
+const RAW_RANDOM_FILES = new Set([
+  "packages/platform/vault/src/encrypted-store.ts",
+  // Mints the single-use proof-of-possession challenge a device signs before
+  // enrollment. A predictable one would let an attacker enroll a foreign key.
+  "apps/extension/src/background/devices/mobile-pq-enrollment.ts",
+]);
 const RANDOM_UUID_FILES = new Set([
   "apps/extension/src/background/approvals/approvals.ts",
   "apps/extension/src/provider/inpage.ts",
@@ -81,6 +87,8 @@ const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/ledger/ledger-ops.ts",
   "apps/extension/src/background/ledger/ledger-sign-queue.ts",
   "apps/extension/src/background/ledger/ledger-signer.ts",
+  "apps/extension/src/background/devices/device-queues.ts",
+  "apps/extension/src/background/devices/mobile-pq-enrollment.ts",
   "apps/extension/src/background/devices/mobile-pq-signer.ts",
   "apps/extension/src/background/devices/mobile-pq-inputs.ts",
   "apps/extension/src/background/devices/mobile-pq-ops.ts",
@@ -168,10 +176,12 @@ const SECRET_MATERIAL_FILES = new Set([
   // remains behind the privileged background accountHashSigner boundary.
   "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-intent-actions.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-views.ts",
-  // The paired-phone signing journey. Public material only: the envelope handed
-  // to the phone, the public signature pasted back, and the templates that show
-  // them. Private signing stays behind the background accountHashSigner
-  // boundary, and the verify gate runs there, never here.
+  // The paired-phone journeys: the envelope handed out, the public signature
+  // pasted back, the templates. Signing and verifying stay in the background.
+  "packages/presentation/wallet-ui/src/sidepanel/app/devices/device-overlays.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/onboard-runtime.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/onboard-session.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/onboard-views.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/runtime-client.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/sign-envelope.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/sign-runtime.ts",
@@ -182,12 +192,8 @@ const SECRET_MATERIAL_FILES = new Set([
   // callers; it receives no private key or vault credential.
   "packages/platform/starknet/src/transactions/signature-verify.ts",
   "packages/platform/starknet/src/transactions/ml-dsa-verify.ts",
-  // Per-contract requirements for the ML-DSA account family. Its matches are the
-  // public signature layouts each contract expects — felt counts and calldata
-  // shapes, no key material and no signing.
+  // The ML-DSA account family: per-contract signature layouts and record claims.
   "packages/platform/starknet/src/accounts/ml-dsa-classes.ts",
-  // Which account contract a record claims. Its matches describe the public
-  // signature layouts those contracts validate; nothing here signs or persists.
   "packages/foundation/wallet-model/src/accounts/contract-metadata.ts",
   // Public account ABI serialization and signer façades. These files carry
   // public keys/signature fragments; private-key operations remain in Krusty.
@@ -225,6 +231,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/vault/src/schema/schema.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
+  "packages/platform/vault/src/accounts/mobile-pq-account.ts",
   "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
   "packages/platform/vault/src/accounts/network-account.ts",
   "packages/platform/vault/src/service/reveal.ts",
@@ -440,7 +447,7 @@ for (const file of await walk(".")) {
 
   if (
     isProductionTypeScript(file) &&
-    file !== "packages/platform/vault/src/encrypted-store.ts" &&
+    !RAW_RANDOM_FILES.has(file) &&
     /\bcrypto\.getRandomValues\b/.test(text)
   ) {
     failures.push(`${file} must keep raw random bytes behind crypto/storage boundaries`);

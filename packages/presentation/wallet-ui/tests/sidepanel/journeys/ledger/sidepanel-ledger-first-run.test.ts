@@ -231,6 +231,7 @@ const entryHarness = () => {
     connector,
     mount,
     openImport: () => undefined,
+    openMobilePq: () => undefined,
     openMultisig: () => {
       multisigs += 1;
     },

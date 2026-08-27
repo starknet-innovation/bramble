@@ -12,13 +12,11 @@ import {
   ARGENT_MULTISIG_CONTRACT,
   argentMultisigAddress,
 } from "@mc-wallet/starknet/account-contracts";
+import { mlDsa65Fixture } from "@mc-wallet/testkit/ml-dsa-fixtures";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
 import { type TokenConfig, withTokenId } from "@mc-wallet/wallet-model/preferences";
-import {
-  ML_DSA_65_PUBLIC_KEY_BYTES,
-  ML_DSA_65_SIGNATURE_BYTES,
-} from "@mc-wallet/wallet-model/signing";
+import { ML_DSA_65_SIGNATURE_BYTES } from "@mc-wallet/wallet-model/signing";
 import { CallData, ec, hash } from "starknet";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
@@ -33,11 +31,15 @@ export const SECRET_PRIVATE_KEY =
 export const SECRET_VIEWING_KEY = "0x0757ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec";
 
 /**
- * A shape-valid ML-DSA-65 public key for the paired-phone queue entry. Public
- * material and not a scanned secret: it exists so the parked request the scan
- * drives carries a key of the exact enrolled length, the way a real one does.
+ * A real deterministic ML-DSA-65 identity for the paired-phone entries. Public
+ * material and not a scanned secret: it exists so the enrollment the scan drives
+ * can actually succeed — a placeholder key would bounce off the proof-of-
+ * possession gate, and the scan would only ever see a refusal.
  */
-export const KEY_BOUNDARY_ML_DSA_PUBLIC_KEY = `0x${"ab".repeat(ML_DSA_65_PUBLIC_KEY_BYTES)}`;
+export const KEY_BOUNDARY_ML_DSA_DEVICE = mlDsa65Fixture(77);
+
+/** The device's enrolled public key, at its exact 1952-byte length. */
+export const KEY_BOUNDARY_ML_DSA_PUBLIC_KEY = KEY_BOUNDARY_ML_DSA_DEVICE.publicKey;
 
 /** A shape-valid ML-DSA-65 signature for the settle callback the scan drives. */
 export const KEY_BOUNDARY_ML_DSA_SIGNATURE = `0x${"cd".repeat(ML_DSA_65_SIGNATURE_BYTES)}`;

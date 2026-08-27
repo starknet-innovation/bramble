@@ -18,7 +18,6 @@ import {
   account,
   contentSender,
   extensionSender,
-  KEY_BOUNDARY_ML_DSA_SIGNATURE,
   KEY_BOUNDARY_NFT_CONTRACT,
   KEY_BOUNDARY_ORIGIN,
   KEY_BOUNDARY_RECIPIENT,
@@ -27,6 +26,7 @@ import {
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
+import { MOBILE_PQ_KEY_BOUNDARY_MESSAGES } from "./key-boundary-mobile-pq-messages";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "./key-boundary-multisig-messages";
 import { RECOVERY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-recovery-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "./key-boundary-strk20-messages";
@@ -233,16 +233,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { id: "", r: "0x1", s: "0x2", type: "wallet.completeLedgerSign" },
     sender: extensionSender,
   },
-  { message: { type: "wallet.mobilePqSignPending" }, sender: extensionSender },
-  {
-    live: async (ids) => ({ id: await ids.mobilePqSignId() }),
-    message: {
-      id: "",
-      signature: KEY_BOUNDARY_ML_DSA_SIGNATURE,
-      type: "wallet.completeMobilePqSign",
-    },
-    sender: extensionSender,
-  },
+  ...MOBILE_PQ_KEY_BOUNDARY_MESSAGES,
   {
     message: {
       accountContractType: "openzeppelin",

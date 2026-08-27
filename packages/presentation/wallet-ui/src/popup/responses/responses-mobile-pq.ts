@@ -34,6 +34,30 @@ export type MobilePqSignPendingResponse = {
   readonly pending: readonly MobilePqSignRequestSummary[];
 };
 
+/**
+ * The proof-of-possession challenge the background issued for one enrollment.
+ * Public material: 32 random bytes the device signs so the wallet can refuse a
+ * key the device cannot sign for.
+ */
+export type MobilePqEnrollChallengeResponse = {
+  readonly challenge: string;
+  readonly ok: true;
+};
+
+/**
+ * Checks the enrollment challenge before it is shown for signing, so a
+ * malformed value can never be presented as something to sign.
+ */
+export const isMobilePqEnrollChallengeResponse = (
+  value: unknown,
+): value is MobilePqEnrollChallengeResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["challenge", "ok"]) &&
+  value["ok"] === true &&
+  typeof value["challenge"] === "string" &&
+  isStarkFieldElement(value["challenge"]);
+
 const isMobilePqSignRequestSummary = (value: unknown): value is MobilePqSignRequestSummary =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountId", "deviceId", "id", "messageHash", "publicKey"]) &&

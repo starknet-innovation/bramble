@@ -36,6 +36,8 @@ export type KeyBoundaryLiveIds = {
   readonly groupId: string;
   /** Parks a device signing request and returns its queue id. */
   readonly ledgerSignId: () => Promise<string>;
+  /** Issues a single-use post-quantum enrollment challenge. */
+  readonly mobilePqEnrollChallenge: () => Promise<string>;
   /** Parks a paired-phone signing request and returns its queue id. */
   readonly mobilePqSignId: () => Promise<string>;
   /** Id of the watched multisig seeded into the multisig registry. */

@@ -32,6 +32,10 @@ import { deriveAccountContractAddress, resolveAccountClassHash } from "./account
 
 /** Account-contract class and address helpers exposed through this package subpath. */
 export { deriveAccountContractAddress, getOzAccountClassHash } from "./account-contract";
+export {
+  deriveMobilePqAccount,
+  type MobilePqAccountInput,
+} from "./mobile-pq-account";
 
 // Krusty owns the private-key -> public-key mapping; the wallet must never
 // derive it locally. `signStarkHash` is the one KMS export that returns the

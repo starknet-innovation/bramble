@@ -4,8 +4,6 @@ import type { WalletStatus } from "../../popup/responses/responses";
 import { actionableApprovals } from "../journeys/approvals/approval-screen";
 import { bindLedgerFirstRun } from "../journeys/ledger/first-run";
 import { createLedgerOnboardEntry } from "../journeys/ledger/onboard-entry";
-import { createLedgerSignRuntime } from "../journeys/ledger/sign-runtime";
-import { createMobilePqSignRuntime } from "../journeys/mobile/sign-runtime";
 import { createMultisigClient } from "../journeys/multisig/multisig-runtime";
 import { shouldPreserveMultisigIntentSurface } from "../journeys/multisig/multisig-surface";
 import { bindMultisigs } from "../journeys/multisig/multisig-ui";
@@ -40,6 +38,7 @@ import {
   bindPickers,
   deploymentPollScope,
 } from "../shell/shell-bindings";
+import { createDeviceOverlays } from "./devices/device-overlays";
 import type { NavDirection } from "./navigation/nav-direction";
 import { popView, pushView, type ViewHistory } from "./navigation/nav-history";
 import {
@@ -99,15 +98,13 @@ export const startWalletUi = async (
   const deployment = createDeploymentCache(wallet);
   const cache: RenderData = emptyRenderCache();
   let privacy: ReturnType<typeof createPrivacyController>;
-  const ledgerSign = createLedgerSignRuntime({
-    connector: ledgerConnector,
-    mount: overlayMount("ledger-sign-overlay"),
-    onSignatureReported: transfer.markTransferLedgerAuthorized,
-    status: () => cache.status,
-    wallet,
-  });
-  const mobilePqSign = createMobilePqSignRuntime({
-    mount: overlayMount("ledger-sign-overlay"),
+  const { ledgerSign, mobilePqOnboard, mobilePqSign } = createDeviceOverlays({
+    ledgerConnector,
+    networkId: () => lastNetworkId,
+    onLedgerSignatureReported: transfer.markTransferLedgerAuthorized,
+    refresh: async () => {
+      await render(await wallet.loadStatus());
+    },
     status: () => cache.status,
     wallet,
   });
@@ -122,6 +119,7 @@ export const startWalletUi = async (
     connector: ledgerConnector,
     mount: ledgerOnboardMount,
     openImport: () => navigate("import-key"),
+    openMobilePq: () => void mobilePqOnboard.open(),
     openMultisig: () => navigate("multisig-add"),
     refresh: async () => {
       await render(await wallet.loadStatus());

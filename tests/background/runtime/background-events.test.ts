@@ -26,8 +26,32 @@ const SERVICE_MEMBER = /^ {4}(?:async )?([a-zA-Z0-9]+)[(:,]/gm;
 
 // Vault-service methods that persist a new activeAccountId, read out of the
 // source rather than listed by hand — the list can never silently go stale.
+// Some account kinds keep their read/derive/write together in their own store
+// module rather than inline in the service, so the scan has to follow the
+// delegation. A service member that calls one of these is still a mutator that
+// re-selects the active account.
+const ACTIVE_ACCOUNT_STORES = [
+  "packages/platform/vault/src/accounts/mobile-pq-account.ts",
+  "packages/platform/vault/src/accounts/network-account.ts",
+];
+
+const selectingStoreNames = async (): Promise<readonly string[]> => {
+  const names: string[] = [];
+  for (const path of ACTIVE_ACCOUNT_STORES) {
+    const text = await readFile(path, "utf8");
+    for (const match of text.matchAll(/export const (store[A-Za-z]+) = async/g)) {
+      const body = text.slice(match.index ?? 0);
+      if (body.includes("writeVault(") && body.includes("activeAccountId:")) {
+        names.push(match[1] ?? "");
+      }
+    }
+  }
+  return names;
+};
+
 const activeAccountMutators = async (): Promise<readonly string[]> => {
   const source = await readFile("packages/platform/vault/src/service/service.ts", "utf8");
+  const stores = await selectingStoreNames();
   const members = [...source.matchAll(SERVICE_MEMBER)].map((match) => ({
     at: match.index ?? 0,
     name: match[1] ?? "",
@@ -35,7 +59,8 @@ const activeAccountMutators = async (): Promise<readonly string[]> => {
   return members
     .filter(({ at }, position) => {
       const body = source.slice(at, members[position + 1]?.at ?? source.length);
-      return body.includes("writeVault(") && body.includes("activeAccountId:");
+      const writesInline = body.includes("writeVault(") && body.includes("activeAccountId:");
+      return writesInline || stores.some((store) => body.includes(`${store}(`));
     })
     .map(({ name }) => name)
     .sort();
@@ -47,6 +72,7 @@ const activeAccountMutators = async (): Promise<readonly string[]> => {
 const MUTATOR_MESSAGE_TYPES: Readonly<Record<string, readonly string[]>> = {
   addDerivedAccount: ["wallet.addAccount"],
   addLedgerAccount: ["wallet.addLedgerAccount"],
+  addMobilePqAccount: ["wallet.addMobilePqAccount"],
   createAccount: ["wallet.createAccount"],
   createLedgerVault: ["wallet.createLedgerVault"],
   ensureNetworkAccount: ["wallet.approveOrigin", "wallet.setActiveNetwork", "wallet.switchChain"],

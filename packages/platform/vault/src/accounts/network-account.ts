@@ -92,3 +92,53 @@ export const deriveNetworkAccount = async (
   };
   return { account, signingKeys: [{ accountId: account.id, privateKey: signingKey.privateKey }] };
 };
+
+/**
+ * Projects the selected account onto one network and makes it active, or selects
+ * the existing projection when there already is one.
+ *
+ * Lives beside {@link deriveNetworkAccount} rather than in the vault service so
+ * the read, the derivation, and the write are one unit: a projection that wrote
+ * an account without its signing key, or a signing key without its account,
+ * would break the vault's account/key bijection and refuse to decrypt. Refuses
+ * a duplicate rather than overwriting one.
+ */
+export const storeNetworkAccount = async (
+  deps: {
+    readonly kms: KmsPort;
+    readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+    readonly writeVault: (next: Vault, vaultPassphrase: string) => Promise<void>;
+  },
+  input: { readonly networkId: StarknetNetworkId; readonly vaultPassphrase: string },
+): Promise<AccountRef> => {
+  const vault = await deps.readVault(input.vaultPassphrase);
+  const source = selectSourceAccount(vault);
+  if (!source) {
+    throw new WalletError("No account selected");
+  }
+  const existing = findNetworkAccount(vault, input.networkId, source);
+  if (existing) {
+    await deps.writeVault({ ...vault, activeAccountId: existing.id }, input.vaultPassphrase);
+    return existing;
+  }
+  // Missing projection key material fails closed in the helper.
+  const { account, signingKeys } = await deriveNetworkAccount(
+    deps.kms,
+    vault,
+    source,
+    input.networkId,
+  );
+  if (vault.accounts.some((stored) => stored.id === account.id)) {
+    throw new WalletError("Account already exists");
+  }
+  await deps.writeVault(
+    {
+      ...vault,
+      accounts: [...vault.accounts, account],
+      activeAccountId: account.id,
+      signingKeys: [...vault.signingKeys, ...signingKeys],
+    },
+    input.vaultPassphrase,
+  );
+  return account;
+};

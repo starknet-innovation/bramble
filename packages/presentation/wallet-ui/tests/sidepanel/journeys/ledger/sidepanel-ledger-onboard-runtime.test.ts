@@ -101,6 +101,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     openImport: () => {
       imports += 1;
     },
+    openMobilePq: () => undefined,
     openMultisig: () => {
       multisigs += 1;
     },

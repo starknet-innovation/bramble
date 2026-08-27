@@ -35,6 +35,7 @@ import {
   ledgerAccountPath,
   MAX_LEDGER_ACCOUNT_BATCH,
 } from "@mc-wallet/wallet-model/ledger-path";
+import type { AddAccountRoute as LedgerOnboardAddKind } from "../onboarding/add-account-routes";
 
 /**
  * Number of account indices read per enumeration page (a page is `start` …
@@ -87,13 +88,7 @@ export type LedgerCandidate = {
 /**
  * Account-contract-aware routes dispatched by the add-account chooser.
  */
-export type LedgerOnboardAddKind =
-  | "argent"
-  | "import"
-  | "ledger-argent"
-  | "ledger-openzeppelin"
-  | "multisig"
-  | "openzeppelin";
+export type { AddAccountRoute as LedgerOnboardAddKind } from "../onboarding/add-account-routes";
 
 /**
  * The onboarding device-prompt view the binder renders: the add-account
@@ -143,6 +138,7 @@ export type LedgerOnboardControllerDeps = {
   readonly existingIds: () => ReadonlySet<string>;
   readonly onCancel: () => void;
   readonly openImport: () => void;
+  readonly openMobilePq: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly render: (view: LedgerOnboardView | null) => void;
@@ -448,12 +444,16 @@ export const createLedgerOnboardController = (
       deps.render({ kind: "connect" });
     } else if (kind === "argent" || kind === "openzeppelin") {
       void runChooseHd(kind);
-    } else if (kind === "import") {
-      deps.render(null);
-      deps.openImport();
     } else {
+      // The remaining routes all hand off to another journey.
       deps.render(null);
-      deps.openMultisig();
+      const open =
+        kind === "import"
+          ? deps.openImport
+          : kind === "mobile-pq"
+            ? deps.openMobilePq
+            : deps.openMultisig;
+      open();
     }
   };
 

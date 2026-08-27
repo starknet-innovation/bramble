@@ -17,6 +17,7 @@ import type { Vault } from "@mc-wallet/vault/schema";
 import type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
+  AddMobilePqAccountInput,
   ConnectedSite,
   CreateLedgerVaultInput,
   CreateVaultAccountInput,
@@ -35,7 +36,11 @@ import type {
   WrapNostrApplicationDataInput,
 } from "@mc-wallet/vault/service";
 import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
-import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type {
+  AccountRef,
+  LedgerAccountRef,
+  MobilePqAccountRef,
+} from "@mc-wallet/wallet-model/accounts";
 import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 
 /**
@@ -45,6 +50,8 @@ export type WalletStatusReader = {
   readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
   /** Stores a keyless Ledger account; optional only for partial test stubs. */
   readonly addLedgerAccount?: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
+  /** Enrolls a paired post-quantum device; optional only for partial test stubs. */
+  readonly addMobilePqAccount?: (input: AddMobilePqAccountInput) => Promise<MobilePqAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
   /** Creates a mnemonic-less Ledger vault; fails closed over an existing vault. */
   readonly createLedgerVault?: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
@@ -127,6 +134,9 @@ export const createWalletReader = (
     },
     async addLedgerAccount(input) {
       return (await required()).addLedgerAccount(input);
+    },
+    async addMobilePqAccount(input) {
+      return (await required()).addMobilePqAccount(input);
     },
     async createAccount(input) {
       return (await required()).createAccount(input);

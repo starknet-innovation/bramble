@@ -76,6 +76,7 @@ export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null):
       ${option("argent", "wallet", "Argent Account", "Create the next account with the Argent account model.")}
       ${option("ledger-openzeppelin", "shield", "OpenZeppelin Ledger Account", "Recommended · Use a Ledger with the OpenZeppelin account model.")}
       ${option("ledger-argent", "shield", "Argent Ledger Account", "Use a Ledger with the Argent account model.")}
+      ${option("mobile-pq", "shield", "Post Quantum Secure with your Biometrics", "Sign with an ML-DSA key held in your phone's secure hardware.")}
       ${option("import", "link", "Import from private key", "Add an existing Starknet account from its raw key.")}
       ${option("multisig", "users", "Argent Multisig", "Create or add an Argent account controlled by multiple signers.")}
     </div>

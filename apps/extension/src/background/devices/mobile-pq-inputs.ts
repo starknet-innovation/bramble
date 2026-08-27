@@ -13,7 +13,75 @@
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isMlDsa65Signature } from "@mc-wallet/wallet-model/signing";
+import { isMlDsaKind, type MlDsaKind } from "@mc-wallet/wallet-model/accounts";
+import {
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+  isStarknetNetworkId,
+  type StarknetNetworkId,
+} from "@mc-wallet/wallet-model/networks";
+import { isMlDsa65PublicKey, isMlDsa65Signature } from "@mc-wallet/wallet-model/signing";
+
+// Matches the bound the account model puts on a stored device id, so a record
+// the wallet would refuse to persist is refused at the message boundary instead.
+const MAX_DEVICE_ID_LENGTH = 64;
+
+/**
+ * A parsed request to enroll a paired device. The public key and the class hash
+ * are both pasted by the user at this milestone, so both are validated exactly
+ * here: a key of the wrong length or a non-felt class hash would otherwise reach
+ * address derivation and produce an address nobody can spend from.
+ */
+export type AddMobilePqAccountRequest = {
+  readonly challenge: string;
+  readonly classHash: string;
+  readonly deviceId: string;
+  readonly mlDsaKind: MlDsaKind;
+  readonly networkId: StarknetNetworkId;
+  readonly publicKey: string;
+  readonly signature: string;
+};
+
+/**
+ * Parses a `wallet.addMobilePqAccount` request, or returns null when malformed.
+ * The signature is the device's proof of possession over `challenge`; this
+ * parser checks its shape only, and the handler verifies it.
+ */
+export const readAddMobilePqAccountInput = (message: unknown): AddMobilePqAccountRequest | null => {
+  if (
+    !isRecord(message) ||
+    message["type"] !== "wallet.addMobilePqAccount" ||
+    !hasOnlyKnownKeys(message, [
+      "challenge",
+      "classHash",
+      "deviceId",
+      "mlDsaKind",
+      "networkId",
+      "publicKey",
+      "signature",
+      "type",
+    ])
+  ) {
+    return null;
+  }
+  const { challenge, classHash, deviceId, mlDsaKind, networkId, publicKey, signature } = message;
+  if (
+    typeof challenge !== "string" ||
+    !isStarkFieldElement(challenge) ||
+    typeof classHash !== "string" ||
+    !isNonZeroStarkFieldElement(classHash) ||
+    typeof deviceId !== "string" ||
+    deviceId.length === 0 ||
+    deviceId.length > MAX_DEVICE_ID_LENGTH ||
+    !isMlDsaKind(mlDsaKind) ||
+    !isStarknetNetworkId(networkId) ||
+    !isMlDsa65PublicKey(publicKey) ||
+    !isMlDsa65Signature(signature)
+  ) {
+    return null;
+  }
+  return { challenge, classHash, deviceId, mlDsaKind, networkId, publicKey, signature };
+};
 
 /**
  * A settled paired-phone sign callback: either the device's encoded signature

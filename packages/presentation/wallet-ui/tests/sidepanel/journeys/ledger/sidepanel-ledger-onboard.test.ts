@@ -142,6 +142,7 @@ const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> = {}) =>
     openImport: () => {
       imports += 1;
     },
+    openMobilePq: () => undefined,
     openMultisig: () => {
       multisigs += 1;
     },

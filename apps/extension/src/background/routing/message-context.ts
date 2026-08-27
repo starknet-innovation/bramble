@@ -28,6 +28,7 @@ import {
   releaseWaitersOnApprovalDrop,
   type SignatureWaiters,
 } from "../approvals/signature-waiters";
+import { createMobilePqEnrollment, type MobilePqEnrollment } from "../devices/mobile-pq-enrollment";
 import {
   createMobilePqSignQueue,
   type MobilePqSignQueue,
@@ -81,6 +82,7 @@ export type RouterContext = {
   readonly extensionId: string;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue: LedgerSignQueue;
+  readonly mobilePqEnrollment: MobilePqEnrollment;
   readonly mobilePqSignQueue: MobilePqSignQueue;
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
@@ -112,6 +114,7 @@ export type MessageHandlerOptions = {
   readonly approvals?: ApprovalQueue;
   readonly balanceSnapshots?: BalanceSnapshotStore;
   readonly ledgerSignQueue?: LedgerSignQueue;
+  readonly mobilePqEnrollment?: MobilePqEnrollment;
   readonly mobilePqSignQueue?: MobilePqSignQueue;
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
@@ -174,6 +177,9 @@ const runtimeMobilePqSignQueue = (
 ): MobilePqSignQueue =>
   provided ??
   createMobilePqSignQueue(notifyApprovalsChanged, MOBILE_PQ_SIGN_TIMEOUT, liveGeneration(session));
+
+const mobilePqEnrollmentFor = (provided: MobilePqEnrollment | undefined): MobilePqEnrollment =>
+  provided ?? createMobilePqEnrollment();
 
 const strk20PreparationsFor = (
   provided: Strk20WalletPreparationStore | undefined,
@@ -241,6 +247,7 @@ export const routerContext = (
     extensionId,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
+    mobilePqEnrollment: mobilePqEnrollmentFor(options.mobilePqEnrollment),
     mobilePqSignQueue: runtimeMobilePqSignQueue(options.mobilePqSignQueue, session),
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),
     multisigStore: options.multisigStore ?? memoryMultisigStore(),

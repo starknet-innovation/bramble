@@ -17,7 +17,11 @@ import {
 } from "@mc-wallet/transactions/verify";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { type DeviceSignQueues, rejectAllDeviceSigns } from "../devices/device-queues";
+import {
+  type DeviceEnrollment,
+  type DeviceSignQueues,
+  rejectAllDeviceSigns,
+} from "../devices/device-queues";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import { type BalanceSnapshotStore, cachedBalances } from "../portfolio/balance-snapshots";
 import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
@@ -51,30 +55,31 @@ import type { WalletStatusReader } from "./wallet-reader";
 /**
  * Dependencies shared by the wallet, allowance, and NFT operations handlers.
  */
-export type WalletOpsDeps = DeviceSignQueues & {
-  /** Serializes network/account selection writes; production always supplies it. */
-  readonly activeStateCoordinator?: ActiveStateCoordinator;
-  readonly activity: ActivityLog;
-  readonly allowanceStore: AllowanceStore;
-  readonly balanceSnapshots?: BalanceSnapshotStore;
-  /**
-   * Watched shared-account registry used only to authorize address-scoped,
-   * read-only asset discovery. Signing paths resolve multisigs separately.
-   */
-  readonly multisigStore?: MultisigStore;
-  /** Public, last-known ownership snapshots; transfer paths still re-prove live ownership. */
-  readonly nftSnapshots?: NftSnapshotStore;
-  /**
-   * Wall-clock reader used to age transaction observation windows. Injected so
-   * reconciliation stays deterministic under test; defaults to the system
-   * clock boundary.
-   */
-  readonly now?: () => number;
-  readonly preferencesStore: WalletPreferencesStore;
-  readonly runtimeRpc: RuntimeRpc;
-  readonly session: UnlockSession;
-  readonly wallet: WalletStatusReader;
-};
+export type WalletOpsDeps = DeviceSignQueues &
+  DeviceEnrollment & {
+    /** Serializes network/account selection writes; production always supplies it. */
+    readonly activeStateCoordinator?: ActiveStateCoordinator;
+    readonly activity: ActivityLog;
+    readonly allowanceStore: AllowanceStore;
+    readonly balanceSnapshots?: BalanceSnapshotStore;
+    /**
+     * Watched shared-account registry used only to authorize address-scoped,
+     * read-only asset discovery. Signing paths resolve multisigs separately.
+     */
+    readonly multisigStore?: MultisigStore;
+    /** Public, last-known ownership snapshots; transfer paths still re-prove live ownership. */
+    readonly nftSnapshots?: NftSnapshotStore;
+    /**
+     * Wall-clock reader used to age transaction observation windows. Injected so
+     * reconciliation stays deterministic under test; defaults to the system
+     * clock boundary.
+     */
+    readonly now?: () => number;
+    readonly preferencesStore: WalletPreferencesStore;
+    readonly runtimeRpc: RuntimeRpc;
+    readonly session: UnlockSession;
+    readonly wallet: WalletStatusReader;
+  };
 
 /**
  * Shared verifier scoping helper, re-exported from its home beside the verifier
