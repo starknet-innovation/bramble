@@ -10,7 +10,10 @@ import {
   argentAccountAddress,
   argentMultisigAddress,
 } from "@mc-wallet/starknet/account-contracts";
-import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
+import {
+  resetRpcEndpointCooldownsForTests,
+  WRONG_CHAIN_MESSAGE,
+} from "@mc-wallet/starknet/provider";
 import {
   accountDeployment,
   buildErc20TransferCall,
@@ -306,6 +309,7 @@ describe("starknet RPC helpers", () => {
       "starknet_addDeployAccountTransaction",
       "starknet_addInvokeTransaction",
     ] as const) {
+      resetRpcEndpointCooldownsForTests();
       const provider = {
         channel: {
           async fetchEndpoint() {

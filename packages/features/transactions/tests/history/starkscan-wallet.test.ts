@@ -2,6 +2,7 @@
  * Indexed holdings and transfer adapter checks for wallet-facing data.
  */
 import { describe, expect, test } from "bun:test";
+import { resetRpcEndpointCooldownsForTests } from "@mc-wallet/starknet/provider";
 import { createStarkscanClient } from "@mc-wallet/transactions/starkscan";
 import {
   createRpcFirstBalances,
@@ -191,6 +192,7 @@ describe("Starkscan wallet adapters", () => {
       (await createRpcFirstBalances({ client: complete, readPreferences })(input, offlineRpc))[0]
         ?.balance,
     ).toBe("0");
+    resetRpcEndpointCooldownsForTests();
 
     let rpcBalanceReads = 0;
     const unavailable = createStarkscanClient({

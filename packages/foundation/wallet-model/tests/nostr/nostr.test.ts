@@ -1,6 +1,10 @@
 /** Nostr public-value boundaries stay bounded before data reaches Krusty. */
 import { describe, expect, test } from "bun:test";
-import { isNostrEvent, parseNostrEventJson } from "@mc-wallet/wallet-model/nostr";
+import {
+  isNostrApplicationData,
+  isNostrEvent,
+  parseNostrEventJson,
+} from "@mc-wallet/wallet-model/nostr";
 
 const event = (content = "ciphertext") => ({
   content,
@@ -13,6 +17,12 @@ const event = (content = "ciphertext") => ({
 });
 
 describe("Nostr event boundary", () => {
+  test("bounds application data by UTF-8 bytes", () => {
+    expect(isNostrApplicationData("payload")).toBe(true);
+    expect(isNostrApplicationData("🦃".repeat(8_192))).toBe(true);
+    expect(isNostrApplicationData("🦃".repeat(8_193))).toBe(false);
+  });
+
   test("accepts only canonical, bounded signed event shapes", () => {
     expect(isNostrEvent(event())).toBe(true);
     expect(isNostrEvent({ ...event(), extra: true })).toBe(false);

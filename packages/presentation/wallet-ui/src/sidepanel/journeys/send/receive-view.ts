@@ -115,7 +115,6 @@ export const receiveAddressView = ({
               <code title="${escapeHtml(publicKeyX)}">${escapeHtml(accountLabel(publicKeyX))}</code>
               ${copyButton(publicKeyX, "Copy signer public key")}
             </div>
-            ${button({ attributes: { "data-copy": publicKeyX }, icon: "copy", label: "Copy public key", variant: "secondary" })}
             <div data-nostr-key-row>
               <div><strong>Coordination public key</strong><span data-nostr-key-status role="status" aria-live="polite">${nostrPublicKey ? "Authenticates private multisig handoffs from this wallet." : "Preparing secure coordination…"}</span></div>
               <div class="address-line" data-nostr-key-value${nostrPublicKey ? "" : " hidden"}>

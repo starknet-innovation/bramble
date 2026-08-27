@@ -48,39 +48,17 @@ type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
 const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(options);
 const RPC_ENDPOINT_COOLDOWN_MS = 30_000;
 const MAX_RPC_ENDPOINT_COOLDOWN_MS = 5 * 60_000;
-type RpcEndpointCooldown = {
-  readonly retryAt: number;
-  readonly suppressUntilExpiry: boolean;
-};
-const endpointCooldowns = new Map<string, RpcEndpointCooldown>();
-const endpointRecoveryProbes = new Set<string>();
+const endpointCooldowns = new Map<string, number>();
 
-const clearObservedCooldown = (
-  nodeUrl: string,
-  observed: RpcEndpointCooldown | undefined,
-): void => {
+const clearObservedCooldown = (nodeUrl: string, observed: number | undefined): void => {
   if (endpointCooldowns.get(nodeUrl) === observed) endpointCooldowns.delete(nodeUrl);
 };
 
 const availableRpcUrls = (rpcUrls: readonly string[], currentTime: number): readonly string[] => {
-  for (const [nodeUrl, cooldown] of endpointCooldowns) {
-    if (cooldown.retryAt <= currentTime) endpointCooldowns.delete(nodeUrl);
+  for (const [nodeUrl, retryAt] of endpointCooldowns) {
+    if (retryAt <= currentTime) endpointCooldowns.delete(nodeUrl);
   }
-  const unique = [...new Set(rpcUrls)];
-  const ready = unique.filter((nodeUrl) => !endpointCooldowns.has(nodeUrl));
-  if (ready.length > 0) return ready;
-  const recovery = unique
-    .filter((nodeUrl) => endpointCooldowns.get(nodeUrl)?.suppressUntilExpiry === false)
-    .filter((nodeUrl) => !endpointRecoveryProbes.has(nodeUrl))
-    .sort(
-      (left, right) =>
-        (endpointCooldowns.get(left)?.retryAt ?? currentTime) -
-        (endpointCooldowns.get(right)?.retryAt ?? currentTime),
-    )
-    .at(0);
-  if (recovery === undefined) return [];
-  endpointRecoveryProbes.add(recovery);
-  return [recovery];
+  return [...new Set(rpcUrls)].filter((nodeUrl) => !endpointCooldowns.has(nodeUrl));
 };
 
 const coolDownRpcUrl = (
@@ -95,15 +73,19 @@ const coolDownRpcUrl = (
     ? parseRetryAfterMilliseconds(error.retryAfter, wallClock())
     : null;
   const stored = endpointCooldowns.get(nodeUrl);
-  const existing = stored && stored.retryAt > currentTime ? stored : undefined;
+  const existing = stored && stored > currentTime ? stored : undefined;
   const retryAt =
     currentTime +
     Math.min(requestedDelay ?? RPC_ENDPOINT_COOLDOWN_MS, MAX_RPC_ENDPOINT_COOLDOWN_MS);
-  endpointCooldowns.set(nodeUrl, {
-    retryAt: Math.max(existing?.retryAt ?? 0, retryAt),
-    suppressUntilExpiry: refused || existing?.suppressUntilExpiry === true,
-  });
+  endpointCooldowns.set(nodeUrl, Math.max(existing ?? 0, retryAt));
 };
+
+/**
+ * Clears process-local endpoint health between isolated tests. Production code
+ * must retain cooldowns so independent resource lanes do not hammer one failed
+ * endpoint.
+ */
+export const resetRpcEndpointCooldownsForTests = (): void => endpointCooldowns.clear();
 
 /**
  * Safe marker for a write whose transport failed after submission began. The
@@ -317,8 +299,6 @@ export const withRpcFallback = async <T>(
       }
       coolDownRpcUrl(nodeUrl, now, wallClock, error);
       lastError = error;
-    } finally {
-      endpointRecoveryProbes.delete(nodeUrl);
     }
   }
   throw lastError;
@@ -364,8 +344,6 @@ const selectWriteProvider = async (
       if (isTransportRpcError(error)) coolDownRpcUrl(nodeUrl, now, wallClock, error);
       else clearObservedCooldown(nodeUrl, observedCooldown);
       lastError = error;
-    } finally {
-      endpointRecoveryProbes.delete(nodeUrl);
     }
   }
   throw chainMismatch ?? lastError;

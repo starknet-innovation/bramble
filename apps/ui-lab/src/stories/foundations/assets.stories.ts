@@ -39,7 +39,10 @@ export const Receive: LabStory = {
     await expect(body?.querySelector(".receive-public-key [data-copy]")).toHaveAttribute(
       "data-copy",
     );
-    await expect(body?.querySelector(".receive-public-key")).toHaveTextContent("Copy public key");
+    await expect(body?.querySelector(".receive-public-key [data-copy]")).toHaveAttribute(
+      "aria-label",
+      "Copy signer public key",
+    );
     await expect(body?.querySelector("[data-nostr-key-row]")).toBeVisible();
     await expect(body?.querySelector("[data-nostr-key-row]")).toHaveTextContent(
       "Coordination public key",

@@ -2,6 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import { getMultisigSignerAccount } from "@mc-wallet/multisig/signer-account";
 import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { resetRpcEndpointCooldownsForTests } from "@mc-wallet/starknet/provider";
 import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@mc-wallet/wallet-model/accounts";
 import type { RpcProvider } from "starknet";
 
@@ -76,6 +77,7 @@ describe("multisig signer account discovery", () => {
         rpcUrls: RPC_URLS,
       }),
     ).rejects.toThrow("not deployed yet");
+    resetRpcEndpointCooldownsForTests();
     await expect(
       getMultisigSignerAccount({
         address: ADDRESS,

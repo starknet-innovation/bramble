@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@mc-wallet/core/errors";
-import { createRpcProvider } from "@mc-wallet/starknet/provider";
+import { createRpcProvider, resetRpcEndpointCooldownsForTests } from "@mc-wallet/starknet/provider";
 import { IndeterminateRpcWriteError, submitInvokeTransaction } from "@mc-wallet/starknet/rpc";
 import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { type Call, CallData, hash, logger, type RpcProvider } from "starknet";
@@ -170,6 +170,7 @@ describe("invoke RPC write boundary", () => {
 
   test("restores retry safety for deployment checks and fee-estimation failures", async () => {
     for (const failure of ["getClassHashAt", "getEstimateFee", "buildTransaction"]) {
+      resetRpcEndpointCooldownsForTests();
       const { fetches, rejection } = await submitWithFailure(failure);
       expect(rejection).toBeInstanceOf(WalletError);
       expect(rejection).not.toBeInstanceOf(IndeterminateRpcWriteError);
@@ -241,6 +242,7 @@ describe("invoke RPC write boundary", () => {
 
   test("binds missing, malformed, and mismatched accepted hashes as indeterminate", async () => {
     for (const result of ["missingResult", "malformedResult", "mismatchedResult"]) {
+      resetRpcEndpointCooldownsForTests();
       const { fetches, rejection } = await submitWithFailure(result);
       expect(rejection).toBeInstanceOf(IndeterminateRpcWriteError);
       expect(fetches).toEqual(["starknet_addInvokeTransaction"]);

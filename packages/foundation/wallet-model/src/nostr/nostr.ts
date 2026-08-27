@@ -7,6 +7,13 @@ export const MAX_NOSTR_EVENT_JSON_BYTES = 131_070;
 export const MAX_NOSTR_APPLICATION_DATA_BYTES = 32_768;
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
 
+/** Bounded plaintext accepted by Krusty's application-data envelope. */
+export const isNostrApplicationData = (value: unknown): value is string =>
+  typeof value === "string" &&
+  value.length > 0 &&
+  value.length <= MAX_NOSTR_APPLICATION_DATA_BYTES &&
+  encodedLength(value) <= MAX_NOSTR_APPLICATION_DATA_BYTES;
+
 const isNostrHex32 = (value: unknown): value is string =>
   typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 

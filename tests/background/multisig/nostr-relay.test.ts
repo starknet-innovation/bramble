@@ -41,6 +41,7 @@ const socketFactory =
 
 describe("Nostr multisig relay", () => {
   test("publishes a recipient-bound gift wrap to each fixed relay", async () => {
+    expect(MULTISIG_NOSTR_RELAYS).toEqual(["wss://relay.primal.net", "wss://nos.lol"]);
     const sent: string[] = [];
     const giftWrap = event("11".repeat(32));
     const factory = socketFactory(sent, (frame, socket) => {

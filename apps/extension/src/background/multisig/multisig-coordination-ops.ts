@@ -6,7 +6,11 @@ import type {
 } from "@mc-wallet/multisig/repository";
 import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
-import { isNostrPublicKey, type NostrEvent } from "@mc-wallet/wallet-model/nostr";
+import {
+  isNostrApplicationData,
+  isNostrPublicKey,
+  type NostrEvent,
+} from "@mc-wallet/wallet-model/nostr";
 import type { AddressBookEntry } from "@mc-wallet/wallet-model/preferences";
 import { runActiveStateMutation } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -232,11 +236,17 @@ const shareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   if (recipients.length === 0) {
     return { error: "Save a co-signer wallet card before sharing securely" };
   }
+  const content = JSON.stringify(argentMultisigIntentPackage(intent));
+  if (!isNostrApplicationData(content)) {
+    return {
+      error: "This intent is too large for secure relay sharing. Copy the intent package instead",
+    };
+  }
   let published: Awaited<ReturnType<typeof publishForRecipients>>;
   try {
     published = await publishForRecipients(
       recipients,
-      JSON.stringify(argentMultisigIntentPackage(intent)),
+      content,
       passphrase,
       authorized.isCurrent,
       wrap,

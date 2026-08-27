@@ -11,6 +11,7 @@ import {
   isStarkPrivateKey,
 } from "@mc-wallet/wallet-model/networks";
 import {
+  isNostrApplicationData,
   isNostrPublicKey,
   MAX_NOSTR_APPLICATION_DATA_BYTES,
   MAX_NOSTR_EVENT_JSON_BYTES,
@@ -266,9 +267,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       if (
         !isRecord(opened) ||
         !hasOnlyKnownKeys(opened, ["content", "identifier", "senderPublicKey"]) ||
-        typeof opened["content"] !== "string" ||
-        opened["content"].length === 0 ||
-        encodedLength(opened["content"]) > MAX_NOSTR_APPLICATION_DATA_BYTES ||
+        !isNostrApplicationData(opened["content"]) ||
         typeof opened["identifier"] !== "string" ||
         !isNostrIdentifier(opened["identifier"]) ||
         !isNostrPublicKey(opened["senderPublicKey"])
@@ -310,10 +309,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
         !isDerivationIndex(accountIndex) ||
         !isNostrPublicKey(recipientPublicKey) ||
         !isNostrIdentifier(identifier) ||
-        typeof content !== "string" ||
-        content.length === 0 ||
-        content.length > MAX_NOSTR_APPLICATION_DATA_BYTES ||
-        encodedLength(content) > MAX_NOSTR_APPLICATION_DATA_BYTES
+        !isNostrApplicationData(content)
       ) {
         throw new WalletError("Invalid Nostr application-data input");
       }

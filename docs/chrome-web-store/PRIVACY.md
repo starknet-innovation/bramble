@@ -1,6 +1,6 @@
 # MC Wallet privacy policy
 
-Effective date: 25 August 2026
+Effective date: 27 August 2026
 
 MC Wallet is a self-custodial Starknet browser-extension wallet. This policy describes what data the
 extension handles, why it is needed, where it goes, and how a user controls it.
@@ -32,6 +32,13 @@ Starkscan activity lookup that discloses an account address is a separate per-ne
 used only after configured RPC history is unavailable. AVNU receives the asset and amount details
 needed for a user-requested swap. CoinGecko receives public asset identifiers needed for prices.
 The phishing feed supplies a public denylist; MC Wallet does not send the current site to that feed.
+
+When the user explicitly shares or checks for an Argent multisig handoff, MC Wallet connects to the
+fixed public Nostr relays `relay.primal.net` and `nos.lol`. A relay receives the recipient's public
+Nostr key, an encrypted and signed gift-wrap event, request timing, and ordinary connection metadata
+such as the user's IP address. The transaction package and signer identities inside the gift wrap
+are end-to-end encrypted by Krusty KMS; MC Wallet does not use these relays for chat, analytics, or
+background polling. Manual copy-and-paste handoff remains available without contacting a relay.
 
 ## Reliability diagnostics
 

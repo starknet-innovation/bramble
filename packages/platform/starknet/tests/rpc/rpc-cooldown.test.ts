@@ -117,32 +117,23 @@ describe("RPC endpoint cooldown", () => {
     expect(probes).toBe(0);
   });
 
-  test("allows only one concurrent recovery probe for a cooling endpoint", async () => {
-    const nodeUrl = "https://single-recovery-probe.example";
-    let releaseProbe = (): void => undefined;
+  test("does not probe a transport-failed endpoint before its cooldown expires", async () => {
+    const nodeUrl = "https://transport-cooldown.example";
+    let currentTime = 1_000;
     let attempts = 0;
     const provider = () => ({}) as RpcProvider;
     await expect(
       withRpcFallback(
         [nodeUrl],
         async () => {
+          attempts += 1;
           throw new RpcTransportError("offline");
         },
         provider,
-        () => 1_000,
+        () => currentTime,
       ),
     ).rejects.toBeInstanceOf(RpcTransportError);
 
-    const probe = withRpcFallback(
-      [nodeUrl],
-      () =>
-        new Promise<never>((_resolve, reject) => {
-          attempts += 1;
-          releaseProbe = () => reject(new RpcTransportError("still offline"));
-        }),
-      provider,
-      () => 1_000,
-    );
     await expect(
       withRpcFallback(
         [nodeUrl],
@@ -150,13 +141,21 @@ describe("RPC endpoint cooldown", () => {
           attempts += 1;
         },
         provider,
-        () => 1_000,
+        () => currentTime,
       ),
     ).rejects.toThrow("temporarily unavailable");
     expect(attempts).toBe(1);
 
-    releaseProbe();
-    await expect(probe).rejects.toBeInstanceOf(RpcTransportError);
+    currentTime += 30_000;
+    await withRpcFallback(
+      [nodeUrl],
+      async () => {
+        attempts += 1;
+      },
+      provider,
+      () => currentTime,
+    );
+    expect(attempts).toBe(2);
   });
 
   test("cools down an endpoint after a determinate refused broadcast", async () => {
