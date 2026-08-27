@@ -168,6 +168,15 @@ const SECRET_MATERIAL_FILES = new Set([
   // remains behind the privileged background accountHashSigner boundary.
   "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-intent-actions.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-views.ts",
+  // The paired-phone signing journey. Public material only: the envelope handed
+  // to the phone, the public signature pasted back, and the templates that show
+  // them. Private signing stays behind the background accountHashSigner
+  // boundary, and the verify gate runs there, never here.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/runtime-client.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/sign-envelope.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/sign-runtime.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/sign-session.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/sign-views.ts",
   "packages/features/transactions/src/routing/ledger-verify.ts",
   // Pure public-key verification consolidated for Ledger and KMS probe
   // callers; it receives no private key or vault credential.

@@ -11,6 +11,7 @@ import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+import { ML_DSA_65_PUBLIC_KEY_BYTES } from "@mc-wallet/wallet-model/signing";
 import type {
   ArgentMultisigView,
   DiscoveredNft,
@@ -59,6 +60,25 @@ export const ledgerAccount: AccountRef = {
   id: `SN_MAIN:${LEDGER_ADDRESS}`,
   networkId: "SN_MAIN",
   publicKeyX: "0x6509ed71b354b7125d61b6f3423cbfa33dd7a6b21f0878399a5713118f9e68e",
+};
+
+const MOBILE_PQ_ADDRESS = "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";
+
+/**
+ * A paired-phone account. Its `publicKeyX` is the Poseidon commitment the
+ * account contract validates against, and `publicKey` the full 1952-byte
+ * enclave key — rendered at real length so a fixture never understates how much
+ * the transport actually carries.
+ */
+export const mobilePqAccount: AccountRef = {
+  accountContractType: "ml-dsa",
+  address: MOBILE_PQ_ADDRESS,
+  classHash: "0x222",
+  derivation: { deviceId: "Pixel 9 Pro", kind: "mobile-pq", transport: { kind: "clipboard" } },
+  id: `SN_MAIN:${MOBILE_PQ_ADDRESS}`,
+  networkId: "SN_MAIN",
+  publicKey: `0x${"ab".repeat(ML_DSA_65_PUBLIC_KEY_BYTES)}`,
+  publicKeyX: "0x7509ed71b354b7125d61b6f3423cbfa33dd7a6b21f0878399a5713118f9e68e",
 };
 
 export const secondAccount: AccountRef = {

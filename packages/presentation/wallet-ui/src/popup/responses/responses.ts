@@ -49,6 +49,14 @@ export {
   type OkResponse,
 } from "./responses-ledger";
 /**
+ * Re-exported paired-phone response validators for one import path.
+ */
+export {
+  isMobilePqSignPendingResponse,
+  type MobilePqSignPendingResponse,
+  type MobilePqSignRequestSummary,
+} from "./responses-mobile-pq";
+/**
  * Re-exported NFT auto-discovery validators for one import path.
  */
 export {

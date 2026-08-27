@@ -40,6 +40,7 @@ import {
 } from "../../popup/responses/responses";
 import { createNftRuntimeClient } from "../journeys/collectibles/nft-runtime";
 import { createLedgerRuntimeClient } from "../journeys/ledger/runtime-client";
+import { createMobilePqRuntimeClient } from "../journeys/mobile/runtime-client";
 import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding-runtime";
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
 
@@ -107,6 +108,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
 
   return {
     ...createLedgerRuntimeClient(sendMessage),
+    ...createMobilePqRuntimeClient(sendMessage),
     ...createNftRuntimeClient(sendMessage),
     ...createOnboardingRuntimeClient(sendMessage),
     ...createPrivacyRuntimeClient(sendMessage),

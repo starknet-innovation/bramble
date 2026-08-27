@@ -5,6 +5,7 @@ import { actionableApprovals } from "../journeys/approvals/approval-screen";
 import { bindLedgerFirstRun } from "../journeys/ledger/first-run";
 import { createLedgerOnboardEntry } from "../journeys/ledger/onboard-entry";
 import { createLedgerSignRuntime } from "../journeys/ledger/sign-runtime";
+import { createMobilePqSignRuntime } from "../journeys/mobile/sign-runtime";
 import { createMultisigClient } from "../journeys/multisig/multisig-runtime";
 import { shouldPreserveMultisigIntentSurface } from "../journeys/multisig/multisig-surface";
 import { bindMultisigs } from "../journeys/multisig/multisig-ui";
@@ -30,7 +31,7 @@ import { bindSwap } from "../journeys/swap/swap-ui";
 import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
-import { bindCopyButtons, showToast } from "../shared/dom";
+import { bindCopyButtons, overlayMount, showToast } from "../shared/dom";
 import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
 import { applyEntryTheme, bindEntryNavigation } from "../shell/entry-ui";
 import {
@@ -98,21 +99,19 @@ export const startWalletUi = async (
   const deployment = createDeploymentCache(wallet);
   const cache: RenderData = emptyRenderCache();
   let privacy: ReturnType<typeof createPrivacyController>;
-  const ledgerSignMount = document.createElement("div");
-  ledgerSignMount.className = "ledger-sign-overlay";
-  ledgerSignMount.hidden = true;
-  document.body.append(ledgerSignMount);
   const ledgerSign = createLedgerSignRuntime({
     connector: ledgerConnector,
-    mount: ledgerSignMount,
+    mount: overlayMount("ledger-sign-overlay"),
     onSignatureReported: transfer.markTransferLedgerAuthorized,
     status: () => cache.status,
     wallet,
   });
-  const ledgerOnboardMount = document.createElement("div");
-  ledgerOnboardMount.className = "ledger-onboard-overlay";
-  ledgerOnboardMount.hidden = true;
-  document.body.append(ledgerOnboardMount);
+  const mobilePqSign = createMobilePqSignRuntime({
+    mount: overlayMount("ledger-sign-overlay"),
+    status: () => cache.status,
+    wallet,
+  });
+  const ledgerOnboardMount = overlayMount("ledger-onboard-overlay");
   const scopeAnnouncer = createScopeAnnouncer(document);
   const ledgerOnboard = createLedgerOnboardEntry({
     addHd: async (accountContractType) => {
@@ -457,6 +456,7 @@ export const startWalletUi = async (
     }
     if (!scopeChanged) paint();
     void ledgerSign.poll();
+    void mobilePqSign.poll();
     await hydrateView({
       status,
       activeView,

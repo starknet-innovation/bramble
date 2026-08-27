@@ -26,6 +26,7 @@ export const PROGRESS_STYLES = `
   }
   .liquid-dots[data-liquid-dots="approval"] { filter: url("#mc-liquid-dots-approval"); }
   .liquid-dots[data-liquid-dots="ledger"] { filter: url("#mc-liquid-dots-ledger"); }
+  .liquid-dots[data-liquid-dots="mobile-pq"] { filter: url("#mc-liquid-dots-mobile-pq"); }
   .liquid-dots[data-liquid-dots="privacy"] { filter: url("#mc-liquid-dots-privacy"); }
   .liquid-dots[data-liquid-dots="send"] { filter: url("#mc-liquid-dots-send"); }
   .liquid-dots-compact {

@@ -288,6 +288,19 @@ export const bindCopyButtons = (app: Element | null): void => {
 };
 
 /**
+ * Creates a hidden full-screen overlay mount appended to the document body. The
+ * device takeovers live outside the app root so they survive a dashboard
+ * repaint: a signing prompt must not reset because balances streamed in.
+ */
+export const overlayMount = (className: string): HTMLElement => {
+  const mount = document.createElement("div");
+  mount.className = className;
+  mount.hidden = true;
+  document.body.append(mount);
+  return mount;
+};
+
+/**
  * Replaces an element's children with markup parsed as a document fragment — the
  * audited string-HTML sink for panel sub-regions that render their own escaped
  * template (e.g. the Ledger sign overlay) outside the main shell repaint. The

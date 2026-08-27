@@ -5,7 +5,7 @@
  * IDs are deliberately closed over known wallet surfaces: the matching SVG
  * filter URL is selected by static CSS, never assembled from untrusted input.
  */
-export type LiquidDotsId = "approval" | "ledger" | "privacy" | "send";
+export type LiquidDotsId = "approval" | "ledger" | "mobile-pq" | "privacy" | "send";
 
 /**
  * Renders the visible Liquid Dots mark. The surrounding status region owns the
