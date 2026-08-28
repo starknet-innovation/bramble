@@ -3,7 +3,11 @@ import { hasOnlyKnownKeys, isRecord, isStringArray } from "@mc-wallet/core/json"
 import type { KeyValueStore } from "@mc-wallet/store/kv";
 import { serializeStoreMutations } from "@mc-wallet/store/mutation";
 import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
-import { isStarkFieldElement, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import {
+  isStarkFieldElement,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
 import { isPrivacyScoreState, type PrivacyScoreState } from "./score-types";
 
 const STORE_KEY = "mc-wallet:privacy-score";
@@ -40,10 +44,11 @@ type PrivacyScoreCacheState = {
  */
 export type PrivacyScoreCache = {
   readonly read: () => Promise<PrivacyScoreCacheState>;
+  /** Returns false when durable state already pins a newer or conflicting checkpoint. */
   readonly write: (
     checkpoint: PrivacyScoreCheckpoint,
     account: PrivacyScoreCacheEntry,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
 };
 
 const emptyState = (): PrivacyScoreCacheState => ({ accounts: [], schemaVersion: 1 });
@@ -100,6 +105,14 @@ export const createPrivacyScoreCache = (store: KeyValueStore): PrivacyScoreCache
       read: () => readState(store),
       async write(checkpoint, account) {
         const current = await readState(store);
+        if (
+          current.checkpoint &&
+          (checkpoint.snapshotBlockNumber < current.checkpoint.snapshotBlockNumber ||
+            (checkpoint.snapshotBlockNumber === current.checkpoint.snapshotBlockNumber &&
+              !sameFelt(checkpoint.snapshotBlockHash, current.checkpoint.snapshotBlockHash)))
+        ) {
+          return false;
+        }
         const retained = current.accounts.filter(
           (entry) => entry.accountId !== account.accountId || entry.networkId !== account.networkId,
         );
@@ -108,6 +121,7 @@ export const createPrivacyScoreCache = (store: KeyValueStore): PrivacyScoreCache
           checkpoint,
           schemaVersion: 1,
         });
+        return true;
       },
     },
     ["read"],

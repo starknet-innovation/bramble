@@ -59,6 +59,15 @@ export type PrivacyAccountState = {
 };
 
 /**
+ * Account-scoped score result loaded independently from private balances.
+ */
+export type PrivacyScoreDisclosure = {
+  readonly accountId: string;
+  readonly networkId: string;
+  readonly score: PrivacyScoreState;
+};
+
+/**
  * Immutable review metadata for one register, deposit, or private-send
  * operation.
  */
@@ -274,14 +283,12 @@ const readState = (response: unknown): PrivacyAccountState | null => {
       "balances",
       "networkId",
       "poolFeeFri",
-      "privacyScore",
       "relayConfigured",
       "registration",
     ]) ||
     !isStarknetNetworkId(state["networkId"]) ||
     !isAccountIdForNetwork(state["accountId"], state["networkId"]) ||
     !isPoolFee(state["poolFeeFri"]) ||
-    (state["privacyScore"] !== undefined && !isPrivacyScoreState(state["privacyScore"])) ||
     typeof state["relayConfigured"] !== "boolean" ||
     (state["registration"] !== "pending" &&
       state["registration"] !== "registered" &&
@@ -323,9 +330,33 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     balances,
     networkId: state["networkId"],
     poolFeeFri: state["poolFeeFri"],
-    ...(isPrivacyScoreState(state["privacyScore"]) ? { privacyScore: state["privacyScore"] } : {}),
     relayConfigured: state["relayConfigured"],
     registration: state["registration"],
+  };
+};
+
+const readPrivacyScore = (response: unknown): PrivacyScoreDisclosure | null => {
+  if (
+    !isRecord(response) ||
+    !hasOnlyKnownKeys(response, ["ok", "strk20PrivacyScore"]) ||
+    response["ok"] !== true ||
+    !isRecord(response["strk20PrivacyScore"])
+  ) {
+    return null;
+  }
+  const value = response["strk20PrivacyScore"];
+  if (
+    !hasOnlyKnownKeys(value, ["accountId", "networkId", "score"]) ||
+    !isStarknetNetworkId(value["networkId"]) ||
+    !isAccountIdForNetwork(value["accountId"], value["networkId"]) ||
+    !isPrivacyScoreState(value["score"])
+  ) {
+    return null;
+  }
+  return {
+    accountId: value["accountId"],
+    networkId: value["networkId"],
+    score: value["score"],
   };
 };
 
@@ -359,6 +390,14 @@ export const createPrivacyRuntimeClient = (
       return state;
     }
     throw responseError(response, "Private balances unavailable");
+  },
+  async loadPrivacyScore(): Promise<PrivacyScoreDisclosure> {
+    const response = await sendMessage({ type: "wallet.strk20PrivacyScore" });
+    const score = readPrivacyScore(response);
+    if (score) {
+      return score;
+    }
+    throw responseError(response, "Privacy score unavailable");
   },
   async preparePrivacyDeposit(
     tokenId: string,

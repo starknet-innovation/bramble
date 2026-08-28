@@ -101,6 +101,59 @@ describe("privacy UI async scope isolation", () => {
     expect(paints).toBe(2);
   });
 
+  test("paints private balances before the independent score request settles", async () => {
+    const loaded = {
+      accountId: account.id,
+      balances: [],
+      networkId: "SN_MAIN" as const,
+      poolFeeFri: "0x1",
+      relayConfigured: true,
+      registration: "registered" as const,
+    };
+    const score = deferred<{
+      readonly accountId: string;
+      readonly networkId: string;
+      readonly score: { readonly status: "no-withdrawals" };
+    }>();
+    let disclosure: PrivacyDisclosureState = { error: null, loading: false, value: null };
+    let paints = 0;
+    bindPrivacy({
+      app: mount("<div></div>"),
+      balances: () => [],
+      disclosure: () => disclosure,
+      generation: () => 0,
+      journey: () => ({ stage: "idle" }),
+      navigate: () => undefined,
+      paint: () => {
+        paints += 1;
+      },
+      preferences: () => preferences,
+      setDisclosure: (state) => {
+        disclosure = state;
+      },
+      setJourney: () => undefined,
+      status: () => statusFor(account.id),
+      wallet: {
+        loadPrivacyScore: () => score.promise,
+        loadPrivacyState: async () => loaded,
+      } as unknown as SidepanelWallet,
+    });
+    await tick();
+
+    expect(disclosure).toEqual({ error: null, loading: false, value: loaded });
+    expect(paints).toBe(2);
+
+    score.resolve({
+      accountId: account.id,
+      networkId: "SN_MAIN",
+      score: { status: "no-withdrawals" },
+    });
+    await tick();
+
+    expect(disclosure.value?.privacyScore).toEqual({ status: "no-withdrawals" });
+    expect(paints).toBe(3);
+  });
+
   test("never starts discovery while locked, already loading, or after an error", () => {
     let loads = 0;
     const wallet = {

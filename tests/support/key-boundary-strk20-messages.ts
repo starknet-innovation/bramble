@@ -1,13 +1,10 @@
 /**
  * STRK20 requests for the exhaustive background key-boundary scan.
  *
- * These are the entries the scan most needs to be live: every one of them but
- * the network-config write really derives the account-scoped viewing key on its
- * way through the STRK20 service double, exactly where the official SDK adapter
- * would, so a response that never got past its input validator would leave the
- * one secret this module exists to guard completely unscanned. That set is
- * pinned in tests/background/key-boundary.test.ts, so this comment cannot drift
- * away from what the entries actually do.
+ * Entries that reach the STRK20 SDK derive the account-scoped viewing key in
+ * the shared harness, exactly where the official adapter would. Local-only
+ * disclosures still have to produce a live scanned response even though they
+ * never need that key. The deriving set is pinned in the key-boundary suite.
  */
 import {
   contentSender,
@@ -70,6 +67,7 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: contentSender,
   },
   { message: { type: "wallet.strk20State" }, sender: extensionSender },
+  { message: { type: "wallet.strk20PrivacyScore" }, sender: extensionSender },
   {
     live: async (ids) => ({ tokenId: ids.tokenId }),
     message: {

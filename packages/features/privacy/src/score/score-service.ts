@@ -39,7 +39,7 @@ export type PrivacyScoreInput = {
 };
 
 /**
- * Read-only privacy-score service used by the STRK20 state handler.
+ * Read-only privacy-score service used by the separate score handler.
  */
 export type PrivacyScoreService = {
   /**
@@ -119,6 +119,24 @@ const scoreSnapshot = (
     return { status: "stale" };
   }
   return summarizePrivacyScores(snapshot.withdrawals, transactions, snapshot);
+};
+
+const scoreAfterCacheWrite = async (
+  cache: PrivacyScoreCache,
+  stored: boolean,
+  input: PrivacyScoreInput,
+  keys: readonly string[],
+  score: PrivacyScoreState,
+  now: number,
+): Promise<PrivacyScoreState> => {
+  if (stored) {
+    return score;
+  }
+  const latest = await cache.read();
+  const latestEntry = latest.accounts.find(
+    (entry) => entry.accountId === input.accountId && entry.networkId === input.networkId,
+  );
+  return cachedResult(latestEntry, keys, now, false) ?? { status: "unavailable" };
 };
 
 /**
@@ -205,7 +223,7 @@ export const createPrivacyScoreService = ({
         const snapshot = await verifiedSnapshot(state.checkpoint);
         const checkedAt = now();
         const score = scoreSnapshot(snapshot, input.transactions, checkedAt);
-        await cache.write(
+        const stored = await cache.write(
           {
             snapshotBlockHash: snapshot.snapshotBlockHash,
             snapshotBlockNumber: snapshot.snapshotBlockNumber,
@@ -218,7 +236,7 @@ export const createPrivacyScoreService = ({
             transactionKeys: keys,
           },
         );
-        return score;
+        return scoreAfterCacheWrite(cache, stored, input, keys, score, now());
       } catch {
         return cachedResult(existing, keys, now(), false) ?? { status: "unavailable" };
       }

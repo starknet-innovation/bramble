@@ -63,6 +63,14 @@ const input = {
   transactions: [{ hash: TX_HASH }],
 };
 
+const cacheEntry = (accountId: string, checkedAt: number) => ({
+  accountId,
+  checkedAt,
+  networkId: "SN_MAIN" as const,
+  score: { status: "pending" as const },
+  transactionKeys: [TX_HASH],
+});
+
 describe("privacy score service", () => {
   test("requests only shared static files and caches a verified local association", async () => {
     const backing = createMemoryStore();
@@ -136,5 +144,31 @@ describe("privacy score service", () => {
     });
 
     expect(await service.score(input)).toEqual({ status: "unavailable" });
+  });
+
+  test("rejects an older or conflicting checkpoint inside serialized cache writes", async () => {
+    const cache = createPrivacyScoreCache(createMemoryStore());
+    const newest = {
+      snapshotBlockHash: "0x0000000000000abc",
+      snapshotBlockNumber: 101,
+    };
+    expect(await cache.write(newest, cacheEntry("SN_MAIN:0xabc", 1))).toBe(true);
+
+    expect(
+      await cache.write(
+        { snapshotBlockHash: "0x0000000000000def", snapshotBlockNumber: 100 },
+        cacheEntry("SN_MAIN:0xdef", 2),
+      ),
+    ).toBe(false);
+    expect(
+      await cache.write(
+        { snapshotBlockHash: "0x0000000000000123", snapshotBlockNumber: 101 },
+        cacheEntry("SN_MAIN:0xdef", 3),
+      ),
+    ).toBe(false);
+
+    const state = await cache.read();
+    expect(state.checkpoint).toEqual(newest);
+    expect(state.accounts.map((entry) => entry.accountId)).toEqual(["SN_MAIN:0xabc"]);
   });
 });

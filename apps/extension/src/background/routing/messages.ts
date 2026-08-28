@@ -19,6 +19,7 @@ import { handleAllowanceOps } from "../portfolio/allowance-ops";
 import { handleDiscoveryOps } from "../portfolio/discovery-ops";
 import { handleNftOps } from "../portfolio/nft-ops";
 import { handleTokenOps } from "../portfolio/token-ops";
+import { handlePrivacyScoreOps } from "../privacy/privacy-score-ops";
 import { handleStrk20Ops } from "../privacy/strk20-ops";
 import { handleStrk20WalletOps } from "../privacy/strk20-wallet-ops";
 import { handleAddChainOps } from "../provider/add-chain-ops";
@@ -86,6 +87,12 @@ const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...buildOpsDeps(ctx),
   multisigDeploymentReviews: ctx.multisigDeploymentReviews,
   multisigStore: ctx.multisigStore,
+});
+
+const buildStrk20WalletDeps = (ctx: RouterContext) => ({
+  ...buildOpsDeps(ctx),
+  privacyScores: ctx.privacyScores,
+  strk20Preparations: ctx.strk20Preparations,
 });
 
 const MULTISIG_ACTIVE_STATE_MESSAGES = new Set([
@@ -410,15 +417,9 @@ const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message, sender) => handleDeclareOps(ctx, messageType, message, sender),
   (ctx, messageType, message, sender) => handleStrk20Ops(ctx, messageType, message, sender),
   (ctx, messageType, message) =>
-    handleStrk20WalletOps(
-      {
-        ...buildOpsDeps(ctx),
-        privacyScores: ctx.privacyScores,
-        strk20Preparations: ctx.strk20Preparations,
-      },
-      messageType,
-      message,
-    ),
+    handlePrivacyScoreOps(buildStrk20WalletDeps(ctx), messageType, message),
+  (ctx, messageType, message) =>
+    handleStrk20WalletOps(buildStrk20WalletDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleOriginOps(ctx, messageType, message),
   (ctx, messageType, message) => handleTokenOps(ctx, messageType, message),
   handleCreateAccount,

@@ -16,6 +16,7 @@ import {
   type PrivacyJourneyState,
 } from "./privacy-model";
 import { createPendingRegistrationPoll } from "./privacy-pending-poll";
+import type { PrivacyAccountState } from "./privacy-runtime";
 
 /**
  * Current render state and callbacks consumed by privacy bindings.
@@ -61,6 +62,34 @@ const scopeMatches = (deps: PrivacyUiDeps, scope: PrivacyAsyncScope): boolean =>
   );
 };
 
+const loadPrivacyScoreDisclosure = async (
+  deps: PrivacyUiDeps,
+  scope: PrivacyAsyncScope,
+  base: PrivacyAccountState,
+): Promise<void> => {
+  try {
+    const result = await deps.wallet.loadPrivacyScore();
+    const current = deps.disclosure();
+    if (
+      current.value !== base ||
+      !scopeMatches(deps, scope) ||
+      result.accountId !== scope.accountId ||
+      result.networkId !== scope.networkId
+    ) {
+      return;
+    }
+    deps.setDisclosure({
+      error: null,
+      loading: false,
+      value: { ...base, privacyScore: result.score },
+    });
+    deps.paint();
+  } catch {
+    // Optional metadata must never turn a successful private-balance read into
+    // an error or delay the balance screen's own retry behavior.
+  }
+};
+
 /**
  * Re-reads the active account's privacy state with account/network staleness
  * guards. Exported so Send's recoverable route error uses the same loader and
@@ -87,6 +116,7 @@ export const loadPrivacyDisclosure = async (deps: PrivacyUiDeps): Promise<boolea
     }
     deps.setDisclosure({ error: null, loading: false, value });
     deps.paint();
+    void loadPrivacyScoreDisclosure(deps, scope, value);
     return true;
   } catch (error) {
     if (deps.disclosure() === pending && scopeMatches(deps, scope)) {

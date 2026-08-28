@@ -135,7 +135,7 @@ describe("background wallet STRK20 operations", () => {
     );
   });
 
-  test("associates the signed score against only this account's local withdrawals", async () => {
+  test("loads the locally associated score without blocking private balance state", async () => {
     const activity = memoryActivityLog(() => SUBMITTED_AT);
     await activity.record({
       accountId: account.id,
@@ -156,11 +156,28 @@ describe("background wallet STRK20 operations", () => {
       },
     });
 
-    const response = (await handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)) as {
-      readonly strk20State: { readonly privacyScore: unknown };
+    const state = (await handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)) as {
+      readonly strk20State: Readonly<Record<string, unknown>>;
+    };
+    expect(state.strk20State).not.toHaveProperty("privacyScore");
+    expect(scoreInput).toBeUndefined();
+
+    const response = (await handler(
+      { type: "wallet.strk20PrivacyScore" },
+      STRK20_EXTENSION_SENDER,
+    )) as {
+      readonly strk20PrivacyScore: {
+        readonly accountId: string;
+        readonly networkId: string;
+        readonly score: unknown;
+      };
     };
 
-    expect(response.strk20State.privacyScore).toEqual({ status: "pending" });
+    expect(response.strk20PrivacyScore).toMatchObject({
+      accountId: account.id,
+      networkId: account.networkId,
+      score: { status: "pending" },
+    });
     expect(scoreInput).toMatchObject({
       accountId: account.id,
       networkId: account.networkId,

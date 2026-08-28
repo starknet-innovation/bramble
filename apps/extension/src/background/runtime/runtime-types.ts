@@ -35,8 +35,8 @@ import type {
   Strk20PrepareResponse,
   Strk20RecipientStatusResponse,
   Strk20SubaccountCommitmentResponse,
+  Strk20WalletDisclosureResponse,
   Strk20WalletPreparationResponse,
-  Strk20WalletStateResponse,
 } from "../privacy/runtime-strk20-types";
 import type { SwapPreparationReview } from "../transactions/swap-preparations";
 
@@ -485,8 +485,8 @@ export type RuntimeResponse =
   | Strk20PrepareResponse
   | Strk20RecipientStatusResponse
   | Strk20SubaccountCommitmentResponse
+  | Strk20WalletDisclosureResponse
   | Strk20WalletPreparationResponse
-  | Strk20WalletStateResponse
   | SwapQuoteResponse
   | SwapPreparationResponse
   | SwapTokensResponse

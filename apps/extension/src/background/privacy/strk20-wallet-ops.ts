@@ -24,7 +24,6 @@ import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
-import { privacyScoreForState } from "./privacy-score-ops";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
@@ -147,7 +146,6 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
         }),
         networkId: context.accountContext.account.networkId,
         poolFeeFri,
-        privacyScore: await privacyScoreForState(deps, context),
         relayConfigured: context.accountContext.config?.paymaster !== undefined,
         registration,
       },

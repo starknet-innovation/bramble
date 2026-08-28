@@ -87,6 +87,7 @@ const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
 const POLLED_OUTSIDE_HYDRATION: readonly string[] = [
   "wallet.status",
   "wallet.transactionAlerts",
+  "wallet.strk20PrivacyScore",
   "wallet.strk20State",
 ];
 
@@ -234,7 +235,7 @@ describe("panel polling cannot hold the wallet unlocked", () => {
     expect([...called].filter((call) => HYDRATED_CALL_MESSAGES[call] === undefined)).toEqual([]);
   });
 
-  test("the three ambient readers outside hydration remain classified", async () => {
+  test("the ambient readers outside hydration remain classified", async () => {
     const [lifecycle, privacy, transactionAlerts] = await Promise.all([
       readFile(LIFECYCLE_SOURCE, "utf8"),
       readFile(PRIVACY_SOURCE, "utf8"),
@@ -248,8 +249,15 @@ describe("panel polling cannot hold the wallet unlocked", () => {
       transactionAlerts.split("\n").filter((line) => line.includes("wallet.loadTransactionAlerts")),
     ).toEqual(["    const alerts = await wallet.loadTransactionAlerts().catch(() => []);"]);
     expect(
-      privacy.split("\n").filter((line) => line.includes("deps.wallet.loadPrivacyState")),
+      privacy
+        .split("\n")
+        .filter(
+          (line) =>
+            line.includes("deps.wallet.loadPrivacyScore") ||
+            line.includes("deps.wallet.loadPrivacyState"),
+        ),
     ).toEqual([
+      "    const result = await deps.wallet.loadPrivacyScore();",
       "    const value = await deps.wallet.loadPrivacyState();",
       "    load: () => deps.wallet.loadPrivacyState(),",
     ]);

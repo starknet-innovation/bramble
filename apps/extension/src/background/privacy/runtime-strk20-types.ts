@@ -35,7 +35,7 @@ export type Strk20SubaccountCommitmentResponse = {
  * Private-balance state returned only to an extension-controlled page after the
  * user explicitly enables disclosure.
  */
-export type Strk20WalletStateResponse = {
+type Strk20WalletStateResponse = {
   readonly ok: true;
   readonly strk20State: {
     readonly accountId: string;
@@ -49,8 +49,6 @@ export type Strk20WalletStateResponse = {
     readonly networkId: StarknetNetworkId;
     /** Pool action fee in FRI. A failed read rejects the state request. */
     readonly poolFeeFri: string;
-    /** Signed public withdrawal estimate associated only against local activity. */
-    readonly privacyScore: PrivacyScoreState;
     /** Whether this network has the unlinkable paymaster route private spends require. */
     readonly relayConfigured: boolean;
     /**
@@ -61,6 +59,24 @@ export type Strk20WalletStateResponse = {
     readonly registration: "pending" | "registered" | "unregistered";
   };
 };
+
+/**
+ * Optional signed withdrawal estimate returned independently from core private
+ * balances so downloading a public snapshot cannot delay the balance screen.
+ */
+type Strk20PrivacyScoreResponse = {
+  readonly ok: true;
+  readonly strk20PrivacyScore: {
+    readonly accountId: string;
+    readonly networkId: StarknetNetworkId;
+    readonly score: PrivacyScoreState;
+  };
+};
+
+/**
+ * Core and optional STRK20 disclosures accepted by the runtime response union.
+ */
+export type Strk20WalletDisclosureResponse = Strk20PrivacyScoreResponse | Strk20WalletStateResponse;
 
 /**
  * Frozen registration, deposit, or private-send review returned to the

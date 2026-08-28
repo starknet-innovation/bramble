@@ -38,7 +38,7 @@ const registration = {
 };
 
 describe("privacy runtime client", () => {
-  test("sends the four privileged request shapes and accepts validated responses", async () => {
+  test("sends the privileged request shapes and accepts validated responses", async () => {
     const seen: unknown[] = [];
     const client = createPrivacyRuntimeClient(async (message) => {
       seen.push(message);
@@ -59,9 +59,18 @@ describe("privacy runtime client", () => {
             ],
             networkId: "SN_MAIN",
             poolFeeFri: "0x1",
-            privacyScore: { status: "no-withdrawals" },
             relayConfigured: true,
             registration: "registered",
+          },
+        };
+      }
+      if (type === "wallet.strk20PrivacyScore") {
+        return {
+          ok: true,
+          strk20PrivacyScore: {
+            accountId: "SN_MAIN:0xabc",
+            networkId: "SN_MAIN",
+            score: { status: "no-withdrawals" },
           },
         };
       }
@@ -76,8 +85,12 @@ describe("privacy runtime client", () => {
 
     await expect(client.loadPrivacyState()).resolves.toMatchObject({
       balances: [{ balance: "0x2", symbol: "ETH" }],
-      privacyScore: { status: "no-withdrawals" },
       registration: "registered",
+    });
+    await expect(client.loadPrivacyScore()).resolves.toEqual({
+      accountId: "SN_MAIN:0xabc",
+      networkId: "SN_MAIN",
+      score: { status: "no-withdrawals" },
     });
     await expect(
       client.preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT),
@@ -86,6 +99,7 @@ describe("privacy runtime client", () => {
     await expect(client.executePrivacyPreparation(digest)).resolves.toBe("0x789");
     expect(seen).toEqual([
       { type: "wallet.strk20State" },
+      { type: "wallet.strk20PrivacyScore" },
       {
         amount: "1.25",
         recipient: RECIPIENT,
@@ -119,8 +133,8 @@ describe("privacy runtime client", () => {
     );
   });
 
-  test("rejects malformed privacy score state", async () => {
-    const client = createPrivacyRuntimeClient(async () => ({
+  test("rejects an embedded score and a malformed separate score response", async () => {
+    const embedded = createPrivacyRuntimeClient(async () => ({
       ok: true,
       strk20State: {
         accountId: "SN_MAIN:0xabc",
@@ -133,7 +147,17 @@ describe("privacy runtime client", () => {
       },
     }));
 
-    await expect(client.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
+    await expect(embedded.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
+
+    const malformed = createPrivacyRuntimeClient(async () => ({
+      ok: true,
+      strk20PrivacyScore: {
+        accountId: "SN_MAIN:0xabc",
+        networkId: "SN_MAIN",
+        score: { score: 101, status: "available" },
+      },
+    }));
+    await expect(malformed.loadPrivacyScore()).rejects.toThrow("Privacy score unavailable");
   });
 
   test("requires a credited recipient on a deposit review", async () => {
