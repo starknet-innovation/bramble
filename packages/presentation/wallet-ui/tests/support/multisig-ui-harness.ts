@@ -68,7 +68,7 @@ export const makeMultisigUiClient = async (
       publicKeyX: "0x456",
     }),
     reviewDeployment: async () => fixture.deploymentReview,
-    shareIntent: async () => ({ recipients: 1 }),
+    shareIntent: async () => ({ recipients: 1, totalRecipients: 1 }),
     signIntent: async () => ({ intent: fixture.intent }),
     syncIntents: async () => ({ imported: 0, intentIds: [], received: 0 }),
     submitIntent: async () => ({ intent: fixture.readyIntent, transactionHash: "0x456" }),

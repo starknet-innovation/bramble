@@ -249,7 +249,9 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         "sign Argent multisig intent failed",
       );
     },
-    async shareIntent(intentId: string): Promise<{ readonly recipients: number }> {
+    async shareIntent(
+      intentId: string,
+    ): Promise<{ readonly recipients: number; readonly totalRecipients: number }> {
       const response = await sendMessage({
         intentId,
         type: "wallet.shareArgentMultisigIntent",
@@ -257,7 +259,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       if (!isNostrShareResponse(response)) {
         throw responseError(response, "secure co-signer share failed");
       }
-      return { recipients: response.recipients };
+      return { recipients: response.recipients, totalRecipients: response.totalRecipients };
     },
     async syncIntents(multisigId: string): Promise<{
       readonly imported: number;

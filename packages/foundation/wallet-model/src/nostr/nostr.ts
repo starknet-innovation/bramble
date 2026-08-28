@@ -6,6 +6,8 @@ import { isWebSocketServiceUrl } from "@mc-wallet/core/service-url";
 export const MAX_NOSTR_EVENT_JSON_BYTES = 131_070;
 /** Largest raw application payload considered before Krusty validates nested envelope expansion. */
 export const MAX_NOSTR_APPLICATION_DATA_BYTES = 32_768;
+/** Largest one-action batch accepted from a relay or wrapped for co-signers. */
+export const MAX_NOSTR_BATCH_ITEMS = 50;
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
 
 /** Bounded plaintext accepted by Krusty's application-data envelope. */

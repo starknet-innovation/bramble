@@ -392,6 +392,9 @@ export const IntentHandoff: LabStory = {
     await expect(body?.querySelector("[data-ms-copy-package]")).toHaveTextContent(
       "Copy full intent package",
     );
+    await expect(body?.querySelector("[data-ms-share]")).toHaveTextContent(
+      "Share securely with co-signers",
+    );
     await expect(body?.querySelector(".multisig-fragment-exports")).not.toHaveAttribute("open");
   },
 };

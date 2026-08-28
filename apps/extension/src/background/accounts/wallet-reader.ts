@@ -23,6 +23,7 @@ import type {
   DeriveLedgerAccountsInput,
   EnsureNetworkAccountInput,
   ImportRawKeyAccountInput,
+  OpenNostrApplicationDataBatchInput,
   OpenNostrApplicationDataInput,
   OriginGrantInput,
   RevokeOriginInput,
@@ -30,6 +31,7 @@ import type {
   SignHashInput,
   WalletStatus as VaultStatus,
   WalletVaultService,
+  WrapNostrApplicationDataBatchInput,
   WrapNostrApplicationDataInput,
 } from "@mc-wallet/vault/service";
 import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
@@ -68,6 +70,10 @@ export type WalletStatusReader = {
   readonly openNostrApplicationData?: (
     input: OpenNostrApplicationDataInput,
   ) => Promise<NostrApplicationData>;
+  /** Opens a bounded Nostr inbox with one encrypted-vault read. */
+  readonly openNostrApplicationDataBatch?: (
+    input: OpenNostrApplicationDataBatchInput,
+  ) => Promise<readonly (NostrApplicationData | null)[]>;
   /**
    * Imports an account from a raw private key. Optional on this narrow dispatch
    * type so partial test stubs stay valid; the wired vault service always
@@ -96,6 +102,10 @@ export type WalletStatusReader = {
   readonly status: () => Promise<VaultStatus>;
   /** Creates one recipient-specific NIP-59 event inside Krusty. */
   readonly wrapNostrApplicationData?: (input: WrapNostrApplicationDataInput) => Promise<string>;
+  /** Creates a bounded recipient batch with one encrypted-vault read. */
+  readonly wrapNostrApplicationDataBatch?: (
+    input: WrapNostrApplicationDataBatchInput,
+  ) => Promise<readonly (string | null)[]>;
 };
 
 /**
@@ -142,6 +152,9 @@ export const createWalletReader = (
     async openNostrApplicationData(input) {
       return (await required()).openNostrApplicationData(input);
     },
+    async openNostrApplicationDataBatch(input) {
+      return (await required()).openNostrApplicationDataBatch(input);
+    },
     async getGrantedAccounts(origin, vaultPassphrase) {
       return (await required()).getGrantedAccounts(origin, vaultPassphrase);
     },
@@ -180,6 +193,9 @@ export const createWalletReader = (
     },
     async wrapNostrApplicationData(input) {
       return (await required()).wrapNostrApplicationData(input);
+    },
+    async wrapNostrApplicationDataBatch(input) {
+      return (await required()).wrapNostrApplicationDataBatch(input);
     },
   };
 };

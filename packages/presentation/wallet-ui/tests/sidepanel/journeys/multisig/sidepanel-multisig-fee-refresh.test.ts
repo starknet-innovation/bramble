@@ -320,5 +320,43 @@ describe("Argent multisig fee refresh", () => {
     await flushMultisigUi();
     expect(opened).toEqual([[fixture.record.id, fixture.intent.id]]);
     expect(document.body.textContent).toContain("1 signing intent updated");
+
+    intentIds = [fixture.intent.id, `${fixture.intent.id}:other`];
+    app.querySelector<HTMLButtonElement>("[data-ms-sync-intents]")?.click();
+    await flushMultisigUi();
+    expect(opened).toEqual([[fixture.record.id, fixture.intent.id]]);
+    expect(document.body.textContent).toContain(
+      "2 signing intents updated. Review them in Intents",
+    );
+  });
+
+  test("names partial secure delivery and leaves sharing ready to retry", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const client = await makeMultisigUiClient({
+      shareIntent: async () => ({ recipients: 1, totalRecipients: 2 }),
+    });
+    const app = mountMultisigUi(
+      multisigDetailFlow(
+        fixture.status,
+        fixture.status.accounts[0] ?? null,
+        fixture.view,
+        [fixture.intent],
+        false,
+        defaultWalletPreferences(),
+        "multisig-detail",
+        undefined,
+        fixture.intent.id,
+      ),
+      client,
+      fixture.status,
+    );
+
+    const share = app.querySelector<HTMLButtonElement>("[data-ms-share]");
+    share?.click();
+    await flushMultisigUi();
+    expect(document.querySelector(".toast.error")?.textContent).toContain(
+      "Reached 1 of 2 co-signers. Share again to retry the remaining delivery.",
+    );
+    expect(share?.disabled).toBe(false);
   });
 });

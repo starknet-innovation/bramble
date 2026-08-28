@@ -340,15 +340,22 @@ export const isNostrPublicKeyResponse = (value: unknown): value is NostrPublicKe
 /** Validates a recipient-specific relay share outcome. */
 export const isNostrShareResponse = (
   value: unknown,
-): value is { readonly ok: true; readonly recipients: number; readonly relays: number } =>
+): value is {
+  readonly ok: true;
+  readonly recipients: number;
+  readonly relays: number;
+  readonly totalRecipients: number;
+} =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["ok", "recipients", "relays"]) &&
+  hasOnlyKnownKeys(value, ["ok", "recipients", "relays", "totalRecipients"]) &&
   value["ok"] === true &&
   Number.isSafeInteger(value["recipients"]) &&
   Number(value["recipients"]) > 0 &&
   Number.isSafeInteger(value["relays"]) &&
-  Number(value["relays"]) >= Number(value["recipients"]);
+  Number(value["relays"]) >= Number(value["recipients"]) &&
+  Number.isSafeInteger(value["totalRecipients"]) &&
+  Number(value["totalRecipients"]) >= Number(value["recipients"]);
 
 /** Validates one bounded explicit relay-sync outcome. */
 export const isNostrSyncResponse = (

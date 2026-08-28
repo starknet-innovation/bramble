@@ -170,6 +170,9 @@ describe("createMultisigClient", () => {
         if (type === "wallet.syncArgentMultisigIntents") {
           return { imported: 0, intentIds: [], ok: true, received: 0 };
         }
+        if (type === "wallet.shareArgentMultisigIntent") {
+          return { ok: true, recipients: 1, relays: 2, totalRecipients: 1 };
+        }
         return { error: "unexpected message" };
       },
     });
@@ -214,6 +217,10 @@ describe("createMultisigClient", () => {
       intentIds: [],
       received: 0,
     });
+    await expect(client.shareIntent(fixture.intent.id)).resolves.toEqual({
+      recipients: 1,
+      totalRecipients: 1,
+    });
     expect(messages).toEqual([
       { type: "wallet.multisigs" },
       { multisigId: fixture.record.id, type: "wallet.refreshMultisig" },
@@ -230,6 +237,7 @@ describe("createMultisigClient", () => {
       },
       { address: "0x123", networkId: "SN_MAIN", type: "wallet.resolveMultisigSigner" },
       { multisigId: fixture.record.id, type: "wallet.syncArgentMultisigIntents" },
+      { intentId: fixture.intent.id, type: "wallet.shareArgentMultisigIntent" },
     ]);
   });
 

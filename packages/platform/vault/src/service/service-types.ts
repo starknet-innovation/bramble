@@ -66,6 +66,20 @@ export type OpenNostrApplicationDataInput = {
   readonly vaultPassphrase: string;
 };
 
+/** Bounded Nostr inbox batch opened under one vault snapshot and live session. */
+export type OpenNostrApplicationDataBatchInput = {
+  readonly eventJsons: readonly string[];
+  readonly isAuthorized: () => boolean;
+  readonly vaultPassphrase: string;
+};
+
+/** Bounded recipient batch wrapped under one vault snapshot and live session. */
+export type WrapNostrApplicationDataBatchInput = {
+  readonly isAuthorized: () => boolean;
+  readonly items: readonly Omit<WrapNostrApplicationDataInput, "vaultPassphrase">[];
+  readonly vaultPassphrase: string;
+};
+
 /**
  * Origin grant input for account access permissions.
  */
@@ -222,6 +236,10 @@ export type WalletVaultService = {
   readonly openNostrApplicationData: (
     input: OpenNostrApplicationDataInput,
   ) => Promise<NostrApplicationData>;
+  /** Opens a bounded batch once; malformed events become null and authorization aborts the batch. */
+  readonly openNostrApplicationDataBatch: (
+    input: OpenNostrApplicationDataBatchInput,
+  ) => Promise<readonly (NostrApplicationData | null)[]>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   /** Removes one retained Ledger viewing-key scope without returning its value. */
   readonly forgetLedgerStrk20ViewingKey: (
@@ -241,6 +259,10 @@ export type WalletVaultService = {
   readonly validateMnemonic: (mnemonic: string) => Promise<boolean>;
   /** Creates one recipient-specific NIP-59 event inside Krusty. */
   readonly wrapNostrApplicationData: (input: WrapNostrApplicationDataInput) => Promise<string>;
+  /** Wraps a bounded recipient batch once; individual Krusty failures become null. */
+  readonly wrapNostrApplicationDataBatch: (
+    input: WrapNostrApplicationDataBatchInput,
+  ) => Promise<readonly (string | null)[]>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   /**
    * The wallet's active account when the origin's grant covers it, per

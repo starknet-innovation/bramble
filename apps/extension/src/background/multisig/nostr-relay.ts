@@ -3,13 +3,13 @@ import {
   isNostrEvent,
   isNostrPublicKey,
   isNostrRelayUrl,
+  MAX_NOSTR_BATCH_ITEMS,
   type NostrEvent,
   parseNostrEventJson,
 } from "@mc-wallet/wallet-model/nostr";
 
 const RELAY_TIMEOUT_MS = 8_000;
 const MAX_RELAY_FRAME_BYTES = 140_000;
-const MAX_EVENTS_PER_RELAY = 50;
 
 /** Reviewed defaults used unless the user explicitly replaces them in settings. */
 export const MULTISIG_NOSTR_RELAYS = ["wss://relay.primal.net", "wss://nos.lol"] as const;
@@ -35,11 +35,21 @@ export type NostrRelayTransport = {
     recipientPublicKey: string,
     relayUrls: readonly string[],
   ) => Promise<number>;
+  readonly publishMany?: (
+    giftWraps: readonly NostrGiftWrapDelivery[],
+    relayUrls: readonly string[],
+  ) => Promise<readonly number[]>;
   readonly sync: (
     recipientPublicKey: string,
     since: number,
     relayUrls: readonly string[],
   ) => Promise<readonly NostrEvent[]>;
+};
+
+/** One recipient-bound gift wrap awaiting relay acknowledgement. */
+export type NostrGiftWrapDelivery = {
+  readonly eventJson: string;
+  readonly recipientPublicKey: string;
 };
 
 const nativeSocket: RelaySocketFactory = (url) => new WebSocket(url);
@@ -82,10 +92,11 @@ const readSyncFrame = (
   value: unknown,
   subscriptionId: string,
   recipientPublicKey: string,
-): NostrEvent | "eose" | null => {
+): NostrEvent | "closed" | "eose" | null => {
   const frame = parseFrame(value);
   if (!frame || frame[1] !== subscriptionId) return null;
   if (frame[0] === "EOSE") return "eose";
+  if (frame[0] === "CLOSED") return "closed";
   return frame[0] === "EVENT" &&
     isNostrEvent(frame[2]) &&
     frame[2].kind === 1_059 &&
@@ -96,32 +107,84 @@ const readSyncFrame = (
 
 const publishToRelay = (
   relay: string,
-  event: NostrEvent,
+  events: readonly NostrEvent[],
   socketFactory: RelaySocketFactory,
-): Promise<void> =>
-  new Promise((resolve, reject) => {
+): Promise<ReadonlySet<string>> =>
+  new Promise((resolve) => {
     const socket = socketFactory(relay);
+    const pending = new Set(events.map((event) => event.id));
+    const accepted = new Set<string>();
     let settled = false;
-    const finish = (error?: Error): void => {
+    const finish = (): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       socket.close();
-      error ? reject(error) : resolve();
+      resolve(accepted);
     };
-    const timeout = setTimeout(
-      () => finish(new Error("Nostr relay publish timed out")),
-      RELAY_TIMEOUT_MS,
-    );
-    socket.onopen = () => socket.send(JSON.stringify(["EVENT", event]));
+    const timeout = setTimeout(finish, RELAY_TIMEOUT_MS);
+    socket.onopen = () => {
+      for (const event of events) socket.send(JSON.stringify(["EVENT", event]));
+    };
     socket.onmessage = ({ data }) => {
       const frame = parseFrame(data);
-      if (frame?.[0] !== "OK" || frame[1] !== event.id || typeof frame[2] !== "boolean") return;
-      finish(frame[2] ? undefined : new Error("Nostr relay refused the event"));
+      const eventId = frame?.[1];
+      if (
+        frame?.[0] !== "OK" ||
+        typeof eventId !== "string" ||
+        typeof frame[2] !== "boolean" ||
+        !pending.delete(eventId)
+      ) {
+        return;
+      }
+      if (frame[2]) accepted.add(eventId);
+      if (pending.size === 0) finish();
     };
-    socket.onerror = () => finish(new Error("Nostr relay connection failed"));
-    socket.onclose = () => finish(new Error("Nostr relay closed before acknowledging the event"));
+    socket.onerror = finish;
+    socket.onclose = finish;
   });
+
+const parsedGiftWraps = (giftWraps: readonly NostrGiftWrapDelivery[]): readonly NostrEvent[] => {
+  if (giftWraps.length === 0 || giftWraps.length > MAX_NOSTR_BATCH_ITEMS) {
+    throw new Error("Invalid Nostr gift wrap batch");
+  }
+  const events = giftWraps.map(({ eventJson, recipientPublicKey }) => {
+    const event = parseNostrEventJson(eventJson);
+    if (
+      !isNostrPublicKey(recipientPublicKey) ||
+      event?.kind !== 1_059 ||
+      !hasRecipientTag(event, recipientPublicKey)
+    ) {
+      throw new Error("Invalid Nostr gift wrap");
+    }
+    return event;
+  });
+  if (new Set(events.map((event) => event.id)).size !== events.length) {
+    throw new Error("Invalid Nostr gift wrap batch");
+  }
+  return events;
+};
+
+/** Publishes recipient gift wraps over one connection per relay, preserving per-recipient acks. */
+export const publishManyNostrGiftWraps = async (
+  giftWraps: readonly NostrGiftWrapDelivery[],
+  options: NostrRelayOptions = {},
+): Promise<readonly number[]> => {
+  const { relayUrls, socketFactory } = relayOptions(options);
+  const events = parsedGiftWraps(giftWraps);
+  const results = await Promise.allSettled(
+    relayUrls.map((relay) => publishToRelay(relay, events, socketFactory)),
+  );
+  const acknowledgements = events.map(
+    (event) =>
+      results.filter((result) => result.status === "fulfilled" && result.value.has(event.id))
+        .length,
+  );
+  if (acknowledgements.every((count) => count === 0)) {
+    throw new Error("Nostr relays are unavailable");
+  }
+  return acknowledgements;
+};
 
 /** Publishes one already-signed NIP-59 gift wrap to the selected relay set. */
 export const publishNostrGiftWrap = async (
@@ -129,21 +192,8 @@ export const publishNostrGiftWrap = async (
   recipientPublicKey: string,
   options: NostrRelayOptions = {},
 ): Promise<number> => {
-  const { relayUrls, socketFactory } = relayOptions(options);
-  const event = parseNostrEventJson(eventJson);
-  if (
-    !isNostrPublicKey(recipientPublicKey) ||
-    event?.kind !== 1_059 ||
-    !hasRecipientTag(event, recipientPublicKey)
-  ) {
-    throw new Error("Invalid Nostr gift wrap");
-  }
-  const results = await Promise.allSettled(
-    relayUrls.map((relay) => publishToRelay(relay, event, socketFactory)),
-  );
-  const published = results.filter((result) => result.status === "fulfilled").length;
-  if (published === 0) throw new Error("Nostr relays are unavailable");
-  return published;
+  const published = await publishManyNostrGiftWraps([{ eventJson, recipientPublicKey }], options);
+  return published[0] ?? 0;
 };
 
 const syncRelay = (
@@ -162,7 +212,7 @@ const syncRelay = (
       settled = true;
       clearTimeout(timeout);
       socket.close();
-      error ? reject(error) : resolve(events);
+      error && events.length === 0 ? reject(error) : resolve(events);
     };
     const timeout = setTimeout(
       () => finish(new Error("Nostr relay sync timed out")),
@@ -173,16 +223,24 @@ const syncRelay = (
         JSON.stringify([
           "REQ",
           subscriptionId,
-          { "#p": [recipientPublicKey], kinds: [1_059], limit: MAX_EVENTS_PER_RELAY, since },
+          { "#p": [recipientPublicKey], kinds: [1_059], limit: MAX_NOSTR_BATCH_ITEMS, since },
         ]),
       );
     socket.onmessage = ({ data }) => {
       const frame = readSyncFrame(data, subscriptionId, recipientPublicKey);
       if (frame === "eose") {
-        finish();
+        try {
+          socket.send(JSON.stringify(["CLOSE", subscriptionId]));
+        } finally {
+          finish();
+        }
         return;
       }
-      if (frame && events.length < MAX_EVENTS_PER_RELAY) events.push(frame);
+      if (frame === "closed") {
+        finish(new Error("Nostr relay refused the subscription"));
+        return;
+      }
+      if (frame && events.length < MAX_NOSTR_BATCH_ITEMS) events.push(frame);
     };
     socket.onerror = () => finish(new Error("Nostr relay connection failed"));
     socket.onclose = () => finish(new Error("Nostr relay closed before completing sync"));
@@ -210,13 +268,16 @@ export const syncNostrGiftWraps = async (
     ...new Map(
       successful.flatMap((result) => result.value).map((event) => [event.id, event]),
     ).values(),
-  ].slice(0, MAX_EVENTS_PER_RELAY);
+  ]
+    .sort((left, right) => right.created_at - left.created_at || left.id.localeCompare(right.id))
+    .slice(0, MAX_NOSTR_BATCH_ITEMS);
 };
 
 /** Production adapter over native one-shot WebSocket operations. */
 export const nativeNostrRelayTransport: NostrRelayTransport = {
   publish: (eventJson, recipientPublicKey, relayUrls) =>
     publishNostrGiftWrap(eventJson, recipientPublicKey, { relayUrls }),
+  publishMany: (giftWraps, relayUrls) => publishManyNostrGiftWraps(giftWraps, { relayUrls }),
   sync: (recipientPublicKey, since, relayUrls) =>
     syncNostrGiftWraps(recipientPublicKey, since, { relayUrls }),
 };

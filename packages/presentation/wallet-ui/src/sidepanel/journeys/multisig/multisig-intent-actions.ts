@@ -110,6 +110,7 @@ const collaborationTools = (
   intent: ArgentMultisigSigningIntent,
   canImport: boolean,
   packageIsPrimary: boolean,
+  canShareSecurely: boolean,
 ): string => {
   const signatures = intent.signatures
     .map((signature, index) =>
@@ -139,13 +140,26 @@ const collaborationTools = (
                 <strong>Share the reviewed transaction</strong>
                 <p>Copies the transaction and every signature collected so far for another MC Wallet signer.</p>
               </div>
-              ${button({
-                attributes: { "data-ms-copy-package": intent.id },
-                icon: "copy",
-                label: "Copy full intent package",
-                size: "small",
-                variant: "secondary",
-              })}
+              <div class="multisig-collaboration-actions">
+                ${
+                  canShareSecurely
+                    ? button({
+                        attributes: { "data-ms-share": intent.id },
+                        icon: "send",
+                        label: "Share securely with co-signers",
+                        size: "small",
+                        variant: "secondary",
+                      })
+                    : ""
+                }
+                ${button({
+                  attributes: { "data-ms-copy-package": intent.id },
+                  icon: "copy",
+                  label: "Copy full intent package",
+                  size: "small",
+                  variant: "secondary",
+                })}
+              </div>
             </section>`
       }
       ${
@@ -231,6 +245,7 @@ export const multisigIntentActions = (
             intent,
             intent.state === "collecting" && hasFreshAuthority,
             action.packageIsPrimary,
+            intent.state === "ready" && hasFreshAuthority,
           )
     }`;
 };

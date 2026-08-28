@@ -53,6 +53,7 @@ export type {
   EnsureNetworkAccountInput,
   ForgetLedgerStrk20ViewingKeyInput,
   ImportRawKeyAccountInput,
+  OpenNostrApplicationDataBatchInput,
   OpenNostrApplicationDataInput,
   OriginGrantInput,
   RevealedSecrets,
@@ -62,6 +63,7 @@ export type {
   StoreLedgerStrk20ViewingKeyInput,
   WalletStatus,
   WalletVaultService,
+  WrapNostrApplicationDataBatchInput,
   WrapNostrApplicationDataInput,
 } from "./service-types";
 
@@ -93,7 +95,6 @@ export const createWalletVaultService = ({
   migrationStore,
 }: WalletVaultServiceOptions): WalletVaultService => {
   assertStoreAccess("vault", actor);
-
   const readVaultSnapshot = async (vaultPassphrase: string): Promise<Vault> => {
     if (!isVaultPassphrase(vaultPassphrase)) {
       throw new WalletError("Passphrase must be at least 12 characters");
@@ -122,7 +123,6 @@ export const createWalletVaultService = ({
       if (!vault.mnemonic) {
         throw new WalletError("No recovery phrase stored for this wallet");
       }
-
       const { account, privateKey } = await deriveAccount(kms, {
         accountContractType: input.accountContractType,
         accountIndex: nextAccountIndex(vault.accounts, input.networkId),

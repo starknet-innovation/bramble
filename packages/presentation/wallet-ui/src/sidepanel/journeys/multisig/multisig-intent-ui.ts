@@ -109,6 +109,11 @@ const bindActions = (deps: MultisigUiDeps): void => {
       if (!id) return;
       run(deps, button, async () => {
         const result = await deps.multisig.shareIntent(id);
+        if (result.recipients < result.totalRecipients) {
+          throw new Error(
+            `Reached ${result.recipients} of ${result.totalRecipients} co-signers. Share again to retry the remaining delivery.`,
+          );
+        }
         return `Shared securely with ${result.recipients} co-signer${result.recipients === 1 ? "" : "s"}`;
       });
     });
@@ -209,7 +214,7 @@ export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
     ?.querySelector<HTMLButtonElement>("[data-ms-sync-intents]")
     ?.addEventListener("click", (event) => {
       const button = event.currentTarget as HTMLButtonElement;
-      let updatedIntentId: string | undefined;
+      let updatedIntentIds: readonly string[] = [];
       run(
         deps,
         button,
@@ -217,17 +222,17 @@ export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
           const multisigId = deps.selectedMultisigId();
           if (!multisigId) throw new Error("Select a multisig before checking for updates");
           const result = await deps.multisig.syncIntents(multisigId);
-          updatedIntentId = result.intentIds.at(-1);
+          updatedIntentIds = result.intentIds;
           return result.imported === 0
             ? "No new co-signer updates"
-            : `${result.imported} signing intent${result.imported === 1 ? "" : "s"} updated`;
+            : `${result.imported} signing intent${result.imported === 1 ? "" : "s"} updated${result.imported === 1 ? "" : ". Review them in Intents"}`;
         },
         {
           reconcile: true,
           afterRender: () => {
             const multisigId = deps.selectedMultisigId();
-            if (multisigId && updatedIntentId) {
-              deps.openIntent(multisigId, updatedIntentId);
+            if (multisigId && updatedIntentIds.length === 1 && updatedIntentIds[0]) {
+              deps.openIntent(multisigId, updatedIntentIds[0]);
               return;
             }
             const tab = deps.app?.querySelector<HTMLButtonElement>('[data-ms-home-tab="intents"]');

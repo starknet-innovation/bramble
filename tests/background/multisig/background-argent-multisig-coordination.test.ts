@@ -1,7 +1,11 @@
 /** Nostr handoffs bind the authenticated sender to a saved Starknet signer. */
 import { describe, expect, test } from "bun:test";
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
+import {
+  type ArgentMultisigSigningIntent,
+  createMultisigStore,
+} from "@mc-wallet/multisig/repository";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { createMemoryStore } from "@mc-wallet/store/kv";
 import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
 import type { NostrEvent } from "@mc-wallet/wallet-model/nostr";
 import {
@@ -82,8 +86,12 @@ describe("Argent multisig Nostr coordination", () => {
     const nostrA = "11".repeat(32);
     const nostrB = "22".repeat(32);
     const network = coordinationNetwork();
+    const targetStorage = createMemoryStore();
     const source = await makeMultisigHarness({ coordination: network.identity(nostrA) });
-    const target = await makeMultisigHarness({ coordination: network.identity(nostrB) });
+    const target = await makeMultisigHarness({
+      coordination: network.identity(nostrB),
+      multisigStore: createMultisigStore({ store: targetStorage }),
+    });
     for (const harness of [source, target]) {
       await harness.preferencesStore.setNostrRelayUrl({ relayUrl });
     }
@@ -123,7 +131,7 @@ describe("Argent multisig Nostr coordination", () => {
         { intentId: signedByA.intent.id, type: "wallet.shareArgentMultisigIntent" },
         harnessExtensionSender,
       ),
-    ).resolves.toMatchObject({ ok: true, recipients: 1, relays: 1 });
+    ).resolves.toMatchObject({ ok: true, recipients: 1, relays: 1, totalRecipients: 1 });
     await source.handler(
       { intentId: signedByA.intent.id, type: "wallet.shareArgentMultisigIntent" },
       harnessExtensionSender,
@@ -169,6 +177,9 @@ describe("Argent multisig Nostr coordination", () => {
       signatures: [{}, {}],
       state: "ready",
     });
+    await expect(
+      createMultisigStore({ store: targetStorage }).getIntent(signedByB.intent.id),
+    ).resolves.toMatchObject({ signatures: [{}, {}], state: "ready" });
     expect(network.relaySelections.every((selection) => selection[0] === relayUrl)).toBe(true);
   });
 

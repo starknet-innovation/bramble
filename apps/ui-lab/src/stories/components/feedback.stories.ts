@@ -81,6 +81,7 @@ export const Toasts: CatalogStory = {
         `<div class="catalog-stack catalog-card-limit">
           ${toast("Transaction submitted. Tracking confirmation now.", "success")}
           ${toast("Argent multisig intent nonce is no longer current", "error")}
+          ${toast("Reached 1 of 2 co-signers. Share again to retry the remaining delivery.", "error")}
         </div>`,
       ),
       args.theme,

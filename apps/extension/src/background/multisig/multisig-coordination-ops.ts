@@ -108,6 +108,21 @@ const openGiftWrap = async (
   }
 };
 
+const openGiftWraps = (
+  events: readonly NostrEvent[],
+  vaultPassphrase: string,
+  isAuthorized: () => boolean,
+  open: NonNullable<MultisigOpsDeps["wallet"]["openNostrApplicationData"]>,
+  openMany: MultisigOpsDeps["wallet"]["openNostrApplicationDataBatch"],
+): Promise<readonly (NostrApplicationData | null)[]> =>
+  openMany
+    ? openMany({
+        eventJsons: events.map((event) => JSON.stringify(event)),
+        isAuthorized,
+        vaultPassphrase,
+      }).catch(() => events.map(() => null))
+    : Promise.all(events.map((event) => openGiftWrap(open, event, vaultPassphrase)));
+
 /** Accepts only a package from a saved Nostr identity whose Stark key is in the frozen signer set. */
 export const trustedSharedIntent = (
   opened: NostrApplicationData,
@@ -153,25 +168,60 @@ const publishForRecipients = async (
   relayUrls: readonly string[],
   transport: NostrRelayTransport,
   wrap: NonNullable<MultisigOpsDeps["wallet"]["wrapNostrApplicationData"]>,
-): Promise<{ readonly recipients: number; readonly relays: number } | null> => {
-  const results = await Promise.allSettled(
-    recipients.map(async (recipient) => {
-      if (!isAuthorized()) return null;
-      const event = await wrap({
-        content,
-        identifier: MULTISIG_NOSTR_IDENTIFIER,
-        recipientPublicKey: recipient.nostrPublicKey,
+  wrapMany: MultisigOpsDeps["wallet"]["wrapNostrApplicationDataBatch"],
+): Promise<{
+  readonly recipients: number;
+  readonly relays: number;
+  readonly totalRecipients: number;
+} | null> => {
+  const wrapped = wrapMany
+    ? await wrapMany({
+        isAuthorized,
+        items: recipients.map((recipient) => ({
+          content,
+          identifier: MULTISIG_NOSTR_IDENTIFIER,
+          recipientPublicKey: recipient.nostrPublicKey,
+        })),
         vaultPassphrase,
-      });
-      return isAuthorized() ? transport.publish(event, recipient.nostrPublicKey, relayUrls) : null;
-    }),
-  );
+      })
+    : await Promise.all(
+        recipients.map(async (recipient) => {
+          if (!isAuthorized()) return null;
+          try {
+            return await wrap({
+              content,
+              identifier: MULTISIG_NOSTR_IDENTIFIER,
+              recipientPublicKey: recipient.nostrPublicKey,
+              vaultPassphrase,
+            });
+          } catch {
+            return null;
+          }
+        }),
+      );
   if (!isAuthorized()) return null;
-  const delivered = results.flatMap((result) =>
-    result.status === "fulfilled" && result.value !== null ? [result.value] : [],
-  );
-  if (delivered.length === 0) throw new Error("Nostr relays are unavailable");
-  return { recipients: delivered.length, relays: delivered.reduce((sum, count) => sum + count, 0) };
+  const deliveries = wrapped.flatMap((eventJson, index) => {
+    const recipient = recipients[index];
+    return eventJson && recipient
+      ? [{ eventJson, recipientPublicKey: recipient.nostrPublicKey }]
+      : [];
+  });
+  if (deliveries.length === 0) throw new Error("Nostr relays are unavailable");
+  const relayCounts = transport.publishMany
+    ? await transport.publishMany(deliveries, relayUrls)
+    : await Promise.all(
+        deliveries.map(({ eventJson, recipientPublicKey }) =>
+          transport.publish(eventJson, recipientPublicKey, relayUrls).catch(() => 0),
+        ),
+      );
+  if (!isAuthorized()) return null;
+  const relays = relayCounts.reduce((sum, count) => sum + count, 0);
+  if (relays === 0) throw new Error("Nostr relays are unavailable");
+  return {
+    recipients: relayCounts.filter((count) => count > 0).length,
+    relays,
+    totalRecipients: recipients.length,
+  };
 };
 
 const recentGiftWraps = async (
@@ -195,13 +245,15 @@ const importGiftWraps = async (
   vaultPassphrase: string,
   isAuthorized: () => boolean,
   open: NonNullable<MultisigOpsDeps["wallet"]["openNostrApplicationData"]>,
+  openMany: MultisigOpsDeps["wallet"]["openNostrApplicationDataBatch"],
 ): Promise<readonly string[] | null> => {
   const imported = new Set<string>();
-  for (const event of events) {
+  const opened = await openGiftWraps(events, vaultPassphrase, isAuthorized, open, openMany);
+  for (const index of events.keys()) {
     if (!isAuthorized()) return null;
-    const opened = await openGiftWrap(open, event, vaultPassphrase);
-    if (!opened) continue;
-    const input = trustedSharedIntent(opened, contacts, records);
+    const content = opened[index];
+    if (!content) continue;
+    const input = trustedSharedIntent(content, contacts, records);
     if (!input) continue;
     const current = await deps.multisigStore.getIntent(input.package.intent.id);
     if (!sharedIntentHasUpdate(current, input.package.intent)) continue;
@@ -269,6 +321,7 @@ const shareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
       coordinationRelayUrls(preferences),
       deps.nostrRelayTransport ?? nativeNostrRelayTransport,
       wrap,
+      deps.wallet.wrapNostrApplicationDataBatch,
     );
   } catch {
     return { error: "Secure co-signer sharing is unavailable. Try again shortly" };
@@ -309,6 +362,7 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
     passphrase,
     authorized.isCurrent,
     open,
+    deps.wallet.openNostrApplicationDataBatch,
   );
   if (intentIds === null) return { error: "wallet locked" };
   return { imported: intentIds.length, intentIds, ok: true, received: events.length };
