@@ -3,20 +3,26 @@ import { WalletError } from "@mc-wallet/core/errors";
 import {
   type BoundedHttpFetch,
   fetchBoundedJson,
+  fetchBoundedText,
   HTTP_BODY_LIMITS,
 } from "@mc-wallet/core/http-json";
 import { type StarknetNetworkId, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { STRK20_MAINNET_POOL } from "../config";
+import {
+  type PrivacyScoreArtifact,
+  readPrivacyScoreArtifact,
+  readVerifiedPrivacyScorePayload,
+} from "./score-artifact";
 import type {
   PrivacyScoreCache,
   PrivacyScoreCacheEntry,
   PrivacyScoreCheckpoint,
 } from "./score-cache";
-import { verifyPrivacyScoreEnvelope } from "./score-crypto";
+import { verifyPrivacyScoreArtifact } from "./score-crypto";
 import {
   PRIVACY_SCORE_ORIGIN,
   type PrivacyScoreEnvelope,
-  readPrivacyScoreEnvelope,
+  type PrivacyScoreManifest,
   readPrivacyScoreManifest,
   sameSnapshotSignature,
 } from "./score-schema";
@@ -55,7 +61,7 @@ type ServiceOptions = {
   readonly http: BoundedHttpFetch;
   readonly now: () => number;
   /** Test seam; production wiring always uses the pinned default verifier. */
-  readonly verify?: typeof verifyPrivacyScoreEnvelope;
+  readonly verify?: typeof verifyPrivacyScoreArtifact;
 };
 
 const transactionKeys = (transactions: readonly PrivacyScoreTransaction[]): readonly string[] =>
@@ -139,6 +145,55 @@ const scoreAfterCacheWrite = async (
   return cachedResult(latestEntry, keys, now, false) ?? { status: "unavailable" };
 };
 
+const matchesManifest = (
+  snapshot: Pick<
+    PrivacyScoreEnvelope,
+    "generatedAt" | "payloadSha256" | "signature" | "snapshotBlockHash" | "snapshotBlockNumber"
+  >,
+  manifest: PrivacyScoreManifest,
+): boolean =>
+  snapshot.generatedAt === manifest.generatedAt &&
+  snapshot.payloadSha256 === manifest.payloadSha256 &&
+  snapshot.snapshotBlockNumber === manifest.snapshotBlockNumber &&
+  sameFelt(snapshot.snapshotBlockHash, manifest.snapshotBlockHash) &&
+  sameSnapshotSignature(manifest.signature, snapshot.signature);
+
+const fetchScoreManifest = async (http: BoundedHttpFetch): Promise<PrivacyScoreManifest> => {
+  const input = await fetchBoundedJson(
+    http,
+    `${PRIVACY_SCORE_ORIGIN}/v1/latest.json`,
+    HTTP_BODY_LIMITS.price,
+  );
+  const manifest = readPrivacyScoreManifest(input);
+  if (!manifest) throw new WalletError("Privacy score manifest was invalid");
+  const expectedKey = `v1/snapshots/${manifest.snapshotBlockNumber}-${manifest.snapshotBlockHash.slice(2, 18)}-${manifest.payloadSha256.slice(0, 16)}.json.gz`;
+  if (manifest.snapshotKey !== expectedKey) {
+    throw new WalletError("Privacy score snapshot key was invalid");
+  }
+  return manifest;
+};
+
+const fetchScoreArtifact = async (
+  http: BoundedHttpFetch,
+  manifest: PrivacyScoreManifest,
+): Promise<PrivacyScoreArtifact> => {
+  const text = await fetchBoundedText(
+    http,
+    `${PRIVACY_SCORE_ORIGIN}/${manifest.snapshotKey}`,
+    HTTP_BODY_LIMITS.privacyScore,
+    SNAPSHOT_TIMEOUT_MS,
+  );
+  const artifact = readPrivacyScoreArtifact(text);
+  if (
+    !artifact ||
+    artifact.payloadSha256 !== manifest.payloadSha256 ||
+    !sameSnapshotSignature(manifest.signature, artifact.signature)
+  ) {
+    throw new WalletError("Privacy score snapshot did not match its manifest");
+  }
+  return artifact;
+};
+
 /**
  * Creates the production signed-artifact privacy-score service.
  */
@@ -146,60 +201,45 @@ export const createPrivacyScoreService = ({
   cache,
   http,
   now,
-  verify = verifyPrivacyScoreEnvelope,
+  verify = verifyPrivacyScoreArtifact,
 }: ServiceOptions): PrivacyScoreService => {
   let memorySnapshot: PrivacyScoreEnvelope | null = null;
+  let inFlightSnapshot: Promise<PrivacyScoreEnvelope> | null = null;
+
+  const loadVerifiedSnapshot = async (
+    checkpoint: PrivacyScoreCheckpoint | undefined,
+  ): Promise<PrivacyScoreEnvelope> => {
+    const manifest = await fetchScoreManifest(http);
+    assertMonotonic(checkpoint, manifest);
+    if (memorySnapshot && matchesManifest(memorySnapshot, manifest)) {
+      return memorySnapshot;
+    }
+    const artifact = await fetchScoreArtifact(http, manifest);
+    if (!(await verify(artifact, manifest))) {
+      throw new WalletError("Privacy score signature was invalid");
+    }
+    const envelope = readVerifiedPrivacyScorePayload(artifact);
+    if (!envelope || !matchesManifest(envelope, manifest)) {
+      throw new WalletError("Privacy score payload did not match its manifest");
+    }
+    memorySnapshot = envelope;
+    return envelope;
+  };
 
   const verifiedSnapshot = async (
     checkpoint: PrivacyScoreCheckpoint | undefined,
   ): Promise<PrivacyScoreEnvelope> => {
-    const manifestInput = await fetchBoundedJson(
-      http,
-      `${PRIVACY_SCORE_ORIGIN}/v1/latest.json`,
-      HTTP_BODY_LIMITS.price,
-    );
-    const manifest = readPrivacyScoreManifest(manifestInput);
-    if (!manifest) {
-      throw new WalletError("Privacy score manifest was invalid");
+    if (!inFlightSnapshot) {
+      const request = loadVerifiedSnapshot(checkpoint);
+      inFlightSnapshot = request;
+      const clear = (): void => {
+        if (inFlightSnapshot === request) inFlightSnapshot = null;
+      };
+      void request.then(clear, clear);
     }
-    const expectedKey = `v1/snapshots/${manifest.snapshotBlockNumber}-${manifest.snapshotBlockHash.slice(2, 18)}-${manifest.payloadSha256.slice(0, 16)}.json.gz`;
-    if (manifest.snapshotKey !== expectedKey) {
-      throw new WalletError("Privacy score snapshot key was invalid");
-    }
-    if (
-      memorySnapshot &&
-      memorySnapshot.generatedAt === manifest.generatedAt &&
-      memorySnapshot.payloadSha256 === manifest.payloadSha256 &&
-      memorySnapshot.snapshotBlockNumber === manifest.snapshotBlockNumber &&
-      sameFelt(memorySnapshot.snapshotBlockHash, manifest.snapshotBlockHash) &&
-      sameSnapshotSignature(manifest.signature, memorySnapshot.signature)
-    ) {
-      assertMonotonic(checkpoint, memorySnapshot);
-      return memorySnapshot;
-    }
-    const snapshotInput = await fetchBoundedJson(
-      http,
-      `${PRIVACY_SCORE_ORIGIN}/${manifest.snapshotKey}`,
-      HTTP_BODY_LIMITS.privacyScore,
-      SNAPSHOT_TIMEOUT_MS,
-    );
-    const envelope = readPrivacyScoreEnvelope(snapshotInput);
-    if (
-      !envelope ||
-      envelope.generatedAt !== manifest.generatedAt ||
-      envelope.payloadSha256 !== manifest.payloadSha256 ||
-      envelope.snapshotBlockNumber !== manifest.snapshotBlockNumber ||
-      !sameFelt(envelope.snapshotBlockHash, manifest.snapshotBlockHash) ||
-      !sameSnapshotSignature(manifest.signature, envelope.signature)
-    ) {
-      throw new WalletError("Privacy score snapshot did not match its manifest");
-    }
-    assertMonotonic(checkpoint, envelope);
-    if (!(await verify(envelope, manifest))) {
-      throw new WalletError("Privacy score signature was invalid");
-    }
-    memorySnapshot = envelope;
-    return envelope;
+    const snapshot = await inFlightSnapshot;
+    assertMonotonic(checkpoint, snapshot);
+    return snapshot;
   };
 
   return {

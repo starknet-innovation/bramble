@@ -115,6 +115,7 @@ const SECRET_MATERIAL_FILES = new Set([
   // Public privacy-score verification boundary. These modules contain only the
   // publisher's public SPKI and signed artifact fields; no wallet key, viewing
   // key, or other user secret enters them.
+  "packages/features/privacy/src/score/score-artifact.ts",
   "packages/features/privacy/src/score/score-crypto.ts",
   "packages/features/privacy/src/score/score-schema.ts",
   "packages/features/privacy/src/score/score-service.ts",

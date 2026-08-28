@@ -3,10 +3,13 @@ import { describe, expect, test } from "bun:test";
 import { bytesToHex } from "@mc-wallet/core/hex";
 import { canonicalJson } from "@mc-wallet/core/json";
 import { STRK20_MAINNET_POOL } from "@mc-wallet/privacy/config";
-import { privacyScoreDerToP1363, verifyPrivacyScoreEnvelope } from "../../src/score/score-crypto";
+import {
+  readPrivacyScoreArtifact,
+  readVerifiedPrivacyScorePayload,
+} from "../../src/score/score-artifact";
+import { privacyScoreDerToP1363, verifyPrivacyScoreArtifact } from "../../src/score/score-crypto";
 import {
   PRIVACY_SCORE_KEY_ID,
-  readPrivacyScoreEnvelope,
   readPrivacyScoreManifest,
   type WithdrawalScore,
 } from "../../src/score/score-schema";
@@ -21,7 +24,12 @@ const scoreRow = (overrides: Partial<WithdrawalScore> = {}): WithdrawalScore => 
   confidence: "high",
   effectiveAnonymitySet: 28,
   eventId: `${HASH_ONE}:4`,
-  factors: ["94 same-token deposits", "no exact public amount match"],
+  factors: [
+    "94 same-token deposits in the lookback window",
+    "no exact public amount match",
+    "no recipient reuse observed",
+    "no same-transaction deposit observed",
+  ],
   score: 72,
   token: "0x789",
   transactionHash: HASH_ONE,
@@ -50,7 +58,7 @@ const signedFixture = async () => {
   const generatedAt = "2026-08-28T12:00:00.000Z";
   const payload = {
     chainId: "SN_MAIN",
-    completeness: { completeFromDeployment: true, deploymentBlock: 1 },
+    completeness: { completeFromDeployment: true, deploymentBlock: 8_978_970 },
     generatedAt,
     model: {
       addressReuseBoost: 25,
@@ -98,13 +106,13 @@ const signedFixture = async () => {
     snapshotBlockNumber: payload.snapshotBlockNumber,
     snapshotKey: `v1/snapshots/100-0000000000000abc-${digest.slice(0, 16)}.json.gz`,
   };
-  const envelope = readPrivacyScoreEnvelope(envelopeInput);
+  const artifact = readPrivacyScoreArtifact(canonicalJson(envelopeInput));
   const manifest = readPrivacyScoreManifest(manifestInput);
-  if (!envelope || !manifest) {
+  if (!artifact || !manifest) {
     throw new Error("test fixture did not satisfy the production schema");
   }
   return {
-    envelope,
+    artifact,
     envelopeInput,
     manifest,
     trust: {
@@ -119,8 +127,9 @@ describe("privacy score verification", () => {
     const fixture = await signedFixture();
 
     expect(
-      await verifyPrivacyScoreEnvelope(fixture.envelope, fixture.manifest, fixture.trust),
+      await verifyPrivacyScoreArtifact(fixture.artifact, fixture.manifest, fixture.trust),
     ).toBe(true);
+    expect(readVerifiedPrivacyScorePayload(fixture.artifact)?.withdrawals).toHaveLength(1);
   });
 
   test("rejects tampering and non-canonical DER", async () => {
@@ -131,13 +140,31 @@ describe("privacy score verification", () => {
       throw new Error("test fixture lost its withdrawal");
     }
     firstWithdrawal.score = 99;
-    const tampered = readPrivacyScoreEnvelope(tamperedInput);
+    const tampered = readPrivacyScoreArtifact(canonicalJson(tamperedInput));
     if (!tampered) {
       throw new Error("tampered fixture should remain structurally valid");
     }
 
-    expect(await verifyPrivacyScoreEnvelope(tampered, fixture.manifest, fixture.trust)).toBe(false);
+    expect(await verifyPrivacyScoreArtifact(tampered, fixture.manifest, fixture.trust)).toBe(false);
     expect(privacyScoreDerToP1363(Uint8Array.from([0x30, 3, 0x02, 1, 0]))).toBeNull();
+  });
+
+  test("rejects incomplete snapshots, changed models, and unknown factor prose", async () => {
+    const fixture = await signedFixture();
+    const incomplete = structuredClone(fixture.envelopeInput);
+    incomplete.payload.completeness.completeFromDeployment = false;
+    const changedModel = structuredClone(fixture.envelopeInput);
+    changedModel.payload.model.lookbackDays = 30;
+    const changedFactors = structuredClone(fixture.envelopeInput);
+    const [withdrawal] = changedFactors.payload.withdrawals;
+    if (!withdrawal) throw new Error("test fixture lost its withdrawal");
+    withdrawal.factors = ["publisher-defined prose"];
+
+    for (const input of [incomplete, changedModel, changedFactors]) {
+      const artifact = readPrivacyScoreArtifact(canonicalJson(input));
+      expect(artifact).not.toBeNull();
+      if (artifact) expect(readVerifiedPrivacyScorePayload(artifact)).toBeNull();
+    }
   });
 });
 

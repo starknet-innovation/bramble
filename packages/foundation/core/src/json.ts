@@ -45,23 +45,6 @@ export const JSON_BUDGETS = {
     maxObjectKeys: 2_048,
     maxStringLength: 512 * 1024,
   },
-  /**
-   * Signed public privacy-score snapshots. The production feed is intentionally
-   * broad (one row per public pool event) and currently decodes to roughly
-   * 80 MiB, so this cap leaves growth headroom while keeping parsing and
-   * canonicalization bounded.
-   */
-  privacyScore: {
-    maxArrayLength: 300_000,
-    // The tracker charges every UTF-16 code unit at the six-byte worst case
-    // for JSON escaping. The current ~80 MiB artifact consumes ~400 MiB of
-    // that conservative budget despite using ordinary ASCII throughout.
-    maxBytes: 512 * 1024 * 1024,
-    maxDepth: 24,
-    maxNodes: 2_000_000,
-    maxObjectKeys: 128,
-    maxStringLength: 8 * 1024,
-  },
   strk20Proof: {
     maxArrayLength: 4_096,
     maxBytes: 8 * 1024 * 1024,

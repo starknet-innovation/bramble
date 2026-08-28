@@ -1,10 +1,9 @@
 /** P-256 verification for signed privacy-score snapshot payloads. */
 import { bytesToHex } from "@mc-wallet/core/hex";
-import { canonicalJson } from "@mc-wallet/core/json";
+import type { PrivacyScoreArtifact } from "./score-artifact";
 import {
   PRIVACY_SCORE_PUBLIC_KEY_DER_BASE64,
   PRIVACY_SCORE_PUBLIC_KEY_FINGERPRINT,
-  type PrivacyScoreEnvelope,
   type PrivacyScoreManifest,
 } from "./score-schema";
 
@@ -82,12 +81,13 @@ export const privacyScoreDerToP1363 = (der: Uint8Array): Uint8Array<ArrayBuffer>
 };
 
 /**
- * Verifies the canonical payload digest and pinned P-256 signature. The public
- * key fingerprint is recomputed from compiled DER bytes on every import, so an
- * origin compromise cannot replace both the key and artifact.
+ * Verifies the exact publisher-signed payload substring and pinned P-256
+ * signature. The public key fingerprint is recomputed from compiled DER bytes
+ * on every import, so an origin compromise cannot replace both the key and
+ * artifact.
  */
-export const verifyPrivacyScoreEnvelope = async (
-  envelope: PrivacyScoreEnvelope,
+export const verifyPrivacyScoreArtifact = async (
+  artifact: PrivacyScoreArtifact,
   manifest: PrivacyScoreManifest,
   trust: {
     readonly fingerprint?: string;
@@ -97,10 +97,10 @@ export const verifyPrivacyScoreEnvelope = async (
 ): Promise<boolean> => {
   try {
     const subtle = trust.subtle ?? crypto.subtle;
-    const payloadBytes = new TextEncoder().encode(canonicalJson(envelope.payload));
+    const payloadBytes = new TextEncoder().encode(artifact.payloadJson);
     const payloadDigest = new Uint8Array(await subtle.digest("SHA-256", payloadBytes));
     const digestHex = bytesToHex(payloadDigest);
-    if (digestHex !== envelope.payloadSha256 || digestHex !== manifest.payloadSha256) {
+    if (digestHex !== artifact.payloadSha256 || digestHex !== manifest.payloadSha256) {
       return false;
     }
     const keyBytes = decodeBase64(trust.publicKeyDerBase64 ?? PRIVACY_SCORE_PUBLIC_KEY_DER_BASE64);
@@ -108,7 +108,7 @@ export const verifyPrivacyScoreEnvelope = async (
     if (keyFingerprint !== (trust.fingerprint ?? PRIVACY_SCORE_PUBLIC_KEY_FINGERPRINT)) {
       return false;
     }
-    const signature = privacyScoreDerToP1363(decodeBase64(envelope.signature.value));
+    const signature = privacyScoreDerToP1363(decodeBase64(artifact.signature.value));
     if (!signature) {
       return false;
     }

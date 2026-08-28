@@ -1,5 +1,7 @@
 /** Static request privacy, durable rollback, and cache behavior. */
 import { describe, expect, test } from "bun:test";
+import { HTTP_BODY_LIMITS } from "@mc-wallet/core/http-json";
+import { canonicalJson } from "@mc-wallet/core/json";
 import { STRK20_MAINNET_POOL } from "@mc-wallet/privacy/config";
 import { createPrivacyScoreCache } from "@mc-wallet/privacy/score-cache";
 import { createPrivacyScoreService } from "@mc-wallet/privacy/score-service";
@@ -18,9 +20,18 @@ const SIGNATURE = {
 const artifact = (block: number, blockHash: string) => {
   const payload = {
     chainId: "SN_MAIN",
-    completeness: { completeFromDeployment: true, deploymentBlock: 1 },
+    completeness: { completeFromDeployment: true, deploymentBlock: 8_978_970 },
     generatedAt: GENERATED_AT,
-    model: { id: "effective-min-entropy-v1" },
+    model: {
+      addressReuseBoost: 25,
+      amountLogSigma: 1.5,
+      exactAmountBoost: 4,
+      id: "effective-min-entropy-v1",
+      lookbackDays: 180,
+      recencyHalfLifeDays: 30,
+      sameTransactionBoost: 100,
+      targetEffectiveSet: 100,
+    },
     poolAddress: STRK20_MAINNET_POOL,
     poolMetrics: [],
     publicEvents: [],
@@ -35,7 +46,12 @@ const artifact = (block: number, blockHash: string) => {
         confidence: "medium",
         effectiveAnonymitySet: 10,
         eventId: `${TX_HASH}:1`,
-        factors: ["20 same-token deposits"],
+        factors: [
+          "20 same-token deposits in the lookback window",
+          "no exact public amount match",
+          "no recipient reuse observed",
+          "no same-transaction deposit observed",
+        ],
         maxProbability: 0.1,
         score: 50,
         token: "0x456",
@@ -71,6 +87,15 @@ const cacheEntry = (accountId: string, checkedAt: number) => ({
   transactionKeys: [TX_HASH],
 });
 
+const responseFor = (url: string, current: ReturnType<typeof artifact>) => {
+  const input = url.endsWith("latest.json") ? current.manifest : current.envelope;
+  return {
+    json: async () => input,
+    ok: true,
+    text: async () => canonicalJson(input),
+  };
+};
+
 describe("privacy score service", () => {
   test("requests only shared static files and caches a verified local association", async () => {
     const backing = createMemoryStore();
@@ -83,10 +108,7 @@ describe("privacy score service", () => {
       cache,
       http: async (url) => {
         urls.push(url);
-        return {
-          json: async () => (url.endsWith("latest.json") ? current.manifest : current.envelope),
-          ok: true,
-        };
+        return responseFor(url, current);
       },
       now: () => clock,
       verify: async () => {
@@ -135,15 +157,80 @@ describe("privacy score service", () => {
     );
     const service = createPrivacyScoreService({
       cache: createPrivacyScoreCache(createMemoryStore()),
-      http: async (url) => ({
-        json: async () => (url.endsWith("latest.json") ? current.manifest : current.envelope),
-        ok: true,
-      }),
+      http: async (url) => responseFor(url, current),
       now: () => Date.parse(GENERATED_AT) + 1_000,
       verify: async () => true,
     });
 
     expect(await service.score(input)).toEqual({ status: "unavailable" });
+  });
+
+  test("rejects an oversized score from Content-Length before reading its body", async () => {
+    const current = artifact(100, "0x0000000000000abc");
+    let snapshotBodyRead = false;
+    const service = createPrivacyScoreService({
+      cache: createPrivacyScoreCache(createMemoryStore()),
+      http: async (url) => {
+        if (url.endsWith("latest.json")) return responseFor(url, current);
+        return {
+          headers: new Headers({
+            "content-length": String(HTTP_BODY_LIMITS.privacyScore + 1),
+          }),
+          json: async () => current.envelope,
+          ok: true,
+          text: async () => {
+            snapshotBodyRead = true;
+            return canonicalJson(current.envelope);
+          },
+        };
+      },
+      now: () => Date.parse(GENERATED_AT) + 1_000,
+      verify: async () => true,
+    });
+
+    expect(await service.score(input)).toEqual({ status: "unavailable" });
+    expect(snapshotBodyRead).toBe(false);
+  });
+
+  test("shares one manifest, snapshot, and verification across overlapping refreshes", async () => {
+    const current = artifact(100, "0x0000000000000abc");
+    const urls: string[] = [];
+    let releaseSnapshot: (() => void) | undefined;
+    const snapshotReady = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    let verifications = 0;
+    const service = createPrivacyScoreService({
+      cache: createPrivacyScoreCache(createMemoryStore()),
+      http: async (url) => {
+        urls.push(url);
+        if (url.endsWith("latest.json")) return responseFor(url, current);
+        return {
+          json: async () => current.envelope,
+          ok: true,
+          text: async () => {
+            await snapshotReady;
+            return canonicalJson(current.envelope);
+          },
+        };
+      },
+      now: () => Date.parse(GENERATED_AT) + 1_000,
+      verify: async () => {
+        verifications += 1;
+        return true;
+      },
+    });
+
+    const first = service.score(input);
+    const second = service.score({ ...input, accountId: "SN_MAIN:0xdef" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(urls).toHaveLength(2);
+    releaseSnapshot?.();
+
+    expect(await first).toMatchObject({ score: 50, status: "available" });
+    expect(await second).toMatchObject({ score: 50, status: "available" });
+    expect(urls).toHaveLength(2);
+    expect(verifications).toBe(1);
   });
 
   test("rejects an older or conflicting checkpoint inside serialized cache writes", async () => {

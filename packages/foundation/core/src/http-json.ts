@@ -52,9 +52,9 @@ export const HTTP_BODY_LIMITS = {
   phishingFeed: 8 * 1024 * 1024,
   /**
    * The signed public pool snapshot currently transfers at about 11 MiB and
-   * decodes to roughly 80 MiB. The transport cap measures actual decoded
-   * bytes; the structurally larger `JSON_BUDGETS` figure is a conservative
-   * worst-case escaping charge rather than another response-size allowance.
+   * decodes to roughly 80 MiB. The wallet verifies the bounded raw text and
+   * selectively parses its wallet-facing slice rather than building the full
+   * JSON tree.
    */
   privacyScore: 128 * 1024 * 1024,
   /** CoinGecko price and 7-day chart bodies are a few kilobytes. */
@@ -264,6 +264,34 @@ export const readBoundedText = async (
   deadline: AbortSignal,
 ): Promise<string> => {
   const text = await boundedText(response, maxBytes, expiryOf(deadline));
+  if (text === null) {
+    throw new WalletError("Response body was not readable");
+  }
+  return text;
+};
+
+/**
+ * Fetches one untrusted text body under the same hard byte and wall-clock
+ * limits as {@link fetchBoundedJson}. The returned string is not interpreted;
+ * callers must validate it before use.
+ */
+export const fetchBoundedText = async (
+  http: BoundedHttpFetch,
+  url: string,
+  maxBytes: number,
+  timeoutMs: number = HTTP_REQUEST_TIMEOUT_MS,
+  request: Omit<RequestInit, "signal"> = {},
+): Promise<string> => {
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const expiry = expiryOf(deadline);
+  const response = await Promise.race([
+    http(url, { ...request, ...UNTRUSTED_REQUEST_INIT, signal: deadline }),
+    expiry,
+  ]);
+  if (!response.ok) {
+    throw new WalletError("Request failed");
+  }
+  const text = await boundedText(response, maxBytes, expiry);
   if (text === null) {
     throw new WalletError("Response body was not readable");
   }

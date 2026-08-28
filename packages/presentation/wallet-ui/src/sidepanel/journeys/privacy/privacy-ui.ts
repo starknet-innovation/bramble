@@ -16,7 +16,6 @@ import {
   type PrivacyJourneyState,
 } from "./privacy-model";
 import { createPendingRegistrationPoll } from "./privacy-pending-poll";
-import type { PrivacyAccountState } from "./privacy-runtime";
 
 /**
  * Current render state and callbacks consumed by privacy bindings.
@@ -65,14 +64,16 @@ const scopeMatches = (deps: PrivacyUiDeps, scope: PrivacyAsyncScope): boolean =>
 const loadPrivacyScoreDisclosure = async (
   deps: PrivacyUiDeps,
   scope: PrivacyAsyncScope,
-  base: PrivacyAccountState,
 ): Promise<void> => {
   try {
     const result = await deps.wallet.loadPrivacyScore();
     const current = deps.disclosure();
     if (
-      current.value !== base ||
+      current.loading ||
+      !current.value ||
       !scopeMatches(deps, scope) ||
+      current.value.accountId !== scope.accountId ||
+      current.value.networkId !== scope.networkId ||
       result.accountId !== scope.accountId ||
       result.networkId !== scope.networkId
     ) {
@@ -81,7 +82,7 @@ const loadPrivacyScoreDisclosure = async (
     deps.setDisclosure({
       error: null,
       loading: false,
-      value: { ...base, privacyScore: result.score },
+      value: { ...current.value, privacyScore: result.score },
     });
     deps.paint();
   } catch {
@@ -116,7 +117,7 @@ export const loadPrivacyDisclosure = async (deps: PrivacyUiDeps): Promise<boolea
     }
     deps.setDisclosure({ error: null, loading: false, value });
     deps.paint();
-    void loadPrivacyScoreDisclosure(deps, scope, value);
+    void loadPrivacyScoreDisclosure(deps, scope);
     return true;
   } catch (error) {
     if (deps.disclosure() === pending && scopeMatches(deps, scope)) {

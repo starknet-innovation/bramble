@@ -143,6 +143,9 @@ describe("privacy UI async scope isolation", () => {
     expect(disclosure).toEqual({ error: null, loading: false, value: loaded });
     expect(paints).toBe(2);
 
+    const refreshed = { ...loaded, registration: "pending" as const };
+    disclosure = { error: null, loading: false, value: refreshed };
+
     score.resolve({
       accountId: account.id,
       networkId: "SN_MAIN",
@@ -151,6 +154,7 @@ describe("privacy UI async scope isolation", () => {
     await tick();
 
     expect(disclosure.value?.privacyScore).toEqual({ status: "no-withdrawals" });
+    expect(disclosure.value?.registration).toBe("pending");
     expect(paints).toBe(3);
   });
 
