@@ -259,15 +259,21 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       }
       return { recipients: response.recipients };
     },
-    async syncIntents(
-      multisigId: string,
-    ): Promise<{ readonly imported: number; readonly received: number }> {
+    async syncIntents(multisigId: string): Promise<{
+      readonly imported: number;
+      readonly intentIds: readonly string[];
+      readonly received: number;
+    }> {
       invalidateRefreshes();
       const response = await sendMessage({ multisigId, type: "wallet.syncArgentMultisigIntents" });
       if (!isNostrSyncResponse(response)) {
         throw responseError(response, "co-signer sync failed");
       }
-      return { imported: response.imported, received: response.received };
+      return {
+        imported: response.imported,
+        intentIds: response.intentIds,
+        received: response.received,
+      };
     },
     async submitIntent(intentId: string) {
       return intentResult(

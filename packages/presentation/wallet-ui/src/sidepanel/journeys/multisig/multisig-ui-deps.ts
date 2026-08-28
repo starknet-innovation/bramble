@@ -17,7 +17,7 @@ export type MultisigUiDeps = {
   readonly openIntent: (accountId: string, intentId: string) => void;
   readonly openFunding?: (intent: SendIntent) => Promise<void>;
   readonly openList: () => void;
-  readonly render: (status: WalletStatus) => Promise<void>;
+  readonly render: (status: WalletStatus, refreshReason?: "action") => Promise<void>;
   readonly selectedMultisigId: () => string | null;
   readonly wallet: SidepanelWallet;
 };

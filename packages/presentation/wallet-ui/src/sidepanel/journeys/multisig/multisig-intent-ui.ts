@@ -40,14 +40,18 @@ const run = (
   deps: MultisigUiDeps,
   button: HTMLButtonElement | null | undefined,
   action: () => Promise<string>,
-  options: { readonly afterRender?: () => void; readonly resetScroll?: boolean } = {},
+  options: {
+    readonly afterRender?: () => void;
+    readonly reconcile?: boolean;
+    readonly resetScroll?: boolean;
+  } = {},
 ): void => {
   const doc = button?.ownerDocument ?? deps.app?.ownerDocument;
   buttonBusy(button, true);
   void action().then(
     async (message) => {
       showToast(message, "success", button ?? deps.app);
-      await deps.render(await deps.wallet.loadStatus());
+      await deps.render(await deps.wallet.loadStatus(), options.reconcile ? "action" : undefined);
       options.afterRender?.();
       if (options.resetScroll && doc) {
         doc.documentElement.scrollTop = 0;
@@ -205,6 +209,7 @@ export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
     ?.querySelector<HTMLButtonElement>("[data-ms-sync-intents]")
     ?.addEventListener("click", (event) => {
       const button = event.currentTarget as HTMLButtonElement;
+      let updatedIntentId: string | undefined;
       run(
         deps,
         button,
@@ -212,12 +217,19 @@ export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
           const multisigId = deps.selectedMultisigId();
           if (!multisigId) throw new Error("Select a multisig before checking for updates");
           const result = await deps.multisig.syncIntents(multisigId);
+          updatedIntentId = result.intentIds.at(-1);
           return result.imported === 0
             ? "No new co-signer updates"
-            : `${result.imported} co-signer update${result.imported === 1 ? "" : "s"} verified`;
+            : `${result.imported} signing intent${result.imported === 1 ? "" : "s"} updated`;
         },
         {
+          reconcile: true,
           afterRender: () => {
+            const multisigId = deps.selectedMultisigId();
+            if (multisigId && updatedIntentId) {
+              deps.openIntent(multisigId, updatedIntentId);
+              return;
+            }
             const tab = deps.app?.querySelector<HTMLButtonElement>('[data-ms-home-tab="intents"]');
             tab?.click();
             (deps.app?.querySelector<HTMLButtonElement>("[data-ms-sync-intents]") ?? tab)?.focus({

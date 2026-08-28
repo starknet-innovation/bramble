@@ -268,10 +268,12 @@ describe("Argent multisig fee refresh", () => {
   test("keeps the user in the intents tab after checking for co-signer updates", async () => {
     const fixture = await makeArgentMultisigFixture();
     const synced: string[] = [];
+    const opened: string[][] = [];
+    let intentIds: readonly string[] = [];
     const client = await makeMultisigUiClient({
       syncIntents: async (multisigId) => {
         synced.push(multisigId);
-        return { imported: 0, received: 0 };
+        return { imported: intentIds.length, intentIds, received: intentIds.length };
       },
     });
     const app = document.createElement("div");
@@ -290,7 +292,7 @@ describe("Argent multisig fee refresh", () => {
       app,
       multisig: client,
       openDetail() {},
-      openIntent() {},
+      openIntent: (...args: string[]) => opened.push(args),
       openList() {},
       async render() {
         app.replaceChildren(document.createRange().createContextualFragment(markup()));
@@ -312,5 +314,11 @@ describe("Argent multisig fee refresh", () => {
     );
     expect(app.querySelector<HTMLElement>('[data-ms-home-panel="intents"]')?.hidden).toBe(false);
     expect(document.activeElement).toBe(app.querySelector("[data-ms-sync-intents]"));
+
+    intentIds = [fixture.intent.id];
+    app.querySelector<HTMLButtonElement>("[data-ms-sync-intents]")?.click();
+    await flushMultisigUi();
+    expect(opened).toEqual([[fixture.record.id, fixture.intent.id]]);
+    expect(document.body.textContent).toContain("1 signing intent updated");
   });
 });

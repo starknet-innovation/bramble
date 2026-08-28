@@ -77,10 +77,10 @@ export const Toasts: CatalogStory = {
       "Transient feedback confirms completion or names a recoverable failure. Runtime timing and swipe behavior remain in the audited DOM boundary.",
       catalogGroup(
         "Semantic feedback",
-        "Errors stay to one scannable line while the copy action retains the complete diagnostic.",
+        "Long errors wrap for readability while the copy action retains the complete diagnostic.",
         `<div class="catalog-stack catalog-card-limit">
           ${toast("Transaction submitted. Tracking confirmation now.", "success")}
-          ${toast("Not submitted — network fees changed.", "error")}
+          ${toast("Argent multisig intent nonce is no longer current", "error")}
         </div>`,
       ),
       args.theme,

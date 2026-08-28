@@ -505,6 +505,14 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     true,
   ),
   checkpoint(
+    "home-observer-proposal",
+    "Observer can propose",
+    "Preparing an off-chain transaction is available even when this browser does not own a signer; signature collection remains a separate capability.",
+    { multisigIntents: [], status: observerOnly, view: "multisig-home" },
+    { localSigner: "unavailable", proposal: "available" },
+    true,
+  ),
+  checkpoint(
     "home-intents",
     "Condensed open work",
     "Home keeps each intent to one scannable line before opening the focused review.",

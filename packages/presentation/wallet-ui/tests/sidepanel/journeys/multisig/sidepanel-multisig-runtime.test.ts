@@ -168,7 +168,7 @@ describe("createMultisigClient", () => {
           };
         }
         if (type === "wallet.syncArgentMultisigIntents") {
-          return { imported: 0, ok: true, received: 0 };
+          return { imported: 0, intentIds: [], ok: true, received: 0 };
         }
         return { error: "unexpected message" };
       },
@@ -211,6 +211,7 @@ describe("createMultisigClient", () => {
     });
     await expect(client.syncIntents(fixture.record.id)).resolves.toEqual({
       imported: 0,
+      intentIds: [],
       received: 0,
     });
     expect(messages).toEqual([

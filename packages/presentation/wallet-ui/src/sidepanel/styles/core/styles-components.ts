@@ -487,9 +487,8 @@ ${SIGN_REQUEST_STYLES}
   .toast-text {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
   }
   button.toast-copy { height: 30px; min-height: 30px; width: 30px; }
 `;

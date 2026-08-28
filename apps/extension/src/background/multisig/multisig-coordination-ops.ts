@@ -195,8 +195,8 @@ const importGiftWraps = async (
   vaultPassphrase: string,
   isAuthorized: () => boolean,
   open: NonNullable<MultisigOpsDeps["wallet"]["openNostrApplicationData"]>,
-): Promise<number | null> => {
-  let imported = 0;
+): Promise<readonly string[] | null> => {
+  const imported = new Set<string>();
   for (const event of events) {
     if (!isAuthorized()) return null;
     const opened = await openGiftWrap(open, event, vaultPassphrase);
@@ -211,9 +211,9 @@ const importGiftWraps = async (
         type: "wallet.importArgentMultisigIntent",
       }),
     );
-    if (response && !("error" in response)) imported += 1;
+    if (response && !("error" in response)) imported.add(input.package.intent.id);
   }
-  return imported;
+  return [...imported];
 };
 
 const publicKey = async (deps: MultisigOpsDeps): Promise<RuntimeResponse> => {
@@ -301,7 +301,7 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
   if (!events) {
     return { error: "Secure co-signer updates are unavailable. Try again shortly" };
   }
-  const imported = await importGiftWraps(
+  const intentIds = await importGiftWraps(
     deps,
     events,
     preferences.addressBook,
@@ -310,8 +310,8 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
     authorized.isCurrent,
     open,
   );
-  if (imported === null) return { error: "wallet locked" };
-  return { imported, ok: true, received: events.length };
+  if (intentIds === null) return { error: "wallet locked" };
+  return { imported: intentIds.length, intentIds, ok: true, received: events.length };
 };
 
 /** Handles trusted-page Nostr coordination requests and no other messages. */

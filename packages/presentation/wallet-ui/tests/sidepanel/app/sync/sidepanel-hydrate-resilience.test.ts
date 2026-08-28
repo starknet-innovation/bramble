@@ -203,34 +203,38 @@ describe("cached hydration resilience", () => {
     let refreshes = 0;
     const nftReads: boolean[] = [];
 
-    await hydrateView({
-      activeView: "multisig-home",
-      cache,
-      deployment: {},
-      multisig: {
-        loadBalances: async () => ({ error: "offline" }),
-        loadMultisigs: async () => cache.multisigs,
-        refreshMultisig: async () => {
-          refreshes += 1;
-          return "error";
+    const run = (refreshReason: "action" | "ambient") =>
+      hydrateView({
+        activeView: "multisig-home",
+        cache,
+        deployment: {},
+        multisig: {
+          loadBalances: async () => ({ error: "offline" }),
+          loadMultisigs: async () => cache.multisigs,
+          refreshMultisig: async () => {
+            refreshes += 1;
+            return "error";
+          },
         },
-      },
-      paint: () => undefined,
-      refreshReason: "ambient",
-      selectedMultisigId: multisigId,
-      selectedTokenId: null,
-      status,
-      wallet: {
-        discoverNfts: async (...input: readonly unknown[]) => {
-          nftReads.push(input[3] === true);
-          return [];
+        paint: () => undefined,
+        refreshReason,
+        selectedMultisigId: multisigId,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          discoverNfts: async (...input: readonly unknown[]) => {
+            nftReads.push(input[3] === true);
+            return [];
+          },
+          loadActivity: async () => ({ entries: [], historyUnavailable: false }),
+          loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
         },
-        loadActivity: async () => ({ entries: [], historyUnavailable: false }),
-        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
-      },
-    } as never);
+      } as never);
 
+    await run("ambient");
     expect(refreshes).toBe(0);
     expect(nftReads).toEqual([true]);
+    await run("action");
+    expect(refreshes).toBe(1);
   });
 });

@@ -306,6 +306,16 @@ export const HomeEmpty: LabStory = {
     await expect(actions?.querySelectorAll(".action-tile")).toHaveLength(4);
   },
 };
+export const HomeObserverProposal: LabStory = {
+  args: { checkpointId: "home-observer-proposal", scenarioId: "multisig" },
+  name: "Home · observer can propose",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector('[data-view="multisig-propose"]')).toBeEnabled();
+  },
+};
 export const HomeIntents: LabStory = {
   args: { checkpointId: "home-intents", scenarioId: "multisig" },
   name: "Home · condensed open work",
@@ -343,6 +353,9 @@ export const IntentCollecting: LabStory = {
     await expect(body?.querySelector("[data-ms-share]")).toHaveTextContent(
       "Share securely with co-signers",
     );
+    await expect(body?.querySelector('[data-view="multisig-home"]')).toHaveTextContent(
+      "Go to multisig account",
+    );
   },
 };
 export const IntentReady: LabStory = {
@@ -359,7 +372,7 @@ export const IntentReady: LabStory = {
     ).toBeVisible();
     await expect(body?.querySelector("[data-ms-submit]")).toBeVisible();
     await expect(body?.querySelector("[data-ms-sign]")).not.toBeInTheDocument();
-    await expect(body?.querySelectorAll(".multisig-intent-action > button")).toHaveLength(1);
+    await expect(body?.querySelectorAll(".multisig-intent-action > button")).toHaveLength(2);
     await expect(body?.querySelector(".multisig-collaboration")).not.toHaveAttribute("open");
     await expect(body).not.toHaveTextContent("Another pending transaction");
     await expect(body?.querySelector(".multisig-intent-stack")).not.toBeInTheDocument();

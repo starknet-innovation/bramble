@@ -222,6 +222,7 @@ export const multisigIntentActions = (
             })
           : ""
       }
+      ${button({ attributes: { "data-view": "multisig-home" }, label: "Go to multisig account", variant: "ghost" })}
     </div>
     ${
       intent.state === "stale"

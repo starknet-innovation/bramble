@@ -231,7 +231,8 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toContain(".sparkline-up polyline { stroke: var(--mc-positive); }");
     // Toast tone is a leading icon chip — green check on positive-soft for
     // success, red alert on danger-soft for error — a fixed heuristic the eye
-    // reads before any text, while the surface stays a neutral panel.
+    // reads before any text, while the surface stays a neutral panel and long
+    // messages wrap instead of clipping their recovery guidance.
     expect(SIDEPANEL_STYLES).toContain(
       ".toast.success .toast-icon { background: var(--mc-positive-soft); color: var(--mc-positive); }",
     );
@@ -239,7 +240,7 @@ describe("sidepanel styles", () => {
       ".toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }",
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.toast-text \{[^}]*text-overflow: ellipsis[^}]*text-wrap: nowrap/s,
+      /\.toast-text \{[^}]*overflow-wrap: anywhere[^}]*text-wrap: pretty/s,
     );
     // The swap success moment draws its ring and check in the semantic green
     // and collapses to static marks under reduced motion.

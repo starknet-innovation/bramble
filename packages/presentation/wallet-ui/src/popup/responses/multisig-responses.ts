@@ -353,13 +353,22 @@ export const isNostrShareResponse = (
 /** Validates one bounded explicit relay-sync outcome. */
 export const isNostrSyncResponse = (
   value: unknown,
-): value is { readonly imported: number; readonly ok: true; readonly received: number } =>
+): value is {
+  readonly imported: number;
+  readonly intentIds: readonly string[];
+  readonly ok: true;
+  readonly received: number;
+} =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["imported", "ok", "received"]) &&
+  hasOnlyKnownKeys(value, ["imported", "intentIds", "ok", "received"]) &&
   value["ok"] === true &&
   Number.isSafeInteger(value["imported"]) &&
   Number(value["imported"]) >= 0 &&
+  Array.isArray(value["intentIds"]) &&
+  value["intentIds"].length === value["imported"] &&
+  value["intentIds"].every((id) => typeof id === "string" && id.length > 0 && id.length <= 256) &&
+  new Set(value["intentIds"]).size === value["intentIds"].length &&
   Number.isSafeInteger(value["received"]) &&
   Number(value["received"]) >= Number(value["imported"]);
 

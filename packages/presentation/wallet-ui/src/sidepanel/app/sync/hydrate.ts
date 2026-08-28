@@ -291,7 +291,9 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     (view) => view.record.id === selectedMultisigId,
   );
   const selectedNeedsRefresh =
-    authorityCriticalView || selectedMultisig?.record.currentConfig === undefined;
+    refreshReason === "action" ||
+    authorityCriticalView ||
+    selectedMultisig?.record.currentConfig === undefined;
   await hydrateCachedView(
     deps,
     walletBalanceView,

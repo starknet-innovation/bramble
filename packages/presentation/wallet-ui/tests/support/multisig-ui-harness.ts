@@ -70,7 +70,7 @@ export const makeMultisigUiClient = async (
     reviewDeployment: async () => fixture.deploymentReview,
     shareIntent: async () => ({ recipients: 1 }),
     signIntent: async () => ({ intent: fixture.intent }),
-    syncIntents: async () => ({ imported: 0, received: 0 }),
+    syncIntents: async () => ({ imported: 0, intentIds: [], received: 0 }),
     submitIntent: async () => ({ intent: fixture.readyIntent, transactionHash: "0x456" }),
     ...overrides,
   };

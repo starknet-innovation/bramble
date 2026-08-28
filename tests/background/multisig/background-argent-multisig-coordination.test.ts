@@ -124,12 +124,28 @@ describe("Argent multisig Nostr coordination", () => {
         harnessExtensionSender,
       ),
     ).resolves.toMatchObject({ ok: true, recipients: 1, relays: 1 });
+    await source.handler(
+      { intentId: signedByA.intent.id, type: "wallet.shareArgentMultisigIntent" },
+      harnessExtensionSender,
+    );
+    await expect(target.multisigStore.getIntent(signedByA.intent.id)).resolves.toBeNull();
     await expect(
       target.handler(
         { multisigId: HARNESS_MULTISIG_ID, type: "wallet.syncArgentMultisigIntents" },
         harnessExtensionSender,
       ),
-    ).resolves.toMatchObject({ imported: 1, ok: true });
+    ).resolves.toMatchObject({
+      imported: 1,
+      intentIds: [signedByA.intent.id],
+      ok: true,
+      received: 2,
+    });
+    await expect(
+      target.handler(
+        { multisigId: HARNESS_MULTISIG_ID, type: "wallet.syncArgentMultisigIntents" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ imported: 0, intentIds: [], ok: true });
 
     const signedByB = (await target.handler(
       {
