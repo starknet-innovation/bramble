@@ -42,12 +42,15 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@mc-wallet/wallet-ui": "workspace:*",
   "@mc-wallet/wallet-model": "workspace:*",
   "@mc-wallet/wallet-protocol": "workspace:*",
+  "@starknetfoundation/krusty-kms-wasm": "0.10.0",
   starknet: "10.0.2",
 };
 
 export const PINNED_RUNTIME_FILES = [
   "background/index.js",
   "content/index.js",
+  "dependencies/krusty-kms/krusty_kms_wasm.js",
+  "dependencies/krusty-kms/krusty_kms_wasm_bg.wasm",
   "icons/icon-128.png",
   "icons/icon-16.png",
   "icons/icon-32.png",
@@ -62,8 +65,6 @@ export const PINNED_RUNTIME_FILES = [
   "sandbox/render.js",
   "sidepanel.html",
   "sidepanel/index.js",
-  "vendor/krusty-kms/pkg/krusty_kms_wasm.js",
-  "vendor/krusty-kms/pkg/krusty_kms_wasm_bg.wasm",
   "vendor/starknet-privacy/sdk/starknet-sdk.min.js",
 ] as const;
 
@@ -79,7 +80,6 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   "node_modules/",
   "playwright-report/",
   "test-results/",
-  "vendor/krusty-kms/",
   "vendor/argent-contracts/",
   "vendor/starknet-privacy/",
 ] as const;
@@ -142,7 +142,6 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",
   "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
-  "vendor:krusty": "bun run scripts/vendor-krusty.ts",
   "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
   "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
 };

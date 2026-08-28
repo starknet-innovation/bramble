@@ -55,7 +55,6 @@ const tsconfigJson = await readJson("tsconfig.json");
 const buildScript = await readFile("apps/extension/build.ts", "utf8");
 const ciWorkflow = await readFile(".github/workflows/ci.yml", "utf8");
 const packageScript = await readFile("scripts/package-extension.ts", "utf8");
-const vendorKrustyScript = await readFile("scripts/vendor-krusty.ts", "utf8");
 const vendorPrivacyScript = await readFile("scripts/vendor-privacy-sdk.ts", "utf8");
 failures.push(...(await workflowSecurityFailures()));
 
@@ -381,7 +380,6 @@ if (
 }
 
 failures.push(
-  ...vendorPinFailures(vendorKrustyScript, "scripts/vendor-krusty.ts", "KRUSTY_KMS_REVISION"),
   ...vendorPinFailures(
     vendorPrivacyScript,
     "scripts/vendor-privacy-sdk.ts",
@@ -394,11 +392,9 @@ if (EXPECTED_RUNTIME_FILES.join("\n") !== PINNED_RUNTIME_FILES.join("\n")) {
 }
 
 const ciCommands = [
-  "cargo install wasm-pack --locked --version 0.13.1",
   "bun install --frozen-lockfile",
   "bun run test:e2e:install",
   "bun run check:files",
-  "bun run vendor:krusty",
   "bun run vendor:argent",
   "bun run vendor:privacy",
   "bun run check",

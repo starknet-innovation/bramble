@@ -16,7 +16,7 @@ const createModule = (overrides: Record<string, unknown> = {}) => ({
   deriveOzAccountAddress() {
     return "0xabc";
   },
-  deriveStrk20ViewingKey() {
+  deriveScopedStrk20ViewingKey() {
     return "0x456";
   },
   deriveStarknetKeypair() {

@@ -31,7 +31,7 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
   without a revoke control: on an NFT contract the same call would grant rather than revoke.
 - **Clean Mono UI** — solid achromatic surfaces, purposeful spring motion, and View Transitions, with full reduced-motion support.
 
-Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also available). Mainnet moves real funds. All cryptography runs through the vendored **Krusty KMS** WASM core, and there is no local signing fallback.
+Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also available). Mainnet moves real funds. All cryptography runs through the exact, lockfile-pinned **Krusty KMS** WASM package, and there is no local signing fallback.
 
 ## Quick start
 
@@ -40,14 +40,11 @@ Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also ava
 | Tool | Version | Install | Needed for |
 | --- | --- | --- | --- |
 | [Bun](https://bun.sh) | 1.3.3 | [bun.sh](https://bun.sh/) | all |
-| Rust (stable) | 1.96+ | [rustup](https://rustup.rs) | `vendor:krusty` |
-| [wasm-pack](https://github.com/rustwasm/wasm-pack) | 0.13.1 | `cargo install wasm-pack --locked --version 0.13.1` | `vendor:krusty` |
 | [Scarb](https://docs.swmansion.com/scarb/) | 2.18.0 **exactly** | `asdf install scarb 2.18.0` (pinned in `.tool-versions`) | Terminal contract |
 | [Starknet Foundry](https://foundry-rs.github.io/starknet-foundry/getting-started/installation.html) | 0.59.0 **exactly** | `asdf install starknet-foundry 0.59.0` | Terminal contract tests |
 
 ```bash
 bun install --frozen-lockfile
-bun run vendor:krusty     # Krusty KMS crypto core (WASM) — needs Rust + wasm-pack
 bun run vendor:argent     # pinned official Argent release and artifact verification
 bun run vendor:privacy    # pinned official Starknet Privacy SDK browser bundle
 bun run build             # -> dist/
@@ -73,18 +70,18 @@ The wallet it creates is kept in a git-ignored `.dev-profile/`; delete that dire
 ### Offline checks
 
 After `bun install --frozen-lockfile`, the fast PR gates below need only Bun and the checked-out
-repository. They do not clone Krusty or Argent, invoke Rust/wasm-pack, build the extension, or
+repository. They do not clone Argent, build the extension, or
 launch Chromium:
 
 ```bash
 bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun test ./tests && bun run check:coverage
 ```
 
-The full `bun run check` additionally verifies the vendored Krusty, official Argent release, and Privacy
-SDK outputs. Generate those first with `bun run vendor:krusty` (network, Rust, and
-`wasm-pack 0.13.1`), `bun run vendor:argent` (network), and
-`bun run vendor:privacy` (Node.js 24 + npm). `build`, packaging, and browser E2E also require those
-vendored outputs; Playwright needs its Chromium install once per machine.
+The full `bun run check` additionally verifies the published Krusty package, official Argent
+release, and Privacy SDK outputs. `bun install --frozen-lockfile` installs Krusty; generate the
+remaining outputs with `bun run vendor:argent` (network) and `bun run vendor:privacy` (Node.js 24 +
+npm). `build`, packaging, and browser E2E also require the Argent and Privacy outputs; Playwright
+needs its Chromium install once per machine.
 
 ## Built with
 

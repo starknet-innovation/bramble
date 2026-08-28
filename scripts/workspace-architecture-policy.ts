@@ -42,7 +42,6 @@ export const DEVELOPMENT_SOURCE_FILES = new Set(["apps/terminal/src/data/extende
  */
 export const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
   ["packages/presentation/wallet-ui/tests/support/groups-harness.ts", 1],
-  ["scripts/check-krusty-adapter.ts", 1],
   ["scripts/check-privacy-sdk.ts", 1],
 ]);
 

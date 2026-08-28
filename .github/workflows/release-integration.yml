@@ -3,13 +3,13 @@ name: Release integration
 # Broader, post-merge integration for the release-branch model (DEVELOPMENT.md).
 # Runs on every push to a `release/**` branch — i.e. after a feature/fix/chore
 # PR merges into the active release branch. It exercises the heavier steps the
-# fast PR CI deliberately skips: the vendored crypto/contract toolchain, the
+# fast PR CI deliberately skips: the vendored contract toolchain, the
 # extension build, and the reproducible package. This is the "integration"
 # tier; the full E2E + audit + regression suite runs nightly (nightly.yml).
 #
-# The vendor steps need the private Krusty KMS repo + a Rust/Scarb toolchain.
-# They run on the same self-hosted CodeBuild runner CI uses (toolchain present).
-# If a vendor step fails (e.g. private-repo access or toolchain drift) the job
+# The vendor steps need network access plus the contract toolchains. They run on
+# the same self-hosted CodeBuild runner CI uses (toolchain present).
+# If a vendor step fails (e.g. network access or toolchain drift) the job
 # writes a clear explanation to the run summary and then fails honestly — it
 # never fakes success.
 on:
@@ -31,46 +31,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-        with:
-          toolchain: 1.96.1
-          # scripts/vendor-krusty.ts requires this exact rustc release and
-          # builds the crypto core for this target; it refuses to run on any
-          # other toolchain, so two builds stay comparable.
-          targets: wasm32-unknown-unknown
-      # Same cargo/wasm-pack cache key as ci.yml so the integration build reuses
-      # the exact toolchain the vendored krusty artifacts are built with.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-
-      - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
-      # Vendor the Krusty KMS WASM core. On failure, explain the likely cause in
-      # the run summary, then fail (exit 1) — do not mask a real breakage.
-      - name: Vendor Krusty KMS
-        run: |
-          set -o pipefail
-          if ! bun run vendor:krusty; then
-            {
-              echo "### Release integration: \`vendor:krusty\` FAILED"
-              echo ""
-              echo "This step needs network access to the (private) Krusty KMS"
-              echo "repository, \`wasm-pack 0.13.1\`, and a Rust toolchain. A failure"
-              echo "here usually means the runner lacks private-repo access or the"
-              echo "toolchain drifted — it is NOT a wallet source-code failure."
-              echo "See CONTRIBUTING.md and scripts/vendor-krusty.ts."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
       # Verify the pinned production Argent release and official artifacts.
       - name: Vendor Argent account contracts
         run: |

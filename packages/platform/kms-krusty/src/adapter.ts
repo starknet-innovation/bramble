@@ -121,7 +121,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
 
   const deriveOzAccountAddress = requireFunction(module, "deriveOzAccountAddress");
   const deriveNostrPublicKey = requireFunction(module, "deriveNostrPublicKey");
-  const deriveStrk20ViewingKey = requireFunction(module, "deriveStrk20ViewingKey");
+  const deriveScopedStrk20ViewingKey = requireFunction(module, "deriveScopedStrk20ViewingKey");
   const deriveStarknetKeypair = requireFunction(module, "deriveStarknetKeypair");
   const generateMnemonic = requireFunction(module, "generateMnemonic");
   const getAccountClassHashes = requireFunction(module, "getAccountClassHashes");
@@ -173,7 +173,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       ) {
         throw new WalletError("Invalid STRK20 viewing-key input");
       }
-      const result = await deriveStrk20ViewingKey(privateKey, chainId, poolAddress);
+      const result = await deriveScopedStrk20ViewingKey(privateKey, chainId, poolAddress);
       // A viewing key is a signing scalar too, and the encrypted vault already
       // refuses to store one outside the curve order; checking the same rule
       // here means the boundary refuses it rather than the storage layer.

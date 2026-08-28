@@ -131,34 +131,14 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-        with:
-          toolchain: 1.96.1
-          # scripts/vendor-krusty.ts requires this exact rustc release and
-          # builds the crypto core for this target; it refuses to run on any
-          # other toolchain, so two builds stay comparable.
-          targets: wasm32-unknown-unknown
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-
-      - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
 
       # --- Gates. Each runs to completion (continue-on-error) so the summary
       # --- can categorize every result; the job is failed explicitly at the end.
-      - name: Vendor crypto, privacy, and contract toolchain
+      - name: Verify privacy and contract toolchain
         id: vendor
         continue-on-error: true
-        run: bun run vendor:krusty && bun run vendor:argent && bun run vendor:privacy
+        run: bun run vendor:argent && bun run vendor:privacy
       - name: Build extension
         id: build
         continue-on-error: true
@@ -193,7 +173,7 @@ jobs:
         run: |
           set -euo pipefail
           declare -A GATES=(
-            ["Vendor toolchain (krusty+argent)"]="$VENDOR"
+            ["Verify upstreams (Argent+Privacy)"]="$VENDOR"
             ["Extension build"]="$BUILD"
             ["Dependency audit (bun audit)"]="$AUDIT"
             ["Security property suite"]="$PROPERTIES"
@@ -290,7 +270,7 @@ jobs:
             const { owner, repo } = context.repo;
             const branch = process.env.BRANCH;
             const gates = [
-              ["Vendor toolchain (krusty+argent)", process.env.VENDOR],
+              ["Verify upstreams (Argent+Privacy)", process.env.VENDOR],
               ["Extension build", process.env.BUILD],
               ["Dependency audit (bun audit)", process.env.AUDIT],
               ["Security property suite", process.env.PROPERTIES],

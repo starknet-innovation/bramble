@@ -28,7 +28,7 @@ import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encr
 import { createWalletVaultService } from "@mc-wallet/vault/service";
 import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@mc-wallet/vault/store-migration";
 import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
-import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
+import * as krustyModule from "/dependencies/krusty-kms/krusty_kms_wasm.js";
 import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 import {
   createBrowserLocalStore,

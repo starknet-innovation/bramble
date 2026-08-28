@@ -233,7 +233,7 @@ const kmsReturning = (privateKey: string, viewingKey: string) =>
       public_key_x: "0xabc",
       public_key_y: "0xdef",
     }),
-    deriveStrk20ViewingKey: () => viewingKey,
+    deriveScopedStrk20ViewingKey: () => viewingKey,
     generateMnemonic: () => "habit hope tip crystal because grunt nation idea electric witness",
     getAccountClassHashes: () => "{}",
     openNostrApplicationData: () =>

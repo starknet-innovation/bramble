@@ -12,7 +12,7 @@ const createModule = (signatureR = "0x1") => ({
   deriveOzAccountAddress() {
     return "0xabc";
   },
-  deriveStrk20ViewingKey() {
+  deriveScopedStrk20ViewingKey() {
     return "0x456";
   },
   deriveStarknetKeypair() {
@@ -106,7 +106,7 @@ describe("createKrustyKms", () => {
           public_key_y: "0xdef",
         };
       },
-      deriveStrk20ViewingKey() {
+      deriveScopedStrk20ViewingKey() {
         viewingKeyDerived = true;
         return "0x456";
       },
@@ -169,7 +169,7 @@ describe("createKrustyKms", () => {
     await expect(
       createKrustyKms({
         ...createModule(),
-        deriveStrk20ViewingKey() {
+        deriveScopedStrk20ViewingKey() {
           return "0x0";
         },
       }).deriveStrk20ViewingKey("0x123", "0x1", "0x2"),

@@ -287,8 +287,9 @@ privileged and may never be included in page, content, UI Lab, Terminal, or ordi
 
 ### `platform/kms-krusty`
 
-The only adapter from the vault's KMS port to pinned Krusty WASM. It validates every KMS input and
-output and fails closed. It owns no account-selection, transaction, storage, or UI policy.
+The only adapter from the vault's KMS port to the exact published Krusty WASM package. It validates
+every KMS input and output and fails closed. It owns no account-selection, transaction, storage, or
+UI policy.
 
 ### `platform/starknet`
 
@@ -435,7 +436,6 @@ bun run --filter @mc-wallet/extension build
 The release gate remains authoritative and comprehensive:
 
 ```bash
-bun run vendor:krusty
 bun run vendor:argent
 bun run vendor:privacy
 bun run check

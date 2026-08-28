@@ -102,7 +102,6 @@ version **must be strictly greater** than the currently published one.
 
 ```sh
 bun install --frozen-lockfile
-bun run vendor:krusty      # checks out the pinned Krusty KMS commit and builds wasm
 bun run vendor:argent      # verifies the pinned official Argent release
 bun run build              # writes dist/
 bun run package:extension  # writes artifacts/mc-wallet-<version>.zip (+ .sha256)
@@ -131,8 +130,7 @@ bun run check:extension
 bun test
 ```
 
-The full `bun run check` (plus `vendor:krusty`, `vendor:argent`, `build`,
-`test:e2e`) runs in CI, which needs network plus the Rust toolchain for Krusty.
+The full `bun run check` (plus `vendor:argent`, `build`, `test:e2e`) runs in CI.
 
 ## 3. Cutting a release (automatic on merge)
 
@@ -147,8 +145,7 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
 3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
    idempotent, so a re-run never double-cuts);
 4. calls the reusable `release-build.yml`, which installs the toolchain exactly
-   as CI does (including Rust `1.96.1`), runs
-   `vendor:krusty`/`vendor:argent`/`build`/`package:extension`, re-asserts the
+   as CI does, runs `vendor:argent`/`build`/`package:extension`, re-asserts the
    tag ↔ version gate, verifies the `.zip` matches its `.sha256`, and uploads the
    `mc-wallet-release` artifact. A separate hosted job that never checks out
    wallet source creates the **GitHub Release** with the zip + `.sha256`
