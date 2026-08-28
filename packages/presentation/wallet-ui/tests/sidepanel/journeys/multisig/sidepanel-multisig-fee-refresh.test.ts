@@ -267,7 +267,13 @@ describe("Argent multisig fee refresh", () => {
 
   test("keeps the user in the intents tab after checking for co-signer updates", async () => {
     const fixture = await makeArgentMultisigFixture();
-    const client = await makeMultisigUiClient();
+    const synced: string[] = [];
+    const client = await makeMultisigUiClient({
+      syncIntents: async (multisigId) => {
+        synced.push(multisigId);
+        return { imported: 0, received: 0 };
+      },
+    });
     const app = document.createElement("div");
     document.body.replaceChildren(app);
     const markup = (): string =>
@@ -300,6 +306,7 @@ describe("Argent multisig fee refresh", () => {
     app.querySelector<HTMLButtonElement>("[data-ms-sync-intents]")?.click();
     await flushMultisigUi();
 
+    expect(synced).toEqual([fixture.record.id]);
     expect(app.querySelector('[data-ms-home-tab="intents"]')?.getAttribute("aria-selected")).toBe(
       "true",
     );

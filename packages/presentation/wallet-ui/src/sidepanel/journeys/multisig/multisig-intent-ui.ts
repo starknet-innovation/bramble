@@ -209,7 +209,9 @@ export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
         deps,
         button,
         async () => {
-          const result = await deps.multisig.syncIntents();
+          const multisigId = deps.selectedMultisigId();
+          if (!multisigId) throw new Error("Select a multisig before checking for updates");
+          const result = await deps.multisig.syncIntents(multisigId);
           return result.imported === 0
             ? "No new co-signer updates"
             : `${result.imported} co-signer update${result.imported === 1 ? "" : "s"} verified`;

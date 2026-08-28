@@ -135,7 +135,7 @@ export const readResolveMultisigSignerInput = (
  */
 export const readMultisigIdInput = (
   message: unknown,
-  type: "wallet.multisigBalances" | "wallet.refreshMultisig",
+  type: "wallet.multisigBalances" | "wallet.refreshMultisig" | "wallet.syncArgentMultisigIntents",
 ): { readonly multisigId: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["multisigId", "type"]) &&

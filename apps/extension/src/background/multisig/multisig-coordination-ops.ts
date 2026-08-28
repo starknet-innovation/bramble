@@ -16,7 +16,11 @@ import { runActiveStateMutation } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
 import type { MultisigOpsDeps } from "./multisig-deps";
-import { argentMultisigIntentPackage, readImportIntentInput } from "./multisig-inputs";
+import {
+  argentMultisigIntentPackage,
+  readImportIntentInput,
+  readMultisigIdInput,
+} from "./multisig-inputs";
 import { handleMultisigTxOps } from "./multisig-tx-ops";
 import { publishNostrGiftWrap, syncNostrGiftWraps } from "./nostr-relay";
 
@@ -258,10 +262,14 @@ const shareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   return { ok: true, ...published };
 };
 
-const syncIntents = async (deps: MultisigOpsDeps): Promise<RuntimeResponse> => {
+const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<RuntimeResponse> => {
   if (!deps.wallet.nostrPublicKey || !deps.wallet.openNostrApplicationData) {
     return { error: "Secure co-signer coordination is unavailable for this wallet" };
   }
+  const record = (await deps.multisigStore.listMultisigs()).find(
+    (candidate) => candidate.id === multisigId,
+  );
+  if (!record) return { error: "Argent multisig not found" };
   const nostrPublicKeyFor = deps.wallet.nostrPublicKey;
   const open = deps.wallet.openNostrApplicationData;
   const passphrase = deps.session.getPassphrase();
@@ -276,12 +284,11 @@ const syncIntents = async (deps: MultisigOpsDeps): Promise<RuntimeResponse> => {
     return { error: "Secure co-signer updates are unavailable. Try again shortly" };
   }
   const preferences = await deps.preferencesStore.read();
-  const records = await deps.multisigStore.listMultisigs();
   const imported = await importGiftWraps(
     deps,
     events,
     preferences.addressBook,
-    records,
+    [record],
     passphrase,
     authorized.isCurrent,
     open,
@@ -303,8 +310,9 @@ export const handleMultisigCoordinationOps = async (
   }
   if (messageType === "wallet.shareArgentMultisigIntent") return shareIntent(deps, message);
   if (messageType === "wallet.syncArgentMultisigIntents") {
-    return isTypeOnly(message, messageType)
-      ? syncIntents(deps)
+    const input = readMultisigIdInput(message, messageType);
+    return input
+      ? syncIntents(deps, input.multisigId)
       : { error: "invalid Nostr multisig sync request" };
   }
   return null;
