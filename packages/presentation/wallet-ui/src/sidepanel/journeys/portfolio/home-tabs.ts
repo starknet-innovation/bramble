@@ -28,6 +28,7 @@ import {
   visibleNftItems,
 } from "../collectibles/nft-views";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import { privacyScoreCard } from "../privacy/privacy-score-view";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
 import { type PrivateBreakdown, unifiedBalanceRow } from "./token-row";
 
@@ -269,6 +270,7 @@ const tokensPanel = (
             )
             .join("")}</ul>`;
   return `${body}
+    ${privacyScoreCard(privacy.value?.privacyScore)}
     ${
       privacy.error
         ? `<button class="private-balance-summary muted" data-privacy-retry type="button">

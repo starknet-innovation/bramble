@@ -4,6 +4,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  canonicalJson,
   hasOnlyKnownKeys,
   isJson,
   isJsonWithinBudget,
@@ -12,6 +13,12 @@ import {
   type JsonBudget,
   normalizeFeltBigints,
 } from "@mc-wallet/core/json";
+
+test("canonicalJson recursively sorts object keys without reordering arrays", () => {
+  expect(canonicalJson({ z: 1, a: { y: true, b: null }, list: [{ z: 2, a: 1 }, 3] })).toBe(
+    '{"a":{"b":null,"y":true},"list":[{"a":1,"z":2},3],"z":1}',
+  );
+});
 
 test("isRecord accepts only plain JSON records", () => {
   const inherited = Object.assign(Object.create({ target: "mc-wallet:content" }), {

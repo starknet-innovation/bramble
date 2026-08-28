@@ -450,7 +450,7 @@ describe("executeStrk20InvokeApproval", () => {
     };
 
     const result = await executeStrk20InvokeApproval(deps, {
-      actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
+      actions: [{ amount: "0x1", recipient: token, token, type: "withdraw" }],
       origin,
       plan: { feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" } },
     });
@@ -467,5 +467,6 @@ describe("executeStrk20InvokeApproval", () => {
     // A private-transaction entry was recorded without leaking action detail.
     const recorded = await activity.list();
     expect(recorded[0]?.summary).toContain("submitted a private transaction (1 action)");
+    expect(recorded[0]?.privacyWithdrawal).toBe(true);
   });
 });

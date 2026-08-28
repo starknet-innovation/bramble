@@ -215,6 +215,9 @@ if (import.meta.main) {
     // Keyless availability fallback when a Foundation node is unreachable.
     "https://api.cartridge.gg/*",
     "https://api.coingecko.com/*",
+    // Same signed, static privacy-score artifacts for every wallet. The client
+    // pins the P-256 key and associates withdrawals only against local history.
+    "https://d2phvtlrdr7sx2.cloudfront.net/*",
     // Read-only indexed activity and complete token-holdings snapshots. This
     // never participates in signing or transaction submission.
     "https://starkscan.co/*",

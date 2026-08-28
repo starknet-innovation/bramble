@@ -5,6 +5,7 @@
  * missing network configuration, Ledger accounts, and untracked tokens.
  */
 
+import type { PrivacyScoreService } from "@mc-wallet/privacy/score-service";
 import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
 import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
@@ -22,6 +23,7 @@ import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations"
  * store that keeps executable payloads out of the side panel.
  */
 export type Strk20WalletOpsDeps = WalletOpsDeps & {
+  readonly privacyScores?: PrivacyScoreService;
   readonly strk20Preparations: Strk20WalletPreparationStore;
 };
 

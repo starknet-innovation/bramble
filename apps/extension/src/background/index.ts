@@ -14,6 +14,8 @@ import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
 } from "@mc-wallet/privacy/official-sdk-service";
+import { createPrivacyScoreCache } from "@mc-wallet/privacy/score-cache";
+import { createPrivacyScoreService } from "@mc-wallet/privacy/score-service";
 import { unavailableStrk20Service } from "@mc-wallet/privacy/service";
 import {
   type ApprovalSurfacePreference,
@@ -185,6 +187,11 @@ const activityLog = (() => {
     return undefined;
   }
 })();
+const privacyScores = createPrivacyScoreService({
+  cache: createPrivacyScoreCache(createBrowserLocalStore()),
+  http: untrustedFetch,
+  now: systemClock,
+});
 // Public chain data only. The adapter is restricted to trusted extension
 // contexts at startup; wallet secrets remain exclusively in the encrypted vault.
 const balanceSnapshots = createBalanceSnapshotStore(createBrowserLocalStore());
@@ -281,6 +288,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   nftSnapshots,
   session,
   preferencesStore: preferenceStore,
+  privacyScores,
   runtimeRpc,
   originGuard,
   ...(activityLog ? { activity: activityLog } : {}),

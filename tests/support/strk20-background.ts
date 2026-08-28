@@ -4,6 +4,7 @@
  */
 import { expect } from "bun:test";
 import { WalletError } from "@mc-wallet/core/errors";
+import type { PrivacyScoreService } from "@mc-wallet/privacy/score-service";
 import {
   STRK20_NOT_REGISTERED,
   type Strk20PreparedSubmissionInput,
@@ -57,6 +58,7 @@ export type Strk20HarnessOptions = {
    * precedence over `preferences`.
    */
   readonly preferencesRead?: () => WalletPreferences;
+  readonly privacyScores?: PrivacyScoreService;
   readonly preparedSubmissions?: Strk20PreparedSubmissionInput[];
   readonly proveCalls?: { value: number };
   readonly publicBalance?: string;
@@ -199,6 +201,7 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
         return options.preferencesRead?.() ?? preferences;
       },
     },
+    ...(options.privacyScores ? { privacyScores: options.privacyScores } : {}),
     runtimeRpc: makeRuntimeRpc({
       async getTokenBalances({ tokens }) {
         const balance = options.publicBalance ?? "100000000000000000000";

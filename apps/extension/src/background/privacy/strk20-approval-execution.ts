@@ -478,6 +478,9 @@ export const executeStrk20InvokeApproval = async (
       hash: result.transactionHash,
       kind: "invoke",
       networkId: resolved.account.networkId,
+      ...(approval.actions.some((action) => action.type === "withdraw")
+        ? { privacyWithdrawal: true as const }
+        : {}),
       summary: `${approval.origin} submitted a private transaction (${actionCount} action${
         actionCount === 1 ? "" : "s"
       })`,

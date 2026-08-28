@@ -101,6 +101,25 @@ Wallet API private-relay review, proving, success, service failure, missing conf
 unsupported Ledger boundary. Fixtures never call a real vault, SDK service, RPC, or hardware
 device.
 
+### Withdrawal privacy score
+
+Mainnet privacy state also includes a score from the public
+[`privacy-score`](https://github.com/starknet-innovation/privacy-score) feed.
+Every wallet downloads the same static manifest and snapshot; no account
+address, viewing key, note, amount, or transaction hash is sent to that origin.
+The background verifies the canonical payload hash and P-256 signature against
+a compiled SPKI fingerprint, requires the manifest and envelope to agree, and
+persists the highest accepted finalized block/hash checkpoint to reject
+rollbacks and same-height hash changes.
+
+Association happens only against this account's validated local activity. A
+transaction hash with exactly one public withdrawal is unambiguous; a batch
+with more than one withdrawal is reported unavailable instead of guessing an
+event identity. The stored cache contains only the checkpoint and small
+account-local summary, never the large public artifact or private SDK state.
+Snapshots older than the wallet freshness limit render as stale without their
+numeric score.
+
 ## Privileged data flow
 
 1. The content/provider bridge strictly parses bounded actions, token lists, proof envelopes, and

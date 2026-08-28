@@ -56,6 +56,20 @@ describe("createActivityLog record guard", () => {
     expect(entries[0]?.status).toBe("pending");
   });
 
+  test("persists only an explicit true STRK20 withdrawal marker", async () => {
+    const log = createActivityLog({ now: () => 5, store: createMemoryStore() });
+
+    await log.record({ ...validEntry(), privacyWithdrawal: true });
+    expect((await log.list())[0]?.privacyWithdrawal).toBe(true);
+
+    await log.record({
+      ...validEntry(),
+      hash: "0x2",
+      privacyWithdrawal: false,
+    } as unknown as ReturnType<typeof validEntry>);
+    expect((await log.list()).map((entry) => entry.hash)).toEqual(["0x1"]);
+  });
+
   test("re-recording the same hash replaces the earlier entry (dedup filter)", async () => {
     const store = createMemoryStore();
     let tick = 0;

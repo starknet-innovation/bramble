@@ -76,9 +76,8 @@ export const monotonicActivityStatus = (
 /**
  * One recorded transaction. The `amount`, `counterparty`, and `token` fields
  * are optional so entries stored before they existed still load and export;
- * absent values fall back to blank CSV cells. The three tracking fields below
- * are internal bookkeeping for background reconciliation and are never
- * rendered; they are optional for the same reason.
+ * absent values fall back to blank CSV cells. Optional bookkeeping and local
+ * attribution fields are never rendered and preserve older stored rows.
  */
 export type ActivityEntry = {
   readonly accountId: string;
@@ -109,6 +108,8 @@ export type ActivityEntry = {
    * finds the transaction, so ordinary RPC noise never accumulates.
    */
   readonly notFoundCount?: number;
+  /** True only when a locally reviewed STRK20 batch contained a withdrawal. */
+  readonly privacyWithdrawal?: true;
   readonly status: ActivityStatus;
   readonly submittedAt: number;
   readonly summary: string;
@@ -234,6 +235,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "kind",
     "networkId",
     "notFoundCount",
+    "privacyWithdrawal",
     "status",
     "submittedAt",
     "summary",
@@ -254,6 +256,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   isOptionalDetail(value["amount"]) &&
   isOptionalDetail(value["counterparty"]) &&
   isOptionalDetail(value["token"]) &&
+  (value["privacyWithdrawal"] === undefined || value["privacyWithdrawal"] === true) &&
   isFailureNotice(value["failureNotice"]) &&
   (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
   isNotFoundCount(value["notFoundCount"]);

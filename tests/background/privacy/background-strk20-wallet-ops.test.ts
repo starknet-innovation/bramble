@@ -135,6 +135,39 @@ describe("background wallet STRK20 operations", () => {
     );
   });
 
+  test("associates the signed score against only this account's local withdrawals", async () => {
+    const activity = memoryActivityLog(() => SUBMITTED_AT);
+    await activity.record({
+      accountId: account.id,
+      hash: "0x222",
+      kind: "invoke",
+      networkId: account.networkId,
+      summary: "Unshield 1 ETH",
+    });
+    let scoreInput: unknown;
+    const handler = buildStrk20Handler({
+      activity,
+      preferences: preferences(),
+      privacyScores: {
+        async score(input) {
+          scoreInput = input;
+          return { status: "pending" };
+        },
+      },
+    });
+
+    const response = (await handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)) as {
+      readonly strk20State: { readonly privacyScore: unknown };
+    };
+
+    expect(response.strk20State.privacyScore).toEqual({ status: "pending" });
+    expect(scoreInput).toMatchObject({
+      accountId: account.id,
+      networkId: account.networkId,
+      transactions: [{ hash: "0x222" }],
+    });
+  });
+
   test("prepares public registration and atomically consumes it before submission", async () => {
     const capture = {
       registered: { value: false },

@@ -12,6 +12,10 @@ import {
   type OriginHistoryStore,
 } from "@mc-wallet/permissions/origin-history";
 import { type PriceService, unavailablePriceService } from "@mc-wallet/portfolio/prices";
+import {
+  type PrivacyScoreService,
+  unavailablePrivacyScoreService,
+} from "@mc-wallet/privacy/score-service";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import { type ActivityLog, memoryActivityLog, systemClock } from "@mc-wallet/transactions/activity";
 import { type AllowanceStore, memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
@@ -73,6 +77,7 @@ export type RouterContext = {
   readonly now: () => number;
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
+  readonly privacyScores: PrivacyScoreService;
   readonly prices: PriceService;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -105,6 +110,7 @@ export type MessageHandlerOptions = {
   readonly originGuard?: OriginGuard;
   readonly originHistory?: OriginHistoryStore;
   readonly preferencesStore?: WalletPreferencesStore;
+  readonly privacyScores?: PrivacyScoreService;
   readonly prices?: PriceService;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
@@ -150,6 +156,9 @@ const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): Watc
 const balanceSnapshotsFor = (provided: BalanceSnapshotStore | undefined): BalanceSnapshotStore =>
   provided ?? memoryBalanceSnapshotStore();
 
+const privacyScoresFor = (provided: PrivacyScoreService | undefined): PrivacyScoreService =>
+  provided ?? unavailablePrivacyScoreService;
+
 const nftSnapshotsFor = (
   provided: NftSnapshotStore | undefined,
 ): Pick<RouterContext, "nftSnapshots"> | Record<string, never> =>
@@ -191,6 +200,7 @@ export const routerContext = (
     now: options.now ?? systemClock,
     originHistory: options.originHistory ?? memoryOriginHistory(),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
+    privacyScores: privacyScoresFor(options.privacyScores),
     prices: options.prices ?? unavailablePriceService,
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
     session,

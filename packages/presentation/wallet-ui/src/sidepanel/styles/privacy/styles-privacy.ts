@@ -144,6 +144,45 @@ export const PRIVACY_STYLES = `
     color: var(--mc-muted);
     display: inline-flex;
   }
+  .privacy-score-card {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    gap: ${SPACE.sm};
+    margin-top: ${SPACE.md};
+    padding: ${SPACE.md};
+  }
+  .privacy-score-card > summary {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    list-style: none;
+  }
+  .privacy-score-card > summary::-webkit-details-marker { display: none; }
+  .privacy-score-card > summary > span:first-child { display: grid; gap: 2px; }
+  .privacy-score-eyebrow {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.medium};
+  }
+  .privacy-score-card > p,
+  .privacy-score-details > p,
+  .privacy-score-details li {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+    margin: 0;
+  }
+  .privacy-score-number { font-size: ${TYPE.title.size}; font-variant-numeric: tabular-nums; }
+  .privacy-score-number small { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .privacy-score-details { display: grid; gap: ${SPACE.md}; padding-top: ${SPACE.md}; }
+  .privacy-score-details dl { display: grid; gap: ${SPACE.xs}; margin: 0; }
+  .privacy-score-details dl div { display: flex; justify-content: space-between; }
+  .privacy-score-details dt { color: var(--mc-muted); }
+  .privacy-score-details dd { font-variant-numeric: tabular-nums; margin: 0; }
+  .privacy-score-details ul { display: grid; gap: ${SPACE.xs}; margin: 0; padding-left: ${SPACE.lg}; }
+  .privacy-score-caveat { border-top: 1px solid var(--mc-hairline); padding-top: ${SPACE.sm}; }
   .private-balance-mark { margin-left: ${SPACE.xs}; vertical-align: -2px; }
   .private-balance-mark .icon,
   .private-balance-label .icon { height: 12px; width: 12px; }

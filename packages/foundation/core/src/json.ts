@@ -45,6 +45,23 @@ export const JSON_BUDGETS = {
     maxObjectKeys: 2_048,
     maxStringLength: 512 * 1024,
   },
+  /**
+   * Signed public privacy-score snapshots. The production feed is intentionally
+   * broad (one row per public pool event) and currently decodes to roughly
+   * 80 MiB, so this cap leaves growth headroom while keeping parsing and
+   * canonicalization bounded.
+   */
+  privacyScore: {
+    maxArrayLength: 300_000,
+    // The tracker charges every UTF-16 code unit at the six-byte worst case
+    // for JSON escaping. The current ~80 MiB artifact consumes ~400 MiB of
+    // that conservative budget despite using ordinary ASCII throughout.
+    maxBytes: 512 * 1024 * 1024,
+    maxDepth: 24,
+    maxNodes: 2_000_000,
+    maxObjectKeys: 128,
+    maxStringLength: 8 * 1024,
+  },
   strk20Proof: {
     maxArrayLength: 4_096,
     maxBytes: 8 * 1024 * 1024,
@@ -62,6 +79,26 @@ export const JSON_BUDGETS = {
     maxStringLength: 64 * 1024,
   },
 } as const satisfies Readonly<Record<string, JsonBudget>>;
+
+/**
+ * Serializes already-validated JSON with recursively sorted object keys.
+ * Arrays retain their order. This is the canonical form used for signatures
+ * and approval digests; callers must validate or normalize untrusted input
+ * under an explicit budget before invoking it.
+ */
+export const canonicalJson = (value: Json): string => {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  const record = value as Readonly<Record<string, Json>>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] ?? null)}`)
+    .join(",")}}`;
+};
 
 /**
  * Checks for non-null object records from untrusted input.
@@ -285,6 +322,19 @@ export const isJsonWithinBudget = (
   value: unknown,
   budget: JsonBudget = JSON_BUDGETS.provider,
 ): value is Json => normalizeWithinBudget(value, budget, false) !== INVALID_JSON;
+
+/**
+ * Copies untrusted JSON into accessor-free, null-prototype records while
+ * enforcing the supplied resource budget. Returns undefined for lossy,
+ * cyclic, accessor-backed, or over-budget values.
+ */
+export const normalizeJsonWithinBudget = (
+  value: unknown,
+  budget: JsonBudget = JSON_BUDGETS.provider,
+): Json | undefined => {
+  const normalized = normalizeWithinBudget(value, budget, false);
+  return normalized === INVALID_JSON ? undefined : normalized;
+};
 
 /**
  * Default bounded JSON guard used by extension and storage boundaries.

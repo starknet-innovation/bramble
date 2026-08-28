@@ -5,7 +5,7 @@
  */
 import { WalletError } from "@mc-wallet/core/errors";
 import { bytesToHex } from "@mc-wallet/core/hex";
-import { JSON_BUDGETS, type Json, normalizeFeltBigints } from "@mc-wallet/core/json";
+import { canonicalJson, JSON_BUDGETS, normalizeFeltBigints } from "@mc-wallet/core/json";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { ApprovalContext } from "@mc-wallet/wallet-protocol/extension-responses";
@@ -14,20 +14,6 @@ import type { ApprovalContext } from "@mc-wallet/wallet-protocol/extension-respo
  * Exact account, network, chain, and payload digest frozen into an approval.
  */
 export type { ApprovalContext } from "@mc-wallet/wallet-protocol/extension-responses";
-
-const canonicalJson = (value: Json): string => {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJson).join(",")}]`;
-  }
-  const record = value as Readonly<Record<string, Json>>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key] ?? null)}`)
-    .join(",")}}`;
-};
 
 /**
  * Computes a deterministic SHA-256 digest after bounded, accessor-safe JSON

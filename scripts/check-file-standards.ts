@@ -112,6 +112,12 @@ const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/ledger/ledger-inputs.ts",
   "packages/platform/kms-krusty/src/adapter.ts",
   "packages/foundation/wallet-model/src/accounts/signing.ts",
+  // Public privacy-score verification boundary. These modules contain only the
+  // publisher's public SPKI and signed artifact fields; no wallet key, viewing
+  // key, or other user secret enters them.
+  "packages/features/privacy/src/score/score-crypto.ts",
+  "packages/features/privacy/src/score/score-schema.ts",
+  "packages/features/privacy/src/score/score-service.ts",
   // Pure length policy only; carries no passphrase value across a boundary.
   "packages/foundation/wallet-model/src/preferences/passphrase.ts",
   "packages/testing/testkit/src/fake-kms.ts",

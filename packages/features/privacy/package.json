@@ -20,6 +20,9 @@
     "./official-sdk-values": "./src/sdk/official-sdk-values.ts",
     "./paymaster": "./src/paymaster/paymaster.ts",
     "./paymaster-typed-data": "./src/paymaster/paymaster-typed-data.ts",
+    "./score-cache": "./src/score/score-cache.ts",
+    "./score-service": "./src/score/score-service.ts",
+    "./score-types": "./src/score/score-types.ts",
     "./service": "./src/service.ts"
   },
   "scripts": {

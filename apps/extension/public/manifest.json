@@ -34,6 +34,7 @@
     "https://sepolia.nodes.starknet.org/*",
     "https://api.cartridge.gg/*",
     "https://api.coingecko.com/*",
+    "https://d2phvtlrdr7sx2.cloudfront.net/*",
     "https://starkscan.co/*",
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",

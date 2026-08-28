@@ -59,6 +59,7 @@ describe("privacy runtime client", () => {
             ],
             networkId: "SN_MAIN",
             poolFeeFri: "0x1",
+            privacyScore: { status: "no-withdrawals" },
             relayConfigured: true,
             registration: "registered",
           },
@@ -75,6 +76,7 @@ describe("privacy runtime client", () => {
 
     await expect(client.loadPrivacyState()).resolves.toMatchObject({
       balances: [{ balance: "0x2", symbol: "ETH" }],
+      privacyScore: { status: "no-withdrawals" },
       registration: "registered",
     });
     await expect(
@@ -115,6 +117,23 @@ describe("privacy runtime client", () => {
     await expect(client.executePrivacyPreparation(digest)).rejects.toThrow(
       "Private transaction failed",
     );
+  });
+
+  test("rejects malformed privacy score state", async () => {
+    const client = createPrivacyRuntimeClient(async () => ({
+      ok: true,
+      strk20State: {
+        accountId: "SN_MAIN:0xabc",
+        balances: [],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        privacyScore: { score: 101, status: "available" },
+        relayConfigured: true,
+        registration: "registered",
+      },
+    }));
+
+    await expect(client.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
   });
 
   test("requires a credited recipient on a deposit review", async () => {

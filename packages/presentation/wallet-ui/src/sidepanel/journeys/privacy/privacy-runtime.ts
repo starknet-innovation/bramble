@@ -10,6 +10,7 @@ import {
   isStringArray,
 } from "@mc-wallet/core/json";
 import type { PaymasterAuthorizationReview } from "@mc-wallet/privacy/paymaster-typed-data";
+import { isPrivacyScoreState, type PrivacyScoreState } from "@mc-wallet/privacy/score-types";
 import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
 import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
 
@@ -44,6 +45,8 @@ export type PrivacyAccountState = {
   readonly networkId: string;
   /** Pool action fee in FRI. A failed read rejects the whole disclosure request. */
   readonly poolFeeFri: string;
+  /** Signed estimate associated locally with this account's withdrawals. */
+  readonly privacyScore?: PrivacyScoreState;
   /** Whether the active network has an unlinkable private submission route. */
   readonly relayConfigured: boolean;
   /**
@@ -271,12 +274,14 @@ const readState = (response: unknown): PrivacyAccountState | null => {
       "balances",
       "networkId",
       "poolFeeFri",
+      "privacyScore",
       "relayConfigured",
       "registration",
     ]) ||
     !isStarknetNetworkId(state["networkId"]) ||
     !isAccountIdForNetwork(state["accountId"], state["networkId"]) ||
     !isPoolFee(state["poolFeeFri"]) ||
+    (state["privacyScore"] !== undefined && !isPrivacyScoreState(state["privacyScore"])) ||
     typeof state["relayConfigured"] !== "boolean" ||
     (state["registration"] !== "pending" &&
       state["registration"] !== "registered" &&
@@ -318,6 +323,7 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     balances,
     networkId: state["networkId"],
     poolFeeFri: state["poolFeeFri"],
+    ...(isPrivacyScoreState(state["privacyScore"]) ? { privacyScore: state["privacyScore"] } : {}),
     relayConfigured: state["relayConfigured"],
     registration: state["registration"],
   };

@@ -2,6 +2,7 @@
  * STRK20 response envelopes returned by privileged background handlers.
  */
 
+import type { PrivacyScoreState } from "@mc-wallet/privacy/score-types";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { Strk20BalanceEntry, Strk20CallAndProof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Strk20WalletPreparationReview } from "./strk20-wallet-preparations";
@@ -48,6 +49,8 @@ export type Strk20WalletStateResponse = {
     readonly networkId: StarknetNetworkId;
     /** Pool action fee in FRI. A failed read rejects the state request. */
     readonly poolFeeFri: string;
+    /** Signed public withdrawal estimate associated only against local activity. */
+    readonly privacyScore: PrivacyScoreState;
     /** Whether this network has the unlinkable paymaster route private spends require. */
     readonly relayConfigured: boolean;
     /**

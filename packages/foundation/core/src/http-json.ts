@@ -50,6 +50,13 @@ export const HTTP_BODY_LIMITS = {
   nftIndexer: 4 * 1024 * 1024,
   /** Public web3 phishing lists are a few MB of registrable domains. */
   phishingFeed: 8 * 1024 * 1024,
+  /**
+   * The signed public pool snapshot currently transfers at about 11 MiB and
+   * decodes to roughly 80 MiB. The transport cap measures actual decoded
+   * bytes; the structurally larger `JSON_BUDGETS` figure is a conservative
+   * worst-case escaping charge rather than another response-size allowance.
+   */
+  privacyScore: 128 * 1024 * 1024,
   /** CoinGecko price and 7-day chart bodies are a few kilobytes. */
   price: 512 * 1024,
   /**

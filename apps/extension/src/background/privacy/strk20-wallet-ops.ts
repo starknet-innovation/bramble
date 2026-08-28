@@ -1,9 +1,6 @@
 /**
- * Extension-owned STRK20 registration and private-balance state, plus the shared
- * submission path every wallet-owned privacy preparation is executed through.
- * These messages are privileged by default and never enter the dapp bridge.
- * Review payloads are frozen in a one-time store before any proof or authorization
- * is produced.
+ * Extension-owned STRK20 state and submission. Privileged review payloads stay
+ * frozen in a one-time store until execution.
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
@@ -27,6 +24,7 @@ import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { privacyScoreForState } from "./privacy-score-ops";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
@@ -149,6 +147,7 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
         }),
         networkId: context.accountContext.account.networkId,
         poolFeeFri,
+        privacyScore: await privacyScoreForState(deps, context),
         relayConfigured: context.accountContext.config?.paymaster !== undefined,
         registration,
       },
@@ -325,6 +324,7 @@ const executePreparation = async (
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.accountContext.account.networkId,
+      ...(preparation.kind === "withdraw" ? { privacyWithdrawal: true as const } : {}),
       summary: activitySummary(preparation, context),
       ...(preparation.kind === "register" ? {} : { token: preparation.token.symbol }),
     });

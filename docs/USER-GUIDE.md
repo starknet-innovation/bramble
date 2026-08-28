@@ -122,6 +122,14 @@ prover, relay, indexer, or pool is not configured or fails validation, the
 wallet fails closed and states whether anything was submitted. Ledger accounts
 cannot use a privacy path that requires a viewing key the wallet cannot derive.
 
+For Mainnet withdrawals, the Tokens screen shows an **Estimated withdrawal
+privacy** card. The headline is the lowest score across withdrawals this wallet
+can associate unambiguously, with the raw candidate count, effective set,
+evidence confidence, and model factors available in the details. It is an
+experimental linkability estimate—not a guarantee of anonymity or safety. A
+stale or unverifiable snapshot shows no old numeric score as though it were
+current.
+
 ### Connect to a dApp
 
 MC Wallet injects `window.starknet_mcWallet` and is discoverable through
