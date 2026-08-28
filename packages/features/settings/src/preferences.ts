@@ -1,6 +1,4 @@
-/**
- * Plain wallet preferences kept outside the encrypted vault.
- */
+/** Plain wallet preferences kept outside the encrypted vault. */
 import { WalletError } from "@mc-wallet/core/errors";
 import { isJson } from "@mc-wallet/core/json";
 import { isWatchedNft, withNftId } from "@mc-wallet/portfolio/watched-nft";
@@ -45,6 +43,7 @@ import {
   setAccountInGroup as setAccountInGroupPure,
   setGroupIcon as setGroupIconPure,
 } from "./groups";
+import { withNostrRelayUrl } from "./preferences-nostr";
 import {
   isWalletPreferences,
   normalizeStoredPreferences,
@@ -52,9 +51,7 @@ import {
 } from "./preferences-stored";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
-/**
- * Re-exported entry types so callers keep importing them from this store.
- */
+/** Re-exported entry types so callers keep importing them from this store. */
 export type {
   AccountLabels,
   AddressBookEntry,
@@ -66,14 +63,9 @@ export type {
   ThemeChoice,
   TokenConfig,
 } from "@mc-wallet/wallet-model/preferences";
-/**
- * Re-exported explorer-lane resolver so background and Starknet read wiring
- * reach it through the same entry point as the preferences it reads.
- */
+/** Explorer-lane resolver colocated with the preferences it reads. */
 export { explorerFallbackAllowed } from "@mc-wallet/wallet-model/preferences";
-/**
- * Re-exported store schema and capability types.
- */
+/** Re-exported store schema and capability types. */
 export type {
   WalletPreferences,
   WalletPreferencesStore,
@@ -440,6 +432,11 @@ export const createPreferencesStore = ({
         } else {
           (next as { nftIndexerUrl?: string }).nftIndexerUrl = trimmed;
         }
+        await writePreferences(store, next);
+        return next;
+      },
+      async setNostrRelayUrl({ relayUrl }) {
+        const next = withNostrRelayUrl(await read(), relayUrl);
         await writePreferences(store, next);
         return next;
       },

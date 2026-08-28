@@ -76,6 +76,9 @@ export const MULTISIG_PARTICIPANT_STYLES = `
     background: var(--mc-soft-press);
   }
   .multisig-participant-methods button[aria-pressed="true"] > span { color: var(--mc-text); }
+  @media (max-width: 390px) {
+    .multisig-participant-methods button { padding-inline: ${SPACE.xs}; }
+  }
   .multisig-participant-external > [data-participant-field] { display: grid; gap: ${SPACE.xs}; }
   .multisig-participant-external > [data-participant-field] > label { display: grid; gap: ${SPACE.xs}; }
   [data-participant-result]:empty { display: none; }

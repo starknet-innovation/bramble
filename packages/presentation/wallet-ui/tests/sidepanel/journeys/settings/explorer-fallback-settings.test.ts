@@ -68,6 +68,19 @@ const walletStub = (calls: Array<readonly [string, boolean]>, fail = false) =>
   }) as unknown as SidepanelWallet;
 
 describe("advanced endpoints explorer-fallback control", () => {
+  test("shows custom coordination relay and diagnostics in infrastructure settings", () => {
+    const relayUrl = "wss://relay.team.example";
+    const html = advancedNetworkFlow(
+      status,
+      preferences({ nostrRelayUrl: relayUrl, reliabilityDiagnostics: true }),
+    );
+
+    expect(html).toContain('data-disclosure="nostr-relay"');
+    expect(html).toContain(`value="${relayUrl}"`);
+    expect(html).toContain('data-disclosure="reliability-diagnostics"');
+    expect(html).toContain('id="reliability-diagnostics"');
+  });
+
   test("shows the lane as allowed for a user on the built-in endpoints", () => {
     const section = laneSection(preferences({}));
 
@@ -152,5 +165,31 @@ describe("advanced endpoints explorer-fallback control", () => {
     expect(app.querySelector("#explorer-fallback-result")?.textContent).toBe(
       "preferences unavailable",
     );
+  });
+
+  test("submits a custom coordination relay through its dedicated preference", async () => {
+    const app = document.createElement("div");
+    app.innerHTML = `<form id="nostr-relay-form">
+      <input name="relayUrl" value=" wss://relay.team.example " />
+      <button type="submit">Save</button>
+    </form><p id="nostr-relay-result"></p>`;
+    document.body.append(app);
+    const saved: string[] = [];
+    bindEndpointSettings({
+      app,
+      networkId: () => "SN_MAIN",
+      render: async () => undefined,
+      wallet: {
+        loadStatus: async () => status,
+        setNostrRelayUrl: async (relayUrl: string) => {
+          saved.push(relayUrl);
+        },
+      } as unknown as SidepanelWallet,
+    });
+
+    app.querySelector<HTMLFormElement>("#nostr-relay-form")?.requestSubmit();
+    await tick();
+
+    expect(saved).toEqual(["wss://relay.team.example"]);
   });
 });

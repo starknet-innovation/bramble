@@ -33,6 +33,7 @@ import {
   type ArgentMultisigDeploymentReviews,
   createArgentMultisigDeploymentReviews,
 } from "../multisig/multisig-deployment-reviews";
+import type { NostrRelayTransport } from "../multisig/nostr-relay";
 import {
   createRecoveryDiscoveryCache,
   type RecoveryDiscoveryCache,
@@ -74,6 +75,7 @@ export type RouterContext = {
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
   readonly nftSnapshots?: NftSnapshotStore;
+  readonly nostrRelayTransport?: NostrRelayTransport;
   readonly now: () => number;
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
@@ -102,6 +104,7 @@ export type MessageHandlerOptions = {
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
   readonly nftSnapshots?: NftSnapshotStore;
+  readonly nostrRelayTransport?: NostrRelayTransport;
   /**
    * Wall-clock reader used to age transaction observation windows. Injected so
    * reconciliation is deterministic under test; defaults to the system clock.
@@ -161,6 +164,11 @@ const nftSnapshotsFor = (
 ): Pick<RouterContext, "nftSnapshots"> | Record<string, never> =>
   provided ? { nftSnapshots: provided } : {};
 
+const nostrRelayTransportFor = (
+  provided: NostrRelayTransport | undefined,
+): Pick<RouterContext, "nostrRelayTransport"> | Record<string, never> =>
+  provided ? { nostrRelayTransport: provided } : {};
+
 const recoveryDiscoveryFor = (
   provided: RecoveryDiscoveryCache | undefined,
 ): RecoveryDiscoveryCache => provided ?? createRecoveryDiscoveryCache();
@@ -198,6 +206,7 @@ export const routerContext = (
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
     ...nftSnapshotsFor(options.nftSnapshots),
+    ...nostrRelayTransportFor(options.nostrRelayTransport),
     now: options.now ?? systemClock,
     originHistory: options.originHistory ?? memoryOriginHistory(),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,

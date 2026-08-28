@@ -1,6 +1,6 @@
 /**
  * Bindings for endpoint-URL settings forms on the network flow: the per-network
- * RPC override and the STRK20 prover endpoint. Extracted from the side panel
+ * RPC override, Nostr relay, and the STRK20 prover endpoint. Extracted from the side panel
  * entrypoint to keep it within the size budget.
  */
 
@@ -156,6 +156,9 @@ export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
   );
   bindExplorerFallback(deps);
   bindStrk20Services(deps);
+  bindEndpointForm(deps, "#nostr-relay-form", "relayUrl", "Coordination relay", (relayUrl) =>
+    deps.wallet.setNostrRelayUrl(relayUrl),
+  );
   bindEndpointForm(deps, "#nft-indexer-form", "indexerUrl", "Indexer endpoint", (indexerUrl) =>
     deps.wallet.setNftIndexerUrl(indexerUrl),
   );

@@ -150,6 +150,19 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toContain(".tx-status");
   });
 
+  test("participant choices retain their labels at minimum side-panel width", () => {
+    expect(SIDEPANEL_STYLES).toMatch(
+      /@media \(max-width: 390px\) \{[^}]*\.multisig-participant-methods button \{ padding-inline:/s,
+    );
+  });
+
+  test("compact disclosure states cannot collide with their titles", () => {
+    expect(SIDEPANEL_STYLES).toMatch(
+      /details\.disclosure > summary \.menu-copy strong \{[^}]*text-overflow: ellipsis;[^}]*text-wrap: nowrap;/s,
+    );
+    expect(SIDEPANEL_STYLES).toContain("details.disclosure > summary .menu-value { flex: none; }");
+  });
+
   test("colors come only from skin tokens, never literals", () => {
     // The stylesheet ships zero colour hex literals: every colour is a skin
     // token referenced through var()/color-mix. The near-mono palette adds a

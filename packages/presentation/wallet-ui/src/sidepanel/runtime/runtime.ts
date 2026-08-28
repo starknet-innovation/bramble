@@ -434,6 +434,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "rpc endpoint update failed");
     },
+    async setNostrRelayUrl(relayUrl: string): Promise<void> {
+      const response = await sendMessage({ relayUrl, type: "wallet.setNostrRelayUrl" });
+      if (isPreferencesResponse(response)) return;
+      throw responseError(response, "Nostr relay update failed");
+    },
     async setStrk20NetworkConfig(
       networkId: string,
       config: Strk20NetworkConfig | null,

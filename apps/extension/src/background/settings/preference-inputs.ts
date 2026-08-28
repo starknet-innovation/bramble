@@ -12,7 +12,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
-import { isNostrPublicKey } from "@mc-wallet/wallet-model/nostr";
+import { isNostrPublicKey, isNostrRelayUrl } from "@mc-wallet/wallet-model/nostr";
 import {
   isApprovalSurfacePreference,
   isDisplayCurrency,
@@ -286,6 +286,23 @@ export const readSetRpcOverrideInput = (
     networkId: message["networkId"],
     rpcUrl: message["rpcUrl"],
   };
+};
+
+/** Parses a custom Nostr relay; an empty value restores the reviewed defaults. */
+export const readSetNostrRelayUrlInput = (
+  message: unknown,
+): { readonly relayUrl: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["relayUrl", "type"]) ||
+    message["type"] !== "wallet.setNostrRelayUrl" ||
+    typeof message["relayUrl"] !== "string" ||
+    message["relayUrl"].length > 2048
+  ) {
+    return null;
+  }
+  const relayUrl = message["relayUrl"].trim();
+  return relayUrl.length === 0 || isNostrRelayUrl(relayUrl) ? { relayUrl } : null;
 };
 
 /**

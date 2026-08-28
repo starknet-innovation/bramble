@@ -50,8 +50,8 @@ bun run scripts/check-gateway-health.ts
 
 ## Privacy-safe diagnostics
 
-Reliability counters are disabled by default. A user may enable them under **Settings → Appearance
-& currency → Reliability diagnostics**. The service worker then keeps separate process-local
+Reliability counters are disabled by default. A user may enable them under **Settings → Network →
+Advanced endpoints → Reliability diagnostics**. The service worker then keeps separate process-local
 aggregate rows for Starknet JSON-RPC endpoints and the optional Starkscan explorer lane, using only
 fixed service/endpoint classes, outcomes, and average latency. Disabling the setting clears both
 sets of counters. No diagnostic is uploaded automatically.

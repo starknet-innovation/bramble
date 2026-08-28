@@ -2,6 +2,7 @@
 import {
   isNostrEvent,
   isNostrPublicKey,
+  isNostrRelayUrl,
   type NostrEvent,
   parseNostrEventJson,
 } from "@mc-wallet/wallet-model/nostr";
@@ -10,7 +11,7 @@ const RELAY_TIMEOUT_MS = 8_000;
 const MAX_RELAY_FRAME_BYTES = 140_000;
 const MAX_EVENTS_PER_RELAY = 50;
 
-/** Fixed reviewed relays. Contacts cannot expand the extension's network reach. */
+/** Reviewed defaults used unless the user explicitly replaces them in settings. */
 export const MULTISIG_NOSTR_RELAYS = ["wss://relay.primal.net", "wss://nos.lol"] as const;
 
 type RelaySocket = Pick<
@@ -21,7 +22,42 @@ type RelaySocket = Pick<
 /** Injectable WebSocket constructor used only by deterministic transport tests. */
 export type RelaySocketFactory = (url: string) => RelaySocket;
 
+/** Optional transport seam used for custom settings and deterministic tests. */
+export type NostrRelayOptions = {
+  readonly relayUrls?: readonly string[];
+  readonly socketFactory?: RelaySocketFactory;
+};
+
+/** Narrow relay capability injected into coordination tests; it never handles plaintext. */
+export type NostrRelayTransport = {
+  readonly publish: (
+    eventJson: string,
+    recipientPublicKey: string,
+    relayUrls: readonly string[],
+  ) => Promise<number>;
+  readonly sync: (
+    recipientPublicKey: string,
+    since: number,
+    relayUrls: readonly string[],
+  ) => Promise<readonly NostrEvent[]>;
+};
+
 const nativeSocket: RelaySocketFactory = (url) => new WebSocket(url);
+
+const relayOptions = (
+  options: NostrRelayOptions,
+): { readonly relayUrls: readonly string[]; readonly socketFactory: RelaySocketFactory } => {
+  const relayUrls = options.relayUrls ?? MULTISIG_NOSTR_RELAYS;
+  if (
+    relayUrls.length === 0 ||
+    relayUrls.length > MULTISIG_NOSTR_RELAYS.length ||
+    new Set(relayUrls).size !== relayUrls.length ||
+    !relayUrls.every(isNostrRelayUrl)
+  ) {
+    throw new Error("Invalid Nostr relay configuration");
+  }
+  return { relayUrls, socketFactory: options.socketFactory ?? nativeSocket };
+};
 
 const parseFrame = (value: unknown): readonly unknown[] | null => {
   if (
@@ -87,12 +123,13 @@ const publishToRelay = (
     socket.onclose = () => finish(new Error("Nostr relay closed before acknowledging the event"));
   });
 
-/** Publishes one already-signed NIP-59 gift wrap to the fixed relay set. */
+/** Publishes one already-signed NIP-59 gift wrap to the selected relay set. */
 export const publishNostrGiftWrap = async (
   eventJson: string,
   recipientPublicKey: string,
-  socketFactory: RelaySocketFactory = nativeSocket,
+  options: NostrRelayOptions = {},
 ): Promise<number> => {
+  const { relayUrls, socketFactory } = relayOptions(options);
   const event = parseNostrEventJson(eventJson);
   if (
     !isNostrPublicKey(recipientPublicKey) ||
@@ -102,7 +139,7 @@ export const publishNostrGiftWrap = async (
     throw new Error("Invalid Nostr gift wrap");
   }
   const results = await Promise.allSettled(
-    MULTISIG_NOSTR_RELAYS.map((relay) => publishToRelay(relay, event, socketFactory)),
+    relayUrls.map((relay) => publishToRelay(relay, event, socketFactory)),
   );
   const published = results.filter((result) => result.status === "fulfilled").length;
   if (published === 0) throw new Error("Nostr relays are unavailable");
@@ -155,15 +192,14 @@ const syncRelay = (
 export const syncNostrGiftWraps = async (
   recipientPublicKey: string,
   since: number,
-  socketFactory: RelaySocketFactory = nativeSocket,
+  options: NostrRelayOptions = {},
 ): Promise<readonly NostrEvent[]> => {
+  const { relayUrls, socketFactory } = relayOptions(options);
   if (!isNostrPublicKey(recipientPublicKey) || !Number.isSafeInteger(since) || since < 0) {
     throw new Error("Invalid Nostr sync request");
   }
   const results = await Promise.allSettled(
-    MULTISIG_NOSTR_RELAYS.map((relay) =>
-      syncRelay(relay, recipientPublicKey, since, socketFactory),
-    ),
+    relayUrls.map((relay) => syncRelay(relay, recipientPublicKey, since, socketFactory)),
   );
   const successful = results.filter(
     (result): result is PromiseFulfilledResult<readonly NostrEvent[]> =>
@@ -175,4 +211,12 @@ export const syncNostrGiftWraps = async (
       successful.flatMap((result) => result.value).map((event) => [event.id, event]),
     ).values(),
   ].slice(0, MAX_EVENTS_PER_RELAY);
+};
+
+/** Production adapter over native one-shot WebSocket operations. */
+export const nativeNostrRelayTransport: NostrRelayTransport = {
+  publish: (eventJson, recipientPublicKey, relayUrls) =>
+    publishNostrGiftWrap(eventJson, recipientPublicKey, { relayUrls }),
+  sync: (recipientPublicKey, since, relayUrls) =>
+    syncNostrGiftWraps(recipientPublicKey, since, { relayUrls }),
 };

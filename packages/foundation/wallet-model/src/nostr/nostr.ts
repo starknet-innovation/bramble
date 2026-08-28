@@ -1,5 +1,6 @@
 /** Public Nostr values accepted at contact-card and relay trust boundaries. */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { isWebSocketServiceUrl } from "@mc-wallet/core/service-url";
 
 /** Largest signed event JSON accepted from a relay or Krusty. */
 export const MAX_NOSTR_EVENT_JSON_BYTES = 131_070;
@@ -19,6 +20,9 @@ const isNostrHex32 = (value: unknown): value is string =>
 
 /** Canonical 32-byte x-only public-key spelling Nostr uses. */
 export const isNostrPublicKey = (value: unknown): value is string => isNostrHex32(value);
+
+/** Secure Nostr relay URL accepted from wallet settings. */
+export const isNostrRelayUrl = isWebSocketServiceUrl;
 
 /** Fully signed Nostr event accepted from Krusty or an untrusted relay. */
 export type NostrEvent = {

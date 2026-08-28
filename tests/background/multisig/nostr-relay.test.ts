@@ -40,7 +40,7 @@ const socketFactory =
   };
 
 describe("Nostr multisig relay", () => {
-  test("publishes a recipient-bound gift wrap to each fixed relay", async () => {
+  test("publishes a recipient-bound gift wrap to each reviewed default relay", async () => {
     expect(MULTISIG_NOSTR_RELAYS).toEqual(["wss://relay.primal.net", "wss://nos.lol"]);
     const sent: string[] = [];
     const giftWrap = event("11".repeat(32));
@@ -51,12 +51,14 @@ describe("Nostr multisig relay", () => {
       );
     });
 
-    await expect(publishNostrGiftWrap(JSON.stringify(giftWrap), RECIPIENT, factory)).resolves.toBe(
-      MULTISIG_NOSTR_RELAYS.length,
-    );
+    await expect(
+      publishNostrGiftWrap(JSON.stringify(giftWrap), RECIPIENT, { socketFactory: factory }),
+    ).resolves.toBe(MULTISIG_NOSTR_RELAYS.length);
     expect(sent).toHaveLength(MULTISIG_NOSTR_RELAYS.length);
     await expect(
-      publishNostrGiftWrap(JSON.stringify(giftWrap), "55".repeat(32), factory),
+      publishNostrGiftWrap(JSON.stringify(giftWrap), "55".repeat(32), {
+        socketFactory: factory,
+      }),
     ).rejects.toThrow("Invalid Nostr gift wrap");
   });
 
@@ -80,11 +82,58 @@ describe("Nostr multisig relay", () => {
       );
     });
 
-    await expect(syncNostrGiftWraps(RECIPIENT, 1, factory)).resolves.toEqual([giftWrap]);
+    await expect(syncNostrGiftWraps(RECIPIENT, 1, { socketFactory: factory })).resolves.toEqual([
+      giftWrap,
+    ]);
     expect(sent).toHaveLength(MULTISIG_NOSTR_RELAYS.length);
     expect(sent[0]).toContain('"kinds":[1059]');
-    await expect(syncNostrGiftWraps("0x44", 1, factory)).rejects.toThrow(
+    await expect(syncNostrGiftWraps("0x44", 1, { socketFactory: factory })).rejects.toThrow(
       "Invalid Nostr sync request",
+    );
+  });
+
+  test("round-trips a gift wrap through one user-selected relay", async () => {
+    const relayUrl = "wss://relay.team.example/multisig";
+    const stored: ReturnType<typeof event>[] = [];
+    const sent: string[] = [];
+    const factory = socketFactory(sent, (frame, socket) => {
+      if (frame[0] === "EVENT") {
+        const published = frame[1] as ReturnType<typeof event>;
+        stored.push(published);
+        socket.onmessage?.(
+          new MessageEvent("message", { data: JSON.stringify(["OK", published.id, true, ""]) }),
+        );
+        return;
+      }
+      const subscriptionId = String(frame[1]);
+      for (const published of stored) {
+        socket.onmessage?.(
+          new MessageEvent("message", {
+            data: JSON.stringify(["EVENT", subscriptionId, published]),
+          }),
+        );
+      }
+      socket.onmessage?.(
+        new MessageEvent("message", { data: JSON.stringify(["EOSE", subscriptionId]) }),
+      );
+    });
+    const giftWrap = event("66".repeat(32));
+    const options = { relayUrls: [relayUrl], socketFactory: factory };
+
+    await expect(publishNostrGiftWrap(JSON.stringify(giftWrap), RECIPIENT, options)).resolves.toBe(
+      1,
+    );
+    await expect(syncNostrGiftWraps(RECIPIENT, 1, options)).resolves.toEqual([giftWrap]);
+    expect(sent.every((frame) => frame.startsWith(`${relayUrl}|`))).toBe(true);
+  });
+
+  test("rejects insecure, duplicate, or empty relay selections", async () => {
+    const giftWrap = JSON.stringify(event("77".repeat(32)));
+    await expect(
+      publishNostrGiftWrap(giftWrap, RECIPIENT, { relayUrls: ["ws://relay.example"] }),
+    ).rejects.toThrow("Invalid Nostr relay configuration");
+    await expect(publishNostrGiftWrap(giftWrap, RECIPIENT, { relayUrls: [] })).rejects.toThrow(
+      "Invalid Nostr relay configuration",
     );
   });
 });

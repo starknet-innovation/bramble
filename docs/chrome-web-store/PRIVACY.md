@@ -34,11 +34,12 @@ needed for a user-requested swap. CoinGecko receives public asset identifiers ne
 The phishing feed supplies a public denylist; MC Wallet does not send the current site to that feed.
 
 When the user explicitly shares or checks for an Argent multisig handoff, MC Wallet connects to the
-fixed public Nostr relays `relay.primal.net` and `nos.lol`. A relay receives the recipient's public
-Nostr key, an encrypted and signed gift-wrap event, request timing, and ordinary connection metadata
-such as the user's IP address. The transaction package and signer identities inside the gift wrap
-are end-to-end encrypted by Krusty KMS; MC Wallet does not use these relays for chat, analytics, or
-background polling. Manual copy-and-paste handoff remains available without contacting a relay.
+reviewed public Nostr relays `relay.primal.net` and `nos.lol`, or to one custom relay the user chose
+as their replacement. A relay receives the recipient's public Nostr key, an encrypted and signed
+gift-wrap event, request timing, and ordinary connection metadata such as the user's IP address. The
+transaction package and signer identities inside the gift wrap are end-to-end encrypted by Krusty
+KMS; MC Wallet does not use these relays for chat, analytics, or background polling. Manual
+copy-and-paste handoff remains available without contacting a relay.
 
 ## Reliability diagnostics
 

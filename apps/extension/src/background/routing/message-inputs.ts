@@ -1,5 +1,4 @@
 /** Pure parsers for untrusted background runtime messages. */
-
 import { isUuid } from "@mc-wallet/core/ids";
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@mc-wallet/core/json";
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
@@ -494,6 +493,7 @@ export {
   readSetDisplayInput,
   readSetExplorerFallbackInput,
   readSetGroupIconInput,
+  readSetNostrRelayUrlInput,
   readSetRpcOverrideInput,
   readSetStrk20NetworkConfigInput,
 } from "../settings/preference-inputs";

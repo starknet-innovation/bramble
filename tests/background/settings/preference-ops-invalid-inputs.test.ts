@@ -89,6 +89,11 @@ const cases: ReadonlyArray<{ error: string; message: Record<string, unknown>; ty
     type: "wallet.setNftIndexerUrl",
   },
   {
+    error: "invalid Nostr relay request",
+    message: { relayUrl: "ws://relay.example", type: "wallet.setNostrRelayUrl" },
+    type: "wallet.setNostrRelayUrl",
+  },
+  {
     error: "invalid strk20 service configuration",
     message: { type: "wallet.setStrk20NetworkConfig" },
     type: "wallet.setStrk20NetworkConfig",
@@ -130,6 +135,16 @@ describe("handlePreferenceOps input validation", () => {
     });
     expect(response).toMatchObject({ ok: true });
     expect((await preferencesStore.read()).rpcOverrides?.SN_MAIN).toBe("https://rpc.example.com");
+  });
+
+  test("applies a well-formed custom Nostr relay", async () => {
+    const preferencesStore = store();
+    const response = await handlePreferenceOps(preferencesStore, "wallet.setNostrRelayUrl", {
+      relayUrl: "wss://relay.team.example",
+      type: "wallet.setNostrRelayUrl",
+    });
+    expect(response).toMatchObject({ ok: true });
+    expect((await preferencesStore.read()).nostrRelayUrl).toBe("wss://relay.team.example");
   });
 
   test("applies a well-formed explorer fallback choice (MCW-V09-129)", async () => {

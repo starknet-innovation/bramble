@@ -206,6 +206,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         await rerender(deps);
       },
       (error: unknown) => {
+        diagnosticsToggle.checked = !diagnosticsToggle.checked;
         showToast(errorMessage(error, "Diagnostic preference failed"), "error", diagnosticsToggle);
         diagnosticsToggle.disabled = false;
       },

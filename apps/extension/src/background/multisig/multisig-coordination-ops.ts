@@ -4,6 +4,7 @@ import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
 } from "@mc-wallet/multisig/repository";
+import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
 import {
@@ -22,10 +23,18 @@ import {
   readMultisigIdInput,
 } from "./multisig-inputs";
 import { handleMultisigTxOps } from "./multisig-tx-ops";
-import { publishNostrGiftWrap, syncNostrGiftWraps } from "./nostr-relay";
+import {
+  MULTISIG_NOSTR_RELAYS,
+  type NostrRelayTransport,
+  nativeNostrRelayTransport,
+} from "./nostr-relay";
 
 const MULTISIG_NOSTR_IDENTIFIER = "mc-wallet.multisig";
 const NOSTR_SYNC_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
+
+/** One custom relay replaces the reviewed defaults; it never expands the broadcast set. */
+export const coordinationRelayUrls = (preferences: WalletPreferences): readonly string[] =>
+  preferences.nostrRelayUrl ? [preferences.nostrRelayUrl] : MULTISIG_NOSTR_RELAYS;
 
 const readIntentId = (message: unknown): string | null =>
   isRecord(message) &&
@@ -141,6 +150,8 @@ const publishForRecipients = async (
   content: string,
   vaultPassphrase: string,
   isAuthorized: () => boolean,
+  relayUrls: readonly string[],
+  transport: NostrRelayTransport,
   wrap: NonNullable<MultisigOpsDeps["wallet"]["wrapNostrApplicationData"]>,
 ): Promise<{ readonly recipients: number; readonly relays: number } | null> => {
   const results = await Promise.allSettled(
@@ -152,7 +163,7 @@ const publishForRecipients = async (
         recipientPublicKey: recipient.nostrPublicKey,
         vaultPassphrase,
       });
-      return isAuthorized() ? publishNostrGiftWrap(event, recipient.nostrPublicKey) : null;
+      return isAuthorized() ? transport.publish(event, recipient.nostrPublicKey, relayUrls) : null;
     }),
   );
   if (!isAuthorized()) return null;
@@ -166,9 +177,11 @@ const publishForRecipients = async (
 const recentGiftWraps = async (
   publicKey: string,
   since: number,
+  relayUrls: readonly string[],
+  transport: NostrRelayTransport,
 ): Promise<readonly NostrEvent[] | null> => {
   try {
-    return await syncNostrGiftWraps(publicKey, since);
+    return await transport.sync(publicKey, since, relayUrls);
   } catch {
     return null;
   }
@@ -253,6 +266,8 @@ const shareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
       content,
       passphrase,
       authorized.isCurrent,
+      coordinationRelayUrls(preferences),
+      deps.nostrRelayTransport ?? nativeNostrRelayTransport,
       wrap,
     );
   } catch {
@@ -276,14 +291,16 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
   const authorized = captureSessionAuthorization(deps.session);
   if (!passphrase || !authorized.isCurrent()) return { error: "wallet locked" };
   const nostrPublicKey = await nostrPublicKeyFor(passphrase);
+  const preferences = await deps.preferencesStore.read();
   const events = await recentGiftWraps(
     nostrPublicKey,
     Math.max(0, Math.floor(deps.now() / 1_000) - NOSTR_SYNC_LOOKBACK_SECONDS),
+    coordinationRelayUrls(preferences),
+    deps.nostrRelayTransport ?? nativeNostrRelayTransport,
   );
   if (!events) {
     return { error: "Secure co-signer updates are unavailable. Try again shortly" };
   }
-  const preferences = await deps.preferencesStore.read();
   const imported = await importGiftWraps(
     deps,
     events,

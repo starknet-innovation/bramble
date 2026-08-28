@@ -341,6 +341,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { type: "wallet.setNftIndexerUrl", url: "https://indexer.example" },
     sender: extensionSender,
   },
+  {
+    message: { relayUrl: "wss://relay.example", type: "wallet.setNostrRelayUrl" },
+    sender: extensionSender,
+  },
   { message: { type: "wallet.prices" }, sender: extensionSender },
   {
     message: { address: ETH_TOKEN_ADDRESS, type: "wallet.tokenChart" },

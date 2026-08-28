@@ -25,6 +25,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
+import { isNostrRelayUrl } from "@mc-wallet/wallet-model/nostr";
 import {
   type AccountLabels,
   type AddressBookEntry,
@@ -58,6 +59,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "hiddenTokens",
   "nftIndexerUrl",
   "nfts",
+  "nostrRelayUrl",
   "rpcOverrides",
   "reliabilityDiagnostics",
   "schemaVersion",
@@ -81,6 +83,7 @@ const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
+  (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
   (value["reliabilityDiagnostics"] === undefined ||
     typeof value["reliabilityDiagnostics"] === "boolean") &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
@@ -305,7 +308,7 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
  * every trust-bearing field the transaction-review layer reads as ground
  * truth: `tokens` (decimals and symbols behind amount formatting and the
  * unknown-contract warning), `rpcOverrides`, `customNetworks`,
- * `nftIndexerUrl`, `nfts`, `strk20Networks`, `strk20ProverUrl`, and
+ * `nftIndexerUrl`, `nfts`, `nostrRelayUrl`, `strk20Networks`, `strk20ProverUrl`, and
  * `approvalSurface`. `explorerFallback` is excluded for the same reason: a
  * file that flipped it to `true` would re-arm a third-party address disclosure
  * the user had switched off, and one that flipped it to `false` would turn an

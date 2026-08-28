@@ -39,6 +39,8 @@ export type WalletPreferences = {
   readonly hiddenTokens?: readonly string[];
   readonly nftIndexerUrl?: string;
   readonly nfts?: readonly WatchedNft[];
+  /** Custom relay replacing the reviewed Nostr defaults for explicit multisig handoffs. */
+  readonly nostrRelayUrl?: string;
   readonly rpcOverrides?: RpcOverrides;
   /** Opt-in process-local aggregate RPC counters; never uploaded automatically. */
   readonly reliabilityDiagnostics?: boolean;
@@ -91,6 +93,7 @@ export type WalletPreferencesStore = {
     readonly id: string;
   }) => Promise<WalletPreferences>;
   readonly setNftIndexerUrl: (input: { readonly url: string }) => Promise<WalletPreferences>;
+  readonly setNostrRelayUrl: (input: { readonly relayUrl: string }) => Promise<WalletPreferences>;
   readonly setNftSpam: (input: {
     readonly id: string;
     readonly spam: boolean;

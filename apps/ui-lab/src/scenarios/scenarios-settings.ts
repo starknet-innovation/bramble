@@ -11,6 +11,16 @@ const openAdvancedEndpoint = (context: FrameContext): void => {
   disclosure.open = true;
 };
 
+const openCoordinationRelay = (context: FrameContext): void => {
+  const disclosure = context.app.querySelector<HTMLDetailsElement>(
+    '[data-disclosure="nostr-relay"]',
+  );
+  if (!disclosure) {
+    throw new Error("Missing production Nostr relay disclosure");
+  }
+  disclosure.open = true;
+};
+
 export const settingsScenario: WalletScenario = {
   checkpoints: [
     {
@@ -55,9 +65,25 @@ export const settingsScenario: WalletScenario = {
       id: "advanced-endpoints",
       label: "Advanced endpoints",
       narrative:
-        "RPC, privacy prover, and NFT indexer controls include their trust and fallback context.",
+        "RPC, privacy, Nostr, NFT, and local diagnostics controls keep their trust context behind concise disclosures.",
       prepare: openAdvancedEndpoint,
       state: { disclosure: "rpc", state: "open" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          preferences: {
+            ...journeyPreferences,
+            nostrRelayUrl: "wss://relay.team.example/multisig",
+          },
+          view: "advanced-network",
+        }),
+      id: "nostr-relay",
+      label: "Multisig coordination relay",
+      narrative:
+        "A custom relay is an explicit replacement for the reviewed defaults and stays beside its privacy context.",
+      prepare: openCoordinationRelay,
+      state: { disclosure: "nostr-relay", state: "custom" },
     },
     {
       content: () =>

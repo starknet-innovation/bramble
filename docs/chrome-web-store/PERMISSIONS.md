@@ -39,12 +39,13 @@ approval and store/revoke that site's local account permission.
 All remote hosts are HTTPS except the loopback-only developer endpoints. User-added Starknet
 networks are admitted through Chrome's runtime host-permission flow and validated before use.
 
-## Fixed WebSocket destinations
+## Nostr WebSocket destinations
 
 An explicit **Share securely** or **Check for co-signer updates** action opens a one-shot encrypted
-WebSocket exchange with `relay.primal.net` and `nos.lol`. These destinations do not grant page or
-host access through the manifest; their fixed allowlist is enforced and tested in the background
-transport. The extension does not poll them while idle.
+WebSocket exchange with the reviewed defaults (`relay.primal.net` and `nos.lol`) or one custom relay
+the user deliberately selected as their replacement. Relay URLs require WSS, except loopback WS for
+local testing, and cannot contain credentials. They do not grant page or host access through the
+manifest. The extension does not poll them while idle.
 
 Chrome requires the narrowest permissions necessary and recommends listing the reason for each:
 <https://developer.chrome.com/docs/webstore/program-policies/user-data-faq/#minimum-permission>.

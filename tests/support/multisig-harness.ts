@@ -17,9 +17,11 @@ import { prepareArgentMultisigInvokeV3WithProvider } from "@mc-wallet/starknet/m
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import { memoryActivityLog } from "@mc-wallet/transactions/activity";
 import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
 import type { Vault } from "@mc-wallet/vault/schema";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ec, RpcProvider } from "starknet";
+import type { NostrRelayTransport } from "../../apps/extension/src/background/multisig/nostr-relay";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
@@ -89,6 +91,16 @@ provider.getEstimateFeeBulk = (async () => [
 export type MultisigHarnessOptions = {
   readonly beforeAccountDeployment?: () => Promise<void> | void;
   readonly beforeSubmitPrepared?: () => Promise<void> | void;
+  readonly coordination?: {
+    readonly open: (eventJson: string) => Promise<NostrApplicationData>;
+    readonly publicKey: string;
+    readonly transport: NostrRelayTransport;
+    readonly wrap: (input: {
+      readonly content: string;
+      readonly identifier: string;
+      readonly recipientPublicKey: string;
+    }) => Promise<string>;
+  };
   readonly deploymentBalance?: string | null;
   readonly deploymentEstimateError?: Error;
   readonly deploymentStatus?: boolean | (() => boolean);
@@ -173,6 +185,25 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     async importRawKeyAccount() {
       return harnessAccountA;
     },
+    ...(options.coordination
+      ? {
+          async nostrPublicKey() {
+            return options.coordination?.publicKey ?? "";
+          },
+          async openNostrApplicationData(input: { readonly eventJson: string }) {
+            if (!options.coordination) throw new Error("coordination unavailable");
+            return options.coordination.open(input.eventJson);
+          },
+          async wrapNostrApplicationData(input: {
+            readonly content: string;
+            readonly identifier: string;
+            readonly recipientPublicKey: string;
+          }) {
+            if (!options.coordination) throw new Error("coordination unavailable");
+            return options.coordination.wrap(input);
+          },
+        }
+      : {}),
     async readVault() {
       return { accounts, activeAccountId } as unknown as Vault;
     },
@@ -207,6 +238,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     activity,
     allowanceStore,
     multisigStore,
+    ...(options.coordination ? { nostrRelayTransport: options.coordination.transport } : {}),
     preferencesStore,
     runtimeRpc: {
       async estimateAccountDeploymentFee() {
@@ -334,6 +366,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     allowanceStore,
     handler,
     multisigStore,
+    preferencesStore,
     session,
     submitCount: () => submitCount,
   };

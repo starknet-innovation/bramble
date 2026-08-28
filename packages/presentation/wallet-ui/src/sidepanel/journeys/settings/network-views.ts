@@ -47,6 +47,9 @@ const strk20ConfigFor = (
 const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
   preferences?.nftIndexerUrl ?? "";
 
+const nostrRelayUrlFor = (preferences: WalletPreferences | null): string =>
+  preferences?.nostrRelayUrl ?? "";
+
 // Resolved, not stored: an untouched network shows the default this user gets
 // (on for built-in endpoints, off once they configured their own RPC), so the
 // checkbox never claims a decision the user has not made. Preferences that
@@ -196,6 +199,31 @@ export const advancedNetworkFlow = (
           strk20ServicesForm(status.network, privacy),
         )}
         ${endpointDisclosure(
+          "nostr-relay",
+          "Multisig coordination relay",
+          nostrRelayUrlFor(preferences) ? "Custom" : "Reviewed defaults",
+          `<form id="nostr-relay-form">
+            ${textField({
+              autocomplete: "off",
+              className: "mono",
+              hint: "Used across networks for encrypted intent handoffs. Every co-signer must select the same relay. Leave empty for the reviewed defaults.",
+              label: "Custom Nostr relay",
+              name: "relayUrl",
+              placeholder: "wss://relay.example",
+              spellcheck: false,
+              type: "url",
+              value: nostrRelayUrlFor(preferences),
+            })}
+            ${button({
+              icon: "check",
+              label: "Save coordination relay",
+              type: "submit",
+              variant: "secondary",
+            })}
+            <p id="nostr-relay-result" role="status"></p>
+          </form>`,
+        )}
+        ${endpointDisclosure(
           "nft-indexer",
           "NFT indexer",
           nftIndexerUrlFor(preferences) ? "Configured" : "Off",
@@ -219,6 +247,19 @@ export const advancedNetworkFlow = (
             })}
             <p id="nft-indexer-result" role="status"></p>
           </form>`,
+        )}
+        ${endpointDisclosure(
+          "reliability-diagnostics",
+          "Reliability diagnostics",
+          preferences?.reliabilityDiagnostics ? "On" : "Off",
+          `${checkboxField({
+            attributes: { id: "reliability-diagnostics" },
+            checked: preferences?.reliabilityDiagnostics ?? false,
+            name: "reliabilityDiagnostics",
+            text: "Keep anonymous RPC and explorer reliability counters on this device",
+          })}
+          <p class="hint">No addresses, sites, transaction data, endpoint URLs, or raw errors are collected. Nothing is uploaded; you choose whether to export it.</p>
+          ${button({ attributes: { id: "diagnostics-export" }, icon: "receive", label: "Download diagnostics" })}`,
         )}
       </div>
     </section>`,

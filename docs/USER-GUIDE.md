@@ -163,6 +163,14 @@ submission remain disabled unless the fresh on-chain authority exactly matches
 the intent and the exact threshold is met. There is no separate on-chain
 proposal or confirmation state.
 
+For encrypted Nostr coordination, each participant first saves the other participant's complete
+wallet card so the Stark signer key and coordination key stay bound to one contact. The intent owner
+chooses **Share securely with co-signers**; the other participant opens the same shared account and
+chooses **Check for co-signer updates**. MC Wallet uses the reviewed relay defaults unless a user
+sets **Settings → Network → Advanced endpoints → Multisig coordination relay**. A custom relay
+replaces the defaults, so participants must select infrastructure that can receive the same events.
+Relay access is one-shot and user initiated; manual copy-and-paste remains available as a fallback.
+
 ### Allowance manager
 
 The allowance manager lists **ERC-20 token approvals** submitted through MC

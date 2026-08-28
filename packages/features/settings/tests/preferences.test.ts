@@ -131,6 +131,19 @@ describe("createPreferencesStore", () => {
     ).resolves.toMatchObject({ rpcOverrides: { SN_DEVNET: "http://127.0.0.1:5050/rpc" } });
   });
 
+  test("stores and clears a secure custom Nostr relay", async () => {
+    const preferences = createPreferencesStore({ store: createMemoryStore() });
+
+    await preferences.setNostrRelayUrl({ relayUrl: " wss://relay.team.example/multisig " });
+    expect((await preferences.read()).nostrRelayUrl).toBe("wss://relay.team.example/multisig");
+
+    await expect(preferences.setNostrRelayUrl({ relayUrl: "ws://relay.example" })).rejects.toThrow(
+      "Invalid Nostr relay endpoint",
+    );
+    await preferences.setNostrRelayUrl({ relayUrl: "" });
+    expect((await preferences.read()).nostrRelayUrl).toBeUndefined();
+  });
+
   test("stores and clears complete per-network STRK20 service routing", async () => {
     const store = createMemoryStore();
     const preferences = createPreferencesStore({ store });

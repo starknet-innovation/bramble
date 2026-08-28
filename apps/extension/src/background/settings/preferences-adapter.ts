@@ -58,6 +58,7 @@ export const createBackgroundPreferences = ({
     setExplorerFallback: async (input) => (await required()).setExplorerFallback(input),
     setGroupIcon: async (input) => (await required()).setGroupIcon(input),
     setNftIndexerUrl: async (input) => (await required()).setNftIndexerUrl(input),
+    setNostrRelayUrl: async (input) => (await required()).setNostrRelayUrl(input),
     setNftSpam: async (input) => (await required()).setNftSpam(input),
     setRpcOverride: async (input) => (await required()).setRpcOverride(input),
     setStrk20NetworkConfig: async (input) => (await required()).setStrk20NetworkConfig(input),

@@ -83,6 +83,7 @@ const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...buildOpsDeps(ctx),
   multisigDeploymentReviews: ctx.multisigDeploymentReviews,
   multisigStore: ctx.multisigStore,
+  ...(ctx.nostrRelayTransport ? { nostrRelayTransport: ctx.nostrRelayTransport } : {}),
   now: ctx.now,
 });
 
