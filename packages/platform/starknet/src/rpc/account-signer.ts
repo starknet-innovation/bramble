@@ -5,6 +5,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { isStarkFieldElement, sameFelt } from "@mc-wallet/wallet-model/networks";
 import {
   type AccountSignature,
+  type MlDsa65Signature,
   requireStarkSignature,
   type StarkSignature,
 } from "@mc-wallet/wallet-model/signing";
@@ -19,6 +20,7 @@ import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
   type ArgentMultisigConfig,
+  estimateMode,
   normalizeArgentMultisigConfig,
   serializeAccountSignature,
   serializeArgentAccountSignature,
@@ -26,6 +28,7 @@ import {
   serializeArgentMultisigSignature,
   usesValidatedQueryEstimate,
 } from "../accounts/account-contracts";
+import { mlDsaEstimationSignature, mlDsaSignaturePayload } from "../accounts/ml-dsa-core";
 
 /**
  * Function that signs one transaction hash through the vault service, a hardware
@@ -71,6 +74,19 @@ export type StarknetAccountDescriptor = AccountRef | ArgentMultisigAccountDescri
 
 type ContractKind = StarknetAccountDescriptor["accountContractType"];
 
+// The paired-phone signer is the only producer of this scheme, and it returns a
+// single signature rather than a member list. Anything else reaching here is a
+// wiring mistake, so it aborts the submit rather than serializing something the
+// account cannot validate.
+const requireMlDsa65Signature = (
+  value: AccountSignature | readonly StarkSignature[],
+): MlDsa65Signature => {
+  if (Array.isArray(value) || (value as AccountSignature).kind !== "ml-dsa-65") {
+    throw new WalletError("ML-DSA account requires a post-quantum signature");
+  }
+  return value as MlDsa65Signature;
+};
+
 const exactlyOneSignature = (
   value: AccountSignature | readonly StarkSignature[],
 ): StarkSignature => {
@@ -106,6 +122,13 @@ class FixedContractStarknetSigner extends Signer {
       throw new WalletError("Invalid transaction hash");
     }
     const signed = await this.signHash(hash);
+    if (this.contractKind === "ml-dsa") {
+      // Not `serializeAccountSignature`: that seam takes a Stark `(r, s)`, and
+      // this contract validates neither. Its calldata is the packed
+      // verification key plus the felt-native signature and the hints the
+      // on-chain check needs, all of which depend on the hash just signed.
+      return [...mlDsaSignaturePayload({ ...requireMlDsa65Signature(signed), hash })];
+    }
     if (this.contractKind === "argent-multisig") {
       if (!this.multisig) {
         throw new WalletError("Argent multisig signer configuration is unavailable");
@@ -202,6 +225,72 @@ export const krustyAccount = (
     provider,
     signer: new ContractStarknetSigner(inputs.publicKey, inputs.kind, signHash, inputs.multisig),
   });
+};
+
+// Emits a fixed signature array and never consults a signer. The ML-DSA
+// estimation dummy is the same felts for every transaction of an account, so
+// there is nothing per-hash to compute and nothing to prompt for.
+class FixedCalldataSigner extends Signer {
+  public constructor(private readonly calldata: readonly string[]) {
+    super("0x1");
+  }
+
+  public override async getPubKey(): Promise<string> {
+    return "0x0";
+  }
+
+  protected override async signRaw(): Promise<Signature> {
+    return [...this.calldata];
+  }
+}
+
+/**
+ * Builds an ML-DSA account whose signatures are the fee-estimation dummy, for
+ * simulating a query-version transaction with validation enabled.
+ *
+ * The point is what it does *not* do: it never reaches the paired phone. The
+ * account contract runs its full verifier under a query version and tolerates
+ * the failing verdict, so this measures the true cost of validation — which for
+ * this family is nearly the whole transaction — with no signing round trip. It
+ * reads only the public key already on the record.
+ */
+export const mlDsaQueryAccount = (
+  provider: RpcProvider,
+  account: StarknetAccountDescriptor,
+): Account => {
+  if (account.accountContractType !== "ml-dsa") {
+    throw new WalletError("ML-DSA query signer is only available for ML-DSA accounts");
+  }
+  return new Account({
+    address: account.address,
+    cairoVersion: "1",
+    provider,
+    signer: new FixedCalldataSigner(mlDsaEstimationSignature(account.publicKey)),
+  });
+};
+
+/**
+ * The account a fee estimate must be taken through, and whether that estimate
+ * skips validation.
+ *
+ * One function for every estimate path — invoke, deploy, and the reviews that
+ * price them — because a review taken a different way from the submission that
+ * follows it is not a ceiling on anything.
+ */
+export const estimatingAccountFor = (
+  provider: RpcProvider,
+  account: StarknetAccountDescriptor,
+  submittingAccount: Account,
+  options: AccountSignerOptions = {},
+): { readonly account: Account; readonly skipValidate: boolean } => {
+  const mode = estimateMode(account.accountContractType);
+  if (mode === "argent-query") {
+    return { account: argentQueryAccount(provider, account, options), skipValidate: false };
+  }
+  if (mode === "ml-dsa-query") {
+    return { account: mlDsaQueryAccount(provider, account), skipValidate: false };
+  }
+  return { account: submittingAccount, skipValidate: true };
 };
 
 /**

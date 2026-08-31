@@ -10,7 +10,6 @@
  * question this design has to answer — whether a human will carry a string this
  * size between two devices for every transaction.
  */
-import type { MlDsaKind } from "@mc-wallet/wallet-model/accounts";
 import type { MobilePqEnrollView, MobilePqSignView } from "@mc-wallet/wallet-ui/lab";
 import {
   addAccountChooser,
@@ -93,13 +92,11 @@ const ENROLL_CHALLENGE = "0x02f4c1a83b7e6d095c2a1f8b4e7d3c60a9f5e2b8d1c4a7f03e6b
 const enrollCheckpoint = (
   id: string,
   phase: MobilePqEnrollView["phase"],
-  mlDsaKind: MlDsaKind,
   label: string,
   narrative: string,
   state: ScenarioCheckpoint["state"],
 ): ScenarioCheckpoint => ({
-  content: () =>
-    mobilePqEnrollScreen({ challenge: ENROLL_CHALLENGE, mlDsaKind, phase }, statusFor()),
+  content: () => mobilePqEnrollScreen({ challenge: ENROLL_CHALLENGE, phase }, statusFor()),
   id,
   label,
   narrative,
@@ -123,7 +120,6 @@ export const mobilePqOnboardingScenario: WalletScenario = {
     enrollCheckpoint(
       "loading",
       { kind: "loading" },
-      "const",
       "Awaiting a challenge",
       "Nothing is asked of the user until the wallet has a challenge to bind the enrollment to. Without one there is nothing to verify, so the form is withheld rather than shown and later rejected.",
       { challenge: "pending" },
@@ -131,23 +127,13 @@ export const mobilePqOnboardingScenario: WalletScenario = {
     enrollCheckpoint(
       "collect",
       { kind: "collect" },
-      "const",
       "Prove possession",
-      "The challenge is on screen first and the fields follow the order the user works in: sign it on the device, then paste back the key and the response. One screen, because a clipboard lets the user move between wallet and device freely.",
-      { challenge: "issued", contract: "const", fields: 5 },
-    ),
-    enrollCheckpoint(
-      "collect-hashkey",
-      { kind: "collect" },
-      "hashkey",
-      "Hashed-key contract",
-      "The same form with a shared-class contract selected. Only the contract choice and the class hash differ across this family — the challenge, the key, and the signature are identical, which is why one screen serves all three.",
-      { challenge: "issued", contract: "hashkey", fields: 5 },
+      "The challenge is on screen first and the fields follow the order the user works in: sign it on the device, then paste back the key, the class and the response. One screen, because a clipboard lets the user move between wallet and device freely.",
+      { challenge: "issued", contract: "hashkey", fields: 4 },
     ),
     enrollCheckpoint(
       "enrolling",
       { kind: "enrolling" },
-      "const",
       "Verifying the device",
       "The signature is being checked against the pasted key before any address is derived. An address derived from a key the device cannot sign for is unspendable, so this check gates the write rather than following it.",
       { challenge: "consumed", verifying: true },
@@ -155,7 +141,6 @@ export const mobilePqOnboardingScenario: WalletScenario = {
     enrollCheckpoint(
       "malformed",
       { kind: "error", message: MOBILE_PQ_KEY_INVALID },
-      "const",
       "Malformed key",
       "A paste that is not an ML-DSA-65 key is refused in the panel, before the background is asked. The form stays up with the challenge intact so the user can correct one field.",
       { accountCreated: false, refusedBy: "panel" },
@@ -163,14 +148,13 @@ export const mobilePqOnboardingScenario: WalletScenario = {
     enrollCheckpoint(
       "refused",
       { kind: "error", message: "Mobile device signature verification failed" },
-      "const",
       "Refused enrollment",
       "A well-formed key whose signature does not verify. The background stored nothing, and because the challenge is single-use recovery is a fresh one rather than a retry of this form.",
       { accountCreated: false, challenge: "spent", refusedBy: "background" },
     ),
   ],
   description:
-    "Post-quantum device enrollment: chooser entry, challenge issuance, the proof-of-possession form across contracts, and both refusal paths.",
+    "Post-quantum device enrollment: chooser entry, challenge issuance, the proof-of-possession form, and both refusal paths.",
   id: "mobile-pq-onboarding",
   surface: "sidepanel",
   title: "Post-quantum device onboarding",

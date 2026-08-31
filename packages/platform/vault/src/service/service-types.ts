@@ -12,7 +12,6 @@ import type {
   DerivedAccountRef,
   ImportedAccountRef,
   LedgerAccountRef,
-  MlDsaKind,
   MobilePqAccountRef,
   StarkCurveContractType,
 } from "@mc-wallet/wallet-model/accounts";
@@ -150,14 +149,13 @@ export type ImportRawKeyAccountInput = {
  * No key material is accepted or retained; the device signs every transaction.
  */
 /**
- * Enrolling a paired post-quantum device. `classHash` is required: a `const`
- * account's class is generated from its own public key, so there is no network
- * default, and the wallet must never fall back to another family's class.
+ * Enrolling a paired post-quantum device. `classHash` is required: the ML-DSA
+ * contract has no pinned class yet, so there is no network default the wallet
+ * may fall back to. The constructor argument is derived from `publicKey`.
  */
 export type AddMobilePqAccountInput = {
   readonly classHash: string;
   readonly deviceId: string;
-  readonly mlDsaKind: MlDsaKind;
   readonly networkId: StarknetNetworkId;
   readonly publicKey: string;
   readonly vaultPassphrase: string;

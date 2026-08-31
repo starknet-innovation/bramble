@@ -10,8 +10,7 @@
     "./deployment": "./src/transactions/deployment.ts",
     "./deployment-compatibility": "./src/transactions/deployment-compatibility.ts",
     "./fee-bounds": "./src/rpc/fee-bounds.ts",
-    "./ml-dsa-classes": "./src/accounts/ml-dsa-classes.ts",
-    "./ml-dsa-verify": "./src/transactions/ml-dsa-verify.ts",
+    "./ml-dsa-core": "./src/accounts/ml-dsa-core.ts",
     "./multisig-invoke": "./src/rpc/multisig-invoke.ts",
     "./provider": "./src/rpc/provider.ts",
     "./rpc-diagnostics": "./src/rpc/rpc-diagnostics.ts",
@@ -31,10 +30,13 @@
     "test": "bun test --preload ../../../tests/support/test-preload.ts ./tests"
   },
   "dependencies": {
-    "@noble/post-quantum": "0.7.0",
     "@mc-wallet/core": "workspace:*",
     "@mc-wallet/wallet-model": "workspace:*",
     "@mc-wallet/wallet-protocol": "workspace:*",
+    "@noble/hashes": "1.3.2",
     "starknet": "10.0.2"
+  },
+  "devDependencies": {
+    "@noble/post-quantum": "0.7.0"
   }
 }

@@ -28,7 +28,6 @@ const vaultPassphrase = "correct horse battery staple";
 
 const mobileAccount = {
   accountContractType: "ml-dsa" as const,
-  mlDsaKind: "const" as const,
   address: "0xdef",
   classHash: "0xabc",
   derivation: {
@@ -159,48 +158,38 @@ describe("paired-phone address derivation", () => {
     deriveAccountContractAddress(kms, {
       accountContractType: "ml-dsa",
       networkId: "SN_MAIN",
-      publicKey: mobileAccount.publicKey,
       publicKeyX: "0x456",
       ...extra,
     });
 
-  test("the const contract derives from its per-user class hash alone", async () => {
-    // No constructor arguments, so the class hash is the whole preimage. This is
-    // the one ML-DSA contract whose address the wallet can already compute.
-    const { address, classHash } = await derive({ classHash: "0xabc", mlDsaKind: "const" });
+  test("derives from the class hash and the expanded public key", async () => {
+    const { address, classHash } = await derive({
+      classHash: "0xabc",
+      publicKey: mobileAccount.publicKey,
+    });
     expect(classHash).toBe("0xabc");
     expect(canonicalFelt(address)).toBe(address);
     expect(isNonZeroStarkFieldElement(address)).toBe(true);
-    // Deterministic, and a function of the class hash: with a per-user class
-    // that is the only thing distinguishing two accounts of this contract.
-    const again = await derive({ classHash: "0xabc", mlDsaKind: "const" });
-    expect(again.address).toBe(address);
-    const other = await derive({ classHash: "0xdef", mlDsaKind: "const" });
-    expect(other.address).not.toBe(address);
-    // The public key is NOT in the preimage for this contract — it is compiled
-    // into the class instead, so the same class gives the same address.
-    const otherKey = await derive({
-      classHash: "0xabc",
-      mlDsaKind: "const",
-      publicKey: `0x${"cd".repeat(1952)}`,
-    });
-    expect(otherKey.address).toBe(address);
+    expect((await derive({ classHash: "0xabc", publicKey: mobileAccount.publicKey })).address).toBe(
+      address,
+    );
+    // The class hash and the key are the whole preimage: the commitment the
+    // constructor takes is derived from the key rather than supplied beside it,
+    // so there is no third input that could disagree with either.
+    expect(
+      (await derive({ classHash: "0xabc", publicKey: `0x${"cd".repeat(1952)}` })).address,
+    ).not.toBe(address);
+    expect(
+      (await derive({ classHash: "0xdef", publicKey: mobileAccount.publicKey })).address,
+    ).not.toBe(address);
   });
 
-  test("the contracts needing the packed key refuse by name", async () => {
-    for (const mlDsaKind of ["storage", "hashkey"] as const) {
-      await expect(derive({ classHash: "0xabc", mlDsaKind })).rejects.toThrow(
-        `ML-DSA ${mlDsaKind} account deployment parameters are not yet defined`,
-      );
-    }
-  });
-
-  test("an explicit class hash and contract kind are both required", async () => {
-    await expect(derive({ mlDsaKind: "const" })).rejects.toThrow(
+  test("an explicit class hash and public key are both required", async () => {
+    await expect(derive({ publicKey: mobileAccount.publicKey })).rejects.toThrow(
       "ML-DSA account class hash is required",
     );
     await expect(derive({ classHash: "0xabc" })).rejects.toThrow(
-      "ML-DSA account contract kind is required",
+      "ML-DSA account public key is required",
     );
   });
 });

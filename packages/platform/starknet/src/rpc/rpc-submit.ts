@@ -7,7 +7,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Account, Call, RpcProvider } from "starknet";
-import { usesValidatedQueryEstimate } from "../accounts/account-contracts";
+
 import { ensureAccountDeployed } from "../transactions/deployment";
 import { isCompatibleAccountDeployed } from "../transactions/deployment-compatibility";
 import {
@@ -20,7 +20,7 @@ import {
 import { estimateExactInvokeFee } from "./invoke-fee";
 import {
   type AccountHashSigner,
-  argentQueryAccount,
+  estimatingAccountFor,
   krustyAccount,
   matchingAcceptedRpcWriteHash,
   withRpcWrite,
@@ -122,15 +122,6 @@ const settledResourceBounds = async (
   return speed === "fast" ? scaleFeeBounds(estimate.resourceBounds) : estimate.resourceBounds;
 };
 
-const invokeEstimatingAccount = (
-  provider: RpcProvider,
-  account: AccountRef,
-  submittingAccount: Account,
-): { readonly account: Account; readonly skipValidate: boolean } =>
-  usesValidatedQueryEstimate(account.accountContractType)
-    ? { account: argentQueryAccount(provider, account), skipValidate: false }
-    : { account: submittingAccount, skipValidate: true };
-
 const assertAuthorized = (isAuthorized: (() => boolean) | undefined): void => {
   if (isAuthorized?.() === false) {
     throw new WalletError("wallet locked");
@@ -188,7 +179,7 @@ export const submitInvokeTransaction = async (
         capturedTransactionHashes.push(messageHash);
         return approvalProof;
       });
-      const estimating = invokeEstimatingAccount(provider, account, starknetAccount);
+      const estimating = estimatingAccountFor(provider, account, starknetAccount);
       const deployed = await isCompatibleAccountDeployed(provider, account);
       const resourceBounds = await settledResourceBounds(
         estimating.account,

@@ -6,7 +6,6 @@
  * id, and a public ML-DSA-65 key.
  */
 
-import type { MlDsaKind } from "@mc-wallet/wallet-model/accounts";
 import {
   isCreateAccountResponse,
   isErrorResponse,
@@ -22,14 +21,13 @@ import type { MobilePqSignOutcome } from "./sign-session";
  */
 /**
  * What enrolling a device sends: the pasted public key and class hash, the
- * device label, which contract it runs, and the device's signature over the
- * challenge the background issued.
+ * device label, and the device's signature over the challenge the background
+ * issued.
  */
 type MobilePqEnrollment = {
   readonly challenge: string;
   readonly classHash: string;
   readonly deviceId: string;
-  readonly mlDsaKind: MlDsaKind;
   readonly networkId: string;
   readonly publicKey: string;
   readonly signature: string;
@@ -55,8 +53,8 @@ const failure = (response: unknown, fallback: string): Error =>
 export const createMobilePqRuntimeClient = (
   sendMessage: (message: unknown) => Promise<unknown>,
 ): MobilePqRuntimeClient => ({
-  async addMobilePqAccount(input) {
-    const response = await sendMessage({ ...input, type: "wallet.addMobilePqAccount" });
+  async addMobilePqAccount(enrollment) {
+    const response = await sendMessage({ ...enrollment, type: "wallet.addMobilePqAccount" });
     if (isCreateAccountResponse(response)) {
       // Surface the created account's id so the caller can select it, mirroring
       // addLedgerAccount. Only public material crosses.

@@ -10,18 +10,19 @@
  *
  * Everything the user supplies is pasted, because the transport is a clipboard:
  * the public key, the class hash, and the signature. That is what lets the whole
- * flow run against a fixture key from a terminal, with no phone in the loop.
+ * flow run against a fixture key from a terminal, with no phone in the loop. The
+ * account's constructor argument is not asked for — it is derived from the key.
  *
- * The class hash is asked for rather than derived. A `const` account's class is
- * generated from its own public key, so there is no shared release the wallet
- * could look up, and inheriting another family's class would derive an address
- * nobody holds the key for.
+ * The class hash is asked for rather than derived. The contract shares one class
+ * across every user, so there will be a single hash to pin once it has a
+ * reviewed release — until then the only class that exists is whichever one was
+ * declared on the network being tested, and inheriting another family's class
+ * would derive an address nobody holds the key for.
  *
  * Fail-closed throughout: a malformed paste is refused here, a rejected proof of
  * possession is refused by the background, and neither stores anything.
  */
 
-import type { MlDsaKind } from "@mc-wallet/wallet-model/accounts";
 import { isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import { isMlDsa65PublicKey, isMlDsa65Signature } from "@mc-wallet/wallet-model/signing";
 
@@ -48,12 +49,11 @@ type MobilePqEnrollPhase =
   | { readonly kind: "error"; readonly message: string };
 
 /**
- * The full enrollment view: the phase, the challenge the device must sign, and
- * the contract the new account will run. `null` means the journey is closed.
+ * The full enrollment view: the phase and the challenge the device must sign.
+ * `null` means the journey is closed.
  */
 export type MobilePqEnrollView = {
   readonly challenge: string;
-  readonly mlDsaKind: MlDsaKind;
   readonly phase: MobilePqEnrollPhase;
 };
 
@@ -66,9 +66,7 @@ export type MobilePqEnrollView = {
  */
 export type MobilePqEnrollControllerDeps = {
   readonly challenge: () => Promise<string>;
-  readonly enroll: (
-    draft: MobilePqEnrollDraft & { readonly challenge: string; readonly mlDsaKind: MlDsaKind },
-  ) => Promise<void>;
+  readonly enroll: (draft: MobilePqEnrollDraft & { readonly challenge: string }) => Promise<void>;
   readonly onEnrolled?: () => Promise<void>;
   readonly render: (view: MobilePqEnrollView | null) => void;
 };
@@ -78,7 +76,6 @@ export type MobilePqEnrollControllerDeps = {
  */
 export type MobilePqEnrollController = {
   readonly cancel: () => void;
-  readonly chooseKind: (kind: MlDsaKind) => void;
   readonly open: () => Promise<void>;
   readonly submit: (draft: MobilePqEnrollDraft) => Promise<void>;
 };
@@ -106,6 +103,18 @@ export const MOBILE_PQ_CLASS_INVALID =
  */
 export const MOBILE_PQ_DEVICE_INVALID = "Give this device a name so you can recognise it later.";
 
+/**
+ * Appended to whatever the background refused with.
+ *
+ * The challenge is consumed before the proof of possession is checked, so by the
+ * time any background refusal reaches here it is spent and the form on screen
+ * can no longer succeed — every retry would return "enrollment challenge
+ * expired" whatever the user corrects. Saying so is the difference between one
+ * confusing loop and one clear restart.
+ */
+export const MOBILE_PQ_CHALLENGE_SPENT =
+  "That challenge is now used up. Cancel and reopen to get a fresh one, then sign that.";
+
 const draftError = (draft: MobilePqEnrollDraft): string | null => {
   if (draft.deviceId.length === 0) {
     return MOBILE_PQ_DEVICE_INVALID;
@@ -120,19 +129,17 @@ const draftError = (draft: MobilePqEnrollDraft): string | null => {
 };
 
 /**
- * Creates the enrollment controller. The default contract is `const`, the one
- * whose address the wallet can derive today.
+ * Creates the enrollment controller.
  */
 export const createMobilePqEnrollController = (
   deps: MobilePqEnrollControllerDeps,
 ): MobilePqEnrollController => {
   const { challenge: fetchChallenge, enroll, onEnrolled, render } = deps;
   let challenge: string | null = null;
-  let mlDsaKind: MlDsaKind = "const";
   let phase: MobilePqEnrollPhase = { kind: "loading" };
 
   const paint = (): void => {
-    render(challenge === null ? null : { challenge, mlDsaKind, phase });
+    render(challenge === null ? null : { challenge, phase });
   };
 
   const fail = (message: string): void => {
@@ -144,10 +151,6 @@ export const createMobilePqEnrollController = (
     cancel() {
       challenge = null;
       phase = { kind: "loading" };
-      paint();
-    },
-    chooseKind(kind) {
-      mlDsaKind = kind;
       paint();
     },
     async open() {
@@ -179,12 +182,14 @@ export const createMobilePqEnrollController = (
       phase = { kind: "enrolling" };
       paint();
       try {
-        await enroll({ ...draft, challenge: active, mlDsaKind });
+        await enroll({ ...draft, challenge: active });
       } catch (error) {
         // The background refused it: a failed proof of possession, a consumed
-        // challenge, or a duplicate account. Nothing was stored. The challenge
-        // is single-use, so recovery is a fresh one rather than a retry.
-        fail(error instanceof Error ? error.message : String(error));
+        // challenge, or a duplicate account. Nothing was stored. Reaching the
+        // background at all spends the challenge, so the reason is reported with
+        // the remedy rather than on its own.
+        const reason = error instanceof Error ? error.message : String(error);
+        fail(`${reason}. ${MOBILE_PQ_CHALLENGE_SPENT}`);
         return;
       }
       challenge = null;

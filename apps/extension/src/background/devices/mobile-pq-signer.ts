@@ -15,7 +15,7 @@
  * krusty-kms C ABI, and the trusted display arrives with them.
  */
 import { WalletError } from "@mc-wallet/core/errors";
-import { verifyMlDsa65Signature } from "@mc-wallet/starknet/ml-dsa-verify";
+import { verifyMlDsa65Signature } from "@mc-wallet/starknet/ml-dsa-core";
 import type { AccountHashSigner } from "@mc-wallet/starknet/provider";
 import type { MobilePqAccountRef } from "@mc-wallet/wallet-model/accounts";
 import {

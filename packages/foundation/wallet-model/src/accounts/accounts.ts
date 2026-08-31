@@ -36,9 +36,7 @@ export {
   type AccountContractType,
   ARGENT_ACCOUNT_CLASS_HASH,
   isAccountContractType,
-  isMlDsaKind,
   isStarkCurveContractType,
-  type MlDsaKind,
   OPENZEPPELIN_ACCOUNT_CLASS_HASH,
   type StarkCurveContractType,
 } from "./contract-metadata";
@@ -105,10 +103,9 @@ export type LedgerAccountRef = StarkCurveAccountRefCore & {
  * Paired-phone account metadata containing no locally held signing key. The
  * ML-DSA-65 key is 1952 bytes, far past one felt, so `publicKey` carries the
  * encoded key itself — which the verify-before-broadcast gate needs in full —
- * while `publicKeyX` carries whichever single felt this account's contract binds
- * to it. What that felt is depends on `mlDsaKind`: `split` pins a Poseidon hash
- * of the packed key, while `const` bakes the key into a per-user class and binds
- * nothing in the address preimage at all.
+ * while `publicKeyX` carries the Poseidon commitment to that key's packed
+ * expansion — the same felt the account contract binds in its address, doubling
+ * as this record's single-felt identity.
  */
 export type MobilePqAccountRef = MlDsaAccountRefCore & {
   readonly derivation: MobilePqDerivation;
@@ -217,7 +214,7 @@ const KEYLESS_ACCOUNT_KEYS = [
   "publicKeyX",
 ] as const;
 const DERIVED_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "publicKeyY"] as const;
-const MOBILE_PQ_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "mlDsaKind", "publicKey"] as const;
+const MOBILE_PQ_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "publicKey"] as const;
 const LEGACY_V6_KEYLESS_ACCOUNT_KEYS = [
   "accountContractType",
   "address",

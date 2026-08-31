@@ -191,9 +191,9 @@ const SECRET_MATERIAL_FILES = new Set([
   // Pure public-key verification consolidated for Ledger and KMS probe
   // callers; it receives no private key or vault credential.
   "packages/platform/starknet/src/transactions/signature-verify.ts",
-  "packages/platform/starknet/src/transactions/ml-dsa-verify.ts",
   // The ML-DSA account family: per-contract signature layouts and record claims.
-  "packages/platform/starknet/src/accounts/ml-dsa-classes.ts",
+  "packages/platform/starknet/src/accounts/ml-dsa-core.ts",
+  "packages/platform/starknet/src/accounts/ml-dsa-math.ts",
   "packages/foundation/wallet-model/src/accounts/contract-metadata.ts",
   // Public account ABI serialization and signer façades. These files carry
   // public keys/signature fragments; private-key operations remain in Krusty.

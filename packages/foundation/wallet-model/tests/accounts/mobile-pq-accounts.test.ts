@@ -20,7 +20,6 @@ const publicKey = `0x${"ab".repeat(ML_DSA_65_PUBLIC_KEY_BYTES)}`;
 
 const mobile = {
   accountContractType: "ml-dsa" as const,
-  mlDsaKind: "const" as const,
   address: "0xdef",
   classHash: "0xabc",
   derivation: {

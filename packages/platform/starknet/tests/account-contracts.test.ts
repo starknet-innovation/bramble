@@ -9,10 +9,12 @@ import {
   argentMultisigAddress,
   argentMultisigConstructorCalldata,
   argentSignerGuid,
+  estimateMode,
   serializeAccountSignature,
   serializeArgentAccountSignature,
   serializeArgentMultisigDeploySignature,
   serializeArgentMultisigSignature,
+  usesValidatedQueryEstimate,
 } from "@mc-wallet/starknet/account-contracts";
 import { hash } from "starknet";
 
@@ -128,5 +130,26 @@ describe("Argent signature serialization", () => {
     expect(() =>
       argentMultisigConstructorCalldata({ signerPublicKeys: sparse, threshold: 1 }),
     ).toThrow("signer public key");
+  });
+});
+
+describe("estimateMode", () => {
+  test("only the post-quantum family estimates through its own query dummy", () => {
+    // The distinction the boolean this replaced could not express: ML-DSA needs
+    // validation included in the estimate but cannot borrow Argent's query
+    // account, whose dummy is a Stark `(r, s)` its `__validate__` never reads.
+    expect(estimateMode("ml-dsa")).toBe("ml-dsa-query");
+    expect(estimateMode("argent")).toBe("argent-query");
+    expect(estimateMode("argent-multisig")).toBe("argent-query");
+    expect(estimateMode("openzeppelin")).toBe("skip-validate");
+  });
+
+  test("every family except OpenZeppelin includes validation in its estimate", () => {
+    // OZ is the only one whose `__validate__` is cheap enough to leave out — and
+    // leaving it out is also what keeps a review from waking a Ledger.
+    for (const family of ["argent", "argent-multisig", "ml-dsa"] as const) {
+      expect(usesValidatedQueryEstimate(family)).toBe(true);
+    }
+    expect(usesValidatedQueryEstimate("openzeppelin")).toBe(false);
   });
 });

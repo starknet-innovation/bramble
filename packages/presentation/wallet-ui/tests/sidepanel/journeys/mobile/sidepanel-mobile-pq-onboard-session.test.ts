@@ -53,14 +53,12 @@ const latest = (views: readonly (MobilePqEnrollView | null)[]): MobilePqEnrollVi
   views.at(-1) ?? null;
 
 describe("createMobilePqEnrollController", () => {
-  test("opens on a freshly issued challenge and defaults to the const contract", async () => {
+  test("opens on a freshly issued challenge", async () => {
     const { controller, views } = harness();
     await controller.open();
     const view = latest(views);
     expect(view?.challenge).toBe(CHALLENGE);
     expect(view?.phase).toEqual({ kind: "collect" });
-    // `const` is the contract whose address the wallet can derive today.
-    expect(view?.mlDsaKind).toBe("const");
   });
 
   test("shows nothing when no challenge could be issued", async () => {
@@ -74,12 +72,11 @@ describe("createMobilePqEnrollController", () => {
     expect(latest(views)).toBe(null);
   });
 
-  test("enrolls with the issued challenge and the chosen contract", async () => {
+  test("enrolls with the issued challenge", async () => {
     const { controller, enrolled, refreshed, views } = harness();
     await controller.open();
-    controller.chooseKind("hashkey");
     await controller.submit(draft);
-    expect(enrolled).toEqual([{ ...draft, challenge: CHALLENGE, mlDsaKind: "hashkey" }]);
+    expect(enrolled).toEqual([{ ...draft, challenge: CHALLENGE }]);
     expect(latest(views)).toBe(null);
     expect(refreshed()).toBe(1);
   });

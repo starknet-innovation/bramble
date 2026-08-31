@@ -22,36 +22,6 @@ import { isMobilePqDerivation } from "./derivations";
 export type AccountContractType = "argent" | "ml-dsa" | "openzeppelin";
 
 /**
- * Which ML-DSA account contract a record uses. One family, several contracts,
- * because the on-chain work of checking a post-quantum signature can be
- * arranged in more than one way and the trade-offs are still being measured.
- *
- * The names match the `--variant` values of the contract repository's
- * `py/account_tool.py`, deliberately: that tool generates the class, the
- * constructor calldata, and the signature payload for each contract, so the two
- * sides naming the same contract differently is how a mismatch becomes a
- * signature that fails to verify with no useful error.
- *
- * - `const` compiles the verification key into a per-user class as constants.
- *   Loading the key is free, so `__validate__` reads no storage and unpacks no
- *   key — paid for with one class declaration per user at onboarding, and no
- *   pinned class hash the wallet can check against.
- * - `storage` stores the packed key and takes it as constructor calldata. One
- *   shared, pinnable class; a large deployment.
- * - `hashkey` stores only a Poseidon hash of the packed key and has the key
- *   supplied with every signature, which it authenticates against that hash.
- *   One shared class and a cheap deployment, paid for in per-transaction
- *   calldata.
- *
- * What the wallet does for a paired phone is identical across all of them: the
- * device signs the same 32 bytes and returns the same signature, and the
- * extension verifies it against the same public key. They differ only in
- * address derivation, class-hash provenance, and how signature calldata is
- * assembled — see `ML_DSA_CLASSES` in `@mc-wallet/starknet/ml-dsa-classes`.
- */
-export type MlDsaKind = "const" | "storage" | "hashkey";
-
-/**
  * The contract families whose `__validate__` checks a Stark-curve signature.
  * Everything except `ml-dsa`, and the distinction is load-bearing rather than
  * cosmetic: an account of one of these families can be created from any source
@@ -69,12 +39,6 @@ export type StarkCurveContractType = Exclude<AccountContractType, "ml-dsa">;
  */
 export const isStarkCurveContractType = (value: unknown): value is StarkCurveContractType =>
   value === "argent" || value === "openzeppelin";
-
-/**
- * Validates the closed set of ML-DSA account contracts.
- */
-export const isMlDsaKind = (value: unknown): value is MlDsaKind =>
-  value === "const" || value === "storage" || value === "hashkey";
 
 /**
  * Pinned OpenZeppelin AccountUpgradeable 3.0 class understood by the account
@@ -111,7 +75,6 @@ export type AccountContractMetadata =
     }
   | {
       readonly accountContractType: "ml-dsa";
-      readonly mlDsaKind: MlDsaKind;
       readonly deploymentSalt?: never;
     }
   | {
@@ -140,19 +103,12 @@ export const hasValidContractMetadata = (
   }
   const deploymentSalt = value["deploymentSalt"];
   if (value["accountContractType"] === "ml-dsa") {
-    return (
-      deploymentSalt === undefined &&
-      isMlDsaKind(value["mlDsaKind"]) &&
-      isMobilePqDerivation(value["derivation"])
-    );
+    return deploymentSalt === undefined && isMobilePqDerivation(value["derivation"]);
   }
   if (value["accountContractType"] === "openzeppelin") {
-    return deploymentSalt === undefined && value["mlDsaKind"] === undefined;
+    return deploymentSalt === undefined;
   }
   if (!sameFelt(value["classHash"], ARGENT_ACCOUNT_CLASS_HASH)) {
-    return false;
-  }
-  if (value["mlDsaKind"] !== undefined) {
     return false;
   }
   if (!requireArgentSalt && deploymentSalt === undefined) {
@@ -181,9 +137,7 @@ export const canonicalContractMetadata = (
     return deploymentSalt === null ? null : { accountContractType: "argent", deploymentSalt };
   }
   if (value.accountContractType === "ml-dsa") {
-    return isMlDsaKind(value["mlDsaKind"])
-      ? { accountContractType: "ml-dsa", mlDsaKind: value["mlDsaKind"] }
-      : null;
+    return { accountContractType: "ml-dsa" };
   }
   return { accountContractType: "openzeppelin" };
 };

@@ -89,7 +89,6 @@ const mobilePqAccount: MobilePqAccountRef = {
     transport: { kind: "clipboard" },
   },
   id: account.id,
-  mlDsaKind: "const",
   networkId: account.networkId,
   publicKey: KEY_BOUNDARY_ML_DSA_PUBLIC_KEY,
   publicKeyX: account.publicKeyX,

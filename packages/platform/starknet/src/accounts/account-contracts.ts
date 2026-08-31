@@ -1,4 +1,12 @@
-/** Argent account ABI, deployment, and signature primitives pinned by release. */
+/**
+ * Account ABI, deployment, and signature primitives for every contract family
+ * the platform addresses: Argent and its multisig, OpenZeppelin, and ML-DSA.
+ *
+ * The ML-DSA pieces used to live in a table of their own, back when three
+ * candidate contracts disagreed about their constructor. One contract survived
+ * that comparison, so what is left is an address preimage and an identity felt —
+ * the same kind of per-family constant the other families keep here.
+ */
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@mc-wallet/core/json";
@@ -23,20 +31,40 @@ const ARGENT_UPSTREAM_COMMIT = "1352198956f36fb35fa544c4e46a3507a3ec20e3";
  */
 export type AccountContractFamily = AccountContractType | "argent-multisig";
 
-// Whether a fee estimate for this family must simulate WITH on-chain validation
-// enabled, which requires the Argent query account and its shape-correct dummy
-// signature. A full record rather than a predicate on purpose: adding a family
-// to AccountContractType fails to compile until it is answered here. The four
-// deployment/estimate paths used to ask `accountContractType !== "openzeppelin"`
-// instead, which TypeScript accepts unchanged when a family is added — so a new
-// family silently inherited the validated path, and answering `true` for one
-// whose `__validate__` cannot check the dummy signature fails every review.
-const VALIDATED_QUERY_ESTIMATE: Record<AccountContractFamily, boolean> = {
-  argent: true,
-  "argent-multisig": true,
-  "ml-dsa": false,
-  openzeppelin: false,
+/**
+ * How a fee estimate for this family has to be simulated.
+ *
+ * `argent-query` runs with validation enabled through the Argent query account,
+ * whose contract accepts a shape-correct dummy `(r, s)`. `ml-dsa-query` does the
+ * same thing for post-quantum accounts, whose contract runs its verifier under a
+ * query version and then tolerates the failing verdict, so the estimate carries
+ * the real cost of validating 1830 felts without asking a phone to sign. Only
+ * `skip-validate` leaves validation out, which is safe exactly where an
+ * account's `__validate__` is a rounding error against the transaction.
+ *
+ * An enum rather than the boolean this replaced: that boolean conflated "include
+ * validation" with "estimate through the Argent query account", and ML-DSA needs
+ * the first without the second.
+ */
+export type EstimateMode = "argent-query" | "ml-dsa-query" | "skip-validate";
+
+// A full record for the same reason as the tables below: adding a family fails
+// to compile until someone answers how its fees are estimated, rather than
+// inheriting an answer. Four deployment and estimate paths used to ask
+// `accountContractType !== "openzeppelin"` instead, which TypeScript accepts
+// unchanged when a family is added — so a new family silently inherited the
+// validated path.
+const ESTIMATE_MODE: Record<AccountContractFamily, EstimateMode> = {
+  argent: "argent-query",
+  "argent-multisig": "argent-query",
+  "ml-dsa": "ml-dsa-query",
+  openzeppelin: "skip-validate",
 };
+
+/**
+ * How this family's fee estimate must be simulated.
+ */
+export const estimateMode = (family: AccountContractFamily): EstimateMode => ESTIMATE_MODE[family];
 
 // Whether this family pins the class hash deployed at its address, so a submit
 // can refuse a contract it did not expect. A full record for the same reason as
@@ -57,12 +85,12 @@ export const pinsDeployedClass = (family: AccountContractFamily): boolean =>
   PINS_DEPLOYED_CLASS[family];
 
 /**
- * Whether this family's fee estimate runs with validation enabled through the
- * Argent query account. False means the estimate skips validation instead, which
- * is also what keeps a review from waking an external signing device.
+ * Whether this family's fee estimate includes on-chain validation. False means
+ * the estimate skips it, which is also what keeps a review from waking an
+ * external signing device.
  */
 export const usesValidatedQueryEstimate = (family: AccountContractFamily): boolean =>
-  VALIDATED_QUERY_ESTIMATE[family];
+  ESTIMATE_MODE[family] !== "skip-validate";
 
 /**
  * Pinned Argent Account 0.4 declaration from the update-2024Q2 release.
@@ -255,6 +283,22 @@ export const serializeArgentAccountSignature = (signature: StarkSignature): read
 ];
 
 /**
+ * The DEPLOY_ACCOUNT salt for every ML-DSA account. Zero, and single-sourced so
+ * the deployment path and the vault's address derivation cannot disagree:
+ * `accountDeployment` refuses any result that does not reproduce the stored
+ * address, so a wrong salt fails loudly rather than silently.
+ */
+export const ML_DSA_ADDRESS_SALT = "0x0";
+
+/**
+ * The counterfactual address of an ML-DSA account. `keyCommitment` is the whole
+ * constructor — see `mlDsaKeyCommitment` in ./ml-dsa-core, which derives it from
+ * the public key.
+ */
+export const mlDsaAccountAddress = (classHash: string, keyCommitment: string): string =>
+  hash.calculateContractAddressFromHash(ML_DSA_ADDRESS_SALT, classHash, [keyCommitment], 0);
+
+/**
  * Serializes one signer result for the selected single-signer account contract.
  */
 export const serializeAccountSignature = (
@@ -265,13 +309,12 @@ export const serializeAccountSignature = (
     return serializeArgentAccountSignature(signature);
   }
   if (accountContractType === "ml-dsa") {
-    // The layouts are known — 905 felts for `const` and `packed`, 1830 for
-    // `split`, which prefixes the 925-felt packed key — but assembling one needs
-    // the verification hints (w, M' and K') computed from the raw signature.
-    // That is shared-Rust-core work, and a guessed layout is rejected on chain
-    // with no useful error, so refuse until the hint math exists.
-    // TODO: Blocked
-    throw new WalletError("ML-DSA signature calldata assembly is not yet available");
+    // This seam takes a Stark `(r, s)`, and an ML-DSA account validates neither
+    // field. Its calldata is 1830 felts built from the raw 3309-byte signature
+    // and the transaction hash, which `mlDsaSignaturePayload` assembles and the
+    // account signer calls directly. Refusing here keeps a caller that reached
+    // the wrong seam from serializing two felts the contract cannot read.
+    throw new WalletError("ML-DSA signatures are not serialized through this seam");
   }
   const checked = checkedSignature(signature);
   return [checked.r, checked.s];

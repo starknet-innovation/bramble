@@ -2,18 +2,19 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import type { RpcProvider } from "starknet";
-import { usesValidatedQueryEstimate } from "../accounts/account-contracts";
+
 import { isCompatibleAccountDeployed } from "../transactions/deployment-compatibility";
 import { type FeeEstimate, reviewedSpendFor } from "./fee-bounds";
 import { estimateExactInvokeFee } from "./invoke-fee";
-import { argentQueryAccount, krustyAccount, withRpcFallback } from "./provider";
+import { estimatingAccountFor, krustyAccount, withRpcFallback } from "./provider";
 import type { InvokeInput } from "./rpc-submit";
 
 /**
  * Estimates exact invoke calls and optional proof without signing or broadcast.
- * OZ validation is skipped so a review never opens a Ledger prompt. Argent
- * uses a shape-correct query signature with validation enabled, so its account
- * overhead is included without reading private key material.
+ * OZ validation is skipped so a review never opens a Ledger prompt. Argent and
+ * ML-DSA both estimate with validation enabled through a query-version dummy
+ * signature, so their account overhead is included without reading private key
+ * material or waking a device — see `estimateMode`.
  */
 export const estimateInvokeFee = async (
   { account, calls, proof, rpcUrls, signHash, speed = "standard" }: InvokeInput,
@@ -25,10 +26,11 @@ export const estimateInvokeFee = async (
   return withRpcFallback(
     rpcUrls,
     async (provider) => {
-      const validatedQuery = usesValidatedQueryEstimate(account.accountContractType);
-      const starknetAccount = validatedQuery
-        ? argentQueryAccount(provider, account)
-        : krustyAccount(provider, account, signHash);
+      const { account: starknetAccount, skipValidate } = estimatingAccountFor(
+        provider,
+        account,
+        krustyAccount(provider, account, signHash),
+      );
       const deployed = await isCompatibleAccountDeployed(provider, account);
       const estimate = await estimateExactInvokeFee(
         starknetAccount,
@@ -36,7 +38,7 @@ export const estimateInvokeFee = async (
         calls,
         proof,
         deployed,
-        !validatedQuery,
+        skipValidate,
       );
       return reviewedSpendFor(estimate, speed);
     },

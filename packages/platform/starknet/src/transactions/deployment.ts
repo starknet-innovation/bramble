@@ -15,9 +15,10 @@ import {
   ARGENT_MULTISIG_CONTRACT,
   argentAccountConstructorCalldata,
   argentMultisigConstructorCalldata,
+  ML_DSA_ADDRESS_SALT,
   usesValidatedQueryEstimate,
 } from "../accounts/account-contracts";
-import { mlDsaConstructorCalldata } from "../accounts/ml-dsa-classes";
+import { mlDsaKeyCommitment } from "../accounts/ml-dsa-core";
 import {
   authorizedSpendFor,
   exceedsReviewedFee,
@@ -28,7 +29,7 @@ import {
   type AccountSignerOptions,
   type AggregateHashSigner,
   acceptedRpcWriteHash,
-  argentQueryAccount,
+  estimatingAccountFor,
   IndeterminateRpcWriteError,
   isTransportRpcError,
   krustyAccount,
@@ -106,17 +107,16 @@ const deploymentInputs = (
     };
   }
   if (account.accountContractType === "ml-dsa") {
-    // Per contract, not per family. The `const` contract takes no constructor
-    // arguments at all — its key is compiled into a per-user class — so its
-    // address derives from the class hash alone. The others need the packed key,
-    // and `mlDsaConstructorCalldata` refuses for them by name rather than
-    // deriving an address nobody holds the key for.
+    // The constructor is the Poseidon commitment to the packed key, derived from
+    // the stored public key rather than stored beside it: the contract itself
+    // recomputes the same value on chain from the key each transaction carries,
+    // so a second copy could only ever disagree.
     return {
-      // One class per user, so nothing else distinguishes two accounts of it;
-      // `accountDeployment` rejects the result unless it reproduces the stored
-      // address, so a wrong salt fails loudly rather than silently.
-      addressSalts: ["0x0"],
-      constructorCalldata: mlDsaConstructorCalldata(account.mlDsaKind, account.publicKey),
+      // Nothing but the class and the key distinguishes two accounts of this
+      // contract; `accountDeployment` rejects the result unless it reproduces
+      // the stored address, so a wrong salt fails loudly rather than silently.
+      addressSalts: [ML_DSA_ADDRESS_SALT],
+      constructorCalldata: [mlDsaKeyCommitment(account.publicKey)],
     };
   }
   return {
@@ -248,16 +248,18 @@ export const ensureAccountDeployed = async (
   }
   let submitted: DeploySubmission | null = null;
   try {
-    const validatedQuery = usesValidatedQueryEstimate(account.accountContractType);
-    const estimatingAccount = validatedQuery
-      ? argentQueryAccount(provider, account, signerOptions(account))
-      : starknetAccount;
+    const estimating = estimatingAccountFor(
+      provider,
+      account,
+      starknetAccount,
+      signerOptions(account),
+    );
     submitted = await deployAccountContract(
       starknetAccount,
       account,
       reviewedFee,
-      estimatingAccount,
-      !validatedQuery,
+      estimating.account,
+      estimating.skipValidate,
       isAuthorized,
       expectedTransactionHash,
     );
@@ -362,18 +364,20 @@ export const estimateAccountDeploymentFee = async (
         await isCompatibleAccountDeployed(provider, account);
       }
       const deployment = accountDeployment(account);
-      const validatedQuery = usesValidatedQueryEstimate(account.accountContractType);
-      const estimatingAccount = validatedQuery
-        ? argentQueryAccount(provider, account, signerOptions(account))
-        : makeAccount(provider, account, signHash, signerOptions(account));
-      const estimate = await estimatingAccount.estimateAccountDeployFee(
+      const estimating = estimatingAccountFor(
+        provider,
+        account,
+        makeAccount(provider, account, signHash, signerOptions(account)),
+        signerOptions(account),
+      );
+      const estimate = await estimating.account.estimateAccountDeployFee(
         {
           addressSalt: deployment.addressSalt,
           classHash: deployment.classHash,
           constructorCalldata: [...deployment.constructorCalldata],
           contractAddress: deployment.contractAddress,
         },
-        { skipValidate: !validatedQuery, tip: "0x0" },
+        { skipValidate: estimating.skipValidate, tip: "0x0" },
       );
       return reviewedSpendFor(estimate, "standard");
     },
@@ -411,15 +415,18 @@ export const submitAccountDeployment = async (
         authorizedSigner,
         signerOptions(account),
       );
-      const validatedQuery = usesValidatedQueryEstimate(account.accountContractType);
+      const estimating = estimatingAccountFor(
+        provider,
+        account,
+        starknetAccount,
+        signerOptions(account),
+      );
       const submitted = await deployAccountContract(
         starknetAccount,
         account,
         reviewedFee,
-        validatedQuery
-          ? argentQueryAccount(provider, account, signerOptions(account))
-          : starknetAccount,
-        !validatedQuery,
+        estimating.account,
+        estimating.skipValidate,
         isAuthorized,
         () => signedHash,
       );

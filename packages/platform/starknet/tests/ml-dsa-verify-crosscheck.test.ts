@@ -9,9 +9,16 @@
  * verifier's own `paddedFelt`/`hexToBytes` path. That is deliberate: a test that
  * encodes through the implementation cannot catch the implementation encoding
  * the wrong bytes.
+ *
+ * The keys and signatures come from `@noble/post-quantum`, a second FIPS 204
+ * implementation. That is the point of this file as distinct from the
+ * known-answer tests: those pin our verifier against the Cairo contract's
+ * vectors, and this one pins it against an independent signer over freshly
+ * generated keys. Noble is a test dependency only — nothing it provides is
+ * shipped.
  */
 import { describe, expect, test } from "bun:test";
-import { verifyMlDsa65Signature } from "@mc-wallet/starknet/ml-dsa-verify";
+import { verifyMlDsa65Signature } from "@mc-wallet/starknet/ml-dsa-core";
 import {
   ML_DSA_65_PUBLIC_KEY_BYTES,
   ML_DSA_65_SIGNATURE_BYTES,

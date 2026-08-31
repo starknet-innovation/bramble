@@ -76,7 +76,6 @@ const MOBILE_PQ_ADDRESS = "0x5234567890abcdef1234567890abcdef1234567890abcdef123
  */
 export const mobilePqAccount: MobilePqAccountRef = {
   accountContractType: "ml-dsa",
-  mlDsaKind: "const",
   address: MOBILE_PQ_ADDRESS,
   classHash: "0x222",
   derivation: { deviceId: "Pixel 9 Pro", kind: "mobile-pq", transport: { kind: "clipboard" } },

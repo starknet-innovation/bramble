@@ -23,11 +23,6 @@ export const EnrollCollect = checkpointStory(
   "mobile-pq-onboarding",
   "collect",
 );
-export const EnrollHashkey = checkpointStory(
-  "Add account · hashed-key contract",
-  "mobile-pq-onboarding",
-  "collect-hashkey",
-);
 export const EnrollVerifying = checkpointStory(
   "Add account · verifying device",
   "mobile-pq-onboarding",

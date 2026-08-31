@@ -8,9 +8,8 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import { mlDsaPublicKeyCommitment } from "@mc-wallet/starknet/ml-dsa-classes";
-import type { MlDsaKind, MobilePqAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { isMlDsaKind } from "@mc-wallet/wallet-model/accounts";
+import { mlDsaKeyCommitment } from "@mc-wallet/starknet/ml-dsa-core";
+import type { MobilePqAccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
   DEFAULT_NETWORK,
@@ -25,14 +24,13 @@ import { deriveAccountContractAddress } from "./account-contract";
 
 /**
  * What enrolling a paired post-quantum device needs. `classHash` is required and
- * never resolved for the caller: a `const` account's class is generated from its
- * own public key, so there is no network default to fall back on, and inheriting
+ * never resolved for the caller: the ML-DSA account contract has no pinned
+ * release yet, so there is no network default to fall back on, and inheriting
  * another family's class would derive an address nobody holds the key for.
  */
 export type MobilePqAccountInput = {
   readonly classHash: string;
   readonly deviceId: string;
-  readonly mlDsaKind: MlDsaKind;
   readonly networkId?: StarknetNetworkId;
   readonly publicKey: string;
 };
@@ -42,10 +40,10 @@ export type MobilePqAccountInput = {
  * encoded public key and the class it will run.
  *
  * Holds no signing material: the ML-DSA key never leaves the device, and
- * `publicKey` is its public half. Fails closed on a malformed key, an
- * unsupported contract, or a contract whose address the wallet cannot yet
- * derive — an address derived from the wrong preimage is unspendable, and
- * anything sent to it is lost.
+ * `publicKey` is its public half, and the address derives from it: the contract
+ * commits to the key's packed expansion, which `mlDsaKeyCommitment` computes.
+ * Fails closed on a malformed key — an address derived from the wrong preimage
+ * is unspendable, and anything sent to it is lost.
  */
 export const deriveMobilePqAccount = async (
   kms: KmsPort,
@@ -54,9 +52,6 @@ export const deriveMobilePqAccount = async (
   if (!isMlDsa65PublicKey(input.publicKey)) {
     throw new WalletError("Invalid post-quantum public key");
   }
-  if (!isMlDsaKind(input.mlDsaKind)) {
-    throw new WalletError("Invalid post-quantum account contract");
-  }
   if (input.deviceId.length === 0) {
     throw new WalletError("Invalid post-quantum device id");
   }
@@ -64,14 +59,17 @@ export const deriveMobilePqAccount = async (
   if (!isStarknetNetworkId(networkId)) {
     throw new WalletError("Invalid Starknet network");
   }
-  const publicKeyX = canonicalFelt(mlDsaPublicKeyCommitment(input.publicKey));
+  // The record's single identity felt is the same commitment the contract binds
+  // in its address, not a second hash of the key that happens to look like one.
+  // A 1952-byte key does not fit a felt, and the account model needs one for
+  // record identity and duplicate detection.
+  const publicKeyX = canonicalFelt(mlDsaKeyCommitment(input.publicKey));
   if (publicKeyX === null || !isNonZeroStarkFieldElement(publicKeyX)) {
-    throw new WalletError("Invalid post-quantum key commitment");
+    throw new WalletError("Invalid post-quantum key identity");
   }
   const { address, classHash } = await deriveAccountContractAddress(kms, {
     accountContractType: "ml-dsa",
     classHash: input.classHash,
-    mlDsaKind: input.mlDsaKind,
     networkId,
     publicKey: input.publicKey,
     publicKeyX,
@@ -86,7 +84,6 @@ export const deriveMobilePqAccount = async (
       transport: { kind: "clipboard" },
     },
     id: `${networkId}:${address}`,
-    mlDsaKind: input.mlDsaKind,
     networkId,
     publicKey: input.publicKey,
     publicKeyX,

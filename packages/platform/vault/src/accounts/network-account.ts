@@ -66,10 +66,12 @@ export const deriveNetworkAccount = async (
     return { account, signingKeys: [] };
   }
   if (isKeylessAccount(source)) {
-    // A paired-phone account is not projected: its address is recomputed from
-    // the enclave public key the device supplies at re-pair time, and this
-    // function has no device to ask. Refuse rather than fall through to the
-    // vault lookup, which would report a missing signing key instead.
+    // A paired-phone account is not projected. Its address derives from the
+    // account class declared on the target network, and the ML-DSA contract has
+    // no pinned class hash yet, so there is nothing to derive against there —
+    // enrolling on that network is the supported route. Refuse rather than fall
+    // through to the vault lookup, which would report a missing signing key
+    // instead and send the user looking for the wrong thing.
     // TODO: Blocked
     throw new WalletError("Post-quantum accounts cannot be projected onto another network");
   }

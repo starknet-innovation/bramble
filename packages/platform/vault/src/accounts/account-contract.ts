@@ -5,10 +5,11 @@ import { isRecord } from "@mc-wallet/core/json";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   argentAccountAddress,
+  mlDsaAccountAddress,
 } from "@mc-wallet/starknet/account-contracts";
-import { mlDsaAccountAddress } from "@mc-wallet/starknet/ml-dsa-classes";
+import { mlDsaKeyCommitment } from "@mc-wallet/starknet/ml-dsa-core";
 import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isAccountContractType, type MlDsaKind } from "@mc-wallet/wallet-model/accounts";
+import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -135,21 +136,16 @@ const resolvedDeploymentSalt = (
 // commitment to a class hash and constructor calldata, so deriving an
 // OpenZeppelin address here would return a plausible address nobody holds the
 // key for, stranding anything sent to it — exactly what the proof-of-possession
-// step in enrollment exists to prevent. `mlDsaAccountAddress` answers per
-// contract: `const` takes no constructor arguments, so its address derives from
-// the class hash alone, and the others refuse by name until the packed-key
-// expansion exists.
-const mlDsaContractAddress = (
-  input: { readonly mlDsaKind?: MlDsaKind; readonly publicKey?: string },
-  classHash: string,
-): string => {
-  if (input.mlDsaKind === undefined) {
-    throw new WalletError("ML-DSA account contract kind is required");
-  }
-  if (input.publicKey === undefined) {
+// step in enrollment exists to prevent.
+//
+// The constructor argument is derived, not stored: `mlDsaKeyCommitment` expands
+// the public key to its 925-felt packed form and hashes it, which is the same
+// value the contract recomputes on chain from the key each transaction carries.
+const mlDsaContractAddress = (publicKey: string | undefined, classHash: string): string => {
+  if (publicKey === undefined) {
     throw new WalletError("ML-DSA account public key is required");
   }
-  const address = mlDsaAccountAddress(input.mlDsaKind, classHash, input.publicKey);
+  const address = mlDsaAccountAddress(classHash, mlDsaKeyCommitment(publicKey));
   if (!isNonZeroStarkFieldElement(address)) {
     throw new WalletError("Invalid ML-DSA account address");
   }
@@ -166,8 +162,6 @@ export const deriveAccountContractAddress = async (
     readonly accountContractType: AccountContractType;
     readonly classHash?: string;
     readonly deploymentSalt?: string;
-    /** Which ML-DSA contract, required only for that family. */
-    readonly mlDsaKind?: MlDsaKind;
     readonly networkId: StarknetNetworkId;
     /** The encoded ML-DSA public key, required only for that family. */
     readonly publicKey?: string;
@@ -196,7 +190,7 @@ export const deriveAccountContractAddress = async (
     publicKeyX,
   );
   if (input.accountContractType === "ml-dsa") {
-    return { address: mlDsaContractAddress(input, classHash), classHash };
+    return { address: mlDsaContractAddress(input.publicKey, classHash), classHash };
   }
   const addressInput =
     input.accountContractType === "argent"

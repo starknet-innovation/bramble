@@ -9,7 +9,6 @@
  * sink the rest of the panel uses. No secret material crosses: an enrollment
  * carries a public key, a class hash, and a public signature.
  */
-import type { MlDsaKind } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { bindCopyButtons, renderFragment } from "../../shared/dom";
@@ -58,12 +57,6 @@ export const createMobilePqOnboardRuntime = (
     // The overlay lives outside the app root, so the panel's own copy binding
     // never reaches it; bind the challenge copy control against this mount.
     bindCopyButtons(mount);
-    mount
-      .querySelector<HTMLSelectElement>("[data-mobile-pq-kind]")
-      ?.addEventListener("change", (event) => {
-        const value = (event.target as HTMLSelectElement).value;
-        controller.chooseKind(value as MlDsaKind);
-      });
     mount
       .querySelector<HTMLButtonElement>("[data-mobile-pq-enroll-submit]")
       ?.addEventListener("click", (event) => {

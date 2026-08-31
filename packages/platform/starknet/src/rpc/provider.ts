@@ -20,7 +20,9 @@ export {
   type AggregateHashSigner,
   type ArgentMultisigAccountDescriptor,
   argentQueryAccount,
+  estimatingAccountFor,
   krustyAccount,
+  mlDsaQueryAccount,
   type StarknetAccountDescriptor,
 } from "./account-signer";
 export {

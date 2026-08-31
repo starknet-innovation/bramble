@@ -11,17 +11,11 @@
 import { escapeHtml } from "@mc-wallet/core/html";
 import { pill } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { selectField, textareaField, textField } from "@mc-wallet/ui-kit/fields";
+import { textareaField, textField } from "@mc-wallet/ui-kit/fields";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import type { MobilePqEnrollView } from "./onboard-session";
-
-const CONTRACT_OPTIONS = [
-  { label: "Per-user class (const)", value: "const" },
-  { label: "Key in storage (storage)", value: "storage" },
-  { label: "Hashed key (hashkey)", value: "hashkey" },
-] as const;
 
 const challengeBlock = (challenge: string): string => `
   <section class="ledger-hash-check">
@@ -38,18 +32,10 @@ const challengeBlock = (challenge: string): string => `
     <p class="ledger-hash-help">Sign exactly this value on your device, then paste the response below. It is single-use.</p>
   </section>`;
 
-const enrollForm = (view: MobilePqEnrollView): string => `
+// Static: every field is asked for on every enrollment, so the form has no
+// state of its own — the phase around it does.
+const enrollForm = `
   <form class="section" data-mobile-pq-enroll>
-    ${selectField({
-      attributes: { "data-mobile-pq-kind": true },
-      label: "Account contract",
-      name: "mlDsaKind",
-      options: CONTRACT_OPTIONS.map((option) => ({
-        label: option.label,
-        selected: option.value === view.mlDsaKind,
-        value: option.value,
-      })),
-    })}
     ${textField({
       attributes: { "data-mobile-pq-device": true },
       label: "Device name",
@@ -67,7 +53,7 @@ const enrollForm = (view: MobilePqEnrollView): string => `
     })}
     ${textField({
       attributes: { "data-mobile-pq-class-hash": true },
-      hint: "The declared class for this key. A per-user class is generated from the key itself.",
+      hint: "The declared `MlDsaHashKeyAccount` class on this network.",
       label: "Account class hash",
       name: "classHash",
       placeholder: "0x…",
@@ -105,10 +91,10 @@ const phaseBody = (view: MobilePqEnrollView): string => {
     return "<p>Checking that the device can sign for this key, then deriving the account address.</p>";
   }
   if (phase.kind === "error") {
-    return `<p class="form-error" role="alert">${escapeHtml(phase.message)}</p>
-      ${enrollForm(view)}`;
+    return `<p class="review-flag" role="alert">${icon("alert")}${escapeHtml(phase.message)}</p>
+      ${enrollForm}`;
   }
-  return enrollForm(view);
+  return enrollForm;
 };
 
 const phaseTitle: Readonly<Record<MobilePqEnrollView["phase"]["kind"], string>> = {

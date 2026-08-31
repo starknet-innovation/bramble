@@ -117,7 +117,7 @@ const phaseBody = (view: MobilePqSignView): string => {
     return "<p>Signature received. MC Wallet is verifying it against this account's enrolled key before it can be used.</p>";
   }
   if (phase.kind === "error") {
-    return `<p class="form-error" role="alert">${escapeHtml(phase.message)}</p>
+    return `<p class="review-flag" role="alert">${icon("alert")}${escapeHtml(phase.message)}</p>
       <div class="ledger-phase-actions">
         ${button({
           attributes: { "data-mobile-pq-retry": true },

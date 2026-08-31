@@ -5,7 +5,7 @@
  * absent queue, or a malformed payload settles nothing.
  */
 
-import { verifyMlDsa65Signature } from "@mc-wallet/starknet/ml-dsa-verify";
+import { verifyMlDsa65Signature } from "@mc-wallet/starknet/ml-dsa-core";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import { runUnlockedNetworkMutation } from "../runtime/active-network-mutation";
@@ -96,7 +96,6 @@ const handleAddMobilePqAccount: MobilePqOpsHandler = async (deps, message) => {
         store({
           classHash: input.classHash,
           deviceId: input.deviceId,
-          mlDsaKind: input.mlDsaKind,
           networkId: input.networkId,
           publicKey: input.publicKey,
           vaultPassphrase,
