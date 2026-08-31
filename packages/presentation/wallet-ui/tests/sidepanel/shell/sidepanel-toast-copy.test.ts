@@ -49,21 +49,24 @@ describe("error toast copy control", () => {
     ).toBe("Copy error details");
   });
 
-  test("shows the fee failure as one line and copies the complete RPC diagnostic", async () => {
+  test("shows compact copy and copies the complete RPC diagnostic", async () => {
     const copied: string[] = [];
     Object.defineProperty(window.navigator, "clipboard", {
       configurable: true,
       value: { writeText: async (value: string) => copied.push(value) },
     });
 
-    showToast("Not submitted — network fees changed.", "error", document, FEE_ERROR);
+    showToast(FEE_ERROR, "error", document);
     expect(toastEl().querySelector(".toast-text")?.textContent).toBe(
-      "Not submitted — network fees changed.",
+      "The RPC rejected this request. Copy the error details for the full response.",
     );
     toastEl().querySelector<HTMLButtonElement>(".toast-copy")?.click();
     await Promise.resolve();
 
     expect(copied).toEqual([FEE_ERROR]);
+    expect(toastEl().querySelector(".toast-copy")?.getAttribute("aria-label")).toBe(
+      "Error details copied",
+    );
   });
 
   test("renders in the document that owns the triggering control", () => {

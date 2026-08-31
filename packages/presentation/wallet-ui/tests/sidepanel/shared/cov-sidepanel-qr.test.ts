@@ -1,6 +1,6 @@
 /**
  * QR encoder boundary cases: an empty payload still yields the smallest valid
- * matrix, and an over-long payload (past version 6 capacity) is rejected rather
+ * matrix, and an over-long payload (past version 11 capacity) is rejected rather
  * than silently truncated.
  */
 import { describe, expect, test } from "bun:test";
@@ -16,9 +16,9 @@ describe("qrMatrix boundaries", () => {
   });
 
   test("rejects a payload that exceeds the largest supported version", () => {
-    // Version 6 tops out well under 200 bytes, so no spec is found and the
+    // Version 11-M tops out at 251 bytes, so no spec is found and the
     // encoder throws instead of producing a corrupt matrix.
-    expect(() => qrMatrix("z".repeat(200))).toThrow("QR payload too long");
+    expect(() => qrMatrix("z".repeat(252))).toThrow("QR payload too long");
   });
 
   test("qrSvg renders an accessible SVG for an empty payload", () => {

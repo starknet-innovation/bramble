@@ -37,6 +37,7 @@ describe("onboarding gate view", () => {
     expect(html).toContain('data-onboarding-step="method"');
     expect(html).toContain('data-onboarding-step="recovery"');
     expect(html).toContain('data-onboarding-step="password"');
+    expect(html).toContain('data-onboarding-step="recovery-accounts"');
     expect(html).toContain('data-onboarding-step="account-contract"');
     expect(html).toContain('data-onboarding-step="accounts"');
     expect(html).toMatch(/data-account-contract="openzeppelin"[^>]*aria-pressed="true"/);

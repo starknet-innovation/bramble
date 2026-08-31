@@ -3,10 +3,13 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  readDiscoverRecoveryAccountsInput,
   readPreviewAccountInput,
+  readRecoverAccountsInput,
   readValidateMnemonicInput,
 } from "../../../apps/extension/src/background/accounts/account-creation-inputs";
 import {
+  readActivityInput,
   readAddAccountInput,
   readAddInvokeTransactionInput,
   readApprovalIdInput,
@@ -33,6 +36,17 @@ describe("background message parsers", () => {
     expect(readTypeOnlyInput({ type: "wallet.status" }, "wallet.status")).toBe(true);
     expect(readTypeOnlyInput({ debug: true, type: "wallet.status" }, "wallet.status")).toBe(false);
     expect(readTypeOnlyInput({ type: "wallet.lock" }, "wallet.status")).toBe(false);
+  });
+
+  test("requires an explicit history refresh before a forced explorer scan", () => {
+    expect(readActivityInput({ forceHistory: true, type: "wallet.activity" })).toBeNull();
+    expect(
+      readActivityInput({ forceHistory: true, refreshHistory: true, type: "wallet.activity" }),
+    ).toEqual({
+      cached: false,
+      forceHistory: true,
+      refreshHistory: true,
+    });
   });
 
   test("reject extra fields in runtime messages", () => {
@@ -385,6 +399,41 @@ describe("background message parsers", () => {
       readValidateMnemonicInput({ mnemonic: "  ", type: "wallet.validateMnemonic" }),
     ).toBeNull();
     expect(readValidateMnemonicInput({ mnemonic, type: "wallet.previewAccount" })).toBeNull();
+  });
+
+  test("accepts only bounded exact recovery discovery and selection payloads", () => {
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+    expect(
+      readDiscoverRecoveryAccountsInput({
+        manualIndex: 21,
+        mnemonic,
+        networkId: "SN_MAIN",
+        type: "wallet.discoverRecoveryAccounts",
+      }),
+    ).toEqual({ manualIndex: 21, mnemonic, networkId: "SN_MAIN" });
+    expect(
+      readDiscoverRecoveryAccountsInput({
+        manualIndex: -1,
+        mnemonic,
+        networkId: "SN_MAIN",
+        type: "wallet.discoverRecoveryAccounts",
+      }),
+    ).toBeNull();
+    const recovery = {
+      mnemonic,
+      networkId: "SN_MAIN",
+      selections: [{ accountContractType: "argent", accountIndex: 3 }],
+      type: "wallet.recoverAccounts",
+      vaultPassphrase,
+    } as const;
+    expect(readRecoverAccountsInput(recovery)).toEqual({
+      mnemonic,
+      networkId: "SN_MAIN",
+      selections: recovery.selections,
+      vaultPassphrase,
+    });
+    expect(readRecoverAccountsInput({ ...recovery, debug: true })).toBeNull();
+    expect(readRecoverAccountsInput({ ...recovery, selections: [] })).toBeNull();
   });
 
   test("reads and rejects origin-revocation messages", () => {

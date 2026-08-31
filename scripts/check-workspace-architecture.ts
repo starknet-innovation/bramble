@@ -353,7 +353,6 @@ for (const workspace of workspaces) {
         const runtimeFile = specifier.slice(1);
         if (
           workspace.name !== "@mc-wallet/extension" ||
-          !runtimeFile.startsWith("vendor/") ||
           !PINNED_RUNTIME_FILES.includes(runtimeFile as (typeof PINNED_RUNTIME_FILES)[number])
         ) {
           failures.push(`${file} imports unpinned extension runtime file ${specifier}`);

@@ -18,6 +18,7 @@ import { actionTile, explorerTile } from "../../shell/wallet-shell";
 import { nftImageMarkup, visibleNftItems } from "../collectibles/nft-views";
 import { visibleHomeBalances } from "../portfolio/home-tabs";
 import { balanceRow } from "../portfolio/token-row";
+import { type CompactIntentList, compactIntentListView } from "./multisig-intent-list";
 
 /**
  * Public portfolio data resolved for one watched multisig address.
@@ -122,19 +123,19 @@ const collectiblesPanel = (
 /**
  * Renders the familiar wallet-home hierarchy for one multisig: portfolio,
  * multisig-specific primary actions, then Tokens, Collectibles, and intents.
- * `trustedIntentsMarkup` must be composed by the wallet's intent renderer,
- * which escapes all provider- and user-controlled values before this boundary.
+ * Intent rows cross this boundary as structured data and are escaped by the
+ * wallet's intent renderer here.
  */
 export const multisigPortfolio = (input: {
   readonly authorityAvailable: boolean;
   readonly authorityMessage?: string;
-  readonly canSign: boolean;
+  readonly canPropose: boolean;
   readonly data: MultisigPortfolioData;
   readonly deployed?: boolean | null;
   readonly deploymentPending?: boolean;
   readonly openCount: number;
   readonly preferences: WalletPreferences | null;
-  readonly trustedIntentsMarkup: string;
+  readonly intentList: CompactIntentList;
   readonly record: ArgentMultisigRecord;
   readonly signerKnown: boolean;
 }): string => {
@@ -145,7 +146,7 @@ export const multisigPortfolio = (input: {
   ${portfolioHero(input.record, input.preferences, input.data)}
   <section class="home-actions multisig-primary-actions" aria-label="Multisig actions">
     <div class="action-row">
-      ${input.deployed === false && !input.deploymentPending ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Send", "send", input.canSign)}
+      ${input.deployed === false && !input.deploymentPending ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Send", "send", input.canPropose)}
       ${actionTile("multisig-receive", "Receive", "qrCode", true)}
       ${actionTile("multisig-signers", "Signers", "users", true)}
       ${explorerTile(explorerAccountUrl(input.record.networkId, input.record.address))}
@@ -161,7 +162,7 @@ export const multisigPortfolio = (input: {
             ? `<p class="hint multisig-action-note">${escapeHtml(input.authorityMessage)}</p>`
             : !input.authorityAvailable
               ? '<p class="hint multisig-action-note">Deployment and signer authority could not be verified. Retry when network access is restored.</p>'
-              : input.canSign
+              : input.canPropose
                 ? ""
                 : input.signerKnown
                   ? `<div class="multisig-action-recovery"><p class="hint multisig-action-note"><strong>Signer found.</strong> Add the remaining public signer keys before sending.</p>${button({ attributes: { "data-view": "multisig-signers" }, label: "Complete signer setup", size: "small", variant: "secondary" })}</div>`
@@ -178,6 +179,12 @@ export const multisigPortfolio = (input: {
     </div>
     <div id="multisig-panel-assets" data-ms-home-panel="assets" role="tabpanel" aria-labelledby="multisig-tab-assets" tabindex="0">${tokenPanel(input.preferences, input.data)}</div>
     <div id="multisig-panel-collectibles" data-ms-home-panel="collectibles" role="tabpanel" aria-labelledby="multisig-tab-collectibles" tabindex="0" hidden>${collectiblesPanel(input.record, input.preferences, input.data)}</div>
-    <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>${input.trustedIntentsMarkup}</div>
+    <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>
+      <div class="multisig-intent-sync">
+        <div><strong>Co-signer updates</strong><span>Check securely for intents and signatures shared by known contacts.</span></div>
+        ${button({ attributes: { "data-ms-sync-intents": true }, icon: "refresh", label: "Check for updates", size: "small", variant: "secondary" })}
+      </div>
+      ${compactIntentListView(input.intentList.heading, input.intentList.items, input.intentList.emptyMessage)}
+    </div>
   </section>`;
 };

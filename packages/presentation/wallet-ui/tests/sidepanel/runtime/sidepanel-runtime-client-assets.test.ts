@@ -295,6 +295,12 @@ describe("balances", () => {
     });
   });
 
+  test("loadBalances requests a forced reconciliation only after an action", async () => {
+    const { sent, wallet } = captureRuntime(balancesResponse);
+    await wallet.loadBalances(false, true);
+    expect(sent[0]).toEqual({ refresh: true, type: "wallet.getBalances" });
+  });
+
   test("loadBalances surfaces the error text from an error envelope", async () => {
     expect(await runtimeReturning({ error: "rpc down" }).loadBalances()).toEqual({
       error: "rpc down",

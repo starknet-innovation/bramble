@@ -142,6 +142,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("Submit transaction");
     expect(html).not.toContain('data-ms-sign="');
     expect(html).toContain("Co-signer handoff");
+    expect(html).toContain("Share securely with co-signers");
     expect(html).toContain("Copy full intent package");
     expect(html).toContain("Individual signature fragments");
     expect(html).toContain("1 of 1");

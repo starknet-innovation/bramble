@@ -2,7 +2,7 @@
  * MCW-V09-107: a preferences backup file is untrusted input, so restoring one
  * must not repoint the wallet's trust configuration. These checks pin the
  * import scope: organisational fields are reapplied, while token metadata, RPC
- * overrides, custom networks, the NFT indexer, watched NFTs, the STRK20
+ * overrides, custom networks, the NFT indexer, Nostr relay, watched NFTs, the STRK20
  * service routing, the approval surface, and the saved contacts behind the
  * address-poisoning guard keep their stored values. They also pin that a
  * restore stays the recovery path out of an unreadable stored record.
@@ -20,8 +20,10 @@ import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
 const HOSTILE_RPC = "https://attacker.example/rpc";
 const HOSTILE_INDEXER = "https://attacker.example/indexer";
 const HOSTILE_PROVER = "https://attacker.example/prover";
+const HOSTILE_NOSTR_RELAY = "wss://attacker.example";
 const MINE_RPC = "https://rpc.example/mine";
 const MINE_INDEXER = "https://indexer.example/mine";
+const MINE_NOSTR_RELAY = "wss://relay.example/mine";
 
 // A structurally valid backup — it passes `isWalletPreferences` — whose every
 // field an attacker would want to control is set to an attacker value.
@@ -46,6 +48,7 @@ const hostileBackup = (): WalletPreferences => ({
   hiddenTokens: [`SN_MAIN:STRK:${STRK_TOKEN_ADDRESS}`],
   nftIndexerUrl: HOSTILE_INDEXER,
   nfts: [{ contract: "0x7", id: "SN_MAIN:0x7:1", networkId: "SN_MAIN", tokenId: "1" }],
+  nostrRelayUrl: HOSTILE_NOSTR_RELAY,
   rpcOverrides: { SN_MAIN: HOSTILE_RPC },
   strk20Networks: {
     SN_MAIN: {
@@ -78,6 +81,7 @@ const seededStore = async (): Promise<ReturnType<typeof createPreferencesStore>>
   const preferences = createPreferencesStore({ store: createMemoryStore() });
   await preferences.setRpcOverride({ networkId: "SN_MAIN", rpcUrl: MINE_RPC });
   await preferences.setNftIndexerUrl({ url: MINE_INDEXER });
+  await preferences.setNostrRelayUrl({ relayUrl: MINE_NOSTR_RELAY });
   await preferences.addCustomNetwork({
     chainId: "0x534e5f474f45524c49",
     id: "mine",
@@ -99,6 +103,7 @@ describe("importPreferences trust scope", () => {
     expect(next.tokens).toEqual(before.tokens);
     expect(next.rpcOverrides).toEqual({ SN_MAIN: MINE_RPC });
     expect(next.nftIndexerUrl).toBe(MINE_INDEXER);
+    expect(next.nostrRelayUrl).toBe(MINE_NOSTR_RELAY);
     expect(next.customNetworks).toEqual(before.customNetworks);
     expect(next.nfts).toEqual(before.nfts);
     expect(next.strk20Networks).toEqual(before.strk20Networks);

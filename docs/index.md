@@ -25,6 +25,9 @@ boundaries, release controls, and security posture.
   target repository, migration sequence, and completion gates for the modular-monolith refactor.
 - [Wallet store architecture](wallet-store/) maps every persistent and session store, account
   scoping, Chrome update migration, and optional Ledger viewing-key custody.
+- [Production operations](operations/) defines gateway monitoring, privacy-safe support diagnostics,
+  incident ownership, response targets, hotfix handling, and public-launch gates.
+- [Observed UX validation](ux-validation/) defines the external task protocol and release evidence.
 - [STRK20 privacy integration](strk20-privacy/) documents the pinned SDK, service contract,
   privileged data flow, failure boundaries, and deployment inputs.
 - [Security audit](security-audit/) tracks the directory-by-directory review of the current

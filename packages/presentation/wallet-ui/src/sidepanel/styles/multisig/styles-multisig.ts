@@ -437,6 +437,10 @@ export const MULTISIG_STYLES = `
   .multisig-portfolio-tabs .tab-set { gap: ${SPACE.lg}; }
   .multisig-portfolio-tabs [data-ms-home-panel] { min-width: 0; }
   .multisig-intent-stack { display: grid; gap: ${SPACE.md}; }
+  .multisig-intent-sync { align-items: center; border-bottom: 1px solid var(--mc-hairline); display: flex; gap: ${SPACE.md}; justify-content: space-between; margin-bottom: ${SPACE.md}; padding-bottom: ${SPACE.md}; }
+  .multisig-intent-sync > div { display: grid; gap: ${SPACE.xs}; min-width: 0; }
+  .multisig-intent-sync span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .multisig-intent-sync button { flex: 0 0 auto; }
   .multisig-intent { align-items: stretch; display: grid; gap: ${SPACE.md}; min-width: 0; overflow: hidden; }
   .multisig-intent .decision-head .pill { margin-left: auto; }
   .multisig-intent .decision-head h2, .multisig-intent code { overflow-wrap: anywhere; }

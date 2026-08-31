@@ -8,24 +8,17 @@ import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet
 import {
   addAccountChooser,
   bindOnboarding,
-  bindUnlock,
   createSidepanelRuntime,
   ledgerAccountPicker,
   ledgerConnectPrompt,
   ledgerDevicePicker,
   ledgerOnboardError,
   ledgerReadingPrompt,
-  locked,
   onboarding,
   onboardingComplete,
 } from "@mc-wallet/wallet-ui/lab";
-import {
-  argentSoftwareAccount,
-  invokeApproval,
-  ledgerAccount,
-  softwareAccount,
-} from "../fixtures/fixtures";
-import { emptyWalletStatus, lockedStatus } from "../fixtures/journey-fixtures";
+import { argentSoftwareAccount, ledgerAccount, softwareAccount } from "../fixtures/fixtures";
+import { emptyWalletStatus } from "../fixtures/journey-fixtures";
 import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, WalletScenario } from "../runtime/types";
 
@@ -43,6 +36,20 @@ const onboardingWallet = (context: FrameContext) =>
       }
       if (type === "wallet.validateMnemonic") {
         return { ok: true, valid: true };
+      }
+      if (type === "wallet.discoverRecoveryAccounts") {
+        return {
+          candidates: [
+            { account: softwareAccount, deployed: true, funded: false },
+            { account: argentSoftwareAccount, deployed: false, funded: true },
+          ],
+          complete: true,
+          nextIndex: 20,
+          ok: true,
+        };
+      }
+      if (type === "wallet.recoverAccounts") {
+        return { accounts: [softwareAccount, argentSoftwareAccount], ok: true };
       }
       if (type === "wallet.previewAccount" || type === "wallet.createAccount") {
         const requested =
@@ -106,11 +113,25 @@ const selectSoftwareContract = (context: FrameContext, contract: AccountContract
 const prepareSoftwareContract =
   (contract: AccountContractType) =>
   async (context: FrameContext): Promise<void> => {
-    await preparePassword(context);
+    await prepareGenerated(true, true)(context);
+    press(context, "#verify-continue");
     updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
     updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
     press(context, "#choose-account-contract-button");
     selectSoftwareContract(context, contract);
+  };
+
+const prepareRecoveryAccounts =
+  (acknowledged: boolean) =>
+  async (context: FrameContext): Promise<void> => {
+    await preparePassword(context);
+    updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
+    updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
+    press(context, "#choose-account-contract-button");
+    await nextTurn();
+    if (acknowledged) {
+      context.app.querySelector<HTMLInputElement>('input[name="recoveryMainnetAck"]')?.click();
+    }
   };
 
 const prepareAccountSelection =
@@ -158,17 +179,6 @@ const prepareLedger = (context: FrameContext): void => {
   press(context, "#ledger-contract-continue");
 };
 
-const prepareUnlockFailure = async (context: FrameContext): Promise<void> => {
-  bindUnlock({
-    app: context.app,
-    render: async () => undefined,
-    wallet: onboardingWallet(context),
-  });
-  updateForm(context, 'input[name="vaultPassphrase"]', "incorrect-fixture");
-  context.app.querySelector<HTMLFormElement>("#unlock-form")?.requestSubmit();
-  await nextTurn();
-};
-
 export const onboardingScenario: WalletScenario = {
   checkpoints: [
     {
@@ -206,10 +216,27 @@ export const onboardingScenario: WalletScenario = {
     },
     {
       content: () => onboarding(emptyWalletStatus),
+      id: "recovery-accounts",
+      label: "Review discovered accounts",
+      narrative:
+        "Both supported account contracts are searched together; deployed and funded accounts are selected automatically.",
+      prepare: prepareRecoveryAccounts(false),
+      state: { accountContracts: 2, discovered: 2, scan: "complete" },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "recovery-accounts-confirmed",
+      label: "Confirm recovered accounts",
+      narrative:
+        "The user confirms the exact discovered set before one atomic encrypted-vault restoration.",
+      prepare: prepareRecoveryAccounts(true),
+      state: { mainnetAcknowledged: true, selected: 2 },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
       id: "account-contract-openzeppelin",
       label: "Choose OpenZeppelin account",
-      narrative:
-        "OpenZeppelin is the recommended default while the recovery and signing model stays unchanged.",
+      narrative: "New-wallet setup recommends OpenZeppelin while keeping Argent available.",
       prepare: prepareSoftwareContract("openzeppelin"),
       state: { accountContract: "openzeppelin", recommended: true },
     },
@@ -311,39 +338,6 @@ export const onboardingScenario: WalletScenario = {
   id: "onboarding",
   surface: "fullpage",
   title: "Full-screen onboarding",
-};
-
-export const unlockScenario: WalletScenario = {
-  checkpoints: [
-    {
-      content: () => locked(lockedStatus),
-      id: "locked",
-      label: "Returning wallet locked",
-      narrative: "The returning journey focuses on one re-authentication action.",
-      state: { gate: "locked", pending: 0 },
-    },
-    {
-      content: () => locked(lockedStatus, [invokeApproval]),
-      id: "locked-request",
-      label: "Request waiting at unlock",
-      narrative:
-        "A parked request stays visible before authentication without exposing transaction details.",
-      state: { gate: "locked", pending: 1 },
-    },
-    {
-      content: () => locked(lockedStatus),
-      id: "unlock-failed",
-      label: "Unlock failed",
-      narrative:
-        "The real unlock binding returns a specific inline recovery message and stays locked.",
-      prepare: prepareUnlockFailure,
-      state: { gate: "locked", result: "error" },
-    },
-  ],
-  description: "Returning-wallet unlock, pending-request visibility, and authentication failure.",
-  id: "unlock",
-  surface: "sidepanel",
-  title: "Returning wallet unlock",
 };
 
 const ledgerCandidate = (

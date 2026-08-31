@@ -2,6 +2,7 @@
  * Indexed holdings and transfer adapter checks for wallet-facing data.
  */
 import { describe, expect, test } from "bun:test";
+import { resetRpcEndpointCooldownsForTests } from "@mc-wallet/starknet/provider";
 import { createStarkscanClient } from "@mc-wallet/transactions/starkscan";
 import {
   createRpcFirstBalances,
@@ -191,6 +192,7 @@ describe("Starkscan wallet adapters", () => {
       (await createRpcFirstBalances({ client: complete, readPreferences })(input, offlineRpc))[0]
         ?.balance,
     ).toBe("0");
+    resetRpcEndpointCooldownsForTests();
 
     let rpcBalanceReads = 0;
     const unavailable = createStarkscanClient({
@@ -223,5 +225,54 @@ describe("Starkscan wallet adapters", () => {
     expect(
       await createRpcFirstHistory({ client: unavailable, readPreferences })(historyInput),
     ).toEqual([]);
+  });
+
+  test("uses the configured explorer API only after an RPC transport outage", async () => {
+    resetRpcEndpointCooldownsForTests();
+    const input = {
+      accountAddress: ACCOUNT,
+      rpcUrls: ["https://custom-rpc.example"],
+      tokens: [strk],
+    } as const;
+    const preferences: ExplorerLanePreferences = {
+      explorerApiUrls: { SN_MAIN: "https://explorer.example/v1" },
+      explorerFallback: { SN_MAIN: true },
+      rpcOverrides: { SN_MAIN: "https://custom-rpc.example" },
+    };
+    const selected = clientFor({
+      chainId: "SN_MAIN",
+      completeness: {
+        cap: null,
+        capped: false,
+        complete: true,
+        exact: true,
+        lagBlocks: 0,
+        reason: "Complete snapshot.",
+        reasonCode: "complete",
+        truncated: false,
+      },
+      exact: true,
+      items: [],
+      ownerAddress: ACCOUNT,
+      truncated: false,
+    });
+    const selections: string[] = [];
+    const balances = await createRpcFirstBalances({
+      client: clientFor({}),
+      clientFor: (networkId, current) => {
+        selections.push(`${networkId}:${current.explorerApiUrls?.[networkId]}`);
+        return selected;
+      },
+      readPreferences: async () => preferences,
+    })(input, () => {
+      return {
+        async callContract() {
+          throw new Error("node unreachable");
+        },
+      } as unknown as RpcProvider;
+    });
+
+    expect(balances[0]?.balance).toBe("0");
+    expect(selections).toEqual(["SN_MAIN:https://explorer.example/v1"]);
   });
 });

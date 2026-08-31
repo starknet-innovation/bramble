@@ -1,7 +1,4 @@
-/**
- * Typed extension message handling for the background service worker.
- */
-
+/** Typed extension message handling for the background service worker. */
 import { activeAccountSecrets } from "@mc-wallet/vault/service";
 import { DEFAULT_NETWORK } from "@mc-wallet/wallet-model/networks";
 import { readCreateAccountInput } from "../accounts/account-creation-inputs";
@@ -12,6 +9,7 @@ import { handleApprovalDecision } from "../approvals/approval-decisions";
 import { enrichApprovals } from "../approvals/approval-insights";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { handleLedgerOps } from "../ledger/ledger-ops";
+import { handleMultisigCoordinationOps } from "../multisig/multisig-coordination-ops";
 import { handleMultisigOps, type MultisigOpsDeps } from "../multisig/multisig-ops";
 import { handleMultisigTxOps } from "../multisig/multisig-tx-ops";
 import { handleOnboardingOps } from "../onboarding/onboarding-ops";
@@ -38,6 +36,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import { createUnlockSession } from "../runtime/session";
 import { handleOriginOps } from "../settings/origins-ops";
 import { handlePreferenceOps } from "../settings/preference-ops";
+import { supportDiagnosticsResponse } from "../support/diagnostics";
 import { handleChainOps } from "../transactions/chain-ops";
 import { handleDeclareOps } from "../transactions/declare-ops";
 import { handleSwapOps } from "../transactions/swap-ops";
@@ -66,7 +65,6 @@ type RouterHandler = (
   message: unknown,
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse | null>;
-
 const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   activeStateCoordinator: ctx.activeStateCoordinator,
   activity: ctx.activity,
@@ -81,11 +79,13 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   session: ctx.session,
   wallet: ctx.wallet,
 });
-
 const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...buildOpsDeps(ctx),
   multisigDeploymentReviews: ctx.multisigDeploymentReviews,
   multisigStore: ctx.multisigStore,
+  nostrCoordinationStore: ctx.nostrCoordinationStore,
+  ...(ctx.nostrRelayTransport ? { nostrRelayTransport: ctx.nostrRelayTransport } : {}),
+  now: ctx.now,
 });
 
 const MULTISIG_ACTIVE_STATE_MESSAGES = new Set([
@@ -106,7 +106,8 @@ const handleMultisig: RouterHandler = async (ctx, messageType, message) => {
     const deps = buildMultisigDeps(ctx);
     return (
       (await handleMultisigOps(deps, messageType, message)) ??
-      handleMultisigTxOps(deps, messageType, message)
+      (await handleMultisigTxOps(deps, messageType, message)) ??
+      handleMultisigCoordinationOps(deps, messageType, message)
     );
   };
   return MULTISIG_ACTIVE_STATE_MESSAGES.has(messageType)
@@ -329,6 +330,13 @@ const handleStatus: RouterHandler = async (ctx, messageType, message) => {
   return statusResponse(ctx.wallet, ctx.session, ctx.preferencesStore);
 };
 
+const handleDiagnostics: RouterHandler = async (ctx, messageType, message) => {
+  if (messageType !== "wallet.diagnostics") return null;
+  return readTypeOnlyInput(message, "wallet.diagnostics")
+    ? supportDiagnosticsResponse(ctx.wallet, ctx.session, ctx.preferencesStore)
+    : { error: "invalid diagnostics request" };
+};
+
 const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.unlock") {
     return null;
@@ -425,9 +433,10 @@ const HANDLERS: readonly RouterHandler[] = [
   handleImportAccount,
   (ctx, messageType, message) => handleApprovalDecision(ctx, messageType, message),
   handleGenerateMnemonic,
-  (ctx, messageType, message) => handleOnboardingOps(ctx.wallet, messageType, message),
+  (ctx, messageType, message) => handleOnboardingOps(ctx, messageType, message),
   handleRevealSecrets,
   handleGetGrantedAccounts,
+  handleDiagnostics,
   handlePendingApprovals,
   handleRequestAccounts,
   handleSetActiveAccount,
@@ -472,15 +481,12 @@ const runtimeErrorResponse = (
   error: revealError && error instanceof Error ? error.message : "wallet request failed",
 });
 
-/**
- * Creates the trusted background runtime message dispatcher.
- */
+/** Creates the trusted background runtime message dispatcher. */
 export const createMessageHandler = (
   wallet: WalletStatusReader,
   extensionId: string,
   options: MessageHandlerOptions = {},
 ) => {
-  // Resolve the session before the queue so the queue can read its generation.
   const session = options.session ?? createUnlockSession();
   const ctx = routerContext(wallet, extensionId, options, session);
   return async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {

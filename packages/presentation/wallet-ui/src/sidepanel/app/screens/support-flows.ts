@@ -7,7 +7,7 @@ import { escapeHtml } from "@mc-wallet/core/html";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
+import { textareaField, textField } from "@mc-wallet/ui-kit/fields";
 import type { ConnectedSite, WalletStatus } from "../../../popup/responses/responses";
 import { accountLabel, copyButton, flowHeader, flowScreen } from "../../shared/parts";
 
@@ -62,6 +62,16 @@ export const addressBookFlow = (
       `<section class="section">
         <form id="address-form">
           <input name="networkId" type="hidden" value="${escapeHtml(status.networkId)}" />
+          ${textareaField({
+            autocomplete: "off",
+            className: "mono",
+            hint: "Paste a shared MC Wallet card to fill the address, signer key, and coordination identity together.",
+            label: "Wallet card (optional)",
+            name: "walletCard",
+            placeholder: "mcw:contact:1:…",
+            rows: 3,
+            spellcheck: false,
+          })}
           ${textField({
             autocomplete: "off",
             label: "Label",
@@ -75,6 +85,15 @@ export const addressBookFlow = (
             name: "address",
             placeholder: "0x…",
             required: true,
+            spellcheck: false,
+          })}
+          ${textField({
+            autocomplete: "off",
+            className: "mono",
+            hint: "Authenticates encrypted multisig intent handoffs from this contact.",
+            label: "Coordination public key (optional)",
+            name: "nostrPublicKey",
+            placeholder: "64-character Nostr public key",
             spellcheck: false,
           })}
           ${textField({
@@ -108,9 +127,11 @@ export const addressBookFlow = (
                       <strong>${escapeHtml(entry.label)}</strong>
                       <code>${escapeHtml(accountLabel(entry.address))}</code>
                       ${entry.publicKeyX ? `<span class="hint">Signer key ${escapeHtml(accountLabel(entry.publicKeyX))}</span>` : ""}
+                      ${entry.nostrPublicKey ? `<span class="hint">Secure coordination ready</span>` : ""}
                     </div>
                     ${copyButton(entry.address, `Copy ${entry.label}`)}
                     ${entry.publicKeyX ? copyButton(entry.publicKeyX, `Copy ${entry.label} signer public key`) : ""}
+                    ${entry.nostrPublicKey ? copyButton(entry.nostrPublicKey, `Copy ${entry.label} coordination public key`) : ""}
                     ${iconButton({
                       attributes: { "data-remove-address": entry.id },
                       icon: "x",

@@ -463,9 +463,9 @@ describe("bindMultisigs frozen-intent forms", () => {
     const app = mount(
       multisigPortfolio({
         authorityAvailable: true,
-        canSign: true,
+        canPropose: true,
         data: EMPTY_MULTISIG_PORTFOLIO,
-        trustedIntentsMarkup: "<p>Intent panel</p>",
+        intentList: { emptyMessage: "No intents", heading: "Intents", items: [] },
         openCount: '" autofocus onfocus="alert(1)' as unknown as number,
         preferences: null,
         record: fixture.record,

@@ -10,7 +10,10 @@ import {
   argentAccountAddress,
   argentMultisigAddress,
 } from "@mc-wallet/starknet/account-contracts";
-import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
+import {
+  resetRpcEndpointCooldownsForTests,
+  WRONG_CHAIN_MESSAGE,
+} from "@mc-wallet/starknet/provider";
 import {
   accountDeployment,
   buildErc20TransferCall,
@@ -159,7 +162,7 @@ describe("starknet RPC helpers", () => {
     const calls: string[] = [];
     await expect(
       withRpcFallback(
-        ["https://one.example", "https://two.example"],
+        ["https://semantic-one.example", "https://semantic-two.example"],
         async (provider) => {
           calls.push(String(provider));
           throw semantic;
@@ -167,7 +170,44 @@ describe("starknet RPC helpers", () => {
         (nodeUrl) => nodeUrl as unknown as import("starknet").RpcProvider,
       ),
     ).rejects.toBe(semantic);
-    expect(calls).toEqual(["https://one.example"]);
+    expect(calls).toEqual(["https://semantic-one.example"]);
+  });
+
+  test("cools down a failed read endpoint from the time it fails", async () => {
+    let currentTime = 1_000;
+    let delayedFailure = true;
+    const attempts: string[] = [];
+    const urls = ["https://cooldown-one.example", "https://cooldown-two.example"] as const;
+    const read = () =>
+      withRpcFallback(
+        urls,
+        async (provider) => {
+          const url = String(provider);
+          attempts.push(url);
+          if (url === urls[0]) {
+            if (delayedFailure) {
+              currentTime += 20_000;
+              delayedFailure = false;
+            }
+            throw new Error("offline");
+          }
+          return "ok";
+        },
+        (nodeUrl) => nodeUrl as unknown as import("starknet").RpcProvider,
+        () => currentTime,
+      );
+
+    await expect(read()).resolves.toBe("ok");
+    await expect(read()).resolves.toBe("ok");
+    expect(attempts).toEqual([urls[0], urls[1], urls[1]]);
+
+    currentTime += 29_999;
+    await expect(read()).resolves.toBe("ok");
+    expect(attempts.at(-1)).toBe(urls[1]);
+
+    currentTime += 1;
+    await expect(read()).resolves.toBe("ok");
+    expect(attempts.slice(-2)).toEqual([...urls]);
   });
 
   test("does not classify a callback preflight failure as an ambiguous broadcast", async () => {
@@ -206,6 +246,39 @@ describe("starknet RPC helpers", () => {
     expect(writes).toEqual(["https://selected.example"]);
   });
 
+  test("shares failed-endpoint cooldowns with write selection", async () => {
+    let currentTime = 1_000;
+    const attempts: string[] = [];
+    const urls = [
+      "https://write-cooldown-one.example",
+      "https://write-cooldown-two.example",
+    ] as const;
+    const provider = (nodeUrl: string) =>
+      ({
+        async getChainId() {
+          attempts.push(nodeUrl);
+          if (nodeUrl === urls[0]) throw new Error("offline");
+          return "0x534e5f4d41494e";
+        },
+      }) as unknown as import("starknet").RpcProvider;
+    const write = () =>
+      withRpcWrite(
+        urls,
+        "0x534e5f4d41494e",
+        async () => "ok",
+        provider,
+        () => currentTime,
+      );
+
+    await expect(write()).resolves.toBe("ok");
+    await expect(write()).resolves.toBe("ok");
+    expect(attempts).toEqual([urls[0], urls[1], urls[1]]);
+
+    currentTime += 30_000;
+    await expect(write()).resolves.toBe("ok");
+    expect(attempts.slice(-2)).toEqual([...urls]);
+  });
+
   // A wrong chain is actionable; an unreachable endpoint is not. The later
   // transport failure must not replace it.
   test("reports a wrong-chain endpoint even when a later endpoint is unreachable", async () => {
@@ -236,6 +309,7 @@ describe("starknet RPC helpers", () => {
       "starknet_addDeployAccountTransaction",
       "starknet_addInvokeTransaction",
     ] as const) {
+      resetRpcEndpointCooldownsForTests();
       const provider = {
         channel: {
           async fetchEndpoint() {
@@ -368,14 +442,6 @@ describe("endpoint refusals versus submission ambiguity", () => {
     // Still transport-shaped, so a READ fails over to the next endpoint.
     expect(isTransportRpcError(rejection)).toBe(true);
     expect((rejection as Error).message).toBe(RPC_REFUSED_MESSAGE);
-  });
-
-  test("an HTTP 429 is a refusal whatever its body", async () => {
-    const rejection = await refusalFetch("too many requests", 429)(
-      "https://selected.example",
-      {},
-    ).catch((error: unknown) => error);
-    expect(rejection).toBeInstanceOf(RpcRefusedError);
   });
 
   test("a real JSON-RPC error and a large body are left alone", async () => {

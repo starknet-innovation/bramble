@@ -27,6 +27,7 @@ import {
   SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "./key-boundary-multisig-messages";
+import { RECOVERY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-recovery-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "./key-boundary-strk20-messages";
 import type { KeyBoundaryMessage } from "./key-boundary-types";
 
@@ -113,6 +114,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   { message: { type: "wallet.preferences" }, sender: extensionSender },
+  { message: { type: "wallet.diagnostics" }, sender: extensionSender },
   {
     message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.requestAccounts" },
     sender: contentSender,
@@ -189,6 +191,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     },
     sender: extensionSender,
   },
+  ...RECOVERY_KEY_BOUNDARY_MESSAGES,
   {
     message: {
       accountContractType: "openzeppelin",
@@ -338,6 +341,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { type: "wallet.setNftIndexerUrl", url: "https://indexer.example" },
     sender: extensionSender,
   },
+  {
+    message: { relayUrl: "wss://relay.example", type: "wallet.setNostrRelayUrl" },
+    sender: extensionSender,
+  },
   { message: { type: "wallet.prices" }, sender: extensionSender },
   {
     message: { address: ETH_TOKEN_ADDRESS, type: "wallet.tokenChart" },
@@ -448,7 +455,12 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   {
-    message: { enabled: false, networkId: "SN_MAIN", type: "wallet.setExplorerFallback" },
+    message: {
+      apiUrl: "https://explorer.example/v1",
+      enabled: false,
+      networkId: "SN_MAIN",
+      type: "wallet.setExplorerFallback",
+    },
     sender: extensionSender,
   },
   {

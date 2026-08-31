@@ -69,6 +69,18 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
         {
           multisig: deps.multisig,
           onSelect: selectParticipant,
+          saveContact: (participant) =>
+            deps.wallet.saveAddress(
+              participant.label,
+              participant.address,
+              form
+                .closest<HTMLElement>("#wallet-screen-multisig-signers")
+                ?.querySelector<HTMLElement>("[data-participant-network]")?.dataset[
+                "participantNetwork"
+              ] ?? "",
+              participant.publicKeyX,
+              participant.nostrPublicKey,
+            ),
         },
       );
     }

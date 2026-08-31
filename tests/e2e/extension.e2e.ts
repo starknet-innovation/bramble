@@ -31,7 +31,7 @@ test("loads the dedicated full-screen onboarding surface", async ({ extension })
   await expect(onboarding.getByRole("link", { name: "Open full-screen setup" })).toHaveCount(0);
 });
 
-test("completes an imported wallet in full-screen onboarding", async ({ extension }) => {
+test("discovers and restores an imported wallet in a fresh profile", async ({ extension }) => {
   const onboarding = await extension.openExtensionPage("onboarding.html");
 
   await importWalletFromPhrase(onboarding, IMPORT_MNEMONIC);
@@ -58,6 +58,7 @@ test("loads the dedicated Ledger hardware session surface", async ({ extension }
     "aria-pressed",
     "true",
   );
+  await expect(ledger.getByText(/Hardware preview/)).toBeVisible();
   await expect(ledger.getByRole("button", { name: /Bluetooth/ })).toHaveAttribute(
     "aria-pressed",
     "false",

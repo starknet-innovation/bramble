@@ -14,6 +14,13 @@ type CompactIntentItem = {
   readonly supportingText: string;
 };
 
+/** Structured, inert inputs for the shared account's compact intent queue. */
+export type CompactIntentList = {
+  readonly emptyMessage: string;
+  readonly heading: string;
+  readonly items: readonly CompactIntentItem[];
+};
+
 /**
  * Renders the destructive local-only control inside intent inspection.
  */

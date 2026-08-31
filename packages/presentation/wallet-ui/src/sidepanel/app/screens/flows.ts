@@ -84,8 +84,8 @@ const receiveFlow = (
           ? receiveAddressView({
               address: account.address,
               copyLabel: "Copy address",
-              eyebrow: "Your address",
               hint: `Only send ${status.network} assets to this address.`,
+              networkId: status.networkId,
               publicKeyX: account.publicKeyX,
             })
           : noAccountEmpty(status)

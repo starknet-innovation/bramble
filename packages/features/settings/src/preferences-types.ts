@@ -11,6 +11,7 @@ import type {
   AddressBookEntry,
   ApprovalSurfacePreference,
   DisplayCurrency,
+  ExplorerApiOverrides,
   ExplorerFallback,
   RpcOverrides,
   ThemeChoice,
@@ -29,6 +30,8 @@ export type WalletPreferences = {
   readonly addressBook: readonly AddressBookEntry[];
   readonly customNetworks?: readonly CustomNetwork[];
   readonly displayCurrency?: DisplayCurrency;
+  /** Per-network Starkscan-compatible read API override. */
+  readonly explorerApiUrls?: ExplorerApiOverrides;
   /**
    * Per-network opt-in for the third-party explorer read lane. Absent (or
    * absent for one network) means "never decided", which the wallet resolves
@@ -39,7 +42,11 @@ export type WalletPreferences = {
   readonly hiddenTokens?: readonly string[];
   readonly nftIndexerUrl?: string;
   readonly nfts?: readonly WatchedNft[];
+  /** Custom relay replacing the reviewed Nostr defaults for explicit multisig handoffs. */
+  readonly nostrRelayUrl?: string;
   readonly rpcOverrides?: RpcOverrides;
+  /** Opt-in process-local aggregate RPC counters; never uploaded automatically. */
+  readonly reliabilityDiagnostics?: boolean;
   readonly schemaVersion: 1;
   readonly strk20Networks?: Strk20NetworkConfigs;
   /** @deprecated Legacy incomplete prover-only setting retained for backup compatibility. */
@@ -81,6 +88,7 @@ export type WalletPreferencesStore = {
    * decided, the derived default never silently takes the decision back.
    */
   readonly setExplorerFallback: (input: {
+    readonly apiUrl?: string;
     readonly enabled: boolean;
     readonly networkId: StarknetNetworkId;
   }) => Promise<WalletPreferences>;
@@ -89,6 +97,7 @@ export type WalletPreferencesStore = {
     readonly id: string;
   }) => Promise<WalletPreferences>;
   readonly setNftIndexerUrl: (input: { readonly url: string }) => Promise<WalletPreferences>;
+  readonly setNostrRelayUrl: (input: { readonly relayUrl: string }) => Promise<WalletPreferences>;
   readonly setNftSpam: (input: {
     readonly id: string;
     readonly spam: boolean;
@@ -101,6 +110,7 @@ export type WalletPreferencesStore = {
   readonly setDisplay: (input: {
     readonly approvalSurface?: ApprovalSurfacePreference;
     readonly displayCurrency?: DisplayCurrency;
+    readonly reliabilityDiagnostics?: boolean;
     readonly theme?: ThemeChoice;
   }) => Promise<WalletPreferences>;
   readonly setRpcOverride: (input: {

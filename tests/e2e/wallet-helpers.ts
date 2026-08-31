@@ -3,7 +3,7 @@
  */
 
 import { BACKUP_VERIFY_POSITIONS } from "@mc-wallet/wallet-ui/lab";
-import type { Page } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 import { expect } from "@playwright/test";
 
 export const VAULT_PASSPHRASE = "correct horse battery staple";
@@ -71,6 +71,41 @@ const protectAndSelectAccount = async (
   await sidepanel.getByRole("button", { name: "Add selected account" }).click();
 };
 
+const mockEmptyRecoveryChain = async (page: Page): Promise<() => Promise<void>> => {
+  const pattern = "https://*.starknet.org/**";
+  const handler = async (route: Route): Promise<void> => {
+    const request = route.request().postDataJSON() as {
+      readonly id?: unknown;
+      readonly method?: unknown;
+    };
+    const id = request.id ?? 1;
+    if (request.method === "starknet_getClassHashAt") {
+      await route.fulfill({
+        json: { error: { code: 20, message: "Contract not found" }, id, jsonrpc: "2.0" },
+      });
+      return;
+    }
+    if (request.method === "starknet_call") {
+      await route.fulfill({ json: { id, jsonrpc: "2.0", result: ["0x0", "0x0"] } });
+      return;
+    }
+    await route.abort();
+  };
+  await page.context().route(pattern, handler);
+  return () => page.context().unroute(pattern, handler);
+};
+
+const protectAndRecoverAccounts = async (onboarding: Page, passphrase: string): Promise<void> => {
+  await onboarding.locator('input[name="vaultPassphrase"]').fill(passphrase);
+  await onboarding.locator('input[name="vaultPassphraseConfirm"]').fill(passphrase);
+  await onboarding.getByRole("button", { name: "Find my accounts" }).click();
+  await expect(onboarding.getByRole("heading", { name: "Find your accounts" })).toBeVisible();
+  await expect(onboarding.locator("#recovery-scan-status")).toContainText("Search complete");
+  await onboarding.locator('#recovery-account-list input[type="checkbox"]').first().check();
+  await onboarding.locator('input[name="recoveryMainnetAck"]').check();
+  await onboarding.getByRole("button", { name: "Restore selected accounts" }).click();
+};
+
 /**
  * Creates a wallet by generating a fresh recovery phrase and confirming backup words.
  */
@@ -113,7 +148,12 @@ export const importWalletFromPhrase = async (
   await onboarding.getByRole("button", { name: "Recovery phrase" }).click();
   await onboarding.locator('input[name="import-word-0"]').fill(mnemonic);
   await onboarding.getByRole("button", { name: "Continue" }).click();
-  await protectAndSelectAccount(onboarding, passphrase);
+  const stopMock = await mockEmptyRecoveryChain(onboarding);
+  try {
+    await protectAndRecoverAccounts(onboarding, passphrase);
+  } finally {
+    await stopMock();
+  }
   await setup.finish();
   if (!new URL(sidepanel.url()).pathname.endsWith("/onboarding.html")) {
     await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();

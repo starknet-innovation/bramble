@@ -12,6 +12,7 @@ import { isStarknetNetworkId, type StarknetNetworkId } from "@mc-wallet/wallet-m
 export const BALANCE_SNAPSHOTS_KEY = "mc-wallet:balance-snapshots";
 
 const MAX_SCOPES = 50;
+const BALANCE_SNAPSHOT_TTL_MS = 60_000;
 
 /**
  * Public account balance snapshot retained outside the encrypted vault.
@@ -24,6 +25,40 @@ type BalanceSnapshot = {
 };
 
 type BalanceSnapshotValue = Pick<BalanceSnapshot, "balances" | "fetchedAt">;
+
+const refreshes = new WeakMap<BalanceSnapshotStore, Map<string, Promise<BalanceSnapshotValue>>>();
+
+const refreshBalances = (
+  store: BalanceSnapshotStore,
+  input: {
+    readonly accountId: string;
+    readonly networkId: StarknetNetworkId;
+    readonly now: number;
+  },
+  load: () => Promise<readonly TokenBalance[]>,
+): Promise<BalanceSnapshotValue> => {
+  const key = `${input.networkId}:${input.accountId}`;
+  const active = refreshes.get(store) ?? new Map<string, Promise<BalanceSnapshotValue>>();
+  refreshes.set(store, active);
+  const running = active.get(key);
+  if (running) return running;
+  const refresh = load()
+    .then(async (balances) => {
+      const value = { balances, fetchedAt: input.now };
+      await store
+        .write({
+          accountId: input.accountId,
+          balances,
+          fetchedAt: input.now,
+          networkId: input.networkId,
+        })
+        .catch(() => undefined);
+      return value;
+    })
+    .finally(() => active.delete(key));
+  active.set(key, refresh);
+  return refresh;
+};
 
 /**
  * Background-owned balance cache; callers still refresh from RPC after reads.
@@ -84,3 +119,41 @@ export const createBalanceSnapshotStore = (store: KeyValueStore): BalanceSnapsho
  */
 export const memoryBalanceSnapshotStore = (): BalanceSnapshotStore =>
   createBalanceSnapshotStore(createMemoryStore());
+
+/**
+ * Reads a balance snapshot, refreshing one account/network lane at most once
+ * per minute unless a completed wallet action explicitly forces reconciliation.
+ * Concurrent readers share one RPC load and a failed refresh retains the last
+ * known public balances as stale.
+ */
+export const cachedBalances = async (
+  store: BalanceSnapshotStore | undefined,
+  input: {
+    readonly accountId: string;
+    readonly cachedOnly: boolean;
+    readonly force: boolean;
+    readonly networkId: StarknetNetworkId;
+    readonly now: number;
+  },
+  load: () => Promise<readonly TokenBalance[]>,
+): Promise<(BalanceSnapshotValue & { readonly stale: boolean }) | null> => {
+  if (!store) {
+    return input.cachedOnly ? null : { balances: await load(), fetchedAt: input.now, stale: false };
+  }
+  const snapshot = await store.read(input.accountId, input.networkId).catch(() => null);
+  const fresh =
+    snapshot !== null &&
+    snapshot.fetchedAt > 0 &&
+    snapshot.fetchedAt <= input.now &&
+    input.now - snapshot.fetchedAt < BALANCE_SNAPSHOT_TTL_MS;
+  if (input.cachedOnly || (fresh && !input.force)) {
+    return snapshot ? { ...snapshot, stale: !fresh } : null;
+  }
+
+  try {
+    return { ...(await refreshBalances(store, input, load)), stale: false };
+  } catch (error) {
+    if (snapshot) return { ...snapshot, stale: true };
+    throw error;
+  }
+};

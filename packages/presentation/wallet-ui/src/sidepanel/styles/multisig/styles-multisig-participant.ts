@@ -43,7 +43,7 @@ export const MULTISIG_PARTICIPANT_STYLES = `
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
-  .multisig-participant-methods { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .multisig-participant-methods { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .multisig-participant-methods button {
     align-content: center;
     background: var(--mc-panel);
@@ -76,6 +76,9 @@ export const MULTISIG_PARTICIPANT_STYLES = `
     background: var(--mc-soft-press);
   }
   .multisig-participant-methods button[aria-pressed="true"] > span { color: var(--mc-text); }
+  @media (max-width: 390px) {
+    .multisig-participant-methods button { padding-inline: ${SPACE.xs}; }
+  }
   .multisig-participant-external > [data-participant-field] { display: grid; gap: ${SPACE.xs}; }
   .multisig-participant-external > [data-participant-field] > label { display: grid; gap: ${SPACE.xs}; }
   [data-participant-result]:empty { display: none; }
@@ -91,20 +94,6 @@ export const MULTISIG_PARTICIPANT_STYLES = `
     overflow: hidden;
     text-overflow: ellipsis;
     text-wrap: nowrap;
-  }
-  .receive-public-key {
-    border-top: 1px solid var(--mc-hairline);
-    display: grid;
-    gap: ${SPACE.sm};
-    padding-top: ${SPACE.lg};
-  }
-  .receive-public-key > div:first-child { display: grid; gap: ${SPACE.xs}; }
-  .receive-public-key > div:first-child span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
-  .receive-public-key .address-line code {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-    word-break: normal;
   }
   @media (prefers-reduced-motion: reduce) {
     .multisig-participant-screen:not([hidden]) { transition: none; }

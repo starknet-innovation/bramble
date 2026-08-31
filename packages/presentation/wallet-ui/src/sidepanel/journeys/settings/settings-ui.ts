@@ -5,6 +5,7 @@
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buildInfo } from "../../shell/build-info";
 import { bindGroupControls } from "./group-ui";
 
 /**
@@ -188,6 +189,50 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
           result.textContent = errorMessage(error, "Currency update failed");
         }
         currencySelect.disabled = false;
+      },
+    );
+  });
+
+  const diagnosticsToggle = deps.app?.querySelector<HTMLInputElement>("#reliability-diagnostics");
+  diagnosticsToggle?.addEventListener("change", () => {
+    diagnosticsToggle.disabled = true;
+    void deps.wallet.setDisplay({ reliabilityDiagnostics: diagnosticsToggle.checked }).then(
+      async () => {
+        showToast(
+          diagnosticsToggle.checked ? "Local diagnostics enabled" : "Local diagnostics cleared",
+          "success",
+          diagnosticsToggle,
+        );
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        diagnosticsToggle.checked = !diagnosticsToggle.checked;
+        showToast(errorMessage(error, "Diagnostic preference failed"), "error", diagnosticsToggle);
+        diagnosticsToggle.disabled = false;
+      },
+    );
+  });
+
+  const diagnosticsExport = deps.app?.querySelector<HTMLButtonElement>("#diagnostics-export");
+  diagnosticsExport?.addEventListener("click", () => {
+    buttonBusy(diagnosticsExport, true);
+    void deps.wallet.loadDiagnostics().then(
+      (diagnostics) => {
+        const blob = new Blob([JSON.stringify({ build: buildInfo(), diagnostics }, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const anchor = diagnosticsExport.ownerDocument.createElement("a");
+        anchor.href = url;
+        anchor.download = "mc-wallet-diagnostics.json";
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        showToast("Diagnostics downloaded", "success", diagnosticsExport);
+        buttonBusy(diagnosticsExport, false);
+      },
+      (error: unknown) => {
+        showToast(errorMessage(error, "Diagnostic export failed"), "error", diagnosticsExport);
+        buttonBusy(diagnosticsExport, false);
       },
     );
   });

@@ -3,6 +3,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import { argentMultisigTransactionHash } from "@mc-wallet/starknet/multisig-invoke";
+import {
+  bindMultisigs,
+  type MultisigUiDeps,
+} from "../../../../src/sidepanel/journeys/multisig/multisig-ui";
 import { multisigDetailFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-views";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -259,5 +263,100 @@ describe("Argent multisig fee refresh", () => {
     await flushMultisigUi();
     expect(removed).toEqual([fixture.intent.id]);
     expect(opened).toEqual([[fixture.intent.accountId, "multisig-home"]]);
+  });
+
+  test("keeps the user in the intents tab after checking for co-signer updates", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const synced: string[] = [];
+    const opened: string[][] = [];
+    let intentIds: readonly string[] = [];
+    const client = await makeMultisigUiClient({
+      syncIntents: async (multisigId) => {
+        synced.push(multisigId);
+        return { imported: intentIds.length, intentIds, received: intentIds.length };
+      },
+    });
+    const app = document.createElement("div");
+    document.body.replaceChildren(app);
+    const markup = (): string =>
+      multisigDetailFlow(
+        fixture.status,
+        fixture.status.accounts[0] ?? null,
+        fixture.view,
+        [fixture.intent],
+        false,
+        defaultWalletPreferences(),
+        "multisig-home",
+      );
+    const deps = {
+      app,
+      multisig: client,
+      openDetail() {},
+      openIntent: (...args: string[]) => opened.push(args),
+      openList() {},
+      async render() {
+        app.replaceChildren(document.createRange().createContextualFragment(markup()));
+        bindMultisigs(deps);
+      },
+      selectedMultisigId: () => fixture.record.id,
+      wallet: {
+        loadStatus: async () => fixture.status,
+      } as unknown as MultisigUiDeps["wallet"],
+    } as const;
+    await deps.render();
+    app.querySelector<HTMLButtonElement>('[data-ms-home-tab="intents"]')?.click();
+    app.querySelector<HTMLButtonElement>("[data-ms-sync-intents]")?.click();
+    await flushMultisigUi();
+
+    expect(synced).toEqual([fixture.record.id]);
+    expect(app.querySelector('[data-ms-home-tab="intents"]')?.getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    expect(app.querySelector<HTMLElement>('[data-ms-home-panel="intents"]')?.hidden).toBe(false);
+    expect(document.activeElement).toBe(app.querySelector("[data-ms-sync-intents]"));
+
+    intentIds = [fixture.intent.id];
+    app.querySelector<HTMLButtonElement>("[data-ms-sync-intents]")?.click();
+    await flushMultisigUi();
+    expect(opened).toEqual([[fixture.record.id, fixture.intent.id]]);
+    expect(document.body.textContent).toContain("1 signing intent updated");
+
+    intentIds = [fixture.intent.id, `${fixture.intent.id}:other`];
+    app.querySelector<HTMLButtonElement>("[data-ms-sync-intents]")?.click();
+    await flushMultisigUi();
+    expect(opened).toEqual([[fixture.record.id, fixture.intent.id]]);
+    expect(document.body.textContent).toContain(
+      "2 signing intents updated. Review them in Intents",
+    );
+  });
+
+  test("names partial secure delivery and leaves sharing ready to retry", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const client = await makeMultisigUiClient({
+      shareIntent: async () => ({ recipients: 1, totalRecipients: 2 }),
+    });
+    const app = mountMultisigUi(
+      multisigDetailFlow(
+        fixture.status,
+        fixture.status.accounts[0] ?? null,
+        fixture.view,
+        [fixture.intent],
+        false,
+        defaultWalletPreferences(),
+        "multisig-detail",
+        undefined,
+        fixture.intent.id,
+      ),
+      client,
+      fixture.status,
+    );
+
+    const share = app.querySelector<HTMLButtonElement>("[data-ms-share]");
+    share?.click();
+    await flushMultisigUi();
+    expect(document.querySelector(".toast.error")?.textContent).toContain(
+      "Reached 1 of 2 co-signers. Share again to retry the remaining delivery.",
+    );
+    expect(share?.disabled).toBe(false);
   });
 });

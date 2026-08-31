@@ -487,7 +487,7 @@ describe("submitDeclareTransaction", () => {
             classHash: contractClassHash,
             compiledClassHash: "0x6def",
             contractClass,
-            rpcUrls: ["https://rpc.example"],
+            rpcUrls: [`https://rpc-${returned.transaction_hash}.example`],
             signHash,
           },
           makeProvider,

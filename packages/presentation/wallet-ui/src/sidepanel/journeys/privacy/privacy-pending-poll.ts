@@ -100,6 +100,7 @@ export const createPendingRegistrationPoll = (): PendingRegistrationPoll => {
         },
       });
       scheduler.start();
+      scheduler.visibilityChanged();
       scheduler.afterAction();
     },
   };

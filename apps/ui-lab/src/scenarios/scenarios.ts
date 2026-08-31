@@ -24,15 +24,12 @@ import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, WalletScenario } from "../runtime/types";
 import { approvalsScenario } from "./scenarios-approvals";
 import { multisigScenario } from "./scenarios-multisig";
-import {
-  ledgerOnboardingScenario,
-  onboardingScenario,
-  unlockScenario,
-} from "./scenarios-onboarding";
+import { ledgerOnboardingScenario, onboardingScenario } from "./scenarios-onboarding";
 import { privacyScenario } from "./scenarios-privacy";
 import { settingsScenario } from "./scenarios-settings";
 import { ledgerScenario, sendScenario } from "./scenarios-signing";
 import { swapScenario } from "./scenarios-swap";
+import { unlockScenario } from "./scenarios-unlock";
 import { assetsScenario, portfolioScenario } from "./scenarios-wallet";
 
 const NFT_HASH = `0x02${"b".repeat(62)}`;

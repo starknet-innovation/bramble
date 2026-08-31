@@ -1,6 +1,6 @@
 /**
  * Self-contained QR encoder for the receive screen: byte mode, error
- * correction level M, versions 1-6, mask pattern 0. No external dependencies
+ * correction level M, versions 1-11, mask pattern 0. No external dependencies
  * so the extension CSP stays locked to packaged code.
  */
 import { escapeHtml } from "@mc-wallet/core/html";
@@ -19,6 +19,11 @@ const VERSIONS: readonly VersionSpec[] = [
   { alignment: [6, 26], blocks: [32, 32], ecPerBlock: 18, version: 4 },
   { alignment: [6, 30], blocks: [43, 43], ecPerBlock: 24, version: 5 },
   { alignment: [6, 34], blocks: [27, 27, 27, 27], ecPerBlock: 16, version: 6 },
+  { alignment: [6, 22, 38], blocks: [31, 31, 31, 31], ecPerBlock: 18, version: 7 },
+  { alignment: [6, 24, 42], blocks: [38, 38, 39, 39], ecPerBlock: 22, version: 8 },
+  { alignment: [6, 26, 46], blocks: [36, 36, 36, 37, 37], ecPerBlock: 22, version: 9 },
+  { alignment: [6, 28, 50], blocks: [43, 43, 43, 43, 44], ecPerBlock: 26, version: 10 },
+  { alignment: [6, 30, 54], blocks: [50, 51, 51, 51, 51], ecPerBlock: 30, version: 11 },
 ];
 
 const GF_EXP = new Uint8Array(512);
@@ -67,7 +72,7 @@ const reedSolomon = (data: readonly number[], degree: number): number[] => {
   return remainder;
 };
 
-const bitStream = (payload: Uint8Array, capacity: number): number[] => {
+const bitStream = (payload: Uint8Array, capacity: number, version: number): number[] => {
   const bits: number[] = [];
   const push = (value: number, length: number): void => {
     for (let index = length - 1; index >= 0; index -= 1) {
@@ -75,7 +80,7 @@ const bitStream = (payload: Uint8Array, capacity: number): number[] => {
     }
   };
   push(0b0100, 4);
-  push(payload.length, 8);
+  push(payload.length, version < 10 ? 8 : 16);
   for (const byte of payload) {
     push(byte, 8);
   }
@@ -233,6 +238,20 @@ const placeFormat = (matrix: Matrix): void => {
   }
 };
 
+const placeVersion = (matrix: Matrix, version: number): void => {
+  if (version < 7) return;
+  let remainder = version << 12;
+  for (let index = 17; index >= 12; index -= 1) {
+    if (((remainder >> index) & 1) === 1) remainder ^= 0x1f25 << (index - 12);
+  }
+  const bits = (version << 12) | remainder;
+  for (let index = 0; index < 18; index += 1) {
+    const dark = ((bits >> index) & 1) === 1;
+    setModule(matrix, Math.floor(index / 3), (index % 3) + matrix.size - 11, dark);
+    setModule(matrix, (index % 3) + matrix.size - 11, Math.floor(index / 3), dark);
+  }
+};
+
 const placeData = (matrix: Matrix, codewords: readonly number[]): void => {
   const bits: number[] = [];
   for (const byte of codewords) {
@@ -276,13 +295,14 @@ export const qrMatrix = (text: string): readonly (readonly boolean[])[] => {
   const payload = new TextEncoder().encode(text);
   const spec = VERSIONS.find((candidate) => {
     const capacity = candidate.blocks.reduce((sum, block) => sum + block, 0);
-    return payload.length + 2 <= capacity;
+    const countBits = candidate.version < 10 ? 8 : 16;
+    return 4 + countBits + payload.length * 8 <= capacity * 8;
   });
   if (!spec) {
     throw new Error("QR payload too long");
   }
   const capacity = spec.blocks.reduce((sum, block) => sum + block, 0);
-  const bits = bitStream(payload, capacity);
+  const bits = bitStream(payload, capacity, spec.version);
   const codewords: number[] = [];
   for (let index = 0; index < bits.length; index += 8) {
     let byte = 0;
@@ -298,6 +318,7 @@ export const qrMatrix = (text: string): readonly (readonly boolean[])[] => {
     values: Array.from({ length: size }, () => new Array<boolean>(size).fill(false)),
   };
   placeFixedPatterns(matrix, spec);
+  placeVersion(matrix, spec.version);
   placeFormat(matrix);
   placeData(matrix, interleave(spec, codewords));
   return matrix.values;

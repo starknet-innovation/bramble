@@ -16,23 +16,18 @@ import { escapeRegExp } from "./regexp";
 import { dynamicExecutionFailures } from "./vendor-pin-policy";
 import { readWorkflowSources, WORKFLOW_DIR, type WorkflowSources } from "./workflow-inventory";
 
-const RUST_TOOLCHAIN_ACTION = "dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30";
 const NODE_SETUP_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
 const GITHUB_EXPRESSION = "$" + "{{";
 const SHELL_EXPANSION = "$" + "{";
-const RUST_TOOLCHAIN_BLOCK = `uses: ${RUST_TOOLCHAIN_ACTION} # stable
-        with:
-          toolchain: 1.96.1`;
 const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.0.0
         with:
           node-version: 24`;
 
-// Vendoring is all-or-nothing: a workflow that builds one pinned source against
-// a stale or unverified other one is not running the reviewed artifact set. The
+// Upstream verification is all-or-nothing: a workflow that builds one pinned
+// source against a stale or unverified other one is not running the reviewed artifact set. The
 // rule selects itself from content, so it reaches any future workflow that
 // vendors anything.
 const VENDOR_STEPS = [
-  { command: "bun run vendor:krusty", failure: "must vendor the pinned Krusty KMS source" },
   { command: "bun run vendor:argent", failure: "must verify the pinned Argent account contracts" },
   { command: "bun run vendor:privacy", failure: "must vendor the pinned privacy SDK" },
 ] as const;
@@ -71,9 +66,8 @@ const forbidText = (
 };
 
 // Applies to any workflow that vendors a pinned source, selected by content.
-// The reproducibility of both vendored artifacts depends on these exact
-// toolchains, so the pins travel with the vendoring step rather than with a
-// list of workflow names.
+// The privacy SDK build depends on the exact Node runtime, so the pin travels
+// with the vendoring step rather than with a list of workflow names.
 const vendoringFailures = (name: string, source: string): string[] => {
   const failures: string[] = [];
   if (!VENDOR_STEPS.some((step) => source.includes(step.command))) {
@@ -82,10 +76,6 @@ const vendoringFailures = (name: string, source: string): string[] => {
   const path = workflowPath(name);
   for (const step of VENDOR_STEPS) {
     requireText(failures, source, step.command, `${path} ${step.failure}`);
-  }
-  requireText(failures, source, RUST_TOOLCHAIN_BLOCK, `${path} must pin Rust toolchain 1.96.1`);
-  if (source.split(RUST_TOOLCHAIN_ACTION).length - 1 !== 1) {
-    failures.push(`${path} must use the pinned Rust action exactly once`);
   }
   requireText(
     failures,
@@ -116,6 +106,12 @@ const baselineFailures = (name: string, source: string, reviewed: boolean): stri
     `${path} must declare a read-only default permissions block`,
   );
   forbidText(failures, source, "write-all", `${path} must not request every token permission`);
+  forbidText(
+    failures,
+    source,
+    "vendor:krusty",
+    `${path} must consume the pinned published Krusty package instead of vendoring source`,
+  );
   if (reviewed) {
     return failures;
   }

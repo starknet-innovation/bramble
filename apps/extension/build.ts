@@ -9,9 +9,10 @@ process.chdir(repositoryRoot);
 const extensionRoot = "apps/extension";
 const publicRoot = join(extensionRoot, "public");
 const outdir = "dist";
-const krustyModule = "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
+const krustyModule = "/dependencies/krusty-kms/krusty_kms_wasm.js";
 const privacySdkModule = "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
-const vendorOutdir = join(outdir, "vendor/krusty-kms/pkg");
+const krustyPackage = "node_modules/@starknetfoundation/krusty-kms-wasm";
+const krustyOutdir = join(outdir, "dependencies/krusty-kms");
 const LEDGER_BUFFER_MODULES =
   /[\\/]node_modules[\\/]@ledgerhq[\\/](?:hw-app-starknet|hw-transport|hw-transport-web-ble|hw-transport-webhid|hw-transport-webusb)[\\/].*\.js$/;
 const LEDGER_BLE_RAW_DISCONNECT_LOG = 'console.log("onDisconnect!", e);';
@@ -183,16 +184,14 @@ await cp(join(publicRoot, "onboarding.html"), join(outdir, "onboarding.html"));
 await cp(join(publicRoot, "popup.html"), join(outdir, "popup.html"));
 await cp(join(publicRoot, "sidepanel.html"), join(outdir, "sidepanel.html"));
 await cp(join(publicRoot, "ledger-grant.html"), join(outdir, "ledger-grant.html"));
+await cp(join(publicRoot, "icons"), join(outdir, "icons"), { recursive: true });
 await mkdir(join(outdir, "sandbox"), { recursive: true });
 await cp(join(publicRoot, "sandbox/render.html"), join(outdir, "sandbox/render.html"));
-await mkdir(vendorOutdir, { recursive: true });
+await mkdir(krustyOutdir, { recursive: true });
+await cp(join(krustyPackage, "krusty_kms_wasm.js"), join(krustyOutdir, "krusty_kms_wasm.js"));
 await cp(
-  "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm.js",
-  join(vendorOutdir, "krusty_kms_wasm.js"),
-);
-await cp(
-  "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm_bg.wasm",
-  join(vendorOutdir, "krusty_kms_wasm_bg.wasm"),
+  join(krustyPackage, "krusty_kms_wasm_bg.wasm"),
+  join(krustyOutdir, "krusty_kms_wasm_bg.wasm"),
 );
 await mkdir(join(outdir, "vendor/starknet-privacy/sdk"), { recursive: true });
 await cp(

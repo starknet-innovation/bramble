@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   readAddMultisigInput,
+  readMultisigIdInput,
   readPrepareIntentInput,
   readRemoveIntentInput,
   readRemoveMultisigInput,
@@ -77,5 +78,15 @@ describe("Argent multisig message inputs", () => {
     });
     expect(readResolveMultisigSignerInput({ ...input, address: "0x0123" })).toBeNull();
     expect(readResolveMultisigSignerInput({ ...input, extra: true })).toBeNull();
+  });
+
+  test("scopes secure co-signer sync to one exact multisig", () => {
+    const input = {
+      multisigId: HARNESS_MULTISIG_ID,
+      type: "wallet.syncArgentMultisigIntents" as const,
+    };
+    expect(readMultisigIdInput(input, input.type)).toEqual({ multisigId: HARNESS_MULTISIG_ID });
+    expect(readMultisigIdInput({ type: input.type }, input.type)).toBeNull();
+    expect(readMultisigIdInput({ ...input, extra: true }, input.type)).toBeNull();
   });
 });

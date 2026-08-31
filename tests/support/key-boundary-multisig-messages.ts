@@ -9,6 +9,7 @@ import type { KeyBoundaryMessage } from "./key-boundary-types";
 
 /** Every privileged Argent multisig runtime message, with live durable ids. */
 export const MULTISIG_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
+  { message: { type: "wallet.nostrPublicKey" }, sender: extensionSender },
   { message: { type: "wallet.multisigs" }, sender: extensionSender },
   {
     live: async (ids) => ({ multisigId: ids.multisigId }),
@@ -48,6 +49,17 @@ export const MULTISIG_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   {
     live: async (ids) => ({ package: ids.multisigIntentPackage }),
     message: { package: {}, type: "wallet.importArgentMultisigIntent" },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ intentId: ids.multisigSignIntentId }),
+    message: { intentId: "", type: "wallet.shareArgentMultisigIntent" },
+    negative: "no saved Nostr co-signer card deliberately prevents external relay I/O",
+    sender: extensionSender,
+  },
+  {
+    message: { type: "wallet.syncArgentMultisigIntents", unexpected: true },
+    negative: "invalid payload exercises the handler without external relay I/O",
     sender: extensionSender,
   },
   {

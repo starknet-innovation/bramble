@@ -135,7 +135,7 @@ export const readResolveMultisigSignerInput = (
  */
 export const readMultisigIdInput = (
   message: unknown,
-  type: "wallet.multisigBalances" | "wallet.refreshMultisig",
+  type: "wallet.multisigBalances" | "wallet.refreshMultisig" | "wallet.syncArgentMultisigIntents",
 ): { readonly multisigId: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["multisigId", "type"]) &&
@@ -149,13 +149,19 @@ export const readMultisigIdInput = (
  */
 export const readMultisigBalancesInput = (
   message: unknown,
-): { readonly cached: boolean; readonly multisigId: string } | null =>
+): { readonly cached: boolean; readonly multisigId: string; readonly refresh: boolean } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["cached", "multisigId", "type"]) &&
+  hasOnlyKnownKeys(message, ["cached", "multisigId", "refresh", "type"]) &&
   message["type"] === "wallet.multisigBalances" &&
   isAccountId(message["multisigId"]) &&
-  (message["cached"] === undefined || message["cached"] === true)
-    ? { cached: message["cached"] === true, multisigId: message["multisigId"] }
+  (message["cached"] === undefined || message["cached"] === true) &&
+  (message["refresh"] === undefined || message["refresh"] === true) &&
+  !(message["cached"] === true && message["refresh"] === true)
+    ? {
+        cached: message["cached"] === true,
+        multisigId: message["multisigId"],
+        refresh: message["refresh"] === true,
+      }
     : null;
 
 /**

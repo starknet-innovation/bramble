@@ -35,23 +35,33 @@ export const CreatePassword = checkpointStory(
   "onboarding",
   "password",
 );
+export const ReviewRecoveredAccounts = checkpointStory(
+  "Existing wallet · discovered accounts",
+  "onboarding",
+  "recovery-accounts",
+);
+export const ConfirmRecoveredAccounts = checkpointStory(
+  "Existing wallet · confirm recovered accounts",
+  "onboarding",
+  "recovery-accounts-confirmed",
+);
 export const ChooseOpenZeppelinContract = checkpointStory(
-  "Existing wallet · OpenZeppelin contract · Recommended",
+  "New wallet · OpenZeppelin contract · Recommended",
   "onboarding",
   "account-contract-openzeppelin",
 );
 export const ChooseArgentContract = checkpointStory(
-  "Existing wallet · Argent contract",
+  "New wallet · Argent contract",
   "onboarding",
   "account-contract-argent",
 );
 export const ChooseAccounts = checkpointStory(
-  "Existing wallet · review OpenZeppelin account",
+  "New wallet · review OpenZeppelin account",
   "onboarding",
   "accounts",
 );
 export const ReviewArgentAccount = checkpointStory(
-  "Existing wallet · review Argent account",
+  "New wallet · review Argent account",
   "onboarding",
   "accounts-argent",
 );

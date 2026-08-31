@@ -49,7 +49,7 @@ export const artifactPolicyFailures = (
     buildPrivacyCheck > buildDistClear
   ) {
     failures.push(
-      "apps/extension/build.ts must check manifest and vendored runtimes before building",
+      "apps/extension/build.ts must check manifest and pinned runtimes before building",
     );
   }
 

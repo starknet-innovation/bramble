@@ -1,7 +1,10 @@
 /** Non-Stark Argent signer types remain explicit, safe, and watch-only. */
 import { describe, expect, test } from "bun:test";
 import { multisigSignersFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
-import { multisigProposeFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-views";
+import {
+  multisigDetailFlow,
+  multisigProposeFlow,
+} from "../../../../src/sidepanel/journeys/multisig/multisig-views";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 
 describe("Argent multisig signer types", () => {
@@ -28,5 +31,21 @@ describe("Argent multisig signer types", () => {
     const propose = multisigProposeFlow(fixture.status, view);
     expect(propose).toContain("signer types this wallet cannot sign with");
     expect(propose).not.toContain('id="multisig-propose-form"');
+  });
+
+  test("allows an observer to prepare an off-chain proposal for complete authority", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const html = multisigDetailFlow(
+      { ...fixture.status, accounts: [] },
+      null,
+      fixture.view,
+      [],
+      false,
+      null,
+      "multisig-home",
+    );
+
+    expect(html).toContain('data-view="multisig-propose"');
+    expect(html).not.toContain('data-view="multisig-propose" type="button" disabled');
   });
 });

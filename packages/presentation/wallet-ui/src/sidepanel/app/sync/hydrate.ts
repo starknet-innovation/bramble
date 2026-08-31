@@ -12,6 +12,7 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import type { RenderData } from "../rendering/render-cache";
 import type { WalletView } from "../screens/views";
 import type { DeploymentCache } from "./deployment-cache";
+import type { RefreshReason } from "./refresh-scheduler";
 
 /**
  * Inputs `hydrateView` needs: the current status/view, the shared render cache,
@@ -28,6 +29,7 @@ export type HydrateDeps = {
   readonly multisig: MultisigClient;
   readonly deployment: DeploymentCache;
   readonly paint: () => void;
+  readonly refreshReason?: RefreshReason;
 };
 
 const hydrateMultisigs = async (
@@ -253,6 +255,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     wallet,
     multisig,
     deployment,
+    refreshReason,
     isCurrent = () => true,
     paint,
   } = deps;
@@ -288,7 +291,9 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     (view) => view.record.id === selectedMultisigId,
   );
   const selectedNeedsRefresh =
-    authorityCriticalView || selectedMultisig?.record.currentConfig === undefined;
+    refreshReason === "action" ||
+    authorityCriticalView ||
+    selectedMultisig?.record.currentConfig === undefined;
   await hydrateCachedView(
     deps,
     walletBalanceView,
@@ -300,18 +305,23 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     multisigNftView,
   );
   const primaryJobs: Promise<unknown>[] = [];
-  const deferredJobs: Promise<unknown>[] = [];
+  const deferredJobs: Array<() => Promise<unknown>> = [];
   const streamingJobs: Promise<unknown>[] = [];
-  const fill = <T>(load: Promise<T>, assign: (value: T) => void, deferred = false): void => {
-    (deferred ? deferredJobs : primaryJobs).push(
-      load
+  const fill = <T>(
+    load: Promise<T> | (() => Promise<T>),
+    assign: (value: T) => void,
+    deferred = false,
+  ): void => {
+    const start = () =>
+      (typeof load === "function" ? load() : load)
         .then((value) => {
           if (isCurrent()) {
             assign(value);
           }
         })
-        .catch(() => undefined),
-    );
+        .catch(() => undefined);
+    if (deferred) deferredJobs.push(start);
+    else primaryJobs.push(start());
   };
   const stream = <T>(load: Promise<T>, assign: (value: T) => void): void => {
     streamingJobs.push(
@@ -327,7 +337,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   };
   if (priceView) {
     if (walletBalanceView) {
-      fill(wallet.loadBalances(), (value) => {
+      fill(wallet.loadBalances(false, refreshReason === "action"), (value) => {
         if ("balances" in value) {
           cache.balances =
             value.accountId !== status.activeAccountId || value.networkId !== status.networkId
@@ -349,7 +359,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (activeView === "home") {
     fill(
-      deployment.load(status, activeView),
+      () => deployment.load(status, activeView),
       (value) => {
         cache.deployment = value;
       },
@@ -358,7 +368,12 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (activityView) {
     fill(
-      wallet.loadActivity(activeView === "home" ? undefined : (selectedMultisigId ?? undefined)),
+      () =>
+        wallet.loadActivity(
+          activeView === "home" ? undefined : (selectedMultisigId ?? undefined),
+          false,
+          activeView === "activity" && refreshReason !== "ambient",
+        ),
       (value) => {
         cache.transactions = value.entries;
         cache.historyUnavailable = value.historyUnavailable;
@@ -376,12 +391,15 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.connectedSites = value;
     });
   }
-  if (activeView === "allowances") {
+  if (activeView === "allowances" && refreshReason !== "ambient") {
     fill(wallet.loadAllowances(), (value) => {
       cache.allowances = value;
     });
   }
-  if (walletNftView) {
+  // Home paints the last verified NFT snapshot from the cached phase above.
+  // Full indexer discovery can fan out into many ownership proofs, so only NFT
+  // surfaces refresh it live instead of turning an idle dashboard into a scan.
+  if (walletNftView && activeView !== "home" && refreshReason !== "ambient") {
     const nftScope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
     // Explicitly watched NFTs take the fast lane: no indexer wait, immediate
     // repaint when their verified metadata lands, and no wait for balances,
@@ -391,12 +409,11 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
     });
     fill(
-      wallet.discoverNfts(false, nftScope),
+      () => wallet.discoverNfts(false, nftScope),
       (value) => {
         cache.indexedNfts = value;
         cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
       },
-      activeView === "home",
     );
   }
   if (registryView) {
@@ -431,7 +448,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     );
   }
   if (multisigBalanceView && selectedMultisigId) {
-    fill(multisig.loadBalances(selectedMultisigId), (value) => {
+    fill(multisig.loadBalances(selectedMultisigId, false, refreshReason === "action"), (value) => {
       cache.multisigBalanceId = selectedMultisigId;
       if ("balances" in value) {
         cache.multisigBalances =
@@ -445,7 +462,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       }
     });
   }
-  if (activeView === "multisig-home" && selectedMultisigId) {
+  if (activeView === "multisig-home" && selectedMultisigId && refreshReason !== "ambient") {
     const multisigNftScope = `${status.networkId}:${selectedMultisigId}`;
     stream(wallet.discoverNfts(true, multisigNftScope, selectedMultisigId), (value) => {
       cache.multisigNftId = selectedMultisigId;
@@ -474,6 +491,6 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     }
   };
   await flush(primaryJobs);
-  await flush(deferredJobs);
+  await flush(deferredJobs.map((start) => start()));
   await Promise.all(streamingJobs);
 };

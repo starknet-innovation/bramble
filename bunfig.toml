@@ -12,6 +12,7 @@
 # instead. The reporter is pinned to text so the summary the gate parses is
 # always emitted.
 [test]
+preload = ["./tests/support/test-preload.ts"]
 coverageReporter = ["text"]
 # Vendored dependencies keep their own suites and coverage policies. They are
 # not repository tests and must not dilute MC Wallet's aggregate source floor.

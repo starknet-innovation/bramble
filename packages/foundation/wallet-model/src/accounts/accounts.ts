@@ -372,6 +372,10 @@ const isLegacyAccountRefShape = (
  */
 export const isAccountRef = (value: unknown): value is AccountRef => isAccountRefShape(value, true);
 
+/** Validates phrase-derived account metadata at runtime boundaries. */
+export const isDerivedAccountRef = (value: unknown): value is DerivedAccountRef =>
+  isAccountRef(value) && value.derivation.kind === "starknet-bip44";
+
 /**
  * Validates canonical schema-v6 account metadata for its one-step migration.
  */

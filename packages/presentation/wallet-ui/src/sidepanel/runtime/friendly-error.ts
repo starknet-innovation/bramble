@@ -5,6 +5,7 @@
  * isolation. Error toasts retain the original diagnostic for copying.
  */
 
+import { friendlyNetworkError } from "@mc-wallet/core/network-error";
 import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
 
 /**
@@ -20,6 +21,10 @@ const GENERIC_VALIDATION =
 const WALLET_UNAVAILABLE = "The wallet is locked or unavailable. Unlock it and try again.";
 const NETWORK_UNREACHABLE = "Couldn't reach the network. Check your connection and try again.";
 const UNEXPECTED_FALLBACK = "Something went wrong. Please try again.";
+const RPC_REJECTED = "The RPC rejected this request. Copy the error details for the full response.";
+const SERVICE_REJECTED =
+  "A wallet service rejected this request. Copy the error details for the full response.";
+const RATE_LIMITED = "This service is rate limiting requests. Wait a moment and try again.";
 
 // Exact raw strings the background/runtime layers throw for recoverable,
 // user-facing conditions.
@@ -52,6 +57,16 @@ const EXACT: ReadonlyMap<string, string> = new Map([
 
 // Every "invalid <...> request" validation string shares one friendly message.
 const VALIDATION_REQUEST = /^invalid .+ request$/;
+const RATE_LIMIT = /(?:\b429\b|rate[- ]?limit|too many requests)/i;
+const RAW_RPC = /(?:^\s*RPC:|\bstarknet_[a-zA-Z0-9_]+\b[\s\S]*\bparams\b|\bwith params\s*\{)/i;
+const RAW_RPC_RESPONSE =
+  /(?:^\s*(?:20|24|41|55):|\baccount validation failed\b|\bblock not found(?:: undefined)?\b|\bcontract not found(?:: undefined)?\b|\bresource bounds? (?:were )?not satisfied\b|\btransaction execution error\b)/i;
+const RAW_HTTP = /(?:\bHTTP\s+[45]\d\d\b|\bresponse body\b|\brequest rejected\s*[:{[])/i;
+const rawServiceDiagnostic = (value: string): boolean =>
+  value.length > 240 ||
+  /[\r\n]/.test(value) ||
+  RAW_HTTP.test(value) ||
+  /^\s*[[{][\s\S]*[\]}]\s*$/.test(value);
 
 /**
  * Classifies a raw error string into user-facing copy. Unrecognized non-empty
@@ -72,6 +87,23 @@ export const friendlyError = (raw: string): FriendlyError => {
 
   if (VALIDATION_REQUEST.test(normalized)) {
     return { message: GENERIC_VALIDATION };
+  }
+
+  const networkError = friendlyNetworkError(trimmed);
+  if (networkError) {
+    return { message: networkError };
+  }
+
+  if (RATE_LIMIT.test(trimmed)) {
+    return { message: RATE_LIMITED };
+  }
+
+  if (RAW_RPC.test(trimmed) || RAW_RPC_RESPONSE.test(trimmed)) {
+    return { message: RPC_REJECTED };
+  }
+
+  if (rawServiceDiagnostic(trimmed)) {
+    return { message: SERVICE_REJECTED };
   }
 
   return { message: trimmed };

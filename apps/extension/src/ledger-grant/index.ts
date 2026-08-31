@@ -168,24 +168,25 @@ const render = (): void => {
   methods.setAttribute("aria-labelledby", "grant-methods-title");
   const methodsTitle = textElement("p", "grant-readiness-head", "Connection method");
   methodsTitle.id = "grant-methods-title";
+  const validationNotice = textElement(
+    "p",
+    "grant-footnote",
+    "Hardware preview · MC Wallet's complete physical device matrix is still in progress. Use with trusted-test funds only.",
+  );
   const methodOptions = element("div", "grant-method-options");
   const cableMethod = element("button", "grant-method");
   cableMethod.type = "button";
   cableMethod.dataset["active"] = "true";
   cableMethod.setAttribute("aria-pressed", "true");
-  cableMethod.append(
-    textElement("strong", "", "USB cable"),
-    textElement("span", "", "Recommended · S Plus, X, Stax, Flex, and Gen5"),
-  );
+  cableMethod.append(textElement("strong", "", "USB cable"));
+  cableMethod.append(textElement("span", "", "Primary connection method"));
   const bluetoothMethod = element("button", "grant-method");
   bluetoothMethod.type = "button";
   bluetoothMethod.setAttribute("aria-pressed", "false");
-  bluetoothMethod.append(
-    textElement("strong", "", "Bluetooth"),
-    textElement("span", "", "Nano X, Stax, Flex, and Nano Gen5"),
-  );
+  bluetoothMethod.append(textElement("strong", "", "Bluetooth"));
+  bluetoothMethod.append(textElement("span", "", "Compatibility path for Bluetooth devices"));
   methodOptions.append(cableMethod, bluetoothMethod);
-  methods.append(methodsTitle, methodOptions);
+  methods.append(methodsTitle, validationNotice, methodOptions);
 
   const readiness = element("section", "grant-readiness");
   readiness.setAttribute("aria-labelledby", "grant-readiness-title");

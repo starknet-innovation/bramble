@@ -75,9 +75,10 @@ schema, so it cannot be changed after creation.
 - Preset: OpenZeppelin `AccountUpgradeable`, Cairo `openzeppelin_presets` v3.0.0.
 - Pinned class hash:
   `0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381`
-  (identical on Mainnet and Sepolia). Source of truth: the vendored Krusty KMS
-  manifest `crates/kms/src/oz_account_class_manifest.json` at the commit pinned
-  in `scripts/vendor-krusty.ts`. Address derivation matches `accountDeployment`
+  (identical on Mainnet and Sepolia). Source of truth: `OZ_ACCOUNT_CLASS_HASH` in
+  `packages/foundation/wallet-model/src/accounts/accounts.ts`, cross-checked against the published
+  Krusty package by the known-answer vectors in `scripts/check-krusty-adapter.ts`. Address
+  derivation matches `accountDeployment`
   in `packages/platform/starknet/src/transactions/deployment.ts` (constructor `constructor(public_key: felt252)`).
 - Devnet: run the node as `starknet-devnet --chain-id SN_DEVNET`, matching `STARKNET_NETWORKS.SN_DEVNET`; a
   default devnet reports Sepolia's id and the write-path guard rejects it. A local devnet also declares only its
@@ -387,16 +388,17 @@ serialized before broadcast and prove against mature historical state. See
 
 ## Krusty KMS
 
-Wallet checks and cryptography require vendored WASM from Krusty KMS.
+Wallet checks and cryptography require the exact published Krusty KMS WASM package.
 
 ```bash
-bun run vendor:krusty
+bun install --frozen-lockfile
 bun run check
 ```
 
-The vendor script checks out the pinned Krusty KMS commit in `scripts/vendor-krusty.ts`.
-The build requires `vendor/krusty-kms/crates/wasm/pkg` and copies its runtime files into
-`dist/vendor/krusty-kms/pkg`.
+`package.json` pins the version and `bun.lock` pins the immutable registry tarball. Before import,
+`scripts/check-krusty-adapter.ts` verifies the package metadata, JavaScript and WASM digests, known
+wallet vectors, and authenticated Nostr round trip. The build copies those installed runtime bytes
+into `dist/dependencies/krusty-kms`.
 
 ## Extension
 
@@ -485,9 +487,9 @@ eagerly so the hidden Collectibles panel is warm when opened.
 
 ## Reproducible Builds
 Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen lockfile,
-`wasm-pack 0.13.1`, the exact Argent account-contract release and official artifact digests,
-GitHub Actions by commit SHA, and the Krusty
-KMS source at the commit recorded in `scripts/vendor-krusty.ts`. The Privacy SDK source and browser
+the exact published Krusty KMS package and both runtime-file digests, the exact Argent
+account-contract release and official artifact digests, and GitHub Actions by commit SHA. The
+Privacy SDK source and browser
 bundle digest are pinned by its vendor/check scripts. Reproduce a release, then compare
 `artifacts/*.zip.sha256` against the CI artifact checksum:
 

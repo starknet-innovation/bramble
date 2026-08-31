@@ -18,6 +18,7 @@ import { createMemoryStore } from "@mc-wallet/store/kv";
 import { explorerFallbackAllowed, isExplorerFallback } from "@mc-wallet/wallet-model/preferences";
 
 const MY_NODE = "https://my-node.example/rpc";
+const MY_EXPLORER = "https://explorer.example/v1";
 const store = () => createPreferencesStore({ store: createMemoryStore() });
 
 describe("explorerFallbackAllowed", () => {
@@ -66,17 +67,44 @@ describe("isExplorerFallback", () => {
 });
 
 describe("stored explorer-fallback preferences", () => {
-  test("records and flips an explicit per-network choice", async () => {
+  test("records the API and disclosure choice atomically", async () => {
     const preferences = store();
 
     await expect(
-      preferences.setExplorerFallback({ enabled: false, networkId: "SN_MAIN" }),
-    ).resolves.toMatchObject({ explorerFallback: { SN_MAIN: false } });
+      preferences.setExplorerFallback({
+        apiUrl: MY_EXPLORER,
+        enabled: false,
+        networkId: "SN_MAIN",
+      }),
+    ).resolves.toMatchObject({
+      explorerApiUrls: { SN_MAIN: MY_EXPLORER },
+      explorerFallback: { SN_MAIN: false },
+    });
     await expect(
       preferences.setExplorerFallback({ enabled: true, networkId: "SN_MAIN" }),
-    ).resolves.toMatchObject({ explorerFallback: { SN_MAIN: true } });
+    ).resolves.toMatchObject({
+      explorerApiUrls: { SN_MAIN: MY_EXPLORER },
+      explorerFallback: { SN_MAIN: true },
+    });
 
     expect((await preferences.read()).explorerFallback).toEqual({ SN_MAIN: true });
+  });
+
+  test("rejects an insecure explorer API without changing either setting", async () => {
+    const preferences = store();
+    await preferences.setExplorerFallback({ enabled: false, networkId: "SN_MAIN" });
+
+    await expect(
+      preferences.setExplorerFallback({
+        apiUrl: "http://explorer.example/v1",
+        enabled: true,
+        networkId: "SN_MAIN",
+      }),
+    ).rejects.toThrow("Invalid explorer API endpoint");
+    expect(await preferences.read()).toMatchObject({
+      explorerApiUrls: {},
+      explorerFallback: { SN_MAIN: false },
+    });
   });
 
   test("leaves every other network undecided", async () => {
@@ -129,6 +157,12 @@ describe("stored explorer-fallback preferences", () => {
     expect(
       isWalletPreferences({ ...defaultWalletPreferences(), explorerFallback: { SN_MAIN: true } }),
     ).toBe(true);
+    expect(
+      isWalletPreferences({
+        ...defaultWalletPreferences(),
+        explorerApiUrls: { SN_MAIN: "http://explorer.example" },
+      }),
+    ).toBe(false);
   });
 
   test("a backup file can neither arm nor disarm the lane", async () => {
@@ -137,9 +171,11 @@ describe("stored explorer-fallback preferences", () => {
 
     const restored = await preferences.importPreferences({
       ...defaultWalletPreferences(),
+      explorerApiUrls: { SN_MAIN: MY_EXPLORER },
       explorerFallback: { SN_MAIN: true },
     });
 
+    expect(restored.explorerApiUrls).toEqual({});
     expect(restored.explorerFallback).toEqual({ SN_MAIN: false });
   });
 });

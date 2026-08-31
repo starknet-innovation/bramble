@@ -10,10 +10,13 @@ import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 
 const createModule = (overrides: Record<string, unknown> = {}) => ({
+  deriveNostrPublicKey() {
+    return { public_key: "11".repeat(32) };
+  },
   deriveOzAccountAddress() {
     return "0xabc";
   },
-  deriveStrk20ViewingKey() {
+  deriveScopedStrk20ViewingKey() {
     return "0x456";
   },
   deriveStarknetKeypair() {
@@ -25,11 +28,29 @@ const createModule = (overrides: Record<string, unknown> = {}) => ({
   getAccountClassHashes() {
     return "{}";
   },
+  openNostrApplicationData() {
+    return JSON.stringify({
+      content: "payload",
+      identifier: "mc-wallet.multisig",
+      senderPublicKey: "22".repeat(32),
+    });
+  },
   signStarkHash() {
     return { publicKey: "0xabc", r: "0x1", s: "0x2" };
   },
   validateMnemonic() {
     return true;
+  },
+  wrapNostrApplicationData() {
+    return JSON.stringify({
+      content: "ciphertext",
+      created_at: 1,
+      id: "11".repeat(32),
+      kind: 1_059,
+      pubkey: "22".repeat(32),
+      sig: "33".repeat(64),
+      tags: [["p", "44".repeat(32)]],
+    });
   },
   ...overrides,
 });

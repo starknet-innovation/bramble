@@ -135,6 +135,9 @@ describe("sidepanel styles", () => {
       /\.account-network-label \{[^}]*text-overflow: ellipsis;[^}]*text-wrap: nowrap;/s,
     );
     expect(SIDEPANEL_STYLES).toMatch(
+      /\.pill \{[^}]*max-width: 100%;[^}]*text-overflow: ellipsis;/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
       /\.account-net\.degraded \.dot \{[^}]*network-status-pulse 2400ms[^}]*var\(--mc-warning\)/s,
     );
   });
@@ -145,6 +148,19 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.accepted { color: var(--mc-positive); }");
     expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.pending { color: var(--mc-warning); }");
     expect(SIDEPANEL_STYLES).not.toContain(".tx-status");
+  });
+
+  test("participant choices retain their labels at minimum side-panel width", () => {
+    expect(SIDEPANEL_STYLES).toMatch(
+      /@media \(max-width: 390px\) \{[^}]*\.multisig-participant-methods button \{ padding-inline:/s,
+    );
+  });
+
+  test("compact disclosure states cannot collide with their titles", () => {
+    expect(SIDEPANEL_STYLES).toMatch(
+      /details\.disclosure > summary \.menu-copy strong \{[^}]*text-overflow: ellipsis;[^}]*text-wrap: nowrap;/s,
+    );
+    expect(SIDEPANEL_STYLES).toContain("details.disclosure > summary .menu-value { flex: none; }");
   });
 
   test("colors come only from skin tokens, never literals", () => {
@@ -215,7 +231,8 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toContain(".sparkline-up polyline { stroke: var(--mc-positive); }");
     // Toast tone is a leading icon chip — green check on positive-soft for
     // success, red alert on danger-soft for error — a fixed heuristic the eye
-    // reads before any text, while the surface stays a neutral panel.
+    // reads before any text, while the surface stays a neutral panel and long
+    // messages wrap instead of clipping their recovery guidance.
     expect(SIDEPANEL_STYLES).toContain(
       ".toast.success .toast-icon { background: var(--mc-positive-soft); color: var(--mc-positive); }",
     );
@@ -223,7 +240,7 @@ describe("sidepanel styles", () => {
       ".toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }",
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.toast-text \{[^}]*text-overflow: ellipsis[^}]*text-wrap: nowrap/s,
+      /\.toast-text \{[^}]*overflow-wrap: anywhere[^}]*text-wrap: pretty/s,
     );
     // The swap success moment draws its ring and check in the semantic green
     // and collapses to static marks under reduced motion.

@@ -4,7 +4,7 @@
 
 import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
 import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import { isOkResponse } from "../../popup/responses/multisig-responses";
+import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/multisig-responses";
 import {
   type ActivityResponse,
   type AllowancesResponse,
@@ -25,6 +25,7 @@ import {
   isPreferencesResponse,
   isPricesResponse,
   isRevealSecretsResponse,
+  isSupportDiagnosticsResponse,
   isTokenChartResponse,
   isTransactionAlertsResponse,
   isTransferResponse,
@@ -191,6 +192,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       accountId?: string,
       cached = false,
       refreshHistory = false,
+      forceHistory = false,
     ): Promise<{
       readonly entries: ActivityResponse["activity"];
       readonly historyUnavailable: boolean;
@@ -198,7 +200,8 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({
         ...(accountId === undefined ? {} : { accountId }),
         ...(cached ? { cached: true } : {}),
-        ...(refreshHistory ? { refreshHistory: true } : {}),
+        ...(refreshHistory || forceHistory ? { refreshHistory: true } : {}),
+        ...(forceHistory ? { forceHistory: true } : {}),
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {
@@ -259,9 +262,10 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "transfer review failed");
     },
-    async loadBalances(cached = false): Promise<ScopedBalanceState> {
+    async loadBalances(cached = false, refresh = false): Promise<ScopedBalanceState> {
       const response = await sendMessage({
         ...(cached ? { cached: true } : {}),
+        ...(refresh ? { refresh: true } : {}),
         type: "wallet.getBalances",
       });
       if (isBalancesResponse(response)) {
@@ -317,6 +321,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       // Per-entry: one malformed prompt must not blank the queue (MCW-V09-106).
       return readPendingApprovals(await sendMessage({ type: "wallet.pendingApprovals" })) ?? [];
     },
+    async loadNostrPublicKey(): Promise<string> {
+      const response = await sendMessage({ type: "wallet.nostrPublicKey" });
+      if (isNostrPublicKeyResponse(response)) return response.nostrPublicKey;
+      throw responseError(response, "coordination identity unavailable");
+    },
     async loadPreferences() {
       const response = await sendMessage({ type: "wallet.preferences" });
       if (isPreferencesResponse(response)) {
@@ -346,11 +355,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       address: string,
       networkId: string,
       publicKeyX?: string,
+      nostrPublicKey?: string,
     ): Promise<void> {
       const response = await sendMessage({
         address,
         label,
         networkId,
+        ...(nostrPublicKey ? { nostrPublicKey } : {}),
         ...(publicKeyX ? { publicKeyX } : {}),
         type: "wallet.saveAddress",
       });
@@ -391,6 +402,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     async setDisplay(input: {
       readonly approvalSurface?: "popup" | "side-panel";
       readonly displayCurrency?: "eur" | "gbp" | "usd";
+      readonly reliabilityDiagnostics?: boolean;
       readonly theme?: "dark" | "light";
     }): Promise<void> {
       const response = await sendMessage({ ...input, type: "wallet.setDisplay" });
@@ -399,15 +411,19 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "display update failed");
     },
-    async setExplorerFallback(networkId: string, enabled: boolean): Promise<void> {
+    async loadDiagnostics() {
+      const response = await sendMessage({ type: "wallet.diagnostics" });
+      if (isSupportDiagnosticsResponse(response)) return response.diagnostics;
+      throw responseError(response, "diagnostic export failed");
+    },
+    async setExplorerFallback(networkId: string, enabled: boolean, apiUrl?: string): Promise<void> {
       const response = await sendMessage({
+        ...(apiUrl === undefined ? {} : { apiUrl }),
         enabled,
         networkId,
         type: "wallet.setExplorerFallback",
       });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
+      if (isPreferencesResponse(response)) return;
       throw responseError(response, "explorer fallback update failed");
     },
     async setRpcOverride(networkId: string, rpcUrl: string): Promise<void> {
@@ -416,6 +432,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return;
       }
       throw responseError(response, "rpc endpoint update failed");
+    },
+    async setNostrRelayUrl(relayUrl: string): Promise<void> {
+      const response = await sendMessage({ relayUrl, type: "wallet.setNostrRelayUrl" });
+      if (isPreferencesResponse(response)) return;
+      throw responseError(response, "Nostr relay update failed");
     },
     async setStrk20NetworkConfig(
       networkId: string,

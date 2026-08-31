@@ -10,6 +10,7 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import { transitionTaskStage } from "../../app/rendering/stage-transition";
+import type { SidepanelWallet } from "../../runtime/runtime";
 import {
   bindCopyButtons,
   buttonBusy,
@@ -44,6 +45,7 @@ type MultisigDeployUiDeps = {
   readonly openDetail: (id: string) => void;
   readonly openFunding: (intent: SendIntent) => Promise<void>;
   readonly setResult: (id: string, message: string) => void;
+  readonly wallet: Pick<SidepanelWallet, "saveAddress">;
 };
 
 type CreationStage = (typeof MULTISIG_CREATION_STEPS)[number][0];
@@ -281,7 +283,20 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     return null;
   };
   if (form)
-    bindMultisigParticipantPicker(form, { multisig: deps.multisig, onSelect: addParticipant });
+    bindMultisigParticipantPicker(form, {
+      multisig: deps.multisig,
+      onSelect: addParticipant,
+      saveContact: (participant) =>
+        deps.wallet.saveAddress(
+          participant.label,
+          participant.address,
+          form.querySelector<HTMLElement>("[data-participant-network]")?.dataset[
+            "participantNetwork"
+          ] ?? "",
+          participant.publicKeyX,
+          participant.nostrPublicKey,
+        ),
+    });
   syncSignerSet(false);
   const returnToPreviousStage = (event?: Event): boolean => {
     if (!form) return false;

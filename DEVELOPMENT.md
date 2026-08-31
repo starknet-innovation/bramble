@@ -167,9 +167,9 @@ Trigger: **`pull_request` targeting `main` or `release/**`** (plus `push` to
   floor (`check:coverage`). Runs on `ubuntu-latest` — **no** crypto/contract
   toolchain, **no** build, **no** E2E — so PR feedback is fast. It deliberately
   does **not** run the aggregate `bun run check` (which chains the vendored
-  `check:krusty`/`check:argent`) or any heavy step.
-- **`release-validation`** — the **full heavy pipeline**: cargo/wasm-pack,
-  `vendor:krusty`, `vendor:argent`, `bun run check`, coverage floor, `build`,
+  `check:argent`/`check:privacy`) or any heavy step.
+- **`release-validation`** — the **full heavy pipeline**:
+  `vendor:argent`, `vendor:privacy`, `bun run check`, coverage floor, `build`,
   `test:e2e`, `package:extension`, the `apps/terminal` typecheck+build, and the
   `bun audit` dependency gate (`check:audit`), on the self-hosted CodeBuild
   runner. It is **gated by a job-level `if:`** so it runs **only on same-repository
@@ -193,9 +193,10 @@ again post-merge and nightly (below).
 
 Trigger: **`push` to `release/**`** (i.e. after a PR merges into the release branch).
 
-Runs the heavier steps: vendors the Krusty KMS WASM core and verifies the pinned
-Argent account-contract release, builds the extension, and produces the reproducible package +
-checksum. These need the private Krusty repo, network access, and a Rust toolchain, so they
+Runs the heavier steps: verifies the published Krusty KMS package and the pinned
+Argent account-contract and Privacy SDK releases, builds the extension, and produces the
+reproducible package + checksum. The vendor steps need network access and their contract
+toolchains, so they
 run on the same self-hosted CodeBuild runner CI uses. If a vendor step can't
 complete (missing private-repo access or toolchain drift) it writes a clear
 explanation to the run summary and **fails honestly** — it never fakes success.
@@ -245,7 +246,7 @@ read-only self-hosted job; a separate hosted job receives the narrow
 | --- | :---: | :---: | :---: | :---: |
 | Lint, typecheck, file/config + manifest standards, import/cycle, unit/conformance tests, coverage | ✅ | ✅ | | |
 | Scope & naming guards (`pr-guards`) | ✅ | | | |
-| Vendor Krusty/Argent, extension build, reproducible package | | ✅ | ✅ | ✅ (build) |
+| Verify Krusty package, vendor Argent/Privacy, extension build, reproducible package | | ✅ | ✅ | ✅ (build) |
 | Full E2E (Playwright) | | ✅ | | ✅ |
 | Dependency audit (`bun audit`) | | ✅ | | ✅ (live DB) |
 | Perf / regression | | | | ⚠️ placeholder (no suite exists yet) |
@@ -400,8 +401,7 @@ owner.
 
 - Keep default workflow token permissions **read-only** and prevent Actions from
   approving pull requests.
-- Require every third-party action to use a **full commit SHA**. The repository
-  workflow-policy gate also pins the Rust channel to `1.96.1`.
+- Require every third-party action to use a **full commit SHA**.
 - Keep **secret scanning** and **push protection** enabled.
 - Keep the `chrome-web-store` environment restricted to protected branches.
   The current private-repository plan does not support required-reviewer

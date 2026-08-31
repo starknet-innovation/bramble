@@ -50,11 +50,17 @@ describe("home hydration priority", () => {
     const nfts = deferred<Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>>();
     const watched = deferred<Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>>();
     const cache = emptyRenderCache();
+    const deferredStarts: string[] = [];
     let paints = 0;
     const run = hydrateView({
       activeView: "home",
       cache,
-      deployment: { load: () => deployment.promise },
+      deployment: {
+        load: () => {
+          deferredStarts.push("deployment");
+          return deployment.promise;
+        },
+      },
       multisig: emptyMultisigClient,
       paint: () => {
         paints += 1;
@@ -63,10 +69,21 @@ describe("home hydration priority", () => {
       selectedTokenId: null,
       status,
       wallet: {
-        discoverNfts: () => nfts.promise,
+        discoverNfts: (
+          _includeWatched: boolean,
+          _scope?: string,
+          _multisigId?: string,
+          cached?: boolean,
+        ) => {
+          if (!cached) deferredStarts.push("nfts");
+          return nfts.promise;
+        },
         loadWatchedNfts: () => watched.promise,
-        loadActivity: (_accountId?: string, cached?: boolean) =>
-          cached ? Promise.resolve({ entries: [], historyUnavailable: false }) : activity.promise,
+        loadActivity: (_accountId?: string, cached?: boolean) => {
+          if (cached) return Promise.resolve({ entries: [], historyUnavailable: false });
+          deferredStarts.push("activity");
+          return activity.promise;
+        },
         loadBalances: (cached?: boolean) =>
           cached
             ? Promise.resolve({
@@ -85,12 +102,14 @@ describe("home hydration priority", () => {
     await flush();
     expect(paints).toBe(1);
     expect(cache.prices).toEqual({ "0x1": 1 });
+    expect(deferredStarts).toEqual([]);
 
     balances.resolve({ accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" });
     prices.resolve({ asOf: 2, changes: {}, prices: { "0x1": 2 }, stale: false });
     await flush();
     expect(paints).toBe(2);
     expect(cache.prices).toEqual({ "0x1": 2 });
+    expect(deferredStarts).toEqual(["deployment", "activity"]);
 
     deployment.resolve(true);
     activity.resolve({ entries: [], historyUnavailable: false });
@@ -138,7 +157,7 @@ describe("home hydration priority", () => {
     expect(cache.discoveredNfts).toHaveLength(1);
   });
 
-  test("paints watched artwork before slow portfolio and indexer jobs finish", async () => {
+  test("paints watched artwork before slower portfolio jobs finish", async () => {
     const balances = deferred<Awaited<ReturnType<SidepanelWallet["loadBalances"]>>>();
     const prices = deferred<Awaited<ReturnType<SidepanelWallet["loadPrices"]>>>();
     const indexed = deferred<Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>>();

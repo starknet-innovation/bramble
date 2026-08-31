@@ -232,7 +232,21 @@ if (import.meta.main) {
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*",
   ];
+  // Chrome grants none of these until a user saves a custom HTTP service from
+  // Settings. The UI requests only that endpoint's exact origin; the broad
+  // declaration is the MV3 ceiling needed to support arbitrary HTTPS hosts.
+  const expectedOptionalHostPermissions = [
+    "https://*/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+  ];
   const expectedActionTitle = "Open MC Wallet";
+  const expectedIcons = {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png",
+  } as const;
   const expectedSidePanel = "sidepanel.html";
   const expectedProviderResource = "provider/inpage.js";
   const expectedContentScript = "content/index.js";
@@ -276,8 +290,10 @@ if (import.meta.main) {
       "content_scripts",
       "description",
       "host_permissions",
+      "icons",
       "manifest_version",
       "name",
+      "optional_host_permissions",
       "permissions",
       "sandbox",
       "side_panel",
@@ -299,12 +315,30 @@ if (import.meta.main) {
     failures.push("manifest permissions must stay alarms, sidePanel, and storage only");
   }
 
+  const icons = hasOnlyKeys(manifest["icons"], ["16", "32", "48", "128"])
+    ? manifest["icons"]
+    : null;
+  for (const [size, path] of Object.entries(expectedIcons)) {
+    if (icons?.[size] !== path) failures.push(`manifest ${size}px icon must stay ${path}`);
+    await requireFile(`${publicRoot}/${path}`);
+  }
+
   const hostPermissions = manifest["host_permissions"];
   if (!Array.isArray(hostPermissions) || new Set(hostPermissions).size !== hostPermissions.length) {
     failures.push("manifest host_permissions must not contain duplicates");
   }
   if (!hasOnly(hostPermissions, expectedHostPermissions)) {
     failures.push("manifest host_permissions must stay pinned to reviewed service endpoints");
+  }
+  const optionalHostPermissions = manifest["optional_host_permissions"];
+  if (
+    !Array.isArray(optionalHostPermissions) ||
+    new Set(optionalHostPermissions).size !== optionalHostPermissions.length
+  ) {
+    failures.push("manifest optional_host_permissions must not contain duplicates");
+  }
+  if (!hasOnly(optionalHostPermissions, expectedOptionalHostPermissions)) {
+    failures.push("manifest optional hosts must stay HTTPS-or-loopback and user-granted");
   }
 
   const contentSecurityPolicy = hasOnlyKeys(manifest["content_security_policy"], [

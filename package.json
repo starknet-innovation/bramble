@@ -1,6 +1,6 @@
 {
   "name": "mc-wallet",
-  "version": "0.9.3",
+  "version": "0.10.0",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -36,16 +36,16 @@
     "test:e2e:build": "bun run build && bun run test:e2e",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
-    "vendor:krusty": "bun run scripts/vendor-krusty.ts",
     "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
     "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts"
   },
   "devDependencies": {
-    "@mc-wallet/testkit": "workspace:*",
     "@biomejs/biome": "2.5.8",
+    "@mc-wallet/testkit": "workspace:*",
     "@playwright/test": "1.62.1",
     "@types/bun": "1.3.14",
     "@types/node": "26.2.0",
+    "fast-check": "4.9.0",
     "knip": "6.32.2",
     "madge": "8.0.0",
     "typescript": "6.0.3"
@@ -67,6 +67,7 @@
     "@mc-wallet/wallet-ui": "workspace:*",
     "@mc-wallet/wallet-model": "workspace:*",
     "@mc-wallet/wallet-protocol": "workspace:*",
+    "@starknetfoundation/krusty-kms-wasm": "0.10.0",
     "starknet": "10.0.2"
   }
 }

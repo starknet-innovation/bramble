@@ -37,7 +37,7 @@ import {
   riskFlagMessages,
 } from "../../shared/review-render";
 import { multisigIntentActions, multisigIntentOutcome } from "./multisig-intent-actions";
-import { compactIntentListView, intentDeleteButton } from "./multisig-intent-list";
+import { type CompactIntentList, intentDeleteButton } from "./multisig-intent-list";
 import {
   actionableArgentMultisigIntents,
   feeReplacementIntentFor,
@@ -387,7 +387,7 @@ const compactIntentList = (
   record: ArgentMultisigRecord,
   intents: readonly ArgentMultisigSigningIntent[],
   preferences: WalletPreferences | null,
-): string => {
+): CompactIntentList => {
   const all = intents.filter((intent) => intent.accountId === record.id);
   const scoped = actionableArgentMultisigIntents(all);
   const heading = scoped.every((intent) => intent.state === "stale")
@@ -395,9 +395,11 @@ const compactIntentList = (
     : scoped.some((intent) => intent.state === "stale")
       ? "Intents requiring action"
       : "Awaiting verification & signature";
-  return compactIntentListView(
+  return {
+    emptyMessage:
+      "No intents are awaiting verification or signature. Import one to review it here.",
     heading,
-    scoped.map((intent) => ({
+    items: scoped.map((intent) => ({
       accountId: record.id,
       assets: intentReviewAssets(intent, record, preferences),
       id: intent.id,
@@ -414,8 +416,7 @@ const compactIntentList = (
               : "Awaiting signatures"
       } · ${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
     })),
-    "No intents are awaiting verification or signature. Import one to review it here.",
-  );
+  };
 };
 
 /**
@@ -480,12 +481,11 @@ export const multisigDetailFlow = (
       ${multisigPortfolio({
         authorityAvailable: !loadError && view.config !== null,
         ...(effectiveAuthorityIssue ? { authorityMessage: effectiveAuthorityIssue } : {}),
-        canSign:
-          !loadError && view.deployed === true && options.length > 0 && hasCompleteSignerConfig,
+        canPropose: !loadError && view.deployed === true && hasCompleteSignerConfig,
         data: portfolio,
         ...(view.deployed === undefined ? {} : { deployed: view.deployed }),
         ...(view.deploymentPending ? { deploymentPending: true } : {}),
-        trustedIntentsMarkup: compactIntentList(record, intents, preferences),
+        intentList: compactIntentList(record, intents, preferences),
         openCount,
         preferences,
         record,

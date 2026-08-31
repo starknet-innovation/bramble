@@ -14,9 +14,13 @@ import { animate } from "./motion";
  * failures (e.g. "Failed to fetch") into a friendly, actionable line.
  */
 export const errorMessage = (error: unknown, fallback: string): string => {
-  const raw = error instanceof Error ? error.message : fallback;
+  const raw = errorDetails(error, fallback);
   return friendlyNetworkError(raw) ?? raw;
 };
+
+/** Complete safe diagnostic carried by an Error for an explicit user copy action. */
+export const errorDetails = (error: unknown, fallback: string): string =>
+  error instanceof Error ? error.message : fallback;
 
 /**
  * Marks a button busy so repeated submits are impossible while work runs.
@@ -69,6 +73,8 @@ const toastCopyButton = (doc: Document, message: string): HTMLButtonElement => {
     void (clipboard?.writeText(message) ?? Promise.reject(new Error("Clipboard unavailable"))).then(
       () => {
         copy.innerHTML = icon("check");
+        copy.title = "Error details copied";
+        copy.setAttribute("aria-label", "Error details copied");
       },
       () => {
         // Never raise another toast from inside a toast; say it in place instead

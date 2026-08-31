@@ -89,11 +89,18 @@ describe("bindActivity", () => {
   };
 
   test("refresh reloads status and renders it", async () => {
-    const { app, calls, renderCalls } = mountActivity();
+    const requested: unknown[][] = [];
+    const { app, calls, renderCalls } = mountActivity({
+      async loadActivity(...args: unknown[]) {
+        requested.push(args);
+        return { entries: [], historyUnavailable: false };
+      },
+    });
     const button = app.querySelector<HTMLButtonElement>("#activity-refresh");
     button?.click();
     await flush();
     expect(calls.loadStatus).toBe(1);
+    expect(requested).toEqual([[undefined, false, true, true]]);
     expect(renderCalls).toHaveLength(1);
     expect(button?.hasAttribute("data-busy")).toBe(false);
   });

@@ -25,6 +25,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
+import { isNostrRelayUrl } from "@mc-wallet/wallet-model/nostr";
 import {
   type AccountLabels,
   type AddressBookEntry,
@@ -53,12 +54,15 @@ const PREFERENCE_KEYS: readonly string[] = [
   "addressBook",
   "customNetworks",
   "displayCurrency",
+  "explorerApiUrls",
   "explorerFallback",
   "groups",
   "hiddenTokens",
   "nftIndexerUrl",
   "nfts",
+  "nostrRelayUrl",
   "rpcOverrides",
+  "reliabilityDiagnostics",
   "schemaVersion",
   "strk20Networks",
   "strk20ProverUrl",
@@ -77,9 +81,13 @@ const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["approvalSurface"] === undefined ||
     isApprovalSurfacePreference(value["approvalSurface"])) &&
   (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
+  (value["explorerApiUrls"] === undefined || isRpcOverrides(value["explorerApiUrls"])) &&
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
+  (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
+  (value["reliabilityDiagnostics"] === undefined ||
+    typeof value["reliabilityDiagnostics"] === "boolean") &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
 const hasValidUrlAndNftFields = (value: Record<string, unknown>): boolean =>
@@ -143,6 +151,9 @@ const rebuiltContact = (value: unknown): AddressBookEntry | null =>
         address: value["address"],
         label: value["label"],
         networkId: value["networkId"],
+        ...(typeof value["nostrPublicKey"] === "string"
+          ? { nostrPublicKey: value["nostrPublicKey"] }
+          : {}),
         ...(typeof value["publicKeyX"] === "string" ? { publicKeyX: value["publicKeyX"] } : {}),
       })
     : null;
@@ -298,8 +309,8 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
  * Deliberately excluded — and therefore never restorable from a file — is
  * every trust-bearing field the transaction-review layer reads as ground
  * truth: `tokens` (decimals and symbols behind amount formatting and the
- * unknown-contract warning), `rpcOverrides`, `customNetworks`,
- * `nftIndexerUrl`, `nfts`, `strk20Networks`, `strk20ProverUrl`, and
+ * unknown-contract warning), `rpcOverrides`, `explorerApiUrls`, `customNetworks`,
+ * `nftIndexerUrl`, `nfts`, `nostrRelayUrl`, `strk20Networks`, `strk20ProverUrl`, and
  * `approvalSurface`. `explorerFallback` is excluded for the same reason: a
  * file that flipped it to `true` would re-arm a third-party address disclosure
  * the user had switched off, and one that flipped it to `false` would turn an

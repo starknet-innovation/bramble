@@ -418,10 +418,9 @@ export const multisigReceiveFlow = (
       "multisig-receive",
       receiveAddressView({
         address: view.record.address,
-        copyLabel: "Copy Argent multisig address",
-        eyebrow: "Shared account",
+        copyLabel: "Copy address",
         hint: `Send only Starknet assets on ${status.network}.`,
-        title: multisigDisplayName(view.record),
+        networkId: status.networkId,
       }),
     )
   );

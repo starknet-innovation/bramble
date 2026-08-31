@@ -209,8 +209,8 @@ const validatedNetworkClassHash = async (
 /**
  * Derives keyless Ledger account metadata from a device-provided public key.
  *
- * Reuses the same `kms.deriveOzAccountAddress(publicKeyX, classHash)` call HD and
- * imported accounts use, so the counterfactual address a Ledger account is funded
+ * Reuses the same explicit zero-salt Krusty derivation HD and imported accounts
+ * use, so the counterfactual address a Ledger account is funded
  * at equals the one it will deploy to. No seed, no private key, and no new Krusty
  * entry point: address derivation from an external public key is a public-key op,
  * not signing, so it does not weaken "Krusty owns crypto / fail closed". Throws a

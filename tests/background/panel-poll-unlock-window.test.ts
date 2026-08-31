@@ -5,8 +5,8 @@
  * The dapp half of this rule is pinned next door in
  * dapp-poll-unlock-window.test.ts. This is the other half, and it is the one
  * that survived round one: the panel's own refresh loop re-reads state every
- * fifteen seconds while it is visible, hydration re-reads a view's network data
- * on every one of those ticks, and a settling privacy registration adds a
+ * minute while it is visible, hydration rechecks only data lanes due for that
+ * view, and a settling privacy registration adds a
  * three-second poll of its own. None of that is the user doing anything. If any
  * of those reads renews the unlock, an open side panel keeps the wallet
  * unlocked forever, which is the same defeat a polling dapp page gave us.
@@ -242,7 +242,7 @@ describe("panel polling cannot hold the wallet unlocked", () => {
     ]);
 
     expect(lifecycle.split("\n").filter((line) => line.includes("wallet.loadStatus"))).toEqual([
-      "    refresh: withTransactionAlerts(document, wallet, async () => render(await wallet.loadStatus())),",
+      "        render(await wallet.loadStatus(), reason),",
     ]);
     expect(
       transactionAlerts.split("\n").filter((line) => line.includes("wallet.loadTransactionAlerts")),

@@ -11,6 +11,8 @@
     "./fee-bounds": "./src/rpc/fee-bounds.ts",
     "./multisig-invoke": "./src/rpc/multisig-invoke.ts",
     "./provider": "./src/rpc/provider.ts",
+    "./rpc-diagnostics": "./src/rpc/rpc-diagnostics.ts",
+    "./rpc-transport": "./src/rpc/rpc-transport.ts",
     "./rpc": "./src/rpc/rpc.ts",
     "./rpc-assets": "./src/rpc/rpc-assets.ts",
     "./rpc-submit": "./src/rpc/rpc-submit.ts",
@@ -23,7 +25,7 @@
   "scripts": {
     "check": "bun run check:types && bun run test",
     "check:types": "tsc --noEmit -p tsconfig.json",
-    "test": "bun test ./tests"
+    "test": "bun test --preload ../../../tests/support/test-preload.ts ./tests"
   },
   "dependencies": {
     "@mc-wallet/core": "workspace:*",
