@@ -151,13 +151,18 @@ const session = createBackgroundUnlockSession({
 // Storage lockdown is a startup prerequisite, not a best-effort side effect.
 // Requests remain fail-closed if Chrome cannot remove content-script access.
 const storageReady = requireTrustedStorageAccess();
+// One Krusty KMS instance for the worker. The vault holds it as its privileged
+// crypto boundary; the ML-DSA half is also the paired-phone verifier and the
+// builder of that family's account calldata, and both must be the same
+// implementation the vault derived the account's address with.
+const kms = createKrustyKms(krustyModule);
 const sessionReady = storageReady.then(() => session.restore());
 const wallet = vaultStores
   ? storageReady
       .then(() =>
         createWalletVaultService({
           encryptedStore: vaultStores.primary,
-          kms: createKrustyKms(krustyModule),
+          kms,
           migrationStore: vaultStores.staging,
         }),
       )
@@ -264,7 +269,7 @@ const strk20MaturityStore = (() => {
 // the third-party explorer read lane obeys the user's per-network choice
 // (MCW-V09-129) instead of the built-in-RPC default.
 const runtimeRpc = {
-  ...createDefaultRuntimeRpc({ readPreferences }),
+  ...createDefaultRuntimeRpc({ mlDsa: kms, readPreferences }),
   strk20: strk20MaturityStore
     ? createOfficialStrk20Service({
         maturityStore: strk20MaturityStore,
@@ -288,6 +293,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   balanceSnapshots,
   nftSnapshots,
   session,
+  mlDsa: kms,
   preferencesStore: preferenceStore,
   runtimeRpc,
   originGuard,

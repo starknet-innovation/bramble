@@ -22,7 +22,9 @@ import {
   type AccountHashSigner,
   estimatingAccountFor,
   krustyAccount,
+  type MlDsaCalldata,
   matchingAcceptedRpcWriteHash,
+  mlDsaOptions,
   withRpcWrite,
 } from "./provider";
 
@@ -42,6 +44,13 @@ export type InvokeInput = {
   readonly calls: readonly Call[];
   /** Live authorization checked immediately before each on-chain mutation. */
   readonly isAuthorized?: () => boolean;
+  /**
+   * ML-DSA calldata builders, required only by a paired-phone account and
+   * supplied by whoever composed the wallet. Absent for every other family; an
+   * ML-DSA path that reaches the signer without them aborts rather than
+   * producing calldata the contract would reject.
+   */
+  readonly mlDsa?: MlDsaCalldata;
   /** Optional STRK20 proof material attached to a prepared privacy call. */
   readonly proof?: Strk20Proof;
   /**
@@ -154,6 +163,7 @@ export const submitInvokeTransaction = async (
     account,
     calls,
     isAuthorized,
+    mlDsa,
     proof,
     reviewedDeploymentFee,
     reviewedFee,
@@ -174,12 +184,18 @@ export const submitInvokeTransaction = async (
     STARKNET_NETWORKS[account.networkId].chainId,
     async (provider) => {
       const capturedTransactionHashes: string[] = [];
-      const starknetAccount = krustyAccount(provider, account, async (messageHash) => {
-        const approvalProof = await signHash(messageHash);
-        capturedTransactionHashes.push(messageHash);
-        return approvalProof;
-      });
-      const estimating = estimatingAccountFor(provider, account, starknetAccount);
+      const signerOptions = mlDsaOptions(mlDsa);
+      const starknetAccount = krustyAccount(
+        provider,
+        account,
+        async (messageHash) => {
+          const approvalProof = await signHash(messageHash);
+          capturedTransactionHashes.push(messageHash);
+          return approvalProof;
+        },
+        signerOptions,
+      );
+      const estimating = estimatingAccountFor(provider, account, starknetAccount, signerOptions);
       const deployed = await isCompatibleAccountDeployed(provider, account);
       const resourceBounds = await settledResourceBounds(
         estimating.account,
@@ -200,6 +216,7 @@ export const submitInvokeTransaction = async (
             reviewedDeploymentFee,
             () => capturedTransactionHashes[0],
             isAuthorized,
+            mlDsa,
           );
       const invokeHashIndex = capturedTransactionHashes.length;
       const details = {

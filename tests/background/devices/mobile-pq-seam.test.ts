@@ -7,7 +7,7 @@
  * one, and both are worse than refusing.
  */
 import { describe, expect, test } from "bun:test";
-import { mlDsa65Fixture } from "@mc-wallet/testkit/ml-dsa-fixtures";
+import { mlDsa65Fixture, mlDsa65Verify } from "@mc-wallet/testkit/ml-dsa-fixtures";
 import type { AccountRef, MobilePqAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { createMobilePqSignQueue } from "../../../apps/extension/src/background/devices/mobile-pq-signer";
 import { accountHashSigner } from "../../../apps/extension/src/background/ledger/account-hash-signer";
@@ -43,11 +43,24 @@ const vaultThatMustNotBeUsed = {
   },
 };
 
+// Only `mlDsaVerify` is exercised here — the calldata builders belong to the
+// submit path, not the signer seam — but the port is supplied whole so this
+// stays honest about what the background actually injects.
+const mlDsa = {
+  mlDsaEstimationSignature: async () => {
+    throw new Error("the estimation dummy was built inside the signer seam");
+  },
+  mlDsaSignaturePayload: async () => {
+    throw new Error("account calldata was built inside the signer seam");
+  },
+  mlDsaVerify: mlDsa65Verify,
+};
+
 describe("accountHashSigner for a paired-phone account", () => {
   test("routes to the phone queue and returns the verified scheme-tagged signature", async () => {
     const mobilePqSignQueue = createMobilePqSignQueue();
     const sign = accountHashSigner(
-      { mobilePqSignQueue, session, wallet: vaultThatMustNotBeUsed },
+      { mlDsa, mobilePqSignQueue, session, wallet: vaultThatMustNotBeUsed },
       account as AccountRef,
       vaultPassphrase,
     );
@@ -78,6 +91,19 @@ describe("accountHashSigner for a paired-phone account", () => {
     ).toThrow("Mobile signing unavailable");
   });
 
+  test("fails closed when the phone queue is wired but ML-DSA is not", () => {
+    // The verifier is what makes this seam safe: it is the only thing standing
+    // between a device response and a broadcast. Without it the signer must
+    // refuse, not return an unverified signature.
+    expect(() =>
+      accountHashSigner(
+        { mobilePqSignQueue: createMobilePqSignQueue(), session, wallet: vaultThatMustNotBeUsed },
+        account as AccountRef,
+        vaultPassphrase,
+      ),
+    ).toThrow("Mobile signing unavailable");
+  });
+
   test("a wired Ledger queue is no substitute for the phone queue", () => {
     // The two queues are distinct collaborators. A deployment with Ledger
     // support but no transport to a phone must refuse, not route the phone
@@ -98,7 +124,7 @@ describe("accountHashSigner for a paired-phone account", () => {
   test("a rejected device request rejects the submit instead of falling back", async () => {
     const mobilePqSignQueue = createMobilePqSignQueue();
     const sign = accountHashSigner(
-      { mobilePqSignQueue, session, wallet: vaultThatMustNotBeUsed },
+      { mlDsa, mobilePqSignQueue, session, wallet: vaultThatMustNotBeUsed },
       account as AccountRef,
       vaultPassphrase,
     );

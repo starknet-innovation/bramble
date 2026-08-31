@@ -234,6 +234,10 @@ const kmsReturning = (privateKey: string, viewingKey: string) =>
       public_key_y: "0xdef",
     }),
     deriveScopedStrk20ViewingKey: () => viewingKey,
+    mlDsaEstimationSignature: () => [],
+    mlDsaKeyCommitment: () => "0x1",
+    mlDsaSignaturePayload: () => [],
+    mlDsaVerify: () => false,
     generateMnemonic: () => "habit hope tip crystal because grunt nation idea electric witness",
     getAccountClassHashes: () => "{}",
     openNostrApplicationData: () =>

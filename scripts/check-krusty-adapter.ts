@@ -1,10 +1,11 @@
 /**
- * Verifies the exact published Krusty KMS package before it enters the wallet.
+ * Verifies the exact Krusty KMS package before it enters the wallet.
  *
- * Bun's frozen lockfile pins the immutable npm tarball and its registry
- * integrity. This gate additionally pins both runtime files copied into the
- * extension, rejects package metadata or lifecycle-script drift, then runs the
- * wallet's known-answer and Nostr round-trip checks through the real adapter.
+ * Bun's frozen lockfile pins the tarball and its integrity — for this branch a
+ * local vendor/ tarball rather than a registry release, see `packageVersion`.
+ * This gate additionally pins both runtime files copied into the extension,
+ * rejects package metadata or lifecycle-script drift, then runs the wallet's
+ * known-answer and Nostr round-trip checks through the real adapter.
  */
 
 import { createHash } from "node:crypto";
@@ -14,14 +15,19 @@ import { deriveAccount } from "@mc-wallet/vault/accounts";
 import { DEFAULT_NETWORK, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 
 const packageName = "@starknetfoundation/krusty-kms-wasm";
-const packageVersion = "0.10.0";
+// A local wasm-pack build of krusty `feat/mobile-pq-signer` (v0.11.0 plus the
+// four ML-DSA exports), packed to vendor/ and installed through bun.lock like
+// any tarball. The `-pq.0` suffix exists so this can never be mistaken for a
+// registry release: the ML-DSA surface is unpublished and unaudited. When it
+// lands upstream, drop the tarball and put the published version back here.
+const packageVersion = "0.11.0-pq.0";
 const packageRoot = `node_modules/${packageName}`;
 const packageManifest = `${packageRoot}/package.json`;
 const wasmPackage = `${packageRoot}/krusty_kms_wasm.js`;
 const wasmBinary = `${packageRoot}/krusty_kms_wasm_bg.wasm`;
 const expectedRuntimeDigests: Readonly<Record<string, string>> = {
-  [wasmPackage]: "a3e2d11f8ebae305341a65955b36b6f8869fdb28c8775c0754e36660cc00dfc9",
-  [wasmBinary]: "0f851abcc7ca23f95e23c182fdcc10ad165da21dd1f71437eb314fd72bc2af51",
+  [wasmPackage]: "1e660625c7846e862043b2a4153d8c55372e4db7c5b705200f13b66526e5197f",
+  [wasmBinary]: "52167dc7203b16c0eeca8f283ac8d51b1e6b244256d06543eb885da6934c90d6",
 };
 
 // A published BIP-39 test phrase, never a wallet phrase: it exists so the
@@ -59,12 +65,12 @@ if (
     JSON.stringify(["krusty_kms_wasm_bg.wasm", "krusty_kms_wasm.js", "krusty_kms_wasm.d.ts"]) ||
   Object.hasOwn(manifest, "scripts")
 ) {
-  throw new Error(`Krusty KMS must be the script-free published ${packageName}@${packageVersion}`);
+  throw new Error(`Krusty KMS must be the script-free ${packageName}@${packageVersion}`);
 }
 for (const [path, expectedDigest] of Object.entries(expectedRuntimeDigests)) {
   if ((await artifactDigest(path)) !== expectedDigest) {
     throw new Error(
-      `Krusty KMS runtime does not match the published ${packageName}@${packageVersion}: ${path}`,
+      `Krusty KMS runtime does not match ${packageName}@${packageVersion}: ${path}`,
     );
   }
 }

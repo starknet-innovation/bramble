@@ -5,7 +5,6 @@
  * absent queue, or a malformed payload settles nothing.
  */
 
-import { verifyMlDsa65Signature } from "@mc-wallet/starknet/ml-dsa-core";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import { runUnlockedNetworkMutation } from "../runtime/active-network-mutation";
@@ -71,13 +70,11 @@ const handleAddMobilePqAccount: MobilePqOpsHandler = async (deps, message) => {
   // The gate that stops a stranded account. Without it the wallet would derive
   // an address from a key the device cannot sign for, and anything the user
   // funded there would be unrecoverable.
-  if (
-    !verifyMlDsa65Signature({
-      hash: input.challenge,
-      publicKey: input.publicKey,
-      signature: input.signature,
-    })
-  ) {
+  const mlDsa = deps.mlDsa;
+  if (!mlDsa) {
+    return { error: "mobile enrollment unavailable" };
+  }
+  if (!(await mlDsa.mlDsaVerify(input.publicKey, input.challenge, input.signature))) {
     return { error: "device did not prove it holds this key" };
   }
   const store = deps.wallet.addMobilePqAccount;

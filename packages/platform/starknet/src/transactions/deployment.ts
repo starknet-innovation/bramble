@@ -18,7 +18,6 @@ import {
   ML_DSA_ADDRESS_SALT,
   usesValidatedQueryEstimate,
 } from "../accounts/account-contracts";
-import { mlDsaKeyCommitment } from "../accounts/ml-dsa-core";
 import {
   authorizedSpendFor,
   exceedsReviewedFee,
@@ -33,6 +32,7 @@ import {
   IndeterminateRpcWriteError,
   isTransportRpcError,
   krustyAccount,
+  type MlDsaCalldata,
   matchingAcceptedRpcWriteHash,
   withRpcFallback,
   withRpcWrite,
@@ -63,15 +63,20 @@ export type AccountDeployment = {
   readonly contractAddress: string;
 };
 
-const signerOptions = (account: DeployableAccount): AccountSignerOptions =>
-  account.accountContractType === "argent-multisig" && account.deployment
+const signerOptions = (
+  account: DeployableAccount,
+  mlDsa?: MlDsaCalldata,
+): AccountSignerOptions => ({
+  ...(mlDsa ? { mlDsa } : {}),
+  ...(account.accountContractType === "argent-multisig" && account.deployment
     ? {
         multisig: {
           signerPublicKeys: account.deployment.signerPublicKeys,
           threshold: account.deployment.threshold,
         },
       }
-    : {};
+    : {}),
+});
 
 // The per-family constructor inputs, extracted so the address-commitment check
 // below stays inside the complexity budget as families are added.
@@ -107,16 +112,19 @@ const deploymentInputs = (
     };
   }
   if (account.accountContractType === "ml-dsa") {
-    // The constructor is the Poseidon commitment to the packed key, derived from
-    // the stored public key rather than stored beside it: the contract itself
-    // recomputes the same value on chain from the key each transaction carries,
-    // so a second copy could only ever disagree.
+    // `publicKeyX` *is* the constructor argument: enrollment stores the Poseidon
+    // commitment to the key's 925-felt packed expansion in that field, which is
+    // the same value the contract recomputes on chain from the key each
+    // transaction carries. Re-deriving it here would mean expanding the key
+    // again — now a call across the WASM boundary — inside a function five other
+    // account families call synchronously. The record's own consistency is
+    // checked where the record is read, not here.
     return {
       // Nothing but the class and the key distinguishes two accounts of this
       // contract; `accountDeployment` rejects the result unless it reproduces
       // the stored address, so a wrong salt fails loudly rather than silently.
       addressSalts: [ML_DSA_ADDRESS_SALT],
-      constructorCalldata: [mlDsaKeyCommitment(account.publicKey)],
+      constructorCalldata: [account.publicKeyX],
     };
   }
   return {
@@ -242,6 +250,7 @@ export const ensureAccountDeployed = async (
   reviewedFee: FeeEstimate | undefined,
   expectedTransactionHash: () => unknown,
   isAuthorized?: () => boolean,
+  mlDsa?: MlDsaCalldata,
 ): Promise<DeploySubmission | null> => {
   if (await isCompatibleAccountDeployed(provider, account)) {
     return null;
@@ -252,7 +261,7 @@ export const ensureAccountDeployed = async (
       provider,
       account,
       starknetAccount,
-      signerOptions(account),
+      signerOptions(account, mlDsa),
     );
     submitted = await deployAccountContract(
       starknetAccount,
@@ -312,6 +321,8 @@ export type DeployAccountInput = {
   readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
   readonly signHash: AggregateHashSigner;
+  /** ML-DSA calldata builders; required only by a paired-phone account. */
+  readonly mlDsa?: MlDsaCalldata;
 };
 
 /**
@@ -353,7 +364,7 @@ export const getDeploymentStatus = async (
  * skips validation so a Ledger review never prompts the device.
  */
 export const estimateAccountDeploymentFee = async (
-  { account, rpcUrls, signHash }: DeployAccountInput,
+  { account, mlDsa, rpcUrls, signHash }: DeployAccountInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
   makeAccount: typeof krustyAccount = krustyAccount,
 ): Promise<AccountDeploymentFeeEstimate> =>
@@ -367,8 +378,8 @@ export const estimateAccountDeploymentFee = async (
       const estimating = estimatingAccountFor(
         provider,
         account,
-        makeAccount(provider, account, signHash, signerOptions(account)),
-        signerOptions(account),
+        makeAccount(provider, account, signHash, signerOptions(account, mlDsa)),
+        signerOptions(account, mlDsa),
       );
       const estimate = await estimating.account.estimateAccountDeployFee(
         {
@@ -389,7 +400,7 @@ export const estimateAccountDeploymentFee = async (
  * account the user explicitly asked to deploy.
  */
 export const submitAccountDeployment = async (
-  { account, isAuthorized, reviewedFee, rpcUrls, signHash }: DeployAccountInput,
+  { account, isAuthorized, mlDsa, reviewedFee, rpcUrls, signHash }: DeployAccountInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
   makeAccount: typeof krustyAccount = krustyAccount,
 ): Promise<DeploySubmission> =>
@@ -413,13 +424,13 @@ export const submitAccountDeployment = async (
         provider,
         account,
         authorizedSigner,
-        signerOptions(account),
+        signerOptions(account, mlDsa),
       );
       const estimating = estimatingAccountFor(
         provider,
         account,
         starknetAccount,
-        signerOptions(account),
+        signerOptions(account, mlDsa),
       );
       const submitted = await deployAccountContract(
         starknetAccount,

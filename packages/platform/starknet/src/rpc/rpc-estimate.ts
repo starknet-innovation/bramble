@@ -6,7 +6,7 @@ import type { RpcProvider } from "starknet";
 import { isCompatibleAccountDeployed } from "../transactions/deployment-compatibility";
 import { type FeeEstimate, reviewedSpendFor } from "./fee-bounds";
 import { estimateExactInvokeFee } from "./invoke-fee";
-import { estimatingAccountFor, krustyAccount, withRpcFallback } from "./provider";
+import { estimatingAccountFor, krustyAccount, mlDsaOptions, withRpcFallback } from "./provider";
 import type { InvokeInput } from "./rpc-submit";
 
 /**
@@ -17,7 +17,7 @@ import type { InvokeInput } from "./rpc-submit";
  * material or waking a device — see `estimateMode`.
  */
 export const estimateInvokeFee = async (
-  { account, calls, proof, rpcUrls, signHash, speed = "standard" }: InvokeInput,
+  { account, calls, mlDsa, proof, rpcUrls, signHash, speed = "standard" }: InvokeInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<FeeEstimate> => {
   if (calls.length === 0) {
@@ -26,10 +26,12 @@ export const estimateInvokeFee = async (
   return withRpcFallback(
     rpcUrls,
     async (provider) => {
+      const signerOptions = mlDsaOptions(mlDsa);
       const { account: starknetAccount, skipValidate } = estimatingAccountFor(
         provider,
         account,
-        krustyAccount(provider, account, signHash),
+        krustyAccount(provider, account, signHash, signerOptions),
+        signerOptions,
       );
       const deployed = await isCompatibleAccountDeployed(provider, account);
       const estimate = await estimateExactInvokeFee(

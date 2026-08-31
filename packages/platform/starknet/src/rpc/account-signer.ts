@@ -28,7 +28,6 @@ import {
   serializeArgentMultisigSignature,
   usesValidatedQueryEstimate,
 } from "../accounts/account-contracts";
-import { mlDsaEstimationSignature, mlDsaSignaturePayload } from "../accounts/ml-dsa-core";
 
 /**
  * Function that signs one transaction hash through the vault service, a hardware
@@ -51,10 +50,48 @@ export type AggregateHashSigner = (
 ) => Promise<AccountSignature | readonly StarkSignature[]>;
 
 /**
+ * The ML-DSA calldata builders this module needs, supplied rather than imported.
+ *
+ * Both are pure functions of public material, but they live in Krusty KMS behind
+ * the WASM boundary, and this package may not depend on the adapter that loads
+ * it. So they arrive the same way {@link AccountHashSigner} does — as functions
+ * passed in by whoever composed the wallet. `KmsPort` satisfies this shape.
+ */
+export type MlDsaCalldata = {
+  readonly mlDsaSignaturePayload: (
+    publicKey: string,
+    transactionHash: string,
+    signature: string,
+  ) => Promise<readonly string[]>;
+  readonly mlDsaEstimationSignature: (publicKey: string) => Promise<readonly string[]>;
+};
+
+/**
  * Signer metadata required for an Argent multisig adapter.
  */
 export type AccountSignerOptions = {
   readonly multisig?: ArgentMultisigConfig;
+  readonly mlDsa?: MlDsaCalldata;
+};
+
+/**
+ * Signer options carrying an ML-DSA port, or none when there is no port.
+ *
+ * A one-line helper because the alternative is an inline conditional at each of
+ * the seven call sites: `exactOptionalPropertyTypes` forbids handing on
+ * `mlDsa: undefined`, so an absent port has to be an absent key.
+ */
+export const mlDsaOptions = (mlDsa: MlDsaCalldata | undefined): AccountSignerOptions =>
+  mlDsa ? { mlDsa } : {};
+
+// An ML-DSA account cannot sign or be priced without these, and a missing
+// wiring must not degrade into a Stark path that would produce calldata the
+// contract rejects. So it aborts here rather than further down.
+const requireMlDsaCalldata = (mlDsa: MlDsaCalldata | undefined): MlDsaCalldata => {
+  if (!mlDsa) {
+    throw new WalletError("ML-DSA calldata builders are unavailable");
+  }
+  return mlDsa;
 };
 
 /**
@@ -106,6 +143,7 @@ class FixedContractStarknetSigner extends Signer {
     protected readonly signHash: AggregateHashSigner,
     protected readonly multisig: ArgentMultisigConfig | null,
     private readonly deployment: boolean,
+    protected readonly mlDsa?: MlDsaCalldata,
   ) {
     super("0x1");
   }
@@ -127,7 +165,14 @@ class FixedContractStarknetSigner extends Signer {
       // this contract validates neither. Its calldata is the packed
       // verification key plus the felt-native signature and the hints the
       // on-chain check needs, all of which depend on the hash just signed.
-      return [...mlDsaSignaturePayload({ ...requireMlDsa65Signature(signed), hash })];
+      const { publicKey, signature } = requireMlDsa65Signature(signed);
+      return [
+        ...(await requireMlDsaCalldata(this.mlDsa).mlDsaSignaturePayload(
+          publicKey,
+          hash,
+          signature,
+        )),
+      ];
     }
     if (this.contractKind === "argent-multisig") {
       if (!this.multisig) {
@@ -162,8 +207,9 @@ class ContractStarknetSigner extends FixedContractStarknetSigner {
     signHash: AggregateHashSigner,
     multisig: ArgentMultisigConfig | null,
     private readonly deploySignHash: AggregateHashSigner = signHash,
+    mlDsa?: MlDsaCalldata,
   ) {
-    super(signerPublicKey, contractKind, signHash, multisig, false);
+    super(signerPublicKey, contractKind, signHash, multisig, false, mlDsa);
   }
 
   public override signDeployAccountTransaction(
@@ -175,6 +221,7 @@ class ContractStarknetSigner extends FixedContractStarknetSigner {
       this.deploySignHash,
       this.multisig,
       true,
+      this.mlDsa,
     ).signDeployAccountTransaction(details);
   }
 }
@@ -223,7 +270,14 @@ export const krustyAccount = (
     address: account.address,
     cairoVersion: "1",
     provider,
-    signer: new ContractStarknetSigner(inputs.publicKey, inputs.kind, signHash, inputs.multisig),
+    signer: new ContractStarknetSigner(
+      inputs.publicKey,
+      inputs.kind,
+      signHash,
+      inputs.multisig,
+      signHash,
+      options.mlDsa,
+    ),
   });
 };
 
@@ -231,7 +285,10 @@ export const krustyAccount = (
 // estimation dummy is the same felts for every transaction of an account, so
 // there is nothing per-hash to compute and nothing to prompt for.
 class FixedCalldataSigner extends Signer {
-  public constructor(private readonly calldata: readonly string[]) {
+  // A thunk rather than an array: building the calldata is now an async call
+  // across the WASM boundary, and taking it lazily here is what keeps
+  // `mlDsaQueryAccount` synchronous for its five call sites.
+  public constructor(private readonly calldata: () => Promise<readonly string[]>) {
     super("0x1");
   }
 
@@ -240,7 +297,7 @@ class FixedCalldataSigner extends Signer {
   }
 
   protected override async signRaw(): Promise<Signature> {
-    return [...this.calldata];
+    return [...(await this.calldata())];
   }
 }
 
@@ -257,15 +314,18 @@ class FixedCalldataSigner extends Signer {
 export const mlDsaQueryAccount = (
   provider: RpcProvider,
   account: StarknetAccountDescriptor,
+  options: AccountSignerOptions = {},
 ): Account => {
   if (account.accountContractType !== "ml-dsa") {
     throw new WalletError("ML-DSA query signer is only available for ML-DSA accounts");
   }
+  const mlDsa = requireMlDsaCalldata(options.mlDsa);
+  const publicKey = account.publicKey;
   return new Account({
     address: account.address,
     cairoVersion: "1",
     provider,
-    signer: new FixedCalldataSigner(mlDsaEstimationSignature(account.publicKey)),
+    signer: new FixedCalldataSigner(() => mlDsa.mlDsaEstimationSignature(publicKey)),
   });
 };
 
@@ -288,7 +348,7 @@ export const estimatingAccountFor = (
     return { account: argentQueryAccount(provider, account, options), skipValidate: false };
   }
   if (mode === "ml-dsa-query") {
-    return { account: mlDsaQueryAccount(provider, account), skipValidate: false };
+    return { account: mlDsaQueryAccount(provider, account, options), skipValidate: false };
   }
   return { account: submittingAccount, skipValidate: true };
 };

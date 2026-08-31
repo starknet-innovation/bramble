@@ -22,6 +22,7 @@ import { memoryMultisigStore } from "@mc-wallet/multisig/repository";
 import { createPreferencesStore } from "@mc-wallet/settings/preferences";
 import { type FeeEstimate, sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
 import { createMemoryStore } from "@mc-wallet/store/kv";
+import { mlDsa65Verify } from "@mc-wallet/testkit/ml-dsa-fixtures";
 import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { ec } from "starknet";
 import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
@@ -124,6 +125,15 @@ export const makeKeyBoundaryHarness = async (
     allowanceStore,
     approvals,
     ledgerSignQueue,
+    // A real ML-DSA verifier, because the scan's paired-phone entry runs live
+    // enrollment against a freshly issued challenge: a stub that accepted
+    // anything would let the scan pass while proving nothing about the response
+    // it inspects.
+    mlDsa: {
+      mlDsaEstimationSignature: async () => [],
+      mlDsaSignaturePayload: async () => [],
+      mlDsaVerify: mlDsa65Verify,
+    },
     mobilePqSignQueue,
     multisigStore,
     preferencesStore,

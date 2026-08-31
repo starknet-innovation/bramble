@@ -7,9 +7,10 @@
  * missed at {@link deviceSignQueues} would make that device's accounts fail
  * closed in one submitting path while working in another.
  */
+import type { MlDsaCalldata } from "@mc-wallet/starknet/provider";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import type { MobilePqEnrollment } from "./mobile-pq-enrollment";
-import type { MobilePqSignQueue } from "./mobile-pq-signer";
+import type { MlDsaVerifier, MobilePqSignQueue } from "./mobile-pq-signer";
 
 /**
  * Device queues, each optional so partial test stubs and deployments without a
@@ -28,6 +29,21 @@ export type DeviceSignQueues = {
  */
 export type DeviceEnrollment = {
   readonly mobilePqEnrollment?: MobilePqEnrollment;
+  /**
+   * ML-DSA verification and calldata, from Krusty KMS. Optional like the queues
+   * above and for the same reason: a build or a test that never reaches a paired
+   * phone should not have to supply it, and the paths that need it refuse rather
+   * than fall back — an ML-DSA account cannot be signed for or priced without it.
+   */
+  readonly mlDsa?: MlDsaDeviceCrypto;
+};
+
+/**
+ * The ML-DSA operations the background needs. `KmsPort` satisfies this shape, so
+ * the wallet's one crypto boundary is what gets passed in.
+ */
+export type MlDsaDeviceCrypto = MlDsaCalldata & {
+  readonly mlDsaVerify: MlDsaVerifier;
 };
 
 /**

@@ -40,6 +40,7 @@ import {
   type SubmitPreparedArgentMultisigInvokeV3Input,
   submitPreparedArgentMultisigInvokeV3,
 } from "@mc-wallet/starknet/multisig-invoke";
+import type { MlDsaCalldata } from "@mc-wallet/starknet/provider";
 import { withRpcFallback } from "@mc-wallet/starknet/provider";
 import {
   type BalanceInput,
@@ -268,15 +269,26 @@ const getNftMetadata = async (input: NftTokenUriInput): Promise<NftTokenMetadata
  */
 export type RuntimeRpcOptions = {
   readonly readPreferences: () => Promise<ExplorerLanePreferences>;
+  /**
+   * ML-DSA calldata builders from Krusty KMS, attached to every input that can
+   * carry a paired-phone account. Injected in one place on purpose: a call site
+   * that forgot them would not fail to compile — the field is optional on those
+   * inputs — it would abort at the signer, after the user had already consented.
+   */
+  readonly mlDsa?: MlDsaCalldata;
 };
 
 /**
  * Builds the production RPC wiring bound to one preferences reader.
  */
-export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions): RuntimeRpc => ({
-  estimateAccountDeploymentFee,
+export const createDefaultRuntimeRpc = ({
+  mlDsa,
+  readPreferences,
+}: RuntimeRpcOptions): RuntimeRpc => ({
+  estimateAccountDeploymentFee: (input) =>
+    estimateAccountDeploymentFee(mlDsa ? { ...input, mlDsa } : input),
   estimateDeclareFee,
-  estimateInvokeFee,
+  estimateInvokeFee: (input) => estimateInvokeFee(mlDsa ? { ...input, mlDsa } : input),
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
   getDeploymentStatus,
@@ -305,10 +317,10 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     submitPreparedInvoke: submitPreparedArgentMultisigInvokeV3,
   },
   nftIndexer: createHttpNftIndexer(nftIndexerHttp),
-  submitAccountDeployment,
+  submitAccountDeployment: (input) => submitAccountDeployment(mlDsa ? { ...input, mlDsa } : input),
   submitDeclareTransaction,
   submitErc20Transfer,
-  submitInvokeTransaction,
+  submitInvokeTransaction: (input) => submitInvokeTransaction(mlDsa ? { ...input, mlDsa } : input),
   verifyAccountClassHash,
 });
 

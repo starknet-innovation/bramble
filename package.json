@@ -67,7 +67,7 @@
     "@mc-wallet/wallet-ui": "workspace:*",
     "@mc-wallet/wallet-model": "workspace:*",
     "@mc-wallet/wallet-protocol": "workspace:*",
-    "@starknetfoundation/krusty-kms-wasm": "0.10.0",
+    "@starknetfoundation/krusty-kms-wasm": "file:vendor/starknetfoundation-krusty-kms-wasm-0.11.0-pq.0.tgz",
     "starknet": "10.0.2"
   }
 }

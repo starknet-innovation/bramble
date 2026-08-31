@@ -18,6 +18,11 @@ import {
   parseNostrEventJson,
 } from "@mc-wallet/wallet-model/nostr";
 import { isMnemonicPassphrase, isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
+import {
+  isMlDsa65PublicKey,
+  isMlDsa65Signature,
+  ML_DSA_65_CALLDATA_FELTS,
+} from "@mc-wallet/wallet-model/signing";
 
 type Callable = (...args: unknown[]) => unknown;
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
@@ -76,6 +81,21 @@ const requireStringField = (value: unknown, field: string): string => {
   return fieldValue;
 };
 
+// Every felt of an account signature is checked before it can become calldata.
+// A single bad entry makes the whole transaction fail on chain with no useful
+// error, so the boundary refuses the array rather than passing it on.
+const requireFeltArray = (value: unknown, expected: number, what: string): readonly string[] => {
+  if (!Array.isArray(value) || value.length !== expected) {
+    throw new WalletError(`Krusty KMS returned invalid ${what}`);
+  }
+  for (const felt of value) {
+    if (typeof felt !== "string" || !isStarkFieldElement(felt)) {
+      throw new WalletError(`Krusty KMS returned invalid ${what}`);
+    }
+  }
+  return value as readonly string[];
+};
+
 const requireFieldElementField = (value: unknown, field: string): string => {
   const fieldValue = requireStringField(value, field);
   if (!isStarkFieldElement(fieldValue)) {
@@ -129,6 +149,10 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
   const signStarkHash = requireFunction(module, "signStarkHash");
   const validateMnemonic = requireFunction(module, "validateMnemonic");
   const wrapNostrApplicationData = requireFunction(module, "wrapNostrApplicationData");
+  const mlDsaKeyCommitment = requireFunction(module, "mlDsaKeyCommitment");
+  const mlDsaVerify = requireFunction(module, "mlDsaVerify");
+  const mlDsaSignaturePayload = requireFunction(module, "mlDsaSignaturePayload");
+  const mlDsaEstimationSignature = requireFunction(module, "mlDsaEstimationSignature");
 
   return {
     async deriveNostrPublicKey(mnemonic, addressIndex, accountIndex, passphrase) {
@@ -338,6 +362,57 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
         throw new WalletError("Krusty KMS returned an invalid Nostr gift wrap");
       }
       return result;
+    },
+    async mlDsaKeyCommitment(publicKey) {
+      await ready;
+      if (!isMlDsa65PublicKey(publicKey)) {
+        throw new WalletError("Invalid post-quantum public key");
+      }
+      const result = await mlDsaKeyCommitment(publicKey);
+      // The account's whole address derives from this. A wrong-but-plausible
+      // value would produce an address nobody holds the key for, and anything
+      // funded there is unrecoverable, so it is checked before it can be used.
+      if (typeof result !== "string" || !isNonZeroStarkFieldElement(result)) {
+        throw new WalletError("Krusty KMS returned an invalid ML-DSA key commitment");
+      }
+      return canonicalFelt(result) as string;
+    },
+    async mlDsaVerify(publicKey, transactionHash, signature) {
+      // Malformed input is `false`, never a throw: this gates a broadcast, and a
+      // caller that has to distinguish "invalid" from "not verified" has two
+      // ways to get the decision wrong instead of one.
+      if (
+        !isMlDsa65PublicKey(publicKey) ||
+        !isStarkFieldElement(transactionHash) ||
+        !isMlDsa65Signature(signature)
+      ) {
+        return false;
+      }
+      await ready;
+      const result = await mlDsaVerify(publicKey, transactionHash, signature);
+      if (typeof result !== "boolean") {
+        throw new WalletError("Krusty KMS returned an invalid ML-DSA verification result");
+      }
+      return result;
+    },
+    async mlDsaSignaturePayload(publicKey, transactionHash, signature) {
+      if (!isMlDsa65PublicKey(publicKey) || !isMlDsa65Signature(signature)) {
+        throw new WalletError("Invalid post-quantum signing input");
+      }
+      if (!isStarkFieldElement(transactionHash)) {
+        throw new WalletError("Invalid transaction hash");
+      }
+      await ready;
+      const result = await mlDsaSignaturePayload(publicKey, transactionHash, signature);
+      return requireFeltArray(result, ML_DSA_65_CALLDATA_FELTS, "ML-DSA account signature");
+    },
+    async mlDsaEstimationSignature(publicKey) {
+      if (!isMlDsa65PublicKey(publicKey)) {
+        throw new WalletError("Invalid post-quantum public key");
+      }
+      await ready;
+      const result = await mlDsaEstimationSignature(publicKey);
+      return requireFeltArray(result, ML_DSA_65_CALLDATA_FELTS, "ML-DSA estimation signature");
     },
   };
 };

@@ -28,6 +28,7 @@ import {
   releaseWaitersOnApprovalDrop,
   type SignatureWaiters,
 } from "../approvals/signature-waiters";
+import type { MlDsaDeviceCrypto } from "../devices/device-queues";
 import { createMobilePqEnrollment, type MobilePqEnrollment } from "../devices/mobile-pq-enrollment";
 import {
   createMobilePqSignQueue,
@@ -82,6 +83,7 @@ export type RouterContext = {
   readonly extensionId: string;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue: LedgerSignQueue;
+  readonly mlDsa?: MlDsaDeviceCrypto;
   readonly mobilePqEnrollment: MobilePqEnrollment;
   readonly mobilePqSignQueue: MobilePqSignQueue;
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
@@ -114,6 +116,7 @@ export type MessageHandlerOptions = {
   readonly approvals?: ApprovalQueue;
   readonly balanceSnapshots?: BalanceSnapshotStore;
   readonly ledgerSignQueue?: LedgerSignQueue;
+  readonly mlDsa?: MlDsaDeviceCrypto;
   readonly mobilePqEnrollment?: MobilePqEnrollment;
   readonly mobilePqSignQueue?: MobilePqSignQueue;
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
@@ -177,6 +180,11 @@ const runtimeMobilePqSignQueue = (
 ): MobilePqSignQueue =>
   provided ??
   createMobilePqSignQueue(notifyApprovalsChanged, MOBILE_PQ_SIGN_TIMEOUT, liveGeneration(session));
+
+// Follows the other `...For` helpers here: an absent collaborator becomes an
+// absent key, so the result stays assignable under `exactOptionalPropertyTypes`.
+const mlDsaFor = (mlDsa: MlDsaDeviceCrypto | undefined): { readonly mlDsa?: MlDsaDeviceCrypto } =>
+  mlDsa ? { mlDsa } : {};
 
 const mobilePqEnrollmentFor = (provided: MobilePqEnrollment | undefined): MobilePqEnrollment =>
   provided ?? createMobilePqEnrollment();
@@ -247,6 +255,7 @@ export const routerContext = (
     extensionId,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
+    ...mlDsaFor(options.mlDsa),
     mobilePqEnrollment: mobilePqEnrollmentFor(options.mobilePqEnrollment),
     mobilePqSignQueue: runtimeMobilePqSignQueue(options.mobilePqSignQueue, session),
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),

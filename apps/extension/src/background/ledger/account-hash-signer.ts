@@ -21,7 +21,7 @@ import {
 } from "@mc-wallet/wallet-model/accounts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
-import type { DeviceSignQueues } from "../devices/device-queues";
+import type { DeviceEnrollment, DeviceSignQueues } from "../devices/device-queues";
 import { mobilePqHashSigner } from "../devices/mobile-pq-signer";
 import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 import { ledgerStarkHashSigner } from "./ledger-signer";
@@ -38,10 +38,11 @@ import { ledgerStarkHashSigner } from "./ledger-signer";
  * extension is authorized by exactly one unlock. `wallet` supplies the
  * vault-backed hash signer for keyed accounts.
  */
-export type AccountHashSignerDeps = DeviceSignQueues & {
-  readonly session: PassiveUnlockSession;
-  readonly wallet: Pick<WalletStatusReader, "signHash">;
-};
+export type AccountHashSignerDeps = DeviceSignQueues &
+  DeviceEnrollment & {
+    readonly session: PassiveUnlockSession;
+    readonly wallet: Pick<WalletStatusReader, "signHash">;
+  };
 
 /**
  * Builds the {@link AccountHashSigner} for a resolved account without exposing any
@@ -71,10 +72,11 @@ export const accountHashSigner = (
   }
   if (isKeylessAccount(account)) {
     const queue = deps.mobilePqSignQueue;
-    if (!queue) {
+    const mlDsa = deps.mlDsa;
+    if (!queue || !mlDsa) {
       throw new WalletError("Mobile signing unavailable");
     }
-    return mobilePqHashSigner(account, (request) => queue.request(request));
+    return mobilePqHashSigner(account, (request) => queue.request(request), mlDsa.mlDsaVerify);
   }
   const authorized = captureSessionAuthorization(deps.session);
   const requireLiveSession = (): void => {

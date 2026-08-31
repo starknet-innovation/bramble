@@ -72,6 +72,7 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   allowanceStore: ctx.allowanceStore,
   balanceSnapshots: ctx.balanceSnapshots,
   ledgerSignQueue: ctx.ledgerSignQueue,
+  ...(ctx.mlDsa ? { mlDsa: ctx.mlDsa } : {}),
   mobilePqEnrollment: ctx.mobilePqEnrollment,
   mobilePqSignQueue: ctx.mobilePqSignQueue,
   multisigStore: ctx.multisigStore,

@@ -22,6 +22,8 @@ export {
   argentQueryAccount,
   estimatingAccountFor,
   krustyAccount,
+  type MlDsaCalldata,
+  mlDsaOptions,
   mlDsaQueryAccount,
   type StarknetAccountDescriptor,
 } from "./account-signer";

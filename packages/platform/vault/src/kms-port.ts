@@ -66,4 +66,39 @@ export type KmsPort = {
     content: string,
     passphrase?: string,
   ) => Promise<string>;
+  /**
+   * The Poseidon commitment to an ML-DSA-65 public key's 925-felt packed
+   * expansion — the paired-phone account contract's entire constructor argument,
+   * and therefore half of its address preimage. Derived rather than stored: the
+   * contract recomputes the same value on chain from the key each transaction
+   * carries, so a second copy could only ever disagree.
+   */
+  readonly mlDsaKeyCommitment: (publicKey: string) => Promise<string>;
+  /**
+   * Whether an ML-DSA-65 signature verifies over `transactionHash` under
+   * `publicKey`. Answers `false` on malformed input rather than rejecting, so a
+   * caller gating a broadcast gets one decision it can trust.
+   */
+  readonly mlDsaVerify: (
+    publicKey: string,
+    transactionHash: string,
+    signature: string,
+  ) => Promise<boolean>;
+  /**
+   * The full account signature calldata for one transaction: the packed key, the
+   * felt-native signature, and the witnesses the on-chain check runs against.
+   * Rejects rather than answering with calldata whose identity could not be
+   * proven, because the contract refuses a wrong one with no diagnosis.
+   */
+  readonly mlDsaSignaturePayload: (
+    publicKey: string,
+    transactionHash: string,
+    signature: string,
+  ) => Promise<readonly string[]>;
+  /**
+   * Well-formed calldata that verifies against nothing, for fee estimation.
+   * Lets an estimate run the account's real validation cost without asking the
+   * phone to sign anything.
+   */
+  readonly mlDsaEstimationSignature: (publicKey: string) => Promise<readonly string[]>;
 };

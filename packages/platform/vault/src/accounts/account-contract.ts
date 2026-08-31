@@ -7,7 +7,6 @@ import {
   argentAccountAddress,
   mlDsaAccountAddress,
 } from "@mc-wallet/starknet/account-contracts";
-import { mlDsaKeyCommitment } from "@mc-wallet/starknet/ml-dsa-core";
 import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
 import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
 import {
@@ -141,11 +140,26 @@ const resolvedDeploymentSalt = (
 // The constructor argument is derived, not stored: `mlDsaKeyCommitment` expands
 // the public key to its 925-felt packed form and hashes it, which is the same
 // value the contract recomputes on chain from the key each transaction carries.
-const mlDsaContractAddress = (publicKey: string | undefined, classHash: string): string => {
+const mlDsaContractAddress = async (
+  kms: KmsPort,
+  publicKey: string | undefined,
+  classHash: string,
+  publicKeyX: string,
+): Promise<string> => {
   if (publicKey === undefined) {
     throw new WalletError("ML-DSA account public key is required");
   }
-  const address = mlDsaAccountAddress(classHash, mlDsaKeyCommitment(publicKey));
+  const commitment = canonicalFelt(await kms.mlDsaKeyCommitment(publicKey));
+  // Checked, not assumed. The two are written together at enrollment, so this
+  // agrees by construction on a healthy record — but they are read apart:
+  // deployment calldata takes `publicKeyX` while signing and verification take
+  // `publicKey`. A record where they disagree deploys an account the phone
+  // cannot sign for, and the contract rejects every later transaction with no
+  // useful error. This is the one place holding both, so it is where they meet.
+  if (commitment === null || commitment !== publicKeyX) {
+    throw new WalletError("ML-DSA account key does not match its stored identity");
+  }
+  const address = mlDsaAccountAddress(classHash, commitment);
   if (!isNonZeroStarkFieldElement(address)) {
     throw new WalletError("Invalid ML-DSA account address");
   }
@@ -190,7 +204,10 @@ export const deriveAccountContractAddress = async (
     publicKeyX,
   );
   if (input.accountContractType === "ml-dsa") {
-    return { address: mlDsaContractAddress(input.publicKey, classHash), classHash };
+    return {
+      address: await mlDsaContractAddress(kms, input.publicKey, classHash, publicKeyX),
+      classHash,
+    };
   }
   const addressInput =
     input.accountContractType === "argent"

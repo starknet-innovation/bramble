@@ -8,7 +8,6 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import { mlDsaKeyCommitment } from "@mc-wallet/starknet/ml-dsa-core";
 import type { MobilePqAccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
@@ -63,7 +62,7 @@ export const deriveMobilePqAccount = async (
   // in its address, not a second hash of the key that happens to look like one.
   // A 1952-byte key does not fit a felt, and the account model needs one for
   // record identity and duplicate detection.
-  const publicKeyX = canonicalFelt(mlDsaKeyCommitment(input.publicKey));
+  const publicKeyX = canonicalFelt(await kms.mlDsaKeyCommitment(input.publicKey));
   if (publicKeyX === null || !isNonZeroStarkFieldElement(publicKeyX)) {
     throw new WalletError("Invalid post-quantum key identity");
   }

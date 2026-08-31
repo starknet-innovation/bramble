@@ -15,7 +15,6 @@
  * krusty-kms C ABI, and the trusted display arrives with them.
  */
 import { WalletError } from "@mc-wallet/core/errors";
-import { verifyMlDsa65Signature } from "@mc-wallet/starknet/ml-dsa-core";
 import type { AccountHashSigner } from "@mc-wallet/starknet/provider";
 import type { MobilePqAccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
@@ -80,6 +79,19 @@ export const createMobilePqSignQueue = (
   );
 
 /**
+ * Verifies a device's ML-DSA response against the key the account enrolled.
+ *
+ * Declared here rather than taken from the device collaborators type because the
+ * dependency runs the other way: those collaborators are built from this
+ * module's types, so importing back would be a cycle.
+ */
+export type MlDsaVerifier = (
+  publicKey: string,
+  transactionHash: string,
+  signature: string,
+) => Promise<boolean>;
+
+/**
  * Builds a {@link AccountHashSigner} for a paired-phone account. It hands the hash
  * to the phone via `sign`, verifies the returned signature against the account's
  * enrolled public key, and throws `WalletError` on any mismatch before
@@ -87,7 +99,11 @@ export const createMobilePqSignQueue = (
  * than broadcasting an unverified signature.
  */
 export const mobilePqHashSigner =
-  (account: MobilePqAccountRef, sign: MobilePqHashSigner): AccountHashSigner =>
+  (
+    account: MobilePqAccountRef,
+    sign: MobilePqHashSigner,
+    verify: MlDsaVerifier,
+  ): AccountHashSigner =>
   async (messageHash) => {
     const { signature } = await sign({
       accountId: account.id,
@@ -95,7 +111,7 @@ export const mobilePqHashSigner =
       messageHash,
       publicKey: account.publicKey,
     });
-    if (!verifyMlDsa65Signature({ hash: messageHash, publicKey: account.publicKey, signature })) {
+    if (!(await verify(account.publicKey, messageHash, signature))) {
       throw new WalletError("Mobile signature verification failed");
     }
     return { kind: "ml-dsa-65", publicKey: account.publicKey, signature };

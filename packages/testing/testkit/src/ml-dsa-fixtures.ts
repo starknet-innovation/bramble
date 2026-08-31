@@ -39,6 +39,44 @@ const messageOf = (messageHash: string): Uint8Array => {
 };
 
 /**
+ * A verifier with the shape the background injects, for tests that assert a
+ * signer path fails closed.
+ *
+ * It has to be a real ML-DSA verification: the assertions around it are that an
+ * impostor key, a signature over a different hash, and a domain-separated
+ * signature are all rejected, and a stub that answered `false` for everything or
+ * `true` for everything would make all three vacuous. Test-only, and the one
+ * remaining reason `@noble/post-quantum` stays a testkit devDependency.
+ */
+export const mlDsa65Verify = async (
+  publicKey: string,
+  transactionHash: string,
+  signature: string,
+): Promise<boolean> => {
+  const bytes = (value: string): Uint8Array | null => {
+    const digits = value.replace(/^0x/, "");
+    if (digits.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(digits)) {
+      return null;
+    }
+    const out = new Uint8Array(digits.length / 2);
+    for (let index = 0; index < out.length; index += 1) {
+      out[index] = Number.parseInt(digits.slice(index * 2, index * 2 + 2), 16);
+    }
+    return out;
+  };
+  const key = bytes(publicKey);
+  const signatureBytes = bytes(signature);
+  if (key === null || signatureBytes === null) {
+    return false;
+  }
+  try {
+    return ml_dsa65.verify(signatureBytes, messageOf(transactionHash), key);
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Builds a fixture from a single seed byte, so distinct seeds give distinct
  * identities and the same seed always gives the same one. Pass `context` to
  * `sign` to produce a domain-separated signature the empty-context host

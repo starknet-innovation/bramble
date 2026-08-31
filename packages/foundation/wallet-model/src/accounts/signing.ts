@@ -45,6 +45,17 @@ export const isMlDsa65PublicKey = (value: unknown): value is string =>
 export const ML_DSA_65_SIGNATURE_BYTES = 3309;
 
 /**
+ * Felts one ML-DSA-65 account signature occupies as Starknet calldata: the
+ * 925-felt packed verification key, 111 for the signature itself, and 794 of
+ * verification witnesses.
+ *
+ * A wire-format fact about the scheme rather than a wallet choice, which is why
+ * it sits beside the byte counts above: the account contract reads exactly this
+ * many felts and rejects any other length with no useful error.
+ */
+export const ML_DSA_65_CALLDATA_FELTS = 1830;
+
+/**
  * Checks whether a value is an encoded ML-DSA-65 signature in lowercase hex.
  * Shape only: a well-formed signature is not a valid one, so the
  * verify-before-broadcast gate still has to check it against the enrolled key.
