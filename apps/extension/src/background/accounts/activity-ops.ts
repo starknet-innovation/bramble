@@ -9,7 +9,6 @@ import {
   activityForScope,
   systemClock,
 } from "@mc-wallet/transactions/activity";
-import { mergeActivity } from "@mc-wallet/transactions/tx-history";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import { readActivityInput } from "../routing/message-inputs";
@@ -17,7 +16,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
-import { reconcileScope } from "../transactions/tx-reconcile";
+import { mergeReconciledHistory, reconcileScope } from "../transactions/tx-reconcile";
 import type { WalletStatusReader } from "./wallet-reader";
 
 type ActivityOpsDeps = {
@@ -133,10 +132,10 @@ export const handleActivity = async (
   const history = scanHistory
     ? await accountHistory(deps, target)
     : { onChain: [], unavailable: previousSync?.unavailable ?? false };
-  const merged = mergeActivity(local, history.onChain);
-  if (!history.unavailable) {
-    await deps.activity.replaceScope?.(merged, target.scope).catch(() => undefined);
-  }
+  const merged =
+    scanHistory && !history.unavailable
+      ? await mergeReconciledHistory(deps, target.scope, history.onChain)
+      : local;
   if (scanHistory) {
     await deps.activity
       .markHistorySynced?.(target.scope, now, history.unavailable)

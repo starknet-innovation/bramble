@@ -124,6 +124,24 @@ const publishWithPool = async (
   return acknowledgements;
 };
 
+const boundedRelayCandidates = (
+  eventsByRelay: readonly (readonly NostrEvent[])[],
+): readonly NostrEvent[] => {
+  const candidates: NostrEvent[] = [];
+  for (let index = 0; candidates.length < MAX_NOSTR_BATCH_ITEMS; index += 1) {
+    let added = false;
+    for (const events of eventsByRelay) {
+      const event = events[index];
+      if (!event) continue;
+      candidates.push(event);
+      added = true;
+      if (candidates.length === MAX_NOSTR_BATCH_ITEMS) break;
+    }
+    if (!added) break;
+  }
+  return candidates;
+};
+
 const syncWithPool = async (
   pool: ReturnType<typeof createNostrRelayPool>,
   recipientPublicKey: string,
@@ -141,13 +159,12 @@ const syncWithPool = async (
       result.status === "fulfilled",
   );
   if (successful.length === 0) throw new Error("Nostr relays are unavailable");
-  return [
-    ...new Map(
-      successful.flatMap((result) => result.value).map((event) => [event.id, event]),
-    ).values(),
-  ]
-    .sort((left, right) => right.created_at - left.created_at || left.id.localeCompare(right.id))
-    .slice(0, MAX_NOSTR_BATCH_ITEMS);
+  // Relay-provided ids are untrusted until Krusty authenticates each wrap.
+  // Round-robin the bounded relay results so one hostile relay cannot fill the
+  // authentication batch or suppress a same-id candidate from another relay.
+  return [...boundedRelayCandidates(successful.map((result) => result.value))].sort(
+    (left, right) => right.created_at - left.created_at || left.id.localeCompare(right.id),
+  );
 };
 
 /** Creates one opportunistically pooled transport without any keepalive traffic. */

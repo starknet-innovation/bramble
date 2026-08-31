@@ -50,6 +50,13 @@ const manifest = JSON.parse(await readFile(packageManifest, "utf8")) as Record<s
 if (
   manifest["name"] !== packageName ||
   manifest["version"] !== packageVersion ||
+  manifest["type"] !== "module" ||
+  manifest["main"] !== "krusty_kms_wasm.js" ||
+  Object.hasOwn(manifest, "browser") ||
+  Object.hasOwn(manifest, "exports") ||
+  Object.hasOwn(manifest, "module") ||
+  JSON.stringify(manifest["files"]) !==
+    JSON.stringify(["krusty_kms_wasm_bg.wasm", "krusty_kms_wasm.js", "krusty_kms_wasm.d.ts"]) ||
   Object.hasOwn(manifest, "scripts")
 ) {
   throw new Error(`Krusty KMS must be the script-free published ${packageName}@${packageVersion}`);

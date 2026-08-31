@@ -134,19 +134,26 @@ export const bindMultisigParticipantPicker = (
     origin.hidden = false;
     open.focus({ preventScroll: true });
   };
-  const finish = (participant: MultisigParticipant): boolean => {
+  const accept = (participant: MultisigParticipant): boolean => {
     const selectionError = deps.onSelect(participant);
     if (selectionError) {
       result.textContent = selectionError;
       showToast(selectionError, "error", confirm);
       return false;
     }
+    return true;
+  };
+  const complete = (): void => {
     addressInput.value = "";
     publicKeyInput.value = "";
     if (labelInput) labelInput.value = "";
     if (walletCardInput) walletCardInput.value = "";
     result.textContent = "";
     close();
+  };
+  const finish = (participant: MultisigParticipant): boolean => {
+    if (!accept(participant)) return false;
+    complete();
     return true;
   };
   const selectMethod = (next: typeof method): void => {
@@ -198,8 +205,9 @@ export const bindMultisigParticipantPicker = (
     } as const;
     buttonBusy(confirm, true);
     try {
+      if (!accept(participant)) return;
       await deps.saveContact?.(participant);
-      finish(participant);
+      complete();
     } catch (error) {
       const failure = errorMessage(error, "Contact save failed");
       result.textContent = failure;

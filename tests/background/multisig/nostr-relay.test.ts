@@ -1,5 +1,6 @@
 /** Relay coordination stays pooled, recipient-bound, bounded, and deduplicated. */
 import { describe, expect, test } from "bun:test";
+import { MAX_NOSTR_BATCH_ITEMS } from "@mc-wallet/wallet-model/nostr";
 import {
   createNostrRelayTransport,
   MULTISIG_NOSTR_RELAYS,
@@ -67,7 +68,7 @@ describe("Nostr multisig relay", () => {
     ).rejects.toThrow("Invalid Nostr gift wrap");
   });
 
-  test("syncs only matching gift wraps and deduplicates across relays", async () => {
+  test("syncs only matching gift wraps from each relay", async () => {
     const sent: string[] = [];
     const giftWrap = event("11".repeat(32));
     const factory = socketFactory(sent, (frame, socket) => {
@@ -89,6 +90,7 @@ describe("Nostr multisig relay", () => {
 
     await expect(syncNostrGiftWraps(RECIPIENT, 1, { socketFactory: factory })).resolves.toEqual([
       giftWrap,
+      giftWrap,
     ]);
     expect(sent.filter((frame) => frame.includes('["REQ"'))).toHaveLength(
       MULTISIG_NOSTR_RELAYS.length,
@@ -100,6 +102,84 @@ describe("Nostr multisig relay", () => {
     await expect(syncNostrGiftWraps("0x44", 1, { socketFactory: factory })).rejects.toThrow(
       "Invalid Nostr sync request",
     );
+  });
+
+  test("preserves same-id relay candidates until Krusty authenticates them", async () => {
+    const sent: string[] = [];
+    const sharedId = "ab".repeat(32);
+    const factory = socketFactory(sent, (frame, socket, url) => {
+      const subscriptionId = String(frame[1]);
+      socket.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify(["EVENT", subscriptionId, { ...event(sharedId), content: url }]),
+        }),
+      );
+      socket.onmessage?.(
+        new MessageEvent("message", { data: JSON.stringify(["EOSE", subscriptionId]) }),
+      );
+    });
+
+    const candidates = await syncNostrGiftWraps(RECIPIENT, 1, { socketFactory: factory });
+    expect(candidates).toHaveLength(2);
+    expect(candidates.map((candidate) => candidate.content).sort()).toEqual(
+      [...MULTISIG_NOSTR_RELAYS].sort(),
+    );
+  });
+
+  test("gives each relay space in the pre-authentication batch", async () => {
+    const sent: string[] = [];
+    const honestRelay = MULTISIG_NOSTR_RELAYS[1];
+    const factory = socketFactory(sent, (frame, socket, url) => {
+      const subscriptionId = String(frame[1]);
+      const events =
+        url === honestRelay
+          ? [{ ...event("fe".repeat(32)), content: "honest" }]
+          : Array.from({ length: MAX_NOSTR_BATCH_ITEMS }, (_, index) => ({
+              ...event(index.toString(16).padStart(64, "0")),
+              content: "untrusted",
+              created_at: Number.MAX_SAFE_INTEGER - index,
+            }));
+      for (const candidate of events) {
+        socket.onmessage?.(
+          new MessageEvent("message", {
+            data: JSON.stringify(["EVENT", subscriptionId, candidate]),
+          }),
+        );
+      }
+      socket.onmessage?.(
+        new MessageEvent("message", { data: JSON.stringify(["EOSE", subscriptionId]) }),
+      );
+    });
+
+    const candidates = await syncNostrGiftWraps(RECIPIENT, 1, { socketFactory: factory });
+    expect(candidates).toHaveLength(MAX_NOSTR_BATCH_ITEMS);
+    expect(candidates.some((candidate) => candidate.content === "honest")).toBe(true);
+  });
+
+  test("closes a subscription at the accepted frame budget", async () => {
+    const sent: string[] = [];
+    const relayUrl = "wss://relay.team.example";
+    const factory = socketFactory(sent, (frame, socket) => {
+      const subscriptionId = String(frame[1]);
+      for (let index = 0; index < MAX_NOSTR_BATCH_ITEMS + 10; index += 1) {
+        socket.onmessage?.(
+          new MessageEvent("message", {
+            data: JSON.stringify([
+              "EVENT",
+              subscriptionId,
+              event(index.toString(16).padStart(64, "0")),
+            ]),
+          }),
+        );
+      }
+    });
+
+    const candidates = await syncNostrGiftWraps(RECIPIENT, 1, {
+      relayUrls: [relayUrl],
+      socketFactory: factory,
+    });
+    expect(candidates).toHaveLength(MAX_NOSTR_BATCH_ITEMS);
+    expect(sent.filter((frame) => frame.includes('["CLOSE"'))).toHaveLength(1);
   });
 
   test("publishes many recipients over one connection per relay and preserves partial acks", async () => {

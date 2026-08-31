@@ -13,6 +13,7 @@ import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
 import { type ActivityEntry, memoryActivityLog } from "@mc-wallet/transactions/activity";
 import { UNRESOLVED_WINDOW_MS } from "../../../apps/extension/src/background/transactions/tx-observation";
 import {
+  mergeReconciledHistory,
   type ReconcileDeps,
   reconcileObserved,
   reconcileScope,
@@ -263,5 +264,43 @@ describe("background reconciliation", () => {
 
     releaseRpc.resolve();
     await alarm;
+  });
+
+  test("serializes history persistence behind an in-flight status reconciliation", async () => {
+    const activity = memoryActivityLog();
+    await activity.record(entry());
+    const rpcStarted = Promise.withResolvers<void>();
+    const releaseRpc = Promise.withResolvers<void>();
+    const deps: ReconcileDeps = {
+      activity,
+      preferencesStore: {
+        async read() {
+          return preferences;
+        },
+      },
+      runtimeRpc: {
+        async getTransactionStatuses() {
+          rpcStarted.resolve();
+          await releaseRpc.promise;
+          return { "0xabc": found("accepted") };
+        },
+      } as unknown as ReconcileDeps["runtimeRpc"],
+    };
+    const scope = { accountId: ACCOUNT, networkId: "SN_MAIN" } as const;
+    const alarm = reconcileObserved(deps, "fast", 1_000);
+    await rpcStarted.promise;
+    await activity.record(entry({ hash: "0xdef", summary: "New local row" }));
+    const history = mergeReconciledHistory(deps, scope, [
+      entry({ hash: "0x123", status: "accepted", summary: "Discovered history" }),
+    ]);
+    releaseRpc.resolve();
+    await Promise.all([alarm, history]);
+
+    expect((await statusOf(deps, "0xabc"))?.status).toBe("accepted");
+    expect((await activity.list()).map((stored) => stored.hash).sort()).toEqual([
+      "0x123",
+      "0xabc",
+      "0xdef",
+    ]);
   });
 });

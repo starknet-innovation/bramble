@@ -28,10 +28,12 @@ addresses, contract addresses, transaction hashes, calldata, signatures, and sig
 Those requests are sent only to the selected user-configured or bundled service needed for the
 requested wallet feature, using HTTPS except for an explicit loopback devnet.
 
-Starkscan activity lookup that discloses an account address is a separate per-network opt-in and is
-used only after configured RPC history is unavailable. AVNU receives the asset and amount details
-needed for a user-requested swap. CoinGecko receives public asset identifiers needed for prices.
-The phishing feed supplies a public denylist; MC Wallet does not send the current site to that feed.
+Starkscan activity lookup that discloses an account address is used only after every configured RPC
+history source is unavailable. This outage rescue is enabled by default for the bundled RPCs and
+can be disabled per network; it defaults off when the user configures a custom RPC unless they
+explicitly enable it. AVNU receives the asset and amount details needed for a user-requested swap.
+CoinGecko receives public asset identifiers needed for prices. The phishing feed supplies a public
+denylist; MC Wallet does not send the current site to that feed.
 
 When the user explicitly shares or checks for an Argent multisig handoff, MC Wallet connects to the
 reviewed public Nostr relays `relay.primal.net` and `nos.lol`, or to one custom relay the user chose

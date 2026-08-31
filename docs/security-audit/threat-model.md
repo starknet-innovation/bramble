@@ -101,7 +101,7 @@ dependency audit.
 | Dynamic text or metadata reaches an executable DOM sink | `scripts/check-file-standards.ts`; `tests/conformance/shared-helper-single-source.test.ts` |
 | Remote metadata changes executable behavior | `tests/background/portfolio/background-nft-discovery.test.ts`; `tests/background/portfolio/token-ops-addtoken-spam.test.ts` |
 | Privacy route, fee, proof, or pool bypasses exact review | `tests/background/strk20-subaccount-sdk-boundary.test.ts`; `tests/background/privacy/strk20-wallet-preparations.test.ts`; `tests/background/strk20-vault-sign-lock-revocation.test.ts` |
-| Build or release admits undeclared or unpinned input | `tests/scripts/workflow-action-pinning.test.ts`; `tests/scripts/vendor-execution-policy.test.ts`; `tests/scripts/krusty-provenance-pin.test.ts`; `tests/conformance/release-version-single-source.test.ts` |
+| Build or release admits undeclared or unpinned input | `tests/scripts/workflow-action-pinning.test.ts`; `tests/scripts/vendor-execution-policy.test.ts`; `tests/scripts/krusty-package-provenance.test.ts`; `tests/conformance/release-version-single-source.test.ts` |
 
 The dapp-reachable negative corpus explicitly covers hostile and overflowing calldata in
 `tests/property/security-boundaries.test.ts` and

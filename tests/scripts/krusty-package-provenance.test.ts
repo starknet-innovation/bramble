@@ -22,15 +22,28 @@ describe("published Krusty package", () => {
 
   test("pins both published runtime files before importing the package", async () => {
     const source = await readFile("scripts/check-krusty-adapter.ts", "utf8");
-    const digestCheck = source.indexOf("expectedRuntimeDigests");
+    const digestLoop = source.indexOf("for (const [path, expectedDigest]");
     const packageImport = source.indexOf(
       'createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm"))',
     );
     expect(source).toContain(`const packageVersion = "${packageVersion}"`);
     expect(source).toMatch(/krusty_kms_wasm\.js.*[0-9a-f]{64}/s);
     expect(source).toMatch(/krusty_kms_wasm_bg\.wasm.*[0-9a-f]{64}/s);
-    expect(digestCheck).toBeGreaterThan(-1);
-    expect(packageImport).toBeGreaterThan(digestCheck);
+    expect(source).toContain('manifest["main"] !== "krusty_kms_wasm.js"');
+    expect(source).toContain('Object.hasOwn(manifest, "exports")');
+    expect(digestLoop).toBeGreaterThan(-1);
+    let depth = 0;
+    let digestLoopEnd = -1;
+    for (let index = source.indexOf("{", digestLoop); index < source.length; index += 1) {
+      if (source[index] === "{") depth += 1;
+      if (source[index] === "}") depth -= 1;
+      if (depth === 0) {
+        digestLoopEnd = index;
+        break;
+      }
+    }
+    expect(digestLoopEnd).toBeGreaterThan(digestLoop);
+    expect(packageImport).toBeGreaterThan(digestLoopEnd);
     expect(source).toContain("known-answer vectors do not match the reviewed build");
   });
 

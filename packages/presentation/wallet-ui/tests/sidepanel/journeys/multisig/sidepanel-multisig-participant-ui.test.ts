@@ -93,4 +93,42 @@ describe("multisig participant selection", () => {
     );
     expect(app.querySelector<HTMLElement>("[data-participant-screen]")?.hidden).toBe(true);
   });
+
+  test("does not save a wallet card rejected by the originating flow", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const saved: unknown[][] = [];
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      await testClient(),
+      fixture.status,
+      {
+        wallet: {
+          loadStatus: async () => fixture.status,
+          saveAddress: async (...values: unknown[]) => {
+            saved.push(values);
+          },
+        } as unknown as MultisigUiDeps["wallet"],
+      },
+    );
+    app.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+    app.querySelector<HTMLButtonElement>('[data-participant-method="wallet-card"]')?.click();
+    const label = app.querySelector<HTMLInputElement>("[data-participant-label-input]");
+    const card = app.querySelector<HTMLTextAreaElement>('[name="participantWalletCard"]');
+    if (!label || !card) throw new Error("wallet-card participant controls unavailable");
+    label.value = "Duplicate signer";
+    card.value = walletContactCard({
+      address: signer.address,
+      networkId: "SN_MAIN",
+      nostrPublicKey: "11".repeat(32),
+      publicKeyX: signer.publicKeyX,
+    });
+    app.querySelector<HTMLButtonElement>("[data-confirm-participant]")?.click();
+    await flush();
+
+    expect(saved).toEqual([]);
+    expect(app.querySelector<HTMLElement>("[data-participant-screen]")?.hidden).toBe(false);
+    expect(app.querySelector("[data-participant-result]")?.textContent).not.toBe("");
+  });
 });

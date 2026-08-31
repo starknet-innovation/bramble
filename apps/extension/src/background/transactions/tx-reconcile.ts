@@ -20,6 +20,7 @@ import {
   type ActivityScope,
   activityForScope,
 } from "@mc-wallet/transactions/activity";
+import { mergeActivity } from "@mc-wallet/transactions/tx-history";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
@@ -164,6 +165,18 @@ export const reconcileScope = async (
       : deps.activity.updateStatuses(outcomes, scope);
   });
 };
+
+/** Serializes a discovered-history merge with every status reconciliation. */
+export const mergeReconciledHistory = (
+  deps: ReconcileDeps,
+  scope: ActivityScope,
+  onChain: readonly ActivityEntry[],
+): Promise<readonly ActivityEntry[]> =>
+  runReconciliation(async () => {
+    const merged = mergeActivity(activityForScope(await deps.activity.list(), scope), onChain);
+    await deps.activity.replaceScope?.(merged, scope).catch(() => undefined);
+    return merged;
+  });
 
 /**
  * Reconciles every scope that has a transaction due on the given cadence. Used

@@ -25,6 +25,7 @@ type PendingAck = {
 
 type PendingSubscription = {
   readonly events: NostrEvent[];
+  frames: number;
   readonly recipientPublicKey: string;
   readonly reject: (error: Error) => void;
   readonly resolve: (events: readonly NostrEvent[]) => void;
@@ -122,6 +123,7 @@ class RelayConnection {
       );
       this.#subscriptions.set(subscriptionId, {
         events: [],
+        frames: 0,
         recipientPublicKey,
         reject,
         resolve,
@@ -241,14 +243,21 @@ class RelayConnection {
       this.#finishSubscription(subscriptionId, new Error("Nostr relay refused the subscription"));
       return;
     }
+    if (frame[0] !== "EVENT") return;
+    pending.frames += 1;
     if (
-      frame[0] === "EVENT" &&
-      pending.events.length < MAX_NOSTR_BATCH_ITEMS &&
       isNostrEvent(frame[2]) &&
       frame[2].kind === 1_059 &&
       hasNostrRecipientTag(frame[2], pending.recipientPublicKey)
     ) {
       pending.events.push(frame[2]);
+    }
+    if (pending.frames >= MAX_NOSTR_BATCH_ITEMS) {
+      try {
+        this.#socket.send(JSON.stringify(["CLOSE", subscriptionId]));
+      } finally {
+        this.#finishSubscription(subscriptionId);
+      }
     }
   }
 
