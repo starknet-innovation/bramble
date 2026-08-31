@@ -109,3 +109,17 @@ describe("validateMnemonic output validation", () => {
     ).rejects.toThrow("Krusty KMS returned an invalid mnemonic validation result");
   });
 });
+
+
+// Pins the export name this adapter binds: upstream kept `deriveStrk20ViewingKey`
+// for a derivation that ignores the chain and pool, so binding to that name would
+// return a wrong-scope key with no error anywhere. wasm-bindgen drops surplus
+// arguments instead of throwing, so nothing at the call site would show it.
+describe("the module surface this adapter is pinned to", () => {
+  test("the viewing key is read from the scoped export, never the unscoped one", () => {
+    const { deriveScopedStrk20ViewingKey: _scoped, ...unscopedOnly } = createModule();
+    expect(() =>
+      createKrustyKms({ ...unscopedOnly, deriveStrk20ViewingKey: () => "0x456" }),
+    ).toThrow("Krusty KMS export missing: deriveScopedStrk20ViewingKey");
+  });
+});

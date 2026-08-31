@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { mlDsa65Fixture } from "@mc-wallet/testkit/ml-dsa-fixtures";
 import {
   createMobilePqEnrollController,
+  MOBILE_PQ_CHALLENGE_SPENT,
   MOBILE_PQ_CLASS_INVALID,
   MOBILE_PQ_DEVICE_INVALID,
   MOBILE_PQ_KEY_INVALID,
@@ -109,9 +110,12 @@ describe("createMobilePqEnrollController", () => {
     });
     await controller.open();
     await controller.submit(draft);
+    // The remedy is appended to every background refusal, not just an expired
+    // one: the challenge is consumed before the proof of possession is checked,
+    // so any refusal leaves the form on screen unable to succeed.
     expect(latest(views)?.phase).toEqual({
       kind: "error",
-      message: "device did not prove it holds this key",
+      message: `device did not prove it holds this key. ${MOBILE_PQ_CHALLENGE_SPENT}`,
     });
     expect(refreshed()).toBe(0);
     // The challenge is single-use, so what is on screen is no longer usable.
