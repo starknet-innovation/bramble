@@ -15,6 +15,18 @@ const createModule = (signatureR = "0x1") => ({
   deriveScopedStrk20ViewingKey() {
     return "0x456";
   },
+  mlDsaEstimationSignature() {
+    return [];
+  },
+  mlDsaKeyCommitment() {
+    return "0x1";
+  },
+  mlDsaSignaturePayload() {
+    return [];
+  },
+  mlDsaVerify() {
+    return false;
+  },
   deriveStarknetKeypair() {
     return {
       private_key: "0x123",

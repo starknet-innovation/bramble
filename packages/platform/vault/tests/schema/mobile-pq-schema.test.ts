@@ -148,19 +148,30 @@ describe("paired-phone address derivation", () => {
   // A KMS whose OpenZeppelin derivation throws, so any test that reaches it
   // fails loudly. Deriving an ML-DSA address from another family's recipe would
   // otherwise succeed and return a plausible address nobody holds the key for.
+  // A stand-in for the real Poseidon commitment: not that value, but a
+  // deterministic function of the whole key, which is what these assertions
+  // depend on — same key, same address; different key, different address.
+  const commitmentOf = (publicKey: string) =>
+    `0x${(BigInt(publicKey.length) + BigInt(`0x${publicKey.slice(2, 34)}`)).toString(16)}`;
+
   const kms = {
     deriveOzAccountAddress: async () => {
       throw new Error("the OpenZeppelin derivation was reached for an ml-dsa account");
     },
+    mlDsaKeyCommitment: async (publicKey: string) => commitmentOf(publicKey),
   } as never;
 
-  const derive = (extra: Record<string, unknown>) =>
-    deriveAccountContractAddress(kms, {
+  const derive = (extra: Record<string, unknown>) => {
+    const publicKey = extra["publicKey"];
+    return deriveAccountContractAddress(kms, {
       accountContractType: "ml-dsa",
       networkId: "SN_MAIN",
-      publicKeyX: "0x456",
+      // The identity felt is the commitment, so the two agree here the way they
+      // do on a real record. The refusal when they disagree is asserted below.
+      publicKeyX: typeof publicKey === "string" ? commitmentOf(publicKey) : "0x456",
       ...extra,
     });
+  };
 
   test("derives from the class hash and the expanded public key", async () => {
     const { address, classHash } = await derive({
@@ -182,6 +193,22 @@ describe("paired-phone address derivation", () => {
     expect(
       (await derive({ classHash: "0xdef", publicKey: mobileAccount.publicKey })).address,
     ).not.toBe(address);
+  });
+
+  test("refuses a record whose identity felt is not the commitment to its key", async () => {
+    // Deployment calldata reads `publicKeyX` while signing reads `publicKey`. A
+    // record where they disagree would deploy an account the device cannot sign
+    // for, and the contract rejects every later transaction with no useful
+    // error — so the mismatch is refused here, where both values are in hand.
+    await expect(
+      deriveAccountContractAddress(kms, {
+        accountContractType: "ml-dsa",
+        classHash: "0xabc",
+        networkId: "SN_MAIN",
+        publicKey: mobileAccount.publicKey,
+        publicKeyX: "0x456",
+      }),
+    ).rejects.toThrow("ML-DSA account key does not match its stored identity");
   });
 
   test("an explicit class hash and public key are both required", async () => {
