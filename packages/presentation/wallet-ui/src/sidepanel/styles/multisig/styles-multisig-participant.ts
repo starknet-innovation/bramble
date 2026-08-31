@@ -95,39 +95,6 @@ export const MULTISIG_PARTICIPANT_STYLES = `
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
-  .receive-public-key {
-    border-top: 1px solid var(--mc-hairline);
-    display: grid;
-    gap: ${SPACE.sm};
-    padding-top: ${SPACE.lg};
-  }
-  .receive-public-key > div:first-child { display: grid; gap: ${SPACE.xs}; }
-  .receive-public-key > div:first-child span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
-  .receive-public-key > [data-nostr-key-row] {
-    border-top: 1px solid var(--mc-hairline);
-    display: grid;
-    gap: ${SPACE.sm};
-    padding-top: ${SPACE.sm};
-  }
-  .receive-public-key > [data-nostr-key-row] > div:first-child { display: grid; gap: ${SPACE.xs}; }
-  .receive-public-key > [data-nostr-key-row] > div:first-child span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
-  .receive-public-key .address-line code {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-    word-break: normal;
-  }
-  .receive-card-pending {
-    align-items: center;
-    color: inherit;
-    display: flex;
-    justify-content: center;
-    margin: 0;
-    min-height: 216px;
-    opacity: 0.62;
-    padding: ${SPACE.lg};
-    text-align: center;
-  }
   @media (prefers-reduced-motion: reduce) {
     .multisig-participant-screen:not([hidden]) { transition: none; }
   }

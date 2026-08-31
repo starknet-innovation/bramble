@@ -123,8 +123,7 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
         cardCopy.disabled = false;
         if (cardCopy.lastChild) cardCopy.lastChild.textContent = "Copy wallet card";
       }
-      if (keyStatus)
-        keyStatus.textContent = "Authenticates private multisig handoffs from this wallet.";
+      if (keyStatus) keyStatus.hidden = true;
       if (key) {
         key.textContent = accountLabel(nostrPublicKey);
         key.title = nostrPublicKey;
@@ -137,6 +136,7 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
       const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
       const cardCopy = root.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
       const keyStatus = root.querySelector<HTMLElement>("[data-nostr-key-status]");
+      const keyValue = root.querySelector<HTMLElement>("[data-nostr-key-value]");
       if (qr) {
         renderFragment(qr, qrSvg(address, "QR code for account address"));
         qr.removeAttribute("aria-busy");
@@ -144,9 +144,10 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
       root.dataset["walletCardState"] = "unavailable";
       if (cardCopy) cardCopy.hidden = true;
       if (keyStatus) {
-        keyStatus.textContent =
-          "Secure coordination is unavailable for this vault. Share the account address instead.";
+        keyStatus.textContent = "Coordination is unavailable. Share the account address instead.";
+        keyStatus.hidden = false;
       }
+      if (keyValue) keyValue.hidden = true;
     },
   );
 };

@@ -18,7 +18,6 @@ const render = (): HTMLElement => {
       receiveAddressView({
         address: account.address,
         copyLabel: "Copy account address",
-        eyebrow: "Receive",
         hint: "Share this account.",
         networkId: account.networkId,
         publicKeyX: account.publicKeyX,
@@ -41,6 +40,7 @@ describe("Receive wallet card coordination", () => {
     expect(card?.dataset["walletCardState"]).toBe("preparing");
     expect(copy?.disabled).toBe(true);
     expect(app.querySelector("[data-receive-qr] svg")).toBeNull();
+    expect(app.querySelector(".receive-address-line")).toBeNull();
 
     bindReceiveWalletCard({
       app,
@@ -54,6 +54,7 @@ describe("Receive wallet card coordination", () => {
     expect(copy?.dataset["copy"]).toContain(nostrPublicKey);
     expect(app.querySelector("[data-receive-qr] svg")).not.toBeNull();
     expect(app.querySelector("[data-nostr-key-value]")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("[data-nostr-key-status]")?.hasAttribute("hidden")).toBe(true);
   });
 
   test("falls back explicitly to an address-only QR when derivation is unavailable", async () => {
@@ -75,5 +76,7 @@ describe("Receive wallet card coordination", () => {
     expect(app.querySelector("[data-nostr-key-status]")?.textContent).toContain(
       "Share the account address instead",
     );
+    expect(app.querySelector("[data-nostr-key-status]")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("[data-nostr-key-value]")?.hasAttribute("hidden")).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 /**
- * Send and Ledger-signing progress layer. The four-step rail gives the journey
- * a persistent map; live task rows expose exactly what the wallet is doing.
+ * Send, Receive, and Ledger-signing layer. Transaction progress keeps a
+ * persistent map; Receive puts the shareable address before technical identity.
  * Motion is reserved for active work and the final submitted receipt, with a
  * complete reduced-motion cut.
  */
@@ -10,6 +10,87 @@ import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wa
  * Send-flow stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const SEND_STYLES = `
+  .receive-address-view {
+    gap: ${SPACE.md};
+    min-width: 0;
+  }
+  .receive-address-view .qr-card { width: min(204px, 100%); }
+  .receive-intro {
+    display: grid;
+    gap: ${SPACE.xs};
+    text-align: center;
+  }
+  .receive-intro h2 { font-size: ${TYPE.title.size}; margin: 0; }
+  .receive-intro p {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+    margin: 0;
+  }
+  .receive-actions {
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+  .receive-actions button { min-width: 0; padding-inline: ${SPACE.sm}; text-wrap: nowrap; }
+  details.receive-identity {
+    background: transparent;
+    border-radius: 0;
+    border-top: 1px solid var(--mc-hairline);
+  }
+  details.receive-identity > summary { padding: 0; }
+  .receive-identity .disclosure-body {
+    gap: ${SPACE.md};
+    padding: ${SPACE.sm} 0 0;
+  }
+  .receive-identity .disclosure-body::before { display: none; }
+  .receive-key-row {
+    align-items: center;
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: ${CONTROL.hit};
+  }
+  .receive-key-row + .receive-key-row {
+    border-top: 1px solid var(--mc-hairline);
+    padding-top: ${SPACE.md};
+  }
+  .receive-key-row > strong { font-size: ${TYPE.label.size}; }
+  .receive-key-row > [data-nostr-key-status] {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+    text-align: right;
+  }
+  .receive-address-view[data-wallet-card-state="unavailable"] .receive-key-row > [data-nostr-key-status] {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+  .receive-key-value {
+    align-items: center;
+    display: inline-flex;
+    gap: ${SPACE.xs};
+    justify-self: end;
+    min-width: 0;
+  }
+  .receive-key-value code {
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+    word-break: normal;
+  }
+  .receive-card-pending {
+    align-items: center;
+    color: inherit;
+    display: flex;
+    justify-content: center;
+    margin: 0;
+    min-height: 188px;
+    opacity: 0.62;
+    padding: ${SPACE.lg};
+    text-align: center;
+  }
   .send-flow, .send-flow form, .send-stage { display: grid; gap: ${SPACE.lg}; }
   .send-flow form { min-width: 0; }
   .send-stage-frame {

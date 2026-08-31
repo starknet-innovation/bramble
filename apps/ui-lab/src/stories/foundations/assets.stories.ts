@@ -35,7 +35,9 @@ export const Receive: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
-    await expect(body?.querySelector(".receive-public-key")).toBeVisible();
+    await expect(body?.querySelector(".receive-address-line")).not.toBeInTheDocument();
+    await expect(body?.querySelector(".receive-identity")).not.toHaveAttribute("open");
+    await expect(body?.querySelector(".receive-public-key")).toBeInTheDocument();
     await expect(body?.querySelector(".receive-public-key [data-copy]")).toHaveAttribute(
       "data-copy",
     );
@@ -43,7 +45,7 @@ export const Receive: LabStory = {
       "aria-label",
       "Copy signer public key",
     );
-    await expect(body?.querySelector("[data-nostr-key-row]")).toBeVisible();
+    await expect(body?.querySelector("[data-nostr-key-row]")).toBeInTheDocument();
     await expect(body?.querySelector("[data-nostr-key-row]")).toHaveTextContent(
       "Coordination public key",
     );
