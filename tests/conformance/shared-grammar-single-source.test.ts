@@ -226,17 +226,34 @@ const vaultWithSigningKey = (privateKey: string) => ({
 
 const kmsReturning = (privateKey: string, viewingKey: string) =>
   createKrustyKms({
+    deriveNostrPublicKey: () => ({ public_key: "11".repeat(32) }),
     deriveOzAccountAddress: () => "0xabc",
     deriveStarknetKeypair: () => ({
       private_key: privateKey,
       public_key_x: "0xabc",
       public_key_y: "0xdef",
     }),
-    deriveStrk20ViewingKey: () => viewingKey,
+    deriveScopedStrk20ViewingKey: () => viewingKey,
     generateMnemonic: () => "habit hope tip crystal because grunt nation idea electric witness",
     getAccountClassHashes: () => "{}",
+    openNostrApplicationData: () =>
+      JSON.stringify({
+        content: "payload",
+        identifier: "mc-wallet.multisig",
+        senderPublicKey: "22".repeat(32),
+      }),
     signStarkHash: () => ({ publicKey: "0xabc", r: "0x1", s: "0x2" }),
     validateMnemonic: () => true,
+    wrapNostrApplicationData: () =>
+      JSON.stringify({
+        content: "ciphertext",
+        created_at: 1,
+        id: "11".repeat(32),
+        kind: 1_059,
+        pubkey: "22".repeat(32),
+        sig: "33".repeat(64),
+        tags: [["p", "44".repeat(32)]],
+      }),
   });
 
 describe("the Stark signing-scalar grammar has one definition", () => {

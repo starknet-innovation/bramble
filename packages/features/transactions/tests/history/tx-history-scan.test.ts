@@ -284,10 +284,16 @@ describe("collectTransactionHistory", () => {
       transaction_hash: `0x${(index + 1).toString(16)}`,
     }));
     const timestampBlocks: number[] = [];
+    let activeTimestamps = 0;
+    let maximumTimestamps = 0;
     const entries = await collectTransactionHistory(
       fakeRpc({
         async getBlockTimestamp(blockNumber) {
+          activeTimestamps += 1;
+          maximumTimestamps = Math.max(maximumTimestamps, activeTimestamps);
           timestampBlocks.push(blockNumber);
+          await Promise.resolve();
+          activeTimestamps -= 1;
           return 1_700_000_000 + blockNumber;
         },
         async getEvents() {
@@ -298,6 +304,7 @@ describe("collectTransactionHistory", () => {
     );
     expect(entries).toHaveLength(MAX_HISTORY_ENTRIES);
     expect(timestampBlocks).toHaveLength(MAX_HISTORY_ENTRIES);
+    expect(maximumTimestamps).toBe(4);
   });
 
   test("returns an empty feed when no events touch the account", async () => {

@@ -24,6 +24,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
+import { isNostrPublicKey } from "@mc-wallet/wallet-model/nostr";
 
 /**
  * Fresh untrusted chain authority paired with one watched account.
@@ -100,6 +101,12 @@ export type MultisigSignerAccount = {
   readonly accountContractType: AccountContractType;
   readonly address: string;
   readonly publicKeyX: string;
+};
+
+/** Public Nostr identity returned only to the wallet's own receive screen. */
+export type NostrPublicKeyResponse = {
+  readonly nostrPublicKey: string;
+  readonly ok: true;
 };
 
 const canonicalNonZeroFelt = (value: unknown): value is string =>
@@ -321,6 +328,56 @@ export const isMultisigSignerResponse = (
     value["signer"]["accountContractType"] === "openzeppelin") &&
   canonicalNonZeroFelt(value["signer"]["address"]) &&
   canonicalNonZeroFelt(value["signer"]["publicKeyX"]);
+
+/** Validates the wallet-level public Nostr identity. */
+export const isNostrPublicKeyResponse = (value: unknown): value is NostrPublicKeyResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["nostrPublicKey", "ok"]) &&
+  value["ok"] === true &&
+  isNostrPublicKey(value["nostrPublicKey"]);
+
+/** Validates a recipient-specific relay share outcome. */
+export const isNostrShareResponse = (
+  value: unknown,
+): value is {
+  readonly ok: true;
+  readonly recipients: number;
+  readonly relays: number;
+  readonly totalRecipients: number;
+} =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["ok", "recipients", "relays", "totalRecipients"]) &&
+  value["ok"] === true &&
+  Number.isSafeInteger(value["recipients"]) &&
+  Number(value["recipients"]) > 0 &&
+  Number.isSafeInteger(value["relays"]) &&
+  Number(value["relays"]) >= Number(value["recipients"]) &&
+  Number.isSafeInteger(value["totalRecipients"]) &&
+  Number(value["totalRecipients"]) >= Number(value["recipients"]);
+
+/** Validates one bounded explicit relay-sync outcome. */
+export const isNostrSyncResponse = (
+  value: unknown,
+): value is {
+  readonly imported: number;
+  readonly intentIds: readonly string[];
+  readonly ok: true;
+  readonly received: number;
+} =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["imported", "intentIds", "ok", "received"]) &&
+  value["ok"] === true &&
+  Number.isSafeInteger(value["imported"]) &&
+  Number(value["imported"]) >= 0 &&
+  Array.isArray(value["intentIds"]) &&
+  value["intentIds"].length === value["imported"] &&
+  value["intentIds"].every((id) => typeof id === "string" && id.length > 0 && id.length <= 256) &&
+  new Set(value["intentIds"]).size === value["intentIds"].length &&
+  Number.isSafeInteger(value["received"]) &&
+  Number(value["received"]) >= Number(value["imported"]);
 
 /**
  * Validates the exact acknowledgement returned by removal.

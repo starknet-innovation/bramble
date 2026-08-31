@@ -9,7 +9,6 @@ target/
 test-results/
 .dev-profile/
 output/
-vendor/krusty-kms/
 vendor/argent-contracts/
 vendor/starknet-privacy/
 *.log

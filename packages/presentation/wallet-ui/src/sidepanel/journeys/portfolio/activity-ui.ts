@@ -46,7 +46,7 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
       "activityAccountId"
     ];
     void wallet
-      .loadActivity(accountId, false, true)
+      .loadActivity(accountId, false, true, true)
       .then(() => wallet.loadStatus())
       .then(render)
       .catch(() => undefined)

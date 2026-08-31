@@ -14,6 +14,8 @@ import {
   isArgentMultisigResponse,
   isArgentMultisigsResponse,
   isMultisigSignerResponse,
+  isNostrShareResponse,
+  isNostrSyncResponse,
   isOkResponse,
   type MultisigSignerAccount,
 } from "../../../popup/responses/multisig-responses";
@@ -118,9 +120,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         "import Argent multisig signature failed",
       );
     },
-    async loadBalances(multisigId: string, cached = false): Promise<ScopedBalanceState> {
+    async loadBalances(
+      multisigId: string,
+      cached = false,
+      refresh = false,
+    ): Promise<ScopedBalanceState> {
       const response = await sendMessage({
         ...(cached ? { cached: true } : {}),
+        ...(refresh ? { refresh: true } : {}),
         multisigId,
         type: "wallet.multisigBalances",
       });
@@ -241,6 +248,34 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         { intentId, signerAccountId, type: "wallet.signArgentMultisigIntent" },
         "sign Argent multisig intent failed",
       );
+    },
+    async shareIntent(
+      intentId: string,
+    ): Promise<{ readonly recipients: number; readonly totalRecipients: number }> {
+      const response = await sendMessage({
+        intentId,
+        type: "wallet.shareArgentMultisigIntent",
+      });
+      if (!isNostrShareResponse(response)) {
+        throw responseError(response, "secure co-signer share failed");
+      }
+      return { recipients: response.recipients, totalRecipients: response.totalRecipients };
+    },
+    async syncIntents(multisigId: string): Promise<{
+      readonly imported: number;
+      readonly intentIds: readonly string[];
+      readonly received: number;
+    }> {
+      invalidateRefreshes();
+      const response = await sendMessage({ multisigId, type: "wallet.syncArgentMultisigIntents" });
+      if (!isNostrSyncResponse(response)) {
+        throw responseError(response, "co-signer sync failed");
+      }
+      return {
+        imported: response.imported,
+        intentIds: response.intentIds,
+        received: response.received,
+      };
     },
     async submitIntent(intentId: string) {
       return intentResult(

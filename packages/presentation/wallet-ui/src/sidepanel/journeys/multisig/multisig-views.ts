@@ -480,8 +480,7 @@ export const multisigDetailFlow = (
       ${multisigPortfolio({
         authorityAvailable: !loadError && view.config !== null,
         ...(effectiveAuthorityIssue ? { authorityMessage: effectiveAuthorityIssue } : {}),
-        canSign:
-          !loadError && view.deployed === true && options.length > 0 && hasCompleteSignerConfig,
+        canPropose: !loadError && view.deployed === true && hasCompleteSignerConfig,
         data: portfolio,
         ...(view.deployed === undefined ? {} : { deployed: view.deployed }),
         ...(view.deploymentPending ? { deploymentPending: true } : {}),

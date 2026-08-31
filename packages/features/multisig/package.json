@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./chain": "./src/chain.ts",
+    "./coordination": "./src/coordination.ts",
     "./deploy": "./src/deploy.ts",
     "./repository": "./src/repository.ts",
     "./signer-account": "./src/signer-account.ts"
@@ -12,7 +13,7 @@
   "scripts": {
     "check": "bun run check:types && bun run test",
     "check:types": "tsc --noEmit -p tsconfig.json",
-    "test": "bun test ./tests"
+    "test": "bun test --preload ../../../tests/support/test-preload.ts ./tests"
   },
   "dependencies": {
     "@mc-wallet/core": "workspace:*",

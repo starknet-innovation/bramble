@@ -40,15 +40,20 @@ const run = (
   deps: MultisigUiDeps,
   button: HTMLButtonElement | null | undefined,
   action: () => Promise<string>,
-  resetScroll = false,
+  options: {
+    readonly afterRender?: () => void;
+    readonly reconcile?: boolean;
+    readonly resetScroll?: boolean;
+  } = {},
 ): void => {
   const doc = button?.ownerDocument ?? deps.app?.ownerDocument;
   buttonBusy(button, true);
   void action().then(
     async (message) => {
       showToast(message, "success", button ?? deps.app);
-      await deps.render(await deps.wallet.loadStatus());
-      if (resetScroll && doc) {
+      await deps.render(await deps.wallet.loadStatus(), options.reconcile ? "action" : undefined);
+      options.afterRender?.();
+      if (options.resetScroll && doc) {
         doc.documentElement.scrollTop = 0;
         doc.body.scrollTop = 0;
       }
@@ -98,6 +103,21 @@ const bindCopies = (deps: MultisigUiDeps): void => {
 };
 
 const bindActions = (deps: MultisigUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-share]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset["msShare"];
+      if (!id) return;
+      run(deps, button, async () => {
+        const result = await deps.multisig.shareIntent(id);
+        if (result.recipients < result.totalRecipients) {
+          throw new Error(
+            `Reached ${result.recipients} of ${result.totalRecipients} co-signers. Share again to retry the remaining delivery.`,
+          );
+        }
+        return `Shared securely with ${result.recipients} co-signer${result.recipients === 1 ? "" : "s"}`;
+      });
+    });
+  });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-sign]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["msSign"];
@@ -127,7 +147,7 @@ const bindActions = (deps: MultisigUiDeps): void => {
             throw error;
           }
         },
-        true,
+        { resetScroll: true },
       );
     });
   });
@@ -190,6 +210,40 @@ const bindDeletes = (deps: MultisigUiDeps): void => {
  * Binds focused intent navigation, handoff, signing, refresh, and submission.
  */
 export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
+  deps.app
+    ?.querySelector<HTMLButtonElement>("[data-ms-sync-intents]")
+    ?.addEventListener("click", (event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      let updatedIntentIds: readonly string[] = [];
+      run(
+        deps,
+        button,
+        async () => {
+          const multisigId = deps.selectedMultisigId();
+          if (!multisigId) throw new Error("Select a multisig before checking for updates");
+          const result = await deps.multisig.syncIntents(multisigId);
+          updatedIntentIds = result.intentIds;
+          return result.imported === 0
+            ? "No new co-signer updates"
+            : `${result.imported} signing intent${result.imported === 1 ? "" : "s"} updated${result.imported === 1 ? "" : ". Review them in Intents"}`;
+        },
+        {
+          reconcile: true,
+          afterRender: () => {
+            const multisigId = deps.selectedMultisigId();
+            if (multisigId && updatedIntentIds.length === 1 && updatedIntentIds[0]) {
+              deps.openIntent(multisigId, updatedIntentIds[0]);
+              return;
+            }
+            const tab = deps.app?.querySelector<HTMLButtonElement>('[data-ms-home-tab="intents"]');
+            tab?.click();
+            (deps.app?.querySelector<HTMLButtonElement>("[data-ms-sync-intents]") ?? tab)?.focus({
+              preventScroll: true,
+            });
+          },
+        },
+      );
+    });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-open-intent]").forEach((button) => {
     button.addEventListener("click", () => {
       const accountId = button.dataset["msIntentAccount"];

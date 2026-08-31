@@ -20,6 +20,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
+import { isNostrPublicKey } from "@mc-wallet/wallet-model/nostr";
 import { isCustomRpcUrl } from "../networks/custom-network";
 
 /**
@@ -42,13 +43,74 @@ export type AddressBookEntry = {
   readonly id: string;
   readonly label: string;
   readonly networkId: StarknetNetworkId;
+  readonly nostrPublicKey?: string;
   readonly publicKeyX?: string;
+};
+
+/** Public contract and coordination identity carried by a shared wallet card. */
+export type WalletContactCard = {
+  readonly address: string;
+  readonly networkId: StarknetNetworkId;
+  readonly nostrPublicKey?: string;
+  readonly publicKeyX?: string;
+};
+
+const CONTACT_CARD_PREFIX = "mcw:contact:1:";
+
+/** Encodes one validated public wallet identity into a compact, QR-safe card. */
+export const walletContactCard = (card: WalletContactCard): string => {
+  const address = canonicalAddress(card.address);
+  const publicKeyX = card.publicKeyX ? canonicalFelt(card.publicKeyX) : null;
+  if (
+    !address ||
+    !isNonZeroStarkFieldElement(address) ||
+    !isStarknetNetworkId(card.networkId) ||
+    (card.publicKeyX !== undefined && (!publicKeyX || !isNonZeroStarkFieldElement(publicKeyX))) ||
+    (card.nostrPublicKey !== undefined && !isNostrPublicKey(card.nostrPublicKey))
+  ) {
+    throw new Error("Invalid wallet contact card");
+  }
+  return `${CONTACT_CARD_PREFIX}${card.networkId}:${address.slice(2)}:${publicKeyX?.slice(2) ?? "-"}:${card.nostrPublicKey ?? "-"}`;
+};
+
+/** Parses an untrusted, versioned wallet contact card into canonical public data. */
+export const parseWalletContactCard = (value: unknown): WalletContactCard | null => {
+  if (typeof value !== "string" || value.length > 512 || !value.startsWith(CONTACT_CARD_PREFIX)) {
+    return null;
+  }
+  const [networkId, addressHex, publicKeyHex, nostrPublicKey, ...rest] = value
+    .slice(CONTACT_CARD_PREFIX.length)
+    .split(":");
+  const address = addressHex ? canonicalAddress(`0x${addressHex}`) : null;
+  const publicKeyX =
+    publicKeyHex && publicKeyHex !== "-" ? canonicalFelt(`0x${publicKeyHex}`) : null;
+  if (
+    rest.length > 0 ||
+    !isStarknetNetworkId(networkId) ||
+    !address ||
+    !isNonZeroStarkFieldElement(address) ||
+    (publicKeyHex !== "-" && (!publicKeyX || !isNonZeroStarkFieldElement(publicKeyX))) ||
+    (nostrPublicKey !== "-" && !isNostrPublicKey(nostrPublicKey))
+  ) {
+    return null;
+  }
+  return {
+    address,
+    networkId,
+    ...(nostrPublicKey === "-" ? {} : { nostrPublicKey }),
+    ...(publicKeyX ? { publicKeyX } : {}),
+  };
 };
 
 /**
  * Per-network custom RPC endpoints chosen by the user.
  */
 export type RpcOverrides = Readonly<Partial<Record<StarknetNetworkId, string>>>;
+
+/**
+ * Per-network Starkscan-compatible explorer API bases chosen by the user.
+ */
+export type ExplorerApiOverrides = RpcOverrides;
 
 /**
  * Per-network opt-in for the public explorer gateway read lane (MCW-V09-129).
@@ -70,6 +132,7 @@ export type ExplorerFallback = Readonly<Partial<Record<StarknetNetworkId, boolea
  * answer one question about one network.
  */
 export type ExplorerLanePreferences = {
+  readonly explorerApiUrls?: ExplorerApiOverrides;
   readonly explorerFallback?: ExplorerFallback;
   readonly rpcOverrides?: RpcOverrides;
 };
@@ -198,13 +261,21 @@ export const isTokenConfig = (value: unknown): value is TokenConfig =>
  */
 export const isAddressBookEntry = (value: unknown): value is AddressBookEntry =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["address", "id", "label", "networkId", "publicKeyX"]) &&
+  hasOnlyKnownKeys(value, [
+    "address",
+    "id",
+    "label",
+    "networkId",
+    "nostrPublicKey",
+    "publicKeyX",
+  ]) &&
   typeof value["address"] === "string" &&
   isNonZeroStarkFieldElement(value["address"]) &&
   canonicalAddress(value["address"]) === value["address"] &&
   typeof value["id"] === "string" &&
   isLabel(value["label"]) &&
   isStarknetNetworkId(value["networkId"]) &&
+  (value["nostrPublicKey"] === undefined || isNostrPublicKey(value["nostrPublicKey"])) &&
   (value["publicKeyX"] === undefined ||
     (typeof value["publicKeyX"] === "string" &&
       isNonZeroStarkFieldElement(value["publicKeyX"]) &&

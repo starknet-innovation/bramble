@@ -19,10 +19,11 @@ describe("mutation runtime", () => {
 
     await runtime.sendMessage({ type: "wallet.getBalances" });
     await runtime.sendMessage({ type: "wallet.transfer" });
+    await runtime.sendMessage({ type: "wallet.approveOrigin" });
     await runtime.sendMessage({ label: "Savings", type: "wallet.setAccountLabel" });
 
-    expect(messages).toHaveLength(3);
-    expect(notifications).toEqual(["burst", "once"]);
+    expect(messages).toHaveLength(4);
+    expect(notifications).toEqual(["burst", "once", "once"]);
   });
 
   test("does not notify when a mutation fails", async () => {

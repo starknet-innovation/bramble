@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   readSetDisplayInput,
+  readSetNostrRelayUrlInput,
   readSetStrk20NetworkConfigInput,
 } from "../../../apps/extension/src/background/settings/preference-inputs";
 
@@ -14,10 +15,16 @@ describe("readSetDisplayInput", () => {
       readSetDisplayInput({
         approvalSurface: "popup",
         displayCurrency: "eur",
+        reliabilityDiagnostics: true,
         theme: "dark",
         type: "wallet.setDisplay",
       }),
-    ).toEqual({ approvalSurface: "popup", displayCurrency: "eur", theme: "dark" });
+    ).toEqual({
+      approvalSurface: "popup",
+      displayCurrency: "eur",
+      reliabilityDiagnostics: true,
+      theme: "dark",
+    });
   });
 
   test("rejects a non-record, wrong-type, or unknown-key envelope", () => {
@@ -34,6 +41,32 @@ describe("readSetDisplayInput", () => {
     ).toBeNull();
     expect(readSetDisplayInput({ displayCurrency: "jpy", type: "wallet.setDisplay" })).toBeNull();
     expect(readSetDisplayInput({ theme: "solarized", type: "wallet.setDisplay" })).toBeNull();
+    expect(
+      readSetDisplayInput({ reliabilityDiagnostics: "yes", type: "wallet.setDisplay" }),
+    ).toBeNull();
+  });
+});
+
+describe("readSetNostrRelayUrlInput", () => {
+  test("accepts WSS and loopback WS while rejecting insecure remote relays", () => {
+    expect(
+      readSetNostrRelayUrlInput({
+        relayUrl: " wss://relay.team.example ",
+        type: "wallet.setNostrRelayUrl",
+      }),
+    ).toEqual({ relayUrl: "wss://relay.team.example" });
+    expect(
+      readSetNostrRelayUrlInput({
+        relayUrl: "ws://localhost:8080",
+        type: "wallet.setNostrRelayUrl",
+      }),
+    ).not.toBeNull();
+    expect(
+      readSetNostrRelayUrlInput({
+        relayUrl: "ws://relay.example",
+        type: "wallet.setNostrRelayUrl",
+      }),
+    ).toBeNull();
   });
 });
 

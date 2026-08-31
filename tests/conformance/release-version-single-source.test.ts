@@ -180,9 +180,9 @@ describe("repository sources", () => {
     expect(result.ok).toBe(true);
   });
 
-  test("the checked-in version matches the v0.9 release line", async () => {
+  test("the checked-in version matches the v0.10 release line", async () => {
     const packageJson = await readJson("package.json");
-    expect(packageJson["version"]).toBe("0.9.3");
+    expect(packageJson["version"]).toBe("0.10.0");
   });
 });
 
@@ -201,24 +201,21 @@ describe("main (CLI over the real repository sources)", () => {
     return join(dir, "github_output");
   };
 
-  test("writes release/version/tag/kind to GITHUB_OUTPUT for this hotfix promotion", async () => {
+  test("writes release/version/tag/kind to GITHUB_OUTPUT for a hotfix promotion", async () => {
     const outPath = await outputPath();
     const code = await main({
-      HEAD_REF: "hotfix/v09-audit-remediation",
+      HEAD_REF: "hotfix/v010-production-readiness",
       GITHUB_OUTPUT: outPath,
     });
     expect(code).toBe(0);
     const output = await readFile(outPath, "utf8");
     expect(output).toContain("release=true");
-    expect(output).toContain("version=0.9.3");
-    expect(output).toContain("tag=v0.9.3");
+    expect(output).toContain("version=0.10.0");
+    expect(output).toContain("tag=v0.10.0");
     expect(output).toContain("kind=hotfix");
   });
 
-  // A patch version can only travel on a hotfix branch: `release/vX.Y` implies
-  // `X.Y.0`, so promoting the checked-in patch from the release branch must fail
-  // closed rather than silently cut the wrong tag.
-  test("refuses to promote the checked-in patch version from the v0.9 release branch", async () => {
+  test("refuses to promote the checked-in version from a stale release branch", async () => {
     const outPath = await outputPath();
     const code = await main({
       HEAD_REF: "release/v0.9",

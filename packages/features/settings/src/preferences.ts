@@ -1,10 +1,7 @@
-/**
- * Plain wallet preferences kept outside the encrypted vault.
- */
+/** Plain wallet preferences kept outside the encrypted vault. */
 import { WalletError } from "@mc-wallet/core/errors";
 import { isJson } from "@mc-wallet/core/json";
 import { isWatchedNft, withNftId } from "@mc-wallet/portfolio/watched-nft";
-
 import {
   DEFAULT_STRK20_NETWORKS,
   isStrk20NetworkConfig,
@@ -46,6 +43,8 @@ import {
   setAccountInGroup as setAccountInGroupPure,
   setGroupIcon as setGroupIconPure,
 } from "./groups";
+import { withExplorerSettings } from "./preferences-explorer";
+import { withNostrRelayUrl } from "./preferences-nostr";
 import {
   isWalletPreferences,
   normalizeStoredPreferences,
@@ -53,28 +52,22 @@ import {
 } from "./preferences-stored";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
-/**
- * Re-exported entry types so callers keep importing them from this store.
- */
+/** Re-exported entry types so callers keep importing them from this store. */
 export type {
   AccountLabels,
   AddressBookEntry,
   ApprovalSurfacePreference,
   DisplayCurrency,
+  ExplorerApiOverrides,
   ExplorerFallback,
   ExplorerLanePreferences,
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
 } from "@mc-wallet/wallet-model/preferences";
-/**
- * Re-exported explorer-lane resolver so background and Starknet read wiring
- * reach it through the same entry point as the preferences it reads.
- */
+/** Explorer-lane resolver colocated with the preferences it reads. */
 export { explorerFallbackAllowed } from "@mc-wallet/wallet-model/preferences";
-/**
- * Re-exported store schema and capability types.
- */
+/** Re-exported store schema and capability types. */
 export type {
   WalletPreferences,
   WalletPreferencesStore,
@@ -96,6 +89,24 @@ type WalletPreferencesStoreOptions = {
  */
 export { isWalletPreferences } from "./preferences-stored";
 
+const isValidDisplayInput = (
+  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
+): boolean => {
+  if (input.approvalSurface !== undefined && !isApprovalSurfacePreference(input.approvalSurface)) {
+    return false;
+  }
+  if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
+    return false;
+  }
+  if (
+    input.reliabilityDiagnostics !== undefined &&
+    typeof input.reliabilityDiagnostics !== "boolean"
+  ) {
+    return false;
+  }
+  return input.theme === undefined || isThemeChoice(input.theme);
+};
+
 /**
  * Creates default non-secret wallet preferences.
  */
@@ -107,9 +118,11 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   customNetworks: [],
   displayCurrency: "usd",
   explorerFallback: {},
+  explorerApiUrls: {},
   groups: [],
   hiddenTokens: [],
   nfts: [],
+  reliabilityDiagnostics: false,
   rpcOverrides: {},
   schemaVersion: 1,
   strk20Networks: DEFAULT_STRK20_NETWORKS,
@@ -295,15 +308,8 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
-      async setExplorerFallback({ enabled, networkId }) {
-        if (!isStarknetNetworkId(networkId)) {
-          throw new WalletError("Invalid Starknet network");
-        }
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          explorerFallback: { ...preferences.explorerFallback, [networkId]: enabled },
-        };
+      async setExplorerFallback(input) {
+        const next = withExplorerSettings(await read(), input);
         await writePreferences(store, next);
         return next;
       },
@@ -350,12 +356,7 @@ export const createPreferencesStore = ({
         return next;
       },
       async setDisplay(input) {
-        if (
-          (input.approvalSurface !== undefined &&
-            !isApprovalSurfacePreference(input.approvalSurface)) ||
-          (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) ||
-          (input.theme !== undefined && !isThemeChoice(input.theme))
-        ) {
+        if (!isValidDisplayInput(input)) {
           throw new WalletError("Invalid display preference");
         }
         const preferences = await read();
@@ -367,6 +368,9 @@ export const createPreferencesStore = ({
           ...(input.displayCurrency === undefined
             ? {}
             : { displayCurrency: input.displayCurrency }),
+          ...(input.reliabilityDiagnostics === undefined
+            ? {}
+            : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
           ...(input.theme === undefined ? {} : { theme: input.theme }),
         };
         await writePreferences(store, next);
@@ -379,10 +383,15 @@ export const createPreferencesStore = ({
         }
         const preferences = await read();
         const previous = preferences.addressBook.find((stored) => stored.id === nextEntry.id);
-        const savedEntry =
-          nextEntry.publicKeyX || !previous?.publicKeyX
-            ? nextEntry
-            : { ...nextEntry, publicKeyX: previous.publicKeyX };
+        const savedEntry = {
+          ...nextEntry,
+          ...(nextEntry.nostrPublicKey || !previous?.nostrPublicKey
+            ? {}
+            : { nostrPublicKey: previous.nostrPublicKey }),
+          ...(nextEntry.publicKeyX || !previous?.publicKeyX
+            ? {}
+            : { publicKeyX: previous.publicKeyX }),
+        };
         const entries = preferences.addressBook.filter((stored) => stored.id !== nextEntry.id);
         const next = { ...preferences, addressBook: [...entries, savedEntry] };
         await writePreferences(store, next);
@@ -419,6 +428,11 @@ export const createPreferencesStore = ({
         } else {
           (next as { nftIndexerUrl?: string }).nftIndexerUrl = trimmed;
         }
+        await writePreferences(store, next);
+        return next;
+      },
+      async setNostrRelayUrl({ relayUrl }) {
+        const next = withNostrRelayUrl(await read(), relayUrl);
         await writePreferences(store, next);
         return next;
       },

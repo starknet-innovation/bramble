@@ -5,6 +5,22 @@ import { hasUniqueStrings } from "./json";
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
 
+const isUrlFor = (value: unknown, secureProtocol: string, loopbackProtocol: string): boolean => {
+  if (typeof value !== "string" || value.length === 0 || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.username === "" &&
+      url.password === "" &&
+      url.hash === "" &&
+      (url.protocol === secureProtocol ||
+        (url.protocol === loopbackProtocol && LOOPBACK_HOSTS.has(url.hostname)))
+    );
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Removes trailing URL separators in linear time without a backtracking regex.
  */
@@ -19,21 +35,13 @@ export const trimTrailingSlashes = (value: string): string => {
 /**
  * Checks a user-configured service endpoint without performing network access.
  */
-export const isServiceUrl = (value: unknown): value is string => {
-  if (typeof value !== "string" || value.length === 0 || value.length > 2048) {
-    return false;
-  }
-  try {
-    const url = new URL(value);
-    return (
-      url.username === "" &&
-      url.password === "" &&
-      (url.protocol === "https:" || (url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname)))
-    );
-  } catch {
-    return false;
-  }
-};
+export const isServiceUrl = (value: unknown): value is string => isUrlFor(value, "https:", "http:");
+
+/**
+ * Checks a user-configured WebSocket endpoint: WSS anywhere, WS only on loopback.
+ */
+export const isWebSocketServiceUrl = (value: unknown): value is string =>
+  isUrlFor(value, "wss:", "ws:");
 
 /**
  * Checks a chain descriptor's endpoint list: non-empty, every entry a

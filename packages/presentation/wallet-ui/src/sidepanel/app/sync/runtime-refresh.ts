@@ -24,6 +24,7 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.removeNft",
   "wallet.removeArgentMultisigIntent",
   "wallet.removeMultisig",
+  "wallet.recoverAccounts",
   "wallet.renameGroup",
   "wallet.revokeAllowance",
   "wallet.revokeOrigin",
@@ -38,6 +39,7 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.setExplorerFallback",
   "wallet.setGroupIcon",
   "wallet.setNftIndexerUrl",
+  "wallet.setNostrRelayUrl",
   "wallet.setNftSpam",
   "wallet.setRpcOverride",
   "wallet.setStrk20NetworkConfig",
@@ -60,7 +62,6 @@ export type MutationRefresh = "burst" | "once";
 // confirmation polls. Local preferences, labels, imports, and prepared intents
 // repaint once instead of amplifying every change into six full hydrations.
 const CHAIN_SETTLING_MESSAGES: ReadonlySet<string> = new Set([
-  "wallet.approveOrigin",
   "wallet.deployAccount",
   "wallet.deployArgentMultisig",
   "wallet.revokeAllowance",

@@ -8,7 +8,6 @@ rules and `README.md` the feature-level docs. Treat every change as security-sen
 
 ```bash
 bun install --frozen-lockfile
-bun run vendor:krusty        # required once before check/build (clones + wasm-pack builds Krusty KMS)
 bun run vendor:argent        # required once before check/build (verifies pinned official contracts)
 bun run vendor:privacy       # required once before check/build (builds pinned official privacy SDK)
 bun run check                # types + lint + standards + manifest + vendored pins + tests
@@ -27,10 +26,10 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
 - The E2E suite blackholes DNS, so no test can reach a live host; `test:e2e:mainnet` opts back in
   via `MC_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
   flag is set.
-- `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain;
+- Krusty KMS is installed as an exact, lockfile-pinned npm package by `bun install`.
   `bun run vendor:argent` needs network access to the pinned official Argent release; and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,
-  `check:krusty`/`check:argent`/`check:privacy` and `build` fail — that is expected in offline
+  `check:argent`/`check:privacy` and `build` fail — that is expected in offline
   sandboxes; run the rest of the gates and say so.
 - Narrower loops while iterating: `bun test tests/<module>/<name>.test.ts`, `bun run check:types`,
   `bun run check:lint`, `bun run test:e2e:build` (build + extension E2E). Always finish with the
@@ -55,8 +54,8 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
 ## Hard rules (enforced by `bun run check` and review)
 
 - **Never** add fallback signing, key derivation, or mnemonic validation — Krusty KMS owns wallet
-  crypto; if it is unavailable, fail closed. The Krusty commit pin lives in
-  `scripts/vendor-krusty.ts`; don't bump it casually.
+  crypto; if it is unavailable, fail closed. Keep its published package pinned exactly in
+  `package.json` and `bun.lock`; don't bump it casually.
 - Never log or persist secrets outside the encrypted vault. Secret-material field names are only
   allowed in the boundary modules whitelisted in `scripts/check-file-standards.ts`.
 - Clock/randomness calls live only in explicit boundary modules (inject `clock`/`fetch`/RNG into
@@ -137,17 +136,10 @@ exists, use or extend it in place rather than adding a sibling.
 
 ## Cursor Cloud specific instructions
 
-The VM snapshot already has `bun`, `wasm-pack 0.13.1`, and a Rust toolchain on `PATH`, and the
-Krusty KMS WASM package is already vendored — so `bun run check`, `bun run build`, and
-`bun run package:extension` run out of the box. The startup update script only runs
-`bun install --frozen-lockfile`; everything else below is background context, not steps to re-run.
-
-- Rust default toolchain must be **stable** (currently 1.96+); an `edition2024` transitive dep
-  fails to build under the older pinned 1.83 that some base images ship. If `bun run vendor:krusty`
-  ever fails with an `edition2024`/`feature not stabilized` error, run `rustup default stable`.
-- `vendor/krusty-kms/` persists in the snapshot (git-ignored). If it is missing (e.g. a clean
-  checkout), regenerate it with `bun run vendor:krusty` (needs network + `wasm-pack` + Rust). This
-  is the only build-like setup step and is intentionally kept out of the update script.
+The VM snapshot already has `bun`, and `bun install --frozen-lockfile` installs the exact published
+Krusty KMS package, so no Rust toolchain or Krusty source checkout is needed by this repository.
+The pinned Argent and Privacy vendor outputs are already present, so `bun run check`,
+`bun run build`, and `bun run package:extension` run out of the box.
 - There is **no dev server / watch mode**: this is a Chrome MV3 extension. To run/verify it,
   `bun run build` then load the `dist/` folder as an unpacked extension at `chrome://extensions`
   (Developer mode on), and open the side panel from the toolbar action. Re-run `bun run build` and

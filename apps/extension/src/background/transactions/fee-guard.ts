@@ -18,9 +18,10 @@ import { tokenConfigId } from "@mc-wallet/wallet-model/preferences";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 
-// The canonical STRK token for a network: the user's tracked entry when one
-// exists, otherwise a synthetic config — fees are payable whether or not the
-// user tracks STRK in the panel.
+/**
+ * Returns the canonical STRK token for a network: the tracked entry when one
+ * exists, otherwise the same synthetic fee-token configuration.
+ */
 const strkToken = (networkId: StarknetNetworkId, preferences: WalletPreferences): TokenConfig =>
   preferences.tokens.find(
     (token) => token.networkId === networkId && sameFelt(token.address, STRK_TOKEN_ADDRESS),

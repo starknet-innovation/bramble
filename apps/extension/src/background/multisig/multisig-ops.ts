@@ -58,6 +58,11 @@ import {
  */
 export type { MultisigOpsDeps } from "./multisig-deps";
 
+// One authority snapshot uses several pinned-block RPC reads. The registry can
+// hold twenty watched accounts, so cap account-level fan-out as well as the
+// lower-level token/NFT/status lanes.
+const MULTISIG_READ_CONCURRENCY = 4;
+
 const addRecord = async (
   store: MultisigStore,
   record: ArgentMultisigRecord,
@@ -340,11 +345,16 @@ const listMultisigs = async (deps: MultisigOpsDeps, message: unknown): Promise<R
       ok: true,
     };
   }
-  const multisigs: ArgentMultisigView[] = await Promise.all(
-    records.map((record) =>
-      freshMultisigView(deps, active, preferences, record, deploymentPending),
-    ),
-  );
+  const multisigs: ArgentMultisigView[] = [];
+  for (let start = 0; start < records.length; start += MULTISIG_READ_CONCURRENCY) {
+    multisigs.push(
+      ...(await Promise.all(
+        records
+          .slice(start, start + MULTISIG_READ_CONCURRENCY)
+          .map((record) => freshMultisigView(deps, active, preferences, record, deploymentPending)),
+      )),
+    );
+  }
   return { intents, multisigs, ok: true };
 };
 

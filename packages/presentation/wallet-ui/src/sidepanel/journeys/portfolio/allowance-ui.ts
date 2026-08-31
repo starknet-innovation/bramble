@@ -24,6 +24,17 @@ export type AllowanceUiDeps = {
  */
 export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void => {
   const result = app?.querySelector<HTMLElement>("#allowance-result");
+  const refresh = app?.querySelector<HTMLButtonElement>("#allowance-refresh");
+  refresh?.addEventListener("click", () => {
+    buttonBusy(refresh, true);
+    void wallet
+      .loadStatus()
+      .then(render)
+      .catch((error: unknown) => {
+        showToast(errorMessage(error, "Allowance refresh failed"), "error", refresh);
+        buttonBusy(refresh, false);
+      });
+  });
   app?.querySelectorAll<HTMLButtonElement>("[data-revoke-allowance]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["revokeAllowance"];
@@ -46,7 +57,7 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
       const reviewedFee = REVIEWED_FEES.get(button);
       if (reviewedFee) REVIEWED_FEES.delete(button);
       void wallet.revokeAllowance(id, reviewedFee).then(
-        async (response) => {
+        (response) => {
           if (typeof response !== "string") {
             REVIEWED_FEES.set(button, response);
             const fee = formatFeeEstimate(response);
@@ -62,7 +73,6 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
           }
           if (review)
             review.textContent = "Revoke submitted. Activity will show its network status.";
-          await render(await wallet.loadStatus());
         },
         (error: unknown) => {
           REVIEWED_FEES.delete(button);

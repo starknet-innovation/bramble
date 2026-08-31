@@ -37,9 +37,9 @@ export const STARKNET_RPC_SPEC_VERSION = "0.10.0";
  * rate limits before forwarding to the Starknet Foundation RPC nodes, and fall
  * back to those same Foundation nodes directly when the gateway is unreachable
  * — a gateway outage must not take the wallet offline. Failover is transport-
- * only (see `withRpcFallback`), so the fallback is never reached because of a
- * rate limit or any other answer the gateway actually returns; and writes
- * re-probe `starknet_chainId` before signing (see `withRpcWrite`). Sepolia
+ * only (see `withRpcFallback`); an HTTP gateway refusal or rate limit is the
+ * one pre-node response that may fail over because no request reached Starknet.
+ * Writes re-probe `starknet_chainId` before signing (see `withRpcWrite`). Sepolia
  * keeps Cartridge as a last read/write resort.
  *
  * Both wallet-operated gateway endpoints and direct Foundation-node fallbacks

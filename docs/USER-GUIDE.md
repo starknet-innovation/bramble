@@ -73,7 +73,9 @@ unlock screen. Enter your vault passphrase to reach the dashboard.
 Choose **Add an existing wallet**, then **Ledger hardware wallet**. Ledger
 accounts are keyless in MC Wallet: the private key never leaves the device, and
 recovery is handled by the Ledger's own recovery phrase, not by an MC Wallet
-software recovery phrase.
+software recovery phrase. This is a trusted-testers preview until the physical
+device and transport matrix in issue #224 is complete; no model or connection
+method is advertised as production-validated yet.
 
 ---
 
@@ -160,6 +162,14 @@ the versioned intent package or individual signature fragments; signing and
 submission remain disabled unless the fresh on-chain authority exactly matches
 the intent and the exact threshold is met. There is no separate on-chain
 proposal or confirmation state.
+
+For encrypted Nostr coordination, each participant first saves the other participant's complete
+wallet card so the Stark signer key and coordination key stay bound to one contact. The intent owner
+chooses **Share securely with co-signers**; the other participant opens the same shared account and
+chooses **Check for co-signer updates**. MC Wallet uses the reviewed relay defaults unless a user
+sets **Settings → Network → Advanced endpoints → Multisig coordination relay**. A custom relay
+replaces the defaults, so participants must select infrastructure that can receive the same events.
+Relay access is one-shot and user initiated; manual copy-and-paste remains available as a fallback.
 
 ### Allowance manager
 

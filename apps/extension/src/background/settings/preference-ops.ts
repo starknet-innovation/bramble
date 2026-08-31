@@ -21,6 +21,7 @@ import {
   readSetDisplayInput,
   readSetExplorerFallbackInput,
   readSetGroupIconInput,
+  readSetNostrRelayUrlInput,
   readSetRpcOverrideInput,
   readSetStrk20NetworkConfigInput,
   readTypeOnlyInput,
@@ -118,6 +119,11 @@ const PREFERENCE_HANDLERS: Readonly<Record<string, PreferenceHandler>> = {
     readSetNftIndexerUrlInput,
     "invalid indexer endpoint request",
     (store, input) => store.setNftIndexerUrl(input),
+  ),
+  "wallet.setNostrRelayUrl": parseThen(
+    readSetNostrRelayUrlInput,
+    "invalid Nostr relay request",
+    (store, input) => store.setNostrRelayUrl(input),
   ),
   "wallet.setNftSpam": parseThen(readSetNftSpamInput, "invalid nft request", (store, input) =>
     store.setNftSpam(input),

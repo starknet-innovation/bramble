@@ -12,7 +12,7 @@ import {
   isUnlimitedAllowance,
 } from "@mc-wallet/transactions/allowance-discovery";
 import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
+import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { accountLabel, contextHelp, flowHeader, flowScreen } from "../../shared/parts";
@@ -97,7 +97,10 @@ export const allowancesFlow = (
     flowScreen(
       "allowances",
       `<section class="section">
-        <p class="lede">Review who can move your tokens. Revoking sets one spender's allowance to zero after you confirm its network fee.</p>
+        <div class="section-head">
+          <p class="lede">Review who can move your tokens. Revoking sets one spender's allowance to zero after you confirm its network fee.</p>
+          ${iconButton({ attributes: { id: "allowance-refresh" }, icon: "refresh", label: "Refresh allowances" })}
+        </div>
         ${contextHelp(
           "allowance-scan-scope",
           "What this list includes",

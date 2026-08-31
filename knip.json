@@ -15,6 +15,7 @@
         "src/sidepanel/index.ts"
       ],
       "ignoreDependencies": ["buffer"],
+      "ignoreUnresolved": ["/dependencies/krusty-kms/krusty_kms_wasm.js"],
       "project": ["src/**/*.ts"]
     },
     "apps/terminal": {

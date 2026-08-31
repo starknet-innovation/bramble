@@ -5,13 +5,14 @@
  * `getStarkscanTransactionHistory`) are the gateway lane and are exported for
  * the fallback wiring and its tests; the two `createRpcFirst*` factories are
  * what production consumes, and they reach the gateway only after the user's own
- * endpoints have failed AND the user's per-network `explorerFallback`
+ * endpoints have failed at the transport layer AND the user's per-network `explorerFallback`
  * preference permits it. The names say which source is tried first on purpose:
  * an earlier spelling ("StarkscanPreferred") outlived the ordering it described
  * and read as an endorsement of the third party.
  */
 
 import { isSafeDecimals } from "@mc-wallet/core/json";
+import { isTransportRpcError } from "@mc-wallet/starknet/provider";
 import {
   type BalanceInput,
   formatTokenAmount,
@@ -185,6 +186,10 @@ export const getStarkscanTokenBalances = async (
  */
 export type RpcFirstReadOptions = {
   readonly client: StarkscanClient;
+  readonly clientFor?: (
+    networkId: StarknetNetworkId,
+    preferences: ExplorerLanePreferences,
+  ) => StarkscanClient;
   readonly readPreferences: () => Promise<ExplorerLanePreferences>;
 };
 
@@ -192,24 +197,31 @@ export type RpcFirstReadOptions = {
 // whose network cannot be identified, and a preferences read that throws (the
 // store is unavailable, or holds a record this build refuses), leave the
 // gateway unused so an infrastructure fault can never widen disclosure.
-const gatewayAllowedFor = async (
+const gatewayPreferencesFor = async (
   readPreferences: () => Promise<ExplorerLanePreferences>,
   networkId: StarknetNetworkId | undefined,
-): Promise<boolean> => {
+): Promise<ExplorerLanePreferences | null> => {
   if (networkId === undefined) {
-    return false;
+    return null;
   }
   try {
-    return explorerFallbackAllowed(await readPreferences(), networkId);
+    const preferences = await readPreferences();
+    return explorerFallbackAllowed(preferences, networkId) ? preferences : null;
   } catch {
-    return false;
+    return null;
   }
 };
 
+const gatewayClientFor = (
+  options: Pick<RpcFirstReadOptions, "client" | "clientFor">,
+  networkId: StarknetNetworkId,
+  preferences: ExplorerLanePreferences,
+): StarkscanClient => options.clientFor?.(networkId, preferences) ?? options.client;
+
 /**
  * Serves balances from the user's configured Starknet RPC and falls back to the
- * public explorer gateway only when every configured endpoint fails and the
- * user's `explorerFallback` preference permits that lane for the network.
+ * public explorer gateway only when every configured endpoint has a transport
+ * outage and the user's `explorerFallback` preference permits that lane.
  *
  * The configured endpoints are the user's own trust and privacy choice, and
  * latest-state RPC is authoritative; the gateway is a third party that learns
@@ -224,16 +236,23 @@ const gatewayAllowedFor = async (
  * user's own endpoint. Neither source participates in signing or submission.
  */
 export const createRpcFirstBalances =
-  ({ client, readPreferences }: RpcFirstReadOptions): typeof getTokenBalances =>
+  (options: RpcFirstReadOptions): typeof getTokenBalances =>
   async (input, makeProvider) => {
     try {
       return await getTokenBalances(input, makeProvider);
     } catch (rpcFailure) {
-      if (!(await gatewayAllowedFor(readPreferences, input.tokens[0]?.networkId))) {
+      const networkId = input.tokens[0]?.networkId;
+      const preferences = isTransportRpcError(rpcFailure)
+        ? await gatewayPreferencesFor(options.readPreferences, networkId)
+        : null;
+      if (networkId === undefined || preferences === null) {
         throw rpcFailure;
       }
       try {
-        return await getStarkscanTokenBalances(client, input);
+        return await getStarkscanTokenBalances(
+          gatewayClientFor(options, networkId, preferences),
+          input,
+        );
       } catch {
         throw rpcFailure;
       }
@@ -247,22 +266,29 @@ export const createRpcFirstBalances =
  *
  * Same trust ordering and same `explorerFallback` gate as
  * {@link createRpcFirstBalances}: the gateway sees the account address only
- * when the user's own endpoints cannot answer and the user has not refused the
- * lane. A refused or failed gateway re-throws the RPC failure, so the caller
+ * when the user's own endpoints cannot be reached and the user has not refused
+ * the lane. A semantic RPC answer is never replaced. A refused or failed
+ * gateway re-throws the RPC failure, so the caller
  * still degrades to the local activity log with an honest "history unavailable"
  * indicator rather than a third party's account of the outage.
  */
 export const createRpcFirstHistory =
-  ({ client, readPreferences }: RpcFirstReadOptions): typeof scanTransactionHistory =>
+  (options: RpcFirstReadOptions): typeof scanTransactionHistory =>
   async (input, makeProvider) => {
     try {
       return await scanTransactionHistory(input, makeProvider);
     } catch (rpcFailure) {
-      if (!(await gatewayAllowedFor(readPreferences, input.networkId))) {
+      const preferences = isTransportRpcError(rpcFailure)
+        ? await gatewayPreferencesFor(options.readPreferences, input.networkId)
+        : null;
+      if (preferences === null) {
         throw rpcFailure;
       }
       try {
-        return await getStarkscanTransactionHistory(client, input);
+        return await getStarkscanTransactionHistory(
+          gatewayClientFor(options, input.networkId, preferences),
+          input,
+        );
       } catch {
         throw rpcFailure;
       }

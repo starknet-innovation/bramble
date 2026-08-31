@@ -4,6 +4,7 @@
 
 import { untrustedFetch } from "@mc-wallet/core/http-json";
 import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
+import { createNostrCoordinationStore } from "@mc-wallet/multisig/coordination";
 import { createMultisigStore } from "@mc-wallet/multisig/repository";
 import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
 import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
@@ -20,6 +21,7 @@ import {
   createPreferencesStore,
   type WalletPreferences,
 } from "@mc-wallet/settings/preferences";
+import { setReliabilityDiagnosticsEnabled } from "@mc-wallet/starknet/rpc-diagnostics";
 import { createActivityLog, systemClock } from "@mc-wallet/transactions/activity";
 import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { createSwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
@@ -27,7 +29,7 @@ import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encr
 import { createWalletVaultService } from "@mc-wallet/vault/service";
 import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@mc-wallet/vault/store-migration";
 import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
-import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
+import * as krustyModule from "/dependencies/krusty-kms/krusty_kms_wasm.js";
 import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 import {
   createBrowserLocalStore,
@@ -48,6 +50,7 @@ import {
   type OnboardingSurfaceBrowser,
   openOnboardingOnInstall,
 } from "./onboarding/onboarding-surface";
+import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createMessageHandler } from "./routing/messages";
@@ -119,6 +122,7 @@ const sessionStore = (() => {
   }
 })();
 const multisigDeploymentReviews = createArgentMultisigDeploymentReviews(sessionStore);
+const recoveryDiscovery = createRecoveryDiscoveryCache(sessionStore);
 // The vault store is created up front so the unlock session can drop its
 // cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
 // operations for the life of an unlock rather than re-derived every time.
@@ -164,11 +168,14 @@ const preferences = storageReady
   .catch(() => null);
 const preferenceStore = createBackgroundPreferences({
   onApprovalSurface: updateApprovalSurface,
+  onReliabilityDiagnostics: setReliabilityDiagnosticsEnabled,
   store: preferences,
 });
 void preferences
   .then(async (store) => {
-    updateApprovalSurface((await store?.read())?.approvalSurface ?? "side-panel");
+    const stored = await store?.read();
+    updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
+    setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
   })
   .catch(() => undefined);
 // The read-only slice of the fail-closed adapter above, handed to collaborators
@@ -223,6 +230,7 @@ const swapService = (() => {
 // If local storage is unavailable, fail background initialization rather than
 // silently accepting signatures or broadcasts into a volatile registry.
 const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
+const nostrCoordinationLog = createNostrCoordinationStore({ store: createBrowserLocalStore() });
 // Live phishing feed: fetched from the configured source under an explicit host
 // permission, cached in local storage, and refreshed on the first worker wake
 // after its TTL. The guard reads the feed's in-memory snapshot on every check,
@@ -286,10 +294,12 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   ...(activityLog ? { activity: activityLog } : {}),
   ...(originHistory ? { originHistory } : {}),
   prices: priceService,
+  recoveryDiscovery,
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
   multisigDeploymentReviews,
   multisigStore: multisigLog,
+  nostrCoordinationStore: nostrCoordinationLog,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm

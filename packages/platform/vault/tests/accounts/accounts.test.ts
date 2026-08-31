@@ -36,6 +36,22 @@ describe("deriveAccountRef", () => {
     expect(JSON.stringify(account)).not.toContain("0x123456");
   });
 
+  test("keeps the established zero-salt OpenZeppelin address policy explicit", async () => {
+    let salt: string | undefined;
+    await deriveAccountRef(
+      {
+        ...fakeKms(),
+        async deriveOzAccountAddress(_publicKeyX, _classHash, inputSalt) {
+          salt = inputSalt;
+          return "0xabc111111";
+        },
+      },
+      { accountContractType: "openzeppelin", mnemonic },
+    );
+
+    expect(salt).toBe("0x0");
+  });
+
   test("derives Argent accounts from the pinned class and constructor", async () => {
     let ozAddressDerived = false;
     const account = await deriveAccountRef(

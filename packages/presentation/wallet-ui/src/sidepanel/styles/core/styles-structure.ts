@@ -170,7 +170,14 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   @media (hover: hover) and (pointer: fine) {
     details.disclosure > summary:hover { background: var(--mc-hover); }
   }
-  details.disclosure > summary .menu-copy strong { font-size: ${TYPE.body.size}; font-weight: ${WEIGHT.medium}; }
+  details.disclosure > summary .menu-copy strong {
+    font-size: ${TYPE.body.size};
+    font-weight: ${WEIGHT.medium};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  details.disclosure > summary .menu-value { flex: none; }
   .disclosure-mark { color: var(--mc-muted); display: inline-flex; flex: none; transition: transform ${MOTION.tabMs}ms var(--ease-out); }
   .disclosure-mark .icon { height: 16px; width: 16px; }
   details.disclosure[open] > .disclosure-mark, details.disclosure[open] > summary .disclosure-mark { transform: rotate(90deg); }

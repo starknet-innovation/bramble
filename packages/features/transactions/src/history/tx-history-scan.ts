@@ -45,6 +45,7 @@ const HISTORY_BLOCK_WINDOW = 200_000;
 // recent slice is re-read, so a heavy account's feed shows genuinely recent
 // transfers instead of the window's oldest ones dressed up as recent.
 const HISTORY_RECENT_STRIDE = 20_000;
+const BLOCK_TIMESTAMP_CONCURRENCY = 4;
 
 /**
  * Minimal event filter this scan issues, mirroring the allowance scan's shape.
@@ -241,13 +242,19 @@ const readBlockTimestamps = async (
   transfers: readonly TokenTransfer[],
 ): Promise<ReadonlyMap<number, number | null>> => {
   const distinctBlocks = [...new Set(transfers.map(({ decoded }) => decoded.blockNumber))];
-  return new Map(
-    await Promise.all(
-      distinctBlocks.map(
-        async (blockNumber) => [blockNumber, await rpc.getBlockTimestamp(blockNumber)] as const,
-      ),
-    ),
-  );
+  const timestamps: Array<readonly [number, number | null]> = [];
+  for (let index = 0; index < distinctBlocks.length; index += BLOCK_TIMESTAMP_CONCURRENCY) {
+    timestamps.push(
+      ...(await Promise.all(
+        distinctBlocks
+          .slice(index, index + BLOCK_TIMESTAMP_CONCURRENCY)
+          .map(
+            async (blockNumber) => [blockNumber, await rpc.getBlockTimestamp(blockNumber)] as const,
+          ),
+      )),
+    );
+  }
+  return new Map(timestamps);
 };
 
 // Joins each ranked transfer with its block timestamp into a validated entry.

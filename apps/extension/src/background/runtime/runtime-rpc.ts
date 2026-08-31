@@ -83,7 +83,7 @@ import type {
   scanTransactionHistory,
   TransactionHistoryScan,
 } from "@mc-wallet/transactions/tx-history-scan";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+import { canonicalFelt, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { ExplorerLanePreferences } from "@mc-wallet/wallet-model/preferences";
 
 /**
@@ -240,10 +240,21 @@ const starkscanHttp: StarkscanHttp = untrustedFetch;
 // embed an external API key. The client keeps its base injectable so a
 // deployment-owned authenticated relay can replace this without changing
 // wallet consumers.
-const starkscanClient = createStarkscanClient({
-  baseUrl: "https://starkscan.co/v1",
-  http: starkscanHttp,
-});
+const DEFAULT_EXPLORER_API_URL = "https://starkscan.co/v1";
+const starkscanClients = new Map<string, ReturnType<typeof createStarkscanClient>>();
+const starkscanClientFor = (baseUrl: string): ReturnType<typeof createStarkscanClient> => {
+  const stored = starkscanClients.get(baseUrl);
+  if (stored) return stored;
+  const client = createStarkscanClient({ baseUrl, http: starkscanHttp });
+  starkscanClients.set(baseUrl, client);
+  return client;
+};
+const starkscanClient = starkscanClientFor(DEFAULT_EXPLORER_API_URL);
+const configuredStarkscanClient = (
+  networkId: StarknetNetworkId,
+  preferences: ExplorerLanePreferences,
+): ReturnType<typeof createStarkscanClient> =>
+  starkscanClientFor(preferences.explorerApiUrls?.[networkId] ?? DEFAULT_EXPLORER_API_URL);
 const getNftMetadata = async (input: NftTokenUriInput): Promise<NftTokenMetadata | null> =>
   resolveNftMetadataUri(await getNftTokenUri(input), nftMetadataHttp);
 
@@ -272,9 +283,17 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   getNftMetadata,
   getNftOwner,
   getNftOwnership,
-  getTokenBalances: createRpcFirstBalances({ client: starkscanClient, readPreferences }),
+  getTokenBalances: createRpcFirstBalances({
+    client: starkscanClient,
+    clientFor: configuredStarkscanClient,
+    readPreferences,
+  }),
   getTokenMetadata,
-  getTransactionHistory: createRpcFirstHistory({ client: starkscanClient, readPreferences }),
+  getTransactionHistory: createRpcFirstHistory({
+    client: starkscanClient,
+    clientFor: configuredStarkscanClient,
+    readPreferences,
+  }),
   getTransactionStatuses,
   multisig: {
     getConfig: getArgentMultisigConfig,

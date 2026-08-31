@@ -1,7 +1,4 @@
-/**
- * Pure parsers for untrusted background runtime messages.
- */
-
+/** Pure parsers for untrusted background runtime messages. */
 import { isUuid } from "@mc-wallet/core/ids";
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@mc-wallet/core/json";
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
@@ -11,12 +8,12 @@ import {
   isAccountContractType,
   isAccountId,
 } from "@mc-wallet/wallet-model/accounts";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import {
   isHexChainId,
   isStarkFieldElement,
   isStarknetNetworkId,
   STARK_FIELD_PRIME,
+  type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
 import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
 import { INVOKE_LIMITS } from "@mc-wallet/wallet-protocol/invoke-limits";
@@ -78,12 +75,16 @@ export const readTypeOnlyInput = (message: unknown, type: string): boolean =>
 /**
  * Parses the balance reader's optional local-snapshot request.
  */
-export const readBalancesInput = (message: unknown): { readonly cached: boolean } | null =>
+export const readBalancesInput = (
+  message: unknown,
+): { readonly cached: boolean; readonly refresh: boolean } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["cached", "type"]) &&
+  hasOnlyKnownKeys(message, ["cached", "refresh", "type"]) &&
   message["type"] === "wallet.getBalances" &&
-  (message["cached"] === undefined || message["cached"] === true)
-    ? { cached: message["cached"] === true }
+  (message["cached"] === undefined || message["cached"] === true) &&
+  (message["refresh"] === undefined || message["refresh"] === true) &&
+  !(message["cached"] === true && message["refresh"] === true)
+    ? { cached: message["cached"] === true, refresh: message["refresh"] === true }
     : null;
 
 /**
@@ -113,24 +114,23 @@ export const readFeeReviewInput = (
         ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
       }
     : null;
-/**
- * Parses an activity request for either the active signer or one explicitly
- * selected watched account. The background resolves and authorizes the scope;
- * this boundary accepts only a well-formed account id and no unknown fields.
- */
+/** Parses a scoped activity read and its bounded history-refresh intent. */
 export const readActivityInput = (
   message: unknown,
 ): {
   readonly accountId?: string;
   readonly cached: boolean;
+  readonly forceHistory: boolean;
   readonly refreshHistory: boolean;
 } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountId", "cached", "refreshHistory", "type"]) ||
+    !hasOnlyKnownKeys(message, ["accountId", "cached", "forceHistory", "refreshHistory", "type"]) ||
     message["type"] !== "wallet.activity" ||
     (message["cached"] !== undefined && message["cached"] !== true) ||
+    (message["forceHistory"] !== undefined && message["forceHistory"] !== true) ||
     (message["refreshHistory"] !== undefined && message["refreshHistory"] !== true) ||
+    (message["forceHistory"] === true && message["refreshHistory"] !== true) ||
     (message["accountId"] !== undefined && !isAccountId(message["accountId"]))
   ) {
     return null;
@@ -138,6 +138,7 @@ export const readActivityInput = (
   return {
     ...(message["accountId"] === undefined ? {} : { accountId: message["accountId"] }),
     cached: message["cached"] === true,
+    forceHistory: message["forceHistory"] === true,
     refreshHistory: message["refreshHistory"] === true,
   };
 };
@@ -479,9 +480,7 @@ export const readRevealSecretsInput = (
   return { vaultPassphrase: message["vaultPassphrase"] };
 };
 
-/**
- * Re-exported preference input readers so callers keep one import path.
- */
+/** Re-exported preference input readers so callers keep one import path. */
 export {
   readCreateGroupInput,
   readImportPreferencesInput,
@@ -494,6 +493,7 @@ export {
   readSetDisplayInput,
   readSetExplorerFallbackInput,
   readSetGroupIconInput,
+  readSetNostrRelayUrlInput,
   readSetRpcOverrideInput,
   readSetStrk20NetworkConfigInput,
 } from "../settings/preference-inputs";

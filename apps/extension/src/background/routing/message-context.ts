@@ -5,6 +5,10 @@
  * stays a dispatch table.
  */
 
+import {
+  memoryNostrCoordinationStore,
+  type NostrCoordinationStore,
+} from "@mc-wallet/multisig/coordination";
 import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
 import {
@@ -33,6 +37,11 @@ import {
   type ArgentMultisigDeploymentReviews,
   createArgentMultisigDeploymentReviews,
 } from "../multisig/multisig-deployment-reviews";
+import type { NostrRelayTransport } from "../multisig/nostr-relay";
+import {
+  createRecoveryDiscoveryCache,
+  type RecoveryDiscoveryCache,
+} from "../onboarding/recovery-cache";
 import {
   type BalanceSnapshotStore,
   memoryBalanceSnapshotStore,
@@ -69,11 +78,14 @@ export type RouterContext = {
   readonly ledgerSignQueue: LedgerSignQueue;
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
+  readonly nostrCoordinationStore: NostrCoordinationStore;
   readonly nftSnapshots?: NftSnapshotStore;
+  readonly nostrRelayTransport?: NostrRelayTransport;
   readonly now: () => number;
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
   readonly prices: PriceService;
+  readonly recoveryDiscovery: RecoveryDiscoveryCache;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly swap: SwapService;
@@ -96,7 +108,9 @@ export type MessageHandlerOptions = {
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
+  readonly nostrCoordinationStore?: NostrCoordinationStore;
   readonly nftSnapshots?: NftSnapshotStore;
+  readonly nostrRelayTransport?: NostrRelayTransport;
   /**
    * Wall-clock reader used to age transaction observation windows. Injected so
    * reconciliation is deterministic under test; defaults to the system clock.
@@ -106,6 +120,7 @@ export type MessageHandlerOptions = {
   readonly originHistory?: OriginHistoryStore;
   readonly preferencesStore?: WalletPreferencesStore;
   readonly prices?: PriceService;
+  readonly recoveryDiscovery?: RecoveryDiscoveryCache;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
@@ -144,6 +159,10 @@ const multisigDeploymentReviewsFor = (
   provided: ArgentMultisigDeploymentReviews | undefined,
 ): ArgentMultisigDeploymentReviews => provided ?? createArgentMultisigDeploymentReviews();
 
+const nostrCoordinationStoreFor = (
+  provided: NostrCoordinationStore | undefined,
+): NostrCoordinationStore => provided ?? memoryNostrCoordinationStore();
+
 const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): WatchAssetAdmission =>
   provided ?? createWatchAssetAdmission();
 
@@ -154,6 +173,15 @@ const nftSnapshotsFor = (
   provided: NftSnapshotStore | undefined,
 ): Pick<RouterContext, "nftSnapshots"> | Record<string, never> =>
   provided ? { nftSnapshots: provided } : {};
+
+const nostrRelayTransportFor = (
+  provided: NostrRelayTransport | undefined,
+): Pick<RouterContext, "nostrRelayTransport"> | Record<string, never> =>
+  provided ? { nostrRelayTransport: provided } : {};
+
+const recoveryDiscoveryFor = (
+  provided: RecoveryDiscoveryCache | undefined,
+): RecoveryDiscoveryCache => provided ?? createRecoveryDiscoveryCache();
 
 /**
  * Resolves every optional collaborator into the fully wired router context.
@@ -187,11 +215,14 @@ export const routerContext = (
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
+    nostrCoordinationStore: nostrCoordinationStoreFor(options.nostrCoordinationStore),
     ...nftSnapshotsFor(options.nftSnapshots),
+    ...nostrRelayTransportFor(options.nostrRelayTransport),
     now: options.now ?? systemClock,
     originHistory: options.originHistory ?? memoryOriginHistory(),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
+    recoveryDiscovery: recoveryDiscoveryFor(options.recoveryDiscovery),
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
     session,
     swap: options.swap ?? unavailableSwapService,

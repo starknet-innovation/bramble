@@ -5,11 +5,16 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import {
   HTTP_BODY_LIMITS,
+  parseRetryAfterMilliseconds,
   readBoundedText,
   UNTRUSTED_REQUEST_INIT,
 } from "@mc-wallet/core/http-json";
 import { isRecord } from "@mc-wallet/core/json";
 import { trimTrailingSlashes } from "@mc-wallet/core/service-url";
+import {
+  type ExplorerOutcome,
+  recordExplorerDiagnostic,
+} from "@mc-wallet/starknet/rpc-diagnostics";
 import { canonicalFelt, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import {
   parseStarkscanAddress,
@@ -39,6 +44,8 @@ import type {
 } from "./starkscan-types";
 
 const DEFAULT_TIMEOUT_MS = 8_000;
+const DEFAULT_COOLDOWN_MS = 30_000;
+const MAX_COOLDOWN_MS = 5 * 60_000;
 const MAX_PAGE_LIMIT = 200;
 /**
  * Fetch-compatible transport injected at the Starkscan trust boundary.
@@ -52,7 +59,9 @@ export type StarkscanClientOptions = {
   readonly apiKey?: string;
   readonly baseUrl: string;
   readonly http?: StarkscanHttp;
+  readonly now?: () => number;
   readonly timeoutMs?: number;
+  readonly wallClock?: () => number;
 };
 
 /**
@@ -70,6 +79,36 @@ export class StarkscanError extends Error {
     this.name = "StarkscanError";
   }
 }
+
+const explorerOutcome = (error: unknown): ExplorerOutcome => {
+  if (
+    error instanceof StarkscanError &&
+    error.code === "timeout" &&
+    (error.status === null || error.status < 400)
+  ) {
+    return "timeout";
+  }
+  if (!(error instanceof StarkscanError) || error.status === null) return "transport-error";
+  if (error.status === 429) return "rate-limited";
+  return error.status >= 400 ? "http-error" : "invalid-response";
+};
+
+const explorerCooldownMilliseconds = (
+  error: unknown,
+  outcome: ExplorerOutcome,
+  currentTime: number,
+): number | null => {
+  if (!(error instanceof StarkscanError)) return null;
+  const shouldCoolDown =
+    outcome === "rate-limited" ||
+    outcome === "invalid-response" ||
+    outcome === "timeout" ||
+    outcome === "transport-error" ||
+    (error.status !== null && error.status >= 500);
+  if (!shouldCoolDown) return null;
+  const requestedDelay = parseRetryAfterMilliseconds(error.retryAfter, currentTime);
+  return Math.min(requestedDelay ?? DEFAULT_COOLDOWN_MS, MAX_COOLDOWN_MS);
+};
 
 /**
  * Typed read-only Starkscan endpoints consumed by wallet and terminal adapters.
@@ -201,8 +240,16 @@ const fetchResponse = async (
         signal: deadline,
       }),
     };
-  } catch {
-    throw new StarkscanError("Starkscan unavailable", null);
+  } catch (error) {
+    throw new StarkscanError(
+      deadline.aborted || (error instanceof DOMException && error.name === "TimeoutError")
+        ? "Starkscan request timed out"
+        : "Starkscan unavailable",
+      null,
+      deadline.aborted || (error instanceof DOMException && error.name === "TimeoutError")
+        ? "timeout"
+        : null,
+    );
   }
 };
 
@@ -226,6 +273,7 @@ const parseResponse = async <T>(
     throw new StarkscanError(
       error instanceof WalletError ? error.message : "Starkscan response unavailable",
       response.status,
+      deadline.aborted ? "timeout" : null,
     );
   }
   try {
@@ -252,9 +300,29 @@ export const createStarkscanClient = ({
   apiKey,
   baseUrl,
   http = (url, init) => fetch(url, init),
+  now = () => performance.now(),
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  wallClock = Date.now,
 }: StarkscanClientOptions): StarkscanClient => {
   const base = trimTrailingSlashes(baseUrl);
+  let retryAt = 0;
+  let retryError: StarkscanError | null = null;
+  const activeCooldown = (currentTime: number): StarkscanError | null =>
+    retryAt > currentTime ? retryError : null;
+  const clearObservedCooldown = (startedAt: number): void => {
+    if (retryAt <= startedAt) {
+      retryAt = 0;
+      retryError = null;
+    }
+  };
+  const retainCooldown = (error: unknown, outcome: ExplorerOutcome, failedAt: number): void => {
+    const cooldown = explorerCooldownMilliseconds(error, outcome, wallClock());
+    if (cooldown === null || !(error instanceof StarkscanError)) return;
+    const nextRetryAt = failedAt + cooldown;
+    if (nextRetryAt < retryAt) return;
+    retryAt = nextRetryAt;
+    retryError = error;
+  };
   const request = async <T>(
     chainId: StarkscanChainId,
     route: string,
@@ -262,7 +330,21 @@ export const createStarkscanClient = ({
     query?: URLSearchParams,
   ): Promise<T> => {
     const url = `${base}/${chainId}/${route}${query === undefined ? "" : `?${query.toString()}`}`;
-    return parseResponse(await fetchResponse(http, url, apiKey, timeoutMs), parse);
+    const startedAt = now();
+    const cooldown = activeCooldown(startedAt);
+    if (cooldown !== null) throw cooldown;
+    try {
+      const result = await parseResponse(await fetchResponse(http, url, apiKey, timeoutMs), parse);
+      clearObservedCooldown(startedAt);
+      recordExplorerDiagnostic("starkscan", "ok", now() - startedAt);
+      return result;
+    } catch (error) {
+      const outcome = explorerOutcome(error);
+      const failedAt = now();
+      retainCooldown(error, outcome, failedAt);
+      recordExplorerDiagnostic("starkscan", outcome, failedAt - startedAt);
+      throw error;
+    }
   };
 
   return {

@@ -3,12 +3,12 @@ import type { MultisigStore } from "@mc-wallet/multisig/repository";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import {
   type ActivityEntry,
+  type ActivityHistoryState,
   type ActivityLog,
   type ActivityScope,
   activityForScope,
   systemClock,
 } from "@mc-wallet/transactions/activity";
-import { mergeActivity } from "@mc-wallet/transactions/tx-history";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import { readActivityInput } from "../routing/message-inputs";
@@ -16,7 +16,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
-import { reconcileScope } from "../transactions/tx-reconcile";
+import { mergeReconciledHistory, reconcileScope } from "../transactions/tx-reconcile";
 import type { WalletStatusReader } from "./wallet-reader";
 
 type ActivityOpsDeps = {
@@ -36,7 +36,19 @@ type ActivityTarget = {
   readonly scope: ActivityScope;
 };
 
-const HISTORY_SYNC_TTL_MS = 60_000;
+const HISTORY_FRESH_MS = 5 * 60_000;
+const HISTORY_RETRY_MS = 60_000;
+
+const historyRefreshDue = (sync: ActivityHistoryState | null, now: number): boolean =>
+  sync === null ||
+  sync.syncedAt > now ||
+  now - sync.syncedAt >= (sync.unavailable ? HISTORY_RETRY_MS : HISTORY_FRESH_MS);
+
+const shouldScanHistory = (
+  input: { readonly forceHistory: boolean; readonly refreshHistory: boolean },
+  sync: ActivityHistoryState | null,
+  now: number,
+): boolean => input.refreshHistory && (input.forceHistory || historyRefreshDue(sync, now));
 
 const activityTarget = async (
   deps: ActivityOpsDeps,
@@ -108,20 +120,22 @@ export const handleActivity = async (
     return { activity: activityForScope(await deps.activity.list(), target.scope), ok: true };
   }
   const now = (deps.now ?? systemClock)();
-  const local = await reconcileScope(deps, target.scope, now);
+  // Ambient panel reads cover only unresolved transactions. L2-accepted rows
+  // stay on the monitor's 15-minute lane unless the user opens or refreshes
+  // Activity, avoiding a duplicate finality poll on every visible-panel tick.
+  const local = await reconcileScope(deps, target.scope, now, input.refreshHistory);
   const previousSync = await deps.activity.historySync?.(target.scope).catch(() => null);
-  const scanHistory =
-    input.refreshHistory ||
-    previousSync == null ||
-    previousSync.syncedAt > now ||
-    now - previousSync.syncedAt >= HISTORY_SYNC_TTL_MS;
+  // History discovery is intentionally screen-driven. Ambient Home refreshes
+  // reconcile only transactions still under observation; entering Activity or
+  // pressing its refresh control opts into the larger event scan explicitly.
+  const scanHistory = shouldScanHistory(input, previousSync ?? null, now);
   const history = scanHistory
     ? await accountHistory(deps, target)
-    : { onChain: [], unavailable: previousSync.unavailable };
-  const merged = mergeActivity(local, history.onChain);
-  if (!history.unavailable) {
-    await deps.activity.replaceScope?.(merged, target.scope).catch(() => undefined);
-  }
+    : { onChain: [], unavailable: previousSync?.unavailable ?? false };
+  const merged =
+    scanHistory && !history.unavailable
+      ? await mergeReconciledHistory(deps, target.scope, history.onChain)
+      : local;
   if (scanHistory) {
     await deps.activity
       .markHistorySynced?.(target.scope, now, history.unavailable)

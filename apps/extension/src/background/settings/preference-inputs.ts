@@ -12,6 +12,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
+import { isNostrPublicKey, isNostrRelayUrl } from "@mc-wallet/wallet-model/nostr";
 import {
   isApprovalSurfacePreference,
   isDisplayCurrency,
@@ -32,11 +33,19 @@ export const readSaveAddressInput = (
   readonly address: string;
   readonly label: string;
   readonly networkId: StarknetNetworkId;
+  readonly nostrPublicKey?: string;
   readonly publicKeyX?: string;
 } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["address", "label", "networkId", "publicKeyX", "type"]) ||
+    !hasOnlyKnownKeys(message, [
+      "address",
+      "label",
+      "networkId",
+      "nostrPublicKey",
+      "publicKeyX",
+      "type",
+    ]) ||
     message["type"] !== "wallet.saveAddress" ||
     typeof message["address"] !== "string" ||
     !isStarkFieldElement(message["address"]) ||
@@ -44,6 +53,7 @@ export const readSaveAddressInput = (
     message["label"].trim().length === 0 ||
     message["label"].trim().length > 64 ||
     !isStarknetNetworkId(message["networkId"]) ||
+    (message["nostrPublicKey"] !== undefined && !isNostrPublicKey(message["nostrPublicKey"])) ||
     (message["publicKeyX"] !== undefined &&
       (typeof message["publicKeyX"] !== "string" ||
         !isNonZeroStarkFieldElement(message["publicKeyX"])))
@@ -55,6 +65,9 @@ export const readSaveAddressInput = (
     address: message["address"],
     label: message["label"].trim(),
     networkId: message["networkId"],
+    ...(typeof message["nostrPublicKey"] === "string"
+      ? { nostrPublicKey: message["nostrPublicKey"] }
+      : {}),
     ...(typeof message["publicKeyX"] === "string" ? { publicKeyX: message["publicKeyX"] } : {}),
   };
 };
@@ -158,37 +171,66 @@ export const readSetAccountInGroupInput = (
 /**
  * Parses display and approval-surface preference updates from extension pages.
  */
-export const readSetDisplayInput = (
-  message: unknown,
-): {
+type DisplayPreferenceInput = {
   readonly approvalSurface?: "popup" | "side-panel";
   readonly displayCurrency?: "eur" | "gbp" | "usd";
+  readonly reliabilityDiagnostics?: boolean;
   readonly theme?: "dark" | "light";
-} | null => {
+};
+
+const hasValidDisplayValues = (
+  message: Record<string, unknown>,
+): message is Record<string, unknown> & DisplayPreferenceInput => {
+  if (
+    message["approvalSurface"] !== undefined &&
+    !isApprovalSurfacePreference(message["approvalSurface"])
+  ) {
+    return false;
+  }
+  if (message["displayCurrency"] !== undefined && !isDisplayCurrency(message["displayCurrency"])) {
+    return false;
+  }
+  if (
+    message["reliabilityDiagnostics"] !== undefined &&
+    typeof message["reliabilityDiagnostics"] !== "boolean"
+  ) {
+    return false;
+  }
+  return (
+    message["theme"] === undefined || message["theme"] === "dark" || message["theme"] === "light"
+  );
+};
+
+/** Parses exact display-preference updates from an untrusted runtime message. */
+export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | null => {
   if (!isRecord(message)) {
     return null;
   }
-  if (!hasOnlyKnownKeys(message, ["approvalSurface", "displayCurrency", "theme", "type"])) {
+  if (
+    !hasOnlyKnownKeys(message, [
+      "approvalSurface",
+      "displayCurrency",
+      "reliabilityDiagnostics",
+      "theme",
+      "type",
+    ])
+  ) {
     return null;
   }
   if (message["type"] !== "wallet.setDisplay") {
     return null;
   }
+  if (!hasValidDisplayValues(message)) {
+    return null;
+  }
   const approvalSurface = message["approvalSurface"];
   const displayCurrency = message["displayCurrency"];
+  const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
-  if (approvalSurface !== undefined && !isApprovalSurfacePreference(approvalSurface)) {
-    return null;
-  }
-  if (displayCurrency !== undefined && !isDisplayCurrency(displayCurrency)) {
-    return null;
-  }
-  if (theme !== undefined && theme !== "dark" && theme !== "light") {
-    return null;
-  }
   return {
     ...(approvalSurface === undefined ? {} : { approvalSurface }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
+    ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),
     ...(theme === undefined ? {} : { theme }),
   };
 };
@@ -214,13 +256,23 @@ export const readImportPreferencesInput = (
  */
 export const readSetExplorerFallbackInput = (
   message: unknown,
-): { readonly enabled: boolean; readonly networkId: StarknetNetworkId } | null =>
+): {
+  readonly apiUrl?: string;
+  readonly enabled: boolean;
+  readonly networkId: StarknetNetworkId;
+} | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["enabled", "networkId", "type"]) &&
+  hasOnlyKnownKeys(message, ["apiUrl", "enabled", "networkId", "type"]) &&
   message["type"] === "wallet.setExplorerFallback" &&
   isStarknetNetworkId(message["networkId"]) &&
+  (message["apiUrl"] === undefined ||
+    (typeof message["apiUrl"] === "string" && message["apiUrl"].length <= 2048)) &&
   typeof message["enabled"] === "boolean"
-    ? { enabled: message["enabled"], networkId: message["networkId"] }
+    ? {
+        ...(typeof message["apiUrl"] === "string" ? { apiUrl: message["apiUrl"] } : {}),
+        enabled: message["enabled"],
+        networkId: message["networkId"],
+      }
     : null;
 
 /**
@@ -244,6 +296,23 @@ export const readSetRpcOverrideInput = (
     networkId: message["networkId"],
     rpcUrl: message["rpcUrl"],
   };
+};
+
+/** Parses a custom Nostr relay; an empty value restores the reviewed defaults. */
+export const readSetNostrRelayUrlInput = (
+  message: unknown,
+): { readonly relayUrl: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["relayUrl", "type"]) ||
+    message["type"] !== "wallet.setNostrRelayUrl" ||
+    typeof message["relayUrl"] !== "string" ||
+    message["relayUrl"].length > 2048
+  ) {
+    return null;
+  }
+  const relayUrl = message["relayUrl"].trim();
+  return relayUrl.length === 0 || isNostrRelayUrl(relayUrl) ? { relayUrl } : null;
 };
 
 /**

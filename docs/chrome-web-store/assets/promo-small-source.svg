@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 280">
+  <title>MC Wallet promotional image</title>
+  <defs>
+    <radialGradient id="ground" cx="50%" cy="48%" r="75%">
+      <stop offset="0" stop-color="#242424"/>
+      <stop offset="1" stop-color="#0a0a0a"/>
+    </radialGradient>
+  </defs>
+  <rect width="440" height="280" rx="24" fill="url(#ground)"/>
+  <g fill="none" stroke="#f5f5f5" stroke-opacity=".10">
+    <circle cx="220" cy="140" r="116"/>
+    <circle cx="220" cy="140" r="88"/>
+    <circle cx="220" cy="140" r="60"/>
+  </g>
+  <circle cx="220" cy="24" r="4" fill="#fb923c"/>
+  <circle cx="308" cy="140" r="4" fill="#4ade80"/>
+  <rect x="172" y="92" width="96" height="96" rx="26" fill="#171717" stroke="#363636"/>
+  <g transform="translate(172 92)" fill="none" stroke="#f5f5f5" stroke-linecap="round" stroke-linejoin="round" stroke-width="6">
+    <path d="M18 38h60v40H18z"/>
+    <path d="M18 38l10-18h40l10 18"/>
+    <path d="M60 58h8"/>
+  </g>
+</svg>

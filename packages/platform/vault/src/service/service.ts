@@ -1,7 +1,4 @@
-/**
- * Wallet vault service: privileged account metadata persistence behind encryption.
- */
-
+/** Wallet vault service: privileged account metadata persistence behind encryption. */
 import { WalletError } from "@mc-wallet/core/errors";
 import { isWalletOrigin } from "@mc-wallet/core/origin";
 import { assertStoreAccess, type StoreActor } from "@mc-wallet/store/access";
@@ -39,14 +36,13 @@ import type { KmsPort } from "../kms-port";
 import { CURRENT_SCHEMA_VERSION, isVaultV7, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
+import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
+import { recoverVaultAccounts } from "./recovery";
 import type { WalletVaultService } from "./service-types";
 
 export { activeAccountSecrets } from "./reveal";
-
-/**
- * Re-exports the documented type surface from its size-budget split.
- */
+/** Re-exports the documented type surface from its size-budget split. */
 export type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
@@ -57,6 +53,8 @@ export type {
   EnsureNetworkAccountInput,
   ForgetLedgerStrk20ViewingKeyInput,
   ImportRawKeyAccountInput,
+  OpenNostrApplicationDataBatchInput,
+  OpenNostrApplicationDataInput,
   OriginGrantInput,
   RevealedSecrets,
   RevokeOriginInput,
@@ -65,6 +63,8 @@ export type {
   StoreLedgerStrk20ViewingKeyInput,
   WalletStatus,
   WalletVaultService,
+  WrapNostrApplicationDataBatchInput,
+  WrapNostrApplicationDataInput,
 } from "./service-types";
 
 type WalletVaultServiceOptions = {
@@ -95,7 +95,6 @@ export const createWalletVaultService = ({
   migrationStore,
 }: WalletVaultServiceOptions): WalletVaultService => {
   assertStoreAccess("vault", actor);
-
   const readVaultSnapshot = async (vaultPassphrase: string): Promise<Vault> => {
     if (!isVaultPassphrase(vaultPassphrase)) {
       throw new WalletError("Passphrase must be at least 12 characters");
@@ -124,7 +123,6 @@ export const createWalletVaultService = ({
       if (!vault.mnemonic) {
         throw new WalletError("No recovery phrase stored for this wallet");
       }
-
       const { account, privateKey } = await deriveAccount(kms, {
         accountContractType: input.accountContractType,
         accountIndex: nextAccountIndex(vault.accounts, input.networkId),
@@ -351,6 +349,7 @@ export const createWalletVaultService = ({
     generateMnemonic() {
       return kms.generateMnemonic();
     },
+    ...nostrWalletMethods(kms, readVault),
     previewAccount: (input) => deriveAccountRef(kms, input),
     validateMnemonic: (mnemonic) => kms.validateMnemonic(mnemonic),
     async grantOrigin(input) {
@@ -397,6 +396,8 @@ export const createWalletVaultService = ({
       );
     },
     readVault,
+    recoverAccounts: (input) =>
+      serialized(() => recoverVaultAccounts(encryptedStore, kms, readVaultSnapshot, input)),
     async revokeOrigin(input) {
       if (!isWalletOrigin(input.origin)) {
         throw new WalletError("Invalid origin");

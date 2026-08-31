@@ -155,7 +155,7 @@ export const deriveAccountContractAddress = async (
   const addressInput =
     input.accountContractType === "argent"
       ? argentAccountAddress(publicKeyX, deploymentSalt)
-      : await kms.deriveOzAccountAddress(publicKeyX, classHash);
+      : await kms.deriveOzAccountAddress(publicKeyX, classHash, "0x0");
   if (!isNonZeroStarkFieldElement(addressInput)) {
     throw new WalletError(
       input.accountContractType === "argent"

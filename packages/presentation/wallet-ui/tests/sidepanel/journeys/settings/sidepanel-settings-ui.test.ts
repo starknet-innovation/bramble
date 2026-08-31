@@ -160,6 +160,7 @@ describe("settings UI bindings", () => {
        <button data-theme-id="light" aria-pressed="false">Light</button>
        <button data-theme-id="dark" aria-pressed="true">Selected</button>
        <select id="currency-select"><option value="eur" selected>EUR</option></select>
+       <input id="reliability-diagnostics" type="checkbox" checked />
        <p id="display-result"></p>`,
       {
         setDisplay: async (input) => {
@@ -174,14 +175,18 @@ describe("settings UI bindings", () => {
     app.querySelector<HTMLButtonElement>('[data-theme-id="light"]')?.click();
     app.querySelector<HTMLButtonElement>('[data-theme-id="dark"]')?.click();
     app.querySelector<HTMLSelectElement>("#currency-select")?.dispatchEvent(new Event("change"));
+    app
+      .querySelector<HTMLInputElement>("#reliability-diagnostics")
+      ?.dispatchEvent(new Event("change"));
     await tick();
 
     expect(updates).toEqual([
       { approvalSurface: "side-panel" },
       { theme: "light" },
       { displayCurrency: "eur" },
+      { reliabilityDiagnostics: true },
     ]);
-    expect(calls.render).toBe(3);
+    expect(calls.render).toBe(4);
   });
 
   test("restores display controls when each preference mutation rejects", async () => {
@@ -189,6 +194,7 @@ describe("settings UI bindings", () => {
       `<button data-approval-surface="popup" aria-pressed="false">Popup</button>
        <button data-theme-id="dark" aria-pressed="false">Dark</button>
        <select id="currency-select"><option value="gbp" selected>GBP</option></select>
+       <input id="reliability-diagnostics" type="checkbox" checked />
        <p id="display-result"></p>`,
       {
         setDisplay: async () => {
@@ -201,14 +207,19 @@ describe("settings UI bindings", () => {
     const approval = app.querySelector<HTMLButtonElement>("[data-approval-surface]");
     const theme = app.querySelector<HTMLButtonElement>("[data-theme-id]");
     const currency = app.querySelector<HTMLSelectElement>("#currency-select");
+    const diagnostics = app.querySelector<HTMLInputElement>("#reliability-diagnostics");
     approval?.click();
     theme?.click();
     currency?.dispatchEvent(new Event("change"));
+    if (diagnostics) diagnostics.checked = false;
+    diagnostics?.dispatchEvent(new Event("change"));
     await tick();
 
     expect(approval?.disabled).toBe(false);
     expect(theme?.disabled).toBe(false);
     expect(currency?.disabled).toBe(false);
+    expect(diagnostics?.checked).toBe(true);
+    expect(diagnostics?.disabled).toBe(false);
     expect(app.querySelector("#display-result")?.textContent).toBe("Display service unavailable");
   });
 

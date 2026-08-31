@@ -146,7 +146,7 @@ describe("pending registration poll", () => {
     expect(test.count(500)).toBe(1);
   });
 
-  test("re-arms a poll that a tick left stranded while the surface was hidden", async () => {
+  test("resumes a hidden poll with its pending action priority", async () => {
     let reads = 0;
     const test = harness({
       load: async () => {
@@ -159,17 +159,17 @@ describe("pending registration poll", () => {
     await flush();
     expect(reads).toBe(1);
 
-    // Ticks firing while hidden reschedule nothing, so the poll goes quiet: the
-    // ambient timer is dropped and the burst has nothing left to fire.
+    // Hidden ticks perform no reads. The last burst timer may remain armed, but
+    // the scheduler preserves one pending action rather than losing it.
     expect(test.count(3_000)).toBe(1);
     test.setVisible(false);
     test.fire(500);
     test.fire(1_500);
     await flush();
-    expect(test.timers.size).toBe(0);
+    expect(reads).toBe(1);
+    expect(test.count(3_000)).toBe(1);
 
-    // Coming back must revive it rather than leave a pending registration with
-    // nothing watching it.
+    // Coming back consumes that action and re-arms the bounded polling cadence.
     test.setVisible(true);
     test.sync(true);
     await flush();

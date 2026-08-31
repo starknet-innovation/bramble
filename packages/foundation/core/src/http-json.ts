@@ -73,6 +73,28 @@ export const HTTP_BODY_LIMITS = {
 export const HTTP_REQUEST_TIMEOUT_MS = 15_000;
 
 /**
+ * Parses an untrusted HTTP `Retry-After` value into a non-negative delay.
+ * Both standard delta-seconds and HTTP dates are accepted; malformed or
+ * numerically unsafe values return null so callers can apply their own bounded
+ * default rather than trusting remote timing input.
+ */
+export const parseRetryAfterMilliseconds = (
+  value: string | null,
+  currentTime: number,
+): number | null => {
+  const normalized = value?.trim();
+  if (!normalized) return null;
+  if (/^(?:0|[1-9][0-9]*)$/.test(normalized)) {
+    const milliseconds = Number(normalized) * 1_000;
+    return Number.isSafeInteger(milliseconds) ? milliseconds : null;
+  }
+  if (Number.isFinite(Number(normalized))) return null;
+  if (!Number.isFinite(currentTime)) return null;
+  const retryAt = Date.parse(normalized);
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - currentTime) : null;
+};
+
+/**
  * Request options every untrusted boundary fetch carries. Cookies and referrer
  * are withheld so a third-party endpoint reached under the extension's
  * `host_permissions` cannot link requests to a browsing identity, and a
