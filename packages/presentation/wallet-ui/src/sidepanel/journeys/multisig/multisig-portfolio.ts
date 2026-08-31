@@ -18,6 +18,7 @@ import { actionTile, explorerTile } from "../../shell/wallet-shell";
 import { nftImageMarkup, visibleNftItems } from "../collectibles/nft-views";
 import { visibleHomeBalances } from "../portfolio/home-tabs";
 import { balanceRow } from "../portfolio/token-row";
+import { type CompactIntentList, compactIntentListView } from "./multisig-intent-list";
 
 /**
  * Public portfolio data resolved for one watched multisig address.
@@ -122,8 +123,8 @@ const collectiblesPanel = (
 /**
  * Renders the familiar wallet-home hierarchy for one multisig: portfolio,
  * multisig-specific primary actions, then Tokens, Collectibles, and intents.
- * `trustedIntentsMarkup` must be composed by the wallet's intent renderer,
- * which escapes all provider- and user-controlled values before this boundary.
+ * Intent rows cross this boundary as structured data and are escaped by the
+ * wallet's intent renderer here.
  */
 export const multisigPortfolio = (input: {
   readonly authorityAvailable: boolean;
@@ -134,7 +135,7 @@ export const multisigPortfolio = (input: {
   readonly deploymentPending?: boolean;
   readonly openCount: number;
   readonly preferences: WalletPreferences | null;
-  readonly trustedIntentsMarkup: string;
+  readonly intentList: CompactIntentList;
   readonly record: ArgentMultisigRecord;
   readonly signerKnown: boolean;
 }): string => {
@@ -183,7 +184,7 @@ export const multisigPortfolio = (input: {
         <div><strong>Co-signer updates</strong><span>Check securely for intents and signatures shared by known contacts.</span></div>
         ${button({ attributes: { "data-ms-sync-intents": true }, icon: "refresh", label: "Check for updates", size: "small", variant: "secondary" })}
       </div>
-      ${input.trustedIntentsMarkup}
+      ${compactIntentListView(input.intentList.heading, input.intentList.items, input.intentList.emptyMessage)}
     </div>
   </section>`;
 };
