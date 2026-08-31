@@ -4,6 +4,7 @@
 
 import { untrustedFetch } from "@mc-wallet/core/http-json";
 import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
+import { createNostrCoordinationStore } from "@mc-wallet/multisig/coordination";
 import { createMultisigStore } from "@mc-wallet/multisig/repository";
 import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
 import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
@@ -229,6 +230,7 @@ const swapService = (() => {
 // If local storage is unavailable, fail background initialization rather than
 // silently accepting signatures or broadcasts into a volatile registry.
 const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
+const nostrCoordinationLog = createNostrCoordinationStore({ store: createBrowserLocalStore() });
 // Live phishing feed: fetched from the configured source under an explicit host
 // permission, cached in local storage, and refreshed on the first worker wake
 // after its TTL. The guard reads the feed's in-memory snapshot on every check,
@@ -297,6 +299,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
   multisigDeploymentReviews,
   multisigStore: multisigLog,
+  nostrCoordinationStore: nostrCoordinationLog,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm

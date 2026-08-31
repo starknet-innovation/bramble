@@ -186,6 +186,10 @@ export const getStarkscanTokenBalances = async (
  */
 export type RpcFirstReadOptions = {
   readonly client: StarkscanClient;
+  readonly clientFor?: (
+    networkId: StarknetNetworkId,
+    preferences: ExplorerLanePreferences,
+  ) => StarkscanClient;
   readonly readPreferences: () => Promise<ExplorerLanePreferences>;
 };
 
@@ -193,19 +197,26 @@ export type RpcFirstReadOptions = {
 // whose network cannot be identified, and a preferences read that throws (the
 // store is unavailable, or holds a record this build refuses), leave the
 // gateway unused so an infrastructure fault can never widen disclosure.
-const gatewayAllowedFor = async (
+const gatewayPreferencesFor = async (
   readPreferences: () => Promise<ExplorerLanePreferences>,
   networkId: StarknetNetworkId | undefined,
-): Promise<boolean> => {
+): Promise<ExplorerLanePreferences | null> => {
   if (networkId === undefined) {
-    return false;
+    return null;
   }
   try {
-    return explorerFallbackAllowed(await readPreferences(), networkId);
+    const preferences = await readPreferences();
+    return explorerFallbackAllowed(preferences, networkId) ? preferences : null;
   } catch {
-    return false;
+    return null;
   }
 };
+
+const gatewayClientFor = (
+  options: Pick<RpcFirstReadOptions, "client" | "clientFor">,
+  networkId: StarknetNetworkId,
+  preferences: ExplorerLanePreferences,
+): StarkscanClient => options.clientFor?.(networkId, preferences) ?? options.client;
 
 /**
  * Serves balances from the user's configured Starknet RPC and falls back to the
@@ -225,19 +236,23 @@ const gatewayAllowedFor = async (
  * user's own endpoint. Neither source participates in signing or submission.
  */
 export const createRpcFirstBalances =
-  ({ client, readPreferences }: RpcFirstReadOptions): typeof getTokenBalances =>
+  (options: RpcFirstReadOptions): typeof getTokenBalances =>
   async (input, makeProvider) => {
     try {
       return await getTokenBalances(input, makeProvider);
     } catch (rpcFailure) {
-      if (
-        !isTransportRpcError(rpcFailure) ||
-        !(await gatewayAllowedFor(readPreferences, input.tokens[0]?.networkId))
-      ) {
+      const networkId = input.tokens[0]?.networkId;
+      const preferences = isTransportRpcError(rpcFailure)
+        ? await gatewayPreferencesFor(options.readPreferences, networkId)
+        : null;
+      if (networkId === undefined || preferences === null) {
         throw rpcFailure;
       }
       try {
-        return await getStarkscanTokenBalances(client, input);
+        return await getStarkscanTokenBalances(
+          gatewayClientFor(options, networkId, preferences),
+          input,
+        );
       } catch {
         throw rpcFailure;
       }
@@ -258,19 +273,22 @@ export const createRpcFirstBalances =
  * indicator rather than a third party's account of the outage.
  */
 export const createRpcFirstHistory =
-  ({ client, readPreferences }: RpcFirstReadOptions): typeof scanTransactionHistory =>
+  (options: RpcFirstReadOptions): typeof scanTransactionHistory =>
   async (input, makeProvider) => {
     try {
       return await scanTransactionHistory(input, makeProvider);
     } catch (rpcFailure) {
-      if (
-        !isTransportRpcError(rpcFailure) ||
-        !(await gatewayAllowedFor(readPreferences, input.networkId))
-      ) {
+      const preferences = isTransportRpcError(rpcFailure)
+        ? await gatewayPreferencesFor(options.readPreferences, input.networkId)
+        : null;
+      if (preferences === null) {
         throw rpcFailure;
       }
       try {
-        return await getStarkscanTransactionHistory(client, input);
+        return await getStarkscanTransactionHistory(
+          gatewayClientFor(options, input.networkId, preferences),
+          input,
+        );
       } catch {
         throw rpcFailure;
       }

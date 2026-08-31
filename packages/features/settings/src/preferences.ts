@@ -43,6 +43,7 @@ import {
   setAccountInGroup as setAccountInGroupPure,
   setGroupIcon as setGroupIconPure,
 } from "./groups";
+import { withExplorerSettings } from "./preferences-explorer";
 import { withNostrRelayUrl } from "./preferences-nostr";
 import {
   isWalletPreferences,
@@ -57,6 +58,7 @@ export type {
   AddressBookEntry,
   ApprovalSurfacePreference,
   DisplayCurrency,
+  ExplorerApiOverrides,
   ExplorerFallback,
   ExplorerLanePreferences,
   RpcOverrides,
@@ -116,6 +118,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   customNetworks: [],
   displayCurrency: "usd",
   explorerFallback: {},
+  explorerApiUrls: {},
   groups: [],
   hiddenTokens: [],
   nfts: [],
@@ -305,15 +308,8 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
-      async setExplorerFallback({ enabled, networkId }) {
-        if (!isStarknetNetworkId(networkId)) {
-          throw new WalletError("Invalid Starknet network");
-        }
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          explorerFallback: { ...preferences.explorerFallback, [networkId]: enabled },
-        };
+      async setExplorerFallback(input) {
+        const next = withExplorerSettings(await read(), input);
         await writePreferences(store, next);
         return next;
       },

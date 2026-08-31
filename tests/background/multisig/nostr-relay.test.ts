@@ -1,6 +1,7 @@
-/** One-shot relay coordination stays recipient-bound, bounded, and deduplicated. */
+/** Relay coordination stays pooled, recipient-bound, bounded, and deduplicated. */
 import { describe, expect, test } from "bun:test";
 import {
+  createNostrRelayTransport,
   MULTISIG_NOSTR_RELAYS,
   publishManyNostrGiftWraps,
   publishNostrGiftWrap,
@@ -132,6 +133,72 @@ describe("Nostr multisig relay", () => {
     ).resolves.toEqual([2, 1]);
     expect(connections).toEqual([...MULTISIG_NOSTR_RELAYS]);
     expect(sent.filter((frame) => frame.includes('["EVENT"'))).toHaveLength(4);
+  });
+
+  test("reuses one socket per relay and coalesces identical in-flight syncs", async () => {
+    const sent: string[] = [];
+    const connections: string[] = [];
+    const relayUrl = "wss://relay.team.example";
+    const giftWrap = event("99".repeat(32));
+    const factory = socketFactory(
+      sent,
+      (frame, socket) => {
+        if (frame[0] === "EVENT") {
+          const published = frame[1] as ReturnType<typeof event>;
+          socket.onmessage?.(
+            new MessageEvent("message", {
+              data: JSON.stringify(["OK", published.id, true, ""]),
+            }),
+          );
+          return;
+        }
+        const subscriptionId = String(frame[1]);
+        socket.onmessage?.(
+          new MessageEvent("message", { data: JSON.stringify(["EOSE", subscriptionId]) }),
+        );
+      },
+      connections,
+    );
+    const transport = createNostrRelayTransport({ idleMs: 60_000, socketFactory: factory });
+    try {
+      await transport.publish(JSON.stringify(giftWrap), RECIPIENT, [relayUrl]);
+      await Promise.all([
+        transport.sync(RECIPIENT, 1, [relayUrl]),
+        transport.sync(RECIPIENT, 1, [relayUrl]),
+      ]);
+      expect(connections).toEqual([relayUrl]);
+      expect(sent.filter((frame) => frame.includes('["REQ"'))).toHaveLength(1);
+    } finally {
+      transport.close();
+    }
+  });
+
+  test("returns after one durable relay copy and accepts idempotent duplicate acks", async () => {
+    const sent: string[] = [];
+    const connections: string[] = [];
+    const giftWrap = event("aa".repeat(32));
+    const factory = socketFactory(
+      sent,
+      (frame, socket, url) => {
+        if (url !== MULTISIG_NOSTR_RELAYS[0]) return;
+        const published = frame[1] as ReturnType<typeof event>;
+        socket.onmessage?.(
+          new MessageEvent("message", {
+            data: JSON.stringify(["OK", published.id, false, "duplicate: already saved"]),
+          }),
+        );
+      },
+      connections,
+    );
+    const transport = createNostrRelayTransport({ idleMs: 60_000, socketFactory: factory });
+    try {
+      await expect(
+        transport.publish(JSON.stringify(giftWrap), RECIPIENT, MULTISIG_NOSTR_RELAYS),
+      ).resolves.toBe(1);
+      expect(connections).toEqual([...MULTISIG_NOSTR_RELAYS]);
+    } finally {
+      transport.close();
+    }
   });
 
   test("fails a refused subscription without waiting for the relay timeout", async () => {

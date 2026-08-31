@@ -37,6 +37,7 @@ export * from "./sidepanel/journeys/send/transfer-ui";
 export * from "./sidepanel/journeys/swap/swap-client";
 export * from "./sidepanel/journeys/swap/swap-ui";
 export * from "./sidepanel/runtime/runtime";
+export { showToast } from "./sidepanel/shared/dom";
 export * from "./sidepanel/shared/parts";
 export * from "./sidepanel/shared/review-render";
 export * from "./sidepanel/shell/account-types";

@@ -17,6 +17,7 @@ afterAll(unregisterDom);
 beforeEach(() => document.body.replaceChildren());
 
 const MY_NODE = "https://my-node.example/rpc";
+const MY_EXPLORER = "https://explorer.example/v1";
 
 const status: WalletStatus = {
   accountCount: 1,
@@ -46,9 +47,10 @@ const laneSection = (prefs: WalletPreferences | null): string => {
   return html.slice(start, html.indexOf("</details>", start));
 };
 
-const screen = (checked: boolean): HTMLElement => {
+const screen = (checked: boolean, apiUrl = ""): HTMLElement => {
   const app = document.createElement("div");
   app.innerHTML = `<form id="explorer-fallback-form">
+      <input name="apiUrl" value="${apiUrl}" />
       <input name="explorerFallback" type="checkbox"${checked ? " checked" : ""} />
       <button type="submit">Save</button>
     </form><p id="explorer-fallback-result"></p>`;
@@ -56,11 +58,11 @@ const screen = (checked: boolean): HTMLElement => {
   return app;
 };
 
-const walletStub = (calls: Array<readonly [string, boolean]>, fail = false) =>
+const walletStub = (calls: Array<readonly [string, boolean, string]>, fail = false) =>
   ({
     loadStatus: async () => status,
-    setExplorerFallback: async (networkId: string, enabled: boolean) => {
-      calls.push([networkId, enabled]);
+    setExplorerFallback: async (networkId: string, enabled: boolean, apiUrl: string) => {
+      calls.push([networkId, enabled, apiUrl]);
       if (fail) {
         throw new Error("preferences unavailable");
       }
@@ -84,15 +86,15 @@ describe("advanced endpoints explorer-fallback control", () => {
   test("shows the lane as allowed for a user on the built-in endpoints", () => {
     const section = laneSection(preferences({}));
 
-    expect(section).toContain("Explorer fallback");
-    expect(section).toContain(">Allowed<");
+    expect(section).toContain("Explorer data");
+    expect(section).toContain("Default · Allowed");
     expect(section).toContain('name="explorerFallback" type="checkbox" checked');
   });
 
   test("shows the lane off for a user who configured their own RPC", () => {
     const section = laneSection(preferences({ rpcOverrides: { SN_MAIN: MY_NODE } }));
 
-    expect(section).toContain(">Off<");
+    expect(section).toContain("Default · Off");
     expect(section).toContain('name="explorerFallback" type="checkbox" /');
     expect(section).not.toContain("checked");
   });
@@ -102,20 +104,32 @@ describe("advanced endpoints explorer-fallback control", () => {
       preferences({ explorerFallback: { SN_MAIN: true }, rpcOverrides: { SN_MAIN: MY_NODE } }),
     );
 
-    expect(section).toContain(">Allowed<");
+    expect(section).toContain("Default · Allowed");
     expect(section).toContain('name="explorerFallback" type="checkbox" checked');
+  });
+
+  test("shows the selected explorer API beside its disclosure choice", () => {
+    const section = laneSection(
+      preferences({
+        explorerApiUrls: { SN_MAIN: MY_EXPLORER },
+        explorerFallback: { SN_MAIN: true },
+      }),
+    );
+
+    expect(section).toContain("Custom · Allowed");
+    expect(section).toContain(`value="${MY_EXPLORER}"`);
   });
 
   test("renders as off when preferences could not be loaded", () => {
     const section = laneSection(null);
 
-    expect(section).toContain(">Off<");
+    expect(section).toContain("Default · Off");
     expect(section).not.toContain("checked");
   });
 
   test("submits the unchecked box as an explicit refusal", async () => {
     const app = screen(false);
-    const calls: Array<readonly [string, boolean]> = [];
+    const calls: Array<readonly [string, boolean, string]> = [];
     let renders = 0;
     bindEndpointSettings({
       app,
@@ -129,13 +143,13 @@ describe("advanced endpoints explorer-fallback control", () => {
     app.querySelector<HTMLFormElement>("#explorer-fallback-form")?.requestSubmit();
     await tick();
 
-    expect(calls).toEqual([["SN_MAIN", false]]);
+    expect(calls).toEqual([["SN_MAIN", false, ""]]);
     expect(renders).toBe(1);
   });
 
   test("submits the checked box as an explicit opt-in", async () => {
     const app = screen(true);
-    const calls: Array<readonly [string, boolean]> = [];
+    const calls: Array<readonly [string, boolean, string]> = [];
     bindEndpointSettings({
       app,
       networkId: () => "SN_MAIN",
@@ -146,12 +160,12 @@ describe("advanced endpoints explorer-fallback control", () => {
     app.querySelector<HTMLFormElement>("#explorer-fallback-form")?.requestSubmit();
     await tick();
 
-    expect(calls).toEqual([["SN_MAIN", true]]);
+    expect(calls).toEqual([["SN_MAIN", true, ""]]);
   });
 
   test("surfaces a failed save instead of implying the choice was recorded", async () => {
     const app = screen(true);
-    const calls: Array<readonly [string, boolean]> = [];
+    const calls: Array<readonly [string, boolean, string]> = [];
     bindEndpointSettings({
       app,
       networkId: () => "SN_MAIN",
@@ -164,6 +178,69 @@ describe("advanced endpoints explorer-fallback control", () => {
 
     expect(app.querySelector("#explorer-fallback-result")?.textContent).toBe(
       "preferences unavailable",
+    );
+  });
+
+  test("requests only the custom explorer origin before saving it", async () => {
+    const app = screen(true, MY_EXPLORER);
+    const calls: Array<readonly [string, boolean, string]> = [];
+    const origins: string[][] = [];
+    bindEndpointSettings({
+      app,
+      networkId: () => "SN_MAIN",
+      permissions: {
+        request: async ({ origins: requested }) => {
+          origins.push(requested);
+          return true;
+        },
+      },
+      render: async () => undefined,
+      wallet: walletStub(calls),
+    });
+
+    app.querySelector<HTMLFormElement>("#explorer-fallback-form")?.requestSubmit();
+    await tick();
+
+    expect(origins).toEqual([["https://explorer.example/*"]]);
+    expect(calls).toEqual([["SN_MAIN", true, MY_EXPLORER]]);
+  });
+
+  test("does not store an endpoint when Chrome denies its host permission", async () => {
+    const app = screen(true, MY_EXPLORER);
+    const calls: Array<readonly [string, boolean, string]> = [];
+    bindEndpointSettings({
+      app,
+      networkId: () => "SN_MAIN",
+      permissions: { request: async () => false },
+      render: async () => undefined,
+      wallet: walletStub(calls),
+    });
+
+    app.querySelector<HTMLFormElement>("#explorer-fallback-form")?.requestSubmit();
+    await tick();
+
+    expect(calls).toEqual([]);
+    expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain(
+      "did not grant access",
+    );
+  });
+
+  test("does not store a custom HTTP endpoint without Chrome permission controls", async () => {
+    const app = screen(true, MY_EXPLORER);
+    const calls: Array<readonly [string, boolean, string]> = [];
+    bindEndpointSettings({
+      app,
+      networkId: () => "SN_MAIN",
+      render: async () => undefined,
+      wallet: walletStub(calls),
+    });
+
+    app.querySelector<HTMLFormElement>("#explorer-fallback-form")?.requestSubmit();
+    await tick();
+
+    expect(calls).toEqual([]);
+    expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain(
+      "permission controls are unavailable",
     );
   });
 

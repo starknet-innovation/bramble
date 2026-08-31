@@ -1,5 +1,6 @@
 /** Nostr handoffs bind the authenticated sender to a saved Starknet signer. */
 import { describe, expect, test } from "bun:test";
+import { createNostrCoordinationStore } from "@mc-wallet/multisig/coordination";
 import {
   type ArgentMultisigSigningIntent,
   createMultisigStore,
@@ -28,6 +29,7 @@ import {
 const coordinationNetwork = () => {
   const events: NostrEvent[] = [];
   const relaySelections: string[][] = [];
+  const sinceValues: number[] = [];
   const transport: NostrRelayTransport = {
     async publish(eventJson, recipientPublicKey, relayUrls) {
       const event = JSON.parse(eventJson) as NostrEvent;
@@ -38,8 +40,9 @@ const coordinationNetwork = () => {
       relaySelections.push([...relayUrls]);
       return 1;
     },
-    async sync(recipientPublicKey, _since, relayUrls) {
+    async sync(recipientPublicKey, since, relayUrls) {
       relaySelections.push([...relayUrls]);
+      sinceValues.push(since);
       return events.filter((event) =>
         event.tags.some((tag) => tag[0] === "p" && tag[1] === recipientPublicKey),
       );
@@ -77,7 +80,12 @@ const coordinationNetwork = () => {
       });
     },
   });
-  return { identity, relaySelections };
+  return {
+    identity,
+    pushEvent: (event: NostrEvent) => events.push(event),
+    relaySelections,
+    sinceValues,
+  };
 };
 
 describe("Argent multisig Nostr coordination", () => {
@@ -85,12 +93,17 @@ describe("Argent multisig Nostr coordination", () => {
     const relayUrl = "wss://relay.team.example";
     const nostrA = "11".repeat(32);
     const nostrB = "22".repeat(32);
+    const now = 2_000_000_000_000;
     const network = coordinationNetwork();
     const targetStorage = createMemoryStore();
-    const source = await makeMultisigHarness({ coordination: network.identity(nostrA) });
+    const source = await makeMultisigHarness({
+      coordination: network.identity(nostrA),
+      now: () => now,
+    });
     const target = await makeMultisigHarness({
       coordination: network.identity(nostrB),
       multisigStore: createMultisigStore({ store: targetStorage }),
+      now: () => now,
     });
     for (const harness of [source, target]) {
       await harness.preferencesStore.setNostrRelayUrl({ relayUrl });
@@ -153,7 +166,11 @@ describe("Argent multisig Nostr coordination", () => {
         { multisigId: HARNESS_MULTISIG_ID, type: "wallet.syncArgentMultisigIntents" },
         harnessExtensionSender,
       ),
-    ).resolves.toMatchObject({ imported: 0, intentIds: [], ok: true });
+    ).resolves.toMatchObject({ imported: 0, intentIds: [], ok: true, received: 0 });
+    expect(network.sinceValues).toEqual([
+      Math.floor(now / 1_000) - 30 * 24 * 60 * 60,
+      Math.floor(now / 1_000) - 3 * 24 * 60 * 60,
+    ]);
 
     const signedByB = (await target.handler(
       {
@@ -189,6 +206,39 @@ describe("Argent multisig Nostr coordination", () => {
       coordinationRelayUrls({ ...defaultWalletPreferences(), nostrRelayUrl: relayUrl }),
     ).toEqual([relayUrl]);
     expect(coordinationRelayUrls(defaultWalletPreferences())).toHaveLength(2);
+  });
+
+  test("never persists an unauthenticated relay event as a durable receipt", async () => {
+    const network = coordinationNetwork();
+    const recipientPublicKey = "22".repeat(32);
+    const receipts = createNostrCoordinationStore({ store: createMemoryStore() });
+    const target = await makeMultisigHarness({
+      coordination: network.identity(recipientPublicKey),
+      nostrCoordinationStore: receipts,
+      now: () => 2_000_000_000_000,
+    });
+    network.pushEvent({
+      content: "not-authenticated-application-data",
+      created_at: 1,
+      id: "99".repeat(32),
+      kind: 1_059,
+      pubkey: "33".repeat(32),
+      sig: "44".repeat(64),
+      tags: [["p", recipientPublicKey]],
+    });
+
+    await expect(
+      target.handler(
+        { multisigId: HARNESS_MULTISIG_ID, type: "wallet.syncArgentMultisigIntents" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ imported: 0, ok: true, received: 0 });
+    await expect(
+      receipts.getCheckpoint(
+        HARNESS_MULTISIG_ID,
+        coordinationRelayUrls(defaultWalletPreferences()),
+      ),
+    ).resolves.toMatchObject({ eventIds: [] });
   });
 
   test("trusts only a saved Nostr identity bound to a frozen signer", async () => {

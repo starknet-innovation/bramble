@@ -256,13 +256,23 @@ export const readImportPreferencesInput = (
  */
 export const readSetExplorerFallbackInput = (
   message: unknown,
-): { readonly enabled: boolean; readonly networkId: StarknetNetworkId } | null =>
+): {
+  readonly apiUrl?: string;
+  readonly enabled: boolean;
+  readonly networkId: StarknetNetworkId;
+} | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["enabled", "networkId", "type"]) &&
+  hasOnlyKnownKeys(message, ["apiUrl", "enabled", "networkId", "type"]) &&
   message["type"] === "wallet.setExplorerFallback" &&
   isStarknetNetworkId(message["networkId"]) &&
+  (message["apiUrl"] === undefined ||
+    (typeof message["apiUrl"] === "string" && message["apiUrl"].length <= 2048)) &&
   typeof message["enabled"] === "boolean"
-    ? { enabled: message["enabled"], networkId: message["networkId"] }
+    ? {
+        ...(typeof message["apiUrl"] === "string" ? { apiUrl: message["apiUrl"] } : {}),
+        enabled: message["enabled"],
+        networkId: message["networkId"],
+      }
     : null;
 
 /**

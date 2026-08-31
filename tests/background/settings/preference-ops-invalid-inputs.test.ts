@@ -150,12 +150,16 @@ describe("handlePreferenceOps input validation", () => {
   test("applies a well-formed explorer fallback choice (MCW-V09-129)", async () => {
     const preferencesStore = store();
     const response = await handlePreferenceOps(preferencesStore, "wallet.setExplorerFallback", {
+      apiUrl: "https://explorer.example/v1",
       enabled: false,
       networkId: "SN_MAIN",
       type: "wallet.setExplorerFallback",
     });
 
     expect(response).toMatchObject({ ok: true });
+    expect((await preferencesStore.read()).explorerApiUrls).toEqual({
+      SN_MAIN: "https://explorer.example/v1",
+    });
     expect((await preferencesStore.read()).explorerFallback).toEqual({ SN_MAIN: false });
   });
 

@@ -416,15 +416,14 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       if (isSupportDiagnosticsResponse(response)) return response.diagnostics;
       throw responseError(response, "diagnostic export failed");
     },
-    async setExplorerFallback(networkId: string, enabled: boolean): Promise<void> {
+    async setExplorerFallback(networkId: string, enabled: boolean, apiUrl?: string): Promise<void> {
       const response = await sendMessage({
+        ...(apiUrl === undefined ? {} : { apiUrl }),
         enabled,
         networkId,
         type: "wallet.setExplorerFallback",
       });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
+      if (isPreferencesResponse(response)) return;
       throw responseError(response, "explorer fallback update failed");
     },
     async setRpcOverride(networkId: string, rpcUrl: string): Promise<void> {

@@ -157,6 +157,7 @@ export const startWalletUi = async (
       app,
       networkId: () => lastNetworkId,
       onStrk20ConfigChanged: () => privacy.reset(),
+      ...(extensionApi?.permissions ? { permissions: extensionApi.permissions } : {}),
       render,
       wallet,
     });
@@ -238,9 +239,7 @@ export const startWalletUi = async (
       balances: () => cache.balances,
       currency: () => cache.preferences?.displayCurrency ?? "usd",
       navigateHome: () => {
-        if (activeView === "swap") {
-          navigate("home");
-        }
+        if (activeView === "swap") navigate("home");
       },
       preferences: () => cache.preferences,
       render,

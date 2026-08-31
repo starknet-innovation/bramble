@@ -5,6 +5,10 @@
  * stays a dispatch table.
  */
 
+import {
+  memoryNostrCoordinationStore,
+  type NostrCoordinationStore,
+} from "@mc-wallet/multisig/coordination";
 import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
 import {
@@ -74,6 +78,7 @@ export type RouterContext = {
   readonly ledgerSignQueue: LedgerSignQueue;
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
+  readonly nostrCoordinationStore: NostrCoordinationStore;
   readonly nftSnapshots?: NftSnapshotStore;
   readonly nostrRelayTransport?: NostrRelayTransport;
   readonly now: () => number;
@@ -103,6 +108,7 @@ export type MessageHandlerOptions = {
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
+  readonly nostrCoordinationStore?: NostrCoordinationStore;
   readonly nftSnapshots?: NftSnapshotStore;
   readonly nostrRelayTransport?: NostrRelayTransport;
   /**
@@ -152,6 +158,10 @@ const activeStateCoordinatorFor = (
 const multisigDeploymentReviewsFor = (
   provided: ArgentMultisigDeploymentReviews | undefined,
 ): ArgentMultisigDeploymentReviews => provided ?? createArgentMultisigDeploymentReviews();
+
+const nostrCoordinationStoreFor = (
+  provided: NostrCoordinationStore | undefined,
+): NostrCoordinationStore => provided ?? memoryNostrCoordinationStore();
 
 const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): WatchAssetAdmission =>
   provided ?? createWatchAssetAdmission();
@@ -205,6 +215,7 @@ export const routerContext = (
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
+    nostrCoordinationStore: nostrCoordinationStoreFor(options.nostrCoordinationStore),
     ...nftSnapshotsFor(options.nftSnapshots),
     ...nostrRelayTransportFor(options.nostrRelayTransport),
     now: options.now ?? systemClock,

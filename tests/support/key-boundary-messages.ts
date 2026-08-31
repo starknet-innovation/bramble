@@ -455,7 +455,12 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   {
-    message: { enabled: false, networkId: "SN_MAIN", type: "wallet.setExplorerFallback" },
+    message: {
+      apiUrl: "https://explorer.example/v1",
+      enabled: false,
+      networkId: "SN_MAIN",
+      type: "wallet.setExplorerFallback",
+    },
     sender: extensionSender,
   },
   {

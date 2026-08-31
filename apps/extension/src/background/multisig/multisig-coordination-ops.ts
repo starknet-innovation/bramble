@@ -31,6 +31,9 @@ import {
 
 const MULTISIG_NOSTR_IDENTIFIER = "mc-wallet.multisig";
 const NOSTR_SYNC_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
+// NIP-59 backdates gift wraps by up to two days. The extra day preserves a
+// safe overlap while cutting subsequent relay scans from 30 days to three.
+const NOSTR_INCREMENTAL_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
 
 /** One custom relay replaces the reviewed defaults; it never expands the broadcast set. */
 export const coordinationRelayUrls = (preferences: WalletPreferences): readonly string[] =>
@@ -114,13 +117,13 @@ const openGiftWraps = (
   isAuthorized: () => boolean,
   open: NonNullable<MultisigOpsDeps["wallet"]["openNostrApplicationData"]>,
   openMany: MultisigOpsDeps["wallet"]["openNostrApplicationDataBatch"],
-): Promise<readonly (NostrApplicationData | null)[]> =>
+): Promise<readonly (NostrApplicationData | null)[] | null> =>
   openMany
     ? openMany({
         eventJsons: events.map((event) => JSON.stringify(event)),
         isAuthorized,
         vaultPassphrase,
-      }).catch(() => events.map(() => null))
+      }).catch(() => null)
     : Promise.all(events.map((event) => openGiftWrap(open, event, vaultPassphrase)));
 
 /** Accepts only a package from a saved Nostr identity whose Stark key is in the frozen signer set. */
@@ -237,6 +240,33 @@ const recentGiftWraps = async (
   }
 };
 
+const nostrSyncSince = (nowSeconds: number, syncedAt: number | undefined): number =>
+  Math.max(
+    0,
+    syncedAt !== undefined && syncedAt <= nowSeconds
+      ? syncedAt - NOSTR_INCREMENTAL_LOOKBACK_SECONDS
+      : nowSeconds - NOSTR_SYNC_LOOKBACK_SECONDS,
+  );
+
+const importSharedIntent = async (
+  deps: MultisigOpsDeps,
+  opened: NostrApplicationData,
+  contacts: readonly AddressBookEntry[],
+  records: readonly ArgentMultisigRecord[],
+): Promise<string | null> => {
+  const input = trustedSharedIntent(opened, contacts, records);
+  if (!input) return null;
+  const current = await deps.multisigStore.getIntent(input.package.intent.id);
+  if (!sharedIntentHasUpdate(current, input.package.intent)) return null;
+  const response = await runActiveStateMutation(deps.activeStateCoordinator, () =>
+    handleMultisigTxOps(deps, "wallet.importArgentMultisigIntent", {
+      package: input.package,
+      type: "wallet.importArgentMultisigIntent",
+    }),
+  );
+  return response && !("error" in response) ? input.package.intent.id : null;
+};
+
 const importGiftWraps = async (
   deps: MultisigOpsDeps,
   events: readonly NostrEvent[],
@@ -246,26 +276,25 @@ const importGiftWraps = async (
   isAuthorized: () => boolean,
   open: NonNullable<MultisigOpsDeps["wallet"]["openNostrApplicationData"]>,
   openMany: MultisigOpsDeps["wallet"]["openNostrApplicationDataBatch"],
-): Promise<readonly string[] | null> => {
+): Promise<{
+  readonly intentIds: readonly string[];
+  readonly verifiedEventIds: readonly string[];
+} | null> => {
   const imported = new Set<string>();
+  const verifiedEventIds = new Set<string>();
+  if (events.length === 0) return { intentIds: [], verifiedEventIds: [] };
   const opened = await openGiftWraps(events, vaultPassphrase, isAuthorized, open, openMany);
+  if (!opened) return null;
   for (const index of events.keys()) {
     if (!isAuthorized()) return null;
     const content = opened[index];
     if (!content) continue;
-    const input = trustedSharedIntent(content, contacts, records);
-    if (!input) continue;
-    const current = await deps.multisigStore.getIntent(input.package.intent.id);
-    if (!sharedIntentHasUpdate(current, input.package.intent)) continue;
-    const response = await runActiveStateMutation(deps.activeStateCoordinator, () =>
-      handleMultisigTxOps(deps, "wallet.importArgentMultisigIntent", {
-        package: input.package,
-        type: "wallet.importArgentMultisigIntent",
-      }),
-    );
-    if (response && !("error" in response)) imported.add(input.package.intent.id);
+    const event = events[index];
+    if (event) verifiedEventIds.add(event.id);
+    const intentId = await importSharedIntent(deps, content, contacts, records);
+    if (intentId) imported.add(intentId);
   }
-  return [...imported];
+  return { intentIds: [...imported], verifiedEventIds: [...verifiedEventIds] };
 };
 
 const publicKey = async (deps: MultisigOpsDeps): Promise<RuntimeResponse> => {
@@ -345,18 +374,23 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
   if (!passphrase || !authorized.isCurrent()) return { error: "wallet locked" };
   const nostrPublicKey = await nostrPublicKeyFor(passphrase);
   const preferences = await deps.preferencesStore.read();
+  const relayUrls = coordinationRelayUrls(preferences);
+  const nowSeconds = Math.floor(deps.now() / 1_000);
+  const checkpoint = await deps.nostrCoordinationStore.getCheckpoint(record.id, relayUrls);
   const events = await recentGiftWraps(
     nostrPublicKey,
-    Math.max(0, Math.floor(deps.now() / 1_000) - NOSTR_SYNC_LOOKBACK_SECONDS),
-    coordinationRelayUrls(preferences),
+    nostrSyncSince(nowSeconds, checkpoint?.syncedAt),
+    relayUrls,
     deps.nostrRelayTransport ?? nativeNostrRelayTransport,
   );
   if (!events) {
     return { error: "Secure co-signer updates are unavailable. Try again shortly" };
   }
-  const intentIds = await importGiftWraps(
+  const seenEventIds = new Set(checkpoint?.eventIds ?? []);
+  const unseenEvents = events.filter((event) => !seenEventIds.has(event.id));
+  const imported = await importGiftWraps(
     deps,
-    events,
+    unseenEvents,
     preferences.addressBook,
     [record],
     passphrase,
@@ -364,8 +398,29 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
     open,
     deps.wallet.openNostrApplicationDataBatch,
   );
-  if (intentIds === null) return { error: "wallet locked" };
-  return { imported: intentIds.length, intentIds, ok: true, received: events.length };
+  if (imported === null) {
+    return authorized.isCurrent()
+      ? { error: "Secure co-signer updates could not be verified. Try again shortly" }
+      : { error: "wallet locked" };
+  }
+  await deps.nostrCoordinationStore
+    .recordSync(
+      {
+        accountId: record.id,
+        eventIds: imported.verifiedEventIds,
+        relayUrls,
+        syncedAt: nowSeconds,
+      },
+      authorized.isCurrent,
+    )
+    .catch(() => "invalid" as const);
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
+  return {
+    imported: imported.intentIds.length,
+    intentIds: imported.intentIds,
+    ok: true,
+    received: imported.verifiedEventIds.length,
+  };
 };
 
 /** Handles trusted-page Nostr coordination requests and no other messages. */

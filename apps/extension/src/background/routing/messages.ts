@@ -83,6 +83,7 @@ const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...buildOpsDeps(ctx),
   multisigDeploymentReviews: ctx.multisigDeploymentReviews,
   multisigStore: ctx.multisigStore,
+  nostrCoordinationStore: ctx.nostrCoordinationStore,
   ...(ctx.nostrRelayTransport ? { nostrRelayTransport: ctx.nostrRelayTransport } : {}),
   now: ctx.now,
 });
@@ -486,7 +487,6 @@ export const createMessageHandler = (
   extensionId: string,
   options: MessageHandlerOptions = {},
 ) => {
-  // Resolve the session before the queue so the queue can read its generation.
   const session = options.session ?? createUnlockSession();
   const ctx = routerContext(wallet, extensionId, options, session);
   return async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {

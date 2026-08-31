@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./chain": "./src/chain.ts",
+    "./coordination": "./src/coordination.ts",
     "./deploy": "./src/deploy.ts",
     "./repository": "./src/repository.ts",
     "./signer-account": "./src/signer-account.ts"

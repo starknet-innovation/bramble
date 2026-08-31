@@ -26,6 +26,11 @@ export const AdvancedEndpoints = checkpointStory(
   "settings-security",
   "advanced-endpoints",
 );
+export const ExplorerData = checkpointStory(
+  "Explorer data and rejected request",
+  "settings-security",
+  "explorer-data",
+);
 export const MultisigCoordinationRelay = checkpointStory(
   "Multisig coordination relay",
   "settings-security",

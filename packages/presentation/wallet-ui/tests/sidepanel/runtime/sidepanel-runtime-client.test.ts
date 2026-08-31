@@ -453,6 +453,22 @@ describe("token and preference wrappers", () => {
     );
   });
 
+  test("setExplorerFallback only replaces the API URL when one is supplied", async () => {
+    const { sent, wallet } = captureRuntime(preferencesResponse);
+    await wallet.setExplorerFallback("SN_MAIN", false);
+    await wallet.setExplorerFallback("SN_MAIN", true, "https://explorer.example/v1");
+
+    expect(sent).toEqual([
+      { enabled: false, networkId: "SN_MAIN", type: "wallet.setExplorerFallback" },
+      {
+        apiUrl: "https://explorer.example/v1",
+        enabled: true,
+        networkId: "SN_MAIN",
+        type: "wallet.setExplorerFallback",
+      },
+    ]);
+  });
+
   test("setStrk20NetworkConfig resolves on preferences and throws otherwise", async () => {
     const config = {
       discoveryUrl: "https://discovery.example",

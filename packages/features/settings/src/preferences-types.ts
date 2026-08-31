@@ -11,6 +11,7 @@ import type {
   AddressBookEntry,
   ApprovalSurfacePreference,
   DisplayCurrency,
+  ExplorerApiOverrides,
   ExplorerFallback,
   RpcOverrides,
   ThemeChoice,
@@ -29,6 +30,8 @@ export type WalletPreferences = {
   readonly addressBook: readonly AddressBookEntry[];
   readonly customNetworks?: readonly CustomNetwork[];
   readonly displayCurrency?: DisplayCurrency;
+  /** Per-network Starkscan-compatible read API override. */
+  readonly explorerApiUrls?: ExplorerApiOverrides;
   /**
    * Per-network opt-in for the third-party explorer read lane. Absent (or
    * absent for one network) means "never decided", which the wallet resolves
@@ -85,6 +88,7 @@ export type WalletPreferencesStore = {
    * decided, the derived default never silently takes the decision back.
    */
   readonly setExplorerFallback: (input: {
+    readonly apiUrl?: string;
     readonly enabled: boolean;
     readonly networkId: StarknetNetworkId;
   }) => Promise<WalletPreferences>;

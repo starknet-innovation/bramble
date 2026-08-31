@@ -20,6 +20,9 @@ export const isNostrApplicationData = (value: unknown): value is string =>
 const isNostrHex32 = (value: unknown): value is string =>
   typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 
+/** Canonical 32-byte event identifier spelling Nostr uses. */
+export const isNostrEventId = (value: unknown): value is string => isNostrHex32(value);
+
 /** Canonical 32-byte x-only public-key spelling Nostr uses. */
 export const isNostrPublicKey = (value: unknown): value is string => isNostrHex32(value);
 
@@ -52,7 +55,7 @@ export const isNostrEvent = (value: unknown): value is NostrEvent =>
   encodedLength(value["content"]) <= MAX_NOSTR_EVENT_JSON_BYTES &&
   Number.isSafeInteger(value["created_at"]) &&
   (value["created_at"] as number) >= 0 &&
-  isNostrHex32(value["id"]) &&
+  isNostrEventId(value["id"]) &&
   Number.isSafeInteger(value["kind"]) &&
   (value["kind"] as number) >= 0 &&
   (value["kind"] as number) <= 65_535 &&

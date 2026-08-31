@@ -54,6 +54,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "addressBook",
   "customNetworks",
   "displayCurrency",
+  "explorerApiUrls",
   "explorerFallback",
   "groups",
   "hiddenTokens",
@@ -80,6 +81,7 @@ const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["approvalSurface"] === undefined ||
     isApprovalSurfacePreference(value["approvalSurface"])) &&
   (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
+  (value["explorerApiUrls"] === undefined || isRpcOverrides(value["explorerApiUrls"])) &&
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
@@ -307,7 +309,7 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
  * Deliberately excluded — and therefore never restorable from a file — is
  * every trust-bearing field the transaction-review layer reads as ground
  * truth: `tokens` (decimals and symbols behind amount formatting and the
- * unknown-contract warning), `rpcOverrides`, `customNetworks`,
+ * unknown-contract warning), `rpcOverrides`, `explorerApiUrls`, `customNetworks`,
  * `nftIndexerUrl`, `nfts`, `nostrRelayUrl`, `strk20Networks`, `strk20ProverUrl`, and
  * `approvalSurface`. `explorerFallback` is excluded for the same reason: a
  * file that flipped it to `true` would re-arm a third-party address disclosure

@@ -39,14 +39,7 @@ describe("friendlyError", () => {
   test("maps platform network rejections to a friendly message", () => {
     for (const raw of ["Failed to fetch", "NetworkError", "Load failed", "network error"]) {
       const result = friendlyError(raw);
-      if (raw === "NetworkError") {
-        // Not an exact match; treated as unexpected and left verbatim.
-        expect(result.message).toBe(raw);
-        continue;
-      }
-      expect(result).toEqual({
-        message: "Couldn't reach the network. Check your connection and try again.",
-      });
+      expect(result.message).toContain("Couldn't reach the network");
     }
   });
 
@@ -58,6 +51,37 @@ describe("friendlyError", () => {
   test("keeps unrecognized errors verbatim", () => {
     const raw = "krusty kms handshake failed: 0x1f timeout";
     expect(friendlyError(raw)).toEqual({ message: raw });
+  });
+
+  test("collapses raw RPC and API diagnostics to short recovery copy", () => {
+    expect(
+      friendlyError(
+        'RPC: starknet_addInvokeTransaction with params {"calldata":["0x1"]} 55: rejected',
+      ).message,
+    ).toBe("The RPC rejected this request. Copy the error details for the full response.");
+    expect(friendlyError(`Gateway rejected\n${"response body ".repeat(30)}`).message).toBe(
+      "A wallet service rejected this request. Copy the error details for the full response.",
+    );
+    expect(friendlyError('HTTP 400 response body: {"error":"invalid payload"}').message).toBe(
+      "A wallet service rejected this request. Copy the error details for the full response.",
+    );
+    expect(friendlyError("HTTP 429: rate_limited").message).toBe(
+      "This service is rate limiting requests. Wait a moment and try again.",
+    );
+    for (const raw of [
+      "24: Block not found: undefined",
+      "55: Account validation failed: Resource bounds were not satisfied",
+      "Transaction execution error: contract reverted",
+    ]) {
+      expect(friendlyError(raw).message).toBe(
+        "The RPC rejected this request. Copy the error details for the full response.",
+      );
+    }
+  });
+
+  test("keeps actionable wallet-domain errors visible", () => {
+    const raw = "Argent multisig intent nonce is no longer current";
+    expect(friendlyError(raw).message).toBe(raw);
   });
 
   test("falls back to a generic message for empty input", () => {

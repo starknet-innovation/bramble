@@ -108,6 +108,11 @@ export const parseWalletContactCard = (value: unknown): WalletContactCard | null
 export type RpcOverrides = Readonly<Partial<Record<StarknetNetworkId, string>>>;
 
 /**
+ * Per-network Starkscan-compatible explorer API bases chosen by the user.
+ */
+export type ExplorerApiOverrides = RpcOverrides;
+
+/**
  * Per-network opt-in for the public explorer gateway read lane (MCW-V09-129).
  *
  * An entry is an explicit user choice about one network and always wins over
@@ -127,6 +132,7 @@ export type ExplorerFallback = Readonly<Partial<Record<StarknetNetworkId, boolea
  * answer one question about one network.
  */
 export type ExplorerLanePreferences = {
+  readonly explorerApiUrls?: ExplorerApiOverrides;
   readonly explorerFallback?: ExplorerFallback;
   readonly rpcOverrides?: RpcOverrides;
 };

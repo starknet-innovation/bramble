@@ -226,4 +226,53 @@ describe("Starkscan wallet adapters", () => {
       await createRpcFirstHistory({ client: unavailable, readPreferences })(historyInput),
     ).toEqual([]);
   });
+
+  test("uses the configured explorer API only after an RPC transport outage", async () => {
+    resetRpcEndpointCooldownsForTests();
+    const input = {
+      accountAddress: ACCOUNT,
+      rpcUrls: ["https://custom-rpc.example"],
+      tokens: [strk],
+    } as const;
+    const preferences: ExplorerLanePreferences = {
+      explorerApiUrls: { SN_MAIN: "https://explorer.example/v1" },
+      explorerFallback: { SN_MAIN: true },
+      rpcOverrides: { SN_MAIN: "https://custom-rpc.example" },
+    };
+    const selected = clientFor({
+      chainId: "SN_MAIN",
+      completeness: {
+        cap: null,
+        capped: false,
+        complete: true,
+        exact: true,
+        lagBlocks: 0,
+        reason: "Complete snapshot.",
+        reasonCode: "complete",
+        truncated: false,
+      },
+      exact: true,
+      items: [],
+      ownerAddress: ACCOUNT,
+      truncated: false,
+    });
+    const selections: string[] = [];
+    const balances = await createRpcFirstBalances({
+      client: clientFor({}),
+      clientFor: (networkId, current) => {
+        selections.push(`${networkId}:${current.explorerApiUrls?.[networkId]}`);
+        return selected;
+      },
+      readPreferences: async () => preferences,
+    })(input, () => {
+      return {
+        async callContract() {
+          throw new Error("node unreachable");
+        },
+      } as unknown as RpcProvider;
+    });
+
+    expect(balances[0]?.balance).toBe("0");
+    expect(selections).toEqual(["SN_MAIN:https://explorer.example/v1"]);
+  });
 });

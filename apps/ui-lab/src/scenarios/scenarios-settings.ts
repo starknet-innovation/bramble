@@ -1,3 +1,4 @@
+import { showToast } from "@mc-wallet/wallet-ui/lab";
 import { ledgerAccount, softwareAccount, statusFor } from "../fixtures/fixtures";
 import { connectedSites, importedStatus, journeyPreferences } from "../fixtures/journey-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
@@ -19,6 +20,23 @@ const openCoordinationRelay = (context: FrameContext): void => {
     throw new Error("Missing production Nostr relay disclosure");
   }
   disclosure.open = true;
+};
+
+const openExplorerData = (context: FrameContext): void => {
+  const disclosure = context.app.querySelector<HTMLDetailsElement>(
+    '[data-disclosure="explorer-fallback"]',
+  );
+  if (!disclosure) throw new Error("Missing production explorer disclosure");
+  disclosure.open = true;
+};
+
+const showRejectedService = (context: FrameContext): void => {
+  openExplorerData(context);
+  showToast(
+    'RPC: starknet_addInvokeTransaction with params {"invoke_transaction":{"calldata":["0x1"]}} 55: Account validation failed: upstream gateway rejected the request',
+    "error",
+    context.app,
+  );
 };
 
 export const settingsScenario: WalletScenario = {
@@ -68,6 +86,23 @@ export const settingsScenario: WalletScenario = {
         "RPC, privacy, Nostr, NFT, and local diagnostics controls keep their trust context behind concise disclosures.",
       prepare: openAdvancedEndpoint,
       state: { disclosure: "rpc", state: "open" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          preferences: {
+            ...journeyPreferences,
+            explorerApiUrls: { SN_MAIN: "https://explorer.team.example/v1" },
+            explorerFallback: { SN_MAIN: true },
+          },
+          view: "advanced-network",
+        }),
+      id: "explorer-data",
+      label: "Explorer data and rejected request",
+      narrative:
+        "Explorer routing and disclosure consent stay together; a rejected request keeps one human line while its copy control retains the complete diagnostic.",
+      prepare: showRejectedService,
+      state: { disclosure: "explorer-fallback", endpoint: "custom", toast: "copyable" },
     },
     {
       content: () =>
