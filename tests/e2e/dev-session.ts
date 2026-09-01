@@ -3,8 +3,9 @@
  * persistent profile, onboarding or unlocking it automatically so neither the
  * recovery phrase nor the vault passphrase has to be retyped.
  *
- * Run with `bun run dev:session` after `bun run build`. The browser stays open
- * until interrupted.
+ * Run with `MC_E2E_LIVE_NETWORK=1 bun run dev:session` after `bun run build`.
+ * The explicit network opt-in prevents automation from reaching shared wallet
+ * services by accident. The browser stays open until interrupted.
  *
  * Development only. The default phrase is the throwaway fixture already
  * published in this repository, so its accounts are public by construction:
@@ -270,10 +271,11 @@ const main = async (): Promise<void> => {
   if (!existsSync(resolve(repoRoot, "dist/manifest.json"))) {
     throw new Error("dist/manifest.json is missing; run bun run build before bun run dev:session");
   }
-
-  // The default E2E fixture blocks egress. This manual session deliberately
-  // uses Sepolia, and the flag is scoped to this one launcher process.
-  process.env["MC_E2E_LIVE_NETWORK"] = "1";
+  if (process.env["MC_E2E_LIVE_NETWORK"] !== "1") {
+    throw new Error(
+      "dev:session blocks live wallet services by default; set MC_E2E_LIVE_NETWORK=1 to opt in",
+    );
+  }
   const extension = await launchExtension({
     // Reduced motion collapses the root view transitions to a cut
     // (styles-transitions.ts). Headless never animates them; a headed browser

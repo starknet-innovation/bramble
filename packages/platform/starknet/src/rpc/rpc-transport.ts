@@ -42,13 +42,16 @@ export const RPC_REFUSED_MESSAGE =
   "The RPC endpoint refused this request (rate limit or gateway rejection). Nothing was submitted - wait a moment and try again.";
 
 const REFUSAL_BODY_LIMIT_BYTES = 1024;
+const RPC_RATE_LIMIT_CODE = -32_005;
 
 const endpointRefusal = (text: string, status: number): boolean => {
   if (status === 429) return true;
   if (text.length > REFUSAL_BODY_LIMIT_BYTES) return false;
   try {
     const parsed: unknown = JSON.parse(text);
-    return isRecord(parsed) && typeof parsed["error"] === "string";
+    if (!isRecord(parsed)) return false;
+    const error = parsed["error"];
+    return typeof error === "string" || (isRecord(error) && error["code"] === RPC_RATE_LIMIT_CODE);
   } catch {
     return false;
   }
