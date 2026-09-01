@@ -18,6 +18,7 @@ export default defineConfig({
       input: {
         docs: `${root}docs/index.html`,
         home: `${root}index.html`,
+        privacy: `${root}privacy/index.html`,
         support: `${root}support/index.html`,
       },
     },
