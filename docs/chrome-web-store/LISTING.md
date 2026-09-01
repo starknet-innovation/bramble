@@ -6,7 +6,7 @@ collected. Chrome's current policy requires prominent disclosure for all data co
 
 ## Store listing
 
-- **Name:** MC Wallet
+- **Name:** Bramble: Starknet Wallet
 - **Category:** Productivity
 - **Primary language:** English
 - **Summary:** A self-custodial Starknet wallet for accounts, dapps, privacy and multisig, with a trusted-tester Ledger preview.

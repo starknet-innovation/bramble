@@ -36,7 +36,7 @@ test("discovers and restores an imported wallet in a fresh profile", async ({ ex
 
   await importWalletFromPhrase(onboarding, IMPORT_MNEMONIC);
   await expect(onboarding.getByRole("heading", { name: "You’re all set" })).toBeVisible();
-  await expect(onboarding.getByRole("button", { name: "Open MC Wallet" })).toBeVisible();
+  await expect(onboarding.getByRole("button", { name: "Open Bramble" })).toBeVisible();
 });
 
 test("loads the built toolbar popup surface", async ({ extension }) => {

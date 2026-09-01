@@ -240,7 +240,7 @@ if (import.meta.main) {
     "http://127.0.0.1/*",
     "http://localhost/*",
   ];
-  const expectedActionTitle = "Open MC Wallet";
+  const expectedActionTitle = "Open Bramble";
   const expectedIcons = {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
