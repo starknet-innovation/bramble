@@ -270,6 +270,7 @@ describe("createPreferencesStore", () => {
     await preferences.setDisplay({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      productAnalytics: true,
       reliabilityDiagnostics: true,
       theme: "dark",
     });
@@ -280,6 +281,7 @@ describe("createPreferencesStore", () => {
     expect(stored.accountLabels?.[accountId]).toBe("Savings");
     expect(stored.approvalSurface).toBe("popup");
     expect(stored.displayCurrency).toBe("eur");
+    expect(stored.productAnalytics).toBe(true);
     expect(stored.reliabilityDiagnostics).toBe(true);
     expect(stored.theme).toBe("dark");
     expect(stored.addressBook).toEqual([]);

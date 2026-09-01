@@ -98,6 +98,9 @@ const isValidDisplayInput = (
   if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
     return false;
   }
+  if (input.productAnalytics !== undefined && typeof input.productAnalytics !== "boolean") {
+    return false;
+  }
   if (
     input.reliabilityDiagnostics !== undefined &&
     typeof input.reliabilityDiagnostics !== "boolean"
@@ -122,6 +125,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   groups: [],
   hiddenTokens: [],
   nfts: [],
+  productAnalytics: false,
   reliabilityDiagnostics: false,
   rpcOverrides: {},
   schemaVersion: 1,
@@ -368,6 +372,9 @@ export const createPreferencesStore = ({
           ...(input.displayCurrency === undefined
             ? {}
             : { displayCurrency: input.displayCurrency }),
+          ...(input.productAnalytics === undefined
+            ? {}
+            : { productAnalytics: input.productAnalytics }),
           ...(input.reliabilityDiagnostics === undefined
             ? {}
             : { reliabilityDiagnostics: input.reliabilityDiagnostics }),

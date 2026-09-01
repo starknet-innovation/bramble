@@ -7,6 +7,7 @@ import type {
 
 type PreferencesAdapterOptions = {
   readonly onApprovalSurface: (preference: ApprovalSurfacePreference) => void;
+  readonly onProductAnalytics: (enabled: boolean) => void;
   readonly onReliabilityDiagnostics: (enabled: boolean) => void;
   readonly store: Promise<WalletPreferencesStore | null>;
 };
@@ -17,6 +18,7 @@ type PreferencesAdapterOptions = {
  */
 export const createBackgroundPreferences = ({
   onApprovalSurface,
+  onProductAnalytics,
   onReliabilityDiagnostics,
   store,
 }: PreferencesAdapterOptions): WalletPreferencesStore => {
@@ -32,6 +34,7 @@ export const createBackgroundPreferences = ({
     async importPreferences(input) {
       const next = await (await required()).importPreferences(input);
       onApprovalSurface(next.approvalSurface ?? "side-panel");
+      onProductAnalytics(next.productAnalytics ?? false);
       onReliabilityDiagnostics(next.reliabilityDiagnostics ?? false);
       return next;
     },
@@ -47,6 +50,7 @@ export const createBackgroundPreferences = ({
     async setDisplay(input) {
       const next = await (await required()).setDisplay(input);
       if (input.approvalSurface !== undefined) onApprovalSurface(input.approvalSurface);
+      if (input.productAnalytics !== undefined) onProductAnalytics(input.productAnalytics);
       if (input.reliabilityDiagnostics !== undefined) {
         onReliabilityDiagnostics(input.reliabilityDiagnostics);
       }

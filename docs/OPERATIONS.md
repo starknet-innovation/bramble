@@ -48,6 +48,21 @@ Run the same probe locally without account data:
 bun run scripts/check-gateway-health.ts
 ```
 
+## Product analytics
+
+Product analytics are disabled by default. A user may opt in under **Settings → Network → Advanced
+endpoints → Product analytics**. Only requests to `wallet.nodes.starknet.org` receive the complete
+analytics header set; custom RPCs and third-party services receive none. The installation UUID is
+random non-secret local metadata, while STRK20 discovery, proving, and paymaster calls share a fresh
+transient flow UUID for one service operation. Neither identifier is derived from an account,
+address, site, extension id, or browser profile.
+
+The gateway HMAC-pseudonymizes both identifiers before logging and retains no raw identifier,
+request body, response body, address, hash, calldata, or signature. Operators must call the metric a
+"pseudonymous installation," never a person, user, wallet, or account. Disabling analytics stops all
+five headers immediately; storage failure also omits the complete set without blocking wallet
+traffic. Analytics access events expire after 90 days.
+
 ## Privacy-safe diagnostics
 
 Reliability counters are disabled by default. A user may enable them under **Settings → Network →

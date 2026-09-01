@@ -52,6 +52,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 | `mc-wallet:origin-history` | `storage.local`, plain | first-seen dapp origins | valid HTTPS/localhost origin; 500 origins | discard invalid entries |
 | `mc-wallet:prices`, `mc-wallet:charts` | `storage.local`, plain | recoverable market cache | TTL and cache-size bounded | cached-or-empty |
 | `mc-wallet:phishing-feed` | `storage.local`, plain | signed/validated blocklist cache | TTL and response bounds | bundled baseline remains active |
+| `mc-wallet:analytics-installation-id` | `storage.local`, plain, trusted contexts only | random pseudonymous installation metadata | canonical UUIDv4; independent of accounts, sites, and browser identity | omit analytics on read/write failure; retained while analytics is off |
 | `mc-wallet:session` | `storage.session`, plain trusted-context only | unlock passphrase capability | timeout-bound session | cleared on lock/update/browser exit |
 | `mc-wallet:strk20-maturity` | `storage.session`, plain | public pending transaction metadata | account + network + pool; 100 records | discard invalid rows |
 | approvals, AES keys, selected UI view | worker/page memory | transient authority or presentation state | request/session/view scoped | lost safely on restart |

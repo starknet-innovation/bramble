@@ -402,6 +402,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     async setDisplay(input: {
       readonly approvalSurface?: "popup" | "side-panel";
       readonly displayCurrency?: "eur" | "gbp" | "usd";
+      readonly productAnalytics?: boolean;
       readonly reliabilityDiagnostics?: boolean;
       readonly theme?: "dark" | "light";
     }): Promise<void> {

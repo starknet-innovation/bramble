@@ -55,6 +55,7 @@ const ENCRYPTED_STORE_WIRING_FILES = new Set([
   "packages/platform/vault/src/encrypted-store.ts",
 ]);
 const RANDOM_UUID_FILES = new Set([
+  "apps/extension/src/background/analytics/gateway-analytics.ts",
   "apps/extension/src/background/approvals/approvals.ts",
   "apps/extension/src/provider/inpage.ts",
   "packages/platform/ledger-browser/src/grant-window.ts",

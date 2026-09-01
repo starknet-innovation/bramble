@@ -38,6 +38,13 @@ import {
   requireTrustedStorageAccess,
 } from "../browser-storage";
 import { createWalletReader } from "./accounts/wallet-reader";
+import {
+  analyticsPlatform,
+  analyticsReleaseChannel,
+  createGatewayAnalytics,
+  randomAnalyticsUuid,
+  withGatewayAnalyticsFlows,
+} from "./analytics/gateway-analytics";
 import { setApprovalNotifier } from "./approvals/approval-notifier";
 import {
   type ApprovalSurfaceBrowser,
@@ -67,6 +74,7 @@ import { createBackgroundPreferences } from "./settings/preferences-adapter";
 import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
 
 type RuntimeApi = {
+  readonly getManifest?: () => { readonly version?: string };
   readonly getURL?: (path: string) => string;
   readonly id: string;
   readonly onInstalled: {
@@ -108,7 +116,9 @@ type ExtensionGlobal = typeof globalThis & {
 const extensionApi = (globalThis as ExtensionGlobal).chrome;
 const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
+declare const __MC_BUILD_BRANCH__: string | undefined;
 let approvalSurfacePreference: ApprovalSurfacePreference = "side-panel";
+let productAnalyticsEnabled = false;
 const updateApprovalSurface = (preference: ApprovalSurfacePreference): void => {
   approvalSurfacePreference = preference;
   void configureApprovalSurface(extensionApi, preference).catch(() => undefined);
@@ -168,13 +178,17 @@ const preferences = storageReady
   .catch(() => null);
 const preferenceStore = createBackgroundPreferences({
   onApprovalSurface: updateApprovalSurface,
+  onProductAnalytics: (enabled) => {
+    productAnalyticsEnabled = enabled;
+  },
   onReliabilityDiagnostics: setReliabilityDiagnosticsEnabled,
   store: preferences,
 });
-void preferences
+const preferenceSignalsReady = preferences
   .then(async (store) => {
     const stored = await store?.read();
     updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
+    productAnalyticsEnabled = stored?.productAnalytics ?? false;
     setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
   })
   .catch(() => undefined);
@@ -185,6 +199,29 @@ void preferences
 // lane (MCW-V09-129) treats that rejection as "not permitted", narrowing
 // disclosure rather than widening it.
 const readPreferences = (): Promise<WalletPreferences> => preferenceStore.read();
+const nativeFetch = globalThis.fetch.bind(globalThis);
+const browserNavigator = globalThis.navigator as Navigator & { readonly brave?: unknown };
+const gatewayAnalytics = createGatewayAnalytics({
+  enabled: async () => {
+    await preferenceSignalsReady;
+    return productAnalyticsEnabled;
+  },
+  http: nativeFetch,
+  metadata: {
+    appVersion: runtime?.getManifest?.().version ?? "",
+    platform: analyticsPlatform(browserNavigator.userAgent, browserNavigator.brave !== undefined),
+    releaseChannel: analyticsReleaseChannel(
+      typeof __MC_BUILD_BRANCH__ === "string" ? __MC_BUILD_BRANCH__ : "",
+    ),
+  },
+  randomUuid: randomAnalyticsUuid,
+  store: createBrowserLocalStore(),
+});
+// The pinned privacy SDK performs discovery and proving through its own
+// uninjectable fetch calls. One permanent exact-origin wrapper is therefore the
+// shared boundary for it and starknet.js; every non-gateway request is passed
+// through unchanged.
+globalThis.fetch = gatewayAnalytics.fetch as typeof globalThis.fetch;
 const activityLog = (() => {
   try {
     return createActivityLog({ store: createBrowserLocalStore() });
@@ -266,11 +303,15 @@ const strk20MaturityStore = (() => {
 const runtimeRpc = {
   ...createDefaultRuntimeRpc({ readPreferences }),
   strk20: strk20MaturityStore
-    ? createOfficialStrk20Service({
-        maturityStore: strk20MaturityStore,
-        nowSeconds: () => Math.floor(systemClock() / 1_000),
-        sdk: privacySdkModule as unknown as PrivacySdkRuntime,
-      })
+    ? withGatewayAnalyticsFlows(
+        createOfficialStrk20Service({
+          http: gatewayAnalytics.fetch,
+          maturityStore: strk20MaturityStore,
+          nowSeconds: () => Math.floor(systemClock() / 1_000),
+          sdk: privacySdkModule as unknown as PrivacySdkRuntime,
+        }),
+        gatewayAnalytics.withFlow,
+      )
     : unavailableStrk20Service,
 };
 const walletReader = createWalletReader(wallet);

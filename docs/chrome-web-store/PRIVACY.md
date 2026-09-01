@@ -1,6 +1,6 @@
 # MC Wallet privacy policy
 
-Effective date: 27 August 2026
+Effective date: 1 September 2026
 
 MC Wallet is a self-custodial Starknet browser-extension wallet. This policy describes what data the
 extension handles, why it is needed, where it goes, and how a user controls it.
@@ -43,6 +43,23 @@ transaction package and signer identities inside the gift wrap are end-to-end en
 KMS; MC Wallet does not use these relays for chat, analytics, or background polling. Manual
 copy-and-paste handoff remains available without contacting a relay.
 
+## Optional product analytics
+
+Product analytics are off by default and require affirmative in-product opt-in. When enabled, MC
+Wallet adds a random installation identifier, extension version, browser family, release channel,
+and (for a multi-request private-transaction workflow) a temporary random flow identifier only to
+requests sent to `wallet.nodes.starknet.org`. The installation identifier is generated independently
+of every account, address, site, extension id, and browser profile. It is stored as non-secret local
+metadata so extension updates do not create a new identifier; reinstalling the extension does.
+
+These headers never contain an address, site, balance, transaction hash, calldata, signature,
+request body, or response body. The wallet gateway replaces the raw random identifiers with keyed
+pseudonyms before retaining an access event and does not retain the raw values. A pseudonymous
+installation is not an authenticated person or account. Retained events are used only to understand
+gateway feature usage, version adoption, failures, and multi-request funnel completion, and expire
+after 90 days. Disabling product analytics stops sending all analytics headers; the local random
+identifier remains so re-enabling does not create a misleading new installation.
+
 ## Reliability diagnostics
 
 Reliability diagnostics are off by default and require affirmative in-product opt-in. When enabled,
@@ -55,23 +72,26 @@ whether to share that specific file with support. Disabling diagnostics clears t
 
 ## Collection, sharing, and retention
 
-MC Wallet's maintainers do not operate behavioral analytics, advertising, profiling, or automatic
-diagnostic collection in the extension. Data remains in the extension's local storage unless a
-wallet feature must send it to the service described above, the user explicitly exports a file, or
-the user chooses to share a diagnostic with support. External services process requests under their
-own policies.
+MC Wallet's maintainers do not operate advertising, cross-site tracking, profiling, or automatic
+diagnostic collection in the extension. The optional, bounded product analytics described above is
+the only behavioral measurement operated by the maintainers. Other data remains in the extension's
+local storage unless a wallet feature must send it to the service described above, the user
+explicitly exports a file, or the user chooses to share a diagnostic with support. External services
+process requests under their own policies.
 
 Local data remains until the user removes the relevant item, clears the extension's storage, or
-uninstalls the extension. A support diagnostic remains only wherever the user saves or shares it.
-Maintainers use a voluntarily shared diagnostic only to investigate the requested support issue and
-delete their copy when the issue is closed, unless security or legal obligations require longer.
+uninstalls the extension. Product-analytics access events expire after 90 days. A support diagnostic
+remains only wherever the user saves or shares it. Maintainers use a voluntarily shared diagnostic
+only to investigate the requested support issue and delete their copy when the issue is closed,
+unless security or legal obligations require longer.
 
 ## User controls
 
 Users can revoke connected sites, remove contacts and tracked assets, change or remove custom
 services, refuse explorer fallback, disable and clear diagnostics, export non-secret preferences,
-clear extension storage, or uninstall MC Wallet. Deleting browser storage or uninstalling before
-confirming an offline recovery phrase may make a software wallet unrecoverable.
+disable product analytics, clear extension storage, or uninstall MC Wallet. Deleting browser storage
+or uninstalling before confirming an offline recovery phrase may make a software wallet
+unrecoverable.
 
 ## Limited Use disclosure
 

@@ -174,6 +174,7 @@ export const readSetAccountInGroupInput = (
 type DisplayPreferenceInput = {
   readonly approvalSurface?: "popup" | "side-panel";
   readonly displayCurrency?: "eur" | "gbp" | "usd";
+  readonly productAnalytics?: boolean;
   readonly reliabilityDiagnostics?: boolean;
   readonly theme?: "dark" | "light";
 };
@@ -188,6 +189,12 @@ const hasValidDisplayValues = (
     return false;
   }
   if (message["displayCurrency"] !== undefined && !isDisplayCurrency(message["displayCurrency"])) {
+    return false;
+  }
+  if (
+    message["productAnalytics"] !== undefined &&
+    typeof message["productAnalytics"] !== "boolean"
+  ) {
     return false;
   }
   if (
@@ -210,6 +217,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
     !hasOnlyKnownKeys(message, [
       "approvalSurface",
       "displayCurrency",
+      "productAnalytics",
       "reliabilityDiagnostics",
       "theme",
       "type",
@@ -225,11 +233,13 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
   }
   const approvalSurface = message["approvalSurface"];
   const displayCurrency = message["displayCurrency"];
+  const productAnalytics = message["productAnalytics"];
   const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
   return {
     ...(approvalSurface === undefined ? {} : { approvalSurface }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
+    ...(productAnalytics === undefined ? {} : { productAnalytics }),
     ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),
     ...(theme === undefined ? {} : { theme }),
   };

@@ -59,9 +59,9 @@ const run = async (cmd: string[]): Promise<void> => {
   }
 };
 
-// Stamp the sidepanel bundle with the manifest version and source branch so
-// the settings screen can show exactly what build is loaded. Released builds
-// (main, or a detached tag checkout reporting HEAD) carry no branch.
+// Stamp extension bundles with the manifest version and source branch so the
+// settings screen and gateway analytics can identify the exact build. Released
+// builds (main, or a detached tag checkout reporting HEAD) carry no branch.
 const gitBranch = async (): Promise<string> => {
   try {
     const child = Bun.spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
@@ -95,6 +95,7 @@ await mkdir(outdir, { recursive: true });
 
 requireBuild(
   await Bun.build({
+    define: buildStamp,
     entrypoints: [join(extensionRoot, "src/background/index.ts")],
     external: [krustyModule, privacySdkModule],
     format: "esm",

@@ -74,11 +74,17 @@ describe("advanced endpoints explorer-fallback control", () => {
     const relayUrl = "wss://relay.team.example";
     const html = advancedNetworkFlow(
       status,
-      preferences({ nostrRelayUrl: relayUrl, reliabilityDiagnostics: true }),
+      preferences({
+        nostrRelayUrl: relayUrl,
+        productAnalytics: true,
+        reliabilityDiagnostics: true,
+      }),
     );
 
     expect(html).toContain('data-disclosure="nostr-relay"');
     expect(html).toContain(`value="${relayUrl}"`);
+    expect(html).toContain('data-disclosure="product-analytics"');
+    expect(html).toContain('id="product-analytics"');
     expect(html).toContain('data-disclosure="reliability-diagnostics"');
     expect(html).toContain('id="reliability-diagnostics"');
   });

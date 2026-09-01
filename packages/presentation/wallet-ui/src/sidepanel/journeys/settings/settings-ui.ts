@@ -194,6 +194,26 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
   });
 
   const diagnosticsToggle = deps.app?.querySelector<HTMLInputElement>("#reliability-diagnostics");
+  const analyticsToggle = deps.app?.querySelector<HTMLInputElement>("#product-analytics");
+  analyticsToggle?.addEventListener("change", () => {
+    analyticsToggle.disabled = true;
+    void deps.wallet.setDisplay({ productAnalytics: analyticsToggle.checked }).then(
+      async () => {
+        showToast(
+          analyticsToggle.checked ? "Product analytics enabled" : "Product analytics disabled",
+          "success",
+          analyticsToggle,
+        );
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        analyticsToggle.checked = !analyticsToggle.checked;
+        showToast(errorMessage(error, "Analytics preference failed"), "error", analyticsToggle);
+        analyticsToggle.disabled = false;
+      },
+    );
+  });
+
   diagnosticsToggle?.addEventListener("change", () => {
     diagnosticsToggle.disabled = true;
     void deps.wallet.setDisplay({ reliabilityDiagnostics: diagnosticsToggle.checked }).then(
