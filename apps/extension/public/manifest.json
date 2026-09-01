@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "MC Wallet",
+  "name": "Bramble: Starknet Wallet",
   "version": "0.10.0",
   "description": "Starknet browser extension wallet shell.",
   "icons": {
