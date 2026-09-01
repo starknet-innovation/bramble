@@ -41,6 +41,10 @@ is cut. See DEVELOPMENT.md and RELEASING.md.
   balance still blocks nothing.
 - A transaction the network rejects now reports the node's own reason in the panel
   and copies it to the clipboard, rather than only "invoke request failed".
+- A *fee estimate* the network rejects now names its reason too, on both the Send
+  review and the dapp approval card, behind a disclosure with a copy control. The
+  banner previously advised checking the connection, which is the wrong story for
+  the common case: the estimate reached the node and the calls reverted.
 
 ## [0.9.0] - 2026-08-10
 

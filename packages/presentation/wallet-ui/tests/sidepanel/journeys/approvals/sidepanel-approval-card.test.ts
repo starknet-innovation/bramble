@@ -116,6 +116,45 @@ describe("invoke approval card fee review (#189)", () => {
     );
   });
 
+  // Without the node's reason the banner can only blame the connection, which is
+  // wrong for the common case: the estimate executed the calls and reverted. The
+  // reason sits behind a disclosure with a copy control so a user can report it.
+  test("a failed estimate surfaces the node's reason with a copy control", () => {
+    const failed: PendingApproval = {
+      ...withFee,
+      fee: null,
+      feeEstimateDetail: "40 Contract error: entry point not found",
+      feeEstimateFailed: true,
+    };
+    const html = activity([failed]);
+
+    expect(html).toContain("40 Contract error: entry point not found");
+    expect(html).toContain('data-copy="40 Contract error: entry point not found"');
+    expect(html).toContain("Copy fee estimate error");
+  });
+
+  test("a failed estimate with no reason renders no empty disclosure", () => {
+    const failed: PendingApproval = { ...withFee, fee: null, feeEstimateFailed: true };
+    const html = activity([failed]);
+
+    expect(html).toContain("Couldn't estimate the network fee right now.");
+    expect(html).not.toContain("review-fee-detail");
+    expect(html).not.toContain("Copy fee estimate error");
+  });
+
+  test("escapes a hostile reason instead of rendering it as markup", () => {
+    const failed: PendingApproval = {
+      ...withFee,
+      fee: null,
+      feeEstimateDetail: '40 <img src=x onerror="alert(1)"> failed',
+      feeEstimateFailed: true,
+    };
+    const html = activity([failed]);
+
+    expect(html).not.toContain("<img src=x");
+    expect(html).toContain("&lt;img src=x");
+  });
+
   test("a pending estimate is visible and prevents approval until review is complete", () => {
     const pending: PendingApproval = {
       ...withFee,

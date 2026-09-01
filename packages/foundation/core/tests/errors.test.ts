@@ -5,7 +5,7 @@
  * tests pin what each one does and does not reveal.
  */
 import { describe, expect, test } from "bun:test";
-import { errorDetail, WalletError, walletErrorMessage } from "../src/errors";
+import { errorDetail, isErrorDetail, WalletError, walletErrorMessage } from "../src/errors";
 
 describe("walletErrorMessage", () => {
   test("keeps a curated WalletError message and collapses anything else", () => {
@@ -75,5 +75,25 @@ describe("errorDetail", () => {
     // Bounded, and the truncation is visible rather than a silent cut.
     expect((long ?? "").length).toBeLessThanOrEqual(601);
     expect(long?.endsWith("…")).toBe(true);
+  });
+});
+
+describe("isErrorDetail", () => {
+  test("accepts exactly what errorDetail can produce, including a truncated one", () => {
+    expect(isErrorDetail("40 Contract error: entry point not found")).toBe(true);
+    // The producer's own worst case — the full bound plus its ellipsis — must
+    // survive the boundary that re-checks it, or a real diagnostic would be
+    // dropped for being too long.
+    const truncated = errorDetail(new Error("x".repeat(5000)), "summary");
+    expect(isErrorDetail(truncated)).toBe(true);
+  });
+
+  test("rejects anything the producer could not have returned", () => {
+    expect(isErrorDetail("")).toBe(false);
+    expect(isErrorDetail("x".repeat(602))).toBe(false);
+    expect(isErrorDetail(undefined)).toBe(false);
+    expect(isErrorDetail(null)).toBe(false);
+    expect(isErrorDetail(42)).toBe(false);
+    expect(isErrorDetail({ message: "reason" })).toBe(false);
   });
 });

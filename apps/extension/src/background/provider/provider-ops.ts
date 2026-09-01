@@ -38,7 +38,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { UnlockSession } from "../runtime/session";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
-import { resolveReviewFee, verificationContext } from "../accounts/wallet-ops";
+import { FEE_ESTIMATE_SUMMARY, resolveReviewFee, verificationContext } from "../accounts/wallet-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { canonicalTokenAddress, watchAssetToken } from "./watch-asset";
 
@@ -246,6 +246,11 @@ const estimateInvokeApprovalFee = async (
     deployed = true;
   }
   let estimated: FeeEstimate | null = null;
+  // The node's own reason for a rejected estimate. Without it the panel can only
+  // blame the connection, which is wrong for the common case: `skipValidate`
+  // skips `__validate__` but still executes the calls, so a dapp transaction
+  // that would revert on-chain fails here for a reason only the node knows.
+  let estimateDetail: string | null = null;
   if (deployed) {
     try {
       estimated = await deps.runtimeRpc.estimateInvokeFee({
@@ -259,8 +264,9 @@ const estimateInvokeApprovalFee = async (
           "dapp-transaction",
         ),
       });
-    } catch {
+    } catch (error) {
       estimated = null;
+      estimateDetail = errorDetail(error, FEE_ESTIMATE_SUMMARY);
     }
   }
   const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
@@ -275,6 +281,11 @@ const estimateInvokeApprovalFee = async (
   return {
     fee,
     feeAffordability,
+    // Only carried alongside a failure the user can act on; a recovered estimate
+    // never ships a stale reason.
+    ...(feeEstimateFailed && estimateDetail !== null
+      ? { feeEstimateDetail: estimateDetail }
+      : {}),
     feeEstimateFailed,
     feeEstimatePending: false,
     requiresDeployment: !deployed,

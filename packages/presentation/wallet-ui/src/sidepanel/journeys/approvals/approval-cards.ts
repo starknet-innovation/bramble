@@ -237,6 +237,9 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
         {
           fee: approval.fee ?? null,
           feeAffordability: approval.feeAffordability ?? "unknown",
+          ...(approval.feeEstimateDetail === undefined
+            ? {}
+            : { feeEstimateDetail: approval.feeEstimateDetail }),
           feeEstimateFailed: approval.feeEstimateFailed === true,
           feeEstimatePending: approval.feeEstimatePending === true,
           requiresDeployment: approval.requiresDeployment === true,

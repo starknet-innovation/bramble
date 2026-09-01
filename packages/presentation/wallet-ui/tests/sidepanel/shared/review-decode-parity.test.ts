@@ -100,6 +100,7 @@ const reviewForCalls = (
 type FeeState = {
   readonly fee: { readonly overallFee: string; readonly unit: string } | null;
   readonly feeAffordability: "insufficient" | "ok" | "unknown";
+  readonly feeEstimateDetail?: string;
   readonly feeEstimateFailed: boolean;
   readonly requiresDeployment: boolean;
 };
@@ -360,6 +361,24 @@ describe("Send review vs dApp invoke card fee parity (#189)", () => {
     expect(card).not.toContain(
       'data-approval-action="approve" data-approval-id="b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14" type="button" disabled',
     );
+  });
+
+  test("the node's reason and its copy control render identically on both surfaces", () => {
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    const reason = "41 Transaction execution error Execution failed: ERC20: insufficient allowance";
+    const fee: FeeState = {
+      fee: null,
+      feeAffordability: "unknown",
+      feeEstimateDetail: reason,
+      feeEstimateFailed: true,
+      requiresDeployment: false,
+    };
+
+    for (const rendered of [sendReview(summaries, flags, fee), dappCard(summaries, flags, fee)]) {
+      expect(rendered).toContain(reason);
+      expect(rendered).toContain(`data-copy="${reason}"`);
+      expect(rendered).toContain("Copy fee estimate error");
+    }
   });
 });
 

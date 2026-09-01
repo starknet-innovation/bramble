@@ -96,3 +96,16 @@ export const errorDetail = (error: unknown, summary: string): string | null => {
   }
   return trimmed.length > MAX_DETAIL_LENGTH ? `${trimmed.slice(0, MAX_DETAIL_LENGTH)}…` : trimmed;
 };
+
+/**
+ * Checks a value against the exact shape {@link errorDetail} produces: a
+ * non-empty string no longer than the truncation bound plus the ellipsis that
+ * truncation appends.
+ *
+ * Extension pages validate a background-supplied diagnostic with this rather
+ * than restating the bound, so the producer's limit and every consumer's check
+ * cannot drift apart. A value failing this check did not come from
+ * `errorDetail` and must not be rendered.
+ */
+export const isErrorDetail = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= MAX_DETAIL_LENGTH + 1;

@@ -86,6 +86,13 @@ export type DeclarationReview = {
 export type InvokeFeeReview = {
   readonly fee: FeeEstimate | null;
   readonly feeAffordability: FeeAffordability;
+  /**
+   * The node's own reason a fee estimate was rejected, present only when
+   * `feeEstimateFailed` is true. A wallet-internal diagnostic for the panel's
+   * own surface — it must never be returned to the requesting page, which sees
+   * only the curated `invoke request failed`.
+   */
+  readonly feeEstimateDetail?: string;
   readonly feeEstimateFailed: boolean;
   readonly feeEstimatePending: boolean;
   readonly requiresDeployment: boolean;
@@ -102,6 +109,7 @@ export type PendingApproval = {
   readonly declaration?: DeclarationReview;
   readonly fee?: FeeEstimate | null;
   readonly feeAffordability?: FeeAffordability;
+  readonly feeEstimateDetail?: string;
   readonly feeEstimateFailed?: boolean;
   readonly feeEstimatePending?: boolean;
   readonly flags?: readonly ApprovalRiskFlag[];
@@ -199,6 +207,9 @@ const feeReviewSnapshot = (approval: ApprovalEntry): Partial<PendingApproval> =>
   ...(approval.feeAffordability === undefined
     ? {}
     : { feeAffordability: approval.feeAffordability }),
+  ...(approval.feeEstimateDetail === undefined
+    ? {}
+    : { feeEstimateDetail: approval.feeEstimateDetail }),
   ...(approval.feeEstimateFailed === undefined
     ? {}
     : { feeEstimateFailed: approval.feeEstimateFailed }),
@@ -364,6 +375,9 @@ export const createApprovalQueue = (): ApprovalQueue => {
         context: { ...context },
         fee: fee.fee && { ...fee.fee },
         feeAffordability: fee.feeAffordability,
+        ...(fee.feeEstimateDetail === undefined
+          ? {}
+          : { feeEstimateDetail: fee.feeEstimateDetail }),
         feeEstimateFailed: fee.feeEstimateFailed,
         feeEstimatePending: fee.feeEstimatePending,
         flags: flags.map((flag) => ({ ...flag })),
@@ -470,10 +484,18 @@ export const createApprovalQueue = (): ApprovalQueue => {
       if (approval?.kind !== "invoke") {
         return null;
       }
+      // The detail slot is replaced wholesale, not merged: a retry that succeeds
+      // — or fails with no node reason — must not leave the previous attempt's
+      // text on the card. Dropped via rest so the key is absent rather than set
+      // to `undefined`.
+      const { feeEstimateDetail: _previous, ...carried } = approval;
       pending.set(id, {
-        ...approval,
+        ...carried,
         fee: fee.fee && { ...fee.fee },
         feeAffordability: fee.feeAffordability,
+        ...(fee.feeEstimateDetail === undefined
+          ? {}
+          : { feeEstimateDetail: fee.feeEstimateDetail }),
         feeEstimateFailed: fee.feeEstimateFailed,
         feeEstimatePending: fee.feeEstimatePending,
         requiresDeployment: fee.requiresDeployment,

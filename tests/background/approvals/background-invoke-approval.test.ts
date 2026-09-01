@@ -236,6 +236,7 @@ describe("dApp invoke decode/risk parity with Send review (#19)", () => {
 type FeePending = {
   readonly fee?: { readonly overallFee: string; readonly unit: string } | null;
   readonly feeAffordability?: string;
+  readonly feeEstimateDetail?: string;
   readonly feeEstimateFailed?: boolean;
   readonly feeEstimatePending?: boolean;
   readonly id: string;
@@ -347,6 +348,39 @@ describe("dApp invoke fee estimate (#189)", () => {
     await expect(held).resolves.toEqual({ error: "request rejected" });
   });
 
+  // `skipValidate` skips `__validate__` but still executes the calls, so the
+  // common dapp failure is an on-chain revert, not a dead connection. The node's
+  // own reason is the only thing that distinguishes the two, so it must reach
+  // the queued approval rather than being swallowed by the estimate's catch.
+  test("a rejected estimate carries the node's reason onto the approval", async () => {
+    const { handler } = makeHarness([account], unavailablePreferencesStore, {
+      async estimateInvokeFee(): Promise<never> {
+        throw Object.assign(
+          new Error('RPC: starknet_estimateFee with params {"request":[{"calldata":["0xabc"]}]}'),
+          {
+            baseError: {
+              code: 41,
+              data: { execution_error: "Execution failed: ERC20: insufficient allowance" },
+              message: "Transaction execution error",
+            },
+          },
+        );
+      },
+    });
+
+    const { held, pending } = await queueInvoke(handler);
+    expect(pending.feeEstimateFailed).toBe(true);
+    expect(pending.feeEstimateDetail).toBe(
+      "41 Transaction execution error Execution failed: ERC20: insufficient allowance",
+    );
+    // The request dump carries the dapp's calldata and must never become the
+    // diagnostic the panel shows.
+    expect(pending.feeEstimateDetail).not.toContain("0xabc");
+
+    await handler({ id: pending.id, type: "wallet.denyOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: "request rejected" });
+  });
+
   test("wallet.retryApprovalFee re-estimates a failed fee onto the queued approval", async () => {
     let attempts = 0;
     const { handler } = makeHarness([account], unavailablePreferencesStore, {
@@ -368,6 +402,8 @@ describe("dApp invoke fee estimate (#189)", () => {
     const refreshed = (await waitForPendingApprovals<FeePending>(handler, extensionSender)).at(-1);
     expect(refreshed?.fee).toEqual({ overallFee: "42", unit: "FRI" });
     expect(refreshed?.feeEstimateFailed).toBe(false);
+    // The first attempt's reason must not survive a successful retry.
+    expect(refreshed?.feeEstimateDetail).toBeUndefined();
 
     await handler({ id: pending.id, type: "wallet.denyOrigin" }, extensionSender);
     await expect(held).resolves.toEqual({ error: "request rejected" });

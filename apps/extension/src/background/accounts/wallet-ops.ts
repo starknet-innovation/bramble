@@ -3,6 +3,7 @@
  * balances, deployment, transfer review and submission, and the activity feed.
  */
 
+import { errorDetail } from "@mc-wallet/core/errors";
 import type { LedgerSignIntent } from "@mc-wallet/ledger-protocol/intent";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
@@ -128,6 +129,14 @@ const transferContext = async (
  * estimate the failure flag is set so the UI can surface a retry instead of a
  * dead "unavailable" string.
  */
+/**
+ * Curated summary a failed fee estimate is reported under. Passed to
+ * {@link errorDetail} by every review path so a node reason identical to the
+ * summary collapses to `null` instead of being echoed twice, and so the two
+ * review journeys classify one failure the same way.
+ */
+export const FEE_ESTIMATE_SUMMARY = "fee estimate failed";
+
 export const resolveReviewFee = (input: {
   readonly deployed: boolean;
   readonly fee: FeeEstimate | null;
@@ -237,6 +246,9 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
   const deployed = await deps.runtimeRpc
     .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
     .catch(() => true);
+  // Keeps the node's reason for a rejected estimate (see FEE_ESTIMATE_SUMMARY):
+  // the panel would otherwise blame the connection for an on-chain revert.
+  let estimateDetail: string | null = null;
   const estimated = deployed
     ? await deps.runtimeRpc
         .estimateInvokeFee({
@@ -245,7 +257,10 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
           rpcUrls,
           signHash: accountHashSigner(deps, account, vaultPassphrase, "send-token"),
         })
-        .catch(() => null)
+        .catch((error: unknown) => {
+          estimateDetail = errorDetail(error, FEE_ESTIMATE_SUMMARY);
+          return null;
+        })
     : null;
   const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
   // Fee-affordability guard (issue 191): compare the estimate against the
@@ -262,6 +277,11 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
     review: {
       fee,
       feeAffordability,
+      // Only alongside a failure the user can act on; a recovered estimate never
+      // ships a stale reason.
+      ...(feeEstimateFailed && estimateDetail !== null
+        ? { feeEstimateDetail: estimateDetail }
+        : {}),
       feeEstimateFailed,
       flags: report.flags,
       requiresDeployment: !deployed,

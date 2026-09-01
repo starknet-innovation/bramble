@@ -2,6 +2,7 @@
  * Pure popup validators for pre-sign transfer review responses.
  */
 
+import { isErrorDetail } from "@mc-wallet/core/errors";
 import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
 
 /**
@@ -17,6 +18,12 @@ export type TransferReviewResponse = {
      * "insufficient" and never block on this field.
      */
     readonly feeAffordability: "insufficient" | "ok" | "unknown";
+    /**
+     * The node's own reason a fee estimate was rejected, only ever present with
+     * `feeEstimateFailed`. Shown on the wallet's own review surface so a user
+     * can read and copy why the estimate failed.
+     */
+    readonly feeEstimateDetail?: string;
     readonly feeEstimateFailed: boolean;
     readonly flags: readonly { readonly code: string; readonly message: string }[];
     readonly requiresDeployment: boolean;
@@ -57,6 +64,7 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     !hasOnlyKnownKeys(value["review"], [
       "fee",
       "feeAffordability",
+      "feeEstimateDetail",
       "feeEstimateFailed",
       "flags",
       "requiresDeployment",
@@ -74,6 +82,11 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     // An affordability claim requires an estimate to compare against.
     (review["fee"] !== null || review["feeAffordability"] === "unknown") &&
     typeof review["feeEstimateFailed"] === "boolean" &&
+    // The node's reason is bounded by the producer's own shape check and only
+    // travels with an actual failure, so a stray or oversized diagnostic never
+    // reaches the review screen.
+    (review["feeEstimateDetail"] === undefined ||
+      (isErrorDetail(review["feeEstimateDetail"]) && review["feeEstimateFailed"] === true)) &&
     Array.isArray(review["flags"]) &&
     review["flags"].every(isRiskFlagShape) &&
     typeof review["requiresDeployment"] === "boolean" &&

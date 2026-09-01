@@ -249,6 +249,16 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     line-height: ${TYPE.caption.line};
   }
   .approval-takeover .review-flag .icon { color: var(--mc-danger); flex: none; margin-top: 1px; }
+  /* Node rejection reason under a failed fee estimate. A node can return one
+     unbroken token longer than the panel, so it wraps mid-word rather than
+     forcing the whole card to scroll sideways. */
+  .review-fee-detail .disclosure-body { display: grid; gap: ${SPACE.sm}; }
+  .review-fee-detail code {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+    overflow-wrap: anywhere;
+  }
   .approval-takeover .button-row {
     grid-template-columns: minmax(0, 1fr) minmax(104px, auto);
     margin-top: auto;

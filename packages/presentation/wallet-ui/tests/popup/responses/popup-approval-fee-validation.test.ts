@@ -42,6 +42,51 @@ describe("PendingApproval fee review validation (#189)", () => {
     expect(isPendingApprovalsResponse(response(invokeApproval()))).toBe(true);
   });
 
+  test("accepts a failure reason alongside a failed estimate", () => {
+    const failed = invokeApproval({
+      fee: null,
+      feeEstimateDetail: "40 Contract error: entry point not found",
+      feeEstimateFailed: true,
+    });
+    expect(isPendingApprovalsResponse(response(failed))).toBe(true);
+  });
+
+  test("rejects a failure reason that contradicts or outgrows its producer", () => {
+    // A reason with no failure would render under a card claiming success.
+    expect(
+      isPendingApprovalsResponse(
+        response(invokeApproval({ feeEstimateDetail: "40 Contract error" })),
+      ),
+    ).toBe(false);
+    // Longer than `errorDetail` can return, so it did not come from it.
+    expect(
+      isPendingApprovalsResponse(
+        response(
+          invokeApproval({
+            fee: null,
+            feeEstimateDetail: "x".repeat(602),
+            feeEstimateFailed: true,
+          }),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      isPendingApprovalsResponse(
+        response(invokeApproval({ fee: null, feeEstimateDetail: "", feeEstimateFailed: true })),
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects a failure reason on an approval kind that has no fee review", () => {
+    const connect = {
+      feeEstimateDetail: "40 Contract error",
+      id: INVOKE_ID,
+      kind: "connect",
+      origin: "https://dapp.example",
+    };
+    expect(isPendingApprovalsResponse(response(connect))).toBe(false);
+  });
+
   test("rejects an account id whose network contradicts the approval context", () => {
     const wrongScope = {
       ...context,
