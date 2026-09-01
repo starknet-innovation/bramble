@@ -241,6 +241,15 @@ if (import.meta.main) {
     "http://localhost/*",
   ];
   const expectedActionTitle = "Open Bramble";
+  // The toolbar slot is 16 device-independent pixels, so Chrome picks by scale
+  // factor: the 16px asset at 1x, 24px at 1.5x, 32px at 2x. Declaring them here
+  // rather than letting `icons` serve the toolbar keeps Chrome from downscaling a
+  // 48 or 128 into a 16px slot, which is where a detailed mark turns to mush.
+  const expectedActionIcon = {
+    "16": "icons/icon-16.png",
+    "24": "icons/icon-24.png",
+    "32": "icons/icon-32.png",
+  } as const;
   const expectedIcons = {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -369,9 +378,17 @@ if (import.meta.main) {
   }
   await requireFile(`${sourceRoot}/${backgroundPath.replace(/\.js$/, ".ts")}`);
 
-  const action = hasOnlyKeys(manifest["action"], ["default_title"]) ? manifest["action"] : null;
+  const action = hasOnlyKeys(manifest["action"], ["default_icon", "default_title"])
+    ? manifest["action"]
+    : null;
   if (action?.["default_title"] !== expectedActionTitle) {
     failures.push("manifest action must open the wallet side panel");
+  }
+  const actionIcon = isRecord(action?.["default_icon"]) ? action["default_icon"] : null;
+  for (const [size, path] of Object.entries(expectedActionIcon)) {
+    if (actionIcon?.[size] !== path)
+      failures.push(`manifest action ${size}px icon must stay ${path}`);
+    await requireFile(`${publicRoot}/${path}`);
   }
 
   const sidePanel = hasOnlyKeys(manifest["side_panel"], ["default_path"])
