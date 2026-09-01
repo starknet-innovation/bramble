@@ -125,7 +125,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   groups: [],
   hiddenTokens: [],
   nfts: [],
-  productAnalytics: false,
+  productAnalytics: true,
   reliabilityDiagnostics: false,
   rpcOverrides: {},
   schemaVersion: 1,
@@ -149,16 +149,17 @@ const isRetiredBundledMainnetRouting = (config: Strk20NetworkConfig | undefined)
   config.proverUrl === `${RETIRED_STRK20_GATEWAY_BASE}/prover` &&
   config.subaccountAnonymizerAddress === undefined;
 
-const withCurrentStrk20Defaults = (preferences: WalletPreferences): WalletPreferences => {
-  if (preferences.strk20Networks === undefined) {
-    return { ...preferences, strk20Networks: DEFAULT_STRK20_NETWORKS };
+const withCurrentDefaults = (preferences: WalletPreferences): WalletPreferences => {
+  const current = { ...preferences, productAnalytics: preferences.productAnalytics ?? true };
+  if (current.strk20Networks === undefined) {
+    return { ...current, strk20Networks: DEFAULT_STRK20_NETWORKS };
   }
-  if (!isRetiredBundledMainnetRouting(preferences.strk20Networks.SN_MAIN)) {
-    return preferences;
+  if (!isRetiredBundledMainnetRouting(current.strk20Networks.SN_MAIN)) {
+    return current;
   }
   return {
-    ...preferences,
-    strk20Networks: { ...preferences.strk20Networks, ...DEFAULT_STRK20_NETWORKS },
+    ...current,
+    strk20Networks: { ...current.strk20Networks, ...DEFAULT_STRK20_NETWORKS },
   };
 };
 
@@ -192,17 +193,15 @@ export const createPreferencesStore = ({
     if (!isWalletPreferences(stored)) {
       throw new WalletError("Invalid stored preferences");
     }
-    const withPrivacyDefaults = withCurrentStrk20Defaults(stored);
+    const current = withCurrentDefaults(stored);
     // Self-heal legacy multi-group membership on read (the validator stays
     // permissive so old data loads rather than erroring): collapse each account
     // to a single folder so every consumer sees the single-group invariant.
-    if (withPrivacyDefaults.groups === undefined) {
-      return withPrivacyDefaults;
+    if (current.groups === undefined) {
+      return current;
     }
-    const groups = normalizeAccountGroups(withPrivacyDefaults.groups);
-    return groups === withPrivacyDefaults.groups
-      ? withPrivacyDefaults
-      : { ...withPrivacyDefaults, groups };
+    const groups = normalizeAccountGroups(current.groups);
+    return groups === current.groups ? current : { ...current, groups };
   };
 
   // Merge base for a restore, the recovery path out of a record this build

@@ -271,14 +271,14 @@ export const advancedNetworkFlow = (
         ${endpointDisclosure(
           "product-analytics",
           "Product analytics",
-          preferences?.productAnalytics ? "On" : "Off",
+          (preferences?.productAnalytics ?? true) ? "On" : "Off",
           `${checkboxField({
             attributes: { id: "product-analytics" },
-            checked: preferences?.productAnalytics ?? false,
+            checked: preferences?.productAnalytics ?? true,
             name: "productAnalytics",
-            text: "Share pseudonymous usage of the wallet-owned gateway",
+            text: "Share pseudonymous gateway usage (on by default; turn off anytime)",
           })}
-          <p class="hint">Sends a random installation ID, app version, browser family, release channel, and temporary workflow ID only to wallet.nodes.starknet.org. No addresses, sites, balances, transaction data, or request contents are included.</p>`,
+          <p class="hint">Helps us understand feature usage and failures. Sends a random installation ID, app version, browser family, release channel, and temporary workflow ID only to wallet.nodes.starknet.org. No addresses, sites, balances, transaction data, or request contents are included.</p>`,
         )}
         ${endpointDisclosure(
           "reliability-diagnostics",

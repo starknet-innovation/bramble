@@ -188,7 +188,7 @@ const preferenceSignalsReady = preferences
   .then(async (store) => {
     const stored = await store?.read();
     updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
-    productAnalyticsEnabled = stored?.productAnalytics ?? false;
+    productAnalyticsEnabled = store ? (stored?.productAnalytics ?? true) : false;
     setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
   })
   .catch(() => undefined);

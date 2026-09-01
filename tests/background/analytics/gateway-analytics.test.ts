@@ -1,4 +1,4 @@
-/** Gateway analytics stays exact-origin, opt-in, and pseudonymous. */
+/** Gateway analytics stays exact-origin, user-controllable, and pseudonymous. */
 
 import { describe, expect, test } from "bun:test";
 import { createMemoryStore } from "@mc-wallet/store/kv";

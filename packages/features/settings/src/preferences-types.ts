@@ -44,7 +44,7 @@ export type WalletPreferences = {
   readonly nfts?: readonly WatchedNft[];
   /** Custom relay replacing the reviewed Nostr defaults for explicit multisig handoffs. */
   readonly nostrRelayUrl?: string;
-  /** Opt-in pseudonymous usage metadata sent only to the wallet-owned gateway. */
+  /** User-controllable pseudonymous usage metadata sent only to the wallet-owned gateway. */
   readonly productAnalytics?: boolean;
   readonly rpcOverrides?: RpcOverrides;
   /** Opt-in process-local aggregate RPC counters; never uploaded automatically. */

@@ -31,11 +31,12 @@ with outcome classes and average latency. It never includes addresses, sites, ha
 endpoint URLs, or raw errors, and nothing is uploaded automatically. The user may download the
 report and decide whether to share it with support.
 
-Product analytics are separately optional and off by default. If enabled, requests to the
-wallet-owned gateway include a random installation ID plus app version, browser family, release
-channel, and a temporary workflow ID. They never include addresses, sites, balances, hashes,
-calldata, signatures, or request contents. The gateway retains only keyed pseudonyms and bounded
-service/method outcomes for 90 days; disabling the setting stops every analytics header.
+Product analytics are enabled by default and can be turned off at any time under Settings → Network
+→ Advanced endpoints. Requests to the wallet-owned gateway include a random installation ID plus
+app version, browser family, release channel, and a temporary workflow ID. They never include
+addresses, sites, balances, hashes, calldata, signatures, or request contents. The gateway retains
+only keyed pseudonyms and bounded service/method outcomes for 90 days; disabling the setting stops
+every analytics header.
 
 MC Wallet is non-custodial software. Keep your recovery phrase offline. No maintainer or support
 agent will ask for it.
@@ -49,8 +50,8 @@ agent will ask for it.
   security or sensitive reports.
 - **Visibility for first publish:** Private / trusted testers.
 - **Test instructions:** Create a fresh wallet with a synthetic phrase, use Sepolia, exercise the
-  side panel and dapp approval, and confirm product analytics and diagnostics are off by default. No
-  credentials required.
+  side panel and dapp approval, confirm the product-analytics disclosure and opt-out work, and
+  confirm diagnostics are off by default. No credentials required.
 
 ## Required assets
 

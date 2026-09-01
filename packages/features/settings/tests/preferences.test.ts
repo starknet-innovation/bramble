@@ -20,7 +20,20 @@ describe("createPreferencesStore", () => {
     expect(preferences.activeNetworkId).toBe("SN_MAIN");
     expect(preferences.approvalSurface).toBe("side-panel");
     expect(preferences.addressBook).toEqual([]);
+    expect(preferences.productAnalytics).toBe(true);
     expect(preferences.tokens.some((token) => token.networkId === "SN_DEVNET")).toBe(true);
+  });
+
+  test("enables analytics for legacy preferences while preserving an explicit opt-out", async () => {
+    const store = createMemoryStore();
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>)["productAnalytics"];
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+
+    const preferences = createPreferencesStore({ store });
+    expect((await preferences.read()).productAnalytics).toBe(true);
+    await preferences.setDisplay({ productAnalytics: false });
+    expect((await preferences.read()).productAnalytics).toBe(false);
   });
 
   test("persists active network and address book entries", async () => {

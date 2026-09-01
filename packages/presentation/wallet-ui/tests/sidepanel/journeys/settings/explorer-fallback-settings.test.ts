@@ -70,6 +70,19 @@ const walletStub = (calls: Array<readonly [string, boolean, string]>, fail = fal
   }) as unknown as SidepanelWallet;
 
 describe("advanced endpoints explorer-fallback control", () => {
+  test("clearly discloses that product analytics are on by default", () => {
+    const html = advancedNetworkFlow(status, null);
+    const start = html.indexOf('data-disclosure="product-analytics"');
+    expect(start).toBeGreaterThan(-1);
+    const section = html.slice(start, html.indexOf("</details>", start));
+
+    expect(section).toContain("Product analytics");
+    expect(section).toContain("On");
+    expect(section).toContain("on by default; turn off anytime");
+    expect(section).toContain('id="product-analytics"');
+    expect(section).toContain("checked");
+  });
+
   test("shows custom coordination relay and diagnostics in infrastructure settings", () => {
     const relayUrl = "wss://relay.team.example";
     const html = advancedNetworkFlow(

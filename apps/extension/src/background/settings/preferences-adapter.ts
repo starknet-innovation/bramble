@@ -34,7 +34,7 @@ export const createBackgroundPreferences = ({
     async importPreferences(input) {
       const next = await (await required()).importPreferences(input);
       onApprovalSurface(next.approvalSurface ?? "side-panel");
-      onProductAnalytics(next.productAnalytics ?? false);
+      onProductAnalytics(next.productAnalytics ?? true);
       onReliabilityDiagnostics(next.reliabilityDiagnostics ?? false);
       return next;
     },

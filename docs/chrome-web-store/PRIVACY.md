@@ -45,12 +45,13 @@ copy-and-paste handoff remains available without contacting a relay.
 
 ## Optional product analytics
 
-Product analytics are off by default and require affirmative in-product opt-in. When enabled, MC
-Wallet adds a random installation identifier, extension version, browser family, release channel,
-and (for a multi-request private-transaction workflow) a temporary random flow identifier only to
-requests sent to `wallet.nodes.starknet.org`. The installation identifier is generated independently
-of every account, address, site, extension id, and browser profile. It is stored as non-secret local
-metadata so extension updates do not create a new identifier; reinstalling the extension does.
+Product analytics are enabled by default and can be turned off at any time under **Settings → Network
+→ Advanced endpoints → Product analytics**. MC Wallet adds a random installation identifier,
+extension version, browser family, release channel, and (for a multi-request private-transaction
+workflow) a temporary random flow identifier only to requests sent to
+`wallet.nodes.starknet.org`. The installation identifier is generated independently of every
+account, address, site, extension id, and browser profile. It is stored as non-secret local metadata
+so extension updates do not create a new identifier; reinstalling the extension does.
 
 These headers never contain an address, site, balance, transaction hash, calldata, signature,
 request body, or response body. The wallet gateway replaces the raw random identifiers with keyed
