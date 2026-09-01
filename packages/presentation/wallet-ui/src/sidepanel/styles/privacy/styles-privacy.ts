@@ -8,22 +8,26 @@ import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wallet/u
  * Privacy styles inherit every color from the active skin.
  */
 export const PRIVACY_STYLES = `
-  /* Receive: an unregistered account can only be paid publicly, so the whole
-     notice is the activation control rather than a message beside a link. */
+  /* Receive: keep the public-only state compact; the whole row remains the
+     activation control so the recovery action is never detached from context. */
   button.privacy-pool-notice {
+    align-items: center;
     background: var(--mc-panel);
     border-radius: ${RADIUS.lg};
     color: var(--mc-muted);
-    display: grid;
+    display: flex;
     font-size: ${TYPE.caption.size};
-    gap: ${SPACE.xs};
-    justify-items: start;
+    gap: ${SPACE.sm};
+    justify-content: space-between;
     line-height: ${TYPE.caption.line};
-    padding: ${SPACE.md};
+    padding: ${SPACE.sm} ${SPACE.md};
     text-align: left;
     width: 100%;
   }
-  button.privacy-pool-notice strong { color: var(--mc-text); font-weight: ${WEIGHT.semibold}; }
+  .privacy-pool-copy { display: grid; flex: 1; gap: 2px; min-width: 0; }
+  .privacy-pool-copy strong,
+  button.privacy-pool-notice > strong { color: var(--mc-text); font-weight: ${WEIGHT.semibold}; }
+  button.privacy-pool-notice > strong { flex: none; text-wrap: nowrap; }
   button.privacy-pool-notice:not(:disabled):hover { background: var(--mc-hover); }
   /* The same notice with nothing to act on yet: same surface, no affordance. */
   .privacy-pool-notice.is-static {
@@ -32,10 +36,9 @@ export const PRIVACY_STYLES = `
     color: var(--mc-muted);
     display: grid;
     font-size: ${TYPE.caption.size};
-    gap: ${SPACE.xs};
     line-height: ${TYPE.caption.line};
     margin: 0;
-    padding: ${SPACE.md};
+    padding: ${SPACE.sm} ${SPACE.md};
   }
 
   /* Unified balance rows: the summary is the row, the dropdown carries the
@@ -137,16 +140,7 @@ export const PRIVACY_STYLES = `
     font-size: ${TYPE.caption.size};
   }
   .send-route-reason[hidden] { display: none; }
-  .privacy-inline-error {
-    align-items: center;
-    color: var(--mc-muted);
-    display: flex;
-    font-size: ${TYPE.caption.size};
-    gap: ${SPACE.sm};
-    justify-content: space-between;
-    padding: ${SPACE.sm} ${SPACE.sm} 0;
-  }
-  .private-balance-summary.muted .token-fiat { color: var(--mc-muted); }
+  .private-balance-summary.muted .token-fiat { color: var(--mc-text); }
   .private-balance-mark,
   .private-balance-label {
     align-items: center;
@@ -164,6 +158,15 @@ export const PRIVACY_STYLES = `
     margin-top: ${SPACE.sm};
     padding-top: ${SPACE.md};
   }
+  button.private-balance-summary {
+    background: transparent;
+    color: var(--mc-text);
+    min-height: ${CONTROL.hitSmall};
+    padding: ${SPACE.md} 0 0;
+    text-align: left;
+    width: 100%;
+  }
+  button.private-balance-summary:not(:disabled):hover { background: transparent; }
   .private-balance-label {
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.medium};

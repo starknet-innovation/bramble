@@ -3,9 +3,8 @@
  */
 
 import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import type { AccountGroupIcon } from "@mc-wallet/settings/groups";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { isOkResponse } from "../../popup/responses/multisig-responses";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/multisig-responses";
 import {
   type ActivityResponse,
   type AllowancesResponse,
@@ -22,11 +21,11 @@ import {
   isDeploymentStatusResponse,
   isDetectTokensResponse,
   isErrorResponse,
-  isGenerateMnemonicResponse,
-  isPendingApprovalsResponse,
+  isFeeReviewResponse,
   isPreferencesResponse,
   isPricesResponse,
   isRevealSecretsResponse,
+  isSupportDiagnosticsResponse,
   isTokenChartResponse,
   isTransactionAlertsResponse,
   isTransferResponse,
@@ -34,15 +33,15 @@ import {
   isWalletStatus,
   type PendingApproval,
   type RevealSecretsResponse,
+  readPendingApprovals,
   type TokenBalance,
   type TransferReviewResponse,
   type WalletStatus,
 } from "../../popup/responses/responses";
 import { createNftRuntimeClient } from "../journeys/collectibles/nft-runtime";
 import { createLedgerRuntimeClient } from "../journeys/ledger/runtime-client";
+import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding-runtime";
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
-import { createAccountsRuntimeClient } from "./accounts-runtime-client";
-import { responseError } from "./response-error";
 
 /**
  * Minimal browser runtime API consumed by the side panel.
@@ -58,7 +57,12 @@ export type RuntimeApi = {
  * Balance loading state rendered by the side panel.
  */
 export type BalanceState =
-  | { readonly balances: readonly TokenBalance[]; readonly error?: never }
+  | {
+      readonly asOf?: number | null;
+      readonly balances: readonly TokenBalance[];
+      readonly error?: never;
+      readonly stale?: boolean;
+    }
   | { readonly balances?: never; readonly error: string };
 /**
  * Successful balances retain the account/network scope proven by the response.
@@ -66,9 +70,11 @@ export type BalanceState =
 export type ScopedBalanceState =
   | {
       readonly accountId: string;
+      readonly asOf?: number | null;
       readonly balances: readonly TokenBalance[];
       readonly error?: never;
       readonly networkId: string;
+      readonly stale?: boolean;
     }
   | {
       readonly accountId?: never;
@@ -78,20 +84,15 @@ export type ScopedBalanceState =
     };
 
 /**
- * A locked, account-less status used before the first load resolves and as the
- * fallback when the background is unavailable.
+ * The pre-load placeholder status, re-exported here so the panel keeps one
+ * import surface for the runtime client and the statuses it paints.
  */
-export const emptyStatus = (): WalletStatus => ({
-  accountCount: 0,
-  accounts: [],
-  activeAccountId: null,
-  hasVault: false,
-  locked: true,
-  network: "Unavailable",
-  networkId: "SN_MAIN",
-  networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
-  ready: false,
-});
+export { emptyStatus } from "./runtime-status";
+
+import { createAccountRuntimeClient } from "./runtime-accounts";
+import { responseError } from "./runtime-errors";
+import { createAccountGroupClient } from "./runtime-groups";
+import { unavailableStatus } from "./runtime-status";
 
 /**
  * Wallet client surface returned by createSidepanelRuntime.
@@ -105,10 +106,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
   const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
 
   return {
-    ...createAccountsRuntimeClient(sendMessage),
     ...createLedgerRuntimeClient(sendMessage),
     ...createNftRuntimeClient(sendMessage),
+    ...createOnboardingRuntimeClient(sendMessage),
     ...createPrivacyRuntimeClient(sendMessage),
+    ...createAccountRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
       if (isPreferencesResponse(response)) {
@@ -116,51 +118,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "add token failed");
     },
-    async importAccount(networkId: string, privateKey: string): Promise<string> {
-      const response = await sendMessage({ networkId, privateKey, type: "wallet.importAccount" });
-      if (isCreateAccountResponse(response)) {
-        // Surface the imported account's id so the caller can select it, mirroring
-        // addAccount. The raw key travels only in this privileged request and is
-        // never echoed back in the response.
-        return response.account.id;
-      }
-      throw responseError(response, "import account failed");
-    },
-    // `accountIndex` sets which HD position becomes the vault's first account.
-    // Recovery needs it: a user restoring only accounts 3 and 7 must not be given
-    // account 0 as well just because a vault has to start somewhere.
-    async createAccount(
-      mnemonic: string,
-      networkId: string,
-      vaultPassphrase: string,
-      accountIndex?: number,
-    ): Promise<void> {
+    async deployAccount(reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
       const response = await sendMessage({
-        ...(accountIndex === undefined ? {} : { accountIndex }),
-        mnemonic,
-        networkId,
-        type: "wallet.createAccount",
-        vaultPassphrase,
+        ...(reviewedFee ? { reviewedFee } : {}),
+        type: "wallet.deployAccount",
       });
-      if (isCreateAccountResponse(response)) {
-        return;
-      }
-      throw responseError(response, "wallet unavailable");
-    },
-    async previewAccount(mnemonic: string, networkId: string): Promise<AccountRef> {
-      const response = await sendMessage({
-        accountIndex: 0,
-        mnemonic,
-        networkId,
-        type: "wallet.previewAccount",
-      });
-      if (isCreateAccountResponse(response)) {
-        return response.account;
-      }
-      throw responseError(response, "account preview unavailable");
-    },
-    async deployAccount(): Promise<string> {
-      const response = await sendMessage({ type: "wallet.deployAccount" });
+      if (isFeeReviewResponse(response)) return response.feeReview;
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
@@ -178,9 +141,21 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({ type: "wallet.verifyClassHash" });
       return isClassHashVerificationResponse(response) ? response : null;
     },
-    async decideApproval(id: string, approved: boolean): Promise<void> {
+    /**
+     * Settles a pending approval. `reviewedFee` is the figure the deciding card
+     * was displaying; it travels only with an approval, and the background
+     * refuses rather than substituting if its own copy has moved since — which
+     * is what stops a stale card consenting to an unseen fee. A card that
+     * showed no fee sends none and the submission stays unbound.
+     */
+    async decideApproval(
+      id: string,
+      approved: boolean,
+      reviewedFee?: PendingApproval["fee"],
+    ): Promise<void> {
       const response = await sendMessage({
         id,
+        ...(approved && reviewedFee ? { reviewedFee } : {}),
         type: approved ? "wallet.approveOrigin" : "wallet.denyOrigin",
       });
       if (isApprovalDecisionResponse(response)) {
@@ -206,13 +181,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "revoke failed");
     },
-    async generateMnemonic(): Promise<string> {
-      const response = await sendMessage({ type: "wallet.generateMnemonic" });
-      if (isGenerateMnemonicResponse(response)) {
-        return response.mnemonic;
-      }
-      throw responseError(response, "wallet unavailable");
-    },
     async revealSecrets(vaultPassphrase: string): Promise<RevealSecretsResponse> {
       const response = await sendMessage({ type: "wallet.revealSecrets", vaultPassphrase });
       if (isRevealSecretsResponse(response)) {
@@ -220,12 +188,20 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "reveal failed");
     },
-    async loadActivity(accountId?: string): Promise<{
+    async loadActivity(
+      accountId?: string,
+      cached = false,
+      refreshHistory = false,
+      forceHistory = false,
+    ): Promise<{
       readonly entries: ActivityResponse["activity"];
       readonly historyUnavailable: boolean;
     }> {
       const response = await sendMessage({
         ...(accountId === undefined ? {} : { accountId }),
+        ...(cached ? { cached: true } : {}),
+        ...(refreshHistory || forceHistory ? { refreshHistory: true } : {}),
+        ...(forceHistory ? { forceHistory: true } : {}),
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {
@@ -250,8 +226,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({ type: "wallet.allowances" });
       return isAllowancesResponse(response) ? response.allowances : [];
     },
-    async revokeAllowance(id: string): Promise<string> {
-      const response = await sendMessage({ id, type: "wallet.revokeAllowance" });
+    async revokeAllowance(id: string, reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
+      const response = await sendMessage({
+        id,
+        ...(reviewedFee ? { reviewedFee } : {}),
+        type: "wallet.revokeAllowance",
+      });
+      if (isFeeReviewResponse(response)) return response.feeReview;
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
@@ -262,11 +243,17 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       tokenId: string,
       recipient: string,
       amount: string,
+      // The speed the send would use. Carried into the review because a `fast`
+      // send signs scaled-up bounds, so the fee it authorises is not the fee a
+      // standard review would have shown — and that reviewed figure is the
+      // ceiling the send is then held to.
+      speed: "fast" | "standard" = "standard",
     ): Promise<TransferReviewResponse["review"]> {
       const response = await sendMessage({
         accountId,
         amount,
         recipient,
+        speed,
         tokenId,
         type: "wallet.reviewTransfer",
       });
@@ -275,13 +262,19 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "transfer review failed");
     },
-    async loadBalances(): Promise<ScopedBalanceState> {
-      const response = await sendMessage({ type: "wallet.getBalances" });
+    async loadBalances(cached = false, refresh = false): Promise<ScopedBalanceState> {
+      const response = await sendMessage({
+        ...(cached ? { cached: true } : {}),
+        ...(refresh ? { refresh: true } : {}),
+        type: "wallet.getBalances",
+      });
       if (isBalancesResponse(response)) {
         return {
           accountId: response.accountId,
+          ...(response.asOf === undefined ? {} : { asOf: response.asOf }),
           balances: response.balances,
           networkId: response.networkId,
+          ...(response.stale === undefined ? {} : { stale: response.stale }),
         };
       }
       return { error: isErrorResponse(response) ? response.error : "balances unavailable" };
@@ -293,13 +286,16 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "token detection failed");
     },
-    async loadPrices(): Promise<{
+    async loadPrices(cached = false): Promise<{
       readonly asOf: number | null;
       readonly changes: Readonly<Record<string, number>>;
       readonly prices: Readonly<Record<string, number>>;
       readonly stale: boolean;
     }> {
-      const response = await sendMessage({ type: "wallet.prices" });
+      const response = await sendMessage({
+        ...(cached ? { cached: true } : {}),
+        type: "wallet.prices",
+      });
       if (!isPricesResponse(response)) {
         return { asOf: null, changes: {}, prices: {}, stale: false };
       }
@@ -322,8 +318,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       throw responseError(response, "token visibility update failed");
     },
     async loadPendingApprovals(): Promise<readonly PendingApproval[]> {
-      const response = await sendMessage({ type: "wallet.pendingApprovals" });
-      return isPendingApprovalsResponse(response) ? response.pending : [];
+      // Per-entry: one malformed prompt must not blank the queue (MCW-V09-106).
+      return readPendingApprovals(await sendMessage({ type: "wallet.pendingApprovals" })) ?? [];
+    },
+    async loadNostrPublicKey(): Promise<string> {
+      const response = await sendMessage({ type: "wallet.nostrPublicKey" });
+      if (isNostrPublicKeyResponse(response)) return response.nostrPublicKey;
+      throw responseError(response, "coordination identity unavailable");
     },
     async loadPreferences() {
       const response = await sendMessage({ type: "wallet.preferences" });
@@ -332,9 +333,15 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "preferences unavailable");
     },
+    /**
+     * Reads wallet status, or the fail-closed {@link unavailableStatus} when the
+     * background does not answer with one. A failure is never reported as "this
+     * browser has no wallet": that rendered the first-run screen to a user whose
+     * vault was merely unreadable, inviting them to set a new wallet up over it.
+     */
     async loadStatus(): Promise<WalletStatus> {
-      const response = await sendMessage({ type: "wallet.status" });
-      return isWalletStatus(response) ? response : emptyStatus();
+      const response = await sendMessage({ type: "wallet.status" }).catch(() => null);
+      return isWalletStatus(response) ? response : unavailableStatus();
     },
     async lockVault(): Promise<WalletStatus> {
       const response = await sendMessage({ type: "wallet.lock" });
@@ -343,8 +350,21 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "wallet unavailable");
     },
-    async saveAddress(label: string, address: string, networkId: string): Promise<void> {
-      const response = await sendMessage({ address, label, networkId, type: "wallet.saveAddress" });
+    async saveAddress(
+      label: string,
+      address: string,
+      networkId: string,
+      publicKeyX?: string,
+      nostrPublicKey?: string,
+    ): Promise<void> {
+      const response = await sendMessage({
+        address,
+        label,
+        networkId,
+        ...(nostrPublicKey ? { nostrPublicKey } : {}),
+        ...(publicKeyX ? { publicKeyX } : {}),
+        type: "wallet.saveAddress",
+      });
       if (isPreferencesResponse(response)) {
         return;
       }
@@ -378,56 +398,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "label update failed");
     },
-    async createGroup(name: string, icon: AccountGroupIcon): Promise<string> {
-      const response = await sendMessage({ icon, name, type: "wallet.createGroup" });
-      if (isPreferencesResponse(response)) {
-        // The pure model appends the new group last with a deterministic id, so
-        // the final entry is the one just created — return its id so the caller
-        // can open its members editor.
-        const groups = response.preferences.groups ?? [];
-        const created = groups[groups.length - 1];
-        if (created) {
-          return created.id;
-        }
-      }
-      throw responseError(response, "group create failed");
-    },
-    async renameGroup(id: string, name: string): Promise<void> {
-      const response = await sendMessage({ id, name, type: "wallet.renameGroup" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "group rename failed");
-    },
-    async setGroupIcon(id: string, icon: AccountGroupIcon): Promise<void> {
-      const response = await sendMessage({ icon, id, type: "wallet.setGroupIcon" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "group icon update failed");
-    },
-    async removeGroup(id: string): Promise<void> {
-      const response = await sendMessage({ id, type: "wallet.removeGroup" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "group remove failed");
-    },
-    async setAccountInGroup(accountId: string, groupId: string, member: boolean): Promise<void> {
-      const response = await sendMessage({
-        accountId,
-        groupId,
-        member,
-        type: "wallet.setAccountInGroup",
-      });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "group membership update failed");
-    },
+    ...createAccountGroupClient(sendMessage),
     async setDisplay(input: {
       readonly approvalSurface?: "popup" | "side-panel";
       readonly displayCurrency?: "eur" | "gbp" | "usd";
+      readonly reliabilityDiagnostics?: boolean;
       readonly theme?: "dark" | "light";
     }): Promise<void> {
       const response = await sendMessage({ ...input, type: "wallet.setDisplay" });
@@ -436,12 +411,32 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "display update failed");
     },
+    async loadDiagnostics() {
+      const response = await sendMessage({ type: "wallet.diagnostics" });
+      if (isSupportDiagnosticsResponse(response)) return response.diagnostics;
+      throw responseError(response, "diagnostic export failed");
+    },
+    async setExplorerFallback(networkId: string, enabled: boolean, apiUrl?: string): Promise<void> {
+      const response = await sendMessage({
+        ...(apiUrl === undefined ? {} : { apiUrl }),
+        enabled,
+        networkId,
+        type: "wallet.setExplorerFallback",
+      });
+      if (isPreferencesResponse(response)) return;
+      throw responseError(response, "explorer fallback update failed");
+    },
     async setRpcOverride(networkId: string, rpcUrl: string): Promise<void> {
       const response = await sendMessage({ networkId, rpcUrl, type: "wallet.setRpcOverride" });
       if (isPreferencesResponse(response)) {
         return;
       }
       throw responseError(response, "rpc endpoint update failed");
+    },
+    async setNostrRelayUrl(relayUrl: string): Promise<void> {
+      const response = await sendMessage({ relayUrl, type: "wallet.setNostrRelayUrl" });
+      if (isPreferencesResponse(response)) return;
+      throw responseError(response, "Nostr relay update failed");
     },
     async setStrk20NetworkConfig(
       networkId: string,
@@ -464,17 +459,25 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "network switch failed");
     },
+    /**
+     * Sends under the exact invoke and optional deployment fees displayed by
+     * the review. A missing required ceiling is refused before signing.
+     */
     async submitTransfer(
       accountId: string,
       tokenId: string,
       recipient: string,
       amount: string,
       speed: "fast" | "standard" = "standard",
+      reviewedFee: TransferReviewResponse["review"]["fee"] = null,
+      reviewedDeploymentFee: TransferReviewResponse["review"]["deploymentFee"] = null,
     ): Promise<string> {
       const response = await sendMessage({
         accountId,
         amount,
         recipient,
+        ...(reviewedDeploymentFee == null ? {} : { reviewedDeploymentFee }),
+        ...(reviewedFee === null ? {} : { reviewedFee }),
         speed,
         tokenId,
         type: "wallet.transfer",

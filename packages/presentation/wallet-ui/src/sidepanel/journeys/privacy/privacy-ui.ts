@@ -90,12 +90,14 @@ export const loadPrivacyDisclosure = async (deps: PrivacyUiDeps): Promise<boolea
     return true;
   } catch (error) {
     if (deps.disclosure() === pending && scopeMatches(deps, scope)) {
+      const message = errorMessage(error, "Private balances unavailable");
       deps.setDisclosure({
-        error: errorMessage(error, "Private balances unavailable"),
+        error: message,
         loading: false,
         value: null,
       });
       deps.paint();
+      showToast(message, "error", deps.app);
     }
     return false;
   }
@@ -127,7 +129,11 @@ const startJourney = async (
     if (state.registration === "pending") {
       // Registered on Starknet, not yet visible to the indexer. The poll flips
       // this on its own, so the only wrong move here is preparing a second one.
-      showToast("Registration is on its way. You'll be able to shield shortly.", "success");
+      showToast(
+        "Registration is on its way. You'll be able to shield shortly.",
+        "success",
+        button ?? deps.app,
+      );
       buttonBusy(button, false);
       return;
     }
@@ -140,7 +146,7 @@ const startJourney = async (
       if (!scopeMatches(deps, scope)) {
         return;
       }
-      showToast("Viewing key ready. Reading your private balances…", "success");
+      showToast("Viewing key ready. Reading your private balances…", "success", deps.app);
       // Drop the cached reading so the next paint re-reads through the normal
       // discovery path, now that private reads can succeed.
       deps.setDisclosure(emptyPrivacyDisclosure());
@@ -160,7 +166,7 @@ const startJourney = async (
     deps.setJourney({ preparation, stage: "activate-review", tokenId });
     deps.navigate("privacy");
   } catch (error) {
-    showToast(errorMessage(error, "Private journey unavailable"), "error");
+    showToast(errorMessage(error, "Private journey unavailable"), "error", button ?? deps.app);
     buttonBusy(button, false);
   }
 };
@@ -225,11 +231,12 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
     },
     wallet: deps.wallet,
   });
-  deps.app
-    ?.querySelector<HTMLButtonElement>("[data-privacy-retry]")
-    ?.addEventListener("click", () => {
-      void loadPrivacyDisclosure(deps);
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-privacy-retry]").forEach((button) => {
+    button.addEventListener("click", () => {
+      buttonBusy(button, true);
+      void loadPrivacyDisclosure(deps).finally(() => buttonBusy(button, false));
     });
+  });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-privacy-register]").forEach((button) => {
     button.addEventListener("click", () => {
       const tokenId = button.dataset["privacyRegister"] || defaultTokenId(deps);

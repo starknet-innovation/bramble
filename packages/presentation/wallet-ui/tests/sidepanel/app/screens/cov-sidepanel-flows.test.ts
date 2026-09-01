@@ -5,7 +5,9 @@
  * and address book entries.
  */
 import { describe, expect, test } from "bun:test";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { account, preferences } from "@mc-wallet/testkit/sidepanel";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
@@ -108,26 +110,27 @@ describe("sendFlow list callbacks", () => {
   });
 
   test("lists watched multisigs with account recipients on the active network", () => {
-    const html = sendFlow(status, account, preferences, [], {}, {}, "usd", [
+    const sharedAccounts: readonly ArgentMultisigRecord[] = [
       {
+        accountContractType: "argent-multisig",
         address: "0x999",
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
         id: "SN_MAIN:0x999",
         name: "Operations",
         networkId: "SN_MAIN",
-        quorum: 2,
-        signers: ["0x1", "0x2", "0x3"],
       },
       {
+        accountContractType: "argent-multisig",
         address: "0x888",
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
         id: "SN_SEPOLIA:0x888",
         networkId: "SN_SEPOLIA",
-        quorum: 1,
-        signers: ["0x1"],
       },
-    ]);
+    ];
+    const html = sendFlow(status, account, preferences, [], {}, {}, "usd", sharedAccounts);
     expect(html).toContain('data-send-recipient="0x999"');
     expect(html).toContain("Operations");
-    expect(html).toContain("2 of 3 signers required");
+    expect(html).toContain("Argent Multisig account");
     expect(html).not.toContain('data-send-recipient="0x888"');
   });
 });

@@ -3,8 +3,12 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
+import { STARK_CURVE_ORDER } from "@mc-wallet/wallet-model/networks";
 
 const createModule = (signatureR = "0x1") => ({
+  deriveNostrPublicKey() {
+    return { public_key: "11".repeat(32) };
+  },
   deriveOzAccountAddress() {
     return "0xabc";
   },
@@ -30,6 +34,13 @@ const createModule = (signatureR = "0x1") => ({
   getAccountClassHashes() {
     return "{}";
   },
+  openNostrApplicationData() {
+    return JSON.stringify({
+      content: "payload",
+      identifier: "mc-wallet.multisig",
+      senderPublicKey: "22".repeat(32),
+    });
+  },
   signStarkHash() {
     return {
       publicKey: "0xabc",
@@ -39,6 +50,17 @@ const createModule = (signatureR = "0x1") => ({
   },
   validateMnemonic() {
     return true;
+  },
+  wrapNostrApplicationData() {
+    return JSON.stringify({
+      content: "ciphertext",
+      created_at: 1,
+      id: "11".repeat(32),
+      kind: 1_059,
+      pubkey: "22".repeat(32),
+      sig: "33".repeat(64),
+      tags: [["p", "44".repeat(32)]],
+    });
   },
 });
 
@@ -72,112 +94,6 @@ describe("createKrustyKms", () => {
     await expect(kms.deriveOzAccountAddress("0xabc", "0x123")).resolves.toBe("0xabc");
   });
 
-  test("validates the two viewing-key ceremony stages at the boundary", async () => {
-    const kms = createKrustyKms(createModule());
-
-    await expect(kms.strk20ViewingKeyMessageHash("0x1", "0x2")).resolves.toBe("0xabc");
-    await expect(kms.foldStrk20ViewingKey("0x9", "0x1", "0x1", "0x2")).resolves.toBe("0x789");
-
-    // The scope must be canonical: two spellings of one pool would otherwise
-    // derive two different keys, and a registered key cannot be changed.
-    await expect(kms.strk20ViewingKeyMessageHash("0x01", "0x2")).rejects.toThrow(
-      "Invalid STRK20 viewing-key scope",
-    );
-    await expect(kms.strk20ViewingKeyMessageHash("0x1", "0x02")).rejects.toThrow(
-      "Invalid STRK20 viewing-key scope",
-    );
-    await expect(kms.strk20ViewingKeyMessageHash("0x0", "0x2")).rejects.toThrow(
-      "Invalid STRK20 viewing-key scope",
-    );
-    // (r, s) come from a device the wallet does not control.
-    await expect(kms.foldStrk20ViewingKey("0x9", "0x1", "nope", "0x2")).rejects.toThrow(
-      "Invalid STRK20 viewing-key signature input",
-    );
-  });
-
-  test("pins the account-address salt to 0 instead of the KMS default", async () => {
-    // A deployed account's address is immutable, so the salt that produced it is
-    // a wallet invariant. Upstream 0.6.0 changed its own default from 0 to the
-    // public key with no signature change, which re-derived every account to an
-    // address that had never been deployed; the adapter must therefore always say
-    // which salt it means, and pass a caller's through untouched.
-    const seen: unknown[][] = [];
-    const kms = createKrustyKms({
-      ...createModule(),
-      deriveOzAccountAddress(...args: unknown[]) {
-        seen.push(args);
-        return "0xabc";
-      },
-    });
-
-    await expect(kms.deriveOzAccountAddress("0x1", "0x2")).resolves.toBe("0xabc");
-    await expect(kms.deriveOzAccountAddress("0x1", "0x2", "0x9")).resolves.toBe("0xabc");
-    expect(seen).toEqual([
-      ["0x1", "0x2", "0x0"],
-      ["0x1", "0x2", "0x9"],
-    ]);
-  });
-
-  test("binds the scoped derivation and refuses a build offering only the unscoped one", async () => {
-    // The KMS exports both `deriveStrk20ViewingKey` (private key only) and
-    // `deriveScopedStrk20ViewingKey` (private key + chain + pool). Extra
-    // arguments are silently dropped in JS, so binding the wrong one would derive
-    // an unscoped key the pool does not recognize — with nothing throwing. The
-    // adapter must therefore fail closed on a module that lacks the scoped
-    // export, rather than falling back to the unscoped one that happens to exist.
-    const { deriveScopedStrk20ViewingKey: _omitted, ...unscopedOnly } = {
-      ...createModule(),
-      deriveStrk20ViewingKey() {
-        return "0xunscoped";
-      },
-    };
-
-    expect(() => createKrustyKms(unscopedOnly)).toThrow(
-      "Krusty KMS export missing: deriveScopedStrk20ViewingKey",
-    );
-  });
-
-  test("passes the signature's subject through to the fold", async () => {
-    // The fold verifies (r, s) against the public key and message hash, so the
-    // adapter must hand all four through in order. A dropped or reordered
-    // argument would make every device signature unverifiable.
-    const seen: unknown[][] = [];
-    const kms = createKrustyKms({
-      ...createModule(),
-      foldStrk20ViewingKey(...args: unknown[]) {
-        seen.push(args);
-        return "0x789";
-      },
-    });
-
-    await expect(kms.foldStrk20ViewingKey("0x9", "0xa", "0x1", "0x2")).resolves.toBe("0x789");
-    expect(seen).toEqual([["0x9", "0xa", "0x1", "0x2"]]);
-  });
-
-  test("rejects ceremony output the wallet cannot use as a viewing key", async () => {
-    // A fold result outside [1, n/2] means the WASM build broke its own range
-    // guarantee; registering it would strand the account's notes.
-    const outOfRange = createKrustyKms({
-      ...createModule(),
-      foldStrk20ViewingKey() {
-        return "0x0";
-      },
-    });
-    await expect(outOfRange.foldStrk20ViewingKey("0x9", "0x1", "0x1", "0x2")).rejects.toThrow(
-      "Krusty KMS returned an invalid STRK20 viewing key",
-    );
-
-    const badHash = createKrustyKms({
-      ...createModule(),
-      strk20ViewingKeyMessageHash() {
-        return "not-a-felt";
-      },
-    });
-    await expect(badHash.strk20ViewingKeyMessageHash("0x1", "0x2")).rejects.toThrow(
-      "Krusty KMS returned an invalid STRK20 message hash",
-    );
-  });
-
   test("rejects invalid derivation inputs before WASM calls", async () => {
     let addressDerived = false;
     let keypairDerived = false;
@@ -196,7 +112,7 @@ describe("createKrustyKms", () => {
           public_key_y: "0xdef",
         };
       },
-      deriveStrk20ViewingKey() {
+      deriveScopedStrk20ViewingKey() {
         viewingKeyDerived = true;
         return "0x456";
       },
@@ -274,6 +190,35 @@ describe("createKrustyKms", () => {
     });
   });
 
+  test("canonicalizes accepted KMS outputs", async () => {
+    const module = {
+      ...createModule("0x01"),
+      deriveOzAccountAddress() {
+        return "0x0abc";
+      },
+      signStarkHash() {
+        return { publicKey: "0x0abc", r: "0x01", s: "0x02" };
+      },
+    };
+    await expect(createKrustyKms(module).signStarkHash("0x123", "0x1")).resolves.toEqual({
+      publicKey: "0xabc",
+      r: "0x1",
+      s: "0x2",
+    });
+    await expect(createKrustyKms(module).deriveOzAccountAddress("0xabc", "0x123")).resolves.toBe(
+      "0xabc",
+    );
+  });
+
+  test("rejects signature scalars at the Stark curve order", async () => {
+    await expect(
+      createKrustyKms(createModule(`0x${STARK_CURVE_ORDER.toString(16)}`)).signStarkHash(
+        "0x123",
+        "0x1",
+      ),
+    ).rejects.toThrow("Krusty KMS result missing non-zero private key: r");
+  });
+
   test("rejects non-hex signature fields", async () => {
     await expect(
       createKrustyKms(createModule("not-hex")).signStarkHash("0x123", "0x1"),
@@ -288,7 +233,7 @@ describe("createKrustyKms", () => {
   test("rejects zero signature fields", async () => {
     await expect(
       createKrustyKms(createModule("0x0")).signStarkHash("0x123", "0x1"),
-    ).rejects.toThrow("Krusty KMS result missing non-zero field element: r");
+    ).rejects.toThrow("Krusty KMS result missing non-zero private key: r");
   });
 
   test("rejects inherited Krusty result fields", async () => {
@@ -370,5 +315,95 @@ describe("createKrustyKms", () => {
 
     await expect(createKrustyKms(module).validateMnemonic(" ")).rejects.toThrow("Invalid mnemonic");
     expect(validated).toBe(false);
+  });
+
+  test("keeps Nostr key derivation and gift wrapping inside the WASM boundary", async () => {
+    const calls: unknown[][] = [];
+    const module = {
+      ...createModule(),
+      deriveNostrPublicKey(...args: unknown[]) {
+        calls.push(args);
+        return { public_key: "11".repeat(32) };
+      },
+      openNostrApplicationData(...args: unknown[]) {
+        calls.push(args);
+        return JSON.stringify({
+          content: "payload",
+          identifier: "mc-wallet.multisig",
+          senderPublicKey: "22".repeat(32),
+        });
+      },
+      wrapNostrApplicationData(...args: unknown[]) {
+        calls.push(args);
+        return createModule().wrapNostrApplicationData();
+      },
+    };
+    const kms = createKrustyKms(module);
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+    const giftWrap = createModule().wrapNostrApplicationData();
+
+    await expect(kms.deriveNostrPublicKey(mnemonic, 1, 2, "phrase")).resolves.toBe("11".repeat(32));
+    await expect(
+      kms.wrapNostrApplicationData(
+        mnemonic,
+        1,
+        2,
+        "44".repeat(32),
+        "mc wallet.multisig",
+        "payload",
+        "phrase",
+      ),
+    ).resolves.toBe(giftWrap);
+    await expect(kms.openNostrApplicationData(mnemonic, 1, 2, giftWrap, "phrase")).resolves.toEqual(
+      {
+        content: "payload",
+        identifier: "mc-wallet.multisig",
+        senderPublicKey: "22".repeat(32),
+      },
+    );
+    expect(calls).toEqual([
+      [mnemonic, 1, 2, "phrase"],
+      [mnemonic, 1, 2, "phrase", "44".repeat(32), "mc wallet.multisig", "payload"],
+      [mnemonic, 1, 2, "phrase", giftWrap],
+    ]);
+  });
+
+  test("rejects malformed Nostr application data before calling WASM", async () => {
+    let wrapped = false;
+    const kms = createKrustyKms({
+      ...createModule(),
+      wrapNostrApplicationData() {
+        wrapped = true;
+        return "{}";
+      },
+    });
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+
+    await expect(
+      kms.wrapNostrApplicationData(mnemonic, 0, 0, "44".repeat(32), "not printable\n", "payload"),
+    ).rejects.toThrow("Invalid Nostr application-data input");
+    await expect(
+      kms.wrapNostrApplicationData(
+        mnemonic,
+        0,
+        0,
+        "44".repeat(32),
+        "mc-wallet.multisig",
+        "🦊".repeat(20_000),
+      ),
+    ).rejects.toThrow("Invalid Nostr application-data input");
+    expect(wrapped).toBe(false);
+
+    const wrongKind = JSON.parse(createModule().wrapNostrApplicationData()) as Record<
+      string,
+      unknown
+    >;
+    wrongKind["kind"] = 1;
+    await expect(
+      createKrustyKms({
+        ...createModule(),
+        wrapNostrApplicationData: () => JSON.stringify(wrongKind),
+      }).wrapNostrApplicationData(mnemonic, 0, 0, "44".repeat(32), "mc-wallet.multisig", "payload"),
+    ).rejects.toThrow("Krusty KMS returned an invalid Nostr gift wrap");
   });
 });

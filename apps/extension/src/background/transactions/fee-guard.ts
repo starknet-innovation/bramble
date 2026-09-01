@@ -7,27 +7,28 @@
  * predicate maps to "unknown" — a missing balance never blocks a transaction.
  */
 
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
 import {
   STARKNET_NETWORKS,
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
+import { tokenConfigId } from "@mc-wallet/wallet-model/preferences";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 
-// The canonical STRK token for a network: the user's tracked entry when one
-// exists, otherwise a synthetic config — fees are payable whether or not the
-// user tracks STRK in the panel.
+/**
+ * Returns the canonical STRK token for a network: the tracked entry when one
+ * exists, otherwise the same synthetic fee-token configuration.
+ */
 const strkToken = (networkId: StarknetNetworkId, preferences: WalletPreferences): TokenConfig =>
   preferences.tokens.find(
     (token) => token.networkId === networkId && sameFelt(token.address, STRK_TOKEN_ADDRESS),
   ) ?? {
     address: STRK_TOKEN_ADDRESS,
     decimals: 18,
-    id: `${networkId}:STRK:${STRK_TOKEN_ADDRESS}`,
+    id: tokenConfigId(networkId, "STRK", STRK_TOKEN_ADDRESS),
     name: "Starknet Token",
     networkId,
     symbol: "STRK",
@@ -41,7 +42,7 @@ const strkToken = (networkId: StarknetNetworkId, preferences: WalletPreferences)
  */
 export const readStrkBalance = async (
   deps: { readonly runtimeRpc: Pick<RuntimeRpc, "getTokenBalances"> },
-  account: AccountRef,
+  account: { readonly address: string; readonly networkId: StarknetNetworkId },
   preferences: WalletPreferences,
 ): Promise<string | null> => {
   try {

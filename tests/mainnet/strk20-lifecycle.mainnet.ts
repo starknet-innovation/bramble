@@ -348,15 +348,6 @@ test("runs the STRK20 core lifecycle through an acknowledged public caller", asy
       rpcActivity.push(activity);
     }
   });
-  const sidepanel = await extension.openExtensionPage("sidepanel.html");
-  await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
-  await test.step("Import and verify the env-gated funded account", async () => {
-    await importFundedAccount(sidepanel);
-    const selected = await activeAddress(sidepanel);
-    expect(selected).not.toBeNull();
-    expect(sameFelt(selected ?? "0x0", environment.accountAddress)).toBe(true);
-  });
-
   const serviceProxy = await startStrk20ServiceProxy({
     discoveryUpstream: environment.discoveryUrl,
     proverUpstream: environment.proverUrl,
@@ -364,14 +355,22 @@ test("runs the STRK20 core lifecycle through an acknowledged public caller", asy
   });
   const dappServer = await startLiveDapp();
   try {
-    const provider = new RpcProvider({ nodeUrl: environment.rpcUrl });
-    const protocolFee = await readProtocolFee(provider);
+    const sidepanel = await extension.openExtensionPage("sidepanel.html");
     await configureLocalServices(sidepanel, {
       discoveryUrl: serviceProxy.discoveryUrl,
       poolAddress: STRK20_MAINNET_POOL,
       proverUrl: serviceProxy.proverUrl,
       rpcUrl: serviceProxy.rpcUrl,
     });
+    await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
+    await test.step("Import and verify the env-gated funded account", async () => {
+      await importFundedAccount(sidepanel);
+      const selected = await activeAddress(sidepanel);
+      expect(selected).not.toBeNull();
+      expect(sameFelt(selected ?? "0x0", environment.accountAddress)).toBe(true);
+    });
+    const provider = new RpcProvider({ nodeUrl: environment.rpcUrl });
+    const protocolFee = await readProtocolFee(provider);
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
     await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");

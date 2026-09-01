@@ -3,12 +3,18 @@
  * screen is a progress takeover, not a generic alert: every transport, app,
  * account, device-approval, and handoff phase names the work currently under
  * way. All dynamic text is escaped; ./sign-session.ts owns state and bindings.
+ *
+ * Every phase also renders the hash the device is being asked to sign, at the
+ * padded width the Ledger displays it — this takeover is the one surface every
+ * Ledger signature passes through (wallet sends, dapp invoke/declare, multisig,
+ * account deploy, SNIP-12 typed data), so showing it here means no Ledger
+ * approval can happen without the comparison being on screen.
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
 import type { LedgerSignIntent } from "@mc-wallet/ledger-protocol/intent";
 import { pill } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
+import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import { ledgerAccountIndexOfPath } from "@mc-wallet/wallet-model/ledger-path";
 import { paddedFelt } from "@mc-wallet/wallet-model/networks";
@@ -132,19 +138,6 @@ const intentLine = (request: LedgerSignRequestSummary): string => {
   ${becauseLine(prompt)}`;
 };
 
-// The exact value the device is asked to sign, shown so it can be compared with
-// the device screen — the only check that catches a host that computed a
-// different transaction than the one reviewed. Rendered in the padded 32-byte
-// form the device receives (see `paddedFelt`), so the comparison is digit for
-// digit rather than against a shortest-form felt that drops leading zeros.
-const hashLine = (request: LedgerSignRequestSummary): string => `
-  <section class="ledger-hash">
-    <p class="context-label">Hash being signed</p>
-    <code>${escapeHtml(paddedFelt(request.messageHash) ?? request.messageHash)}</code>
-    <p>Your Ledger shows this hash before you approve. Check that it matches, and
-    reject on the device if it does not.</p>
-  </section>`;
-
 const cancelButton = (): string =>
   button({
     attributes: { "data-ledger-cancel": true },
@@ -152,6 +145,51 @@ const cancelButton = (): string =>
     size: "small",
     variant: "ghost",
   });
+
+// Hex digits per rendered group. A 64-digit hash compared character by character
+// against a device screen is far easier to track in short groups than as one
+// unbroken run, and the grouping is presentational only — the copy affordance
+// and the value handed to the device stay unbroken.
+const HASH_GROUP_SIZE = 4;
+
+const hashGroups = (digits: string): readonly string[] => {
+  const groups: string[] = [];
+  for (let index = 0; index < digits.length; index += HASH_GROUP_SIZE) {
+    groups.push(digits.slice(index, index + HASH_GROUP_SIZE));
+  }
+  return groups;
+};
+
+/**
+ * The hash the device is asked to blind-sign, rendered at the same full 64-digit
+ * width the Ledger receives and shows, so the two screens can be compared
+ * character for character. Rendered in every phase of the takeover: the value is
+ * fixed for the parked request, so it is readable before the device is even
+ * connected and stays put while the user reaches the on-device prompt.
+ *
+ * `paddedFelt` returns null only for a non-felt, which the response validator
+ * already rejects before a request reaches the panel; the raw value is shown in
+ * that unreachable case rather than hiding the hash the device will display.
+ */
+const deviceHashCheck = (request: LedgerSignRequestSummary): string => {
+  const hash = paddedFelt(request.messageHash) ?? request.messageHash;
+  const digits = hash.startsWith("0x") ? hash.slice(2) : hash;
+  return `<section class="ledger-hash-check">
+    <div class="ledger-hash-head">
+      <p class="context-label">Hash shown on your Ledger</p>
+      ${iconButton({
+        attributes: { "data-copy": hash },
+        icon: "copy",
+        label: "Copy transaction hash",
+        variant: "ghost",
+      })}
+    </div>
+    <p class="ledger-hash-value"><code>${escapeHtml("0x")}${hashGroups(digits)
+      .map((group) => `<span>${escapeHtml(group)}</span>`)
+      .join("")}</code></p>
+    <p class="ledger-hash-help">Approve only if this matches your device, character for character.</p>
+  </section>`;
+};
 
 const phaseBody = (view: LedgerSignView): string => {
   const phase = view.phase;
@@ -308,7 +346,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
         ${signerLine(view.request)}
       </div>
       ${ledgerProgress(view)}
-      ${hashLine(view.request)}
+      ${deviceHashCheck(view.request)}
       <div class="ledger-phase-body">${phaseBody(view)}</div>
       <p class="ledger-liveness" role="status">
         <span class="ledger-liveness-mark">${livenessMark(view)}</span>

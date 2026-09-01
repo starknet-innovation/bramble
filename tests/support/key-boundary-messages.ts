@@ -1,96 +1,99 @@
 /**
  * Key-boundary scan catalog: one request payload per handled background message
- * type, plus a source-derived list of every wallet.* type the
- * background actually handles. The key-boundary suite asserts the catalog
- * covers the derived list, so new message types cannot bypass the secret scan.
+ * type, plus a source-derived list of every wallet.* type the background
+ * actually handles. The key-boundary suite asserts the catalog covers the
+ * derived list, so new message types cannot bypass the secret scan.
+ *
+ * Payloads are written to reach a real handler, not merely to parse: an entry
+ * that bounces off its input validator or a missing collaborator produces an
+ * `{ error }` the secret scan would pass trivially, which is why the suite also
+ * asserts every entry answers live unless it carries an explicit `negative`
+ * reason. Identifiers the background mints at run time (approvals, proposals,
+ * one-time preparations) are filled in by the harness through `live`.
  */
+
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
-import { type KeyBoundaryMessage, strk20KeyBoundaryMessages } from "./key-boundary-strk20-messages";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import {
+  account,
+  contentSender,
+  extensionSender,
+  KEY_BOUNDARY_NFT_CONTRACT,
+  KEY_BOUNDARY_ORIGIN,
+  KEY_BOUNDARY_RECIPIENT,
+  KEY_BOUNDARY_TOKENS,
+  SECRET_MNEMONIC,
+  SECRET_PASSPHRASE,
+  SECRET_PRIVATE_KEY,
+} from "./key-boundary-fixtures";
+import { LEDGER_KEY_BOUNDARY_MESSAGES } from "./key-boundary-ledger-messages";
+import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "./key-boundary-multisig-messages";
+import { RECOVERY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-recovery-messages";
+import { STRK20_KEY_BOUNDARY_MESSAGES } from "./key-boundary-strk20-messages";
+import type { KeyBoundaryMessage } from "./key-boundary-types";
 
-/**
- * Recognizable secrets salted into the stub vault; the scan greps serialized
- * responses for these exact strings.
- */
-export const SECRET_PRIVATE_KEY =
-  "0x7e57ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8";
+const ETH_TOKEN_ID = KEY_BOUNDARY_TOKENS.eth.id;
+const STRK_TOKEN_ID = KEY_BOUNDARY_TOKENS.strk.id;
+const ETH_TOKEN_ADDRESS = KEY_BOUNDARY_TOKENS.eth.address;
+const NFT_CONTRACT = KEY_BOUNDARY_NFT_CONTRACT;
 
-/** Distinct optional account secret that must never enter runtime responses. */
-export const SECRET_VIEWING_KEY = "0x0757ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec";
-
-/**
- * Vault passphrase used by the stub vault and secret scan.
- */
-export const SECRET_PASSPHRASE = "correct horse battery staple";
-
-/**
- * Recovery phrase stored in the stub vault.
- */
-export const SECRET_MNEMONIC =
-  "habit hope tip crystal because grunt nation idea electric witness alert like";
-
-/**
- * The stub vault's single account.
- */
-export const account: AccountRef = {
-  address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  networkId: "SN_MAIN",
-  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+// A well-formed SNIP-12 typed message that hashes cleanly, so the sign path
+// reaches its approval instead of stopping at the hash.
+const TYPED_DATA = {
+  domain: { chainId: "0x534e5f4d41494e", name: "Example", revision: "1", version: "1" },
+  message: { contents: "hello" },
+  primaryType: "Mail",
+  types: {
+    Mail: [{ name: "contents", type: "felt" }],
+    StarknetDomain: [
+      { name: "name", type: "felt" },
+      { name: "version", type: "felt" },
+      { name: "chainId", type: "felt" },
+    ],
+  },
 };
 
-/**
- * Extension-page sender accepted for privileged messages.
- */
-export const extensionSender: RuntimeSender = {
-  id: "extension-id",
-  url: "chrome-extension://extension-id/sidepanel.html",
-};
-
-/**
- * Content-script sender for dapp-facing messages.
- */
-export const contentSender: RuntimeSender = {
-  id: "extension-id",
-  url: "https://dapp.example/swap",
-};
-
-const MULTISIG = "0x111111111111111111111111111111111111111111111111111111111111111";
-const ORIGIN = "https://dapp.example";
-
-// Broadcast event envelope: emitted by the background, never handled as an
-// inbound request, so it has no scan entry.
+// Broadcast event envelope: emitted by the background, never handled inbound.
 const OUTBOUND_ONLY = new Set(["wallet.event"]);
 
 /**
  * Reads every wallet.* message type the background sources handle. Derived
- * from the literals in apps/extension/src/background so the scan's coverage is enforced by
- * construction rather than by memory.
+ * from the literals under `apps/extension/src/background` so the scan's
+ * coverage is enforced by construction rather than by memory.
+ *
+ * The walk recurses deliberately: the background surface is split across
+ * per-capability directories, so a listing that only read the top level would
+ * derive an almost-empty set and turn the coverage assertion this feeds into a
+ * no-op — exactly the inert scan MCW-V09-111 closed. A new handler directory
+ * is therefore picked up without anyone remembering to register it.
  */
 export const handledWalletMessages = async (): Promise<ReadonlySet<string>> => {
-  const dir = "apps/extension/src/background";
   const handled = new Set<string>();
-  for (const entry of await readdir(dir)) {
-    if (!entry.endsWith(".ts")) {
-      continue;
-    }
-    const source = await readFile(join(dir, entry), "utf8");
-    for (const match of source.matchAll(/"(wallet\.[a-zA-Z0-9]+)"/g)) {
-      const type = match[1] ?? "";
-      if (type && !OUTBOUND_ONLY.has(type)) {
-        handled.add(type);
+  const visit = async (dir: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await visit(path);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith(".ts")) {
+        continue;
+      }
+      const source = await readFile(path, "utf8");
+      for (const match of source.matchAll(/"(wallet\.[a-zA-Z0-9]+)"/g)) {
+        const type = match[1] ?? "";
+        if (type && !OUTBOUND_ONLY.has(type)) {
+          handled.add(type);
+        }
       }
     }
-  }
+  };
+  await visit("apps/extension/src/background");
   return handled;
 };
 
-/** One best-effort-valid request per handled type; rejected responses are also secret-scanned. */
+/** One live request per handled type; the response of each is secret-scanned. */
 export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.status" }, sender: extensionSender },
   {
@@ -100,39 +103,46 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.getBalances" }, sender: extensionSender },
   { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
   { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
+  {
+    message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.deploymentData" },
+    sender: contentSender,
+  },
   { message: { type: "wallet.deployAccount" }, sender: extensionSender },
   { message: { type: "wallet.pendingApprovals" }, sender: extensionSender },
   {
-    message: { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", type: "wallet.retryApprovalFee" },
+    live: async (ids) => ({ id: await ids.invokeApprovalId() }),
+    message: { id: "", type: "wallet.retryApprovalFee" },
     sender: extensionSender,
   },
   { message: { type: "wallet.preferences" }, sender: extensionSender },
-  { message: { origin: ORIGIN, type: "wallet.requestAccounts" }, sender: contentSender },
-  { message: { origin: ORIGIN, type: "wallet.getGrantedAccounts" }, sender: contentSender },
-  { message: { origin: ORIGIN, type: "wallet.getChainId" }, sender: contentSender },
+  { message: { type: "wallet.diagnostics" }, sender: extensionSender },
+  {
+    message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.requestAccounts" },
+    sender: contentSender,
+  },
+  {
+    message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.getGrantedAccounts" },
+    sender: contentSender,
+  },
+  { message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.getChainId" }, sender: contentSender },
   {
     message: {
-      calls: [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "transfer" }],
-      origin: ORIGIN,
+      calls: [{ calldata: ["0x1"], contractAddress: ETH_TOKEN_ADDRESS, entrypoint: "transfer" }],
+      origin: KEY_BOUNDARY_ORIGIN,
       type: "wallet.addInvokeTransaction",
     },
     sender: contentSender,
   },
   {
-    message: { chainId: "0x534e5f4d41494e", origin: ORIGIN, type: "wallet.switchChain" },
+    message: {
+      chainId: "0x534e5f4d41494e",
+      origin: KEY_BOUNDARY_ORIGIN,
+      type: "wallet.switchChain",
+    },
     sender: contentSender,
   },
   { message: { accountId: account.id, type: "wallet.setActiveAccount" }, sender: extensionSender },
   { message: { networkId: "SN_MAIN", type: "wallet.setActiveNetwork" }, sender: extensionSender },
-  {
-    message: {
-      accountId: account.id,
-      messageHash: "0x1",
-      type: "wallet.signHash",
-      vaultPassphrase: SECRET_PASSPHRASE,
-    },
-    sender: extensionSender,
-  },
   {
     message: { type: "wallet.revealSecrets", vaultPassphrase: SECRET_PASSPHRASE },
     sender: extensionSender,
@@ -141,8 +151,9 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: {
       accountId: account.id,
       amount: "1.0",
-      recipient: account.address,
-      tokenId: "SN_MAIN:ETH:0x1",
+      recipient: KEY_BOUNDARY_RECIPIENT,
+      reviewedFee: { overallFee: "1", unit: "FRI" },
+      tokenId: ETH_TOKEN_ID,
       type: "wallet.transfer",
     },
     sender: extensionSender,
@@ -150,76 +161,42 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.swapTokens" }, sender: extensionSender },
   {
     message: {
-      amount: "0.1",
-      buyTokenId: "SN_MAIN:STRK:0x2",
-      sellTokenId: "SN_MAIN:ETH:0x1",
+      amount: "0.01",
+      buyTokenId: STRK_TOKEN_ID,
+      sellTokenId: ETH_TOKEN_ID,
       type: "wallet.swapQuote",
     },
     sender: extensionSender,
   },
   {
     message: {
-      amount: "0.1",
-      buyAmount: "1283.4",
-      buyTokenId: "SN_MAIN:STRK:0x2",
+      amount: "0.01",
+      buyAmount: "12.5",
+      buyTokenId: STRK_TOKEN_ID,
       quoteId: "dae4e180-e2cb-49f4-bd91-6f3de3a0c3ca",
-      sellTokenId: "SN_MAIN:ETH:0x1",
+      sellTokenId: ETH_TOKEN_ID,
       type: "wallet.swapPrepare",
     },
     sender: extensionSender,
   },
   {
-    message: {
-      preparationId: `sha256:${"a".repeat(64)}`,
-      type: "wallet.swapExecute",
-    },
+    live: async (ids) => ({ preparationId: await ids.swapPreparationId() }),
+    message: { preparationId: "", type: "wallet.swapExecute" },
     sender: extensionSender,
   },
-  { message: { networkId: "SN_MAIN", type: "wallet.addAccount" }, sender: extensionSender },
-  // Reads the vault's recovery phrase to walk HD positions; the response must
-  // carry only public account metadata back.
-  { message: { type: "wallet.scanSeedAccounts" }, sender: extensionSender },
   {
     message: {
-      accountIndex: 0,
+      accountContractType: "openzeppelin",
       networkId: "SN_MAIN",
-      publicKeyX: account.publicKeyX,
-      type: "wallet.addLedgerAccount",
+      type: "wallet.addAccount",
     },
     sender: extensionSender,
   },
+  ...RECOVERY_KEY_BOUNDARY_MESSAGES,
+  ...LEDGER_KEY_BOUNDARY_MESSAGES,
   {
     message: {
-      accountIndex: 0,
-      networkId: "SN_MAIN",
-      publicKeyX: account.publicKeyX,
-      type: "wallet.createLedgerVault",
-      vaultPassphrase: SECRET_PASSPHRASE,
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      entries: [{ accountIndex: 0, publicKeyX: account.publicKeyX }],
-      networkId: "SN_MAIN",
-      type: "wallet.deriveLedgerAccounts",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: { address: account.address, networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
-    sender: extensionSender,
-  },
-  { message: { type: "wallet.ledgerSignPending" }, sender: extensionSender },
-  // The viewing-key ceremony writes a retained secret; its response must carry
-  // nothing but an acknowledgement. Scanned like every other wallet.* type.
-  { message: { type: "wallet.strk20DeriveLedgerViewingKey" }, sender: extensionSender },
-  {
-    message: { id: "ledger-sign-1", r: "0x1", s: "0x2", type: "wallet.completeLedgerSign" },
-    sender: extensionSender,
-  },
-  {
-    message: {
+      accountContractType: "openzeppelin",
       networkId: "SN_MAIN",
       privateKey: SECRET_PRIVATE_KEY,
       type: "wallet.importAccount",
@@ -228,6 +205,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   {
     message: {
+      accountContractType: "openzeppelin",
       mnemonic: SECRET_MNEMONIC,
       type: "wallet.createAccount",
       vaultPassphrase: SECRET_PASSPHRASE,
@@ -238,41 +216,53 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   {
     message: {
       mnemonic: SECRET_MNEMONIC,
+      type: "wallet.validateMnemonic",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      accountContractType: "openzeppelin",
+      mnemonic: SECRET_MNEMONIC,
       networkId: "SN_MAIN",
       type: "wallet.previewAccount",
     },
     sender: extensionSender,
   },
   {
-    message: { accountId: account.id, origin: ORIGIN, type: "wallet.grantOrigin" },
+    live: async (ids) => ({ id: await ids.connectApprovalId() }),
+    message: { id: "", type: "wallet.approveOrigin" },
     sender: extensionSender,
   },
   {
-    message: { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", type: "wallet.approveOrigin" },
+    live: async (ids) => ({ id: await ids.connectApprovalId() }),
+    message: { id: "", type: "wallet.denyOrigin" },
     sender: extensionSender,
   },
   {
-    message: { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", type: "wallet.denyOrigin" },
+    message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.revokeOrigin" },
     sender: extensionSender,
   },
-  { message: { origin: ORIGIN, type: "wallet.revokeOrigin" }, sender: extensionSender },
   { message: { type: "wallet.connectedSites" }, sender: extensionSender },
-  { message: { origin: ORIGIN, type: "wallet.getPermissions" }, sender: contentSender },
+  {
+    message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.getPermissions" },
+    sender: contentSender,
+  },
   {
     message: {
       accountId: account.id,
       amount: "1.0",
-      recipient: account.address,
-      tokenId: "SN_MAIN:ETH:0x1",
+      recipient: KEY_BOUNDARY_RECIPIENT,
+      tokenId: ETH_TOKEN_ID,
       type: "wallet.reviewTransfer",
     },
     sender: extensionSender,
   },
   {
     message: {
-      contract: account.classHash,
+      contract: NFT_CONTRACT,
       networkId: "SN_MAIN",
-      recipient: account.address,
+      recipient: KEY_BOUNDARY_RECIPIENT,
       tokenId: "1",
       type: "wallet.reviewNftTransfer",
     },
@@ -280,16 +270,18 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   {
     message: {
-      contract: account.classHash,
+      contract: NFT_CONTRACT,
       networkId: "SN_MAIN",
-      recipient: account.address,
+      recipient: KEY_BOUNDARY_RECIPIENT,
+      reviewedFee: { overallFee: "1", unit: "FRI" },
       tokenId: "1",
       type: "wallet.transferNft",
     },
     sender: extensionSender,
   },
   {
-    message: { allowanceId: "SN_MAIN:0x1:0x2", type: "wallet.revokeAllowance" },
+    live: async (ids) => ({ id: ids.allowanceId }),
+    message: { id: "", type: "wallet.revokeAllowance" },
     sender: extensionSender,
   },
   { message: { type: "wallet.allowances" }, sender: extensionSender },
@@ -297,13 +289,13 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.transactionAlerts" }, sender: extensionSender },
   {
     message: {
-      options: { address: account.classHash, decimals: 18, symbol: "TKN" },
-      origin: ORIGIN,
+      asset: { address: NFT_CONTRACT, decimals: 18, symbol: "TKN" },
+      origin: KEY_BOUNDARY_ORIGIN,
       type: "wallet.watchAsset",
     },
     sender: contentSender,
   },
-  { message: { address: account.classHash, type: "wallet.addToken" }, sender: extensionSender },
+  { message: { address: NFT_CONTRACT, type: "wallet.addToken" }, sender: extensionSender },
   { message: { type: "wallet.detectTokens" }, sender: extensionSender },
   { message: { type: "wallet.discoverNfts" }, sender: extensionSender },
   { message: { type: "wallet.loadWatchedNfts" }, sender: extensionSender },
@@ -311,171 +303,159 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { type: "wallet.setNftIndexerUrl", url: "https://indexer.example" },
     sender: extensionSender,
   },
+  {
+    message: { relayUrl: "wss://relay.example", type: "wallet.setNostrRelayUrl" },
+    sender: extensionSender,
+  },
   { message: { type: "wallet.prices" }, sender: extensionSender },
-  { message: { address: account.classHash, type: "wallet.tokenChart" }, sender: extensionSender },
+  {
+    message: { address: ETH_TOKEN_ADDRESS, type: "wallet.tokenChart" },
+    sender: extensionSender,
+  },
   {
     message: { accountId: account.id, label: "Main", type: "wallet.setAccountLabel" },
     sender: extensionSender,
   },
   { message: { displayCurrency: "usd", type: "wallet.setDisplay" }, sender: extensionSender },
   {
-    message: { icon: "folder", name: "Trading", type: "wallet.createGroup" },
+    message: { icon: "folder", name: "Savings", type: "wallet.createGroup" },
     sender: extensionSender,
   },
   {
-    message: { id: "trading", name: "Savings", type: "wallet.renameGroup" },
+    live: async (ids) => ({ id: ids.groupId }),
+    message: { id: "", name: "Renamed", type: "wallet.renameGroup" },
     sender: extensionSender,
   },
   {
-    message: { icon: "star", id: "trading", type: "wallet.setGroupIcon" },
+    live: async (ids) => ({ id: ids.groupId }),
+    message: { icon: "star", id: "", type: "wallet.setGroupIcon" },
     sender: extensionSender,
   },
-  { message: { id: "trading", type: "wallet.removeGroup" }, sender: extensionSender },
   {
+    live: async (ids) => ({ groupId: ids.groupId }),
     message: {
       accountId: account.id,
-      groupId: "trading",
+      groupId: "",
       member: true,
       type: "wallet.setAccountInGroup",
     },
     sender: extensionSender,
   },
   {
+    live: async (ids) => ({ id: ids.groupId }),
+    message: { id: "", type: "wallet.removeGroup" },
+    sender: extensionSender,
+  },
+  {
     message: {
-      origin: ORIGIN,
-      typedData: { domain: {}, message: {}, primaryType: "X", types: {} },
+      origin: KEY_BOUNDARY_ORIGIN,
+      typedData: TYPED_DATA,
       type: "wallet.signTypedData",
     },
     sender: contentSender,
   },
-  { message: { type: "wallet.lock" }, sender: extensionSender },
-  { message: { type: "wallet.status" }, sender: contentSender },
-  {
-    message: { type: "wallet.unlock", vaultPassphrase: "wrong passphrase!!" },
-    sender: extensionSender,
-  },
-  { message: { type: "wallet.multisigs" }, sender: extensionSender },
-  {
-    message: { id: `SN_MAIN:${MULTISIG}`, type: "wallet.multisigBalances" },
-    sender: extensionSender,
-  },
-  {
-    message: { address: MULTISIG, name: "Treasury", type: "wallet.addMultisig" },
-    sender: extensionSender,
-  },
   {
     message: {
-      calldata: ["0x1"],
-      entrypoint: "transfer",
-      multisigId: `SN_MAIN:${MULTISIG}`,
-      to: account.address,
-      type: "wallet.proposeMultisigTx",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      mode: "confirm-only",
-      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
-      type: "wallet.confirmMultisigProposal",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      mode: "confirm-only",
-      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
-      type: "wallet.prepareMultisigConfirmation",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
-      type: "wallet.revokeMultisigConfirmation",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: { proposalId: `SN_MAIN:${MULTISIG}:0xabc`, type: "wallet.executeMultisigProposal" },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      multisigId: `SN_MAIN:${MULTISIG}`,
-      txId: "0xdef",
-      type: "wallet.trackMultisigProposal",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: { id: `SN_MAIN:${MULTISIG}`, type: "wallet.refreshMultisig" },
-    sender: extensionSender,
-  },
-  {
-    message: { id: `SN_MAIN:${MULTISIG}`, type: "wallet.removeMultisig" },
-    sender: extensionSender,
-  },
-  { message: { type: "wallet.multisigClassStatus" }, sender: extensionSender },
-  { message: { type: "wallet.declareMultisigClass" }, sender: extensionSender },
-  {
-    message: { quorum: 1, signers: [account.address], type: "wallet.deployMultisig" },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      compiledClassHash: "0x1",
-      contractClass: { sierra_program: [] },
-      origin: ORIGIN,
+      declare: { compiledClassHash: "0x1", contractClass: { sierra_program: ["0x1"] } },
+      origin: KEY_BOUNDARY_ORIGIN,
       type: "wallet.addDeclareTransaction",
     },
     sender: contentSender,
   },
   {
     message: {
-      contract: account.classHash,
+      contract: NFT_CONTRACT,
       label: "Art",
       networkId: "SN_MAIN",
-      tokenId: "1",
+      tokenId: "2",
       type: "wallet.addNft",
     },
     sender: extensionSender,
   },
   {
     message: {
-      chain: { chainId: "0x534e5f4d41494e", chainName: "Custom", rpcUrls: ["https://rpc.example"] },
-      origin: ORIGIN,
+      chain: {
+        chainId: "0x534e5f4d41494e",
+        chainName: "Custom",
+        id: "custom-main",
+        rpcUrls: ["https://rpc.example"],
+      },
+      origin: KEY_BOUNDARY_ORIGIN,
       type: "wallet.addStarknetChain",
     },
     sender: contentSender,
   },
-  { message: { origin: ORIGIN, type: "wallet.deploymentData" }, sender: contentSender },
-  { message: { data: "{}", type: "wallet.importPreferences" }, sender: extensionSender },
-  { message: { id: "addr-1", type: "wallet.removeAddress" }, sender: extensionSender },
-  { message: { id: "nft-1", type: "wallet.removeNft" }, sender: extensionSender },
   {
     message: {
-      address: account.address,
-      label: "Me",
+      preferences: { ...defaultWalletPreferences(), theme: "light" },
+      type: "wallet.importPreferences",
+    },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ id: ids.addressBookId }),
+    message: { id: "", type: "wallet.removeAddress" },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ id: ids.nftId, spam: true }),
+    message: { id: "", spam: true, type: "wallet.setNftSpam" },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ id: ids.nftId }),
+    message: { id: "", type: "wallet.removeNft" },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      address: KEY_BOUNDARY_RECIPIENT,
+      label: "Desk",
       networkId: "SN_MAIN",
       type: "wallet.saveAddress",
     },
     sender: extensionSender,
   },
-  { message: { id: "nft-1", spam: true, type: "wallet.setNftSpam" }, sender: extensionSender },
   {
-    message: { networkId: "SN_MAIN", type: "wallet.setRpcOverride", url: "https://rpc.example" },
+    message: {
+      apiUrl: "https://explorer.example/v1",
+      enabled: false,
+      networkId: "SN_MAIN",
+      type: "wallet.setExplorerFallback",
+    },
     sender: extensionSender,
   },
   {
-    message: { hidden: true, id: "tok-1", type: "wallet.setTokenHidden" },
+    message: { networkId: "SN_MAIN", rpcUrl: "https://rpc.example", type: "wallet.setRpcOverride" },
     sender: extensionSender,
   },
-  ...strk20KeyBoundaryMessages({
-    contentSender,
-    extensionSender,
-    origin: ORIGIN,
-  }),
-  { message: { origin: ORIGIN, type: "wallet.supportedSpecs" }, sender: contentSender },
-  { message: { origin: ORIGIN, type: "wallet.supportedWalletApi" }, sender: contentSender },
+  {
+    live: async (ids) => ({ tokenId: ids.tokenId }),
+    message: { hidden: true, tokenId: "", type: "wallet.setTokenHidden" },
+    sender: extensionSender,
+  },
+  ...MULTISIG_KEY_BOUNDARY_MESSAGES,
+  ...STRK20_KEY_BOUNDARY_MESSAGES,
+  {
+    message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.supportedSpecs" },
+    sender: contentSender,
+  },
+  {
+    message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.supportedWalletApi" },
+    sender: contentSender,
+  },
+  // Negative entries last, so the state they tear down cannot starve an entry
+  // above. Refusal is the response being scanned: an error path leaks just as
+  // easily as a success path.
+  { message: { type: "wallet.lock" }, sender: extensionSender },
+  {
+    message: { type: "wallet.status" },
+    negative: "a content script may not read privileged wallet status",
+    sender: contentSender,
+  },
+  {
+    message: { type: "wallet.unlock", vaultPassphrase: "wrong passphrase!!" },
+    negative: "a wrong passphrase must not unlock, and must not echo the vault",
+    sender: extensionSender,
+  },
 ];

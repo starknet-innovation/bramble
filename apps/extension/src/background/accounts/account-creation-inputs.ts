@@ -4,10 +4,26 @@
  * reaches the Krusty KMS boundary.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
 import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
 import type { CreateVaultAccountInput } from "@mc-wallet/vault/service";
+import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
+import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import {
+  isStarkFieldElement,
+  isStarknetNetworkId,
+  normalizeFeltInput,
+  type StarknetNetworkId,
+} from "@mc-wallet/wallet-model/networks";
+import {
+  isMnemonicPassphrase,
+  isMnemonicText,
+  isVaultPassphrase,
+} from "@mc-wallet/wallet-model/passphrase";
+import {
+  isRecoveryAccountIndex,
+  isRecoveryAccountSelection,
+  RECOVERY_SCAN_LIMITS,
+} from "@mc-wallet/wallet-model/recovery";
 
 const readOptionalIndex = (value: unknown): number | null | undefined => {
   if (value === undefined) {
@@ -16,8 +32,19 @@ const readOptionalIndex = (value: unknown): number | null | undefined => {
   return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
 };
 
-const isMnemonicText = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0;
+const readDeploymentSalt = (
+  value: unknown,
+  accountContractType: AccountDerivationInput["accountContractType"],
+): string | null | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || accountContractType === "openzeppelin") {
+    return null;
+  }
+  const salt = normalizeFeltInput(value);
+  return isStarkFieldElement(salt) ? salt : null;
+};
 
 const readDerivationFields = (
   message: Record<string, unknown>,
@@ -27,16 +54,23 @@ const readDerivationFields = (
   if (accountIndex === null || addressIndex === null) {
     return null;
   }
-  if (
-    message["mnemonicPassphrase"] !== undefined &&
-    typeof message["mnemonicPassphrase"] !== "string"
-  ) {
+  if (!isMnemonicPassphrase(message["mnemonicPassphrase"])) {
+    return null;
+  }
+  const accountContractType = message["accountContractType"];
+  if (!isAccountContractType(accountContractType)) {
+    return null;
+  }
+  const deploymentSalt = readDeploymentSalt(message["deploymentSalt"], accountContractType);
+  if (deploymentSalt === null) {
     return null;
   }
   if (message["networkId"] !== undefined && !isStarknetNetworkId(message["networkId"])) {
     return null;
   }
   return {
+    accountContractType,
+    ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
     ...(accountIndex === undefined ? {} : { accountIndex }),
     ...(addressIndex === undefined ? {} : { addressIndex }),
     ...(message["mnemonicPassphrase"] === undefined
@@ -55,7 +89,9 @@ export const readCreateAccountInput = (message: unknown): CreateVaultAccountInpu
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "accountIndex",
+      "accountContractType",
       "addressIndex",
+      "deploymentSalt",
       "mnemonic",
       "mnemonicPassphrase",
       "networkId",
@@ -83,7 +119,9 @@ export const readPreviewAccountInput = (message: unknown): AccountDerivationInpu
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "accountIndex",
+      "accountContractType",
       "addressIndex",
+      "deploymentSalt",
       "mnemonic",
       "mnemonicPassphrase",
       "networkId",
@@ -96,4 +134,77 @@ export const readPreviewAccountInput = (message: unknown): AccountDerivationInpu
   }
   const derivation = readDerivationFields(message);
   return derivation ? { ...derivation, mnemonic: message["mnemonic"] } : null;
+};
+
+/** Parses one bounded account-discovery page or advanced manual index. */
+export const readDiscoverRecoveryAccountsInput = (
+  message: unknown,
+): {
+  readonly manualIndex?: number;
+  readonly mnemonic: string;
+  readonly networkId: StarknetNetworkId;
+} | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["manualIndex", "mnemonic", "networkId", "type"]) ||
+    message["type"] !== "wallet.discoverRecoveryAccounts" ||
+    !isMnemonicText(message["mnemonic"]) ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    (message["manualIndex"] !== undefined && !isRecoveryAccountIndex(message["manualIndex"]))
+  ) {
+    return null;
+  }
+  return {
+    ...(message["manualIndex"] === undefined ? {} : { manualIndex: message["manualIndex"] }),
+    mnemonic: message["mnemonic"],
+    networkId: message["networkId"],
+  };
+};
+
+/** Parses the final confirmed account set for one atomic vault restoration. */
+export const readRecoverAccountsInput = (message: unknown): RecoverVaultAccountsInput | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, [
+      "mnemonic",
+      "networkId",
+      "selections",
+      "type",
+      "vaultPassphrase",
+    ]) ||
+    message["type"] !== "wallet.recoverAccounts" ||
+    !isMnemonicText(message["mnemonic"]) ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    !isVaultPassphrase(message["vaultPassphrase"]) ||
+    !Array.isArray(message["selections"]) ||
+    message["selections"].length === 0 ||
+    message["selections"].length > RECOVERY_SCAN_LIMITS.maxSelections ||
+    !message["selections"].every(isRecoveryAccountSelection)
+  ) {
+    return null;
+  }
+  return {
+    mnemonic: message["mnemonic"],
+    networkId: message["networkId"],
+    selections: message["selections"],
+    vaultPassphrase: message["vaultPassphrase"],
+  };
+};
+
+/**
+ * Parses the privileged mnemonic-validity check. Accepts only the phrase and
+ * type; never a vault passphrase or derivation fields.
+ */
+export const readValidateMnemonicInput = (
+  message: unknown,
+): { readonly mnemonic: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["mnemonic", "type"]) ||
+    message["type"] !== "wallet.validateMnemonic" ||
+    !isMnemonicText(message["mnemonic"])
+  ) {
+    return null;
+  }
+  return { mnemonic: message["mnemonic"] };
 };

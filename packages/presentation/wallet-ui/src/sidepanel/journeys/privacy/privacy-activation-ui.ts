@@ -10,9 +10,13 @@
  * review. Two transactions and two fees, one user action.
  */
 
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { formatFeeEstimate } from "../../shared/review-render";
 import { awaitDeployment, type DeploymentPollScope } from "../../shell/shell-bindings";
+
+const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
 
 /**
  * Collaborators for the deploy-then-register control. `startRegistration` runs
@@ -38,13 +42,27 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
   button.addEventListener("click", () => {
     const scope = deps.deploymentScope();
     if (!scope) {
-      showToast("No active account is available to deploy", "error");
+      showToast("No active account is available to deploy", "error", button);
       return;
     }
     buttonBusy(button, true);
-    showToast("Deploying this account first…", "success");
-    void deps.wallet.deployAccount().then(
-      async (transactionHash) => {
+    showToast(
+      DEPLOYMENT_FEES.has(button) ? "Deploying this account…" : "Estimating deployment fee…",
+      "success",
+      button,
+    );
+    const reviewedFee = DEPLOYMENT_FEES.get(button);
+    if (reviewedFee) DEPLOYMENT_FEES.delete(button);
+    void deps.wallet.deployAccount(reviewedFee).then(
+      async (response) => {
+        if (typeof response !== "string") {
+          DEPLOYMENT_FEES.set(button, response);
+          const fee = formatFeeEstimate(response);
+          button.lastChild?.replaceWith(`Confirm deploy · ${fee}`);
+          showToast(`Maximum deployment fee: ${fee}`, "success", button);
+          buttonBusy(button, false);
+          return;
+        }
         // The deployment is irreversible from here, so the only question left is
         // whether it lands in time to continue automatically.
         const deployed = await awaitDeployment(deps.wallet, scope);
@@ -54,15 +72,17 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
         }
         if (!deployed) {
           showToast(
-            `Deployment ${transactionHash.slice(0, 10)}… is still settling. Register once it lands.`,
+            `Deployment ${response.slice(0, 10)}… is still settling. Register once it lands.`,
             "error",
+            button,
           );
           return;
         }
         deps.startRegistration();
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Deployment failed"), "error");
+        DEPLOYMENT_FEES.delete(button);
+        showToast(errorMessage(error, "Deployment failed"), "error", button);
         buttonBusy(button, false);
       },
     );

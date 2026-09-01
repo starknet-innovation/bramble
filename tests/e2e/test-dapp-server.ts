@@ -36,14 +36,16 @@ const dappHtml = `<!doctype html>
         document.querySelector('[data-testid="' + testId + '"]').textContent = value;
       };
       const provider = () => window.starknet_mcWallet;
-      // A well-formed SNIP-12 (SN_MAIN) typed message that hashes cleanly.
+      // A well-formed SNIP-12 revision 1 (SN_MAIN) typed message that hashes
+      // cleanly. The wallet refuses any domain key the domain type does not
+      // declare, so every one of them is spelled out here.
       const TYPED_DATA = {
-        domain: { chainId: "0x534e5f4d41494e", name: "Example", version: "1" },
+        domain: { chainId: "0x534e5f4d41494e", name: "Example", revision: "1", version: "1" },
         message: { contents: "hello" },
         primaryType: "Mail",
         types: {
           Mail: [{ name: "contents", type: "felt" }],
-          StarkNetDomain: [
+          StarknetDomain: [
             { name: "name", type: "felt" },
             { name: "version", type: "felt" },
             { name: "chainId", type: "felt" },

@@ -38,10 +38,6 @@ export const formatPrice = (value: number): string => {
   })}`;
 };
 
-/** Formats a percentage value (already in percent units) with a fixed digit count. */
-export const formatPct = (value: number, digits = 2): string =>
-  `${value >= 0 ? "+" : ""}${value.toFixed(digits)}%`;
-
 /**
  * Converts a smallest-unit token balance (u256 as a bigint) into a human decimal
  * string using pure string math, then trims trailing fractional zeros. Returns

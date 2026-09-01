@@ -10,6 +10,7 @@
  * malformed numeric input yields "unknown" — never a fabricated verdict, and
  * callers must never block on it.
  */
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 
 /**
  * Affordability verdict. "unknown" means no claim could be made and must be
@@ -33,7 +34,7 @@ const asBigInt = (value: string): bigint | null => {
  */
 export const resolveFeeAffordability = (input: {
   readonly balance: string | null;
-  readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+  readonly fee: FeeEstimate | null;
   readonly sendAmount?: bigint | null;
 }): FeeAffordability => {
   if (input.fee === null || input.fee.unit !== "FRI" || input.balance === null) {

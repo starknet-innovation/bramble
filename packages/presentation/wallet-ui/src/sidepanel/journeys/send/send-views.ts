@@ -6,7 +6,7 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
@@ -98,7 +98,7 @@ const addressBookRow = (entry: NonNullable<WalletPreferences["addressBook"]>[num
     ${icon("chevronRight")}
   </button>`;
 
-const multisigRecipientRow = (record: MultisigRecord): string => {
+const multisigRecipientRow = (record: ArgentMultisigRecord): string => {
   const name = multisigDisplayName(record);
   return `
   <button class="send-recipient-row" type="button"
@@ -109,7 +109,7 @@ const multisigRecipientRow = (record: MultisigRecord): string => {
     <span class="send-recipient-copy">
       <strong>${escapeHtml(name)}</strong>
       <code>${escapeHtml(accountLabel(record.address))}</code>
-      <small>Multisig · ${record.quorum} of ${record.signers.length} signers required</small>
+      <small>Argent Multisig account</small>
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -119,7 +119,7 @@ const recipientStage = (
   status: WalletStatus,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
-  multisigs: readonly MultisigRecord[],
+  multisigs: readonly ArgentMultisigRecord[],
 ): string => {
   const accounts = sendRecipientAccounts(status.accounts, status.networkId);
   const sharedAccounts = multisigs.filter((record) => record.networkId === status.networkId);
@@ -300,8 +300,8 @@ const workingStage = (): string => `
   <section class="send-working" id="send-working" role="status" aria-live="polite" hidden>
     <span class="send-working-mark">${liquidDots("send")}</span>
     <div class="send-working-copy">
-      <h2 id="send-working-title">Preparing review</h2>
-      <p id="send-working-copy">Checking the exact transaction.</p>
+      <h2 id="send-working-title">Authorizing transaction</h2>
+      <p id="send-working-copy">The reviewed transaction is being authorized inside the wallet.</p>
     </div>
     <ol class="send-task-list" aria-label="Transaction status">
       <li data-send-task="review" data-state="active"><span></span><span id="send-task-review-label">Review transaction</span></li>
@@ -325,7 +325,7 @@ const successStage = (): string => `
     </div>
     <div class="send-actions">
       ${button({ attributes: { id: "send-view-activity" }, icon: "activity", label: "View activity" })}
-      ${button({ attributes: { id: "send-another" }, label: "Send another", variant: "secondary" })}
+      ${button({ attributes: { id: "send-home" }, label: "Back to home", variant: "secondary" })}
     </div>
   </section>`;
 
@@ -374,7 +374,7 @@ export const sendFlow = (
   prices: Readonly<Record<string, number>> = {},
   changes: Readonly<Record<string, number>> = {},
   currency: DisplayCurrency = preferences?.displayCurrency ?? "usd",
-  multisigs: readonly MultisigRecord[] = [],
+  multisigs: readonly ArgentMultisigRecord[] = [],
   intent: SendIntent | null = null,
 ): string => {
   const assets = sendAssets(status.networkId, preferences, balances, prices, changes);
@@ -402,7 +402,7 @@ export const sendFlow = (
         ${account ? "" : noAccountEmpty(status)}
         ${account && assets.length === 0 ? emptyState("No tokens are tracked on this network yet, so nothing can be sent.") : ""}
         ${missingIntentAsset ? '<p class="review-flag" role="alert">The requested token is no longer tracked on this network. Choose an asset before continuing.</p>' : ""}
-        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
+        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />
@@ -430,8 +430,8 @@ export const sendFlow = (
               </div>
               <div class="send-review-summary" id="send-review-summary"></div>
               <div class="send-review-fee" id="send-review-fee" aria-live="polite"></div>
-              <details class="send-review-disclosure">
-                <summary><span>Transaction details</span>${icon("chevronDown")}</summary>
+              <details class="send-review-disclosure" data-disclosure="send-technical-details">
+                <summary><span>Technical details</span>${icon("chevronDown")}</summary>
                 <div class="send-review-disclosure-body" id="review-panel"></div>
               </details>
               <p class="send-review-note">${canSend ? "Confirm only if the recipient, amount, and decoded action are correct." : "Send is unavailable."}</p>

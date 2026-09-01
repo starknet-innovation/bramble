@@ -22,7 +22,7 @@ export default meta;
 const skinForTheme = (theme: CatalogArgs["theme"]): Skin =>
   theme === "light" ? defaultSkin : darkSkin;
 
-const semanticColorTokens = new Set(["--mc-danger", "--mc-positive"]);
+const semanticColorTokens = new Set(["--mc-danger", "--mc-positive", "--mc-warning"]);
 const identityColorTokens = new Set([
   "--mc-account-avatar-0",
   "--mc-account-avatar-1",
@@ -53,7 +53,7 @@ const colors = (args: CatalogArgs): HTMLIFrameElement => {
   const semantics = colorSwatches(entries.filter(([name]) => semanticColorTokens.has(name)));
   return catalogFrame(
     "Colors",
-    `${skin.name} maps monochrome interaction roles and explicit success/failure semantics to concrete values. Components consume roles only; no production template owns a color literal.`,
+    `${skin.name} maps monochrome interaction roles and explicit success, degraded-data, and failure semantics to concrete values. Components consume roles only; no production template owns a color literal.`,
     `${catalogGroup(
       "Monochrome foundation",
       "Surfaces, ink, actions, focus, and selection remain achromatic.",
@@ -66,7 +66,7 @@ const colors = (args: CatalogArgs): HTMLIFrameElement => {
      )}
      ${catalogGroup(
        "Reserved signals",
-       "Green and red appear only when state carries positive or negative meaning.",
+       "Green, orange, and red appear only when state carries positive, degraded, or negative meaning.",
        `<div class="catalog-grid">${semantics}</div>`,
      )}`,
     args.theme,

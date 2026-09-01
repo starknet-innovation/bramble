@@ -2,16 +2,25 @@
  * Account derivation checks prove wallet metadata comes from Krusty KMS.
  */
 import { describe, expect, test } from "bun:test";
+import {
+  ARGENT_ACCOUNT_CONTRACT,
+  argentAccountAddress,
+} from "@mc-wallet/starknet/account-contracts";
 import { fakeKms } from "@mc-wallet/testkit/fake-kms";
 import { deriveAccountRef } from "@mc-wallet/vault/accounts";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 
 describe("deriveAccountRef", () => {
   test("creates Starknet account metadata without returning private keys", async () => {
-    const account = await deriveAccountRef(fakeKms(), { mnemonic });
+    const account = await deriveAccountRef(fakeKms(), {
+      accountContractType: "openzeppelin",
+      mnemonic,
+    });
 
     expect(account).toEqual({
+      accountContractType: "openzeppelin",
       address: "0xabc111111",
       classHash: "0x111111",
       derivation: {
@@ -27,24 +36,95 @@ describe("deriveAccountRef", () => {
     expect(JSON.stringify(account)).not.toContain("0x123456");
   });
 
-  test("rejects invalid mnemonics", async () => {
-    await expect(deriveAccountRef(fakeKms(false), { mnemonic })).rejects.toThrow(
-      "Invalid mnemonic",
+  test("keeps the established zero-salt OpenZeppelin address policy explicit", async () => {
+    let salt: string | undefined;
+    await deriveAccountRef(
+      {
+        ...fakeKms(),
+        async deriveOzAccountAddress(_publicKeyX, _classHash, inputSalt) {
+          salt = inputSalt;
+          return "0xabc111111";
+        },
+      },
+      { accountContractType: "openzeppelin", mnemonic },
     );
+
+    expect(salt).toBe("0x0");
+  });
+
+  test("derives Argent accounts from the pinned class and constructor", async () => {
+    let ozAddressDerived = false;
+    const account = await deriveAccountRef(
+      {
+        ...fakeKms(),
+        async deriveOzAccountAddress() {
+          ozAddressDerived = true;
+          throw new Error("OpenZeppelin derivation must not run");
+        },
+      },
+      { accountContractType: "argent", mnemonic },
+    );
+
+    expect(account).toMatchObject({
+      accountContractType: "argent",
+      address: argentAccountAddress("0xabc", "0xabc"),
+      deploymentSalt: "0xabc",
+    });
+    expect(sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)).toBe(true);
+    expect(ozAddressDerived).toBe(false);
+  });
+
+  test("derives an existing Argent account from its exact deployment salt", async () => {
+    const account = await deriveAccountRef(fakeKms(), {
+      accountContractType: "argent",
+      deploymentSalt: "0x777",
+      mnemonic,
+    });
+
+    expect(account).toMatchObject({
+      accountContractType: "argent",
+      address: argentAccountAddress("0xabc", "0x777"),
+      deploymentSalt: "0x777",
+    });
+  });
+
+  test("rejects a non-pinned class hash for an Argent account", async () => {
+    await expect(
+      deriveAccountRef(fakeKms(), {
+        accountContractType: "argent",
+        classHash: "0x123",
+        mnemonic,
+      }),
+    ).rejects.toThrow("Invalid Argent account class hash");
+  });
+
+  test("rejects invalid mnemonics", async () => {
+    await expect(
+      deriveAccountRef(fakeKms(false), { accountContractType: "openzeppelin", mnemonic }),
+    ).rejects.toThrow("Invalid mnemonic");
   });
 
   test("rejects unsafe derivation indexes before KMS derivation", async () => {
-    await expect(deriveAccountRef(fakeKms(), { accountIndex: -1, mnemonic })).rejects.toThrow(
-      "Invalid derivation index",
-    );
     await expect(
-      deriveAccountRef(fakeKms(), { addressIndex: Number.MAX_SAFE_INTEGER + 1, mnemonic }),
+      deriveAccountRef(fakeKms(), {
+        accountContractType: "openzeppelin",
+        accountIndex: -1,
+        mnemonic,
+      }),
+    ).rejects.toThrow("Invalid derivation index");
+    await expect(
+      deriveAccountRef(fakeKms(), {
+        accountContractType: "openzeppelin",
+        addressIndex: Number.MAX_SAFE_INTEGER + 1,
+        mnemonic,
+      }),
     ).rejects.toThrow("Invalid derivation index");
   });
 
   test("rejects invalid networks even with explicit class hashes", async () => {
     await expect(
       deriveAccountRef(fakeKms(), {
+        accountContractType: "openzeppelin",
         classHash: "0xabcdef",
         mnemonic,
         networkId: "toString" as never,
@@ -52,6 +132,7 @@ describe("deriveAccountRef", () => {
     ).rejects.toThrow("Invalid Starknet network");
     await expect(
       deriveAccountRef(fakeKms(), {
+        accountContractType: "openzeppelin",
         classHash: "0xabcdef",
         mnemonic,
         networkId: "SN_BAD" as never,
@@ -62,18 +143,21 @@ describe("deriveAccountRef", () => {
   test("rejects invalid class hashes before storing account metadata", async () => {
     await expect(
       deriveAccountRef(fakeKms(), {
+        accountContractType: "openzeppelin",
         classHash: "not-hex",
         mnemonic,
       }),
     ).rejects.toThrow("Invalid account class hash");
     await expect(
       deriveAccountRef(fakeKms(), {
+        accountContractType: "openzeppelin",
         classHash: "0x800000000000011000000000000000000000000000000000000000000000001",
         mnemonic,
       }),
     ).rejects.toThrow("Invalid account class hash");
     await expect(
       deriveAccountRef(fakeKms(), {
+        accountContractType: "openzeppelin",
         classHash: "0x0",
         mnemonic,
       }),
@@ -86,7 +170,7 @@ describe("deriveAccountRef", () => {
             return JSON.stringify({ oz: { "3.0.0": { SN_MAIN: "not-hex" } } });
           },
         },
-        { mnemonic },
+        { accountContractType: "openzeppelin", mnemonic },
       ),
     ).rejects.toThrow("Krusty KMS returned an invalid class hash");
     await expect(
@@ -97,7 +181,7 @@ describe("deriveAccountRef", () => {
             return JSON.stringify({ oz: { "3.0.0": { SN_MAIN: "0x0" } } });
           },
         },
-        { mnemonic },
+        { accountContractType: "openzeppelin", mnemonic },
       ),
     ).rejects.toThrow("Krusty KMS returned an invalid class hash");
   });
@@ -119,7 +203,7 @@ describe("deriveAccountRef", () => {
               return JSON.stringify({ oz: { "3.0.0": {} } });
             },
           },
-          { mnemonic },
+          { accountContractType: "openzeppelin", mnemonic },
         ),
       ).rejects.toThrow("Krusty KMS class hashes are missing SN_MAIN");
     } finally {
@@ -144,7 +228,7 @@ describe("deriveAccountRef", () => {
             };
           },
         },
-        { mnemonic },
+        { accountContractType: "openzeppelin", mnemonic },
       ),
     ).rejects.toThrow("Krusty KMS returned invalid account key material");
     await expect(
@@ -159,7 +243,7 @@ describe("deriveAccountRef", () => {
             };
           },
         },
-        { mnemonic },
+        { accountContractType: "openzeppelin", mnemonic },
       ),
     ).rejects.toThrow("Krusty KMS returned invalid account key material");
     await expect(
@@ -174,7 +258,7 @@ describe("deriveAccountRef", () => {
             };
           },
         },
-        { mnemonic },
+        { accountContractType: "openzeppelin", mnemonic },
       ),
     ).rejects.toThrow("Krusty KMS returned invalid account key material");
     await expect(
@@ -189,7 +273,7 @@ describe("deriveAccountRef", () => {
             };
           },
         },
-        { mnemonic },
+        { accountContractType: "openzeppelin", mnemonic },
       ),
     ).rejects.toThrow("Krusty KMS returned invalid account key material");
     await expect(
@@ -200,7 +284,7 @@ describe("deriveAccountRef", () => {
             return "not-hex";
           },
         },
-        { mnemonic },
+        { accountContractType: "openzeppelin", mnemonic },
       ),
     ).rejects.toThrow("Krusty KMS returned invalid account address");
     await expect(
@@ -211,7 +295,7 @@ describe("deriveAccountRef", () => {
             return "0x0";
           },
         },
-        { mnemonic },
+        { accountContractType: "openzeppelin", mnemonic },
       ),
     ).rejects.toThrow("Krusty KMS returned invalid account address");
   });
@@ -235,7 +319,7 @@ describe("deriveAccountRef", () => {
             };
           },
         },
-        { mnemonic },
+        { accountContractType: "openzeppelin", mnemonic },
       ),
     ).rejects.toThrow("Krusty KMS returned invalid account key material");
     expect(addressDerived).toBe(false);

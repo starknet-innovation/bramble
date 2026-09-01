@@ -21,6 +21,7 @@ type ExtensionGlobal = typeof globalThis & {
     readonly storage?: {
       readonly local?: RestrictedStorageArea;
       readonly session?: RestrictedStorageArea;
+      readonly sync?: RestrictedStorageArea;
     };
   };
 };
@@ -69,6 +70,19 @@ export const createBrowserSessionStore = (): KeyValueStore => {
   return createAreaStore(storage);
 };
 
+/**
+ * Creates the production adapter for sync-backed vault freshness markers. The
+ * encrypted vault itself remains local; this independent area only stores
+ * non-secret lineage and commit capabilities used to reject local rollback.
+ */
+export const createBrowserSyncStore = (): KeyValueStore => {
+  const storage = (globalThis as ExtensionGlobal).chrome?.storage?.sync;
+  if (!storage) {
+    throw new Error("chrome.storage.sync is unavailable");
+  }
+  return createAreaStore(storage);
+};
+
 const restrictToTrustedContexts = async (
   storage: RestrictedStorageArea | undefined,
 ): Promise<boolean> => {
@@ -101,17 +115,25 @@ export const hardenSessionAccess = async (): Promise<boolean> => {
 };
 
 /**
- * Requires both wallet storage areas to be unavailable to untrusted extension
- * contexts before privileged startup may continue. Chrome exposes local
- * storage to content scripts by default, while session storage may contain the
- * live unlock capability; missing support or either failed lockdown is fatal.
+ * Restricts the independent vault-freshness authority to trusted extension
+ * contexts so content scripts cannot advance or erase commit markers.
+ */
+export const hardenSyncAccess = async (): Promise<boolean> =>
+  restrictToTrustedContexts((globalThis as ExtensionGlobal).chrome?.storage?.sync);
+
+/**
+ * Requires all wallet storage areas to be unavailable to untrusted extension
+ * contexts before privileged startup may continue. Local holds ciphertext,
+ * session may hold the live unlock capability, and sync owns freshness state;
+ * missing support or any failed lockdown is fatal.
  */
 export const requireTrustedStorageAccess = async (): Promise<void> => {
-  const [localRestricted, sessionRestricted] = await Promise.all([
+  const [localRestricted, sessionRestricted, syncRestricted] = await Promise.all([
     hardenLocalAccess(),
     hardenSessionAccess(),
+    hardenSyncAccess(),
   ]);
-  if (!localRestricted || !sessionRestricted) {
+  if (!localRestricted || !sessionRestricted || !syncRestricted) {
     throw new Error("trusted browser storage access is unavailable");
   }
 };

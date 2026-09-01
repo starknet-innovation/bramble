@@ -7,6 +7,7 @@ import type {
 
 type PreferencesAdapterOptions = {
   readonly onApprovalSurface: (preference: ApprovalSurfacePreference) => void;
+  readonly onReliabilityDiagnostics: (enabled: boolean) => void;
   readonly store: Promise<WalletPreferencesStore | null>;
 };
 
@@ -16,6 +17,7 @@ type PreferencesAdapterOptions = {
  */
 export const createBackgroundPreferences = ({
   onApprovalSurface,
+  onReliabilityDiagnostics,
   store,
 }: PreferencesAdapterOptions): WalletPreferencesStore => {
   const required = async (): Promise<WalletPreferencesStore> => {
@@ -30,6 +32,7 @@ export const createBackgroundPreferences = ({
     async importPreferences(input) {
       const next = await (await required()).importPreferences(input);
       onApprovalSurface(next.approvalSurface ?? "side-panel");
+      onReliabilityDiagnostics(next.reliabilityDiagnostics ?? false);
       return next;
     },
     read: async () => (await required()).read(),
@@ -44,10 +47,18 @@ export const createBackgroundPreferences = ({
     async setDisplay(input) {
       const next = await (await required()).setDisplay(input);
       if (input.approvalSurface !== undefined) onApprovalSurface(input.approvalSurface);
+      if (input.reliabilityDiagnostics !== undefined) {
+        onReliabilityDiagnostics(input.reliabilityDiagnostics);
+      }
       return next;
     },
+    // The explorer read lane is a disclosure decision (MCW-V09-129), so it is
+    // delegated through the same fail-closed gate: with storage unavailable the
+    // choice is refused rather than recorded against a half-built store.
+    setExplorerFallback: async (input) => (await required()).setExplorerFallback(input),
     setGroupIcon: async (input) => (await required()).setGroupIcon(input),
     setNftIndexerUrl: async (input) => (await required()).setNftIndexerUrl(input),
+    setNostrRelayUrl: async (input) => (await required()).setNostrRelayUrl(input),
     setNftSpam: async (input) => (await required()).setNftSpam(input),
     setRpcOverride: async (input) => (await required()).setRpcOverride(input),
     setStrk20NetworkConfig: async (input) => (await required()).setStrk20NetworkConfig(input),

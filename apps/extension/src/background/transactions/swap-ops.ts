@@ -1,28 +1,45 @@
 /**
  * In-wallet swap operations over the AVNU aggregator, dispatched from the
  * background message handler. Both messages are privileged (extension pages
- * only, deny-by-default in ./senders.ts) and follow the wallet's execution
- * contract: token addresses come from the user's TRACKED registry (never from
- * the UI message), AVNU responses are validated at the @mc-wallet/transactions/avnu.ts
- * boundary, built calls pass a policy check here (an approve may only touch
- * the sell token) plus the shared call verifier, and signing happens only
- * through the session-gated Krusty signer. Failure behaviour: any validation,
- * quote, build, or policy failure returns an error response — nothing is
- * signed on a path that could not be fully checked.
+ * only, deny-by-default in ../routing/senders.ts) and follow the wallet's
+ * execution contract: token addresses come from the user's TRACKED registry
+ * (never from the UI message), AVNU responses are validated at the
+ * @mc-wallet/transactions/avnu boundary, the COMPLETE built call set passes the
+ * intent policy gate in ../privacy/swap-build-policy.ts — against the router
+ * address and swap selector the WALLET pins per network and the route calldata
+ * DECODED against the pinned exchange ABI (@mc-wallet/transactions/avnu-route),
+ * not against anything the response asserts — plus the shared call verifier,
+ * and signing happens only through the session-gated Krusty signer. Failure
+ * behaviour: any validation, quote, build, or policy failure returns an error
+ * response — nothing is signed on a path that could not be fully checked.
  */
 
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { SwapService } from "@mc-wallet/transactions/avnu";
-import { formatTokenAmount, parseTokenAmount } from "@mc-wallet/starknet/rpc";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
 import type { TokenConfig } from "@mc-wallet/settings/preferences";
-import { approvalPayloadMatchesContext, createApprovalContext } from "../approvals/approval-context";
+import { formatTokenAmount, parseTokenAmount } from "@mc-wallet/starknet/rpc";
+import { avnuRouterAddress, type SwapService } from "@mc-wallet/transactions/avnu";
+import { reviewedMinBuyAmount } from "@mc-wallet/transactions/avnu-route";
+import {
+  refuseOnPoisonedRecipient,
+  verificationContext,
+  verifyCalls,
+} from "@mc-wallet/transactions/verify";
+import { canonical, shortAddress } from "@mc-wallet/transactions/verify-decode";
+import { isApproveEntrypoint } from "@mc-wallet/transactions/verify-selectors";
+import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { signerForContext, type WalletOpsDeps } from "../accounts/wallet-ops";
+import {
+  approvalPayloadMatchesContext,
+  createApprovalContext,
+} from "../approvals/approval-context";
+import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { captureSessionAuthorization } from "../runtime/session";
+import { recordSubmittedActivity } from "./activity-recording";
+import { buildPolicy } from "./swap-build-policy";
 import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
 import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
-import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 
 /**
  * Dependencies for the swap handler: the shared wallet-ops set plus the AVNU
@@ -32,10 +49,6 @@ export type SwapOpsDeps = WalletOpsDeps & {
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
 };
-
-// Entrypoints that grant spend on a token. A built swap may only carry them
-// against the sell token — any other target is rejected before verification.
-const APPROVE_ENTRYPOINTS = new Set(["approve", "increaseAllowance", "increase_allowance"]);
 
 const errorText = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message.length > 0 ? error.message : fallback;
@@ -62,13 +75,21 @@ const swapPair = async (
   return { ...context, buyToken, preferences, sellToken } as const;
 };
 
-const sellAmountHex = (amount: string, decimals: number): string | null => {
+// One guarded parse for both sides of the swap: an amount with more decimal
+// places than its token has, or a non-positive one, is a rejection the caller
+// turns into a message — never a throw out of the handler.
+const baseUnits = (amount: string, decimals: number): bigint | null => {
   try {
-    const wei = parseTokenAmount(amount, decimals);
-    return wei > 0n ? `0x${wei.toString(16)}` : null;
+    const raw = parseTokenAmount(amount, decimals);
+    return raw > 0n ? raw : null;
   } catch {
     return null;
   }
+};
+
+const sellAmountHex = (amount: string, decimals: number): string | null => {
+  const raw = baseUnits(amount, decimals);
+  return raw === null ? null : `0x${raw.toString(16)}`;
 };
 
 const swapTokensResponse = async (deps: SwapOpsDeps): Promise<RuntimeResponse> => {
@@ -117,59 +138,6 @@ const swapQuoteResponse = async (
   }
 };
 
-// The build-output policy gate: bounded call count and approvals only ever on
-// the sell token. Returns the rejection, or null when the build is acceptable.
-const approvalCallPolicyError = (
-  call: {
-    readonly calldata: readonly string[];
-    readonly contractAddress: string;
-    readonly entrypoint: string;
-  },
-  sellAmount: string,
-  sellTokenAddress: string,
-): string | null => {
-  if (!APPROVE_ENTRYPOINTS.has(call.entrypoint)) {
-    return null;
-  }
-  if (!sameFelt(call.contractAddress, sellTokenAddress)) {
-    return "swap build touched an unexpected token approval";
-  }
-  const allowance = BigInt(call.calldata[1] ?? "0") + (BigInt(call.calldata[2] ?? "0") << 128n);
-  if (
-    call.calldata.length !== 3 ||
-    BigInt(call.calldata[0] ?? "0") === 0n ||
-    allowance !== BigInt(sellAmount)
-  ) {
-    return "swap build requested an unexpected token allowance";
-  }
-  return null;
-};
-
-const buildPolicyError = (
-  built: readonly {
-    readonly calldata: readonly string[];
-    readonly contractAddress: string;
-    readonly entrypoint: string;
-  }[],
-  sellAmount: string,
-  sellTokenAddress: string,
-): string | null => {
-  if (built.length > 4) {
-    return "swap build returned too many calls";
-  }
-  let approvals = 0;
-  for (const call of built) {
-    if (APPROVE_ENTRYPOINTS.has(call.entrypoint)) {
-      approvals += 1;
-    }
-    const error = approvalCallPolicyError(call, sellAmount, sellTokenAddress);
-    if (error) {
-      return error;
-    }
-  }
-  return approvals > 1 ? "swap build returned multiple token approvals" : null;
-};
-
 const swapPrepareResponse = async (
   deps: SwapOpsDeps,
   input: NonNullable<ReturnType<typeof readSwapPrepareInput>>,
@@ -183,6 +151,18 @@ const swapPrepareResponse = async (
   if (!sellAmount) {
     return { error: "enter an amount to swap" };
   }
+  // The floor the signed route must promise. Derived from the buy amount the
+  // user is REVIEWING — the same figure the confirm card and the activity line
+  // state — and the slippage the wallet is about to ask the aggregator to build
+  // to, in integer base units. Deriving it here rather than in the panel is the
+  // point: the panel then displays a minimum the gate below actually enforces
+  // instead of a number computed beside the transaction.
+  const quotedBuyAmount = baseUnits(input.buyAmount, buyToken.decimals);
+  const minBuyAmount =
+    quotedBuyAmount === null ? null : reviewedMinBuyAmount(quotedBuyAmount, input.slippage);
+  if (minBuyAmount === null) {
+    return { error: "swap quote is not reviewable — request a fresh price" };
+  }
   try {
     const built = await deps.swap.buildCalls({
       networkId,
@@ -190,24 +170,66 @@ const swapPrepareResponse = async (
       slippage: input.slippage,
       takerAddress: account.address,
     });
-    const policyError = buildPolicyError(built.calls, sellAmount, sellToken.address);
-    if (policyError) {
-      return { error: policyError };
-    }
     const calls = built.calls.map((call) => ({
       calldata: [...call.calldata],
       contractAddress: call.contractAddress,
       entrypoint: call.entrypoint,
     }));
-    const report = verifyCalls(calls, verificationContext(account, preferences));
+    const routerAddress = avnuRouterAddress(networkId);
+    // Decoded first: the policy reads the verifier's per-call kind so it judges
+    // the same decode the reviewer will read, and the report is discarded with
+    // the build when the policy rejects it.
+    const report = verifyCalls(calls, {
+      ...verificationContext(account, preferences),
+      knownContracts: [routerAddress],
+    });
+    const policy = buildPolicy(calls, report.calls, {
+      // Every side of every equality below is wallet-side: the pair comes from
+      // the TRACKED registry, the beneficiary from the unlocked account, the
+      // floor from the reviewed quote, and the counterparty from the ACTIVE
+      // network's pin. None of them is anything the response can influence.
+      buyTokenAddress: buyToken.address,
+      minBuyAmount,
+      routerAddress,
+      sellAmount,
+      sellTokenAddress: sellToken.address,
+      takerAddress: account.address,
+    });
+    if (policy.error !== undefined) {
+      return { error: policy.error };
+    }
+    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[networkId], preferences);
+    const signHash = signerForContext(deps, context, "swap-tokens");
+    const reviewedFee = await deps.runtimeRpc
+      .estimateInvokeFee({ account, calls, rpcUrls, signHash })
+      .catch(() => null);
+    if (!reviewedFee) {
+      return {
+        error:
+          "The network fee could not be estimated. Check the RPC endpoint and retry before signing.",
+      };
+    }
+    const minBuyText = formatTokenAmount(policy.route.minBuyAmount, buyToken.decimals);
+    // The route's own summary is WALLET-AUTHORED from the decoded calldata, not
+    // the verifier's generic "Call multi_route_swap on 0x…". That generic line
+    // reads identically for an honest build and one that moved the beneficiary
+    // or dropped the minimum, which is exactly how such a build passed review;
+    // this line states the two facts the gate above just bound.
+    const routeIndex = calls.findIndex((call) => !isApproveEntrypoint(call.entrypoint));
     const unsigned = {
       amount: input.amount,
       buyAmount: input.buyAmount,
       buySymbol: buyToken.symbol,
       calls,
       flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+      minBuyAmount: minBuyText,
+      reviewedFee,
       sellSymbol: sellToken.symbol,
-      summaries: report.calls.map((call) => call.summary),
+      summaries: report.calls.map((call, index) =>
+        index === routeIndex
+          ? `Swap ${input.amount} ${sellToken.symbol} for at least ${minBuyText} ${buyToken.symbol}, paid to ${shortAddress(canonical(account.address))}`
+          : call.summary,
+      ),
     };
     const approvalContext = await createApprovalContext(account, swapPreparationPayload(unsigned));
     const swapPreparation = deps.swapPreparations.put({
@@ -233,6 +255,7 @@ const swapExecuteResponse = async (
   if (context.error !== undefined) {
     return { error: context.error };
   }
+  const authorized = captureSessionAuthorization(deps.session);
   const preferences = await deps.preferencesStore.read();
   if (
     context.account.id !== preparation.context.accountId ||
@@ -244,14 +267,47 @@ const swapExecuteResponse = async (
     return { error: "swap preparation changed" };
   }
   try {
-    verifyCalls(preparation.calls, verificationContext(context.account, preferences));
+    const assets = verificationContext(context.account, preferences);
+    const reviewedAssets = {
+      ...assets,
+      knownContracts: [avnuRouterAddress(context.networkId)],
+    };
+    // Re-verified against the account's live trusted set immediately before the
+    // batch goes out, and refused — not annotated — when the reviewed route pays
+    // a recipient that mimics a saved address. Same shared policy, same wording,
+    // as the ERC20 send, the NFT send, the dapp invoke, and the pool routes.
+    // A second gate by design: `buildPolicy` already refuses a build containing
+    // any decoded transfer, and pins the route's own beneficiary to this
+    // account, so today nothing reaches here with a recipient the verifier can
+    // read. That is exactly why it belongs — if either rule is ever widened,
+    // the recipient rule must not be the thing that quietly went missing.
+    const refusal = refuseOnPoisonedRecipient(verifyCalls(preparation.calls, reviewedAssets));
+    if (refusal) {
+      return refusal;
+    }
     const result = await deps.runtimeRpc.submitInvokeTransaction({
       account: context.account,
       calls: preparation.calls,
+      isAuthorized: authorized.isCurrent,
+      reviewedFee: preparation.reviewedFee,
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
       signHash: signerForContext(deps, context, "swap-tokens"),
     });
-    await deps.activity.record({
+    // The build always carries an approval of the sell token to the router
+    // (buildPolicy refuses one without it). The route is expected to spend it
+    // in the same transaction, but the wallet cannot prove it did — a residual
+    // allowance must be listed and revokable like any other, so it is tracked
+    // here on exactly the terms the dapp-invoke path tracks a dapp's approval.
+    // Filed BEFORE the activity line: an activity write that fails (a storage
+    // quota, an IO fault) must not be able to lose the record of a grant that
+    // is already on chain.
+    await recordApproveAllowances({
+      assets,
+      calls: preparation.calls,
+      owner: allowanceOwner(context.account),
+      store: deps.allowanceStore,
+    });
+    await recordSubmittedActivity(deps.activity, {
       accountId: context.account.id,
       amount: preparation.amount,
       hash: result.transactionHash,

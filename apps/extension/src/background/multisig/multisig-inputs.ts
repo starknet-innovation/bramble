@@ -1,312 +1,474 @@
 /**
- * Pure parsers for multisig runtime messages from extension pages. Every
- * field is validated structurally here; on-chain facts (signer membership,
- * proposal existence, class declaration) are re-checked by the ops handler,
- * and the multisig contract enforces them again at execution time.
+ * Strict parsers for privileged Argent multisig runtime messages.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import {
-  isMultisigConfirmationMode,
-  type MultisigConfirmationMode,
-} from "@mc-wallet/multisig/confirmation";
-import {
-  isMultisigCallInput,
-  isMultisigEntrypoint,
+  type ArgentMultisigCall,
+  isArgentMultisigCalls,
   MULTISIG_LIMITS,
-  type MultisigCallInput,
 } from "@mc-wallet/multisig/chain";
+import {
+  type ArgentMultisigDeployConfig,
+  canonicalArgentMultisigDeployConfig,
+} from "@mc-wallet/multisig/deploy";
+import {
+  type ArgentMultisigSigningIntent,
+  isArgentMultisigSigningIntent,
+} from "@mc-wallet/multisig/repository";
+import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
+import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  isStarknetNetworkId,
+  type StarknetNetworkId,
+} from "@mc-wallet/wallet-model/networks";
+import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 
-// Stored ids compose `<networkId>:<address>:<txId>`; with full-length felts a
-// proposal id runs to ~144 characters, so the cap must sit comfortably above.
-const MAX_ID_LENGTH = 200;
-const MAX_NAME_LENGTH = MULTISIG_LIMITS.nameLength;
-const MAX_SUMMARY_LENGTH = MULTISIG_LIMITS.summaryLength;
-const MAX_CALLDATA_FELTS = MULTISIG_LIMITS.calldataFelts;
-const MAX_SIGNERS = MULTISIG_LIMITS.signers;
+const isCanonicalNonZeroFelt = (value: unknown): value is string =>
+  typeof value === "string" && isNonZeroStarkFieldElement(value) && canonicalFelt(value) === value;
 
-const isId = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0 && value.length <= MAX_ID_LENGTH;
-
-const isOptionalName = (value: unknown): value is string | undefined =>
+const isName = (value: unknown): value is string | undefined =>
   value === undefined ||
-  (typeof value === "string" && value.length > 0 && value.length <= MAX_NAME_LENGTH);
+  (typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= MULTISIG_LIMITS.nameLength &&
+    value.trim() === value);
 
-const isOptionalSummary = (value: unknown): value is string | undefined =>
-  value === undefined || (typeof value === "string" && value.length <= MAX_SUMMARY_LENGTH);
-
-const isOptionalSalt = (value: unknown): value is string | undefined =>
-  value === undefined || (typeof value === "string" && isStarkFieldElement(value));
-
-const isFeltList = (value: unknown, max: number): value is readonly string[] =>
-  Array.isArray(value) &&
-  value.length <= max &&
-  value.every((felt) => typeof felt === "string" && isStarkFieldElement(felt));
-
-/**
- * Public call details carried by an imported review package.
- */
-export type TrackedMultisigCall = MultisigCallInput & { readonly salt: string };
-
-const readTrackedCall = (value: unknown): TrackedMultisigCall | null => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["calldata", "contractAddress", "entrypoint", "salt"]) ||
-    !Array.isArray(value["calldata"]) ||
-    typeof value["contractAddress"] !== "string" ||
-    typeof value["entrypoint"] !== "string" ||
-    typeof value["salt"] !== "string" ||
-    !isStarkFieldElement(value["salt"])
-  ) {
-    return null;
-  }
-  const call = {
-    calldata: value["calldata"].filter((felt): felt is string => typeof felt === "string"),
-    contractAddress: value["contractAddress"],
-    entrypoint: value["entrypoint"],
-  };
-  return value["calldata"].length === call.calldata.length && isMultisigCallInput(call)
-    ? { ...call, salt: value["salt"] }
-    : null;
+type NormalizedArgentMultisigCall = {
+  readonly calldata: string[];
+  readonly contractAddress: string;
+  readonly entrypoint: string;
 };
 
 /**
- * Parses a watch request that adds a multisig contract by address.
+ * Copies validated frozen calls into Starknet.js's mutable calldata shape.
+ * This projection adds no authority and cannot fail.
  */
-export const readAddMultisigInput = (
+export const normalizedArgentMultisigCalls = (
+  calls: ArgentMultisigSigningIntent["prepared"]["calls"],
+): readonly NormalizedArgentMultisigCall[] =>
+  calls.map((call) => ({ ...call, calldata: [...call.calldata] }));
+
+const isDeployFields = (value: Record<string, unknown>): boolean => {
+  if (
+    typeof value["salt"] !== "string" ||
+    !Array.isArray(value["signerPublicKeys"]) ||
+    !value["signerPublicKeys"].every((key) => typeof key === "string") ||
+    !Number.isSafeInteger(value["threshold"])
+  ) {
+    return false;
+  }
+  try {
+    canonicalArgentMultisigDeployConfig({
+      salt: value["salt"],
+      signerPublicKeys: value["signerPublicKeys"] as readonly string[],
+      threshold: Number(value["threshold"]),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const deployConfigFrom = (value: Record<string, unknown>): ArgentMultisigDeployConfig =>
+  canonicalArgentMultisigDeployConfig({
+    salt: value["salt"] as string,
+    signerPublicKeys: value["signerPublicKeys"] as readonly string[],
+    threshold: Number(value["threshold"]),
+  });
+
+/**
+ * Parsed current-chain account registration request.
+ */
+export type AddArgentMultisigInput = {
+  readonly address: string;
+  readonly networkId: StarknetNetworkId;
+  readonly signerPublicKeys?: readonly string[];
+};
+
+/**
+ * Parses address-only discovery for an existing pinned account.
+ */
+export const readAddMultisigInput = (message: unknown): AddArgentMultisigInput | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["address", "networkId", "signerPublicKeys", "type"]) ||
+    message["type"] !== "wallet.addMultisig" ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    !isCanonicalNonZeroFelt(message["address"]) ||
+    (message["signerPublicKeys"] !== undefined &&
+      (!Array.isArray(message["signerPublicKeys"]) ||
+        message["signerPublicKeys"].length === 0 ||
+        message["signerPublicKeys"].length > MULTISIG_LIMITS.signers ||
+        !message["signerPublicKeys"].every(isCanonicalNonZeroFelt)))
+  ) {
+    return null;
+  }
+  return {
+    address: message["address"],
+    networkId: message["networkId"],
+    ...(message["signerPublicKeys"] === undefined
+      ? {}
+      : { signerPublicKeys: message["signerPublicKeys"] as readonly string[] }),
+  };
+};
+
+/**
+ * Parses one wallet-only request to resolve a supported participant account.
+ */
+export const readResolveMultisigSignerInput = (
   message: unknown,
-): { readonly address: string; readonly name?: string } | null =>
+): { readonly address: string; readonly networkId: StarknetNetworkId } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["address", "name", "type"]) &&
-  message["type"] === "wallet.addMultisig" &&
-  typeof message["address"] === "string" &&
-  isNonZeroStarkFieldElement(message["address"]) &&
-  isOptionalName(message["name"])
-    ? {
-        address: message["address"],
-        ...(message["name"] === undefined ? {} : { name: message["name"] }),
-      }
+  hasOnlyKnownKeys(message, ["address", "networkId", "type"]) &&
+  message["type"] === "wallet.resolveMultisigSigner" &&
+  isStarknetNetworkId(message["networkId"]) &&
+  isCanonicalNonZeroFelt(message["address"])
+    ? { address: message["address"], networkId: message["networkId"] }
     : null;
 
 /**
- * Parses an id-only multisig request (`balances`, `remove`, and `refresh`).
+ * Parses an exact multisig id request.
  */
 export const readMultisigIdInput = (
   message: unknown,
-  type: "wallet.multisigBalances" | "wallet.refreshMultisig" | "wallet.removeMultisig",
-): { readonly id: string } | null =>
+  type: "wallet.multisigBalances" | "wallet.refreshMultisig" | "wallet.syncArgentMultisigIntents",
+): { readonly multisigId: string } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["id", "type"]) &&
+  hasOnlyKnownKeys(message, ["multisigId", "type"]) &&
   message["type"] === type &&
-  isId(message["id"])
-    ? { id: message["id"] }
+  isAccountId(message["multisigId"])
+    ? { multisigId: message["multisigId"] }
     : null;
 
 /**
- * Parsed proposal submission: one inner call plus salt and summary.
+ * Parses a multisig balance read, optionally from the durable snapshot.
  */
-export type ProposeMultisigInput = {
-  readonly calldata: readonly string[];
-  readonly entrypoint: string;
-  readonly multisigId: string;
-  readonly salt: string;
-  readonly signerAccountId?: string;
-  readonly summary?: string;
-  readonly to: string;
-};
-
-/**
- * Parses a proposal submission for a watched multisig.
- */
-export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput | null =>
+export const readMultisigBalancesInput = (
+  message: unknown,
+): { readonly cached: boolean; readonly multisigId: string; readonly refresh: boolean } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, [
-    "calldata",
-    "entrypoint",
-    "multisigId",
-    "salt",
-    "signerAccountId",
-    "summary",
-    "to",
-    "type",
-  ]) &&
-  message["type"] === "wallet.proposeMultisigTx" &&
-  isId(message["multisigId"]) &&
-  typeof message["to"] === "string" &&
-  isNonZeroStarkFieldElement(message["to"]) &&
-  isMultisigEntrypoint(message["entrypoint"]) &&
-  isFeltList(message["calldata"], MAX_CALLDATA_FELTS) &&
-  isOptionalSalt(message["salt"]) &&
-  (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
-  isOptionalSummary(message["summary"])
+  hasOnlyKnownKeys(message, ["cached", "multisigId", "refresh", "type"]) &&
+  message["type"] === "wallet.multisigBalances" &&
+  isAccountId(message["multisigId"]) &&
+  (message["cached"] === undefined || message["cached"] === true) &&
+  (message["refresh"] === undefined || message["refresh"] === true) &&
+  !(message["cached"] === true && message["refresh"] === true)
     ? {
-        calldata: message["calldata"],
-        entrypoint: message["entrypoint"] as string,
-        multisigId: message["multisigId"] as string,
-        salt: message["salt"] ?? "0x0",
-        ...(message["signerAccountId"] === undefined
-          ? {}
-          : { signerAccountId: message["signerAccountId"] }),
-        ...(message["summary"] === undefined ? {} : { summary: message["summary"] }),
-        to: message["to"],
+        cached: message["cached"] === true,
+        multisigId: message["multisigId"],
+        refresh: message["refresh"] === true,
       }
     : null;
 
 /**
- * Parsed proposal action (`confirm`, `revoke`, `execute`). Confirm and revoke
- * on proposals tracked by id only must carry `untrackedVerified: true` after
- * the user acknowledges that off-chain summaries are not chain-verified.
+ * Parses the watched-multisig reader's optional stored-snapshot request.
  */
-export type MultisigProposalActionInput = {
-  readonly proposalId: string;
-  readonly signerAccountId?: string;
-  readonly untrackedVerified?: boolean;
-};
-
-/**
- * Parsed confirmation review/submission. The discriminated mode makes a bare
- * confirmation and an atomic confirmation-plus-execution impossible to mix up
- * after the untrusted message boundary.
- */
-export type ConfirmMultisigProposalInput = MultisigProposalActionInput & {
-  readonly mode: MultisigConfirmationMode;
-};
-
-/**
- * Parses a confirmation review or submission. Both operations carry the same
- * explicit mode so the fee shown in review is for the calls eventually sent.
- */
-export const readConfirmMultisigProposalInput = (
-  message: unknown,
-  type: "wallet.confirmMultisigProposal" | "wallet.prepareMultisigConfirmation",
-): ConfirmMultisigProposalInput | null =>
+export const readMultisigsInput = (message: unknown): { readonly cached: boolean } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, [
-    "mode",
-    "proposalId",
-    "signerAccountId",
-    "type",
-    "untrackedVerified",
-  ]) &&
-  message["type"] === type &&
-  isMultisigConfirmationMode(message["mode"]) &&
-  isId(message["proposalId"]) &&
-  (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
-  (message["untrackedVerified"] === undefined || message["untrackedVerified"] === true)
+  hasOnlyKnownKeys(message, ["cached", "type"]) &&
+  message["type"] === "wallet.multisigs" &&
+  (message["cached"] === undefined || message["cached"] === true)
+    ? { cached: message["cached"] === true }
+    : null;
+
+/**
+ * Parses account removal, with an explicit terminal-history acknowledgement.
+ */
+export const readRemoveMultisigInput = (
+  message: unknown,
+): { readonly confirmHistoryRemoval: boolean; readonly multisigId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["confirmHistoryRemoval", "multisigId", "type"]) &&
+  message["type"] === "wallet.removeMultisig" &&
+  isAccountId(message["multisigId"]) &&
+  (message["confirmHistoryRemoval"] === undefined || message["confirmHistoryRemoval"] === true)
     ? {
-        mode: message["mode"],
-        proposalId: message["proposalId"],
-        ...(message["signerAccountId"] === undefined
-          ? {}
-          : { signerAccountId: message["signerAccountId"] }),
-        ...(message["untrackedVerified"] === true ? { untrackedVerified: true } : {}),
+        confirmHistoryRemoval: message["confirmHistoryRemoval"] === true,
+        multisigId: message["multisigId"],
       }
     : null;
 
 /**
- * Parses a revoke or execute request. Confirmation has its own discriminated
- * parser above because its mode changes the exact calls being authorized.
+ * Parses preparation of one exact call batch.
  */
-export const readMultisigProposalActionInput = (
-  message: unknown,
-  type: "wallet.executeMultisigProposal" | "wallet.revokeMultisigConfirmation",
-): MultisigProposalActionInput | null => {
-  const keys =
-    type === "wallet.executeMultisigProposal"
-      ? (["proposalId", "signerAccountId", "type"] as const)
-      : (["proposalId", "signerAccountId", "type", "untrackedVerified"] as const);
-  if (
-    !(
-      isRecord(message) &&
-      hasOnlyKnownKeys(message, keys) &&
-      message["type"] === type &&
-      isId(message["proposalId"]) &&
-      (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"]))
-    )
-  ) {
-    return null;
-  }
-  if (message["untrackedVerified"] !== undefined && message["untrackedVerified"] !== true) {
-    return null;
-  }
-  return {
-    proposalId: message["proposalId"],
-    ...(message["signerAccountId"] === undefined
-      ? {}
-      : { signerAccountId: message["signerAccountId"] }),
-    ...(message["untrackedVerified"] === true ? { untrackedVerified: true } : {}),
-  };
-};
-
-/**
- * Parses a track request for a proposal id shared out-of-band.
- */
-export const readTrackMultisigProposalInput = (
+export const readPrepareIntentInput = (
   message: unknown,
 ): {
-  readonly call?: TrackedMultisigCall;
+  readonly calls: readonly ArgentMultisigCall[];
   readonly multisigId: string;
-  readonly summary?: string;
-  readonly txId: string;
-} | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["call", "multisigId", "summary", "txId", "type"]) ||
-    message["type"] !== "wallet.trackMultisigProposal" ||
-    !isId(message["multisigId"]) ||
-    typeof message["txId"] !== "string" ||
-    !isStarkFieldElement(message["txId"]) ||
-    !isOptionalSummary(message["summary"])
-  ) {
-    return null;
-  }
-  const call = message["call"] === undefined ? undefined : readTrackedCall(message["call"]);
-  if (call === null) {
-    return null;
-  }
+} | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["calls", "multisigId", "type"]) &&
+  message["type"] === "wallet.prepareArgentMultisigIntent" &&
+  isAccountId(message["multisigId"]) &&
+  isArgentMultisigCalls(message["calls"])
+    ? {
+        calls: message["calls"],
+        multisigId: message["multisigId"],
+      }
+    : null;
+
+/**
+ * Parses local signing by one explicitly selected wallet account.
+ */
+export const readSignIntentInput = (
+  message: unknown,
+): { readonly intentId: string; readonly signerAccountId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["intentId", "signerAccountId", "type"]) &&
+  message["type"] === "wallet.signArgentMultisigIntent" &&
+  typeof message["intentId"] === "string" &&
+  message["intentId"].length > 0 &&
+  isAccountId(message["signerAccountId"])
+    ? { intentId: message["intentId"], signerAccountId: message["signerAccountId"] }
+    : null;
+
+const isSignature = (value: unknown): value is StarkSignature =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["publicKey", "r", "s"]) &&
+  isCanonicalNonZeroFelt(value["publicKey"]) &&
+  isCanonicalNonZeroFelt(value["r"]) &&
+  isCanonicalNonZeroFelt(value["s"]);
+
+/**
+ * Parses one externally collected signature fragment.
+ */
+export const readImportIntentSignatureInput = (
+  message: unknown,
+): { readonly intentId: string; readonly signature: StarkSignature } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["intentId", "signature", "type"]) &&
+  message["type"] === "wallet.importArgentMultisigSignature" &&
+  typeof message["intentId"] === "string" &&
+  message["intentId"].length > 0 &&
+  isSignature(message["signature"])
+    ? { intentId: message["intentId"], signature: message["signature"] }
+    : null;
+
+/**
+ * Versioned deterministic package exchanged between independent co-signers.
+ */
+export type ArgentMultisigIntentPackage = {
+  readonly intent: ArgentMultisigSigningIntent;
+  readonly kind: "mc-wallet.argent-multisig-intent";
+  readonly version: 1;
+};
+
+/**
+ * Builds the only full-intent package version this runtime exports.
+ */
+export const argentMultisigIntentPackage = (
+  intent: ArgentMultisigSigningIntent,
+): ArgentMultisigIntentPackage => ({
+  intent,
+  kind: "mc-wallet.argent-multisig-intent",
+  version: 1,
+});
+
+/**
+ * Discards untrusted remote lifecycle claims and derives local authority only
+ * from already-validated signature count. This pure projection never throws.
+ */
+export const locallyDerivedImportedIntent = (
+  intent: ArgentMultisigSigningIntent,
+): ArgentMultisigSigningIntent => {
+  const { broadcastTransactionHash: _remoteBroadcast, ...imported } = intent;
   return {
-    ...(call === undefined ? {} : { call }),
-    multisigId: message["multisigId"] as string,
-    ...(message["summary"] === undefined ? {} : { summary: message["summary"] }),
-    txId: message["txId"],
+    ...imported,
+    state:
+      imported.signatures.length === imported.configSnapshot.threshold ? "ready" : "collecting",
   };
 };
 
 /**
- * Parsed deploy request for a new multisig contract. No name is carried: the
- * deploy handler intentionally does not watch the contract until it is
- * finalized on-chain, so a name is chosen when the deployed multisig is later
- * added through `wallet.addMultisig`.
+ * Orders verified signature fragments in Argent's canonical signer order.
  */
-export type DeployMultisigInput = {
-  readonly quorum: number;
-  readonly salt: string;
-  readonly signers: readonly string[];
+export const sortedArgentMultisigSignatures = (
+  values: readonly StarkSignature[],
+): readonly StarkSignature[] =>
+  [...values].sort((left, right) =>
+    BigInt(argentSignerGuid(left.publicKey)) < BigInt(argentSignerGuid(right.publicKey)) ? -1 : 1,
+  );
+
+/**
+ * Merges a re-import of the same frozen hash without regressing local state.
+ * Terminal local outcomes remain authoritative; open intents gain only new,
+ * already-validated signer fragments.
+ */
+export const mergeImportedArgentMultisigIntent = (
+  current: ArgentMultisigSigningIntent,
+  incoming: ArgentMultisigSigningIntent,
+): ArgentMultisigSigningIntent => {
+  if (current.state !== "collecting" && current.state !== "ready") return current;
+  const signatures = [...current.signatures];
+  for (const signature of incoming.signatures) {
+    if (!signatures.some((stored) => stored.publicKey === signature.publicKey)) {
+      signatures.push(signature);
+    }
+  }
+  const sorted = sortedArgentMultisigSignatures(signatures);
+  return {
+    ...incoming,
+    signatures: sorted,
+    state: sorted.length === incoming.configSnapshot.threshold ? "ready" : "collecting",
+  };
 };
 
 /**
- * Parses a deploy request. Signer uniqueness and quorum bounds are enforced
- * again by the deploy-call builder before anything is signed.
+ * Parses a full frozen intent package without normalizing any signed field.
  */
-export const readDeployMultisigInput = (message: unknown): DeployMultisigInput | null =>
+export const readImportIntentInput = (
+  message: unknown,
+): { readonly package: ArgentMultisigIntentPackage } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["package", "type"]) ||
+    message["type"] !== "wallet.importArgentMultisigIntent" ||
+    !isRecord(message["package"]) ||
+    !hasOnlyKnownKeys(message["package"], ["intent", "kind", "version"]) ||
+    message["package"]["kind"] !== "mc-wallet.argent-multisig-intent" ||
+    message["package"]["version"] !== 1 ||
+    !isArgentMultisigSigningIntent(message["package"]["intent"])
+  ) {
+    return null;
+  }
+  return { package: message["package"] as unknown as ArgentMultisigIntentPackage };
+};
+
+/**
+ * Parses submission of one stored, immutable signing intent.
+ */
+export const readSubmitIntentInput = (message: unknown): { readonly intentId: string } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["quorum", "salt", "signers", "type"]) &&
-  message["type"] === "wallet.deployMultisig" &&
-  Array.isArray(message["signers"]) &&
-  message["signers"].length >= 1 &&
-  message["signers"].length <= MAX_SIGNERS &&
-  message["signers"].every(
-    (signer) => typeof signer === "string" && isNonZeroStarkFieldElement(signer),
-  ) &&
-  typeof message["quorum"] === "number" &&
-  Number.isSafeInteger(message["quorum"]) &&
-  message["quorum"] >= 1 &&
-  message["quorum"] <= message["signers"].length &&
-  isOptionalSalt(message["salt"])
-    ? {
-        quorum: message["quorum"],
-        salt: message["salt"] ?? "0x0",
-        signers: message["signers"] as readonly string[],
-      }
+  hasOnlyKnownKeys(message, ["intentId", "type"]) &&
+  message["type"] === "wallet.submitArgentMultisigIntent" &&
+  typeof message["intentId"] === "string" &&
+  message["intentId"].length > 0
+    ? { intentId: message["intentId"] }
     : null;
+
+/**
+ * Parses deletion of one exact locally stored intent.
+ */
+export const readRemoveIntentInput = (message: unknown): { readonly intentId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["intentId", "type"]) &&
+  message["type"] === "wallet.removeArgentMultisigIntent" &&
+  typeof message["intentId"] === "string" &&
+  message["intentId"].length > 0 &&
+  message["intentId"].length <= 256
+    ? { intentId: message["intentId"] }
+    : null;
+
+/**
+ * Exact deployment review echoed from review to submit.
+ */
+export type ArgentMultisigDeploymentReview = ArgentMultisigDeployConfig & {
+  readonly address: string;
+  readonly fee: FeeEstimate;
+  readonly feeAffordability: FeeAffordability;
+  readonly name?: string;
+  readonly networkId: StarknetNetworkId;
+  readonly signerAccountId: string;
+};
+
+const readDeploymentReview = (value: unknown): ArgentMultisigDeploymentReview | null => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, [
+      "address",
+      "fee",
+      "feeAffordability",
+      "name",
+      "networkId",
+      "salt",
+      "signerAccountId",
+      "signerPublicKeys",
+      "threshold",
+    ]) ||
+    !isCanonicalNonZeroFelt(value["address"]) ||
+    !isFeeEstimate(value["fee"]) ||
+    (value["feeAffordability"] !== "insufficient" &&
+      value["feeAffordability"] !== "ok" &&
+      value["feeAffordability"] !== "unknown") ||
+    !isName(value["name"]) ||
+    !isStarknetNetworkId(value["networkId"]) ||
+    !isAccountId(value["signerAccountId"]) ||
+    !isDeployFields(value)
+  ) {
+    return null;
+  }
+  return {
+    address: value["address"],
+    ...deployConfigFrom(value),
+    fee: value["fee"],
+    feeAffordability: value["feeAffordability"],
+    ...(value["name"] === undefined ? {} : { name: value["name"] }),
+    networkId: value["networkId"],
+    signerAccountId: value["signerAccountId"],
+  };
+};
+
+/**
+ * Parses a constructor and signer selection for fee review.
+ */
+export const readReviewDeploymentInput = (
+  message: unknown,
+):
+  | (Omit<ArgentMultisigDeploymentReview, "address" | "fee" | "feeAffordability"> & {
+      readonly expectedAddress?: string;
+    })
+  | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, [
+      "name",
+      "networkId",
+      "expectedAddress",
+      "salt",
+      "signerAccountId",
+      "signerPublicKeys",
+      "threshold",
+      "type",
+    ]) ||
+    message["type"] !== "wallet.reviewArgentMultisigDeployment" ||
+    (message["expectedAddress"] !== undefined &&
+      !isCanonicalNonZeroFelt(message["expectedAddress"])) ||
+    !isName(message["name"]) ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    !isAccountId(message["signerAccountId"]) ||
+    !isDeployFields(message)
+  ) {
+    return null;
+  }
+  return {
+    ...deployConfigFrom(message),
+    ...(message["expectedAddress"] === undefined
+      ? {}
+      : { expectedAddress: message["expectedAddress"] }),
+    ...(message["name"] === undefined ? {} : { name: message["name"] }),
+    networkId: message["networkId"],
+    signerAccountId: message["signerAccountId"],
+  };
+};
+
+/**
+ * Parses a deployment only when the exact prior review is echoed.
+ */
+export const readDeployMultisigInput = (
+  message: unknown,
+): { readonly review: ArgentMultisigDeploymentReview } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["review", "type"]) ||
+    message["type"] !== "wallet.deployArgentMultisig"
+  ) {
+    return null;
+  }
+  const review = readDeploymentReview(message["review"]);
+  return review ? { review } : null;
+};

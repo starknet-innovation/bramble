@@ -265,6 +265,30 @@ describe("bucket controls", () => {
     expect(retries).toBe(1);
   });
 
+  test("does not show a route failure before an amount has been entered", () => {
+    const form = mountForm();
+    const amount = form.querySelector<HTMLInputElement>('[name="amount"]');
+    const destination = form.querySelector<HTMLInputElement>('[name="destination"]');
+    if (amount) amount.value = "";
+    if (destination) destination.value = "private";
+    const privacy: PrivacyDisclosureState = {
+      error: "could not read private state",
+      loading: false,
+      value: null,
+    };
+    bindTransferBuckets({
+      balanceIn: (bucket) => balanceInBucket(bucket, context(form, privacy)),
+      form,
+      onRouteChange: () => undefined,
+      retryable: () => true,
+      route: () => resolveTransferRoute(context(form, privacy)),
+    });
+
+    expect(form.querySelector<HTMLElement>("#send-route-reason")?.hidden).toBe(true);
+    expect(form.querySelector<HTMLButtonElement>("#send-route-retry")?.hidden).toBe(true);
+    expect(form.querySelector("#send-route-controls")?.classList.contains("muted")).toBe(false);
+  });
+
   test("fails private spending closed when no relay is configured", () => {
     const form = mountForm();
     const privacy = registered();

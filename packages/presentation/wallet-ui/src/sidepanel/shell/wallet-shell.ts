@@ -4,7 +4,7 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { callout } from "@mc-wallet/ui-kit/content";
 import { button, iconButton, iconLink } from "@mc-wallet/ui-kit/controls";
@@ -13,7 +13,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { type IconName, icon } from "../shared/icons";
 import { accountAvatar, accountDisplayName, type WalletView } from "../shared/parts";
-import { TERMINAL_URL } from "./terminal-link";
+import { STARKSCAN_URL } from "./starkscan-link";
 
 /**
  * Renders the unlocked account header and its trusted destinations.
@@ -22,7 +22,8 @@ export const walletHeader = (
   status: WalletStatus,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
-  multisig: MultisigRecord | null = null,
+  multisig: ArgentMultisigRecord | null = null,
+  networkIssue: string | null = null,
 ): string => {
   const name = multisig
     ? (multisig.name ?? "Multisig account")
@@ -33,13 +34,16 @@ export const walletHeader = (
   const network = status.network
     .replace(/^Starknet Mainnet$/, "Starknet")
     .replace(/^Starknet\s+/, "");
+  const networkDetail = networkIssue
+    ? `<span id="network-status-detail" class="sr-only">${escapeHtml(networkIssue)}</span>`
+    : "";
   return `
   <header class="wallet-header">
-    <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" title="Manage accounts">
+    <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false"${networkIssue ? ' aria-describedby="network-status-detail"' : ""} title="Manage accounts">
       <span class="brand-mark">${address ? accountAvatar(address) : icon("wallet")}</span>
       <span class="account-meta">
         <span class="account-name"><strong>${escapeHtml(name)}</strong>${icon("chevronDown")}</span>
-        <span class="account-net"><span class="dot"></span>${escapeHtml(network)}${multisig ? ` · Multisig ${multisig.quorum} of ${multisig.signers.length}` : ""}</span>
+        <span class="account-net${networkIssue ? " degraded" : ""}"${networkIssue ? ` title="${escapeHtml(networkIssue)}"` : ""}><span class="dot" aria-hidden="true"></span><span class="account-network-label">${escapeHtml(network)}</span>${networkDetail}</span>
       </span>
     </button>
     <div class="header-actions">
@@ -50,10 +54,10 @@ export const walletHeader = (
         variant: "ghost",
       })}
       ${iconLink({
-        attributes: { id: "terminal-button" },
-        href: TERMINAL_URL,
-        icon: "terminal",
-        label: "Open trade terminal",
+        attributes: { id: "starkscan-button" },
+        href: STARKSCAN_URL,
+        icon: "externalLink",
+        label: "Open Starkscan",
         target: "_blank",
         variant: "ghost",
       })}
@@ -147,10 +151,9 @@ export const explorerTile = (url: string | null): string => {
 };
 
 /**
- * Renders the counterfactual-account deployment action when chain state is
- * conclusively undeployed. Deployment is a fee-paying transaction, so the action
- * stays disabled — with the reason on hover — until the account holds STRK to
- * pay with. Offering it to an empty account only produces a failed estimate.
+ * Renders the counterfactual-account status when chain state is conclusively
+ * undeployed. Home only directs the user to the next task; fee review and
+ * submission stay in their dedicated transaction journeys.
  */
 export const deployNotice = (
   account: AccountRef | null,
@@ -162,17 +165,15 @@ export const deployNotice = (
     : `<div class="deploy-notice">
         ${button({
           attributes: {
-            id: "deploy-button",
+            "data-view": fundedForFees ? "deploy-account" : "receive",
             title: fundedForFees
               ? "This account contract is not on-chain yet. Deploying it enables transactions."
               : "Deploying costs a network fee. Receive STRK into this account first.",
           },
           className: "deploy-chip",
-          disabled: !fundedForFees,
           icon: "alert",
-          label: fundedForFees ? "Not deployed — deploy now" : "Not deployed — receive STRK first",
+          label: fundedForFees ? "Deploy account" : "Fund with STRK",
           size: "small",
           variant: "secondary",
         })}
-        <p id="deploy-result" role="status"></p>
       </div>`;

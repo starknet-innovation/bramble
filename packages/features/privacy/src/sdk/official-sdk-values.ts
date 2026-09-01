@@ -21,6 +21,12 @@ import {
   STRK20_SERVICE_UNAVAILABLE,
   type Strk20AccountContext,
 } from "../service";
+import { isRetryableStrk20ServiceError } from "./official-sdk-errors";
+import {
+  defaultServiceRetryPause,
+  retryStrk20ServiceRead,
+  type ServiceRetryPause,
+} from "./official-sdk-retry";
 
 type SdkNote = { readonly amount: BigNumberish };
 
@@ -36,8 +42,15 @@ export type SdkNoteMap = {
  * private state or produce a proof.
  */
 export const requireStrk20Config = (context: Strk20AccountContext): Strk20NetworkConfig => {
-  if (!context.config || context.rpcUrls.length === 0) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  // Split: absent routing and an absent endpoint are different operator
+  // problems, and reporting one line for both hid which was missing.
+  if (!context.config) {
+    throw new WalletError(
+      `${STRK20_SERVICE_UNAVAILABLE}: no privacy routing is configured for this network`,
+    );
+  }
+  if (context.rpcUrls.length === 0) {
+    throw new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: no RPC endpoint is configured`);
   }
   return context.config;
 };
@@ -138,6 +151,38 @@ export const balancesFrom = (
 const poolFeeUnavailable = (reason: string): WalletError =>
   new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: could not read the pool fee (${reason})`);
 
+const readPoolCall = async (
+  providerFor: (nodeUrl: string) => RpcProvider,
+  rpcUrls: readonly string[],
+  poolAddress: string,
+  entrypoint: "get_fee_amount" | "get_public_key",
+  calldata: readonly string[],
+  pauseForServiceRetry: ServiceRetryPause,
+  unavailable: (reason: string) => WalletError,
+): Promise<readonly string[]> => {
+  const nodeUrl = rpcUrls[0];
+  if (!nodeUrl) {
+    throw unavailable("no RPC endpoint is configured");
+  }
+  try {
+    return await retryStrk20ServiceRead(
+      () =>
+        providerFor(nodeUrl).callContract({
+          calldata: [...calldata],
+          contractAddress: poolAddress,
+          entrypoint,
+        }),
+      pauseForServiceRetry,
+    );
+  } catch (error) {
+    throw unavailable(
+      isRetryableStrk20ServiceError(error)
+        ? "rate limited; retry shortly"
+        : `the node did not answer ${entrypoint}`,
+    );
+  }
+};
+
 /**
  * Reads the pool's per-`apply_actions` STRK charge (`get_fee_amount`), which
  * the pool pulls from the caller via `transfer_from` in the same transaction.
@@ -149,21 +194,17 @@ export const readStrk20PoolFee = async (
   providerFor: (nodeUrl: string) => RpcProvider,
   rpcUrls: readonly string[],
   poolAddress: string,
+  pauseForServiceRetry: ServiceRetryPause = defaultServiceRetryPause,
 ): Promise<bigint> => {
-  const nodeUrl = rpcUrls[0];
-  if (!nodeUrl) {
-    throw poolFeeUnavailable("no RPC endpoint is configured");
-  }
-  let response: readonly string[];
-  try {
-    response = await providerFor(nodeUrl).callContract({
-      calldata: [],
-      contractAddress: poolAddress,
-      entrypoint: "get_fee_amount",
-    });
-  } catch {
-    throw poolFeeUnavailable("the node did not answer get_fee_amount");
-  }
+  const response = await readPoolCall(
+    providerFor,
+    rpcUrls,
+    poolAddress,
+    "get_fee_amount",
+    [],
+    pauseForServiceRetry,
+    poolFeeUnavailable,
+  );
   const felt = response.length === 1 ? response[0] : undefined;
   if (felt === undefined) {
     throw poolFeeUnavailable("the pool returned an unexpected result shape");
@@ -190,9 +231,10 @@ export const requireReviewedStrk20PoolFee = async (
   rpcUrls: readonly string[],
   poolAddress: string,
   reviewedPoolFeeFri: string,
+  pauseForServiceRetry: ServiceRetryPause = defaultServiceRetryPause,
 ): Promise<bigint> => {
   const reviewed = canonicalStrk20PoolFee(reviewedPoolFeeFri);
-  const current = await readStrk20PoolFee(providerFor, rpcUrls, poolAddress);
+  const current = await readStrk20PoolFee(providerFor, rpcUrls, poolAddress, pauseForServiceRetry);
   if (current !== BigInt(reviewed)) {
     throw new WalletError("Private pool fee changed. Review the transaction again.");
   }
@@ -222,24 +264,20 @@ export const readStrk20Registered = async (
   rpcUrls: readonly string[],
   poolAddress: string,
   address: string,
+  pauseForServiceRetry: ServiceRetryPause = defaultServiceRetryPause,
 ): Promise<boolean> => {
-  const nodeUrl = rpcUrls[0];
-  if (!nodeUrl) {
-    throw registrationUnreadable("no RPC endpoint is configured");
-  }
   if (!isNonZeroStarkFieldElement(address)) {
     throw registrationUnreadable("the address is not a field element");
   }
-  let response: readonly string[];
-  try {
-    response = await providerFor(nodeUrl).callContract({
-      calldata: [address],
-      contractAddress: poolAddress,
-      entrypoint: "get_public_key",
-    });
-  } catch {
-    throw registrationUnreadable("the node did not answer get_public_key");
-  }
+  const response = await readPoolCall(
+    providerFor,
+    rpcUrls,
+    poolAddress,
+    "get_public_key",
+    [address],
+    pauseForServiceRetry,
+    registrationUnreadable,
+  );
   const felt = response.length === 1 ? response[0] : undefined;
   if (felt === undefined) {
     throw registrationUnreadable("the pool returned an unexpected result shape");

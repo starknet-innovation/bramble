@@ -6,12 +6,14 @@
  * submit path (which drives the injected signHash callback). Complements
  * background-strk20-messages.test.ts.
  */
+
 import { describe, expect, test } from "bun:test";
 import type { OriginGuard } from "@mc-wallet/permissions/blocklist";
 import type { Strk20Service } from "@mc-wallet/privacy/service";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import type { InvokeInput } from "@mc-wallet/starknet/rpc";
 import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import type { SignHashInput, WalletStatus } from "@mc-wallet/vault/service";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ec } from "starknet";
@@ -28,6 +30,7 @@ const origin = "https://example.com";
 const vaultPassphrase = "correct horse battery staple";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabcabcdef",
   classHash: "0xabcdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -41,6 +44,7 @@ const { starkCurve } = ec;
 // real Stark public x-coordinate so a good device signature verifies.
 const LEDGER_KEY = "0x1234567890abcdef";
 const ledgerAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xfedfed",
   classHash: "0xabcdef",
   derivation: {
@@ -110,7 +114,7 @@ const walletStub = (
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 4 as const,
+      schemaVersion: 7 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -314,6 +318,7 @@ describe("executeStrk20InvokeApproval", () => {
     const session = createUnlockSession(); // never unlocked
     const deps = {
       activity: memoryActivityLog(),
+      allowanceStore: memoryAllowanceStore(),
       preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {
@@ -343,6 +348,7 @@ describe("executeStrk20InvokeApproval", () => {
     session.unlock(vaultPassphrase);
     return {
       activity: memoryActivityLog(),
+      allowanceStore: memoryAllowanceStore(),
       ...(queue ? { ledgerSignQueue: queue } : {}),
       preferencesStore: {
         ...unavailablePreferencesStore,
@@ -431,6 +437,7 @@ describe("executeStrk20InvokeApproval", () => {
     const activity = memoryActivityLog(() => 42);
     const deps = {
       activity,
+      allowanceStore: memoryAllowanceStore(),
       preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {

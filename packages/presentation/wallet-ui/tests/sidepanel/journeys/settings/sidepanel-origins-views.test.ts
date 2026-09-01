@@ -31,9 +31,7 @@ const sites = [{ accountCount: 1, origin: "https://dapp.example" }];
 describe("connected-sites views", () => {
   test("settings links to the connected-sites flow", () => {
     const html = dashboard("settings", status, [], preferences, { balances: [] });
-    expect(html).toMatch(/menu-row" data-view="security"/);
-    const security = dashboard("security", status, [], preferences, { balances: [] });
-    expect(security).toMatch(/menu-row" data-view="connected-sites"/);
+    expect(html).toMatch(/menu-row" data-view="connected-sites"/);
   });
 
   test("connected-sites flow lists origins with revoke controls and back nav", () => {
@@ -77,6 +75,7 @@ describe("connected-sites views", () => {
         blocked: false,
         id: approvalId,
         insights: ["Domain closely resembles starknet.io; watch for a spoofed lookalike."],
+        kind: "connect" as const,
         origin: "https://st4rknet.io",
       },
     ];
@@ -92,6 +91,7 @@ describe("connected-sites views", () => {
         blocked: true,
         id: approvalId,
         insights: ["This domain is on the wallet blocklist of known phishing and scam sites."],
+        kind: "connect" as const,
         origin: "https://starknet-airdrop.com",
       },
     ];
@@ -145,6 +145,7 @@ describe("connected-sites response validators", () => {
             blocked: false,
             id: approvalId,
             insights: ["First time seen."],
+            kind: "connect",
             origin: "https://d.example",
           },
         ],

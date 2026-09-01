@@ -8,11 +8,14 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   accountAvatar,
   accountDisplayName,
+  dockScreen,
+  flowScreen,
   formatFri,
   isWalletView,
 } from "../../../src/sidepanel/shared/parts";
 
 const account = (address: string): AccountRef => ({
+  accountContractType: "openzeppelin",
   address,
   classHash: "0x2",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -27,6 +30,16 @@ describe("isWalletView", () => {
     expect(isWalletView("home")).toBe(true);
     expect(isWalletView("not-a-view")).toBe(false);
     expect(isWalletView(42)).toBe(false);
+  });
+});
+
+describe("screen wrappers", () => {
+  test("escapes a malformed view id without escaping trusted renderer markup", () => {
+    for (const wrap of [dockScreen, flowScreen]) {
+      const html = wrap('" onclick="alert(1)' as never, "<p>Trusted renderer output</p>");
+      expect(html).toContain("wallet-screen-&quot; onclick=&quot;alert(1)");
+      expect(html).toContain("<p>Trusted renderer output</p>");
+    }
   });
 });
 

@@ -21,6 +21,7 @@ import {
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
 const account = {
+  accountContractType: "openzeppelin" as const,
   address: "0x123",
   classHash: "0xabc",
   derivation: {
@@ -34,7 +35,6 @@ const account = {
   publicKeyY: "0xdef",
 };
 const accountResult = { accounts: [account], ok: true as const };
-// Page-facing view: only address + networkId survive sanitization.
 const publicAccount = { address: account.address, networkId: account.networkId };
 const publicAccountResult = { accounts: [publicAccount], ok: true as const };
 const invokeParams = {

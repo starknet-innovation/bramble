@@ -1,346 +1,396 @@
-/**
- * Multisig screen bindings: watch/remove/refresh multisigs, submit and track
- * proposals, confirm/revoke/execute them, and deploy or declare through the
- * background message client. Pure templates live in multisig-views.ts.
- */
-import { normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
+/** Bindings for watched Argent multisigs and frozen signing intents. */
+
+import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import { buildErc20TransferCall, parseTokenAmount } from "@mc-wallet/starknet/rpc";
+import {
+  canonicalFelt,
+  normalizeFeltInput,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { bindMultisigConfirmation } from "./multisig-confirmation-ui";
+import { formatFiat } from "../../shared/fiat";
+import { balanceShortcut, tokenInputFiat } from "../send/send-model";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
-import { parseMultisigReviewPackage } from "./multisig-model";
-import { bindMultisigProposalForm } from "./multisig-proposal-ui";
-import { bindMultisigReviewTools } from "./multisig-review-ui";
-import { isMultisigSyncFailure, multisigSyncActionMessage } from "./multisig-sync";
+import { bindMultisigIntentCards } from "./multisig-intent-ui";
+import { parseArgentMultisigIntentPackage } from "./multisig-model";
+import { bindMultisigSignerManagement } from "./multisig-signer-management-ui";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 /**
- * Re-exports the multisig binder contract for existing callers.
+ * Capabilities required by the Argent multisig UI binder.
  */
 export type { MultisigUiDeps } from "./multisig-ui-deps";
 
-const rerender = async (deps: MultisigUiDeps): Promise<void> => {
-  await deps.render(await deps.wallet.loadStatus());
+const rerender = async (deps: MultisigUiDeps): Promise<void> =>
+  deps.render(await deps.wallet.loadStatus());
+
+const setResult = (deps: MultisigUiDeps, id: string, value: string): void => {
+  const target = deps.app?.querySelector<HTMLElement>(`#${id}`);
+  if (target) target.textContent = value;
 };
 
-const setResult = (deps: MultisigUiDeps, id: string, message: string): void => {
-  const result = deps.app?.querySelector<HTMLElement>(`#${id}`);
-  if (result) {
-    result.textContent = message;
-  }
-};
-
-const runAction = (
+const run = (
   deps: MultisigUiDeps,
   button: HTMLButtonElement | null | undefined,
   resultId: string,
-  pendingMessage: string,
   action: () => Promise<string>,
 ): void => {
   buttonBusy(button, true);
-  setResult(deps, resultId, pendingMessage);
   void action().then(
     async (message) => {
-      showToast(message, "success");
+      showToast(message, "success", button ?? deps.app);
       await rerender(deps);
     },
     (error: unknown) => {
-      const failed = errorMessage(error, "Request failed");
-      showToast(failed, "error");
-      setResult(deps, resultId, failed);
+      const message = errorMessage(error, "Argent multisig request failed");
+      setResult(deps, resultId, message);
+      showToast(message, "error", button ?? deps.app);
       buttonBusy(button, false);
     },
   );
 };
 
-const WATCH_TIMEOUT_MS = 15_000;
+const parseFelts = (value: string): readonly string[] =>
+  value
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .map(normalizeFeltInput);
 
-const boundedWatch = async (watch: Promise<void>): Promise<void> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      watch,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () =>
-            reject(
-              new Error("Multisig verification took too long. Check the RPC endpoint and retry."),
-            ),
-          WATCH_TIMEOUT_MS,
-        );
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) {
-      clearTimeout(timer);
-    }
-  }
-};
-
-const startWatchProgress = (deps: MultisigUiDeps): (() => void) => {
-  const resultId = "multisig-add-result";
-  const timers = [
-    setTimeout(() => setResult(deps, resultId, "Reading signer and quorum rules…"), 700),
-    setTimeout(() => setResult(deps, resultId, "Verifying this account is a signer…"), 2_000),
-    setTimeout(
-      () => setResult(deps, resultId, "The RPC is slower than expected; failover is automatic…"),
-      4_000,
-    ),
-    setTimeout(() => setResult(deps, resultId, "Trying the fallback RPC endpoint…"), 10_000),
-  ];
-  return () => {
-    for (const timer of timers) {
-      clearTimeout(timer);
-    }
-  };
-};
-
-const bindAddForm = (deps: MultisigUiDeps): void => {
+const bindAdd = (deps: MultisigUiDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#multisig-add-form");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(form);
-    runAction(deps, submitButton, "multisig-add-result", "Contacting Starknet…", async () => {
-      const stopProgress = startWatchProgress(deps);
-      try {
-        await boundedWatch(
-          deps.multisig.addMultisig(
-            normalizeFeltInput(String(data.get("address") ?? "")),
-            String(data.get("name") ?? "").trim(),
-          ),
+    buttonBusy(button, true);
+    void deps.wallet
+      .loadStatus()
+      .then(async (status) => {
+        const view = await deps.multisig.addMultisig({
+          address: normalizeFeltInput(String(data.get("address") ?? "")),
+          networkId: status.networkId,
+        });
+        const matched = status.accounts.filter(
+          (candidate) =>
+            candidate.networkId === view.record.networkId &&
+            view.config?.signerGuids.some((guid) =>
+              sameFelt(guid, argentSignerGuid(candidate.publicKeyX)),
+            ),
+        ).length;
+        showToast(
+          view.deployed === false
+            ? "Undeployed multisig added · complete setup to deploy"
+            : matched === 0
+              ? "Multisig synced · watch-only"
+              : `Multisig synced · ${matched} wallet signer${matched === 1 ? "" : "s"} found`,
+          "success",
+          button ?? deps.app,
         );
-        return "Multisig verified and added to Accounts";
-      } finally {
-        stopProgress();
-      }
-    });
+        deps.openDetail(view.record.id, "multisig-home");
+      })
+      .catch((error: unknown) => {
+        showToast(errorMessage(error, "Sync Argent multisig failed"), "error", button ?? deps.app);
+        buttonBusy(button, false);
+      });
   });
 };
 
-const bindListActions = (deps: MultisigUiDeps): void => {
+const bindList = (deps: MultisigUiDeps): void => {
+  const confirmedRemovals = new WeakSet<HTMLButtonElement>();
   deps.app
     ?.querySelector<HTMLButtonElement>("#multisig-list-retry")
-    ?.addEventListener("click", () => {
-      void rerender(deps);
-    });
-  deps.app
-    ?.querySelector<HTMLButtonElement>("[data-multisig-portfolio-retry]")
     ?.addEventListener("click", () => {
       void rerender(deps);
     });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-multisig-open]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["multisigOpen"];
-      if (id) {
-        deps.openDetail(id);
-      }
+      if (id) deps.openDetail(id);
     });
   });
-
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-multisig-remove]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["multisigRemove"];
-      if (!id) {
-        return;
-      }
-      buttonBusy(button, true);
-      void deps.multisig.removeMultisig(id).then(
-        async () => {
-          showToast("Multisig removed", "success");
-          deps.openList();
-          await rerender(deps);
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Remove failed"), "error");
-          buttonBusy(button, false);
-        },
-      );
-    });
-  });
-
-  const refresh = deps.app?.querySelector<HTMLButtonElement>("#multisig-refresh");
-  refresh?.addEventListener("click", () => {
-    const id = refresh.dataset["multisigId"];
-    if (!id) {
-      return;
-    }
-    runAction(deps, refresh, "multisig-detail-result", "Refreshing from chain…", async () => {
-      const state = await deps.multisig.refreshMultisig(id);
-      const message = multisigSyncActionMessage(state);
-      if (isMultisigSyncFailure(state)) {
-        throw new Error(message);
-      }
-      return message;
+      if (!id) return;
+      run(deps, button, "multisig-detail-result", async () => {
+        try {
+          await deps.multisig.removeMultisig(id, confirmedRemovals.has(button));
+        } catch (error) {
+          if (
+            !confirmedRemovals.has(button) &&
+            error instanceof Error &&
+            /history|terminal|intent/i.test(error.message)
+          ) {
+            confirmedRemovals.add(button);
+            button.lastChild?.replaceWith("Confirm removal and delete terminal history");
+            throw new Error("Review the warning and click again to delete terminal history");
+          }
+          throw error;
+        }
+        deps.openList();
+        return "Argent multisig removed from this wallet";
+      });
     });
   });
 };
 
-type MultisigHomeTab = "assets" | "collectibles" | "proposals";
-let retainedMultisigTab: { readonly id: string; readonly tab: MultisigHomeTab } | null = null;
+const formInput = (form: HTMLFormElement, name: string): HTMLInputElement | null =>
+  form.querySelector<HTMLInputElement>(`input[name="${name}"]`);
 
-const isMultisigHomeTab = (value: string | undefined): value is MultisigHomeTab =>
-  value === "assets" || value === "collectibles" || value === "proposals";
+const setFormValue = (form: HTMLFormElement, name: string, value: string): void => {
+  const input = formInput(form, name);
+  if (input) input.value = value;
+};
 
-const bindPortfolioTabs = (deps: MultisigUiDeps): void => {
-  const multisigId = deps.selectedMultisigId();
-  const apply = (selected: MultisigHomeTab): void => {
-    deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]").forEach((tab) => {
-      tab.setAttribute("aria-selected", String(tab.dataset["msHomeTab"] === selected));
+const updateTransferAmount = (form: HTMLFormElement): void => {
+  const amount = formInput(form, "amount")?.value ?? "";
+  const priceText = formInput(form, "tokenPrice")?.value ?? "";
+  const estimate = tokenInputFiat(amount, priceText ? Number(priceText) : undefined);
+  const target = form.querySelector("#multisig-fiat-estimate");
+  if (target) {
+    target.textContent = `Estimated value ${estimate === null ? "—" : formatFiat(estimate, form.dataset["currency"] === "eur" || form.dataset["currency"] === "gbp" ? form.dataset["currency"] : "usd")}`;
+  }
+};
+
+const applyTransferAsset = (form: HTMLFormElement, button: HTMLButtonElement): void => {
+  const values = {
+    tokenAddress: button.dataset["msAssetAddress"] ?? "",
+    tokenBalance: button.dataset["msAssetBalance"] ?? "",
+    tokenDecimals: button.dataset["msAssetDecimals"] ?? "0",
+    tokenFormatted: button.dataset["msAssetFormatted"] ?? "",
+    tokenPrice: button.dataset["msAssetPrice"] ?? "",
+    tokenSymbol: button.dataset["msAssetSymbol"] ?? "token",
+  };
+  for (const [name, value] of Object.entries(values)) setFormValue(form, name, value);
+  const glyph = form.querySelector("#multisig-selected-token-glyph");
+  const source = button.querySelector(".send-asset-glyph");
+  if (glyph && source) {
+    glyph.replaceChildren(...Array.from(source.childNodes, (node) => node.cloneNode(true)));
+  }
+  const symbol = form.querySelector("#multisig-selected-token-symbol");
+  if (symbol) symbol.textContent = values.tokenSymbol;
+  const balance = form.querySelector("#multisig-balance-label");
+  if (balance) {
+    balance.textContent = `Balance ${values.tokenFormatted || "—"} ${values.tokenSymbol}`;
+  }
+  const isFeeToken = sameFelt(values.tokenAddress, STRK_TOKEN_ADDRESS);
+  form
+    .querySelector("#multisig-max")
+    ?.toggleAttribute("hidden", isFeeToken || !values.tokenBalance);
+  form.querySelector("#multisig-amount-guidance")?.toggleAttribute("hidden", !isFeeToken);
+  form.querySelector<HTMLDetailsElement>(".multisig-asset-picker")?.removeAttribute("open");
+  updateTransferAmount(form);
+  formInput(form, "amount")?.focus({ preventScroll: true });
+};
+
+const bindTransferComposer = (form: HTMLFormElement): void => {
+  const recipient = formInput(form, "recipient");
+  recipient?.addEventListener("input", () => {
+    const query = recipient.value.trim().toLowerCase();
+    let visible = 0;
+    form.querySelectorAll<HTMLButtonElement>("[data-ms-propose-recipient]").forEach((row) => {
+      const matches = !query || (row.dataset["msRecipientSearch"] ?? "").includes(query);
+      row.toggleAttribute("hidden", !matches);
+      if (matches) visible += 1;
     });
+    form.querySelector("#multisig-recipient-empty")?.toggleAttribute("hidden", visible > 0);
+  });
+  form.querySelectorAll<HTMLButtonElement>("[data-ms-propose-recipient]").forEach((row) => {
+    row.addEventListener("click", () => {
+      if (!recipient) return;
+      recipient.value = row.dataset["msProposeRecipient"] ?? "";
+      recipient.setCustomValidity("");
+      form.querySelector<HTMLDetailsElement>(".multisig-recipient-picker")?.removeAttribute("open");
+      formInput(form, "amount")?.focus({ preventScroll: true });
+    });
+  });
+  form.querySelector("#multisig-asset-search")?.addEventListener("input", (event) => {
+    const query =
+      event.currentTarget instanceof HTMLInputElement
+        ? event.currentTarget.value.trim().toLowerCase()
+        : "";
+    let visible = 0;
+    form.querySelectorAll<HTMLButtonElement>("[data-ms-propose-asset]").forEach((row) => {
+      const matches = !query || (row.dataset["msAssetSearch"] ?? "").includes(query);
+      row.toggleAttribute("hidden", !matches);
+      if (matches) visible += 1;
+    });
+    form.querySelector("#multisig-asset-empty")?.toggleAttribute("hidden", visible > 0);
+  });
+  form.querySelectorAll<HTMLButtonElement>("[data-ms-propose-asset]").forEach((asset) => {
+    asset.addEventListener("click", () => applyTransferAsset(form, asset));
+  });
+  formInput(form, "amount")?.addEventListener("input", () => updateTransferAmount(form));
+  form.querySelector("#multisig-max")?.addEventListener("click", () => {
+    const amount = formInput(form, "amount");
+    if (!amount) return;
+    amount.value = balanceShortcut(
+      formInput(form, "tokenBalance")?.value ?? "",
+      Number(formInput(form, "tokenDecimals")?.value ?? "0"),
+      "max",
+    );
+    updateTransferAmount(form);
+    amount.focus();
+  });
+};
+
+const preparedCall = (form: HTMLFormElement) => {
+  const data = new FormData(form);
+  if (form.dataset["msPrepare"] === "transfer") {
+    const amount = parseTokenAmount(
+      String(data.get("amount") ?? ""),
+      Number(data.get("tokenDecimals")),
+    );
+    const balance = String(data.get("tokenBalance") ?? "");
+    if (balance && amount > BigInt(balance)) {
+      throw new Error("Amount exceeds the shared account balance");
+    }
+    const call = buildErc20TransferCall(
+      normalizeFeltInput(String(data.get("tokenAddress") ?? "")),
+      normalizeFeltInput(String(data.get("recipient") ?? "")),
+      amount,
+    );
+    if (!Array.isArray(call.calldata)) throw new Error("Transfer calldata is unavailable");
+    const calldata: string[] = [];
+    for (const felt of call.calldata) {
+      if (typeof felt !== "string") throw new Error("Transfer calldata is unavailable");
+      const canonical = canonicalFelt(felt);
+      if (canonical === null) throw new Error("Transfer calldata is unavailable");
+      calldata.push(canonical);
+    }
+    return {
+      calldata,
+      contractAddress: normalizeFeltInput(call.contractAddress),
+      entrypoint: call.entrypoint,
+    };
+  }
+  return {
+    calldata: parseFelts(String(data.get("calldata") ?? "")),
+    contractAddress: normalizeFeltInput(String(data.get("contractAddress") ?? "")),
+    entrypoint: String(data.get("entrypoint") ?? "").trim(),
+  };
+};
+
+const bindPrepare = (deps: MultisigUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLFormElement>("[data-ms-prepare]").forEach((form) => {
+    if (form.dataset["msPrepare"] === "transfer") bindTransferComposer(form);
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const label = button
+      ? Array.from(button.childNodes).find((node) => node.nodeType === 3)
+      : undefined;
+    const idleLabel = label?.textContent ?? "";
+    const setPreparing = (preparing: boolean): void => {
+      buttonBusy(button, preparing);
+      if (preparing) form.setAttribute("aria-busy", "true");
+      else form.removeAttribute("aria-busy");
+      if (label) label.textContent = preparing ? "Preparing review…" : idleLabel;
+    };
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const multisigId = form.dataset["multisigId"];
+      if (!multisigId) return;
+      setPreparing(true);
+      void Promise.resolve()
+        .then(() => deps.multisig.prepareIntent(multisigId, [preparedCall(form)]))
+        .then(
+          (result) => {
+            showToast("Transaction ready for multisig review", "success", button ?? deps.app);
+            deps.openIntent(multisigId, result.intent.id);
+          },
+          (error: unknown) => {
+            showToast(
+              errorMessage(error, "Prepare Argent multisig transaction failed"),
+              "error",
+              button ?? deps.app,
+            );
+            setPreparing(false);
+          },
+        );
+    });
+  });
+};
+
+const bindImport = (deps: MultisigUiDeps): void => {
+  const form = deps.app?.querySelector<HTMLFormElement>("#multisig-track-form");
+  const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const intentPackage = parseArgentMultisigIntentPackage(
+      String(new FormData(form).get("intentPackage") ?? ""),
+    );
+    if (!intentPackage) {
+      showToast("Intent package is invalid", "error", form);
+      return;
+    }
+    run(deps, button, "multisig-track-result", async () => {
+      const result = await deps.multisig.importIntent(intentPackage);
+      deps.openIntent(result.intent.accountId, result.intent.id);
+      return result.intent.state === "stale"
+        ? "Signed attempt restored — it was not submitted"
+        : "Intent verified and ready to review";
+    });
+  });
+};
+
+type MultisigHomeTab = "assets" | "collectibles" | "intents";
+const bindTabs = (deps: MultisigUiDeps): void => {
+  const tabs = Array.from(
+    deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]") ?? [],
+  );
+  const apply = (selected: MultisigHomeTab): void => {
+    for (const tab of tabs) {
+      const active = tab.dataset["msHomeTab"] === selected;
+      tab.setAttribute("aria-selected", String(active));
+      tab.tabIndex = active ? 0 : -1;
+    }
     deps.app?.querySelectorAll<HTMLElement>("[data-ms-home-panel]").forEach((panel) => {
       const target = panel;
       target.hidden = target.dataset["msHomePanel"] !== selected;
     });
   };
-  if (!multisigId) {
-    retainedMultisigTab = null;
-    return;
-  }
-  apply(retainedMultisigTab?.id === multisigId ? retainedMultisigTab.tab : "assets");
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]").forEach((button) => {
+  for (const [index, button] of tabs.entries()) {
     button.addEventListener("click", () => {
-      const selected = button.dataset["msHomeTab"];
-      if (!isMultisigHomeTab(selected)) return;
-      retainedMultisigTab = { id: multisigId, tab: selected };
-      apply(selected);
+      const value = button.dataset["msHomeTab"];
+      if (value === "assets" || value === "collectibles" || value === "intents") apply(value);
     });
-  });
-};
-
-const bindProposalActions = (deps: MultisigUiDeps): void => {
-  const syncAcknowledgment = (row: Element, checked: boolean): void => {
-    row.querySelectorAll<HTMLButtonElement>("[data-ms-requires-ack]").forEach((button) => {
-      const target = button;
-      target.disabled =
-        target.hasAttribute("data-busy") ||
-        target.dataset["msActionAllowed"] !== "true" ||
-        !checked;
-    });
-  };
-
-  deps.app?.querySelectorAll<HTMLInputElement>("[data-ms-ack]").forEach((checkbox) => {
-    const row = checkbox.closest(".allowance-row");
-    if (!row) {
-      return;
-    }
-    checkbox.addEventListener("change", () => {
-      syncAcknowledgment(row, checkbox.checked);
-    });
-  });
-
-  const actions: readonly {
-    readonly attribute: string;
-    readonly key: "msExecute" | "msRevoke";
-    readonly run: (
-      proposalId: string,
-      signerAccountId: string,
-      untrackedVerified?: boolean,
-    ) => Promise<string>;
-    readonly success: string;
-  }[] = [
-    {
-      attribute: "[data-ms-revoke]",
-      key: "msRevoke",
-      run: (id, signerAccountId, untrackedVerified) =>
-        deps.multisig.revokeConfirmation(id, signerAccountId, untrackedVerified),
-      success: "Revocation submitted",
-    },
-    {
-      attribute: "[data-ms-execute]",
-      key: "msExecute",
-      run: (id, signerAccountId) => deps.multisig.executeProposal(id, signerAccountId),
-      success: "Execution submitted",
-    },
-  ];
-  for (const action of actions) {
-    deps.app?.querySelectorAll<HTMLButtonElement>(action.attribute).forEach((button) => {
-      button.addEventListener("click", () => {
-        const proposalId = button.dataset[action.key];
-        const signerAccountId = button.dataset["msSignerId"];
-        if (!proposalId || !signerAccountId) {
-          return;
-        }
-        const row = button.closest(".allowance-row");
-        const requiresAck = button.dataset["msRequiresAck"] === "true";
-        const ack = requiresAck
-          ? row?.querySelector<HTMLInputElement>("[data-ms-ack]")?.checked
-          : undefined;
-        if (requiresAck && !ack) {
-          showToast("Verify the proposal and check the acknowledgment first", "error");
-          return;
-        }
-        runAction(deps, button, "multisig-proposal-result", "Submitting…", async () => {
-          await action.run(proposalId, signerAccountId, ack ? true : undefined);
-          return action.success;
-        });
-      });
+    button.addEventListener("keydown", (event) => {
+      let next = index;
+      if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+      else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = tabs.length - 1;
+      else return;
+      const nextTab = tabs[next];
+      const value = nextTab?.dataset["msHomeTab"];
+      if (!nextTab || (value !== "assets" && value !== "collectibles" && value !== "intents")) {
+        return;
+      }
+      event.preventDefault();
+      apply(value);
+      nextTab.focus();
     });
   }
-};
-
-const bindTrackForm = (deps: MultisigUiDeps): void => {
-  const form = deps.app?.querySelector<HTMLFormElement>("#multisig-track-form");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const multisigId = deps.selectedMultisigId();
-    if (!multisigId) {
-      return;
-    }
-    const data = new FormData(form);
-    runAction(deps, submitButton, "multisig-track-result", "Checking on-chain…", async () => {
-      const packageText = String(data.get("reviewPackage") ?? "").trim();
-      const reviewPackage = packageText ? parseMultisigReviewPackage(packageText) : null;
-      if (packageText && !reviewPackage) {
-        throw new Error("Review package format is invalid");
-      }
-      if (reviewPackage && reviewPackage.multisig.id !== multisigId) {
-        throw new Error("Review package belongs to a different multisig");
-      }
-      const txId = reviewPackage?.proposal.txId ?? String(data.get("txId") ?? "").trim();
-      if (!txId) {
-        throw new Error("Enter a proposal id or paste a review package");
-      }
-      await deps.multisig.trackProposal(
-        multisigId,
-        txId,
-        String(data.get("summary") ?? "").trim() || reviewPackage?.proposal.summary || "",
-        reviewPackage?.proposal.call ?? undefined,
-      );
-      return reviewPackage?.proposal.call
-        ? "Proposal call verified and tracked"
-        : "Proposal tracked";
-    });
-  });
 };
 
 /**
- * Binds every multisig screen: list, detail, propose, and deploy.
+ * Binds every current Argent multisig surface; runtime failures stay visible.
  */
 export const bindMultisigs = (deps: MultisigUiDeps): void => {
-  bindAddForm(deps);
-  bindListActions(deps);
-  bindPortfolioTabs(deps);
-  bindMultisigConfirmation(deps);
-  bindProposalActions(deps);
-  bindMultisigReviewTools(deps.app);
-  bindTrackForm(deps);
-  bindMultisigProposalForm({
-    app: deps.app,
-    multisig: deps.multisig,
-    openDetail: deps.openDetail,
-    runAction: (button, resultId, pendingMessage, action) =>
-      runAction(deps, button, resultId, pendingMessage, action),
-    selectedMultisigId: deps.selectedMultisigId,
-    setResult: (id, message) => setResult(deps, id, message),
-  });
+  bindAdd(deps);
+  bindList(deps);
+  bindMultisigIntentCards(deps);
+  bindMultisigSignerManagement(deps);
+  bindPrepare(deps);
+  bindImport(deps);
+  bindTabs(deps);
   bindMultisigDeploy({
     app: deps.app,
     multisig: deps.multisig,
-    openList: deps.openList,
-    rerender: () => rerender(deps),
-    runAction: (button, resultId, pendingMessage, action) =>
-      runAction(deps, button, resultId, pendingMessage, action),
+    openDetail: (id) => deps.openDetail(id, "multisig-home"),
+    openFunding:
+      deps.openFunding ?? (() => Promise.reject(new Error("Local funding is unavailable"))),
     setResult: (id, message) => setResult(deps, id, message),
+    wallet: deps.wallet,
   });
 };

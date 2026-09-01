@@ -2,7 +2,7 @@
  * Muted solid asset colors. Token/perp icons are seeded by list index so a given
  * symbol reads consistently without turning the interface into a color field.
  */
-export const ICON_COLORS: readonly string[] = [
+const ICON_COLORS: readonly string[] = [
   "#47505c",
   "#5a4958",
   "#555044",

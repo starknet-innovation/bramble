@@ -42,7 +42,15 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
 
   refreshButton?.addEventListener("click", () => {
     buttonBusy(refreshButton, true);
-    void wallet.loadStatus().then(render, () => buttonBusy(refreshButton, false));
+    const accountId = app?.querySelector<HTMLElement>("[data-activity-account-id]")?.dataset[
+      "activityAccountId"
+    ];
+    void wallet
+      .loadActivity(accountId, false, true, true)
+      .then(() => wallet.loadStatus())
+      .then(render)
+      .catch(() => undefined)
+      .finally(() => buttonBusy(refreshButton, false));
   });
 
   exportButton?.addEventListener("click", () => {
@@ -54,17 +62,17 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
       ({ entries, historyUnavailable }) => {
         const blob = new Blob([activityToCsv(entries)], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
+        const anchor = exportButton.ownerDocument.createElement("a");
         anchor.href = url;
         anchor.download = "mc-wallet-activity.csv";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         const toast = activityExportToast(historyUnavailable);
-        showToast(toast.message, toast.tone);
+        showToast(toast.message, toast.tone, exportButton);
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Export failed"), "error");
+        showToast(errorMessage(error, "Export failed"), "error", exportButton);
         buttonBusy(exportButton, false);
       },
     );

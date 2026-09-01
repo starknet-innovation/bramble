@@ -4,10 +4,7 @@
  * cleanup.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  transitionProposalStage,
-  transitionSendStage,
-} from "../../../../src/sidepanel/journeys/send/send-transition";
+import { transitionSendStage } from "../../../../src/sidepanel/journeys/send/send-transition";
 
 type Deferred = {
   readonly promise: Promise<void>;
@@ -65,6 +62,11 @@ describe("transitionSendStage", () => {
     transitionSendStage(view.document, "details", "reviewing", () => {
       updates += 1;
     });
+    expect(view.dataset["sendTransition"]).toBeUndefined();
+
+    transitionSendStage(view.document, "reviewing", "review", () => {
+      updates += 1;
+    });
     expect(view.dataset["sendTransition"]).toBe("forward");
 
     transitionSendStage(view.document, "review", "details", () => {
@@ -78,22 +80,16 @@ describe("transitionSendStage", () => {
     completions[1]?.resolve();
     await Promise.resolve();
     expect(view.dataset["sendTransition"]).toBeUndefined();
-    expect(updates).toBe(2);
+    expect(updates).toBe(3);
   });
-});
 
-describe("transitionProposalStage", () => {
-  test("keeps recipient, amount, picker, and review movement spatially consistent", async () => {
-    const completion = deferred();
-    const view = fakeDocument(() => completion.promise);
+  test("keeps authorization and confirmation on one stable progress surface", () => {
+    const view = fakeDocument(() => Promise.resolve());
     let updates = 0;
-    transitionProposalStage(view.document, "recipient", "amount", () => {
+    transitionSendStage(view.document, "authorizing", "confirming", () => {
       updates += 1;
     });
-    expect(view.dataset["proposalTransition"]).toBe("forward");
-    completion.resolve();
-    await Promise.resolve();
-    expect(view.dataset["proposalTransition"]).toBeUndefined();
     expect(updates).toBe(1);
+    expect(view.dataset["sendTransition"]).toBeUndefined();
   });
 });

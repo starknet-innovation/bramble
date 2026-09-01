@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@ledgerhq/devices": "8.17.0",
+    "@mc-wallet/core": "workspace:*",
     "@mc-wallet/wallet-model": "workspace:*"
   },
   "devDependencies": {

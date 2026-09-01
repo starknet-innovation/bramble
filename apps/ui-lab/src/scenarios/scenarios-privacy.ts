@@ -137,6 +137,23 @@ export const privacyScenario: WalletScenario = {
       state: { indexer: "failed", staleDataVisible: false },
     },
     {
+      content: () =>
+        privacyDashboard(
+          {
+            error: "The privacy discovery service is unavailable. No private state was returned.",
+            loading: false,
+            value: null,
+          },
+          { stage: "idle" },
+          "token-detail",
+        ),
+      id: "asset-service-failed",
+      label: "Asset privacy unavailable",
+      narrative:
+        "Token detail keeps the failure compact; retry surfaces the display-safe diagnostic in a copyable toast instead of embedding service text in the asset screen.",
+      state: { indexer: "failed", rawServiceCopyVisible: false, retry: "available" },
+    },
+    {
       content: () => privacyDashboard(disclosure("unregistered")),
       id: "activation-required",
       label: "Activation required",

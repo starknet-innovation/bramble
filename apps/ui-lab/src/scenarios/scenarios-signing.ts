@@ -267,9 +267,9 @@ const ledgerRequest = {
   // The prompt states what the device approval authorizes, since blind signing
   // shows the user nothing but the hash. This scenario is the wallet send flow.
   intent: "send-token" as const,
-  // Full width on purpose: the sign screen shows this hash for comparison with
-  // the device, so the lab has to exercise how a real 32-byte value wraps.
-  messageHash: "0x0721ef90ad626dc13fb97cdc7e04499ee5fa1007f2c4e1a9439b22fc3755b912",
+  // Full-width: the takeover renders this at the padded 64 digits a Ledger
+  // shows, so a short stub would misrepresent the block's real density.
+  messageHash: "0x7d1f4b2c9e8a06d35f1c2b8e4a97d05c3e6f1a2b8c4d9e0f3a5b7c1d2e4f6a8",
   path: ledgerAccount.derivation.kind === "ledger" ? ledgerAccount.derivation.path : "",
   publicKeyX: ledgerAccount.publicKeyX,
 };

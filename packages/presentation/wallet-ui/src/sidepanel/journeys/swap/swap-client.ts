@@ -5,9 +5,16 @@
  * throws instead of rendering.
  */
 
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isErrorResponse } from "../../../popup/responses/responses";
+import { isSha256Digest } from "@mc-wallet/core/ids";
+import {
+  hasOnlyKnownKeys,
+  isDecimalAmountText,
+  isRecord,
+  isRiskFlagCode,
+} from "@mc-wallet/core/json";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { RuntimeApi } from "../../runtime/runtime";
+import { responseError } from "../../runtime/runtime-errors";
 
 /**
  * Display-ready quote consumed by the swap screen: decimal amounts plus the
@@ -29,12 +36,15 @@ export type SwapQuoteView = {
 export type SwapPreparationView = {
   readonly flags: readonly { readonly code: string; readonly message: string }[];
   readonly id: string;
+  // Minimum output the frozen route carries, decoded from its calldata by the
+  // background build policy. The confirm card shows THIS rather than a figure
+  // derived beside the transaction, so the minimum it states is the minimum the
+  // signed call enforces.
+  readonly minBuyAmount: string;
   readonly payloadDigest: string;
+  readonly reviewedFee: FeeEstimate;
   readonly summaries: readonly string[];
 };
-
-const isAmountText = (value: unknown): value is string =>
-  typeof value === "string" && /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(value);
 
 const isUsd = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;
@@ -49,23 +59,28 @@ const isSwapQuoteView = (value: unknown): value is SwapQuoteView =>
     "sellAmount",
     "sellAmountInUsd",
   ]) &&
-  isAmountText(value["buyAmount"]) &&
+  isDecimalAmountText(value["buyAmount"]) &&
   isUsd(value["buyAmountInUsd"]) &&
   isUsd(value["gasFeesInUsd"]) &&
   typeof value["quoteId"] === "string" &&
   value["quoteId"].length > 0 &&
-  isAmountText(value["sellAmount"]) &&
+  isDecimalAmountText(value["sellAmount"]) &&
   isUsd(value["sellAmountInUsd"]);
-
-const responseError = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
 
 const isSwapPreparationView = (value: unknown): value is SwapPreparationView =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["flags", "id", "payloadDigest", "summaries"]) &&
-  typeof value["id"] === "string" &&
-  /^sha256:[0-9a-f]{64}$/.test(value["id"]) &&
+  hasOnlyKnownKeys(value, [
+    "flags",
+    "id",
+    "minBuyAmount",
+    "payloadDigest",
+    "reviewedFee",
+    "summaries",
+  ]) &&
+  isSha256Digest(value["id"]) &&
   value["payloadDigest"] === value["id"] &&
+  isDecimalAmountText(value["minBuyAmount"]) &&
+  isFeeEstimate(value["reviewedFee"]) &&
   Array.isArray(value["summaries"]) &&
   value["summaries"].length > 0 &&
   value["summaries"].length <= 4 &&
@@ -78,8 +93,7 @@ const isSwapPreparationView = (value: unknown): value is SwapPreparationView =>
     (flag) =>
       isRecord(flag) &&
       hasOnlyKnownKeys(flag, ["code", "message"]) &&
-      typeof flag["code"] === "string" &&
-      /^[a-z][a-z-]{1,40}$/.test(flag["code"]) &&
+      isRiskFlagCode(flag["code"]) &&
       typeof flag["message"] === "string" &&
       flag["message"].length > 0 &&
       flag["message"].length <= 300,

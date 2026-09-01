@@ -3,7 +3,7 @@
  * accountsChanged/networkChanged subscriptions and delegates to the content
  * bridge.
  */
-import { invalidRequestPayload } from "@mc-wallet/wallet-protocol/rpc-errors";
+
 import {
   CONTENT_TARGET,
   canQueueProviderRequest,
@@ -13,6 +13,8 @@ import {
   walletRpcException,
 } from "@mc-wallet/wallet-protocol/bridge";
 import { createProviderEventHub, readProviderEvent } from "@mc-wallet/wallet-protocol/events";
+import { isHexChainId } from "@mc-wallet/wallet-protocol/results";
+import { invalidRequestPayload } from "@mc-wallet/wallet-protocol/rpc-errors";
 
 type PendingRequest = {
   readonly reject: (error: Error) => void;
@@ -127,7 +129,7 @@ const request = (args: unknown): Promise<unknown> => {
 const refreshChainId = async (): Promise<void> => {
   try {
     const chainId = await request({ type: "wallet_requestChainId" });
-    if (typeof chainId === "string" && /^0x[0-9a-f]+$/.test(chainId)) {
+    if (isHexChainId(chainId)) {
       currentChainId = chainId;
     }
   } catch {

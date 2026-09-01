@@ -23,15 +23,15 @@ const settled = (registration: "registered" | "unregistered"): PrivacyDisclosure
   },
 });
 
-const NOTICE = "You are not registered to the Starknet privacy pool yet.";
+const NOTICE = "Public transfers only";
 
 describe("receive privacy-pool notice", () => {
-  test("an unregistered account is told it can only be paid publicly", () => {
+  test("an unregistered account gets a concise public-only state and recovery", () => {
     const html = privacyPoolNotice(settled("unregistered"));
 
     expect(html).toContain(NOTICE);
-    expect(html).toContain("You can only receive tokens publicly.");
-    expect(html).toContain("Register now");
+    expect(html).toContain("Enable private balances to receive privately.");
+    expect(html).toContain("Enable privacy");
     // The whole notice is the control, and it reuses the home registration hook
     // so both surfaces reach the identical review.
     expect(html).toContain('data-privacy-register=""');
@@ -48,9 +48,9 @@ describe("receive privacy-pool notice", () => {
     const html = privacyPoolNotice(settled("unregistered"), "fund-first");
 
     expect(html).toContain(NOTICE);
-    expect(html).toContain("needs to be deployed and hold STRK first");
+    expect(html).toContain("Deploy this account and add STRK");
     expect(html).not.toContain("data-privacy-register");
-    expect(html).not.toContain("Register now");
+    expect(html).not.toContain("Enable privacy");
     expect(html).not.toContain("<button");
   });
 
@@ -58,10 +58,10 @@ describe("receive privacy-pool notice", () => {
     const html = privacyPoolNotice(settled("unregistered"), "deploy-first");
 
     expect(html).toContain('data-privacy-deploy-register=""');
-    expect(html).toContain("Deploy and register");
+    expect(html).toContain("Deploy and enable");
     // The copy is honest that this is two transactions: Starknet cannot batch a
     // DEPLOY_ACCOUNT with an invoke.
-    expect(html).toContain("two transactions, each with its own fee");
+    expect(html).toContain("two transactions: deploy, then register");
     // It must not also carry the plain registration hook, or one click would
     // start both journeys.
     expect(html).not.toContain('data-privacy-register=""');

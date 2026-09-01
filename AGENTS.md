@@ -8,21 +8,28 @@ rules and `README.md` the feature-level docs. Treat every change as security-sen
 
 ```bash
 bun install --frozen-lockfile
-bun run vendor:krusty        # required once before check/build (clones + wasm-pack builds Krusty KMS)
-bun run vendor:multisig      # required once before check/build (scarb-builds contracts/multisig)
+bun run vendor:argent        # required once before check/build (verifies pinned official contracts)
 bun run vendor:privacy       # required once before check/build (builds pinned official privacy SDK)
 bun run check                # types + lint + standards + manifest + vendored pins + tests
 bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI image)
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
-bun run test:e2e             # Playwright extension E2E (requires dist/)
+bun run test:e2e             # Playwright extension E2E (requires dist/; egress blocked)
 bun run package:extension    # writes artifacts/*.zip + .sha256
+bun run dev:session          # headed browser on a kept profile, onboards/unlocks itself
 ```
 
-- `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain;
-  `bun run vendor:multisig` needs `scarb 2.18.0` exactly (the multisig class hash pin in
-  `packages/features/multisig/src/deploy.ts` is only reproducible on that version); and
+- `bun run dev:session` is development-only: it onboards from the repository's published test phrase,
+  so its accounts are public. It switches to Sepolia after onboarding and keeps its wallet in a
+  git-ignored `.dev-profile/`. Read the header of `tests/e2e/dev-session.ts` before overriding
+  `MC_DEV_MNEMONIC`.
+
+- The E2E suite blackholes DNS, so no test can reach a live host; `test:e2e:mainnet` opts back in
+  via `MC_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
+  flag is set.
+- Krusty KMS is installed as an exact, lockfile-pinned npm package by `bun install`.
+  `bun run vendor:argent` needs network access to the pinned official Argent release; and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,
-  `check:krusty`/`check:multisig`/`check:privacy` and `build` fail — that is expected in offline
+  `check:argent`/`check:privacy` and `build` fail — that is expected in offline
   sandboxes; run the rest of the gates and say so.
 - Narrower loops while iterating: `bun test tests/<module>/<name>.test.ts`, `bun run check:types`,
   `bun run check:lint`, `bun run test:e2e:build` (build + extension E2E). Always finish with the
@@ -47,8 +54,8 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 ## Hard rules (enforced by `bun run check` and review)
 
 - **Never** add fallback signing, key derivation, or mnemonic validation — Krusty KMS owns wallet
-  crypto; if it is unavailable, fail closed. The Krusty commit pin lives in
-  `scripts/vendor-krusty.ts`; don't bump it casually.
+  crypto; if it is unavailable, fail closed. Keep its published package pinned exactly in
+  `package.json` and `bun.lock`; don't bump it casually.
 - Never log or persist secrets outside the encrypted vault. Secret-material field names are only
   allowed in the boundary modules whitelisted in `scripts/check-file-standards.ts`.
 - Clock/randomness calls live only in explicit boundary modules (inject `clock`/`fetch`/RNG into
@@ -113,20 +120,26 @@ exists, use or extend it in place rather than adding a sibling.
 - Activity summaries are load-bearing: dedup guards match on them (see
   `apps/extension/src/background/multisig/multisig-tx-ops.ts`). Record deterministic, specific summaries, and never
   change one without checking what greps for it.
+- Numeric and lexical constants that more than one layer reads are single-sourced too:
+  `UINT128_LIMIT` in `src/starknet/networks.ts` (the uint256 limb bound, the unlimited-allowance
+  cut-off, and the STRK20 pool-fee ceiling all derive from it — never write `1n << 128n`), the
+  lowercase-hex grammar behind `isStarkFieldElement`/`isHexChainId`, and `isNetworkLabel` in
+  `src/shared/json.ts` for chain ids and names (bounded on the raw string, since the background
+  re-validates untrimmed message text), and `isServiceUrlList` in `src/shared/service-url.ts` for a
+  chain's endpoint arrays. `tests/conformance/shared-helper-single-source.test.ts` and its
+  `shared-grammar-single-source` sibling fail when a private copy reappears.
+- Workflow gates read `.github/workflows` from disk (`scripts/workflow-inventory.ts`), both `.yml`
+  and `.yaml` since GitHub runs either; do not add a hand-maintained workflow list. A new workflow
+  is checked automatically, and takes the self-hosted runner or a privileged trigger only by gaining
+  a reviewed policy in `scripts/workflow-security-policy.ts`. The same module owns the `uses:`
+  extraction, which fails closed: a reference it cannot resolve is reported as unpinned.
 
 ## Cursor Cloud specific instructions
 
-The VM snapshot already has `bun`, `wasm-pack 0.13.1`, and a Rust toolchain on `PATH`, and the
-Krusty KMS WASM package is already vendored — so `bun run check`, `bun run build`, and
-`bun run package:extension` run out of the box. The startup update script only runs
-`bun install --frozen-lockfile`; everything else below is background context, not steps to re-run.
-
-- Rust default toolchain must be **stable** (currently 1.96+); an `edition2024` transitive dep
-  fails to build under the older pinned 1.83 that some base images ship. If `bun run vendor:krusty`
-  ever fails with an `edition2024`/`feature not stabilized` error, run `rustup default stable`.
-- `vendor/krusty-kms/` persists in the snapshot (git-ignored). If it is missing (e.g. a clean
-  checkout), regenerate it with `bun run vendor:krusty` (needs network + `wasm-pack` + Rust). This
-  is the only build-like setup step and is intentionally kept out of the update script.
+The VM snapshot already has `bun`, and `bun install --frozen-lockfile` installs the exact published
+Krusty KMS package, so no Rust toolchain or Krusty source checkout is needed by this repository.
+The pinned Argent and Privacy vendor outputs are already present, so `bun run check`,
+`bun run build`, and `bun run package:extension` run out of the box.
 - There is **no dev server / watch mode**: this is a Chrome MV3 extension. To run/verify it,
   `bun run build` then load the `dist/` folder as an unpacked extension at `chrome://extensions`
   (Developer mode on), and open the side panel from the toolbar action. Re-run `bun run build` and

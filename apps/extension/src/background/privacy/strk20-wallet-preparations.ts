@@ -5,14 +5,18 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { isSha256Digest } from "@mc-wallet/core/ids";
 import type { PaymasterAuthorizationReview } from "@mc-wallet/privacy/paymaster-typed-data";
-import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
+import type {
+  PreparedStrk20AccountSubmission,
+  Strk20SubmissionPlan,
+} from "@mc-wallet/privacy/service";
 import type { TokenConfig } from "@mc-wallet/settings/preferences";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
 import type { ApprovalContext } from "../approvals/approval-context";
 
 const MAX_PREPARATIONS = 20;
-const PREPARATION_ID_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 type BasePreparation = {
   readonly context: ApprovalContext;
@@ -22,13 +26,18 @@ type BasePreparation = {
   readonly token: TokenConfig;
 };
 
+type PublicAccountPreparation = PreparedStrk20AccountSubmission & {
+  readonly networkFee: FeeEstimate;
+};
+
 /**
  * Frozen one-time registration operation.
  */
-export type Strk20RegistrationPreparation = BasePreparation & {
-  readonly kind: "register";
-  readonly poolFeeFri: string;
-};
+export type Strk20RegistrationPreparation = BasePreparation &
+  PublicAccountPreparation & {
+    readonly kind: "register";
+    readonly poolFeeFri: string;
+  };
 
 /**
  * Frozen one-time deposit operation, including its reviewed submission route.
@@ -36,20 +45,21 @@ export type Strk20RegistrationPreparation = BasePreparation & {
  * shield, anyone registered with the pool otherwise — and is committed by the
  * digest so the credited party cannot change between review and submission.
  */
-export type Strk20DepositPreparation = BasePreparation & {
-  readonly actions: readonly Strk20Action[];
-  readonly amount: string;
-  readonly amountRaw: string;
-  readonly kind: "deposit";
-  readonly plan: Strk20SubmissionPlan;
-  readonly recipient: string;
-};
+export type Strk20DepositPreparation = BasePreparation &
+  PublicAccountPreparation & {
+    readonly actions: readonly Strk20Action[];
+    readonly amount: string;
+    readonly amountRaw: string;
+    readonly kind: "deposit";
+    readonly plan: Strk20SubmissionPlan;
+    readonly recipient: string;
+  };
 
 /**
  * Frozen one-time shielded transfer, always routed through the private relay.
  * The recipient is committed by the digest alongside the action batch.
  */
-export type Strk20TransferPreparation = BasePreparation & {
+type Strk20TransferPreparation = BasePreparation & {
   readonly actions: readonly Strk20Action[];
   readonly amount: string;
   readonly amountRaw: string;
@@ -62,7 +72,7 @@ export type Strk20TransferPreparation = BasePreparation & {
  * Frozen one-time withdrawal (unshield), always routed through the private
  * relay. The public destination is committed by the digest with the batch.
  */
-export type Strk20WithdrawPreparation = BasePreparation & {
+type Strk20WithdrawPreparation = BasePreparation & {
   readonly actions: readonly Strk20Action[];
   readonly amount: string;
   readonly amountRaw: string;
@@ -94,6 +104,7 @@ export type Strk20WalletPreparationReview = {
   readonly authorization?: PaymasterAuthorizationReview;
   readonly id: string;
   readonly kind: "deposit" | "register" | "transfer" | "withdraw";
+  readonly networkFee?: FeeEstimate;
   readonly payloadDigest: string;
   readonly poolAddress: string;
   readonly poolFeeFri?: string;
@@ -118,22 +129,49 @@ export const strk20WalletPreparationPayload = (
   preparation.kind === "register"
     ? {
         kind: preparation.kind,
+        allowanceGrants: preparation.allowanceGrants,
+        calls: preparation.calls,
+        networkFee: preparation.networkFee,
         poolAddress: preparation.poolAddress,
         poolFeeFri: preparation.poolFeeFri,
+        proof: preparation.proof,
         summaries: preparation.summaries,
         token: preparation.token,
       }
-    : {
-        actions: preparation.actions,
-        amount: preparation.amount,
-        amountRaw: preparation.amountRaw,
-        kind: preparation.kind,
-        plan: preparation.plan,
-        poolAddress: preparation.poolAddress,
-        recipient: preparation.recipient,
-        summaries: preparation.summaries,
-        token: preparation.token,
-      };
+    : preparation.kind === "deposit"
+      ? {
+          actions: preparation.actions,
+          allowanceGrants: preparation.allowanceGrants,
+          amount: preparation.amount,
+          amountRaw: preparation.amountRaw,
+          calls: preparation.calls,
+          kind: preparation.kind,
+          networkFee: preparation.networkFee,
+          plan: preparation.plan,
+          poolAddress: preparation.poolAddress,
+          proof: preparation.proof,
+          recipient: preparation.recipient,
+          summaries: preparation.summaries,
+          token: preparation.token,
+        }
+      : {
+          actions: preparation.actions,
+          amount: preparation.amount,
+          amountRaw: preparation.amountRaw,
+          kind: preparation.kind,
+          plan: preparation.plan,
+          poolAddress: preparation.poolAddress,
+          recipient: preparation.recipient,
+          summaries: preparation.summaries,
+          token: preparation.token,
+        };
+
+const reviewedNetworkFee = (
+  preparation: Strk20WalletPreparation,
+): { readonly networkFee?: FeeEstimate } =>
+  preparation.kind === "register" || preparation.kind === "deposit"
+    ? { networkFee: preparation.networkFee }
+    : {};
 
 const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparationReview => ({
   ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
@@ -144,6 +182,7 @@ const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparation
     : {}),
   id: preparation.id,
   kind: preparation.kind,
+  ...reviewedNetworkFee(preparation),
   payloadDigest: preparation.context.payloadDigest,
   poolAddress: preparation.poolAddress,
   ...(preparation.kind === "register"
@@ -186,7 +225,7 @@ export const createStrk20WalletPreparationStore = (): Strk20WalletPreparationSto
   const pending = new Map<string, Strk20WalletPreparation>();
   return {
     claim(id) {
-      if (!PREPARATION_ID_PATTERN.test(id)) {
+      if (!isSha256Digest(id)) {
         return null;
       }
       const preparation = pending.get(id);
@@ -198,7 +237,7 @@ export const createStrk20WalletPreparationStore = (): Strk20WalletPreparationSto
     },
     put(preparation) {
       const copy = structuredClone(preparation);
-      if (!PREPARATION_ID_PATTERN.test(copy.id) || copy.id !== copy.context.payloadDigest) {
+      if (!isSha256Digest(copy.id) || copy.id !== copy.context.payloadDigest) {
         throw new WalletError("Invalid privacy preparation commitment");
       }
       pending.set(copy.id, copy);

@@ -2,15 +2,16 @@
 import { describe, expect, test } from "bun:test";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import {
+  type ActivityResponse,
   account,
   extensionSender,
   makeWalletOpsHarness as makeHarness,
+  OTHER_ACCOUNT_ID,
+  reviewedDeploymentFee,
+  reviewedFee,
+  SEPOLIA_ACCOUNT_ID,
   tokenId,
 } from "../../support/wallet-ops-harness";
-
-const OTHER_ACCOUNT_ID =
-  "SN_MAIN:0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
-const SEPOLIA_ACCOUNT_ID = `SN_SEPOLIA:${account.address}`;
 
 describe("wallet operations", () => {
   test("review returns decoded summaries, flags, and the fee estimate", async () => {
@@ -25,7 +26,6 @@ describe("wallet operations", () => {
       },
       extensionSender,
     );
-
     expect(response).toMatchObject({
       ok: true,
       review: {
@@ -40,8 +40,7 @@ describe("wallet operations", () => {
     expect(review.summaries[0]).toContain("Send 1.5 ETH");
     expect(review.flags.map((flag) => flag.code)).toContain("self-transfer");
   });
-
-  test("review reports required deployment instead of a fee when undeployed", async () => {
+  test("review reports separate invoke and deployment fees when undeployed", async () => {
     const { handler } = makeHarness({ deployed: false });
     const response = await handler(
       {
@@ -53,13 +52,17 @@ describe("wallet operations", () => {
       },
       extensionSender,
     );
-
     expect(response).toMatchObject({
       ok: true,
-      review: { fee: null, feeEstimateFailed: false, requiresDeployment: true },
+      review: {
+        deploymentFee: reviewedDeploymentFee,
+        deploymentFeeEstimateFailed: false,
+        fee: reviewedFee,
+        feeEstimateFailed: false,
+        requiresDeployment: true,
+      },
     });
   });
-
   test("review flags a genuine fee-estimate failure on a deployed account", async () => {
     const { handler } = makeHarness({ deployed: true, estimateFails: true });
     const response = await handler(
@@ -72,18 +75,11 @@ describe("wallet operations", () => {
       },
       extensionSender,
     );
-
-    // The node's reason travels with the failure too — see
-    // `wallet-ops-review-fee.test.ts` for that invariant.
     expect(response).toMatchObject({
       ok: true,
       review: { fee: null, feeEstimateFailed: true, requiresDeployment: false },
     });
   });
-
-  // Fee-affordability guard (issue 191): the review compares the estimate
-  // against the account's STRK balance via the shared predicate. Warn-only —
-  // nothing here changes what is submittable — and fail-open on missing data.
   const reviewMessage = (overrides?: { amount?: string; tokenId?: string }) => ({
     accountId: account.id,
     amount: overrides?.amount ?? "1.5",
@@ -120,13 +116,11 @@ describe("wallet operations", () => {
     const amount = 10n ** 18n; // "1" STRK in base units
     const covers = (amount + FEE).toString();
     const short = (amount + FEE - 1n).toString();
-
     const ok = await makeHarness({ strkBalance: covers }).handler(
       reviewMessage({ amount: "1", tokenId: strkTokenId }),
       extensionSender,
     );
     expect(ok).toMatchObject({ ok: true, review: { feeAffordability: "ok" } });
-
     const insufficient = await makeHarness({ strkBalance: short }).handler(
       reviewMessage({ amount: "1", tokenId: strkTokenId }),
       extensionSender,
@@ -158,13 +152,13 @@ describe("wallet operations", () => {
         accountId: account.id,
         amount: "1.5",
         recipient: "0x777",
+        reviewedFee,
         speed: "fast",
         tokenId,
         type: "wallet.transfer",
       },
       extensionSender,
     );
-
     const response = await handler({ type: "wallet.activity" }, extensionSender);
     expect(response).toMatchObject({ ok: true });
     const activity = (
@@ -180,8 +174,6 @@ describe("wallet operations", () => {
     expect(stored.find((entry) => entry.hash === "0x9ab")?.status).toBe("pending");
   });
 
-  // A pre-confirmed transaction reaches the feed as its own provisional status
-  // rather than being flattened into accepted or left reading as pending.
   test("surfaces a pre-confirmed transaction as provisional in the feed", async () => {
     const { handler } = makeHarness({
       statusReport: { finalizedOnL1: false, found: true, status: "preconfirmed" },
@@ -191,6 +183,7 @@ describe("wallet operations", () => {
         accountId: account.id,
         amount: "1.5",
         recipient: "0x777",
+        reviewedFee,
         speed: "fast",
         tokenId,
         type: "wallet.transfer",
@@ -202,8 +195,6 @@ describe("wallet operations", () => {
     expect(activity[0]?.status).toBe("preconfirmed");
   });
 
-  // The late-failure channel: a transaction that was pre-confirmed and then
-  // reverted owes the user one notice, delivered on the panel's next poll.
   test("drains a late-failure notice exactly once through wallet.transactionAlerts", async () => {
     const { activity: activityLog, handler } = makeHarness({
       statusReport: { finalizedOnL1: false, found: true, status: "reverted" },
@@ -219,7 +210,6 @@ describe("wallet operations", () => {
       { "0x7ab": { status: "preconfirmed" } },
       { accountId: account.id, networkId: "SN_MAIN" },
     );
-
     expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
       alerts: [],
       ok: true,
@@ -249,7 +239,6 @@ describe("wallet operations", () => {
       { "0x8ab": { failureNotice: "pending", status: "reverted" } },
       { accountId: OTHER_ACCOUNT_ID, networkId: "SN_MAIN" },
     );
-
     expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
       alerts: [],
       ok: true,
@@ -271,7 +260,6 @@ describe("wallet operations", () => {
       { accountId: account.id, networkId: "SN_MAIN" },
     );
     session.lock();
-
     expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
       alerts: [],
       ok: true,
@@ -292,47 +280,65 @@ describe("wallet operations", () => {
       summary: "Received 3 ETH from 0x7770…0abc",
       token: "ETH",
     };
-    const { handler } = makeHarness({ onChainHistory: [chainOnly] });
+    const { handler, historyRequests } = makeHarness({ onChainHistory: [chainOnly] });
     await handler(
       {
         accountId: account.id,
         amount: "1.5",
         recipient: "0x777",
+        reviewedFee,
         tokenId,
         type: "wallet.transfer",
       },
       extensionSender,
     );
+    const idle = (await handler({ type: "wallet.activity" }, extensionSender)) as ActivityResponse;
+    expect(idle.activity.map((entry) => entry.hash)).toEqual(["0x7ab"]);
+    expect(historyRequests()).toBe(0);
 
-    const response = (await handler({ type: "wallet.activity" }, extensionSender)) as {
-      activity: readonly ActivityEntry[];
-      historyUnavailable?: boolean;
-    };
-    // Chain history (newest) appears above the locally-submitted transfer, and
-    // there is no duplicate or degraded indicator.
+    const response = (await handler(
+      { refreshHistory: true, type: "wallet.activity" },
+      extensionSender,
+    )) as ActivityResponse;
     expect(response.activity.map((entry) => entry.hash)).toEqual(["0xc4a1", "0x7ab"]);
     expect(response.historyUnavailable).toBeUndefined();
+    const cached = (await handler({ cached: true, type: "wallet.activity" }, extensionSender)) as {
+      activity: readonly ActivityEntry[];
+    };
+    expect(cached.activity.map((entry) => entry.hash)).toEqual(["0xc4a1", "0x7ab"]);
+    expect(historyRequests()).toBe(1);
+    await handler({ type: "wallet.activity" }, extensionSender);
+    expect(historyRequests()).toBe(1);
+    await handler({ refreshHistory: true, type: "wallet.activity" }, extensionSender);
+    expect(historyRequests()).toBe(1);
+    await handler(
+      { forceHistory: true, refreshHistory: true, type: "wallet.activity" },
+      extensionSender,
+    );
+    expect(historyRequests()).toBe(2);
   });
 
   test("degrades to the local feed with an indicator when history is unreachable", async () => {
-    const { handler } = makeHarness({ historyThrows: true });
+    const { handler, historyRequests } = makeHarness({ historyThrows: true });
     await handler(
       {
         accountId: account.id,
         amount: "1.5",
         recipient: "0x777",
+        reviewedFee,
         tokenId,
         type: "wallet.transfer",
       },
       extensionSender,
     );
-
-    const response = (await handler({ type: "wallet.activity" }, extensionSender)) as {
-      activity: readonly ActivityEntry[];
-      historyUnavailable?: boolean;
-    };
+    const response = (await handler(
+      { refreshHistory: true, type: "wallet.activity" },
+      extensionSender,
+    )) as ActivityResponse;
     expect(response.historyUnavailable).toBe(true);
-    expect(response.activity).toHaveLength(1);
     expect(response.activity[0]?.hash).toBe("0x7ab");
+    const retry = (await handler({ type: "wallet.activity" }, extensionSender)) as ActivityResponse;
+    expect(retry.historyUnavailable).toBe(true);
+    expect(historyRequests()).toBe(1);
   });
 });

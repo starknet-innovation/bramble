@@ -5,6 +5,11 @@
  */
 import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import {
+  readRemoveNftInput,
+  readSetNftIndexerUrlInput,
+  readSetNftSpamInput,
+} from "../portfolio/nft-inputs";
+import {
   readCreateGroupInput,
   readImportPreferencesInput,
   readRemoveAddressInput,
@@ -14,12 +19,13 @@ import {
   readSetAccountInGroupInput,
   readSetAccountLabelInput,
   readSetDisplayInput,
+  readSetExplorerFallbackInput,
   readSetGroupIconInput,
+  readSetNostrRelayUrlInput,
   readSetRpcOverrideInput,
   readSetStrk20NetworkConfigInput,
   readTypeOnlyInput,
 } from "../routing/message-inputs";
-import { readRemoveNftInput, readSetNftIndexerUrlInput, readSetNftSpamInput } from "../portfolio/nft-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 
 /**
@@ -101,6 +107,11 @@ const PREFERENCE_HANDLERS: Readonly<Record<string, PreferenceHandler>> = {
   "wallet.setDisplay": parseThen(readSetDisplayInput, "invalid display request", (store, input) =>
     store.setDisplay(input),
   ),
+  "wallet.setExplorerFallback": parseThen(
+    readSetExplorerFallbackInput,
+    "invalid explorer fallback request",
+    (store, input) => store.setExplorerFallback(input),
+  ),
   "wallet.setGroupIcon": parseThen(readSetGroupIconInput, "invalid group request", (store, input) =>
     store.setGroupIcon(input),
   ),
@@ -108,6 +119,11 @@ const PREFERENCE_HANDLERS: Readonly<Record<string, PreferenceHandler>> = {
     readSetNftIndexerUrlInput,
     "invalid indexer endpoint request",
     (store, input) => store.setNftIndexerUrl(input),
+  ),
+  "wallet.setNostrRelayUrl": parseThen(
+    readSetNostrRelayUrlInput,
+    "invalid Nostr relay request",
+    (store, input) => store.setNostrRelayUrl(input),
   ),
   "wallet.setNftSpam": parseThen(readSetNftSpamInput, "invalid nft request", (store, input) =>
     store.setNftSpam(input),
@@ -132,6 +148,8 @@ export const handlePreferenceOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = PREFERENCE_HANDLERS[messageType];
+  const handler = Object.hasOwn(PREFERENCE_HANDLERS, messageType)
+    ? PREFERENCE_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(preferencesStore, message) : null;
 };

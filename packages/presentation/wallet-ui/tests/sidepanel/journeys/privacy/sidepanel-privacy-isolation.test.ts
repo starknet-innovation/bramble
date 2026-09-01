@@ -137,6 +137,46 @@ describe("privacy UI async scope isolation", () => {
     expect(loads).toBe(0);
   });
 
+  test("retry exposes the display-safe service error in a copyable toast", async () => {
+    let disclosure: PrivacyDisclosureState = {
+      error: "Private balances unavailable",
+      loading: false,
+      value: null,
+    };
+    const app = mount("<button data-privacy-retry>Try again</button>");
+    const button = app.querySelector<HTMLButtonElement>("[data-privacy-retry]");
+    bindPrivacy({
+      app,
+      balances: () => [],
+      disclosure: () => disclosure,
+      generation: () => 0,
+      journey: () => ({ stage: "idle" }),
+      navigate: () => undefined,
+      paint: () => undefined,
+      preferences: () => preferences,
+      setDisclosure: (state) => {
+        disclosure = state;
+      },
+      setJourney: () => undefined,
+      status: () => statusFor(account.id),
+      wallet: {
+        loadPrivacyState: async () => {
+          throw new Error("privacy indexer unavailable for this account");
+        },
+      } as unknown as SidepanelWallet,
+    });
+
+    button?.click();
+    await tick();
+
+    expect(disclosure.error).toBe("privacy indexer unavailable for this account");
+    expect(document.querySelector(".toast.error .toast-text")?.textContent).toBe(
+      "privacy indexer unavailable for this account",
+    );
+    expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();
+    expect(button?.hasAttribute("data-busy")).toBe(false);
+  });
+
   test("drops a slow discovery that resolves after the account scope changes", async () => {
     const pending = deferred<{
       readonly accountId: string;

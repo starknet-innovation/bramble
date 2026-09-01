@@ -202,7 +202,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .sparkline-down polyline { stroke: var(--mc-danger); }
   .request-list { gap: ${SPACE.md}; }
   /* Activity list: same de-boxed treatment as the token list — flush rows split
-     by a single hairline divider, description left, semantic status + copy right. */
+     by a single hairline divider, state on the glyph, summary as the explorer link. */
   .tx-list { display: grid; }
   .tx-row {
     align-items: center; border-radius: ${RADIUS.sm}; display: flex; gap: ${SPACE.sm};
@@ -213,30 +213,17 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     li.tx-row:hover { background: var(--mc-hover); }
   }
   .tx-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
-  .tx-copy strong {
+  .tx-copy strong, .tx-summary-link {
+    color: var(--mc-text);
+    display: block;
     font-size: ${TYPE.label.size};
+    font-weight: ${WEIGHT.bold};
     overflow: hidden;
+    text-decoration: none;
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
-  /* Plain semantic status: pending is muted, accepted green, failures danger.
-     Pre-confirmed borrows green, then dims and dots it to remain provisional. */
-  .tx-status {
-    color: var(--mc-muted);
-    flex: none;
-    font-size: 10px;
-    font-weight: ${WEIGHT.bold};
-    letter-spacing: 0.03em;
-    text-align: right;
-    text-transform: uppercase;
-  }
-  .tx-status.accepted { color: var(--mc-positive); }
-  .tx-status.preconfirmed {
-    border-bottom: 1px dotted currentColor;
-    color: var(--mc-positive);
-    opacity: 0.68;
-  }
-  .tx-status.reverted, .tx-status.rejected { color: var(--mc-danger); }
+  .tx-summary-link:hover { text-decoration: underline; text-underline-offset: 3px; }
   .review-panel {
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
@@ -245,6 +232,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     padding: ${SPACE.md};
   }
   .review-panel p { color: var(--mc-text); font-size: ${TYPE.label.size}; }
+  .review-panel .decision-label { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
 ${SIGN_REQUEST_STYLES}
   .review-flag { color: var(--mc-danger); font-size: ${TYPE.caption.size}; }
   .review-fee { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
@@ -369,8 +357,11 @@ ${SIGN_REQUEST_STYLES}
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.medium};
     gap: 6px;
+    max-width: 100%;
     min-height: 28px;
+    overflow: hidden;
     padding: 3px ${SPACE.md};
+    text-overflow: ellipsis;
     text-wrap: nowrap;
   }
   /* Hardware-wallet badge: a compact accent-tinted pill marking a Ledger
@@ -493,6 +484,11 @@ ${SIGN_REQUEST_STYLES}
   .toast.success .toast-icon { background: var(--mc-positive-soft); color: var(--mc-positive); }
   .toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }
   .toast-icon .icon { height: 16px; width: 16px; }
-  .toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .toast-text {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+  }
   button.toast-copy { height: 30px; min-height: 30px; width: 30px; }
 `;

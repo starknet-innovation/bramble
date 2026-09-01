@@ -7,99 +7,33 @@
  * activity refresh/export suites live in `sidepanel-activity-ui.test.ts`.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { account } from "@mc-wallet/testkit/sidepanel";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
+import type { TokenBalance } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import {
   bindTransfer,
   friendlyReviewError,
   markTransferLedgerAuthorized,
   recipientFieldError,
-  type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
   flush,
-  makeWallet,
+  mountTransferUi as mount,
   paint,
+  transferPreferences as preferences,
+  transferPublicBalance as publicBalance,
+  TRANSFER_RECIPIENT as RECIPIENT,
+  setTransferField as setField,
   walletStatus as status,
-  type WalletCalls,
+  submitTransferForm as submit,
 } from "../../../support/transfer-ui-harness";
-
-const RECIPIENT = "0x02a3f4b1c5d6e7089a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
 
 const originalSetTimeout = globalThis.setTimeout;
-
-const TOKEN_ADDRESS = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
-
-const preferences: WalletPreferences = {
-  activeNetworkId: "SN_MAIN",
-  addressBook: [],
-  schemaVersion: 1,
-  tokens: [
-    {
-      address: TOKEN_ADDRESS,
-      decimals: 18,
-      id: `SN_MAIN:ETH:${TOKEN_ADDRESS}`,
-      name: "Ether",
-      networkId: "SN_MAIN",
-      symbol: "ETH",
-    },
-  ],
-};
-
-const publicBalance: TokenBalance = {
-  address: TOKEN_ADDRESS,
-  balance: "100000000000000000000",
-  decimals: 18,
-  formatted: "100",
-  id: `SN_MAIN:ETH:${TOKEN_ADDRESS}`,
-  name: "Ether",
-  networkId: "SN_MAIN",
-  symbol: "ETH",
-};
-
-const mount = (
-  walletOverrides: Record<string, unknown> = {},
-): { app: HTMLElement; calls: WalletCalls; renderCalls: WalletStatus[]; deps: TransferUiDeps } => {
-  document.body.replaceChildren();
-  const app = document.createElement("div");
-  app.id = "app";
-  paint(app, sendFlow(status, account, preferences, [publicBalance]));
-  document.body.append(app);
-  const { calls, wallet } = makeWallet(walletOverrides);
-  const renderCalls: WalletStatus[] = [];
-  const deps: TransferUiDeps = {
-    app,
-    publicBalances: () => [publicBalance],
-    render: async (next: WalletStatus) => {
-      renderCalls.push(next);
-    },
-    wallet: wallet as unknown as TransferUiDeps["wallet"],
-  };
-  return { app, calls, deps, renderCalls };
-};
-
-const submit = (app: HTMLElement): void => {
-  const form = app.querySelector<HTMLFormElement>("#transfer-form");
-  if (!form) {
-    throw new Error("transfer form missing");
-  }
-  form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-};
-
-const setField = (app: HTMLElement, name: string, value: string): void => {
-  const input = app.querySelector<HTMLInputElement>(`[name="${name}"]`);
-  if (!input) {
-    throw new Error(`field ${name} missing`);
-  }
-  input.value = value;
-};
 
 const resultText = (app: HTMLElement): string =>
   app.querySelector("#transfer-result")?.textContent ?? "";
@@ -188,7 +122,72 @@ describe("bindTransfer", () => {
     expect(calls.submitTransfer).toHaveLength(1);
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
     expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
+    expect(app.querySelector("#send-home")?.textContent).toBe("Back to home");
+    expect(app.querySelector("#send-another")).toBeNull();
     expect(app.querySelector('[data-send-step="sent"]')?.getAttribute("data-state")).toBe("active");
+  });
+
+  test("keeps the amount screen visible while its review is prepared", async () => {
+    let resolveReview = (_review: unknown): void => undefined;
+    const review = new Promise((resolve) => {
+      resolveReview = resolve;
+    });
+    const { app, deps } = mount({ reviewTransfer: () => review });
+    bindTransfer(deps);
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+
+    submit(app);
+    await flush();
+    expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("reviewing");
+    expect(app.querySelector("#send-details")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("#send-review-button")?.hasAttribute("data-busy")).toBe(true);
+
+    resolveReview({
+      fee: { overallFee: "1000", unit: "FRI" },
+      feeEstimateFailed: false,
+      flags: [],
+      requiresDeployment: false,
+      summaries: ["Transfer"],
+    });
+    await flush();
+    expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
+  });
+
+  test("continues a shortcut-owned funding send into deployment", async () => {
+    const { app, deps } = mount();
+    paint(
+      app,
+      sendFlow(status, account, preferences, [publicBalance], {}, {}, "usd", [], {
+        accountId: account.id,
+        completeTo: "multisig-deploy",
+        destination: "public",
+        networkId: status.networkId,
+        recipient: RECIPIENT,
+        recipientLabel: "New treasury",
+        source: "public",
+        tokenId: publicBalance.id,
+      }),
+    );
+    const views: string[] = [];
+    const returned: string[] = [];
+    bindTransfer({
+      ...deps,
+      back: () => returned.push("multisig-deploy"),
+      navigate: (view) => views.push(view),
+    });
+    setField(app, "amount", "1");
+    submit(app);
+    await flush();
+    submit(app);
+    await flush();
+    await flush();
+
+    expect(app.querySelector("#send-home")?.textContent).toBe("Deploy Multisignature Account");
+    app.querySelector<HTMLButtonElement>("#send-home")?.click();
+    app.querySelector<HTMLButtonElement>("#send-close")?.click();
+    expect(returned).toEqual(["multisig-deploy", "multisig-deploy"]);
+    expect(views).toEqual([]);
   });
 
   // Back out of the review and the next Review send must show the review again,
@@ -259,6 +258,8 @@ describe("bindTransfer", () => {
     const { app, calls, deps } = mount({
       async reviewTransfer() {
         return {
+          deploymentFee: { overallFee: "2000", unit: "FRI" },
+          deploymentFeeEstimateFailed: false,
           fee: { overallFee: "1000", unit: "FRI" },
           feeEstimateFailed: false,
           flags: [],
@@ -274,7 +275,8 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(reviewText(app)).toContain("not deployed yet");
-    expect(feeText(app)).toContain("Estimated fee");
+    expect(feeText(app)).toContain("Estimated transaction fee");
+    expect(feeText(app)).toContain("Estimated account deployment fee");
 
     submit(app);
     await flush();
@@ -284,12 +286,14 @@ describe("bindTransfer", () => {
     expect(calls.loadDeploymentStatus).toBeGreaterThan(0);
   });
 
-  test("shows the pending-deployment fee wording on the confirm face when no estimate exists", async () => {
-    const { app, deps } = mount({
+  test("refuses confirmation when either undeployed-account fee is unavailable", async () => {
+    const { app, calls, deps } = mount({
       async reviewTransfer() {
         return {
+          deploymentFee: null,
+          deploymentFeeEstimateFailed: true,
           fee: null,
-          feeEstimateFailed: false,
+          feeEstimateFailed: true,
           flags: [],
           requiresDeployment: true,
           summaries: ["Deploy + transfer"],
@@ -302,10 +306,10 @@ describe("bindTransfer", () => {
 
     submit(app);
     await flush();
-    // The not-yet-deployed fee wording is visible without opening the
-    // disclosure (#190).
-    expect(feeText(app)).toContain("estimated once this account is deployed");
-    expect(reviewText(app)).not.toContain("estimated once this account is deployed");
+    expect(feeText(app)).toContain("Couldn't estimate both");
+    submit(app);
+    await flush();
+    expect(calls.submitTransfer).toHaveLength(0);
   });
 
   test("keeps the review pending and offers a retry when the fee estimate fails", async () => {

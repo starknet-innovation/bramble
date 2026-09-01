@@ -8,11 +8,11 @@
 
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
-import { mostImportantMultisigSync } from "../../journeys/multisig/multisig-sync";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { RenderData } from "../rendering/render-cache";
 import type { WalletView } from "../screens/views";
 import type { DeploymentCache } from "./deployment-cache";
+import type { RefreshReason } from "./refresh-scheduler";
 
 /**
  * Inputs `hydrateView` needs: the current status/view, the shared render cache,
@@ -29,50 +29,66 @@ export type HydrateDeps = {
   readonly multisig: MultisigClient;
   readonly deployment: DeploymentCache;
   readonly paint: () => void;
+  readonly refreshReason?: RefreshReason;
 };
 
 const hydrateMultisigs = async (
-  activeView: WalletView,
-  selectedMultisigId: string | null,
   cached: RenderData["multisigs"],
   multisig: MultisigClient,
-): Promise<Pick<RenderData, "multisigs" | "multisigsError" | "multisigSync">> => {
-  const loaded = await multisig.loadMultisigs();
+  networkId: string,
+  cachedOnly = false,
+): Promise<Pick<RenderData, "multisigs" | "multisigsError" | "multisigsNetworkId">> => {
+  const loaded = await multisig.loadMultisigs(cachedOnly);
   if (loaded === "error") {
-    return { multisigs: cached, multisigsError: true, multisigSync: "background-unavailable" };
+    return { multisigs: cached, multisigsError: true, multisigsNetworkId: null };
   }
-  const ids =
-    activeView === "multisigs"
-      ? loaded.multisigs.map((record) => record.id)
-      : (activeView === "multisig-home" ||
-            activeView === "multisig-detail" ||
-            activeView === "multisig-signers" ||
-            activeView === "multisig-track" ||
-            activeView === "multisig-receive") &&
-          selectedMultisigId
-        ? [selectedMultisigId]
-        : [];
+  return { multisigs: loaded, multisigsError: false, multisigsNetworkId: networkId };
+};
+
+const hydrateSelectedMultisig = async (
+  cached: RenderData["multisigs"],
+  multisig: MultisigClient,
+  multisigId: string,
+  force: boolean,
+): Promise<Pick<RenderData, "multisigs" | "multisigsError">> => {
+  const loaded = await multisig.refreshMultisig(multisigId, force);
+  const existing = cached.multisigs.findIndex((view) => view.record.id === multisigId);
+  const locallyConfirmed =
+    existing >= 0 && cached.multisigs[existing]?.record.currentConfig !== undefined;
+  // Ambient refreshes may improve cached UI state, but they never revoke a
+  // locally confirmed signer view on a transient RPC failure. Prepare, sign,
+  // and submit still revalidate authority in the privileged background.
   if (
-    activeView !== "multisigs" &&
-    activeView !== "multisig-home" &&
-    activeView !== "multisig-detail" &&
-    activeView !== "multisig-signers" &&
-    activeView !== "multisig-track" &&
-    activeView !== "multisig-receive"
+    locallyConfirmed &&
+    (loaded === "error" || loaded.multisig.authorityStatus === "network-unavailable")
   ) {
-    return { multisigs: loaded, multisigsError: false, multisigSync: null };
+    return {
+      multisigs:
+        loaded === "error"
+          ? cached
+          : {
+              intents: [
+                ...loaded.intents,
+                ...cached.intents.filter((intent) => intent.accountId !== multisigId),
+              ],
+              multisigs: cached.multisigs,
+            },
+      multisigsError: false,
+    };
   }
-  const refreshed = await Promise.all(
-    ids.map((id) => multisig.refreshMultisig(id).catch(() => "background-unavailable" as const)),
-  );
-  const reloaded = await multisig.loadMultisigs();
-  if (reloaded === "error") {
-    return { multisigs: loaded, multisigsError: true, multisigSync: "background-unavailable" };
-  }
+  if (loaded === "error") return { multisigs: cached, multisigsError: true };
   return {
-    multisigs: reloaded,
+    multisigs: {
+      intents: [
+        ...loaded.intents,
+        ...cached.intents.filter((intent) => intent.accountId !== multisigId),
+      ],
+      multisigs:
+        existing < 0
+          ? [loaded.multisig, ...cached.multisigs]
+          : cached.multisigs.map((view, index) => (index === existing ? loaded.multisig : view)),
+    },
     multisigsError: false,
-    multisigSync: mostImportantMultisigSync(refreshed),
   };
 };
 
@@ -87,6 +103,141 @@ const nftSnapshot = (
     combined.set(nft.id, nft);
   }
   return [...combined.values()];
+};
+
+const SELECTED_MULTISIG_VIEWS = new Set<WalletView>([
+  "multisig-home",
+  "multisig-detail",
+  "multisig-signers",
+  "multisig-track",
+  "multisig-receive",
+  "multisig-propose",
+  "multisig-deploy",
+]);
+
+const shouldRefreshSelectedMultisig = (
+  activeView: WalletView,
+  registryView: boolean,
+  authorityCriticalView: boolean,
+  selectedMultisigId: string | null,
+  selectedNeedsRefresh: boolean,
+  multisigsNetworkId: string | null,
+  networkId: string,
+): selectedMultisigId is string =>
+  (!registryView || authorityCriticalView) &&
+  selectedMultisigId !== null &&
+  selectedNeedsRefresh &&
+  multisigsNetworkId === networkId &&
+  SELECTED_MULTISIG_VIEWS.has(activeView);
+
+const hydrateCachedView = async (
+  deps: HydrateDeps,
+  walletBalanceView: boolean,
+  priceView: boolean,
+  activityView: boolean,
+  registryView: boolean,
+  multisigBalanceView: boolean,
+  walletNftView: boolean,
+  multisigNftView: boolean,
+): Promise<void> => {
+  const {
+    status,
+    activeView,
+    selectedMultisigId,
+    cache,
+    wallet,
+    multisig,
+    isCurrent = () => true,
+    paint,
+  } = deps;
+  const jobs: Promise<unknown>[] = [];
+  const cached = <T>(load: Promise<T>, assign: (value: T) => void): void => {
+    jobs.push(
+      load
+        .then((value) => {
+          if (isCurrent()) assign(value);
+        })
+        .catch(() => undefined),
+    );
+  };
+  const cachedStream = <T>(load: Promise<T>, assign: (value: T) => void): void => {
+    void load
+      .then((value) => {
+        if (isCurrent()) {
+          assign(value);
+          paint();
+        }
+      })
+      .catch(() => undefined);
+  };
+  if (walletBalanceView) {
+    cached(wallet.loadBalances(true), (value) => {
+      if (
+        "balances" in value &&
+        value.accountId === status.activeAccountId &&
+        value.networkId === status.networkId
+      )
+        cache.balances = value;
+    });
+  }
+  if (priceView) {
+    cached(wallet.loadPrices(true), (value) => {
+      cache.prices = value.prices;
+      cache.changes = value.changes;
+      cache.priceAsOf = value.asOf;
+      cache.priceStale = value.stale;
+    });
+  }
+  if (activityView) {
+    cached(
+      wallet.loadActivity(
+        activeView === "home" ? undefined : (selectedMultisigId ?? undefined),
+        true,
+      ),
+      (value) => {
+        cache.transactions = value.entries;
+      },
+    );
+  }
+  if (registryView) {
+    cached(hydrateMultisigs(cache.multisigs, multisig, status.networkId, true), (value) =>
+      Object.assign(cache, value),
+    );
+  }
+  if (multisigBalanceView && selectedMultisigId) {
+    cached(multisig.loadBalances(selectedMultisigId, true), (value) => {
+      if (
+        "balances" in value &&
+        value.accountId === selectedMultisigId &&
+        value.networkId === status.networkId
+      ) {
+        cache.multisigBalanceId = selectedMultisigId;
+        cache.multisigBalances = value;
+      }
+    });
+  }
+  if (walletNftView) {
+    const scope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
+    cachedStream(wallet.loadWatchedNfts(scope, true), (value) => {
+      cache.watchedNfts = value;
+      cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
+    });
+    cachedStream(wallet.discoverNfts(false, scope, undefined, true), (value) => {
+      cache.indexedNfts = value;
+      cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
+    });
+  }
+  if (multisigNftView && selectedMultisigId) {
+    const scope = `${status.networkId}:${selectedMultisigId}`;
+    cachedStream(wallet.discoverNfts(true, scope, selectedMultisigId, true), (value) => {
+      cache.multisigNftId = selectedMultisigId;
+      cache.multisigNfts = value;
+    });
+  }
+  if (jobs.length > 0) {
+    await Promise.all(jobs);
+    if (isCurrent()) paint();
+  }
 };
 
 /**
@@ -104,22 +255,73 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     wallet,
     multisig,
     deployment,
+    refreshReason,
     isCurrent = () => true,
     paint,
   } = deps;
+  const walletBalanceView =
+    activeView === "home" ||
+    activeView === "send" ||
+    activeView === "swap" ||
+    activeView === "tokens" ||
+    activeView === "token-detail";
+  const priceView =
+    walletBalanceView || activeView === "multisig-home" || activeView === "multisig-propose";
+  const activityView =
+    activeView === "activity" || activeView === "home" || activeView === "multisig-home";
+  const registryView = cache.multisigsNetworkId !== status.networkId || activeView === "multisigs";
+  const multisigBalanceView =
+    selectedMultisigId !== null &&
+    (activeView === "multisig-home" ||
+      activeView === "multisig-propose" ||
+      activeView === "multisig-receive");
+  const walletNftView =
+    activeView === "home" ||
+    activeView === "nfts" ||
+    activeView === "nft-hidden" ||
+    activeView === "nft-detail" ||
+    activeView === "nft-send";
+  const multisigNftView = activeView === "multisig-home" && selectedMultisigId !== null;
+  const authorityCriticalView =
+    activeView === "multisig-detail" ||
+    activeView === "multisig-signers" ||
+    activeView === "multisig-propose" ||
+    activeView === "multisig-deploy";
+  const selectedMultisig = cache.multisigs.multisigs.find(
+    (view) => view.record.id === selectedMultisigId,
+  );
+  const selectedNeedsRefresh =
+    refreshReason === "action" ||
+    authorityCriticalView ||
+    selectedMultisig?.record.currentConfig === undefined;
+  await hydrateCachedView(
+    deps,
+    walletBalanceView,
+    priceView,
+    activityView,
+    registryView,
+    multisigBalanceView,
+    walletNftView,
+    multisigNftView,
+  );
   const primaryJobs: Promise<unknown>[] = [];
-  const deferredJobs: Promise<unknown>[] = [];
+  const deferredJobs: Array<() => Promise<unknown>> = [];
   const streamingJobs: Promise<unknown>[] = [];
-  const fill = <T>(load: Promise<T>, assign: (value: T) => void, deferred = false): void => {
-    (deferred ? deferredJobs : primaryJobs).push(
-      load
+  const fill = <T>(
+    load: Promise<T> | (() => Promise<T>),
+    assign: (value: T) => void,
+    deferred = false,
+  ): void => {
+    const start = () =>
+      (typeof load === "function" ? load() : load)
         .then((value) => {
           if (isCurrent()) {
             assign(value);
           }
         })
-        .catch(() => undefined),
-    );
+        .catch(() => undefined);
+    if (deferred) deferredJobs.push(start);
+    else primaryJobs.push(start());
   };
   const stream = <T>(load: Promise<T>, assign: (value: T) => void): void => {
     streamingJobs.push(
@@ -133,28 +335,19 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
         .catch(() => undefined),
     );
   };
-  if (
-    activeView === "home" ||
-    activeView === "send" ||
-    activeView === "swap" ||
-    activeView === "tokens" ||
-    activeView === "token-detail" ||
-    activeView === "multisig-home" ||
-    activeView === "multisig-propose"
-  ) {
-    if (
-      activeView === "home" ||
-      activeView === "send" ||
-      activeView === "swap" ||
-      activeView === "tokens" ||
-      activeView === "token-detail"
-    ) {
-      fill(wallet.loadBalances(), (value) => {
-        cache.balances =
-          "balances" in value &&
-          (value.accountId !== status.activeAccountId || value.networkId !== status.networkId)
-            ? { error: "balances unavailable" }
-            : value;
+  if (priceView) {
+    if (walletBalanceView) {
+      fill(wallet.loadBalances(false, refreshReason === "action"), (value) => {
+        if ("balances" in value) {
+          cache.balances =
+            value.accountId !== status.activeAccountId || value.networkId !== status.networkId
+              ? { error: "balances unavailable" }
+              : value;
+        } else if (!("error" in cache.balances)) {
+          cache.balances = { ...cache.balances, stale: true };
+        } else {
+          cache.balances = value;
+        }
       });
     }
     fill(wallet.loadPrices(), (value) => {
@@ -166,16 +359,21 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (activeView === "home") {
     fill(
-      deployment.load(status, activeView),
+      () => deployment.load(status, activeView, refreshReason === "action"),
       (value) => {
         cache.deployment = value;
       },
       true,
     );
   }
-  if (activeView === "activity" || activeView === "home" || activeView === "multisig-home") {
+  if (activityView) {
     fill(
-      wallet.loadActivity(activeView === "home" ? undefined : (selectedMultisigId ?? undefined)),
+      () =>
+        wallet.loadActivity(
+          activeView === "home" ? undefined : (selectedMultisigId ?? undefined),
+          false,
+          activeView === "activity" && refreshReason !== "ambient",
+        ),
       (value) => {
         cache.transactions = value.entries;
         cache.historyUnavailable = value.historyUnavailable;
@@ -193,18 +391,15 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.connectedSites = value;
     });
   }
-  if (activeView === "allowances") {
+  if (activeView === "allowances" && refreshReason !== "ambient") {
     fill(wallet.loadAllowances(), (value) => {
       cache.allowances = value;
     });
   }
-  if (
-    activeView === "home" ||
-    activeView === "nfts" ||
-    activeView === "nft-hidden" ||
-    activeView === "nft-detail" ||
-    activeView === "nft-send"
-  ) {
+  // Home paints the last verified NFT snapshot from the cached phase above.
+  // Full indexer discovery can fan out into many ownership proofs, so only NFT
+  // surfaces refresh it live instead of turning an idle dashboard into a scan.
+  if (walletNftView && activeView !== "home" && refreshReason !== "ambient") {
     const nftScope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
     // Explicitly watched NFTs take the fast lane: no indexer wait, immediate
     // repaint when their verified metadata lands, and no wait for balances,
@@ -214,32 +409,16 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
     });
     fill(
-      wallet.discoverNfts(false, nftScope),
+      () => wallet.discoverNfts(false, nftScope),
       (value) => {
         cache.indexedNfts = value;
         cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
       },
-      activeView === "home",
     );
   }
-  if (
-    activeView === "home" ||
-    activeView === "activity" ||
-    activeView === "settings" ||
-    activeView === "account" ||
-    activeView === "send" ||
-    activeView === "multisigs" ||
-    activeView === "multisig-home" ||
-    activeView === "multisig-detail" ||
-    activeView === "multisig-signers" ||
-    activeView === "multisig-track" ||
-    activeView === "multisig-receive" ||
-    activeView === "multisig-watch" ||
-    activeView === "multisig-propose" ||
-    activeView === "multisig-deploy"
-  ) {
+  if (registryView) {
     primaryJobs.push(
-      hydrateMultisigs(activeView, selectedMultisigId, cache.multisigs, multisig).then((value) => {
+      hydrateMultisigs(cache.multisigs, multisig, status.networkId).then((value) => {
         if (isCurrent()) {
           Object.assign(cache, value);
         }
@@ -247,21 +426,43 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     );
   }
   if (
-    (activeView === "multisig-home" ||
-      activeView === "multisig-propose" ||
-      activeView === "multisig-receive") &&
-    selectedMultisigId
+    shouldRefreshSelectedMultisig(
+      activeView,
+      registryView,
+      authorityCriticalView,
+      selectedMultisigId,
+      selectedNeedsRefresh,
+      cache.multisigsNetworkId,
+      status.networkId,
+    )
   ) {
-    fill(multisig.loadBalances(selectedMultisigId), (value) => {
+    primaryJobs.push(
+      hydrateSelectedMultisig(
+        cache.multisigs,
+        multisig,
+        selectedMultisigId,
+        authorityCriticalView,
+      ).then((value) => {
+        if (isCurrent()) Object.assign(cache, value);
+      }),
+    );
+  }
+  if (multisigBalanceView && selectedMultisigId) {
+    fill(multisig.loadBalances(selectedMultisigId, false, refreshReason === "action"), (value) => {
       cache.multisigBalanceId = selectedMultisigId;
-      cache.multisigBalances =
-        "balances" in value &&
-        (value.accountId !== selectedMultisigId || value.networkId !== status.networkId)
-          ? { error: "multisig balances unavailable" }
-          : value;
+      if ("balances" in value) {
+        cache.multisigBalances =
+          value.accountId !== selectedMultisigId || value.networkId !== status.networkId
+            ? { error: "multisig balances unavailable" }
+            : value;
+      } else if (!("error" in cache.multisigBalances)) {
+        cache.multisigBalances = { ...cache.multisigBalances, stale: true };
+      } else {
+        cache.multisigBalances = value;
+      }
     });
   }
-  if (activeView === "multisig-home" && selectedMultisigId) {
+  if (activeView === "multisig-home" && selectedMultisigId && refreshReason !== "ambient") {
     const multisigNftScope = `${status.networkId}:${selectedMultisigId}`;
     stream(wallet.discoverNfts(true, multisigNftScope, selectedMultisigId), (value) => {
       cache.multisigNftId = selectedMultisigId;
@@ -290,6 +491,6 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     }
   };
   await flush(primaryJobs);
-  await flush(deferredJobs);
+  await flush(deferredJobs.map((start) => start()));
   await Promise.all(streamingJobs);
 };

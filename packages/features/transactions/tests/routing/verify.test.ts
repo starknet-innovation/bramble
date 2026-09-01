@@ -3,13 +3,18 @@
  * address-poisoning detection stay pure and predictable.
  */
 import { describe, expect, test } from "bun:test";
-import { isLookalikeAddress, verifyCalls } from "@mc-wallet/transactions/verify";
+import {
+  isLookalikeAddress,
+  refuseOnAccountSelfCall,
+  verifyCalls,
+} from "@mc-wallet/transactions/verify";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { AddressBookEntry, TokenConfig } from "@mc-wallet/wallet-model/preferences";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -39,7 +44,36 @@ const contact: AddressBookEntry = {
 
 const context = { account, addressBook: [contact], tokens };
 
+// A canonical effectively-unlimited allowance: the `(low, high)` limbs of the
+// maximum u256, each inside the u128 range Cairo can actually deserialize. The
+// spelling matters — see the non-canonical case below.
+const UNLIMITED_U256_LIMBS = [
+  ((1n << 128n) - 1n).toString(),
+  ((1n << 128n) - 1n).toString(),
+] as const;
+
 describe("verifyCalls", () => {
+  test("refuses account self-calls through felt aliases", () => {
+    expect(
+      refuseOnAccountSelfCall(
+        [
+          {
+            calldata: ["0x1"],
+            contractAddress: `0x0${account.address.slice(2)}`,
+            entrypoint: "upgrade",
+          },
+        ],
+        account.address,
+      ),
+    ).toEqual({ error: "Dapps cannot call the wallet account contract itself" });
+    expect(
+      refuseOnAccountSelfCall(
+        [{ calldata: [], contractAddress: ETH, entrypoint: "transfer" }],
+        account.address,
+      ),
+    ).toBeNull();
+  });
+
   test("decodes known ERC20 transfers into a human summary", () => {
     const report = verifyCalls(
       [
@@ -58,11 +92,10 @@ describe("verifyCalls", () => {
   });
 
   test("flags unlimited approvals and unknown contracts", () => {
-    const unlimited = (1n << 251n).toString();
     const report = verifyCalls(
       [
         {
-          calldata: ["0x999", unlimited, "0"],
+          calldata: ["0x999", ...UNLIMITED_U256_LIMBS],
           contractAddress: "0x6b17d1f2e12c4247f8bce6e563a40f2275d5e88540f0e9899d9ecfeeb8e0aff",
           entrypoint: "approve",
         },
@@ -74,6 +107,28 @@ describe("verifyCalls", () => {
     expect(codes).toContain("unlimited-approval");
     expect(codes).toContain("unknown-contract");
     expect(report.calls[0]?.kind).toBe("approve");
+  });
+
+  test("does not read a non-canonical uint256 as an approval amount", () => {
+    // `(2^251, 0)` is not a uint256 any Cairo entrypoint can deserialize — the
+    // low limb is outside u128, so the call reverts before it moves anything.
+    // The shared join therefore refuses it, and the reviewer shows an
+    // undecodable call rather than inventing a 2^251 allowance the token would
+    // never grant. Reading it as an amount let calldata that cannot execute
+    // drive the review screen's numbers.
+    const report = verifyCalls(
+      [
+        {
+          calldata: ["0x999", (1n << 251n).toString(), "0"],
+          contractAddress: ETH,
+          entrypoint: "approve",
+        },
+      ],
+      context,
+    );
+
+    expect(report.flags.map((flag) => flag.code)).not.toContain("unlimited-approval");
+    expect(report.calls[0]?.kind).toBe("unknown");
   });
 
   test("flags transfers back to the sender's own account", () => {
@@ -205,17 +260,16 @@ describe("verifyCalls", () => {
     // unknown contract raise the same generic unlimited-approval line; that line
     // is deduped to one, while the two calls keep one unknown-contract flag each
     // for the same address (identical message → collapsed).
-    const unlimited = (1n << 251n).toString();
     const otherContract = "0xcccc000000000000000000000000000000000000000000000000000000000003";
     const report = verifyCalls(
       [
         {
-          calldata: ["0x111", unlimited, "0"],
+          calldata: ["0x111", ...UNLIMITED_U256_LIMBS],
           contractAddress: otherContract,
           entrypoint: "approve",
         },
         {
-          calldata: ["0x222", unlimited, "0"],
+          calldata: ["0x222", ...UNLIMITED_U256_LIMBS],
           contractAddress: otherContract,
           entrypoint: "approve",
         },
@@ -253,6 +307,14 @@ describe("isLookalikeAddress", () => {
     expect(
       isLookalikeAddress(
         "0x777aa7890abcdef9999999999999999999999999999999999999990aabbcc",
+        contact.address,
+      ),
+    ).toBe(true);
+    // The card displays four hex digits at the front. Matching only those four
+    // must be enough to refuse, even when the next two differ.
+    expect(
+      isLookalikeAddress(
+        "0x777affffffffffffffffffffffffffffffffffffffffffffffffffffaabbcc",
         contact.address,
       ),
     ).toBe(true);

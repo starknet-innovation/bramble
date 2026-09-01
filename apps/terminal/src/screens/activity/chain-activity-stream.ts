@@ -79,9 +79,7 @@ export const readCachedChainActivities = (): readonly ChainActivity[] => {
     if (raw === null || raw === undefined) return [];
     const value: unknown = JSON.parse(raw);
     if (!Array.isArray(value) || value.length > CACHE_SIZE) return [];
-    return value
-      .map(cachedActivity)
-      .filter((row): row is ChainActivity => row !== null);
+    return value.map(cachedActivity).filter((row): row is ChainActivity => row !== null);
   } catch {
     return [];
   }
@@ -90,10 +88,7 @@ export const readCachedChainActivities = (): readonly ChainActivity[] => {
 /** Persists exactly the newest bounded feed window; storage failures fail soft. */
 export const cacheChainActivities = (activities: readonly ChainActivity[]): void => {
   try {
-    globalThis.localStorage?.setItem(
-      CACHE_KEY,
-      JSON.stringify(activities.slice(0, CACHE_SIZE)),
-    );
+    globalThis.localStorage?.setItem(CACHE_KEY, JSON.stringify(activities.slice(0, CACHE_SIZE)));
   } catch {
     // Public activity caching is an enhancement; a blocked store is harmless.
   }
@@ -113,7 +108,7 @@ const eventDetail = (
 };
 
 /** Normalizes the newest real Starkscan facts into one chronological activity tape. */
-export const toChainActivities = (pulse: ChainPulse): readonly ChainActivity[] => {
+const toChainActivities = (pulse: ChainPulse): readonly ChainActivity[] => {
   const latestTimestamp = pulse.blocks[0]?.timestampMs ?? Number.POSITIVE_INFINITY;
   const recentMessages = pulse.messages
     .filter((message) => message.timestampMs >= latestTimestamp - 120_000)
@@ -145,9 +140,7 @@ export const toChainActivities = (pulse: ChainPulse): readonly ChainActivity[] =
     ...pulse.transactions.slice(0, 10).map(
       (transaction): ChainActivity => ({
         blockNumber: transaction.blockNumber,
-        detail: `${shortAddress(transaction.fromAddress)} → ${shortAddress(
-          transaction.toAddress,
-        )}`,
+        detail: `${shortAddress(transaction.fromAddress)} → ${shortAddress(transaction.toAddress)}`,
         href: `https://starkscan.co/tx/${transaction.txHash}`,
         id: transaction.id,
         kind: "transaction",
@@ -193,12 +186,7 @@ export const toChainActivities = (pulse: ChainPulse): readonly ChainActivity[] =
   );
 };
 
-const KIND_ORDER: readonly ChainActivityKind[] = [
-  "block",
-  "transaction",
-  "event",
-  "message",
-];
+const KIND_ORDER: readonly ChainActivityKind[] = ["block", "transaction", "event", "message"];
 
 /**
  * Fairly interleaves activity kinds while preserving chronology within each
@@ -217,10 +205,7 @@ export const interleaveChainActivities = (
     KIND_ORDER.map((kind) => [kind, ordered.filter((activity) => activity.kind === kind)]),
   );
   const result: ChainActivity[] = [];
-  let cursor = Math.max(
-    0,
-    KIND_ORDER.indexOf(ordered[0]?.kind ?? "block"),
-  );
+  let cursor = Math.max(0, KIND_ORDER.indexOf(ordered[0]?.kind ?? "block"));
   while (result.length < ordered.length) {
     let found = false;
     for (let offset = 0; offset < KIND_ORDER.length; offset += 1) {
@@ -243,9 +228,7 @@ export const interleaveChainActivities = (
  * Accumulates successive chain snapshots and reveals facts one at a time so new
  * activity enters as a continuous tape instead of replacing the whole list.
  */
-export const useChainActivityStream = (
-  pulse: ChainPulse | null,
-): readonly ChainActivity[] => {
+export const useChainActivityStream = (pulse: ChainPulse | null): readonly ChainActivity[] => {
   const initialRef = useRef<readonly ChainActivity[]>(readCachedChainActivities());
   const [visible, setVisible] = useState<readonly ChainActivity[]>(initialRef.current);
   const pendingRef = useRef<ChainActivity[]>([]);
@@ -253,9 +236,7 @@ export const useChainActivityStream = (
 
   useEffect(() => {
     if (pulse === null) return;
-    const unseen = toChainActivities(pulse).filter(
-      (activity) => !seenRef.current.has(activity.id),
-    );
+    const unseen = toChainActivities(pulse).filter((activity) => !seenRef.current.has(activity.id));
     for (const activity of unseen) {
       seenRef.current.add(activity.id);
     }

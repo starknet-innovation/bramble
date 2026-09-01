@@ -24,7 +24,7 @@ export type Candle = {
 };
 
 /** Config for the SVG placeholder shown when no data is provided. */
-export type CandlePlaceholder = {
+type CandlePlaceholder = {
   readonly start: number;
   readonly vol: number;
   readonly up: boolean;
@@ -69,13 +69,7 @@ const buildMockCandles = (opts: CandlePlaceholder): MockCandle[] => {
 };
 
 // The SVG candlestick placeholder, matching the mockup geometry.
-const MockChart = ({
-  opts,
-  height,
-}: {
-  opts: CandlePlaceholder;
-  height: number;
-}): ReactNode => {
+const MockChart = ({ opts, height }: { opts: CandlePlaceholder; height: number }): ReactNode => {
   const data = useMemo(() => buildMockCandles(opts), [opts]);
   const width = 900;
   const pad = 42;
@@ -134,13 +128,7 @@ const MockChart = ({
         return (
           <g key={`candle-${i}`}>
             <line x1={x} y1={y(d.hi)} x2={x} y2={y(d.lo)} stroke={col} strokeWidth={1} />
-            <rect
-              x={i * cw + 2}
-              y={yTop}
-              width={bw}
-              height={Math.max(1, yBot - yTop)}
-              fill={col}
-            />
+            <rect x={i * cw + 2} y={yTop} width={bw} height={Math.max(1, yBot - yTop)} fill={col} />
           </g>
         );
       })}
@@ -170,13 +158,7 @@ const MockChart = ({
 };
 
 // The real lightweight-charts renderer, used when live data is present.
-const LiveChart = ({
-  data,
-  height,
-}: {
-  data: readonly Candle[];
-  height: number;
-}): ReactNode => {
+const LiveChart = ({ data, height }: { data: readonly Candle[]; height: number }): ReactNode => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {

@@ -14,12 +14,16 @@ import {
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
 
+export { activityToCsv } from "./activity-csv";
+
 /**
  * Browser storage key for the activity log.
  */
 const ACTIVITY_STORE_KEY = "mc-wallet:activity";
+const ACTIVITY_HISTORY_SYNC_KEY = "mc-wallet:activity-history-sync";
 
 const MAX_ENTRIES_PER_SCOPE = 200;
+const MAX_SYNC_SCOPES = 50;
 
 /**
  * System wall-clock reader. Lives in this clock-boundary module so other
@@ -92,7 +96,13 @@ export type ActivityEntry = {
    */
   readonly finalizedOnL1?: boolean;
   readonly hash: string;
-  readonly kind: "deploy" | "invoke" | "transfer";
+  /**
+   * What the account submitted. `"declare"` is its own kind rather than being
+   * folded into `"invoke"` so the feed and the CSV export can tell a class
+   * declaration apart from a call — they are different transaction types on
+   * chain and carry different meaning in an audit.
+   */
+  readonly kind: "declare" | "deploy" | "invoke" | "transfer";
   readonly networkId: StarknetNetworkId;
   /**
    * Consecutive `TXN_HASH_NOT_FOUND` observations. Reset by any answer that
@@ -131,7 +141,15 @@ export type ActivityScope = {
  * Activity log surface used by background message handling.
  */
 export type ActivityLog = {
+  /** Last explorer history attempt for one public account scope. */
+  readonly historySync?: (scope: ActivityScope) => Promise<ActivityHistoryState | null>;
   readonly list: () => Promise<readonly ActivityEntry[]>;
+  /** Records an explorer attempt without touching activity rows. */
+  readonly markHistorySynced?: (
+    scope: ActivityScope,
+    syncedAt: number,
+    unavailable: boolean,
+  ) => Promise<void>;
   readonly record: (
     entry: Omit<
       ActivityEntry,
@@ -145,10 +163,40 @@ export type ActivityLog = {
    * per refresh.
    */
   readonly takeFailureNotices: (scope: ActivityScope) => Promise<readonly ActivityEntry[]>;
+  /**
+   * Replaces one scope with a validated merged local/on-chain snapshot. Optional
+   * only so narrow injected test doubles remain compatible; persistent stores
+   * implement it so discovered history survives future offline opens.
+   */
+  readonly replaceScope?: (
+    entries: readonly ActivityEntry[],
+    scope: ActivityScope,
+  ) => Promise<readonly ActivityEntry[]>;
   readonly updateStatuses: (
     outcomes: Readonly<Record<string, ActivityOutcome>>,
     scope: ActivityScope,
   ) => Promise<readonly ActivityEntry[]>;
+};
+
+/**
+ * Last on-chain history attempt retained for one account scope.
+ */
+export type ActivityHistoryState = { readonly syncedAt: number; readonly unavailable: boolean };
+type ActivityHistorySync = ActivityHistoryState & ActivityScope;
+
+const isHistorySync = (value: unknown): value is ActivityHistorySync =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["accountId", "networkId", "syncedAt", "unavailable"]) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
+  typeof value["syncedAt"] === "number" &&
+  Number.isSafeInteger(value["syncedAt"]) &&
+  value["syncedAt"] >= 0 &&
+  typeof value["unavailable"] === "boolean";
+
+const readHistorySyncs = async (store: KeyValueStore): Promise<readonly ActivityHistorySync[]> => {
+  const stored = await store.get(ACTIVITY_HISTORY_SYNC_KEY);
+  return Array.isArray(stored) ? stored.filter(isHistorySync).slice(-MAX_SYNC_SCOPES) : [];
 };
 
 const isActivityStatus = (value: unknown): value is ActivityStatus =>
@@ -165,7 +213,7 @@ const isNotFoundCount = (value: unknown): value is number | undefined =>
   value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
 
 const isActivityKind = (value: unknown): value is ActivityEntry["kind"] =>
-  value === "deploy" || value === "invoke" || value === "transfer";
+  value === "declare" || value === "deploy" || value === "invoke" || value === "transfer";
 
 const isOptionalDetail = (value: unknown): value is string | undefined =>
   value === undefined || (typeof value === "string" && value.length > 0 && value.length <= 200);
@@ -320,6 +368,12 @@ export const createActivityLog = ({
 }): ActivityLog =>
   serializeStoreMutations<ActivityLog>(
     {
+      async historySync(scope) {
+        const sync = (await readHistorySyncs(store)).find(
+          (entry) => entry.accountId === scope.accountId && entry.networkId === scope.networkId,
+        );
+        return sync ? { syncedAt: sync.syncedAt, unavailable: sync.unavailable } : null;
+      },
       async list() {
         const entries = await readEntries(store);
         return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
@@ -331,6 +385,25 @@ export const createActivityLog = ({
         }
         const entries = await readEntries(store);
         await store.set(ACTIVITY_STORE_KEY, entriesAfterRecord(entries, next));
+      },
+      async markHistorySynced(scope, syncedAt, unavailable) {
+        const next = { ...scope, syncedAt, unavailable };
+        if (!isHistorySync(next)) return;
+        const retained = (await readHistorySyncs(store)).filter(
+          (entry) => entry.accountId !== scope.accountId || entry.networkId !== scope.networkId,
+        );
+        await store.set(ACTIVITY_HISTORY_SYNC_KEY, [...retained, next].slice(-MAX_SYNC_SCOPES));
+      },
+      async replaceScope(entries, scope) {
+        const scoped = entries
+          .filter((entry) => isActivityEntry(entry) && matchesScope(entry, scope))
+          .sort((left, right) => right.submittedAt - left.submittedAt)
+          .slice(0, MAX_ENTRIES_PER_SCOPE);
+        await store.set(ACTIVITY_STORE_KEY, [
+          ...(await readEntries(store)).filter((entry) => !matchesScope(entry, scope)),
+          ...scoped,
+        ]);
+        return scoped;
       },
       async takeFailureNotices(scope) {
         const { delivered, next } = drainFailureNotices(await readEntries(store), scope);
@@ -345,7 +418,7 @@ export const createActivityLog = ({
         return [...activityForScope(updated, scope)].sort((a, b) => b.submittedAt - a.submittedAt);
       },
     },
-    ["list"],
+    ["historySync", "list"],
   );
 
 /**
@@ -353,13 +426,34 @@ export const createActivityLog = ({
  */
 export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
   const entries: ActivityEntry[] = [];
+  const historySyncs = new Map<string, ActivityHistoryState>();
+  const scopeKey = (scope: ActivityScope): string => `${scope.networkId}:${scope.accountId}`;
   return {
+    async historySync(scope) {
+      return historySyncs.get(scopeKey(scope)) ?? null;
+    },
     async list() {
       return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
     },
     async record(entry) {
       const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
       entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
+    },
+    async markHistorySynced(scope, syncedAt, unavailable) {
+      historySyncs.set(scopeKey(scope), { syncedAt, unavailable });
+    },
+    async replaceScope(next, scope) {
+      const scoped = next
+        .filter((entry) => isActivityEntry(entry) && matchesScope(entry, scope))
+        .sort((left, right) => right.submittedAt - left.submittedAt)
+        .slice(0, MAX_ENTRIES_PER_SCOPE);
+      entries.splice(
+        0,
+        entries.length,
+        ...entries.filter((entry) => !matchesScope(entry, scope)),
+        ...scoped,
+      );
+      return scoped;
     },
     async takeFailureNotices(scope) {
       const { delivered, next } = drainFailureNotices(entries, scope);
@@ -372,70 +466,3 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
     },
   };
 };
-
-const CSV_HEADER =
-  "datetime,networkId,accountId,kind,status,amount,token,counterparty,hash,summary";
-
-const csvField = (value: string): string =>
-  /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
-
-const pad = (value: number, width: number): string => value.toString().padStart(width, "0");
-
-/**
- * Formats an epoch-millisecond timestamp as a UTC ISO-8601 string
- * (`YYYY-MM-DDTHH:mm:ss.sssZ`). Implemented as pure integer arithmetic rather
- * than the `Date` constructor so it stays clock-boundary safe: the output
- * depends only on the argument, never on ambient time or locale. The civil
- * date is derived with Howard Hinnant's days-to-year/month/day algorithm.
- */
-const toIsoDate = (submittedAt: number): string => {
-  const millis = ((submittedAt % 1000) + 1000) % 1000;
-  const totalSeconds = Math.floor(submittedAt / 1000);
-  const secondOfDay = ((totalSeconds % 86400) + 86400) % 86400;
-  const seconds = secondOfDay % 60;
-  const minutes = Math.floor(secondOfDay / 60) % 60;
-  const hours = Math.floor(secondOfDay / 3600);
-
-  const z = Math.floor(totalSeconds / 86400) + 719468;
-  const era = Math.floor(z / 146097);
-  const dayOfEra = z - era * 146097;
-  const yearOfEra = Math.floor(
-    (dayOfEra -
-      Math.floor(dayOfEra / 1460) +
-      Math.floor(dayOfEra / 36524) -
-      Math.floor(dayOfEra / 146096)) /
-      365,
-  );
-  const dayOfYear =
-    dayOfEra - (365 * yearOfEra + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100));
-  const monthPart = Math.floor((5 * dayOfYear + 2) / 153);
-  const day = dayOfYear - Math.floor((153 * monthPart + 2) / 5) + 1;
-  const month = monthPart < 10 ? monthPart + 3 : monthPart - 9;
-  const year = yearOfEra + era * 400 + (month <= 2 ? 1 : 0);
-
-  return `${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)}T${pad(hours, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)}.${pad(millis, 3)}Z`;
-};
-
-/**
- * Serializes activity entries as CSV for export. The timestamp is rendered as
- * ISO-8601 and the amount, token, and counterparty are split into their own
- * columns; entries missing those optional fields export blank cells.
- */
-export const activityToCsv = (entries: readonly ActivityEntry[]): string =>
-  [
-    CSV_HEADER,
-    ...entries.map((entry) =>
-      [
-        toIsoDate(entry.submittedAt),
-        entry.networkId,
-        entry.accountId,
-        entry.kind,
-        entry.status,
-        csvField(entry.amount ?? ""),
-        csvField(entry.token ?? ""),
-        csvField(entry.counterparty ?? ""),
-        entry.hash,
-        csvField(entry.summary),
-      ].join(","),
-    ),
-  ].join("\n");

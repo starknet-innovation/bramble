@@ -180,9 +180,9 @@ describe("repository sources", () => {
     expect(result.ok).toBe(true);
   });
 
-  test("the checked-in version matches the v0.9 release line", async () => {
+  test("the checked-in version matches the v0.10 release line", async () => {
     const packageJson = await readJson("package.json");
-    expect(packageJson["version"]).toBe("0.9.0");
+    expect(packageJson["version"]).toBe("0.10.0");
   });
 });
 
@@ -201,18 +201,27 @@ describe("main (CLI over the real repository sources)", () => {
     return join(dir, "github_output");
   };
 
-  test("writes release/version/tag/kind to GITHUB_OUTPUT for this release promotion", async () => {
+  test("writes release/version/tag/kind to GITHUB_OUTPUT for a hotfix promotion", async () => {
     const outPath = await outputPath();
     const code = await main({
-      HEAD_REF: "release/v0.9",
+      HEAD_REF: "hotfix/v010-production-readiness",
       GITHUB_OUTPUT: outPath,
     });
     expect(code).toBe(0);
     const output = await readFile(outPath, "utf8");
     expect(output).toContain("release=true");
-    expect(output).toContain("version=0.9.0");
-    expect(output).toContain("tag=v0.9.0");
-    expect(output).toContain("kind=release");
+    expect(output).toContain("version=0.10.0");
+    expect(output).toContain("tag=v0.10.0");
+    expect(output).toContain("kind=hotfix");
+  });
+
+  test("refuses to promote the checked-in version from a stale release branch", async () => {
+    const outPath = await outputPath();
+    const code = await main({
+      HEAD_REF: "release/v0.9",
+      GITHUB_OUTPUT: outPath,
+    });
+    expect(code).toBe(1);
   });
 
   test("treats an empty HEAD_REF as no promotion (release=false)", async () => {

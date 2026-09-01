@@ -17,7 +17,7 @@ import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 /**
  * Friendly validation copy shared by the recipient screen and review failures.
  */
-export const INVALID_RECIPIENT_MESSAGE = "Enter a valid Starknet address.";
+const INVALID_RECIPIENT_MESSAGE = "Enter a valid Starknet address.";
 
 const INVALID_REVIEW_ERRORS = new Set([
   "invalid nft transfer review request",
@@ -221,8 +221,8 @@ export const confirmationOutcome = (
 export const transferStageTitle = (stage: TransferStage): string => {
   if (stage === "recipient") return "Send to";
   if (stage === "asset") return "Select an asset";
-  if (stage === "details") return "Send";
-  if (stage === "review" || stage === "reviewing") return "Review send";
+  if (stage === "details" || stage === "reviewing") return "Send";
+  if (stage === "review") return "Review send";
   if (stage === "authorizing") return "Authorize send";
   if (stage === "broadcasting") return "Sending";
   if (stage === "confirming") return "Confirming";

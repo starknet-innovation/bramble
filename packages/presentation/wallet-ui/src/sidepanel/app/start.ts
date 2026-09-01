@@ -1,11 +1,12 @@
 /** Primary side-panel UI and its scene-preserving paint loop. */
 import type { LedgerConnector } from "@mc-wallet/ledger-protocol/session";
 import type { WalletStatus } from "../../popup/responses/responses";
+import { actionableApprovals } from "../journeys/approvals/approval-screen";
 import { bindLedgerFirstRun } from "../journeys/ledger/first-run";
 import { createLedgerOnboardEntry } from "../journeys/ledger/onboard-entry";
 import { createLedgerSignRuntime } from "../journeys/ledger/sign-runtime";
 import { createMultisigClient } from "../journeys/multisig/multisig-runtime";
-import { shouldPreserveMultisigProposalSurface } from "../journeys/multisig/multisig-surface";
+import { shouldPreserveMultisigIntentSurface } from "../journeys/multisig/multisig-surface";
 import { bindMultisigs } from "../journeys/multisig/multisig-ui";
 import { locked, onboarding } from "../journeys/onboarding/gate-views";
 import {
@@ -13,7 +14,8 @@ import {
   onboardingComplete,
   onboardingLaunch,
 } from "../journeys/onboarding/onboarding-surface";
-import { bindOnboarding, bindUnlock } from "../journeys/onboarding/onboarding-ui";
+import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
+import { bindUnlock } from "../journeys/onboarding/unlock-ui";
 import type { HomeTab } from "../journeys/portfolio/home-tabs";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";
@@ -37,7 +39,7 @@ import {
   bindPickers,
   deploymentPollScope,
 } from "../shell/shell-bindings";
-import { type NavDirection, navDirection } from "./navigation/nav-direction";
+import type { NavDirection } from "./navigation/nav-direction";
 import { popView, pushView, type ViewHistory } from "./navigation/nav-history";
 import {
   emptyRenderCache,
@@ -45,18 +47,21 @@ import {
   updateRenderScope,
   verificationForAccount,
 } from "./rendering/render-cache";
-import { createSceneRenderer } from "./rendering/scene-renderer";
+import {
+  createSceneRenderer,
+  createScopeAnnouncer,
+  scopeChangeAnnouncement,
+} from "./rendering/scene-renderer";
+import { sceneDirection, sceneFor } from "./rendering/scene-transition";
 import { bindClusterScreens } from "./screens/cluster-ui";
 import { dashboard, type WalletView } from "./screens/views";
 import { createDeploymentCache } from "./sync/deployment-cache";
 import { hydrateView } from "./sync/hydrate";
 import { startRefreshLifecycle } from "./sync/lifecycle";
+import type { RefreshReason } from "./sync/refresh-scheduler";
 import { createMutationRuntime } from "./sync/runtime-refresh";
 
-/**
- * Starts the wallet surface with an injected browser-owned Ledger capability.
- * Startup fails closed when the extension runtime or required DOM root is absent.
- */
+/** Starts the wallet with injected Ledger; fails closed without its runtime or root. */
 export const startWalletUi = async (
   ledgerConnector: LedgerConnector,
   extensionApi?: WalletUiBrowser,
@@ -71,6 +76,7 @@ export const startWalletUi = async (
   let activeView: WalletView = "home";
   let selectedNftId: string | null = null;
   let selectedMultisigId: string | null = null;
+  let selectedMultisigIntentId: string | null = null;
   let lastAccountId: string | null = null;
   let lastNetworkId = "SN_MAIN";
   let lastScene = "";
@@ -87,9 +93,8 @@ export const startWalletUi = async (
   let expandedGroupId: string | null = null;
   let snoozedApprovalIds: readonly string[] = [];
   let sendIntent: SendIntent | null = null;
-
+  let hasPaintedScope = false;
   const renderScene = createSceneRenderer(app, () => bindAll());
-
   const deployment = createDeploymentCache(wallet);
   const cache: RenderData = emptyRenderCache();
   let privacy: ReturnType<typeof createPrivacyController>;
@@ -104,15 +109,15 @@ export const startWalletUi = async (
     status: () => cache.status,
     wallet,
   });
-
   const ledgerOnboardMount = document.createElement("div");
   ledgerOnboardMount.className = "ledger-onboard-overlay";
   ledgerOnboardMount.hidden = true;
   document.body.append(ledgerOnboardMount);
+  const scopeAnnouncer = createScopeAnnouncer(document);
   const ledgerOnboard = createLedgerOnboardEntry({
-    addHd: async () => {
-      await wallet.addAccount(lastNetworkId);
-      showToast("Account added", "success");
+    addHd: async (accountContractType) => {
+      await wallet.addAccount(lastNetworkId, accountContractType);
+      showToast("Account added", "success", app);
     },
     cache,
     connector: ledgerConnector,
@@ -124,7 +129,6 @@ export const startWalletUi = async (
     },
     wallet,
   });
-
   const bindAll = (): void => {
     bindEntryNavigation(app, navigate, goBack);
     bindCopyButtons(app);
@@ -153,6 +157,7 @@ export const startWalletUi = async (
       app,
       networkId: () => lastNetworkId,
       onStrk20ConfigChanged: () => privacy.reset(),
+      ...(extensionApi?.permissions ? { permissions: extensionApi.permissions } : {}),
       render,
       wallet,
     });
@@ -233,11 +238,8 @@ export const startWalletUi = async (
       app,
       balances: () => cache.balances,
       currency: () => cache.preferences?.displayCurrency ?? "usd",
-      // Never yank a user who left while the swap completed.
       navigateHome: () => {
-        if (activeView === "swap") {
-          navigate("home");
-        }
+        if (activeView === "swap") navigate("home");
       },
       preferences: () => cache.preferences,
       render,
@@ -262,20 +264,31 @@ export const startWalletUi = async (
     bindMultisigs({
       app,
       multisig,
-      openDetail: (id) => {
+      openDetail: (id, destination = "multisig-home") => {
         selectedMultisigId = id;
-        navigate("multisig-home");
+        selectedMultisigIntentId = null;
+        navigate(destination);
+      },
+      openIntent: (accountId, intentId) => {
+        selectedMultisigId = accountId;
+        selectedMultisigIntentId = intentId;
+        navigate("multisig-detail");
       },
       openList: () => {
         selectedMultisigId = null;
         navigate("multisigs");
+      },
+      openFunding: async (intent) => {
+        await wallet.setActiveAccount(intent.accountId);
+        selectedMultisigId = intent.completeMultisigId ?? selectedMultisigId;
+        sendIntent = intent;
+        navigate("send");
       },
       render,
       selectedMultisigId: () => selectedMultisigId,
       wallet,
     });
   };
-
   const applyTheme = (): void => {
     lastSkinName = applyEntryTheme(
       cache.preferences?.theme ?? "dark",
@@ -283,31 +296,26 @@ export const startWalletUi = async (
       document.documentElement,
     );
   };
-
   const paint = (): void => {
     const { status } = cache;
     lastNetworkId = status.networkId;
     lastAccountId = status.activeAccountId;
-    // A shortcut's configuration seeds Send's first render and nothing else. Any
-    // paint of another view means it was abandoned, so it cannot resurface on a
-    // later visit to Send. Enforced here because this is the one place every view
-    // transition passes through — five of the six assign activeView directly, and
-    // guarding only `navigate` let a closed shield leak into the next send.
     if (activeView !== "send") {
       sendIntent = null;
     }
     applyTheme();
-    const scene =
-      fullPageOnboarding && status.hasVault
-        ? "onboarding-complete"
-        : !status.hasVault
-          ? "onboarding"
-          : status.locked
-            ? "locked"
-            : `dashboard:${activeView}`;
+    const actionable = actionableApprovals(cache.pending, snoozedApprovalIds);
+    const scene = sceneFor(fullPageOnboarding, status, actionable[0]?.id, activeView);
+    const previousScene = lastScene;
     const animate = scene !== lastScene;
     lastScene = scene;
-    const direction = forcedDirection ?? navDirection(lastActiveView, activeView);
+    const direction = sceneDirection(
+      forcedDirection,
+      scene,
+      previousScene,
+      lastActiveView,
+      activeView,
+    );
     forcedDirection = null;
     const healed = healTransientGroupState(
       { drawerGroupFilter, expandedGroupId, openAssignId },
@@ -326,7 +334,7 @@ export const startWalletUi = async (
     );
     if (transfer.preserveSend(app, activeView, status, cache.pending, snoozedApprovalIds)) return;
     if (
-      shouldPreserveMultisigProposalSurface(
+      shouldPreserveMultisigIntentSurface(
         app,
         activeView,
         selectedMultisigId,
@@ -361,7 +369,7 @@ export const startWalletUi = async (
                 selectedNftId,
                 cache.changes,
                 cache.multisigs.multisigs,
-                cache.multisigs.proposals,
+                cache.multisigs.intents,
                 selectedMultisigId,
                 cache.multisigClassDeclared,
                 drawerGroupFilter,
@@ -374,7 +382,6 @@ export const startWalletUi = async (
                 cache.historyUnavailable,
                 snoozedApprovalIds,
                 cache.multisigsError,
-                cache.multisigSync,
                 cache.multisigBalances,
                 cache.multisigBalanceId,
                 cache.multisigNfts,
@@ -382,6 +389,7 @@ export const startWalletUi = async (
                 privacy.disclosure(),
                 privacy.journey(),
                 sendIntent,
+                selectedMultisigIntentId,
               );
     lastActiveView = activeView;
     if (!animate && content === lastContent) {
@@ -405,10 +413,14 @@ export const startWalletUi = async (
     wallet,
   });
   let renderGeneration = 0;
-  const render = async (status: WalletStatus): Promise<void> => {
+  const render = async (status: WalletStatus, refreshReason?: RefreshReason): Promise<void> => {
     const generation = ++renderGeneration;
     const isCurrent = (): boolean => generation === renderGeneration;
     const scopeChanged = updateRenderScope(cache, status);
+    if (scopeChanged && hasPaintedScope) {
+      scopeAnnouncer.textContent = scopeChangeAnnouncement(scopeChanged);
+    }
+    hasPaintedScope = true;
     if (scopeChanged) {
       privacy.reset();
       sendIntent = null;
@@ -431,8 +443,6 @@ export const startWalletUi = async (
     cache.preferences = nextPreferences;
     if (!status.hasVault || status.locked) {
       privacy.reset();
-      // Reset every view-scoped field from one source so stale state cannot leak
-      // across a lock; preserve the status/pending/preferences just refreshed.
       Object.assign(cache, emptyRenderCache(), {
         pending: cache.pending,
         preferences: cache.preferences,
@@ -445,7 +455,7 @@ export const startWalletUi = async (
       paint();
       return;
     }
-    paint();
+    if (!scopeChanged) paint();
     void ledgerSign.poll();
     await hydrateView({
       status,
@@ -456,16 +466,17 @@ export const startWalletUi = async (
       wallet,
       multisig,
       deployment,
+      ...(refreshReason ? { refreshReason } : {}),
       isCurrent,
       paint,
     });
   };
-
   const navigate = (view: WalletView): void => {
     if (view !== activeView) {
       viewHistory = pushView(viewHistory, activeView);
     }
     activeView = view;
+    if (view !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
     void wallet.loadStatus().then(render);
@@ -475,6 +486,7 @@ export const startWalletUi = async (
     viewHistory = popped.history;
     forcedDirection = "back";
     activeView = popped.view;
+    if (activeView !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
     void wallet.loadStatus().then(render);

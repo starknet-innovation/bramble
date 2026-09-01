@@ -6,7 +6,9 @@
  * boundary this module documents).
  */
 
+import type { ConnectedSite } from "@mc-wallet/core/origin";
 import type {
+  AccountContractType,
   AccountRef,
   DerivedAccountRef,
   ImportedAccountRef,
@@ -16,8 +18,12 @@ import type {
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 import type { AccountDerivationInput } from "../accounts/accounts";
-import type { SeedAccountCandidate, SeedAccountScanInput } from "../accounts/seed-account-scan";
+import type { NostrApplicationData } from "../kms-port";
 import type { Vault } from "../schema/schema";
+import type { RecoverVaultAccountsInput } from "./recovery";
+
+/** Atomic recovery input re-exported for privileged runtime boundaries. */
+export type { RecoverVaultAccountsInput } from "./recovery";
 
 /**
  * Public wallet status shown to popup and provider callers.
@@ -46,11 +52,41 @@ export type SignHashInput = {
   readonly vaultPassphrase: string;
 };
 
+/** Public application payload encrypted to one Nostr recipient inside Krusty. */
+export type WrapNostrApplicationDataInput = {
+  readonly content: string;
+  readonly identifier: string;
+  readonly recipientPublicKey: string;
+  readonly vaultPassphrase: string;
+};
+
+/** Untrusted NIP-59 event opened only after Krusty authenticates it. */
+export type OpenNostrApplicationDataInput = {
+  readonly eventJson: string;
+  readonly vaultPassphrase: string;
+};
+
+/** Bounded Nostr inbox batch opened under one vault snapshot and live session. */
+export type OpenNostrApplicationDataBatchInput = {
+  readonly eventJsons: readonly string[];
+  readonly isAuthorized: () => boolean;
+  readonly vaultPassphrase: string;
+};
+
+/** Bounded recipient batch wrapped under one vault snapshot and live session. */
+export type WrapNostrApplicationDataBatchInput = {
+  readonly isAuthorized: () => boolean;
+  readonly items: readonly Omit<WrapNostrApplicationDataInput, "vaultPassphrase">[];
+  readonly vaultPassphrase: string;
+};
+
 /**
  * Origin grant input for account access permissions.
  */
 export type OriginGrantInput = {
   readonly accountId?: string;
+  /** Live capability check supplied by the privileged session coordinator. */
+  readonly isAuthorized?: () => boolean;
   readonly origin: string;
   readonly vaultPassphrase: string;
 };
@@ -64,12 +100,9 @@ export type RevokeOriginInput = {
 };
 
 /**
- * A site with a persisted origin grant plus how many accounts it can see.
+ * Connected-site DTO re-exported from the shared runtime protocol boundary.
  */
-export type ConnectedSite = {
-  readonly accountCount: number;
-  readonly origin: string;
-};
+export type { ConnectedSite } from "@mc-wallet/core/origin";
 
 /**
  * Active account selection input.
@@ -97,7 +130,7 @@ export type EnsureNetworkAccountInput = {
  * free index without also creating the unused positions between them.
  */
 export type AddDerivedAccountInput = {
-  readonly accountIndex?: number;
+  readonly accountContractType: AccountContractType;
   readonly networkId: StarknetNetworkId;
   readonly vaultPassphrase: string;
 };
@@ -108,6 +141,8 @@ export type AddDerivedAccountInput = {
  * plain preferences or logged.
  */
 export type ImportRawKeyAccountInput = {
+  readonly accountContractType: AccountContractType;
+  readonly deploymentSalt?: string;
   readonly networkId: StarknetNetworkId;
   readonly privateKey: string;
   readonly vaultPassphrase: string;
@@ -118,7 +153,9 @@ export type ImportRawKeyAccountInput = {
  * No key material is accepted or retained; the device signs every transaction.
  */
 export type AddLedgerAccountInput = {
+  readonly accountContractType: AccountContractType;
   readonly accountIndex: number;
+  readonly deploymentSalt?: string;
   readonly eip2645application?: string;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
@@ -174,6 +211,8 @@ export type DeriveLedgerStrk20ViewingKeyInput = {
  * reads no secrets and writes nothing to the vault.
  */
 export type DeriveLedgerAccountsInput = {
+  readonly accountContractType: AccountContractType;
+  readonly deploymentSalt?: string;
   readonly entries: readonly LedgerPubKeyEntry[];
   readonly networkId: StarknetNetworkId;
 };
@@ -219,6 +258,16 @@ export type WalletVaultService = {
   readonly deriveLedgerStrk20ViewingKey: (
     input: DeriveLedgerStrk20ViewingKeyInput,
   ) => Promise<void>;
+  /** Derives the wallet-level public Nostr identity without exposing its secret. */
+  readonly nostrPublicKey: (vaultPassphrase: string) => Promise<string>;
+  /** Opens and authenticates one NIP-59 application event inside Krusty. */
+  readonly openNostrApplicationData: (
+    input: OpenNostrApplicationDataInput,
+  ) => Promise<NostrApplicationData>;
+  /** Opens a bounded batch once; malformed events become null and authorization aborts the batch. */
+  readonly openNostrApplicationDataBatch: (
+    input: OpenNostrApplicationDataBatchInput,
+  ) => Promise<readonly (NostrApplicationData | null)[]>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   /** Removes one retained Ledger viewing-key scope without returning its value. */
   readonly forgetLedgerStrk20ViewingKey: (
@@ -231,6 +280,17 @@ export type WalletVaultService = {
    * returning key material. Invalid derivation input fails closed.
    */
   readonly previewAccount: (input: AccountDerivationInput) => Promise<DerivedAccountRef>;
+  /**
+   * Checks a recovery phrase through Krusty only. Returns false for an invalid
+   * phrase and never echoes the input; fails closed when KMS is unavailable.
+   */
+  readonly validateMnemonic: (mnemonic: string) => Promise<boolean>;
+  /** Creates one recipient-specific NIP-59 event inside Krusty. */
+  readonly wrapNostrApplicationData: (input: WrapNostrApplicationDataInput) => Promise<string>;
+  /** Wraps a bounded recipient batch once; individual Krusty failures become null. */
+  readonly wrapNostrApplicationDataBatch: (
+    input: WrapNostrApplicationDataBatchInput,
+  ) => Promise<readonly (string | null)[]>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   /**
    * The wallet's active account when the origin's grant covers it, per
@@ -244,6 +304,10 @@ export type WalletVaultService = {
     vaultPassphrase: string,
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  /** Restores a confirmed bounded set in one encrypted-vault commit. */
+  readonly recoverAccounts: (
+    input: RecoverVaultAccountsInput,
+  ) => Promise<readonly DerivedAccountRef[]>;
   readonly revokeOrigin: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
   /**
    * Finds the HD accounts a recovery phrase already has on chain, using the
@@ -254,12 +318,6 @@ export type WalletVaultService = {
    * supply `vaultPassphrase` instead to scan the phrase an existing vault already
    * holds. Exactly one source is needed, and neither is ever returned.
    */
-  readonly scanSeedAccounts: (
-    input: SeedAccountScanInput & {
-      readonly mnemonic?: string;
-      readonly vaultPassphrase?: string;
-    },
-  ) => Promise<readonly SeedAccountCandidate[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
   readonly status: () => Promise<WalletStatus>;

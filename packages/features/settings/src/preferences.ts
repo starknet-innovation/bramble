@@ -1,13 +1,10 @@
-/**
- * Plain wallet preferences kept outside the encrypted vault.
- */
+/** Plain wallet preferences kept outside the encrypted vault. */
 import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
+import { isJson } from "@mc-wallet/core/json";
 import { isWatchedNft, withNftId } from "@mc-wallet/portfolio/watched-nft";
 import {
   DEFAULT_STRK20_NETWORKS,
   isStrk20NetworkConfig,
-  isStrk20NetworkConfigs,
   STRK20_MAINNET_POOL,
   type Strk20NetworkConfig,
 } from "@mc-wallet/privacy/config";
@@ -26,14 +23,12 @@ import {
   isStarknetNetworkId,
   STRK_TOKEN_ADDRESS,
 } from "@mc-wallet/wallet-model/networks";
+
 import {
-  isAccountLabels,
   isAddressBookEntry,
   isApprovalSurfacePreference,
   isDisplayCurrency,
-  isHiddenTokens,
   isLabel,
-  isRpcOverrides,
   isThemeChoice,
   isTokenConfig,
   isTokenId,
@@ -42,30 +37,37 @@ import {
 } from "@mc-wallet/wallet-model/preferences";
 import {
   createGroup as createGroupPure,
-  isAccountGroups,
   normalizeAccountGroups,
   removeGroup as removeGroupPure,
   renameGroup as renameGroupPure,
   setAccountInGroup as setAccountInGroupPure,
   setGroupIcon as setGroupIconPure,
 } from "./groups";
+import { withExplorerSettings } from "./preferences-explorer";
+import { withNostrRelayUrl } from "./preferences-nostr";
+import {
+  isWalletPreferences,
+  normalizeStoredPreferences,
+  pickImportablePreferences,
+} from "./preferences-stored";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
-/**
- * Re-exported entry types so callers keep importing them from this store.
- */
+/** Re-exported entry types so callers keep importing them from this store. */
 export type {
   AccountLabels,
   AddressBookEntry,
   ApprovalSurfacePreference,
   DisplayCurrency,
+  ExplorerApiOverrides,
+  ExplorerFallback,
+  ExplorerLanePreferences,
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
 } from "@mc-wallet/wallet-model/preferences";
-/**
- * Re-exported store schema and capability types.
- */
+/** Explorer-lane resolver colocated with the preferences it reads. */
+export { explorerFallbackAllowed } from "@mc-wallet/wallet-model/preferences";
+/** Re-exported store schema and capability types. */
 export type {
   WalletPreferences,
   WalletPreferencesStore,
@@ -81,68 +83,29 @@ type WalletPreferencesStoreOptions = {
   readonly store: KeyValueStore;
 };
 
-const PREFERENCE_KEYS: readonly string[] = [
-  "accountLabels",
-  "activeNetworkId",
-  "approvalSurface",
-  "addressBook",
-  "customNetworks",
-  "displayCurrency",
-  "groups",
-  "hiddenTokens",
-  "nftIndexerUrl",
-  "nfts",
-  "rpcOverrides",
-  "schemaVersion",
-  "strk20Networks",
-  "strk20ProverUrl",
-  "theme",
-  "tokens",
-];
-// Optional-section guards, each pure, keeping the main guard a single `&&` chain.
-const hasValidCustomNetworks = (value: Record<string, unknown>): boolean =>
-  value["customNetworks"] === undefined ||
-  (Array.isArray(value["customNetworks"]) &&
-    value["customNetworks"].every(isCustomNetwork) &&
-    hasUniqueStrings(value["customNetworks"].map((network) => normalizeChainId(network.chainId))));
-const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
-  (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
-  (value["approvalSurface"] === undefined ||
-    isApprovalSurfacePreference(value["approvalSurface"])) &&
-  (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
-  (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
-  (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
-  (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
-  (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
-const hasValidUrlAndNftFields = (value: Record<string, unknown>): boolean =>
-  (value["strk20ProverUrl"] === undefined ||
-    (typeof value["strk20ProverUrl"] === "string" && isCustomRpcUrl(value["strk20ProverUrl"]))) &&
-  (value["strk20Networks"] === undefined || isStrk20NetworkConfigs(value["strk20Networks"])) &&
-  (value["nftIndexerUrl"] === undefined ||
-    (typeof value["nftIndexerUrl"] === "string" && isCustomRpcUrl(value["nftIndexerUrl"]))) &&
-  (value["nfts"] === undefined ||
-    (Array.isArray(value["nfts"]) &&
-      value["nfts"].every(isWatchedNft) &&
-      hasUniqueStrings(value["nfts"].map((nft) => nft.id))));
-
 /**
- * Checks stored plain preferences before use.
+ * Stored-shape guard, re-exported so existing importers keep one entry point
+ * for the store and the record it validates.
  */
-export const isWalletPreferences = (value: unknown): value is WalletPreferences =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, PREFERENCE_KEYS) &&
-  hasValidCustomNetworks(value) &&
-  hasValidOptionalEntries(value) &&
-  hasValidUrlAndNftFields(value) &&
-  value["schemaVersion"] === 1 &&
-  isStarknetNetworkId(value["activeNetworkId"]) &&
-  Array.isArray(value["addressBook"]) &&
-  value["addressBook"].every(isAddressBookEntry) &&
-  hasUniqueStrings(value["addressBook"].map((entry) => entry.id)) &&
-  Array.isArray(value["tokens"]) &&
-  value["tokens"].every(isTokenConfig) &&
-  hasUniqueStrings(value["tokens"].map((token) => token.id));
+export { isWalletPreferences } from "./preferences-stored";
+
+const isValidDisplayInput = (
+  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
+): boolean => {
+  if (input.approvalSurface !== undefined && !isApprovalSurfacePreference(input.approvalSurface)) {
+    return false;
+  }
+  if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
+    return false;
+  }
+  if (
+    input.reliabilityDiagnostics !== undefined &&
+    typeof input.reliabilityDiagnostics !== "boolean"
+  ) {
+    return false;
+  }
+  return input.theme === undefined || isThemeChoice(input.theme);
+};
 
 /**
  * Creates default non-secret wallet preferences.
@@ -154,9 +117,12 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   addressBook: [],
   customNetworks: [],
   displayCurrency: "usd",
+  explorerFallback: {},
+  explorerApiUrls: {},
   groups: [],
   hiddenTokens: [],
   nfts: [],
+  reliabilityDiagnostics: false,
   rpcOverrides: {},
   schemaVersion: 1,
   strk20Networks: DEFAULT_STRK20_NETWORKS,
@@ -212,7 +178,10 @@ export const createPreferencesStore = ({
   assertStoreAccess("preferences", actor);
 
   const read = async (): Promise<WalletPreferences> => {
-    const stored = await store.get(PREFERENCES_STORE_KEY);
+    // Normalized before it is validated, never after: a record an earlier build
+    // wrote with a second spelling of one address is repaired here rather than
+    // failing the strict entry guards and locking the user out of preferences.
+    const stored = normalizeStoredPreferences(await store.get(PREFERENCES_STORE_KEY));
     if (stored === undefined) {
       return defaultWalletPreferences();
     }
@@ -231,6 +200,14 @@ export const createPreferencesStore = ({
       ? withPrivacyDefaults
       : { ...withPrivacyDefaults, groups };
   };
+
+  // Merge base for a restore, the recovery path out of a record this build
+  // cannot read (future key, schema bump, corrupt blob): an unreadable record
+  // falls back to defaults rather than propagating. `get` faults still surface.
+  const readImportBase = async (): Promise<WalletPreferences> =>
+    isWalletPreferences(normalizeStoredPreferences(await store.get(PREFERENCES_STORE_KEY)))
+      ? await read()
+      : defaultWalletPreferences();
 
   return serializeStoreMutations<WalletPreferencesStore>(
     {
@@ -268,11 +245,19 @@ export const createPreferencesStore = ({
         return next;
       },
       async importPreferences(candidate) {
-        if (!isWalletPreferences(candidate)) {
+        // A backup written by an older build carries the old entry spelling, so
+        // it is normalized before validation exactly like a stored record.
+        const backup = normalizeStoredPreferences(candidate);
+        if (!isWalletPreferences(backup)) {
           throw new WalletError("Invalid preferences backup");
         }
-        await writePreferences(store, candidate);
-        return candidate;
+        // A backup file is untrusted input, so a restore may only reapply the
+        // organisational fields; every trust-bearing setting the review layer
+        // reads — including the contacts the address-poisoning guard compares
+        // against — keeps its stored value (see `pickImportablePreferences`).
+        const next = { ...(await readImportBase()), ...pickImportablePreferences(backup) };
+        await writePreferences(store, next);
+        return next;
       },
       read,
       async removeAddress(id) {
@@ -323,6 +308,11 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
+      async setExplorerFallback(input) {
+        const next = withExplorerSettings(await read(), input);
+        await writePreferences(store, next);
+        return next;
+      },
       async setGroupIcon({ icon, id }) {
         const preferences = await read();
         const next = {
@@ -366,12 +356,7 @@ export const createPreferencesStore = ({
         return next;
       },
       async setDisplay(input) {
-        if (
-          (input.approvalSurface !== undefined &&
-            !isApprovalSurfacePreference(input.approvalSurface)) ||
-          (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) ||
-          (input.theme !== undefined && !isThemeChoice(input.theme))
-        ) {
+        if (!isValidDisplayInput(input)) {
           throw new WalletError("Invalid display preference");
         }
         const preferences = await read();
@@ -383,6 +368,9 @@ export const createPreferencesStore = ({
           ...(input.displayCurrency === undefined
             ? {}
             : { displayCurrency: input.displayCurrency }),
+          ...(input.reliabilityDiagnostics === undefined
+            ? {}
+            : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
           ...(input.theme === undefined ? {} : { theme: input.theme }),
         };
         await writePreferences(store, next);
@@ -394,8 +382,18 @@ export const createPreferencesStore = ({
           throw new WalletError("Invalid address book entry");
         }
         const preferences = await read();
+        const previous = preferences.addressBook.find((stored) => stored.id === nextEntry.id);
+        const savedEntry = {
+          ...nextEntry,
+          ...(nextEntry.nostrPublicKey || !previous?.nostrPublicKey
+            ? {}
+            : { nostrPublicKey: previous.nostrPublicKey }),
+          ...(nextEntry.publicKeyX || !previous?.publicKeyX
+            ? {}
+            : { publicKeyX: previous.publicKeyX }),
+        };
         const entries = preferences.addressBook.filter((stored) => stored.id !== nextEntry.id);
-        const next = { ...preferences, addressBook: [...entries, nextEntry] };
+        const next = { ...preferences, addressBook: [...entries, savedEntry] };
         await writePreferences(store, next);
         return next;
       },
@@ -430,6 +428,11 @@ export const createPreferencesStore = ({
         } else {
           (next as { nftIndexerUrl?: string }).nftIndexerUrl = trimmed;
         }
+        await writePreferences(store, next);
+        return next;
+      },
+      async setNostrRelayUrl({ relayUrl }) {
+        const next = withNostrRelayUrl(await read(), relayUrl);
         await writePreferences(store, next);
         return next;
       },

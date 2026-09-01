@@ -7,6 +7,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@mc-wallet/core/errors";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { DeclareInput } from "@mc-wallet/starknet/rpc";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
@@ -18,6 +19,7 @@ import { createUnlockSession } from "../../../apps/extension/src/background/runt
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -39,6 +41,9 @@ const declare = {
   compiledClassHash: "0x6def",
   contractClass: { entry_points_by_type: { EXTERNAL: [] }, sierra_program: ["0x1"] },
 };
+const DECLARATION_FEE = { overallFee: "2500000000000000", unit: "FRI" } as const;
+const DEPLOYMENT_FEE = { overallFee: "1500000000000000", unit: "FRI" } as const;
+const DECLARATION_TOTAL_FEE = { overallFee: "4000000000000000", unit: "FRI" } as const;
 
 const walletStub = (connected: readonly AccountRef[]) => ({
   async addDerivedAccount() {
@@ -66,7 +71,7 @@ const walletStub = (connected: readonly AccountRef[]) => ({
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 4 as const,
+      schemaVersion: 7 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -87,7 +92,14 @@ const walletStub = (connected: readonly AccountRef[]) => ({
   },
 });
 
-const makeHarness = (connected: readonly AccountRef[] = [account], deployed = true) => {
+const makeHarness = (
+  connected: readonly AccountRef[] = [account],
+  deployed = true,
+  estimates: {
+    readonly declaration?: () => FeeEstimate | Promise<FeeEstimate>;
+    readonly deployment?: () => FeeEstimate | Promise<FeeEstimate>;
+  } = {},
+) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const approvals = createApprovalQueue();
@@ -97,11 +109,11 @@ const makeHarness = (connected: readonly AccountRef[] = [account], deployed = tr
   const rpc = {
     async estimateAccountDeploymentFee(input: DeclareInput) {
       deployEstimated.push(input);
-      return { overallFee: "1500000000000000", unit: "FRI" };
+      return estimates.deployment?.() ?? DEPLOYMENT_FEE;
     },
     async estimateDeclareFee(input: DeclareInput) {
       estimated.push(input);
-      return { overallFee: "2500000000000000", unit: "FRI" };
+      return estimates.declaration?.() ?? DECLARATION_FEE;
     },
     async getDeploymentStatus() {
       return deployed;
@@ -183,9 +195,12 @@ describe("wallet_addDeclareTransaction held approval", () => {
     const id = await latestApprovalId(handler, extensionSender);
 
     await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
-      ok: true,
-      pending: [],
+      error: "retry the fee estimate before approving this transaction",
     });
+    expect(declared).toHaveLength(0);
+    await expect(
+      handler({ id, reviewedFee: DECLARATION_FEE, type: "wallet.approveOrigin" }, extensionSender),
+    ).resolves.toEqual({ ok: true, pending: [] });
     await expect(held).resolves.toEqual({
       classHash: "0x7ce",
       ok: true,
@@ -194,6 +209,10 @@ describe("wallet_addDeclareTransaction held approval", () => {
     expect(declared).toHaveLength(1);
     expect(declared[0]?.compiledClassHash).toBe(declare.compiledClassHash);
     expect(declared[0]?.classHash).toBe(declare.classHash);
+    // MCW-V09-119: the declaration fee the card displayed travels into the
+    // submission as a ceiling, so a declare that got more expensive while the
+    // card was open is refused rather than signed at the new price.
+    expect(declared[0]?.reviewedFee).toEqual({ overallFee: "2500000000000000", unit: "FRI" });
   });
 
   test("shows both STRK fee estimates when account deployment is required", async () => {
@@ -218,6 +237,78 @@ describe("wallet_addDeclareTransaction held approval", () => {
     expect(deployEstimated).toHaveLength(1);
     await handler({ id: pending?.id, type: "wallet.denyOrigin" }, extensionSender);
     await expect(held).resolves.toEqual({ error: "request rejected" });
+  });
+
+  test("carries BOTH displayed fees into the submission as ceilings", async () => {
+    // The card adds the declaration fee and the deployment fee into an
+    // "Estimated total" (approval-cards.ts). Approving submits a deployment and
+    // then a declaration; binding only the declaration would leave the larger
+    // half of that total enforced by nothing, which is MCW-V09-119 restated one
+    // transaction over.
+    const { declared, handler } = makeHarness([account], false);
+    const held = handler(declareMessage(), contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+
+    await handler(
+      { id, reviewedFee: DECLARATION_TOTAL_FEE, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await expect(held).resolves.toMatchObject({ ok: true });
+    expect(declared[0]?.reviewedFee).toEqual({ overallFee: "2500000000000000", unit: "FRI" });
+    expect(declared[0]?.reviewedDeploymentFee).toEqual({
+      overallFee: "1500000000000000",
+      unit: "FRI",
+    });
+  });
+
+  test("a stale card cannot approve a refreshed account-deployment fee", async () => {
+    const inflated = { overallFee: "9000000000000000", unit: "FRI" } as const;
+    let deploymentChecks = 0;
+    let resolveRetry: ((fee: FeeEstimate) => void) | undefined;
+    const { declared, handler } = makeHarness([account], false, {
+      deployment: () => {
+        deploymentChecks += 1;
+        return deploymentChecks === 1
+          ? DEPLOYMENT_FEE
+          : new Promise((resolve) => {
+              resolveRetry = resolve;
+            });
+      },
+    });
+    const held = handler(declareMessage(), contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+
+    const retry = handler({ id, type: "wallet.retryApprovalFee" }, extensionSender);
+    await flushHeld();
+    await expect(
+      handler(
+        { id, reviewedFee: DECLARATION_TOTAL_FEE, type: "wallet.approveOrigin" },
+        extensionSender,
+      ),
+    ).resolves.toEqual({ error: "retry the fee estimate before approving this transaction" });
+    resolveRetry?.(inflated);
+    await expect(retry).resolves.toEqual({ ok: true });
+    await expect(
+      handler(
+        { id, reviewedFee: DECLARATION_TOTAL_FEE, type: "wallet.approveOrigin" },
+        extensionSender,
+      ),
+    ).resolves.toEqual({ error: "the fee changed since this request was reviewed" });
+    expect(declared).toHaveLength(0);
+
+    await handler(
+      {
+        id,
+        reviewedFee: { overallFee: "11500000000000000", unit: "FRI" },
+        type: "wallet.approveOrigin",
+      },
+      extensionSender,
+    );
+    await expect(held).resolves.toMatchObject({ ok: true });
+    expect(declared[0]?.reviewedFee).toEqual(DECLARATION_FEE);
+    expect(declared[0]?.reviewedDeploymentFee).toEqual(inflated);
   });
 
   test("drops the declare when the user denies", async () => {
@@ -258,6 +349,12 @@ const makeThrowingSignHarness = () => {
   const approvals = createApprovalQueue();
   const declared: DeclareInput[] = [];
   const rpc = {
+    async estimateDeclareFee() {
+      return DECLARATION_FEE;
+    },
+    async getDeploymentStatus() {
+      return true;
+    },
     async submitDeclareTransaction(input: DeclareInput) {
       // Drive the signer first: a device rejection surfaces here, before any
       // broadcast, so `declared` stays empty on a sign failure (fail-closed).
@@ -291,9 +388,9 @@ describe("declare approval settles the held request when signing throws", () => 
 
     // Approve: the executor's sign step throws, but the applier still settles the
     // held request with the real error rather than leaving the dapp promise open.
-    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
-      error: "device rejected the declare",
-    });
+    await expect(
+      handler({ id, reviewedFee: DECLARATION_FEE, type: "wallet.approveOrigin" }, extensionSender),
+    ).resolves.toEqual({ error: "device rejected the declare" });
     await expect(held).resolves.toEqual({ error: "device rejected the declare" });
     expect(declared).toHaveLength(0);
   });

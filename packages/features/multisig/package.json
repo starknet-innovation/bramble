@@ -5,16 +5,15 @@
   "type": "module",
   "exports": {
     "./chain": "./src/chain.ts",
-    "./confirmation": "./src/confirmation.ts",
+    "./coordination": "./src/coordination.ts",
     "./deploy": "./src/deploy.ts",
-    "./discovery": "./src/discovery.ts",
     "./repository": "./src/repository.ts",
-    "./sync": "./src/sync.ts"
+    "./signer-account": "./src/signer-account.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",
     "check:types": "tsc --noEmit -p tsconfig.json",
-    "test": "bun test ./tests"
+    "test": "bun test --preload ../../../tests/support/test-preload.ts ./tests"
   },
   "dependencies": {
     "@mc-wallet/core": "workspace:*",

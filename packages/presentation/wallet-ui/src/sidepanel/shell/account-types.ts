@@ -5,15 +5,12 @@
  * hash unchanged.
  */
 
-import { MULTISIG_CLASS_HASH } from "@mc-wallet/multisig/deploy";
-
-/**
- * OpenZeppelin `AccountUpgradeable` preset class hash pinned by Krusty KMS
- * (identical on Mainnet and Sepolia). Source of truth: the vendored Krusty KMS
- * manifest documented in README "Account class".
- */
-const OZ_ACCOUNT_UPGRADEABLE_CLASS_HASH =
-  "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381";
+import {
+  ARGENT_ACCOUNT_CONTRACT,
+  ARGENT_MULTISIG_CONTRACT,
+} from "@mc-wallet/starknet/account-contracts";
+import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@mc-wallet/wallet-model/accounts";
+import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
 
 /**
  * Normalises a felt-encoded hash to its canonical `0x` hex form so hashes that
@@ -21,22 +18,15 @@ const OZ_ACCOUNT_UPGRADEABLE_CLASS_HASH =
  * how felts are compared elsewhere (see `sameFelt` in `verify.ts`). Returns
  * null when the value is not a parseable felt.
  */
-const canonicalHash = (value: string): string | null => {
-  try {
-    return `0x${BigInt(value).toString(16)}`;
-  } catch {
-    return null;
-  }
-};
-
 const buildRegistry = (): ReadonlyMap<string, string> => {
   const entries: readonly (readonly [string, string])[] = [
-    [OZ_ACCOUNT_UPGRADEABLE_CLASS_HASH, "OpenZeppelin (AccountUpgradeable)"],
-    [MULTISIG_CLASS_HASH, "Starknet multisig"],
+    [OPENZEPPELIN_ACCOUNT_CLASS_HASH, "OpenZeppelin (AccountUpgradeable)"],
+    [ARGENT_ACCOUNT_CONTRACT.classHash, "Argent Account"],
+    [ARGENT_MULTISIG_CONTRACT.classHash, "Argent Multisig"],
   ];
   const registry = new Map<string, string>();
   for (const [hash, label] of entries) {
-    const key = canonicalHash(hash);
+    const key = canonicalFelt(hash);
     if (key !== null) {
       registry.set(key, label);
     }
@@ -53,6 +43,6 @@ const KNOWN_ACCOUNT_TYPES = buildRegistry();
  * only — callers must still render the raw class hash regardless of the result.
  */
 export const knownAccountType = (classHash: string): string | null => {
-  const key = canonicalHash(classHash);
+  const key = canonicalFelt(classHash);
   return key === null ? null : (KNOWN_ACCOUNT_TYPES.get(key) ?? null);
 };

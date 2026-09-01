@@ -19,6 +19,7 @@ const PRIVATE_KEY = "0x1234567890abcdef";
 const publicKeyX = starkCurve.getStarkKey(PRIVATE_KEY);
 
 const account: LedgerAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabc111111",
   classHash: "0x111111",
   derivation: {

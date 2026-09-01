@@ -167,9 +167,9 @@ Trigger: **`pull_request` targeting `main` or `release/**`** (plus `push` to
   floor (`check:coverage`). Runs on `ubuntu-latest` — **no** crypto/contract
   toolchain, **no** build, **no** E2E — so PR feedback is fast. It deliberately
   does **not** run the aggregate `bun run check` (which chains the vendored
-  `check:krusty`/`check:multisig`) or any heavy step.
-- **`release-validation`** — the **full heavy pipeline**: cargo/wasm-pack,
-  `vendor:krusty`, `vendor:multisig`, `bun run check`, coverage floor, `build`,
+  `check:argent`/`check:privacy`) or any heavy step.
+- **`release-validation`** — the **full heavy pipeline**:
+  `vendor:argent`, `vendor:privacy`, `bun run check`, coverage floor, `build`,
   `test:e2e`, `package:extension`, the `apps/terminal` typecheck+build, and the
   `bun audit` dependency gate (`check:audit`), on the self-hosted CodeBuild
   runner. It is **gated by a job-level `if:`** so it runs **only on same-repository
@@ -193,9 +193,10 @@ again post-merge and nightly (below).
 
 Trigger: **`push` to `release/**`** (i.e. after a PR merges into the release branch).
 
-Runs the heavier steps: vendors the Krusty KMS WASM core and the multisig
-contract class, builds the extension, and produces the reproducible package +
-checksum. These need the private Krusty repo and a Rust/Scarb toolchain, so they
+Runs the heavier steps: verifies the published Krusty KMS package and the pinned
+Argent account-contract and Privacy SDK releases, builds the extension, and produces the
+reproducible package + checksum. The vendor steps need network access and their contract
+toolchains, so they
 run on the same self-hosted CodeBuild runner CI uses. If a vendor step can't
 complete (missing private-repo access or toolchain drift) it writes a clear
 explanation to the run summary and **fails honestly** — it never fakes success.
@@ -208,10 +209,12 @@ Trigger: **scheduled** (`cron: 0 3 * * *`) + manual `workflow_dispatch`, against
 the **active release branch**.
 
 Active-branch resolution: use repo variable **`vars.ACTIVE_RELEASE_BRANCH`** if
-set; otherwise the highest-semver `release/vX.Y` branch; if none exists, exit
-cleanly with a note. Manual runs must be dispatched from `main`. Any configured
-branch must match `release/vX.Y` exactly and must already exist in this
-repository before a self-hosted runner is allocated.
+set; otherwise the highest-semver `release/vX.Y` or patch release branch
+`release/vX.Y.Z`; if none exists, exit cleanly with a note. Manual runs must be
+dispatched from `main`. Any configured branch must match one of those exact
+forms and must already exist in this repository before a self-hosted runner is
+allocated. Release promotion branches remain `release/vX.Y`; the patch form is
+accepted here only so the audit suite can keep testing a shipped hotfix line.
 
 Runs the full **E2E (Playwright)** suite, the **dependency audit** (`bun audit`,
 via `bun run check:audit` — also run in the PR CI `release-validation` job;
@@ -243,7 +246,7 @@ read-only self-hosted job; a separate hosted job receives the narrow
 | --- | :---: | :---: | :---: | :---: |
 | Lint, typecheck, file/config + manifest standards, import/cycle, unit/conformance tests, coverage | ✅ | ✅ | | |
 | Scope & naming guards (`pr-guards`) | ✅ | | | |
-| Vendor krusty/multisig, extension build, reproducible package | | ✅ | ✅ | ✅ (build) |
+| Verify Krusty package, vendor Argent/Privacy, extension build, reproducible package | | ✅ | ✅ | ✅ (build) |
 | Full E2E (Playwright) | | ✅ | | ✅ |
 | Dependency audit (`bun audit`) | | ✅ | | ✅ (live DB) |
 | Perf / regression | | | | ⚠️ placeholder (no suite exists yet) |
@@ -282,11 +285,10 @@ model. Two guards are **blocking** (they fail the check); one is **advisory**
   here only; except for authenticated Dependabot, they do not bypass the
   blocking target guard.
 
-> **Blocking in CI ≠ merge-blocked.** A failed guard shows a red check, but it
-> only *prevents a merge* once it is a **required status check** in branch
-> protection. Until an admin turns that on (see below), the guards are advisory
-> in practice even when they fail. This is the gap between what the repo can
-> enforce on its own and what needs an admin.
+> **Blocking in CI is merge-blocking only through the live ruleset.** The active
+> `main` and `release/*` rulesets require the guards described below. Those
+> server-side settings are still mutable by repository administrators, so each
+> release audit reads them back rather than inferring enforcement from YAML.
 
 ---
 
@@ -371,11 +373,17 @@ the following server-side baseline so a red guard is actually merge-blocking.
   so ordinary `chore/`/`docs/` PRs remain mergeable while a release/hotfix
   promotion cannot bypass the heavy gate.
 - **Require ≥ 1 approving review** (and "Require review from Code Owners" — see `.github/CODEOWNERS`).
+- **Dismiss stale approvals on push** and require approval from someone other
+  than the author of the most recent push.
 - **Require all review threads to be resolved.**
-- **Restrict direct pushes** (no pushes that bypass a PR).
+- **Restrict direct pushes and configure no ruleset bypass actor.**
 - **Block force-pushes and deletions** of `main`.
 - **Require signed commits** — recommended if it is the org norm (this repo already
   values verified signatures; `CONTRIBUTING.md` requires GPG-signed commits).
+
+The current owners are existing push-authorized maintainers other than the
+repository's primary author, so a PR author cannot be the only eligible code
+owner.
 
 ### `release/*` — branch protection / ruleset
 
@@ -385,14 +393,15 @@ the following server-side baseline so a red guard is actually merge-blocking.
   release-branch PRs, so it is not a required check here.
 - **Require ≥ 1 approving review**, Code Owner review, and resolution of every
   review thread.
+- **Dismiss stale approvals on push**, require approval of the latest push, and
+  configure no ruleset bypass actor.
 - **Block force-pushes and deletions** by non-maintainers.
 
 ### Repository settings
 
 - Keep default workflow token permissions **read-only** and prevent Actions from
   approving pull requests.
-- Require every third-party action to use a **full commit SHA**. The repository
-  workflow-policy gate also pins the Rust channel to `1.96.1`.
+- Require every third-party action to use a **full commit SHA**.
 - Keep **secret scanning** and **push protection** enabled.
 - Keep the `chrome-web-store` environment restricted to protected branches.
   The current private-repository plan does not support required-reviewer

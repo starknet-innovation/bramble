@@ -3,6 +3,13 @@
  */
 import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 
+/** Authenticated public application data recovered inside Krusty. */
+export type NostrApplicationData = {
+  readonly content: string;
+  readonly identifier: string;
+  readonly senderPublicKey: string;
+};
+
 /**
  * Stark key material returned only inside privileged vault flows.
  */
@@ -17,6 +24,12 @@ export type StarkKeypair = {
  * implementations must validate every input and output and fail closed.
  */
 export type KmsPort = {
+  readonly deriveNostrPublicKey: (
+    mnemonic: string,
+    addressIndex: number,
+    accountIndex: number,
+    passphrase?: string,
+  ) => Promise<string>;
   /**
    * Derives the counterfactual OZ account address for a public key.
    *
@@ -84,5 +97,21 @@ export type KmsPort = {
   readonly generateMnemonic: (wordCount?: number) => Promise<string>;
   readonly getAccountClassHashes: () => Promise<string>;
   readonly signStarkHash: (privateKey: string, messageHash: string) => Promise<StarkSignature>;
+  readonly openNostrApplicationData: (
+    mnemonic: string,
+    addressIndex: number,
+    accountIndex: number,
+    eventJson: string,
+    passphrase?: string,
+  ) => Promise<NostrApplicationData>;
   readonly validateMnemonic: (mnemonic: string) => Promise<boolean>;
+  readonly wrapNostrApplicationData: (
+    mnemonic: string,
+    addressIndex: number,
+    accountIndex: number,
+    recipientPublicKey: string,
+    identifier: string,
+    content: string,
+    passphrase?: string,
+  ) => Promise<string>;
 };

@@ -7,13 +7,11 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { type AccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
-import {
-  isNonZeroStarkFieldElement,
-  type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { KmsPort } from "../kms-port";
 import type { SigningKeyRef, Vault } from "../schema/schema";
-import { deriveLedgerAccount, getOzAccountClassHash, sameWalletKey } from "./accounts";
+import { deriveAccountContractAddress, deriveLedgerAccount, sameWalletKey } from "./accounts";
 
 /**
  * The wallet key to project: active when present, otherwise the first account.
@@ -31,7 +29,15 @@ export const findNetworkAccount = (
   networkId: StarknetNetworkId,
   source: AccountRef,
 ): AccountRef | undefined =>
-  vault.accounts.find((stored) => stored.networkId === networkId && sameWalletKey(stored, source));
+  vault.accounts.find(
+    (stored) =>
+      stored.networkId === networkId &&
+      stored.accountContractType === source.accountContractType &&
+      (source.accountContractType !== "argent" ||
+        (stored.accountContractType === "argent" &&
+          sameFelt(stored.deploymentSalt, source.deploymentSalt))) &&
+      sameWalletKey(stored, source),
+  );
 
 /**
  * Projects a wallet key onto one network. Ledger accounts retain only public
@@ -46,7 +52,9 @@ export const deriveNetworkAccount = async (
 ): Promise<{ readonly account: AccountRef; readonly signingKeys: readonly SigningKeyRef[] }> => {
   if (isKeylessAccount(source)) {
     const account = await deriveLedgerAccount(kms, {
+      accountContractType: source.accountContractType,
       accountIndex: source.derivation.accountIndex,
+      ...(source.deploymentSalt === undefined ? {} : { deploymentSalt: source.deploymentSalt }),
       eip2645application: source.derivation.eip2645application,
       networkId,
       publicKeyX: source.publicKeyX,
@@ -57,16 +65,17 @@ export const deriveNetworkAccount = async (
   if (!signingKey) {
     throw new WalletError("Signing key unavailable");
   }
-  const classHash = await getOzAccountClassHash(kms, networkId);
-  const address = await kms.deriveOzAccountAddress(source.publicKeyX, classHash);
-  if (!isNonZeroStarkFieldElement(address)) {
-    throw new WalletError("Krusty KMS returned invalid account address");
-  }
+  const projection = await deriveAccountContractAddress(kms, {
+    accountContractType: source.accountContractType,
+    ...(source.deploymentSalt === undefined ? {} : { deploymentSalt: source.deploymentSalt }),
+    networkId,
+    publicKeyX: source.publicKeyX,
+  });
   const account: AccountRef = {
     ...source,
-    address,
-    classHash,
-    id: `${networkId}:${address}`,
+    address: projection.address,
+    classHash: projection.classHash,
+    id: `${networkId}:${projection.address}`,
     networkId,
   };
   return { account, signingKeys: [{ accountId: account.id, privateKey: signingKey.privateKey }] };

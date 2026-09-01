@@ -3,6 +3,7 @@
  * each phase's device prompt separately, and fails closed when the wallet
  * boundary does not provide derivation.
  */
+
 import { describe, expect, test } from "bun:test";
 import { STRK20_SIGN_INTENTS } from "@mc-wallet/ledger-protocol/intent";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
@@ -12,6 +13,7 @@ import { ec } from "starknet";
 import type { LedgerSignQueue } from "../../../apps/extension/src/background/ledger/ledger-sign-queue";
 import type { LedgerSignRequest } from "../../../apps/extension/src/background/ledger/ledger-signer";
 import { strk20AccountContext } from "../../../apps/extension/src/background/privacy/strk20-account-context";
+import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { account, createWallet, vaultPassphrase } from "../../support/background-wallet-stub";
 
 const resolved = {
@@ -31,11 +33,20 @@ const resolved = {
   rpcUrls: ["https://rpc.example"],
 };
 
+// The unlock that authorizes the context; `strk20AccountContext` binds the
+// vault signer it builds to this session.
+const unlockedSession = () => {
+  const session = createUnlockSession({ now: () => 1_000, ttlMs: 1_000 });
+  session.unlock(vaultPassphrase);
+  return session;
+};
+
 describe("STRK20 account context", () => {
   test("derives the viewing key only when the SDK asks for it", async () => {
     const seen: unknown[] = [];
     const context = strk20AccountContext(
       {
+        session: unlockedSession(),
         wallet: {
           ...createWallet(),
           async deriveStrk20ViewingKey(input) {
@@ -60,9 +71,39 @@ describe("STRK20 account context", () => {
     ]);
   });
 
+  // The viewing-key thunk is reached LATE — inside the SDK's network work, well
+  // after the user approved a disclosure — so a lock issued in that window must
+  // revoke it exactly as it revokes the signing thunk. The invocation count is
+  // the real assertion: a rejection after the vault had already been asked would
+  // mean the key was derived for a locked wallet.
+  test("an explicit lock revokes the viewing-key thunk as well as the signing thunk", async () => {
+    const derivations: unknown[] = [];
+    const session = unlockedSession();
+    const context = strk20AccountContext(
+      {
+        session,
+        wallet: {
+          ...createWallet(),
+          async deriveStrk20ViewingKey(input) {
+            derivations.push(input);
+            return "0x55";
+          },
+        },
+      },
+      resolved,
+      STRK20_SIGN_INTENTS.dapp,
+    );
+
+    session.lock();
+
+    await expect(context.viewingKey()).rejects.toThrow("wallet locked");
+    await expect(context.signHash("0x1")).rejects.toThrow("wallet locked");
+    expect(derivations).toEqual([]);
+  });
+
   test("fails closed when viewing-key derivation is unavailable", async () => {
     const context = strk20AccountContext(
-      { wallet: createWallet() },
+      { session: unlockedSession(), wallet: createWallet() },
       resolved,
       STRK20_SIGN_INTENTS.dapp,
     );
@@ -78,6 +119,7 @@ describe("STRK20 account context", () => {
     const deviceKey = "0x1234567890abcdef";
     const seen: LedgerSignRequest[] = [];
     const ledgerAccount: LedgerAccountRef = {
+      accountContractType: "openzeppelin",
       address: "0xabc111111",
       classHash: "0x111111",
       derivation: {
@@ -102,7 +144,7 @@ describe("STRK20 account context", () => {
       },
     };
     const context = strk20AccountContext(
-      { ledgerSignQueue: queue, wallet: createWallet() },
+      { ledgerSignQueue: queue, session: unlockedSession(), wallet: createWallet() },
       { ...resolved, account: ledgerAccount },
       STRK20_SIGN_INTENTS.shield,
     );

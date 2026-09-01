@@ -8,6 +8,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { account } from "@mc-wallet/testkit/sidepanel";
+import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -23,18 +24,25 @@ const preferences: WalletPreferences = {
   tokens: [],
 };
 
-const ledgerAccount = {
-  ...account,
+// Built field by field rather than spread from the software account: a Ledger ref
+// carries no `publicKeyY` and no `deploymentSalt`, and under
+// `exactOptionalPropertyTypes` those keys must be absent, not undefined.
+const ledgerAccount: LedgerAccountRef = {
+  accountContractType: "openzeppelin",
+  address: account.address,
+  classHash: account.classHash,
   derivation: {
     accountIndex: 0,
     eip2645application: LEDGER_EIP2645_APPLICATION,
-    kind: "ledger" as const,
+    kind: "ledger",
     path: ledgerAccountPath(0),
   },
-  publicKeyY: undefined,
+  id: account.id,
+  networkId: account.networkId,
+  publicKeyX: account.publicKeyX,
 };
 
-const rowFor = (accounts: readonly (typeof account)[], address: string): string => {
+const rowFor = (accounts: readonly AccountRef[], address: string): string => {
   const host = document.createElement("main");
   host.innerHTML = sendFlow({ ...status, accounts }, accounts[0] ?? null, preferences);
   return host.querySelector(`[data-send-recipient="${address}"]`)?.textContent ?? "";

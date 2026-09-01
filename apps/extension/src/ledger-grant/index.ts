@@ -17,22 +17,7 @@
  * browser/DOM boundary exercised against Chromium and physical hardware.
  */
 
-import { LedgerRejection, ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
-import { type LedgerTransport, newStarknetClient } from "@mc-wallet/ledger-browser/webhid";
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { applySkin } from "@mc-wallet/ui-kit/skin";
-import {
-  ledgerBrokerChannelName,
-  ledgerBrokerSessionFromHash,
-} from "@mc-wallet/ledger-protocol/broker";
 import { serveLedgerBroker } from "@mc-wallet/ledger-browser/broker-server";
-import {
-  alternateLedgerTransport,
-  type LedgerConnectionMethod,
-  ledgerGrantDiagnostic,
-  ledgerGrantFailure,
-  transportForConnectionMethod,
-} from "./grant-flow";
 import { probeLedgerGrantClient } from "@mc-wallet/ledger-browser/grant-session";
 import {
   closeGrantTransport,
@@ -42,6 +27,21 @@ import {
   requestGrantTransport,
   supportedGrantTransportKinds,
 } from "@mc-wallet/ledger-browser/grant-transport";
+import { type LedgerTransport, newStarknetClient } from "@mc-wallet/ledger-browser/webhid";
+import {
+  ledgerBrokerChannelName,
+  ledgerBrokerSessionFromHash,
+} from "@mc-wallet/ledger-protocol/broker";
+import { LedgerRejection, ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
+import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
+import { applySkin } from "@mc-wallet/ui-kit/skin";
+import {
+  alternateLedgerTransport,
+  type LedgerConnectionMethod,
+  ledgerGrantDiagnostic,
+  ledgerGrantFailure,
+  transportForConnectionMethod,
+} from "./grant-flow";
 import { LEDGER_GRANT_STYLES } from "./styles";
 import { ledgerTransitionProgress } from "./transition-progress";
 
@@ -168,24 +168,25 @@ const render = (): void => {
   methods.setAttribute("aria-labelledby", "grant-methods-title");
   const methodsTitle = textElement("p", "grant-readiness-head", "Connection method");
   methodsTitle.id = "grant-methods-title";
+  const validationNotice = textElement(
+    "p",
+    "grant-footnote",
+    "Hardware preview · MC Wallet's complete physical device matrix is still in progress. Use with trusted-test funds only.",
+  );
   const methodOptions = element("div", "grant-method-options");
   const cableMethod = element("button", "grant-method");
   cableMethod.type = "button";
   cableMethod.dataset["active"] = "true";
   cableMethod.setAttribute("aria-pressed", "true");
-  cableMethod.append(
-    textElement("strong", "", "USB cable"),
-    textElement("span", "", "Recommended · S Plus, X, Stax, Flex, and Gen5"),
-  );
+  cableMethod.append(textElement("strong", "", "USB cable"));
+  cableMethod.append(textElement("span", "", "Primary connection method"));
   const bluetoothMethod = element("button", "grant-method");
   bluetoothMethod.type = "button";
   bluetoothMethod.setAttribute("aria-pressed", "false");
-  bluetoothMethod.append(
-    textElement("strong", "", "Bluetooth"),
-    textElement("span", "", "Nano X, Stax, Flex, and Nano Gen5"),
-  );
+  bluetoothMethod.append(textElement("strong", "", "Bluetooth"));
+  bluetoothMethod.append(textElement("span", "", "Compatibility path for Bluetooth devices"));
   methodOptions.append(cableMethod, bluetoothMethod);
-  methods.append(methodsTitle, methodOptions);
+  methods.append(methodsTitle, validationNotice, methodOptions);
 
   const readiness = element("section", "grant-readiness");
   readiness.setAttribute("aria-labelledby", "grant-readiness-title");

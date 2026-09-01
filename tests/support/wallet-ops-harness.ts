@@ -17,11 +17,9 @@ import { createMessageHandler } from "../../apps/extension/src/background/routin
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 
-/** ETH contract the harness's token id and transfer calls resolve to. */
-export const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
-
-/** Single mainnet account backing every wallet-ops suite. */
+const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 export const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -30,30 +28,27 @@ export const account: AccountRef = {
   publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
-
-/** Privileged extension-page sender the suites dispatch through. */
 export const extensionSender: RuntimeSender = {
   id: "extension-id",
   url: "chrome-extension://extension-id/sidepanel.html",
 };
-export const vaultPassphrase = "correct horse battery staple";
-export const tokenId = `SN_MAIN:ETH:${ETH}`;
-
+const vaultPassphrase = "correct horse battery staple";
+export const reviewedFee = { overallFee: "2500000000000000", unit: "FRI" } as const;
+export const reviewedDeploymentFee = { overallFee: "1000000000000000", unit: "FRI" } as const;
 const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
-
+export const tokenId = `SN_MAIN:ETH:${ETH}`;
+export const OTHER_ACCOUNT_ID =
+  "SN_MAIN:0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+export const SEPOLIA_ACCOUNT_ID = `SN_SEPOLIA:${account.address}`;
+export type ActivityResponse = {
+  readonly activity: readonly ActivityEntry[];
+  readonly historyUnavailable?: boolean;
+};
 const walletStub = {
-  async createAccount() {
-    return account;
-  },
-  async addDerivedAccount() {
-    return account;
-  },
-  async ensureNetworkAccount() {
-    return account;
-  },
-  async getGrantedAccounts() {
-    return [account];
-  },
+  addDerivedAccount: async () => account,
+  createAccount: async () => account,
+  ensureNetworkAccount: async () => account,
+  getGrantedAccounts: async () => [account],
   async generateMnemonic() {
     return "habit hope tip crystal because grunt nation idea electric witness alert like";
   },
@@ -79,33 +74,27 @@ const walletStub = {
     };
   },
 };
-
-/**
- * Failure and data switches a wallet-ops suite can flip. `estimateError`
- * replaces the thrown estimate failure so a suite can assert how a specific
- * rejection shape (an RPC envelope, say) is reported.
- */
-export type WalletOpsHarnessOptions = {
+export const makeWalletOpsHarness = (options?: {
   readonly balanceThrows?: boolean;
   readonly deployed?: boolean;
+  /**
+   * The exact rejection the fee estimate throws, so a suite can assert on the
+   * node reason carried back with the failure. `estimateFails` is the shorthand
+   * for "any failure" when the reason does not matter.
+   */
   readonly estimateError?: unknown;
   readonly estimateFails?: boolean;
   readonly onChainHistory?: readonly ActivityEntry[];
   readonly historyThrows?: boolean;
   readonly statusReport?: TransactionStatusReport;
   readonly strkBalance?: string;
-};
-
-/**
- * Builds an unlocked background message handler over the shared fixtures,
- * returning it with the activity log, session, and the status hashes the RPC
- * stub was asked about.
- */
-export const makeWalletOpsHarness = (options?: WalletOpsHarnessOptions) => {
+}) => {
+  let historyRequests = 0;
   const history =
     options?.historyThrows || options?.onChainHistory
       ? {
           async getTransactionHistory(): Promise<readonly ActivityEntry[]> {
+            historyRequests += 1;
             if (options.historyThrows) {
               throw new Error("fetch failed");
             }
@@ -126,11 +115,11 @@ export const makeWalletOpsHarness = (options?: WalletOpsHarnessOptions) => {
   const statusRequests: string[][] = [];
   const handler = createMessageHandler(walletStub, "extension-id", {
     activity,
-    // The activity log stamps entries on its own monotonic test clock, so the
-    // reconciliation clock reads from the same tick counter — otherwise every
-    // recorded transaction looks older than its observation window.
     now: () => tick,
     runtimeRpc: {
+      async estimateAccountDeploymentFee() {
+        return reviewedDeploymentFee;
+      },
       async estimateInvokeFee() {
         if (options?.estimateError !== undefined) {
           throw options.estimateError;
@@ -194,5 +183,5 @@ export const makeWalletOpsHarness = (options?: WalletOpsHarnessOptions) => {
     },
     session,
   });
-  return { activity, handler, session, statusRequests };
+  return { activity, handler, historyRequests: () => historyRequests, session, statusRequests };
 };

@@ -7,12 +7,12 @@ playwright-report/
 .snfoundry_cache/
 target/
 test-results/
+.dev-profile/
 output/
-vendor/krusty-kms/
-vendor/multisig/
+vendor/argent-contracts/
 vendor/starknet-privacy/
-contracts/multisig/target/
 *.log
+.env
 .env*.local
 .DS_Store
 /dist.zip

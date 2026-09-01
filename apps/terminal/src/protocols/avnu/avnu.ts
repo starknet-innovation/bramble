@@ -31,7 +31,7 @@ import type { SwapParams, SwapQuote, SwapQuoteParams } from "../types";
 /**
  * AVNU protocol id for tagging quotes and routing.
  */
-export const AVNU_PROTOCOL_ID = "avnu" as const;
+const AVNU_PROTOCOL_ID = "avnu" as const;
 
 /**
  * Fetches the best aggregated swap route from the AVNU API and its slippage-bounded

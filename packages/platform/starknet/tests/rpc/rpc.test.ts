@@ -5,25 +5,40 @@
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@mc-wallet/core/errors";
 import {
+  ARGENT_ACCOUNT_CONTRACT,
+  ARGENT_MULTISIG_CONTRACT,
+  argentAccountAddress,
+  argentMultisigAddress,
+} from "@mc-wallet/starknet/account-contracts";
+import {
+  resetRpcEndpointCooldownsForTests,
+  WRONG_CHAIN_MESSAGE,
+} from "@mc-wallet/starknet/provider";
+import {
+  accountDeployment,
   buildErc20TransferCall,
   decodeErc20String,
   formatTokenAmount,
   IndeterminateRpcWriteError,
+  isBlockNotFoundError,
   isContractNotFoundError,
   isTransactionNotFoundError,
   isTransportRpcError,
-  ozAccountDeployment,
   parseTokenAmount,
+  RPC_REFUSED_MESSAGE,
+  RpcRefusedError,
+  timedRpcFetch,
   withRpcFallback,
   withRpcWrite,
 } from "@mc-wallet/starknet/rpc";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { CallData, hash, shortString } from "starknet";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const CLASS_HASH = "0x2b31e19e45c06f29234e06e2ee98a9966479ba3067f8785ed972794fdb0065c";
 
-const ozAccount = (address: string): AccountRef => ({
+const ozAccount = (address: string): DerivedAccountRef => ({
+  accountContractType: "openzeppelin",
   address,
   classHash: CLASS_HASH,
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -57,7 +72,7 @@ describe("starknet RPC helpers", () => {
       CallData.compile([PUBLIC_KEY]),
       0,
     );
-    const krustyDeployment = ozAccountDeployment(ozAccount(krustyAddress));
+    const krustyDeployment = accountDeployment(ozAccount(krustyAddress));
     expect(krustyDeployment.addressSalt).toBe("0x0");
     expect(krustyDeployment.classHash).toBe(CLASS_HASH);
     expect(krustyDeployment.constructorCalldata).toEqual(CallData.compile([PUBLIC_KEY]));
@@ -69,16 +84,60 @@ describe("starknet RPC helpers", () => {
       CallData.compile([PUBLIC_KEY]),
       0,
     );
-    const importedDeployment = ozAccountDeployment(ozAccount(importedAddress));
+    const importedDeployment = accountDeployment(ozAccount(importedAddress));
     expect(importedDeployment.addressSalt).toBe(PUBLIC_KEY);
     expect(importedDeployment.contractAddress).toBe(importedAddress);
   });
 
   test("refuses deployment parameters that would land at a different address", () => {
     const wrongAddress = "0x6c16710431efd3962d3c6f55faf00d8c855188029acb42781b9ac77c438ade5";
-    expect(() => ozAccountDeployment(ozAccount(wrongAddress))).toThrow(
+    expect(() => accountDeployment(ozAccount(wrongAddress))).toThrow(
       "do not match the stored address",
     );
+  });
+
+  test("builds pinned Argent account and multisig deployment parameters", () => {
+    const argent = {
+      ...ozAccount(argentAccountAddress(PUBLIC_KEY)),
+      accountContractType: "argent" as const,
+      classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+      deploymentSalt: PUBLIC_KEY,
+    };
+    expect(accountDeployment(argent)).toMatchObject({
+      addressSalt: PUBLIC_KEY,
+      classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
+      constructorCalldata: ["0", PUBLIC_KEY, "1"],
+    });
+
+    const config = { signerPublicKeys: ["0x456", "0x123"], threshold: 2 } as const;
+    const salt = "0xabc";
+    const address = argentMultisigAddress(config, salt);
+    expect(
+      accountDeployment({
+        accountContractType: "argent-multisig",
+        address,
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+        deployment: { salt, ...config },
+        networkId: "SN_MAIN",
+      }),
+    ).toEqual({
+      addressSalt: salt,
+      classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+      constructorCalldata: ["2", "2", "0", "0x123", "0", "0x456"],
+      contractAddress: address,
+    });
+  });
+
+  test("never reconstructs imported multisig deployment parameters", () => {
+    expect(() =>
+      accountDeployment({
+        accountContractType: "argent-multisig",
+        address: "0x123",
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+        deployment: null,
+        networkId: "SN_MAIN",
+      }),
+    ).toThrow("no counterfactual deployment parameters");
   });
 
   test("fails over to the next RPC endpoint only on transport errors", async () => {
@@ -103,7 +162,7 @@ describe("starknet RPC helpers", () => {
     const calls: string[] = [];
     await expect(
       withRpcFallback(
-        ["https://one.example", "https://two.example"],
+        ["https://semantic-one.example", "https://semantic-two.example"],
         async (provider) => {
           calls.push(String(provider));
           throw semantic;
@@ -111,7 +170,44 @@ describe("starknet RPC helpers", () => {
         (nodeUrl) => nodeUrl as unknown as import("starknet").RpcProvider,
       ),
     ).rejects.toBe(semantic);
-    expect(calls).toEqual(["https://one.example"]);
+    expect(calls).toEqual(["https://semantic-one.example"]);
+  });
+
+  test("cools down a failed read endpoint from the time it fails", async () => {
+    let currentTime = 1_000;
+    let delayedFailure = true;
+    const attempts: string[] = [];
+    const urls = ["https://cooldown-one.example", "https://cooldown-two.example"] as const;
+    const read = () =>
+      withRpcFallback(
+        urls,
+        async (provider) => {
+          const url = String(provider);
+          attempts.push(url);
+          if (url === urls[0]) {
+            if (delayedFailure) {
+              currentTime += 20_000;
+              delayedFailure = false;
+            }
+            throw new Error("offline");
+          }
+          return "ok";
+        },
+        (nodeUrl) => nodeUrl as unknown as import("starknet").RpcProvider,
+        () => currentTime,
+      );
+
+    await expect(read()).resolves.toBe("ok");
+    await expect(read()).resolves.toBe("ok");
+    expect(attempts).toEqual([urls[0], urls[1], urls[1]]);
+
+    currentTime += 29_999;
+    await expect(read()).resolves.toBe("ok");
+    expect(attempts.at(-1)).toBe(urls[1]);
+
+    currentTime += 1;
+    await expect(read()).resolves.toBe("ok");
+    expect(attempts.slice(-2)).toEqual([...urls]);
   });
 
   test("does not classify a callback preflight failure as an ambiguous broadcast", async () => {
@@ -150,12 +246,70 @@ describe("starknet RPC helpers", () => {
     expect(writes).toEqual(["https://selected.example"]);
   });
 
+  test("shares failed-endpoint cooldowns with write selection", async () => {
+    let currentTime = 1_000;
+    const attempts: string[] = [];
+    const urls = [
+      "https://write-cooldown-one.example",
+      "https://write-cooldown-two.example",
+    ] as const;
+    const provider = (nodeUrl: string) =>
+      ({
+        async getChainId() {
+          attempts.push(nodeUrl);
+          if (nodeUrl === urls[0]) throw new Error("offline");
+          return "0x534e5f4d41494e";
+        },
+      }) as unknown as import("starknet").RpcProvider;
+    const write = () =>
+      withRpcWrite(
+        urls,
+        "0x534e5f4d41494e",
+        async () => "ok",
+        provider,
+        () => currentTime,
+      );
+
+    await expect(write()).resolves.toBe("ok");
+    await expect(write()).resolves.toBe("ok");
+    expect(attempts).toEqual([urls[0], urls[1], urls[1]]);
+
+    currentTime += 30_000;
+    await expect(write()).resolves.toBe("ok");
+    expect(attempts.slice(-2)).toEqual([...urls]);
+  });
+
+  // A wrong chain is actionable; an unreachable endpoint is not. The later
+  // transport failure must not replace it.
+  test("reports a wrong-chain endpoint even when a later endpoint is unreachable", async () => {
+    const provider = (nodeUrl: string) =>
+      ({
+        async getChainId() {
+          if (nodeUrl.includes("offline")) {
+            throw new Error("fetch failed");
+          }
+          return "0x534e5f5345504f4c4941";
+        },
+      }) as unknown as import("starknet").RpcProvider;
+
+    const rejection = await withRpcWrite(
+      ["https://wrongchain.example", "https://offline.example"],
+      "0x534e5f4d41494e",
+      async () => "unreachable",
+      provider,
+    ).catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(WalletError);
+    expect((rejection as Error).message).toBe(WRONG_CHAIN_MESSAGE);
+  });
+
   test("marks only add-transaction fetches as status unknown", async () => {
     for (const method of [
       "starknet_addDeclareTransaction",
       "starknet_addDeployAccountTransaction",
       "starknet_addInvokeTransaction",
     ] as const) {
+      resetRpcEndpointCooldownsForTests();
       const provider = {
         channel: {
           async fetchEndpoint() {
@@ -194,6 +348,27 @@ describe("starknet RPC helpers", () => {
       ),
     ).toBe(false);
     expect(isTransportRpcError(new WalletError("Invalid account address"))).toBe(false);
+  });
+
+  // "This node does not have that block" is routine behind a load-balanced
+  // endpoint, not a chain-state failure: the head read moments earlier can be
+  // unknown to the sibling that answers the next request. It must stay
+  // distinguishable so a pinned read can re-pin instead of reporting an outage.
+  test("classifies block-not-found RPC failures", () => {
+    expect(isBlockNotFoundError(new Error("24: Block not found: undefined"))).toBe(true);
+    expect(
+      isBlockNotFoundError(
+        Object.assign(new Error("RPC error"), { baseError: { code: 24, message: "" } }),
+      ),
+    ).toBe(true);
+    // Neighbouring not-found codes must not be mistaken for it.
+    expect(
+      isBlockNotFoundError(
+        Object.assign(new Error("RPC error"), { baseError: { code: 20, message: "" } }),
+      ),
+    ).toBe(false);
+    expect(isBlockNotFoundError(new Error("connection reset"))).toBe(false);
+    expect(isBlockNotFoundError("Block not found")).toBe(false);
   });
 
   test("classifies contract-not-found RPC failures", () => {
@@ -247,5 +422,71 @@ describe("starknet RPC helpers", () => {
     // A multi-word response whose leading word is not a parseable felt cannot
     // yield a ByteArray length, so the decoder falls back to the first word.
     expect(decodeErc20String(["not-a-number", "0x1"])).toBe("");
+  });
+});
+
+describe("endpoint refusals versus submission ambiguity", () => {
+  const refusalFetch = (body: string, status = 200) =>
+    timedRpcFetch(1_000, async () => new Response(body, { status }));
+
+  test("a rate-limit answer is a refusal, not a lost response", async () => {
+    // Real shape observed from the wallet's own mainnet endpoint under load:
+    // HTTP 200 carrying `error` as a bare STRING. A JSON-RPC error is always an
+    // object with a numeric code, so this is the gateway, not the node.
+    const rejection = await refusalFetch('{"error":"rate_limited"}')(
+      "https://selected.example",
+      {},
+    ).catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(RpcRefusedError);
+    // Still transport-shaped, so a READ fails over to the next endpoint.
+    expect(isTransportRpcError(rejection)).toBe(true);
+    expect((rejection as Error).message).toBe(RPC_REFUSED_MESSAGE);
+  });
+
+  test("a real JSON-RPC error and a large body are left alone", async () => {
+    // Contract errors remain semantic even though the one rate-limit code is a refusal.
+    await expect(
+      refusalFetch('{"jsonrpc":"2.0","id":1,"error":{"code":20,"message":"Contract not found"}}')(
+        "https://selected.example",
+        {},
+      ),
+    ).resolves.toBeInstanceOf(Response);
+    // Bodies past the refusal budget are not re-parsed; a Sierra class must not
+    // pay for this check on every read.
+    const large = `{"error":"${"a".repeat(2_000)}"}`;
+    await expect(refusalFetch(large)("https://selected.example", {})).resolves.toBeInstanceOf(
+      Response,
+    );
+  });
+
+  test("a refused broadcast stays determinate so the caller may retry", async () => {
+    const provider = {
+      channel: {
+        async fetchEndpoint() {
+          throw new RpcRefusedError(RPC_REFUSED_MESSAGE);
+        },
+      },
+      async getChainId() {
+        return "0x534e5f4d41494e";
+      },
+    } as unknown as import("starknet").RpcProvider;
+
+    const rejection = await withRpcWrite(
+      ["https://selected.example"],
+      "0x534e5f4d41494e",
+      async (selected) => {
+        const fetchEndpoint = Reflect.get(selected.channel, "fetchEndpoint") as (
+          rpcMethod: string,
+        ) => Promise<never>;
+        return fetchEndpoint("starknet_addDeployAccountTransaction");
+      },
+      () => provider,
+    ).catch((error: unknown) => error);
+
+    // The whole point: NOT indeterminate. Reporting a refusal as ambiguity left
+    // a deploy claim unresolvable and burned the counterfactual address.
+    expect(rejection).not.toBeInstanceOf(IndeterminateRpcWriteError);
+    expect((rejection as Error).message).toBe(RPC_REFUSED_MESSAGE);
   });
 });

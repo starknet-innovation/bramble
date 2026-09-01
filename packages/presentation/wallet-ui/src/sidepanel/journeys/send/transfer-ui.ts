@@ -48,7 +48,7 @@ export type TransferUiDeps = {
   readonly app: Element | null;
   readonly back?: () => void;
   readonly confirmationDelaysMs?: readonly number[];
-  readonly navigate?: (view: "activity" | "home") => void;
+  readonly navigate?: (view: "activity" | "home" | "multisig-deploy") => void;
   /** Invalidates the cached private balance once a private send is accepted. */
   readonly onPrivateSendSettled?: () => void;
   readonly privacy?: () => PrivacyDisclosureState;
@@ -100,6 +100,12 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     transferApp = app;
   }
   const accountId = sendFormInput(form, "accountId")?.value ?? "";
+  const completionTarget =
+    form.dataset["sendCompleteTo"] === "multisig-deploy" ? "multisig-deploy" : "home";
+  const complete = (): void => {
+    if (completionTarget === "multisig-deploy" && back) back();
+    else navigate?.(completionTarget);
+  };
   if (transferState.fields && transferState.fields.accountId !== accountId) {
     transferEpoch += 1;
     transferState = initialTransferState();
@@ -146,6 +152,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     if (transferState.transactionHash === null) {
       transferEpoch += 1;
       transferState = initialTransferState();
+    }
+    if (transferState.transactionHash && completionTarget === "multisig-deploy") {
+      complete();
+      return;
     }
     if (back) {
       back();
@@ -205,19 +215,24 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     form,
     onRouteChange: dropReview,
     ...(deps.reloadPrivacy ? { retry: deps.reloadPrivacy } : {}),
-    retryable: () => deps.privacy?.().error !== null,
+    retryable: () => {
+      const fields = transferFields(form);
+      return (
+        deps.privacy?.().error !== null &&
+        (fields.source === "private" || fields.destination === "private")
+      );
+    },
     route,
   });
 
   form.querySelector("#send-edit")?.addEventListener("click", editDetails);
   form.querySelector("#send-failure-edit")?.addEventListener("click", editDetails);
-  form.querySelector("#send-another")?.addEventListener("click", () => {
-    transferEpoch += 1;
-    form.reset();
-    transferState = initialTransferState();
-    repaint();
-    form.querySelector<HTMLInputElement>("#send-recipient-search")?.focus();
-  });
+  const homeButton = form.querySelector<HTMLButtonElement>("#send-home");
+  if (homeButton) {
+    homeButton.textContent =
+      completionTarget === "multisig-deploy" ? "Deploy Multisignature Account" : "Back to home";
+    homeButton.addEventListener("click", complete);
+  }
   form
     .querySelector("#send-view-activity")
     ?.addEventListener("click", () => navigate?.("activity"));
@@ -248,7 +263,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
               ? { ...transferState, error: "", stage: "submitted" }
               : { ...transferState, error: outcome.message, stage: "failed" };
           repaintActiveTransfer?.();
-          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error");
+          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", form);
           return;
         }
       } catch {
@@ -340,7 +355,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = errorMessage(error, preparationFailure(composed));
-            showToast(message, "error");
+            showToast(message, "error", form);
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             repaintActiveTransfer?.();
           },
@@ -348,20 +363,34 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         return;
       }
       void wallet
-        .reviewTransfer(fields.accountId, fields.tokenId, fields.recipient, fields.amount)
+        .reviewTransfer(
+          fields.accountId,
+          fields.tokenId,
+          fields.recipient,
+          fields.amount,
+          fields.speed,
+        )
         .then(
           (review) => {
             if (epoch !== transferEpoch) return;
-            const feeFailed = review.feeEstimateFailed;
+            const feeFailed =
+              review.feeEstimateFailed || review.deploymentFeeEstimateFailed === true;
+            // Address poisoning is a refusal here, not a notice, matching the
+            // NFT send screen (nft-ui.ts) and the background's own refusal on
+            // submit: leaving the key unreviewed means the next click re-reviews
+            // instead of confirming, so the flag cannot be clicked past.
+            const blocked = review.flags.some((flag) => flag.code === "address-poisoning");
             transferState = {
-              error: feeFailed
-                ? "Fee estimate unavailable. Retry before authorizing this transaction."
-                : "",
+              error: blocked
+                ? "This recipient closely mimics a saved address. Change it and review again."
+                : feeFailed
+                  ? "Fee estimate unavailable. Retry before authorizing this transaction."
+                  : "",
               fields,
               privatePreparation: null,
               requiresDeployment: review.requiresDeployment,
               review,
-              reviewedKey: feeFailed ? null : key,
+              reviewedKey: blocked || feeFailed ? null : key,
               stage: "review",
               transactionHash: null,
             };
@@ -370,7 +399,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = friendlyReviewError(error);
-            showToast(message, "error");
+            showToast(message, "error", form);
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             repaintActiveTransfer?.();
           },
@@ -379,6 +408,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     }
     const epoch = ++transferEpoch;
     const requiresDeployment = transferState.requiresDeployment;
+    const reviewedFee = transferState.review?.fee ?? null;
+    const reviewedDeploymentFee = transferState.review?.deploymentFee ?? null;
     const privatePreparation = transferState.privatePreparation;
     transferState = { ...transferState, error: "", fields, stage: "authorizing" };
     repaint();
@@ -417,7 +448,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             stage: "failed",
           };
           repaintActiveTransfer?.();
-          showToast("Transaction was not sent", "error");
+          showToast("Transaction was not sent", "error", form);
         },
       );
       return;
@@ -429,6 +460,11 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         fields.recipient,
         fields.amount,
         fields.speed,
+        // Exactly what the review step rendered. Sending it back is what lets
+        // the background refuse a send whose fee has moved since the user read
+        // it, instead of signing at a price they never saw.
+        reviewedFee,
+        reviewedDeploymentFee,
       )
       .then(
         (transactionHash) => {
@@ -452,7 +488,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             stage: "failed",
           };
           repaintActiveTransfer?.();
-          showToast("Transaction was not sent", "error");
+          showToast("Transaction was not sent", "error", form);
         },
       );
   });

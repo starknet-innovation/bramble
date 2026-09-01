@@ -10,8 +10,10 @@
  * messages directly.
  */
 import { escapeHtml } from "@mc-wallet/core/html";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { button } from "@mc-wallet/ui-kit/controls";
 import type { UiAttributes } from "@mc-wallet/ui-kit/html-attributes";
+import { tokenGlyph } from "../journeys/portfolio/token-row";
 import { icon } from "./icons";
 import { copyButton, formatFri } from "./parts";
 
@@ -22,17 +24,14 @@ import { copyButton, formatFri } from "./parts";
  * cannot drift between them (issue 189).
  */
 export type ReviewFeeState = {
-  readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+  readonly deploymentFee?: FeeEstimate | null;
+  readonly deploymentFeeEstimateFailed?: boolean;
+  readonly fee: FeeEstimate | null;
   /**
    * Verdict of the shared fee-affordability predicate (issue 191). Only
    * "insufficient" renders a warning; "ok"/"unknown"/absent render nothing
-   * extra.
-   *
-   * "insufficient" is a positive verdict — the balance was read and cannot cover
-   * the transaction — so both confirm surfaces also disable their approve/send
-   * control on it, and the notice below says so. The predicate still fails open:
-   * an unreadable balance yields "unknown", which makes no claim and blocks
-   * nothing.
+   * extra, and no surface gates a decision on it — the guard is warn-only and
+   * fails open.
    */
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   /**
@@ -47,14 +46,47 @@ export type ReviewFeeState = {
   readonly requiresDeployment?: boolean;
 };
 
-// Shortfall notice appended under the fee line when the shared predicate says
-// the STRK balance cannot cover the transaction (issue 191). Names the blocked
-// control, because both surfaces disable it on this verdict — a notice that only
-// warned would leave the user staring at a dead button with no reason given.
+// Warn-only shortfall notice appended under the fee line when the shared
+// predicate says the STRK balance cannot cover the transaction (issue 191).
+// Names the blocked control, because both surfaces disable it on this verdict
+// (issue 191) — a notice that only warned would leave the user staring at a dead
+// button with no reason given.
 const shortfallHtml = (state: ReviewFeeState): string =>
   state.feeAffordability === "insufficient"
     ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. Add STRK to continue — the network would reject it as it stands.</p>`
     : "";
+
+const reviewBoundary = (content: string): string =>
+  `<section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
+    <p class="decision-label">Maximum cost and constraints</p>
+    ${content}
+  </section>`;
+
+/**
+ * Renders a plain-language consequence for decisions that do not carry decoded
+ * calls (connections, signatures, and configuration changes).
+ */
+export const reviewOutcome = (copy: string): string =>
+  `<section class="decision-layer decision-outcome" aria-label="What will happen">
+    <p class="decision-label">What will happen</p>
+    <p>${escapeHtml(copy)}</p>
+  </section>`;
+
+/**
+ * Renders a non-fee constraint statement through the same decision hierarchy
+ * as a transaction fee ceiling.
+ */
+export const reviewConstraints = (copy: string): string =>
+  reviewBoundary(`<p>${escapeHtml(copy)}</p>`);
+
+/**
+ * Formats a fee estimate in the unit the estimate actually returned: `FRI`
+ * renders as STRK via {@link formatFri}-equivalent formatting, any other
+ * accepted unit renders with its own label — so a `WEI` estimate can never be
+ * mislabelled as STRK. Matches the declare card's existing behaviour.
+ */
+export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): string =>
+  fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
 
 // The node's own rejection reason, kept behind a disclosure so the default view
 // stays calm while the text remains selectable and one click from the clipboard
@@ -72,15 +104,6 @@ const feeDetailHtml = (state: ReviewFeeState): string =>
   </details>`;
 
 /**
- * Formats a fee estimate in the unit the estimate actually returned: `FRI`
- * renders as STRK via {@link formatFri}-equivalent formatting, any other
- * accepted unit renders with its own label — so a `WEI` estimate can never be
- * mislabelled as STRK. Matches the declare card's existing behaviour.
- */
-export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): string =>
-  fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
-
-/**
  * Renders the shared fee section of a pre-sign review: the estimated fee when
  * one exists, the not-yet-deployed notice, or the estimate-failed alert with a
  * retry button carrying the caller's attributes (Send wires an id, the dApp
@@ -90,22 +113,49 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
  */
 export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttributes): string => {
   if (state.feeEstimatePending === true) {
-    return '<p class="review-fee" role="status">Estimating network fee…</p>';
+    return reviewBoundary('<p class="review-fee" role="status">Estimating network fee…</p>');
   }
-  if (state.fee) {
-    return `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`;
+  if (state.requiresDeployment === true && state.fee && state.deploymentFee) {
+    return reviewBoundary(
+      `<div class="review-fee"><p>Estimated transaction fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p><p>Estimated account deployment fee: ${escapeHtml(formatFeeEstimate(state.deploymentFee))}</p></div>${shortfallHtml(state)}`,
+    );
+  }
+  if (
+    state.requiresDeployment === true &&
+    state.deploymentFee === undefined &&
+    state.deploymentFeeEstimateFailed === undefined &&
+    state.feeEstimateFailed !== true
+  ) {
+    return reviewBoundary(
+      '<p class="review-fee">The network fee is estimated once this account is deployed.</p>',
+    );
   }
   if (state.requiresDeployment === true) {
-    return '<p class="review-fee">The network fee is estimated once this account is deployed.</p>';
+    return reviewBoundary(
+      `<p class="review-flag" role="alert">Couldn't estimate both the transaction and account deployment fees. Check your connection and retry before sending.</p>${button(
+        {
+          attributes: retryAttributes,
+          label: "Retry fee estimate",
+          variant: "secondary",
+        },
+      )}`,
+    );
+  }
+  if (state.fee) {
+    return reviewBoundary(
+      `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`,
+    );
   }
   if (state.feeEstimateFailed === true) {
-    return `<p class="review-flag" role="alert">Couldn't estimate the network fee right now. Check your connection and retry before sending.</p>${feeDetailHtml(
-      state,
-    )}${button({
-      attributes: retryAttributes,
-      label: "Retry fee estimate",
-      variant: "secondary",
-    })}`;
+    return reviewBoundary(
+      `<p class="review-flag" role="alert">Couldn't estimate the network fee right now. Check your connection and retry before sending.</p>${feeDetailHtml(
+        state,
+      )}${button({
+        attributes: retryAttributes,
+        label: "Retry fee estimate",
+        variant: "secondary",
+      })}`,
+    );
   }
   return "";
 };
@@ -116,24 +166,45 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
  * summaries, so callers can inline it unconditionally without leaving an empty
  * list behind.
  */
-export const reviewCallsList = (summaries: readonly string[]): string =>
+export const reviewCallsList = (
+  summaries: readonly string[],
+  assets: readonly { readonly address: string; readonly symbol: string }[] = [],
+): string =>
   summaries.length === 0
     ? ""
-    : `<ul class="review-calls">${summaries
-        .map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`)
-        .join("")}</ul>`;
+    : `<section class="decision-layer decision-outcome" aria-label="What will happen">
+        <p class="decision-label">What will happen</p>
+        <ul class="review-calls">${summaries
+          .map((summary) => {
+            const words = new Set(summary.toUpperCase().match(/[A-Z0-9.]+/gu) ?? []);
+            const marks = assets
+              .filter((asset) => words.has(asset.symbol.toUpperCase()))
+              .map((asset) => tokenGlyph(asset.address, asset.symbol))
+              .join("");
+            return `<li class="review-call">${marks ? `<span class="review-call-assets">${marks}</span>` : ""}<span>${escapeHtml(summary)}</span></li>`;
+          })
+          .join("")}</ul>
+      </section>`;
 
 /**
  * Renders risk-flag and insight lines inside the shared review panel. Returns an
  * empty string when there is nothing to surface, so an absent panel leaves no
  * empty box behind rather than an empty bordered region.
  */
-export const reviewPanel = (items: readonly string[]): string =>
+export const reviewPanel = (items: readonly string[], clearCopy?: string): string =>
   items.length === 0
-    ? ""
-    : `<div class="review-panel" role="note">${items
-        .map((item) => `<p class="review-flag">${icon("alert")}${escapeHtml(item)}</p>`)
-        .join("")}</div>`;
+    ? clearCopy
+      ? `<div class="review-panel decision-layer decision-risk" role="note">
+          <p class="decision-label">Risk and recovery</p>
+          <p>${escapeHtml(clearCopy)}</p>
+        </div>`
+      : ""
+    : `<div class="review-panel decision-layer decision-risk" role="note">
+        <p class="decision-label">Risk and recovery</p>
+        ${items
+          .map((item) => `<p class="review-flag">${icon("alert")}${escapeHtml(item)}</p>`)
+          .join("")}
+      </div>`;
 
 /**
  * Extracts the user-facing messages from risk flags so both review surfaces

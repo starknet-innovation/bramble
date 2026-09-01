@@ -1,13 +1,22 @@
 /** Submission-side privacy-paymaster contract tests. */
 import { describe, expect, test } from "bun:test";
-import { submitStrk20PaymasterPlan } from "@mc-wallet/privacy/paymaster";
+import { WalletError } from "@mc-wallet/core/errors";
+import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "@mc-wallet/privacy/paymaster";
 import { STRK20_SUBMISSION_UNAVAILABLE } from "@mc-wallet/privacy/service";
 import {
+  INDETERMINATE_RPC_WRITE_MESSAGE,
+  IndeterminateRpcWriteError,
+} from "@mc-wallet/starknet/provider";
+import {
   paymasterCall as call,
+  paymasterChainId as chainId,
   paymasterConfig as config,
   paymasterTypedData as outsideTypedData,
   paymasterResponse as response,
 } from "../support/paymaster";
+
+// The injected transport shape both paymaster entry points accept.
+type PaymasterHttp = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 describe("STRK20 paymaster submission boundary", () => {
   test("submits the frozen proof and validates the returned transaction hash", async () => {
@@ -147,35 +156,73 @@ describe("STRK20 paymaster submission boundary", () => {
     expect(submitted).toBe(false);
   });
 
-  test("rejects malformed JSON-RPC envelopes and transaction hashes", async () => {
-    await expect(
-      submitStrk20PaymasterPlan({
-        accountAddress: "0x1",
-        call,
-        config,
-        http: async () => response({ transaction_hash: "not-a-hash" }),
-        nowSeconds: 2,
-        plan: {
-          feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
-        },
-        proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
-        signTypedData: async () => [],
-      }),
-    ).rejects.toThrow("strk20 private submission unavailable");
-  });
+  /**
+   * EXT-M2. The relay lane reaches its node through this file's own HTTP client
+   * rather than through `withRpcWrite`, so nothing upstream can tell an answer
+   * the wallet could not read apart from a refusal the relay stated. Collapsing
+   * both to a flat `WalletError` told the maturity scope that the write was
+   * determinately rejected, so it released the `submitting` guard over a
+   * transaction the relay may already have forwarded — and the next private
+   * action proved against note state a landed write would have invalidated.
+   *
+   * The line drawn here: once `paymaster_executeTransaction` has left the
+   * wallet, only an answer the relay states for itself is determinate.
+   */
+  const submitWith = async (http: PaymasterHttp): Promise<unknown> =>
+    submitStrk20PaymasterPlan({
+      accountAddress: "0x1",
+      call,
+      config,
+      http,
+      nowSeconds: 2,
+      plan: {
+        feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+      },
+      proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+      signTypedData: async () => [],
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
 
-  test("rejects HTTP failures, invalid JSON, and JSON-RPC errors", async () => {
-    const plan = {
-      feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
-    } as const;
-    for (const http of [
-      async () => new Response("unavailable", { status: 503 }),
-      async () => new Response("not json", { status: 200 }),
+  test("keeps a broadcast whose answer was lost ambiguous, and a stated refusal determinate", async () => {
+    const lost: readonly PaymasterHttp[] = [
+      // Declared past the response budget: refused before a byte is read.
       async () =>
         new Response("{}", {
           headers: { "content-length": String(1024 * 1024 + 1) },
           status: 200,
         }),
+      // Answered, but not with JSON.
+      async () => new Response("not json", { status: 200 }),
+      // A JSON-RPC envelope the client cannot interpret.
+      async () =>
+        new Response(JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0", surprise: 1 }), {
+          status: 200,
+        }),
+      // A well-formed envelope carrying neither a result nor an error.
+      async () =>
+        new Response(JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0" }), { status: 200 }),
+      // A result the relay accepted, with no usable handle on it.
+      async () => response({ transaction_hash: "not-a-hash" }),
+      // This client's own deadline ended the exchange after the request went out.
+      async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      },
+    ];
+    for (const http of lost) {
+      const rejected = await submitWith(http);
+      expect(rejected).toBeInstanceOf(IndeterminateRpcWriteError);
+      // Curated, shared with the JSON-RPC lane, and carrying nothing of the
+      // relay's answer.
+      expect((rejected as Error).message).toBe(INDETERMINATE_RPC_WRITE_MESSAGE);
+    }
+
+    // The counterweight: over-correcting into "hold the scope on every relay
+    // failure" would strand a caller behind a stale `submitting` guard after an
+    // ordinary refusal, so a relay that answers for itself stays determinate.
+    const stated: readonly PaymasterHttp[] = [
+      async () => new Response("unavailable", { status: 503 }),
       async () =>
         new Response(
           JSON.stringify({
@@ -185,19 +232,48 @@ describe("STRK20 paymaster submission boundary", () => {
           }),
           { status: 200 },
         ),
-    ]) {
-      await expect(
-        submitStrk20PaymasterPlan({
-          accountAddress: "0x1",
-          call,
-          config,
-          http,
-          nowSeconds: 2,
-          plan,
-          proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
-          signTypedData: async () => [],
+      // No exchange took place at all: DNS, a refused connection, a refused
+      // redirect. Nothing was broadcast.
+      async () => {
+        throw new TypeError("Failed to fetch");
+      },
+    ];
+    for (const http of stated) {
+      const rejected = await submitWith(http);
+      expect(rejected).toBeInstanceOf(WalletError);
+      expect(rejected).not.toBeInstanceOf(IndeterminateRpcWriteError);
+      expect((rejected as Error).message).toContain("strk20 private submission unavailable");
+    }
+  });
+
+  test("leaves quote failures determinate — a quote never broadcasts anything", async () => {
+    // `paymaster_buildTransaction` runs before the maturity scope is closed and
+    // puts nothing on the wire, so the same lost answer must NOT mint the
+    // ambiguity marker there or a bad quote would strand the scope.
+    for (const http of [
+      async () =>
+        new Response("{}", {
+          headers: { "content-length": String(1024 * 1024 + 1) },
+          status: 200,
         }),
-      ).rejects.toThrow("strk20 private submission unavailable");
+      async () => new Response("not json", { status: 200 }),
+    ] satisfies readonly PaymasterHttp[]) {
+      const rejected = await buildStrk20PaymasterPlan({
+        accountAddress: "0x1",
+        approveCalls: [],
+        chainId,
+        config,
+        expectedFeeAmount: 5n,
+        http,
+        nowSeconds: 2,
+        poolAddress: "0x2",
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(rejected).toBeInstanceOf(WalletError);
+      expect(rejected).not.toBeInstanceOf(IndeterminateRpcWriteError);
+      expect((rejected as Error).message).toBe(STRK20_SUBMISSION_UNAVAILABLE);
     }
   });
 

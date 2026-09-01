@@ -13,8 +13,13 @@ import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { inputControl } from "@mc-wallet/ui-kit/fields";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
+import { formatFeeEstimate } from "../../shared/review-render";
+import { compactAmount, tokenGlyph } from "../portfolio/token-row";
+import type { SwapPreparationView } from "./swap-client";
+import { SWAP_LOSS_WARN_PERCENT } from "./swap-client";
 
 // One tradable panel: label, amount region, token chip, and the USD/balance
 // line. The sell side carries a real input plus Max; the buy side is output.
@@ -70,7 +75,7 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
         <p id="swap-warning" class="swap-warning" role="alert" hidden></p>
         <button id="swap-review" type="button" disabled>${icon("swap")}<span id="swap-review-label">Swap</span></button>
       </section>
-      <div id="swap-picker" class="swap-sheet" role="dialog" aria-modal="true" aria-label="Choose token" hidden>
+      <div id="swap-picker" class="swap-sheet" role="dialog" aria-modal="true" aria-labelledby="swap-picker-title" hidden>
         <header class="swap-sheet-head">
           <h2 id="swap-picker-title">Receive</h2>
           ${iconButton({
@@ -94,10 +99,22 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
         ${emptyState("", "status", { hidden: true, id: "swap-picker-status" })}
       </div>
       <section class="swap-stage" id="swap-confirm" hidden>
-        <p class="eyebrow">Confirm swap</p>
-        ${receipt([], { id: "swap-confirm-receipt" })}
-        <div id="swap-call-review"></div>
-        <p class="hint">These exact calls were built and frozen before this screen. Confirm submits them once; the route cannot change after review.</p>
+        <header class="decision-head">
+          <span class="decision-seal">${icon("shield")}</span>
+          <span><p class="decision-label">Reviewed intent</p><h2>Confirm this swap</h2></span>
+        </header>
+        <div id="swap-confirm-receipt"></div>
+        <div id="swap-risk-review"></div>
+        <details class="disclosure decision-technical" data-disclosure="swap-technical-details">
+          <summary>
+            <span class="menu-copy"><strong>Technical details</strong><small>Frozen calls and review digest</small></span>
+            <span class="disclosure-mark">${icon("chevronRight")}</span>
+          </summary>
+          <div class="disclosure-body">
+            <div id="swap-quote-details"></div>
+            <div id="swap-call-review"></div>
+          </div>
+        </details>
         <div class="swap-actions">
           ${button({
             attributes: { id: "swap-confirm-button" },
@@ -123,3 +140,77 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
     )
   );
 };
+
+/**
+ * The figures the confirm receipt states. `minBuyAmount` is the minimum the
+ * BACKGROUND decoded out of the frozen route calldata, not one derived here —
+ * that separation is the whole point of the row.
+ */
+export type SwapConfirmFigures = {
+  readonly buyAddress: string;
+  readonly buyAmount: string;
+  readonly buySymbol: string;
+  readonly gasFeesInUsd: number;
+  readonly lossPercent: number;
+  readonly minBuyAmount: string;
+  readonly networkFee: SwapPreparationView["reviewedFee"];
+  readonly sellAddress: string;
+  readonly sellAmount: string;
+  readonly sellSymbol: string;
+  readonly valueDelta: number | null;
+};
+
+/**
+ * Renders the confirm-stage receipt. Pure: it states only what it is given, and
+ * every row is a claim the wallet can stand behind — the minimum comes off the
+ * frozen preparation and is labelled as enforced, while the aggregator's fee
+ * guess is labelled as not. Nothing here recomputes a figure the transaction
+ * carries; a row the wallet cannot back would be a false assurance on the last
+ * screen before signing.
+ */
+export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
+  `<div class="swap-review-pair" aria-label="What will happen">
+    <div class="swap-review-asset">
+      ${tokenGlyph(figures.sellAddress, figures.sellSymbol)}
+      <span><small>You sell</small><strong>${compactAmount(figures.sellAmount)} ${figures.sellSymbol}</strong></span>
+    </div>
+    <span class="swap-review-arrow">${icon("arrowDown")}</span>
+    <div class="swap-review-asset">
+      ${tokenGlyph(figures.buyAddress, figures.buySymbol)}
+      <span><small>You receive</small><strong>${compactAmount(figures.buyAmount)} ${figures.buySymbol}</strong></span>
+    </div>
+  </div>
+  <div class="receipt-group">
+    <p class="decision-label">Maximum cost and constraints</p>
+    ${receipt([
+      {
+        label: "Minimum received",
+        value: `${compactAmount(figures.minBuyAmount)} ${figures.buySymbol} (wallet-enforced)`,
+      },
+      { label: "Maximum network fee", value: formatFeeEstimate(figures.networkFee) },
+    ])}
+  </div>`;
+
+/**
+ * Renders secondary quote facts behind the technical disclosure.
+ */
+export const swapQuoteDetails = (figures: SwapConfirmFigures): string =>
+  receipt([
+    ...(figures.valueDelta === null
+      ? []
+      : [
+          {
+            label: "Value change",
+            value: `${figures.valueDelta > 0 ? "+" : ""}${figures.valueDelta.toFixed(2)}%`,
+            valueTone:
+              figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
+                ? ("danger" as const)
+                : ("default" as const),
+          },
+        ]),
+    {
+      label: "Aggregator fee estimate",
+      value: `≈ ${formatFiat(figures.gasFeesInUsd, "usd")} (not wallet-enforced)`,
+    },
+    { label: "Route", value: "AVNU aggregator" },
+  ]);

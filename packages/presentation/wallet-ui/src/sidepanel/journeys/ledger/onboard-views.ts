@@ -72,10 +72,12 @@ export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null):
       })}
     </header>
     <div class="add-account-chooser" role="group" aria-label="Add an account">
-      ${option("hd", "wallet", "Standard Account", "Create the next account from this wallet’s recovery phrase.")}
-      ${option("ledger", "shield", "Ledger Account", "Use a Ledger hardware wallet without exposing its key.")}
+      ${option("openzeppelin", "wallet", "OpenZeppelin Account", "Recommended · Create the next account from this wallet’s recovery phrase.")}
+      ${option("argent", "wallet", "Argent Account", "Create the next account with the Argent account model.")}
+      ${option("ledger-openzeppelin", "shield", "OpenZeppelin Ledger Account", "Recommended · Use a Ledger with the OpenZeppelin account model.")}
+      ${option("ledger-argent", "shield", "Argent Ledger Account", "Use a Ledger with the Argent account model.")}
       ${option("import", "link", "Import from private key", "Add an existing Starknet account from its raw key.")}
-      ${option("multisig", "users", "Multisig Account", "Create or add an account controlled by multiple signers.")}
+      ${option("multisig", "users", "Argent Multisig", "Create or add an Argent account controlled by multiple signers.")}
     </div>
     <div class="onboard-actions">
       ${button({

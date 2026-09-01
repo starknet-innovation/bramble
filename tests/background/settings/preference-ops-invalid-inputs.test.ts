@@ -77,9 +77,21 @@ const cases: ReadonlyArray<{ error: string; message: Record<string, unknown>; ty
     type: "wallet.setRpcOverride",
   },
   {
+    // A non-boolean `enabled` must not be coerced: only a literal `true` may
+    // ever record consent to disclose the account address to an explorer.
+    error: "invalid explorer fallback request",
+    message: { enabled: "yes", networkId: "SN_MAIN", type: "wallet.setExplorerFallback" },
+    type: "wallet.setExplorerFallback",
+  },
+  {
     error: "invalid indexer endpoint request",
     message: { type: "wallet.setNftIndexerUrl" },
     type: "wallet.setNftIndexerUrl",
+  },
+  {
+    error: "invalid Nostr relay request",
+    message: { relayUrl: "ws://relay.example", type: "wallet.setNostrRelayUrl" },
+    type: "wallet.setNostrRelayUrl",
   },
   {
     error: "invalid strk20 service configuration",
@@ -123,6 +135,32 @@ describe("handlePreferenceOps input validation", () => {
     });
     expect(response).toMatchObject({ ok: true });
     expect((await preferencesStore.read()).rpcOverrides?.SN_MAIN).toBe("https://rpc.example.com");
+  });
+
+  test("applies a well-formed custom Nostr relay", async () => {
+    const preferencesStore = store();
+    const response = await handlePreferenceOps(preferencesStore, "wallet.setNostrRelayUrl", {
+      relayUrl: "wss://relay.team.example",
+      type: "wallet.setNostrRelayUrl",
+    });
+    expect(response).toMatchObject({ ok: true });
+    expect((await preferencesStore.read()).nostrRelayUrl).toBe("wss://relay.team.example");
+  });
+
+  test("applies a well-formed explorer fallback choice (MCW-V09-129)", async () => {
+    const preferencesStore = store();
+    const response = await handlePreferenceOps(preferencesStore, "wallet.setExplorerFallback", {
+      apiUrl: "https://explorer.example/v1",
+      enabled: false,
+      networkId: "SN_MAIN",
+      type: "wallet.setExplorerFallback",
+    });
+
+    expect(response).toMatchObject({ ok: true });
+    expect((await preferencesStore.read()).explorerApiUrls).toEqual({
+      SN_MAIN: "https://explorer.example/v1",
+    });
+    expect((await preferencesStore.read()).explorerFallback).toEqual({ SN_MAIN: false });
   });
 
   test("applies and clears complete STRK20 network routing", async () => {

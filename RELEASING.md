@@ -102,8 +102,7 @@ version **must be strictly greater** than the currently published one.
 
 ```sh
 bun install --frozen-lockfile
-bun run vendor:krusty      # checks out the pinned Krusty KMS commit and builds wasm
-bun run vendor:multisig    # vendors the multisig contract class
+bun run vendor:argent      # verifies the pinned official Argent release
 bun run build              # writes dist/
 bun run package:extension  # writes artifacts/mc-wallet-<version>.zip (+ .sha256)
 ```
@@ -121,7 +120,7 @@ cd artifacts && sha256sum -c ./*.zip.sha256
 
 ### Offline quality-gate subset
 
-Run before tagging (these need no network/Rust/Scarb):
+Run before tagging (these need no network/Rust):
 
 ```sh
 bun run check:types
@@ -131,8 +130,7 @@ bun run check:extension
 bun test
 ```
 
-The full `bun run check` (plus `vendor:krusty`, `vendor:multisig`, `build`,
-`test:e2e`) runs in CI, which needs network + the Rust/Scarb toolchain.
+The full `bun run check` (plus `vendor:argent`, `build`, `test:e2e`) runs in CI.
 
 ## 3. Cutting a release (automatic on merge)
 
@@ -147,8 +145,7 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
 3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
    idempotent, so a re-run never double-cuts);
 4. calls the reusable `release-build.yml`, which installs the toolchain exactly
-   as CI does (including Rust `1.96.1`), runs
-   `vendor:krusty`/`vendor:multisig`/`build`/`package:extension`, re-asserts the
+   as CI does, runs `vendor:argent`/`build`/`package:extension`, re-asserts the
    tag ↔ version gate, verifies the `.zip` matches its `.sha256`, and uploads the
    `mc-wallet-release` artifact. A separate hosted job that never checks out
    wallet source creates the **GitHub Release** with the zip + `.sha256`
@@ -203,7 +200,7 @@ Create the item once (via the dashboard) and note its **item/extension ID**
 
 - **Icons:** 128×128 PNG store icon (the manifest also ships action icons).
 - **Screenshots:** at least one, 1280×800 or 640×400 PNG/JPEG.
-- **Promo images (optional):** small tile 440×280; marquee 1400×560.
+- **Promo images:** required small tile 440×280; optional marquee 1400×560.
 - **Text:** name, short description (≤132 chars), detailed description,
   category, primary language.
 
@@ -220,6 +217,11 @@ Required before review will pass:
   transaction reconciliation, and side-panel/storage usage. Vague or missing
   justifications are the most common rejection reason.
 - A **privacy policy** URL if any user data is handled.
+
+Reviewed listing copy, privacy policy, permission justifications, and asset requirements live in
+`docs/chrome-web-store/`. Chrome's August 2026 disclosure policy requires every data collection to
+be disclosed before collection, including local-only diagnostic collection; keep the dashboard,
+listing, privacy policy, and in-product opt-in copy aligned.
 
 ## 5. Chrome Web Store — API credentials and secrets
 

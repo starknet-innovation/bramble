@@ -22,7 +22,7 @@ import type {
 } from "./types";
 
 /** Coerces a wire number/numeric-string into a finite number, else `fallback`. */
-export const num = (value: unknown, fallback = 0): number => {
+const num = (value: unknown, fallback = 0): number => {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : fallback;
   }
@@ -34,13 +34,13 @@ export const num = (value: unknown, fallback = 0): number => {
 };
 
 /** Coerces a wire int/int-string into a safe integer, else `fallback`. */
-export const int = (value: unknown, fallback = 0): number => Math.trunc(num(value, fallback));
+const int = (value: unknown, fallback = 0): number => Math.trunc(num(value, fallback));
 
 /**
  * Thrown when the REST envelope reports `status: "ERROR"`. Carries the API error
  * message so the data hooks surface it verbatim.
  */
-export class ExtendedApiError extends Error {
+class ExtendedApiError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ExtendedApiError";
@@ -52,7 +52,7 @@ export class ExtendedApiError extends Error {
  * `{status,data,error}` object or a bare payload (some routes/mirrors may return
  * the payload directly). Throws `ExtendedApiError` when `status === "ERROR"`.
  */
-export const unwrapEnvelope = (payload: unknown): unknown => {
+const unwrapEnvelope = (payload: unknown): unknown => {
   if (!isRecord(payload)) {
     return payload;
   }
@@ -66,7 +66,7 @@ export const unwrapEnvelope = (payload: unknown): unknown => {
 };
 
 // Decodes the MarketStatsModel block (used nested in a market and standalone).
-export const parseMarketStats = (raw: unknown): ExtendedMarketStats | null => {
+const parseMarketStats = (raw: unknown): ExtendedMarketStats | null => {
   if (!isRecord(raw)) {
     return null;
   }
@@ -182,7 +182,7 @@ export const parseMarketStatsResponse = (payload: unknown): ExtendedMarketStats 
 };
 
 /** Decodes one `{o,h,l,c,v?,T}` candle; null when it lacks a timestamp. */
-export const parseCandle = (raw: unknown): ExtendedCandle | null => {
+const parseCandle = (raw: unknown): ExtendedCandle | null => {
   if (!isRecord(raw) || (raw.T === undefined && raw.t === undefined)) {
     return null;
   }
@@ -222,11 +222,16 @@ export const parseFundingRate = (raw: unknown): ExtendedFundingRate | null => {
   if (!isRecord(raw)) {
     return null;
   }
-  const market = typeof raw.m === "string" ? raw.m : typeof raw.market === "string" ? raw.market : "";
+  const market =
+    typeof raw.m === "string" ? raw.m : typeof raw.market === "string" ? raw.market : "";
   if (market.length === 0) {
     return null;
   }
-  return { market, fundingRate: num(raw.f ?? raw.fundingRate), timestamp: int(raw.T ?? raw.timestamp) };
+  return {
+    market,
+    fundingRate: num(raw.f ?? raw.fundingRate),
+    timestamp: int(raw.T ?? raw.timestamp),
+  };
 };
 
 /**
@@ -274,7 +279,12 @@ export const parseOrderBook = (
 ): ExtendedOrderBook => {
   const record = isRecord(raw) ? raw : {};
   return {
-    market: typeof record.m === "string" ? record.m : typeof record.market === "string" ? record.market : "",
+    market:
+      typeof record.m === "string"
+        ? record.m
+        : typeof record.market === "string"
+          ? record.market
+          : "",
     bids: parseLevels(record.b ?? record.bids ?? record.bid),
     asks: parseLevels(record.a ?? record.asks ?? record.ask),
     seq: meta?.seq ?? null,
@@ -289,7 +299,7 @@ export const parseOrderBookResponse = (payload: unknown): ExtendedOrderBook =>
 const toTradeSide = (value: unknown): ExtendedTradeSide => (value === "SELL" ? "SELL" : "BUY");
 
 /** Decodes one `{i,m,S,tT,T,p,q}` public trade; null when it lacks an id/price. */
-export const parsePublicTrade = (raw: unknown): ExtendedPublicTrade | null => {
+const parsePublicTrade = (raw: unknown): ExtendedPublicTrade | null => {
   if (!isRecord(raw)) {
     return null;
   }
@@ -297,7 +307,12 @@ export const parsePublicTrade = (raw: unknown): ExtendedPublicTrade | null => {
     id: int(raw.i ?? raw.id),
     market: typeof raw.m === "string" ? raw.m : typeof raw.market === "string" ? raw.market : "",
     side: toTradeSide(raw.S ?? raw.side),
-    tradeType: typeof raw.tT === "string" ? raw.tT : typeof raw.tradeType === "string" ? raw.tradeType : "TRADE",
+    tradeType:
+      typeof raw.tT === "string"
+        ? raw.tT
+        : typeof raw.tradeType === "string"
+          ? raw.tradeType
+          : "TRADE",
     timestamp: int(raw.T ?? raw.timestamp),
     price: num(raw.p ?? raw.price),
     qty: num(raw.q ?? raw.qty),

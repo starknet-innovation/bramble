@@ -1,14 +1,13 @@
-import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
 import type {
+  ArgentMultisigView,
   BalanceState,
   ConnectedSite,
   DiscoveredNft,
-  MultisigClassState,
-  MultisigSyncState,
   PendingApproval,
   PrivacyDisclosureState,
   PrivacyJourneyState,
@@ -36,11 +35,10 @@ export type DashboardOptions = {
   readonly discoveredNfts?: readonly DiscoveredNft[];
   readonly expandedGroupId?: string | null;
   readonly historyUnavailable?: boolean;
-  readonly multisigClassDeclared?: MultisigClassState | "error" | null;
-  readonly multisigProposals?: readonly MultisigProposalRecord[];
-  readonly multisigSync?: MultisigSyncState;
+  readonly multisigClassDeclared?: boolean | "error" | null;
+  readonly multisigIntents?: readonly ArgentMultisigSigningIntent[];
   readonly multisigNfts?: readonly DiscoveredNft[];
-  readonly multisigs?: readonly MultisigRecord[];
+  readonly multisigs?: readonly ArgentMultisigView[];
   readonly multisigsError?: boolean;
   readonly openAssignId?: string | null;
   readonly pending?: readonly PendingApproval[];
@@ -51,6 +49,7 @@ export type DashboardOptions = {
   readonly privacy?: PrivacyDisclosureState;
   readonly privacyJourney?: PrivacyJourneyState;
   readonly selectedMultisigId?: string | null;
+  readonly selectedMultisigIntentId?: string | null;
   readonly selectedNftId?: string | null;
   readonly selectedTokenId?: string | null;
   readonly snoozed?: readonly string[];
@@ -63,10 +62,30 @@ export type DashboardOptions = {
  * boundary. Scenario modules use this one adapter so new production arguments
  * cannot silently drift into different fixture meanings.
  */
-export const walletDashboard = (options: DashboardOptions = {}): string =>
-  dashboard(
+export const walletDashboard = (options: DashboardOptions = {}): string => {
+  const { selectedMultisigIntentId = null } = options;
+  const status = options.status ?? statusFor();
+  const account = status.accounts.find((entry) => entry.id === status.activeAccountId) ?? null;
+  const privacy = options.privacy ?? {
+    error: null,
+    loading: false,
+    value: account
+      ? {
+          accountId: account.id,
+          balances: [],
+          networkId: status.networkId,
+          poolFeeFri: "0",
+          // A software account's key is derived on demand, so reads are ready
+          // without a ceremony; the lab's Ledger scenarios set setup-required.
+          privateBalances: "ready" as const,
+          registration: "unregistered" as const,
+          relayConfigured: false,
+        }
+      : null,
+  };
+  return dashboard(
     options.view ?? "home",
-    options.status ?? statusFor(),
+    status,
     options.pending ?? [],
     options.preferences === undefined ? preferences : options.preferences,
     options.balanceState ?? { balances },
@@ -80,7 +99,7 @@ export const walletDashboard = (options: DashboardOptions = {}): string =>
     options.selectedNftId ?? null,
     options.changes ?? {},
     options.multisigs ?? [],
-    options.multisigProposals ?? [],
+    options.multisigIntents ?? [],
     options.selectedMultisigId ?? null,
     options.multisigClassDeclared ?? null,
     null,
@@ -93,11 +112,13 @@ export const walletDashboard = (options: DashboardOptions = {}): string =>
     options.historyUnavailable ?? false,
     options.snoozed ?? [],
     options.multisigsError ?? false,
-    options.multisigSync ?? null,
     options.balanceState ?? { balances },
     options.selectedMultisigId ?? null,
     options.multisigNfts ?? [],
     options.selectedMultisigId ?? null,
-    options.privacy ?? { error: null, loading: false, value: null },
+    privacy,
     options.privacyJourney ?? { stage: "idle" },
+    null,
+    selectedMultisigIntentId,
   );
+};

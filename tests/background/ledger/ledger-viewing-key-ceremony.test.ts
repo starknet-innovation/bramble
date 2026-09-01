@@ -29,6 +29,7 @@ const DEVICE_KEY = "0x1234567890abcdef";
 const publicKeyX = starkCurve.getStarkKey(DEVICE_KEY);
 
 const ledgerAccount: LedgerAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabc111111",
   classHash: "0x111111",
   derivation: {
@@ -43,6 +44,7 @@ const ledgerAccount: LedgerAccountRef = {
 };
 
 const softwareAccount = {
+  accountContractType: "openzeppelin",
   address: "0xdef222222",
   classHash: "0x111111",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

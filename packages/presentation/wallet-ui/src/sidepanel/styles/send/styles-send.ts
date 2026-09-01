@@ -1,6 +1,6 @@
 /**
- * Send and Ledger-signing progress layer. The four-step rail gives the journey
- * a persistent map; live task rows expose exactly what the wallet is doing.
+ * Send, Receive, and Ledger-signing layer. Transaction progress keeps a
+ * persistent map; Receive puts the shareable address before technical identity.
  * Motion is reserved for active work and the final submitted receipt, with a
  * complete reduced-motion cut.
  */
@@ -10,6 +10,87 @@ import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wa
  * Send-flow stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const SEND_STYLES = `
+  .receive-address-view {
+    gap: ${SPACE.md};
+    min-width: 0;
+  }
+  .receive-address-view .qr-card { width: min(204px, 100%); }
+  .receive-intro {
+    display: grid;
+    gap: ${SPACE.xs};
+    text-align: center;
+  }
+  .receive-intro h2 { font-size: ${TYPE.title.size}; margin: 0; }
+  .receive-intro p {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+    margin: 0;
+  }
+  .receive-actions {
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+  .receive-actions button { min-width: 0; padding-inline: ${SPACE.sm}; text-wrap: nowrap; }
+  details.receive-identity {
+    background: transparent;
+    border-radius: 0;
+    border-top: 1px solid var(--mc-hairline);
+  }
+  details.receive-identity > summary { padding: 0; }
+  .receive-identity .disclosure-body {
+    gap: ${SPACE.md};
+    padding: ${SPACE.sm} 0 0;
+  }
+  .receive-identity .disclosure-body::before { display: none; }
+  .receive-key-row {
+    align-items: center;
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: ${CONTROL.hit};
+  }
+  .receive-key-row + .receive-key-row {
+    border-top: 1px solid var(--mc-hairline);
+    padding-top: ${SPACE.md};
+  }
+  .receive-key-row > strong { font-size: ${TYPE.label.size}; }
+  .receive-key-row > [data-nostr-key-status] {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+    text-align: right;
+  }
+  .receive-address-view[data-wallet-card-state="unavailable"] .receive-key-row > [data-nostr-key-status] {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+  .receive-key-value {
+    align-items: center;
+    display: inline-flex;
+    gap: ${SPACE.xs};
+    justify-self: end;
+    min-width: 0;
+  }
+  .receive-key-value code {
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+    word-break: normal;
+  }
+  .receive-card-pending {
+    align-items: center;
+    color: inherit;
+    display: flex;
+    justify-content: center;
+    margin: 0;
+    min-height: 188px;
+    opacity: 0.62;
+    padding: ${SPACE.lg};
+    text-align: center;
+  }
   .send-flow, .send-flow form, .send-stage { display: grid; gap: ${SPACE.lg}; }
   .send-flow form { min-width: 0; }
   .send-stage-frame {
@@ -74,16 +155,13 @@ export const SEND_STYLES = `
     color: var(--mc-positive);
   }
   html[data-send-transition]::view-transition-old(root),
-  html[data-send-transition]::view-transition-new(root),
-  html[data-proposal-transition]::view-transition-old(root),
-  html[data-proposal-transition]::view-transition-new(root) { animation: none; }
-  ::view-transition-group(send-stage), ::view-transition-group(proposal-stage) {
+  html[data-send-transition]::view-transition-new(root) { animation: none; }
+  ::view-transition-group(send-stage) {
     animation-duration: 260ms;
     animation-timing-function: ${EASE.out};
   }
-  ::view-transition-image-pair(send-stage), ::view-transition-image-pair(proposal-stage) { isolation: auto; }
-  ::view-transition-old(send-stage), ::view-transition-new(send-stage),
-  ::view-transition-old(proposal-stage), ::view-transition-new(proposal-stage) {
+  ::view-transition-image-pair(send-stage) { isolation: auto; }
+  ::view-transition-old(send-stage), ::view-transition-new(send-stage) {
     mix-blend-mode: normal;
   }
   html[data-send-transition="forward"]::view-transition-old(send-stage) {
@@ -97,18 +175,6 @@ export const SEND_STYLES = `
   }
   html[data-send-transition="back"]::view-transition-new(send-stage) {
     animation: send-stage-in-left 260ms ${EASE.out} both;
-  }
-  html[data-proposal-transition="forward"]::view-transition-old(proposal-stage) {
-    animation: send-stage-out-left 130ms ${EASE.out} both;
-  }
-  html[data-proposal-transition="forward"]::view-transition-new(proposal-stage) {
-    animation: send-stage-in-right 220ms ${EASE.out} both;
-  }
-  html[data-proposal-transition="back"]::view-transition-old(proposal-stage) {
-    animation: send-stage-out-right 130ms ${EASE.out} both;
-  }
-  html[data-proposal-transition="back"]::view-transition-new(proposal-stage) {
-    animation: send-stage-in-left 220ms ${EASE.out} both;
   }
   @keyframes send-stage-in-right {
     from { opacity: 0; transform: translateX(12px); }
@@ -343,26 +409,6 @@ export const SEND_STYLES = `
   }
   .ledger-signer-line code { color: var(--mc-text); }
   .ledger-signer-line span:last-child::before { content: "·"; margin-right: 5px; }
-  /* The hash the device is signing. Wraps rather than truncates and is left
-     aligned against the centred hero: an ellipsised or centre-drifting hash
-     cannot be compared with the device screen, which is the only thing it is
-     here for. */
-  .ledger-hash {
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.md};
-    display: grid;
-    gap: ${SPACE.xs};
-    padding: ${SPACE.md};
-    text-align: left;
-  }
-  .ledger-hash code {
-    color: var(--mc-text);
-    font-size: ${TYPE.caption.size};
-    line-height: 1.5;
-    overflow-wrap: anywhere;
-    word-break: break-all;
-  }
-  .ledger-hash p:last-child { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
   .ledger-task-list {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     padding: ${SPACE.md};
@@ -391,6 +437,31 @@ export const SEND_STYLES = `
   .ledger-task-list li[data-state="active"] .ledger-task-mark { background: var(--mc-accent); color: var(--mc-bg); }
   .ledger-task-list li[data-state="done"] { color: var(--mc-text); }
   .ledger-task-list li[data-state="done"] .ledger-task-mark { background: var(--mc-positive-soft); color: var(--mc-positive); }
+  .ledger-hash-check {
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.md};
+    display: grid;
+    gap: ${SPACE.xs};
+    padding: ${SPACE.sm} ${SPACE.md};
+    text-align: left;
+  }
+  .ledger-hash-head { align-items: center; display: flex; justify-content: space-between; gap: ${SPACE.xs}; }
+  .ledger-hash-head .context-label { margin: 0; }
+  .ledger-hash-value { margin: 0; }
+  .ledger-hash-value code {
+    color: var(--mc-text);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: ${TYPE.caption.size};
+    gap: 0 8px;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  .ledger-hash-help { color: var(--mc-muted); font-size: ${TYPE.micro.size}; margin: 0; }
+  /* The comparison is live only while the device is showing its own hash, so
+     the panel lifts to the accent fill for that phase — a fill swap, never a
+     ring: surfaces in this language are de-bordered. */
+  .ledger-progress-card[data-phase="confirming"] .ledger-hash-check { background: var(--mc-accent-soft); }
   .ledger-phase-body {
     display: grid;
     font-size: ${TYPE.body.size};
@@ -408,9 +479,6 @@ export const SEND_STYLES = `
     html[data-send-transition]::view-transition-group(send-stage),
     html[data-send-transition]::view-transition-old(send-stage),
     html[data-send-transition]::view-transition-new(send-stage),
-    html[data-proposal-transition]::view-transition-group(proposal-stage),
-    html[data-proposal-transition]::view-transition-old(proposal-stage),
-    html[data-proposal-transition]::view-transition-new(proposal-stage),
     .liquid-dot,
     .send-task-list li[data-state="active"] > span:first-child::after,
     .send-success-ring,

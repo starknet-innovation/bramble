@@ -5,7 +5,7 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { iconButton } from "@mc-wallet/ui-kit/controls";
@@ -25,15 +25,12 @@ export const activityScreen = (
   status: WalletStatus,
   transactions: readonly ActivityEntry[],
   historyUnavailable: boolean,
-  multisig: MultisigRecord | null = null,
+  multisig: ArgentMultisigRecord | null = null,
 ): string =>
   dockScreen(
     "activity",
-    `<div class="section-head"${multisig ? ` data-activity-account-id="${escapeHtml(multisig.id)}"` : ""}>
-      <div>
-        <h2>Activity</h2>
-        <p class="hint">Only ${escapeHtml(status.network)} activity for ${multisig ? escapeHtml(multisig.name ?? "this multisig") : "the active account"}.</p>
-      </div>
+    `<div class="section-head activity-head"${multisig ? ` data-activity-account-id="${escapeHtml(multisig.id)}"` : ""}>
+      <h1 aria-label="Activity on ${escapeHtml(status.network)}">Activity</h1>
       <div class="header-actions">
         ${iconButton({
           attributes: { id: "activity-export" },

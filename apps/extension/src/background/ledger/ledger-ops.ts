@@ -8,14 +8,26 @@
  * DAPP_MESSAGES — so the dispatcher's gate already restricts them to
  * extension-page senders; no dapp origin can reach the device or the vault.
  */
+
+import { knownTokensForNetwork } from "@mc-wallet/portfolio/token-registry";
 import {
   canonicalFelt,
   STARKNET_NETWORKS,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
-import { knownTokensForNetwork } from "@mc-wallet/portfolio/token-registry";
+import type { WalletOpsDeps } from "../accounts/wallet-ops";
+import { readTypeOnlyInput } from "../routing/message-inputs";
+import {
+  runUnlockedNetworkMutation,
+  runVaultCreationWithNetwork,
+} from "../runtime/active-network-mutation";
+import {
+  activeAccountContext,
+  networkRpcUrls,
+  runActiveStateMutation,
+} from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
 import { accountHashSigner } from "./account-hash-signer";
-import { runUnlockedNetworkMutation, runVaultCreationWithNetwork } from "../runtime/active-network-mutation";
 import {
   readAddLedgerAccountInput,
   readCompleteLedgerSignInput,
@@ -23,14 +35,6 @@ import {
   readDeriveLedgerAccountsInput,
   readLedgerAccountStatusInput,
 } from "./ledger-inputs";
-import { readTypeOnlyInput } from "../routing/message-inputs";
-import {
-  activeAccountContext,
-  networkRpcUrls,
-  runActiveStateMutation,
-} from "../runtime/runtime-state";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { WalletOpsDeps } from "../accounts/wallet-ops";
 
 type LedgerOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
@@ -208,6 +212,8 @@ export const handleLedgerOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = LEDGER_OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(LEDGER_OPS_HANDLERS, messageType)
+    ? LEDGER_OPS_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message) : null;
 };

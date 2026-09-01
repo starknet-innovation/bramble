@@ -16,6 +16,7 @@ import { createUnlockSession } from "../../../apps/extension/src/background/runt
 import { flushHeld, latestApprovalId } from "../../support/held";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -64,7 +65,7 @@ const walletStub = () => ({
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 4 as const,
+      schemaVersion: 7 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -163,6 +164,34 @@ describe("wallet_addStarknetChain held approval", () => {
     const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
     expect((listed as { pending: readonly unknown[] }).pending).toHaveLength(0);
     expect((await preferencesStore.read()).customNetworks ?? []).toHaveLength(0);
+  });
+
+  test("rejects an oversized chain label crossed on a runtime message", async () => {
+    // MCW-V09-130: the background re-validation once measured the trimmed label,
+    // so a megabytes-long padded name passed `isProviderChain` and reached the
+    // preferences store on approval. The bound is on the raw string now.
+    const { handler, preferencesStore } = makeHarness();
+
+    await expect(
+      handler(addChainMessage({ chainName: `${" ".repeat(10_000_000)}a` }), contentSender),
+    ).resolves.toEqual({ error: "invalid add chain request" });
+    expect((await preferencesStore.read()).customNetworks ?? []).toHaveLength(0);
+  });
+
+  test("persists a padded chain label in its canonical trimmed form", async () => {
+    const { handler, preferencesStore } = makeHarness();
+
+    const held = handler(
+      addChainMessage({ chainName: "  Katana  ", id: "  katana  " }),
+      contentSender,
+    );
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ added: true, ok: true });
+
+    const stored = (await preferencesStore.read()).customNetworks ?? [];
+    expect(stored[0]).toMatchObject({ id: "katana", name: "Katana" });
   });
 
   test("rejects a malformed chain payload", async () => {

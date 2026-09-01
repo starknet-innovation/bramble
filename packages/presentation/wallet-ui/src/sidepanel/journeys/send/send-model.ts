@@ -4,6 +4,7 @@
  * signed by the wallet.
  */
 
+import { isSafeDecimals } from "@mc-wallet/core/json";
 import { isLikelySpam } from "@mc-wallet/portfolio/token-registry";
 import type {
   DisplayCurrency,
@@ -27,6 +28,10 @@ import { compactAmount } from "../portfolio/token-row";
  */
 export type SendIntent = {
   readonly accountId: string;
+  /** Shared account selected when a setup-owned funding send completes. */
+  readonly completeMultisigId?: string;
+  /** Continues a shortcut-owned funding send into its saved deployment setup. */
+  readonly completeTo?: "multisig-deploy";
   readonly destination: ValueBucket;
   readonly networkId: string;
   readonly recipient: string;
@@ -124,8 +129,9 @@ export const fiatInputToken = (
     price === undefined ||
     !Number.isFinite(price) ||
     price <= 0 ||
-    !Number.isSafeInteger(decimals) ||
-    decimals < 0
+    // The shared token-decimals bound, not a local half of it: a count this
+    // screen would convert against must be one the token boundaries admit.
+    !isSafeDecimals(decimals)
   ) {
     return null;
   }

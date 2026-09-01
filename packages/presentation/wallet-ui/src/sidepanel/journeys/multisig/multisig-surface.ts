@@ -1,13 +1,13 @@
-/** Ambient repaint guard for an in-progress multisig proposal journey. */
+/** Ambient repaint guard for an in-progress multisig intent composer. */
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { actionableApprovals } from "../approvals/approval-screen";
 
 /**
- * Keeps an actively edited proposal DOM authoritative during polling. Locks,
+ * Keeps an actively edited exact-call DOM authoritative during polling. Locks,
  * network changes, navigation, and unsnoozed external approvals still replace
  * it immediately; signer membership is revalidated in the background on submit.
  */
-export const shouldPreserveMultisigProposalSurface = (
+export const shouldPreserveMultisigIntentSurface = (
   app: Element | null,
   activeView: string,
   selectedMultisigId: string | null,
@@ -27,7 +27,5 @@ export const shouldPreserveMultisigProposalSurface = (
   const form = app?.querySelector<HTMLFormElement>("#multisig-propose-form");
   if (!form || form.dataset["multisigId"] !== selectedMultisigId) return false;
   const active = form.ownerDocument.activeElement;
-  return (
-    form.dataset["proposalStage"] !== "recipient" || (active !== null && form.contains(active))
-  );
+  return active !== null && form.contains(active);
 };

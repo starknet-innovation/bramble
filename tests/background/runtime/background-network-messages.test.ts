@@ -14,9 +14,15 @@ import {
   unavailablePreferencesStore,
 } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
-import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
+import {
+  flushHeld,
+  latestApprovalId,
+  reviewedApprovalFee,
+  waitForPendingApprovals,
+} from "../../support/held";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabcabcdef",
   classHash: "0xabcdef",
   derivation: {
@@ -94,7 +100,7 @@ describe("background network messages", () => {
             activeAccountId,
             mnemonic: null,
             originGrants: [],
-            schemaVersion: 4 as const,
+            schemaVersion: 7 as const,
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
               privateKey: "0x123456",
@@ -191,7 +197,7 @@ describe("background network messages", () => {
             activeAccountId,
             mnemonic: null,
             originGrants: [{ accountIds: grantedAccountIds, origin: "https://example.com" }],
-            schemaVersion: 4 as const,
+            schemaVersion: 7 as const,
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
               privateKey: "0x123456",
@@ -304,8 +310,9 @@ describe("background network messages", () => {
     expect(invoked).toHaveLength(0);
 
     const invokeId = await latestApprovalId(handler, sender);
+    const reviewedFee = await reviewedApprovalFee(handler, sender, invokeId);
     await expect(
-      handler({ id: invokeId, type: "wallet.approveOrigin" }, sender),
+      handler({ id: invokeId, reviewedFee, type: "wallet.approveOrigin" }, sender),
     ).resolves.toMatchObject({ ok: true, pending: [] });
     await expect(invokeHeld).resolves.toMatchObject({ ok: true, transactionHash: "0x123" });
 

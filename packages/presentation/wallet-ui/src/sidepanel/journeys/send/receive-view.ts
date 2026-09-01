@@ -1,21 +1,23 @@
 /** Shared account-address surface used by single-owner and multisig Receive. */
 import { escapeHtml } from "@mc-wallet/core/html";
 import { button } from "@mc-wallet/ui-kit/controls";
-import { copyButton } from "../../shared/parts";
+import { icon } from "@mc-wallet/ui-kit/icons";
+import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { walletContactCard } from "@mc-wallet/wallet-model/preferences";
+import { accountLabel, copyButton } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 
-const UNREGISTERED_COPY =
-  "You are not registered to the Starknet privacy pool yet. You can only receive tokens publicly.";
+const PUBLIC_ONLY_COPY = "Public transfers only";
+const UNREGISTERED_COPY = "Enable private balances to receive privately.";
 // Registration is an on-chain transaction from this account, so it needs a
 // deployed contract and STRK for the fee. Naming the prerequisite beats offering
 // a control whose only outcome is a failed estimate.
-const PREREQUISITE_COPY =
-  "Registering is an on-chain transaction, so this account needs to be deployed and hold STRK first.";
+const PREREQUISITE_COPY = "Deploy this account and add STRK before enabling private balances.";
 // Deployment and registration are two transactions — Starknet cannot batch a
 // DEPLOY_ACCOUNT with an invoke — so the copy says so rather than implying one.
 const DEPLOY_FIRST_COPY =
-  "This account is not on-chain yet. Deploying it and registering are two transactions, each with its own fee.";
+  "Enabling private balances takes two transactions: deploy, then register. Each has a network fee.";
 
 /**
  * Whether the account can act on the privacy-pool notice, and if not, why.
@@ -45,51 +47,101 @@ export const privacyPoolNotice = (
   }
   if (action === "fund-first") {
     return `<p class="privacy-pool-notice is-static">
-        <span>${escapeHtml(UNREGISTERED_COPY)}</span>
-        <span>${escapeHtml(PREREQUISITE_COPY)}</span>
+        <span class="privacy-pool-copy"><strong>${escapeHtml(PUBLIC_ONLY_COPY)}</strong><span>${escapeHtml(PREREQUISITE_COPY)}</span></span>
       </p>`;
   }
   const deploying = action === "deploy-first";
   const hook = deploying ? "data-privacy-deploy-register" : "data-privacy-register";
   return `<button class="privacy-pool-notice" ${hook}="" type="button">
-      <span>${escapeHtml(UNREGISTERED_COPY)}</span>
-      ${deploying ? `<span>${escapeHtml(DEPLOY_FIRST_COPY)}</span><strong>Deploy and register</strong>` : "<strong>Register now</strong>"}
+      <span class="privacy-pool-copy"><strong>${escapeHtml(PUBLIC_ONLY_COPY)}</strong><span>${escapeHtml(deploying ? DEPLOY_FIRST_COPY : UNREGISTERED_COPY)}</span></span>
+      <strong>${deploying ? "Deploy and enable" : "Enable privacy"}</strong>
     </button>`;
 };
 
 /**
- * Renders the canonical Receive card. Only the public address is encoded and
- * copied; callers provide account-type context as escaped presentation copy.
+ * Renders the canonical Receive card. Its QR carries a versioned public wallet
+ * card; the address and optional signer keys remain separately copyable.
  */
 type ReceiveAddressViewOptions = {
   readonly address: string;
   readonly copyLabel: string;
-  readonly eyebrow: string;
   readonly hint: string;
+  readonly networkId: StarknetNetworkId;
+  readonly nostrPublicKey?: string;
+  readonly publicKeyX?: string;
   readonly qrLabel?: string;
-  readonly title?: string;
 };
 
 /**
- * Renders the canonical Receive card. Only the public address is encoded and
- * copied; callers provide account-type context as escaped presentation copy.
+ * Renders the canonical Receive card. Callers provide account-type context as
+ * escaped presentation copy and may expose one already-public signer key.
  */
 export const receiveAddressView = ({
   address,
   copyLabel,
-  eyebrow,
   hint,
+  networkId,
+  nostrPublicKey,
+  publicKeyX,
   qrLabel,
-  title,
-}: ReceiveAddressViewOptions): string => `
-  <div class="stack receive-address-view">
-    <div class="qr-card">${qrSvg(address, qrLabel)}</div>
-    <p class="eyebrow">${escapeHtml(eyebrow)}</p>
-    ${title ? `<h2>${escapeHtml(title)}</h2>` : ""}
-    <div class="address-line">
-      <code>${escapeHtml(address)}</code>
-      ${copyButton(address, copyLabel)}
+}: ReceiveAddressViewOptions): string => {
+  const walletCardReady = !publicKeyX || !!nostrPublicKey;
+  const contactCard = walletContactCard({
+    address,
+    networkId,
+    ...(nostrPublicKey ? { nostrPublicKey } : {}),
+    ...(publicKeyX ? { publicKeyX } : {}),
+  });
+  return `
+  <div class="stack receive-address-view"${publicKeyX ? ` data-receive-wallet-card data-receive-address="${escapeHtml(address)}" data-receive-network="${escapeHtml(networkId)}" data-receive-signer-key="${escapeHtml(publicKeyX)}" data-wallet-card-state="${walletCardReady ? "ready" : "preparing"}"` : ""}>
+    <div class="qr-card" data-receive-qr${walletCardReady ? "" : ' aria-busy="true"'}>${walletCardReady ? qrSvg(contactCard, qrLabel ?? "QR code for wallet contact card") : '<p class="receive-card-pending" role="status">Preparing complete wallet card…</p>'}</div>
+    <div class="receive-intro">
+      <h2>Your Starknet address</h2>
+      <p>${escapeHtml(hint)}</p>
     </div>
-    ${button({ attributes: { "data-copy": address }, icon: "copy", label: copyLabel })}
-    <p class="hint">${escapeHtml(hint)}</p>
+    <div class="receive-actions">
+      ${button({ attributes: { "data-copy": address }, icon: "copy", label: copyLabel })}
+      ${
+        publicKeyX
+          ? button({
+              attributes: {
+                "data-copy": walletCardReady ? contactCard : "",
+                "data-wallet-card-copy": true,
+              },
+              disabled: !walletCardReady,
+              icon: "copy",
+              label: walletCardReady ? "Copy wallet card" : "Preparing card…",
+              variant: "secondary",
+            })
+          : ""
+      }
+    </div>
+    ${
+      publicKeyX
+        ? `<details class="disclosure receive-identity" data-disclosure="receive-identity">
+            <summary>
+              <span class="menu-copy"><strong>Wallet identity</strong><small>Signer and coordination keys</small></span>
+              <span class="disclosure-mark">${icon("chevronRight")}</span>
+            </summary>
+            <div class="disclosure-body receive-public-key">
+              <div class="receive-key-row">
+                <strong>Signer public key</strong>
+                <span class="receive-key-value">
+                  <code title="${escapeHtml(publicKeyX)}">${escapeHtml(accountLabel(publicKeyX))}</code>
+                  ${copyButton(publicKeyX, "Copy signer public key")}
+                </span>
+              </div>
+              <div class="receive-key-row" data-nostr-key-row>
+                <strong>Coordination public key</strong>
+                <span data-nostr-key-status role="status" aria-live="polite"${nostrPublicKey ? " hidden" : ""}>Preparing secure coordination…</span>
+                <span class="receive-key-value" data-nostr-key-value${nostrPublicKey ? "" : " hidden"}>
+                  <code data-nostr-key title="${escapeHtml(nostrPublicKey ?? "")}">${nostrPublicKey ? escapeHtml(accountLabel(nostrPublicKey)) : ""}</code>
+                  ${copyButton(nostrPublicKey ?? "", "Copy coordination public key")}
+                </span>
+              </div>
+            </div>
+          </details>`
+        : ""
+    }
   </div>`;
+};

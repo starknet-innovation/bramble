@@ -4,6 +4,14 @@
 const LOCAL_HTTP_HOSTS = new Set(["127.0.0.1", "localhost"]);
 
 /**
+ * A persisted origin grant summarized without exposing account identities.
+ */
+export type ConnectedSite = {
+  readonly accountCount: number;
+  readonly origin: string;
+};
+
+/**
  * Checks whether an origin is safe to persist as a wallet permission grant.
  */
 export const isWalletOrigin = (origin: string): boolean => {

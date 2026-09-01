@@ -6,9 +6,20 @@
  */
 
 /**
- * Encodes Ledger's GetAppAndVersion response envelope.
+ * Encodes Ledger's GetAppAndVersion response envelope: format byte, app name,
+ * app version, then a flags field.
+ *
+ * `trailingFields` appends further length-prefixed fields after flags, the way
+ * firmware newer than a given build may. Only the leading name/version are
+ * load-bearing, so a parser must tolerate them — a fixture that could only emit
+ * the minimal envelope is what let an exact-end-of-envelope check ship and fail
+ * on hardware while every test passed.
  */
-export const ledgerAppStateResponse = (name: string, version = "2.4.0"): Uint8Array => {
+export const ledgerAppStateResponse = (
+  name: string,
+  version = "2.4.0",
+  trailingFields: readonly (readonly number[])[] = [],
+): Uint8Array => {
   const nameBytes = new TextEncoder().encode(name);
   const versionBytes = new TextEncoder().encode(version);
   return Uint8Array.from([
@@ -18,6 +29,7 @@ export const ledgerAppStateResponse = (name: string, version = "2.4.0"): Uint8Ar
     versionBytes.length,
     ...versionBytes,
     0,
+    ...trailingFields.flatMap((field) => [field.length, ...field]),
     0x90,
     0x00,
   ]);

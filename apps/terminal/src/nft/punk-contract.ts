@@ -13,17 +13,14 @@ import {
 } from "starknet";
 import { isStarkFieldElement } from "../protocols/support/networks";
 
-export const PUNK_LIMIT = 10_000;
-export const PUNK_CLASS_HASH =
-  "0x5b5f364528b903513d36dce0aa5544d192c6a25865eeba9ba8a059d7f858263";
+const PUNK_LIMIT = 10_000;
+export const PUNK_CLASS_HASH = "0x5b5f364528b903513d36dce0aa5544d192c6a25865eeba9ba8a059d7f858263";
 export const PUNK_COMPILED_CLASS_HASH =
   "0x7372305f2ffd87350af2927b3e484d91ba0e594d62f5a33d8c8ac656729560a";
-export const PUNK_CONTRACT_ARTIFACT = "/contracts/punk_collection.contract_class.json";
 export const PUNK_MAINNET_CONTRACT =
   "0xda8b762dcb301e6b144e521ede1e2870ce9c723e5b4e6856c870ad341098a9";
 
-const OFFICIAL_PUNK_IMAGE_BASE =
-  "https://www.larvalabs.com/public/images/cryptopunks/punk";
+const OFFICIAL_PUNK_IMAGE_BASE = "https://www.larvalabs.com/public/images/cryptopunks/punk";
 const OFFICIAL_PUNK_DETAILS_BASE = "https://www.cryptopunks.app/cryptopunks/details/";
 
 const utf8Base64 = (value: string): string => {
@@ -117,12 +114,7 @@ export const buildPunkDeployment = (
       0,
     ),
     call: {
-      calldata: CallData.compile([
-        PUNK_CLASS_HASH,
-        normalizedSalt,
-        0,
-        constructorCalldata,
-      ]),
+      calldata: CallData.compile([PUNK_CLASS_HASH, normalizedSalt, 0, constructorCalldata]),
       contractAddress: constants.UDC.ADDRESS,
       entrypoint: constants.UDC.ENTRYPOINT,
     },
@@ -131,11 +123,7 @@ export const buildPunkDeployment = (
 };
 
 /** Builds the owner-only `mint` call with a complete per-token metadata URI. */
-export const buildPunkMintCall = (
-  contractAddress: string,
-  recipient: string,
-  id: number,
-): Call => {
+export const buildPunkMintCall = (contractAddress: string, recipient: string, id: number): Call => {
   if (!isFelt(contractAddress) || !isFelt(recipient)) {
     throw new Error("Collection and recipient must be valid Starknet addresses.");
   }

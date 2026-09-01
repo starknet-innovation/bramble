@@ -42,15 +42,23 @@ export const DEVELOPMENT_SOURCE_FILES = new Set(["apps/terminal/src/data/extende
  */
 export const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
   ["packages/presentation/wallet-ui/tests/support/groups-harness.ts", 1],
-  ["scripts/check-krusty-adapter.ts", 1],
   ["scripts/check-privacy-sdk.ts", 1],
 ]);
 
 /**
  * Generated or external directories excluded from workspace source analysis.
+ *
+ * `.playwright-cli` holds the browser-trace cache a local Playwright session
+ * writes; it is git-ignored, is already skipped by the file-standards and lint
+ * gates, and its captured page scripts are not workspace source. Scanning it
+ * made this gate fail on any machine that had ever driven the browser locally.
+ * `.dev-profile` is the same story for `bun run dev:session`: a git-ignored
+ * Chrome profile full of caches and singleton symlinks, never workspace source.
  */
 export const EXCLUDED_DIRECTORIES = new Set([
+  ".dev-profile",
   ".git",
+  ".playwright-cli",
   "artifacts",
   "dist",
   "node_modules",

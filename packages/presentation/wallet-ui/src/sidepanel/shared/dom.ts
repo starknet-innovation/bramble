@@ -14,9 +14,13 @@ import { animate } from "./motion";
  * failures (e.g. "Failed to fetch") into a friendly, actionable line.
  */
 export const errorMessage = (error: unknown, fallback: string): string => {
-  const raw = error instanceof Error ? error.message : fallback;
+  const raw = errorDetails(error, fallback);
   return friendlyNetworkError(raw) ?? raw;
 };
+
+/** Complete safe diagnostic carried by an Error for an explicit user copy action. */
+export const errorDetails = (error: unknown, fallback: string): string =>
+  error instanceof Error ? error.message : fallback;
 
 /**
  * Marks a button busy so repeated submits are impossible while work runs.
@@ -54,17 +58,23 @@ export type ToastTone = "error" | "success";
 const SUCCESS_TOAST_MS = 3200;
 const ERROR_TOAST_MS = 8000;
 
-const toastCopyButton = (message: string): HTMLButtonElement => {
-  const copy = document.createElement("button");
+const documentFor = (context?: Document | Element | null): Document =>
+  context ? ("defaultView" in context ? context : context.ownerDocument) : document;
+
+const toastCopyButton = (doc: Document, message: string): HTMLButtonElement => {
+  const copy = doc.createElement("button");
   copy.className = "icon-button toast-copy";
   copy.type = "button";
-  copy.setAttribute("aria-label", "Copy error message");
-  copy.title = "Copy error message";
+  copy.setAttribute("aria-label", "Copy error details");
+  copy.title = "Copy error details";
   copy.innerHTML = icon("copy");
   copy.addEventListener("click", () => {
-    void navigator.clipboard.writeText(message).then(
+    const clipboard = copy.ownerDocument.defaultView?.navigator.clipboard;
+    void (clipboard?.writeText(message) ?? Promise.reject(new Error("Clipboard unavailable"))).then(
       () => {
         copy.innerHTML = icon("check");
+        copy.title = "Error details copied";
+        copy.setAttribute("aria-label", "Error details copied");
       },
       () => {
         // Never raise another toast from inside a toast; say it in place instead
@@ -177,41 +187,43 @@ const TOAST_SPRING = resolveSpring("momentum");
 /**
  * Shows a transient toast in the fixed stack at the bottom of the shell.
  * Anatomy is a fixed scannable heuristic: a leading tone chip (green check /
- * red alert) the eye reads before any text, then the message, then an error's
- * copy control. It springs in with a little momentum, can be swiped away, and
- * error toasts stay longer.
+ * red alert) the eye reads before any text, then the message, then every
+ * error's copy control. It springs in with a little momentum, can be swiped
+ * away, and error toasts stay longer. `details` lets a compact display line
+ * retain the complete diagnostic behind its copy control.
  */
-export const showToast = (message: string, tone: ToastTone, detail?: string): void => {
+export const showToast = (
+  message: string,
+  tone: ToastTone,
+  context: Document | Element | null | undefined,
+  details: string = message,
+): void => {
+  const doc = documentFor(context);
   const stackId = "toast-stack";
-  const stack = document.querySelector<HTMLElement>(`#${stackId}`) ?? document.createElement("div");
+  const stack = doc.querySelector<HTMLElement>(`#${stackId}`) ?? doc.createElement("div");
   if (!stack.id) {
     stack.id = stackId;
     stack.className = "toast-stack";
     stack.setAttribute("aria-live", "polite");
-    document.body.append(stack);
+    doc.body.append(stack);
   }
 
   const friendly = tone === "error" ? friendlyError(message) : null;
-  const toast = document.createElement("div");
+  const toast = doc.createElement("div");
   toast.className = `toast ${tone}`;
-  const mark = document.createElement("span");
+  const mark = doc.createElement("span");
   mark.className = "toast-icon";
   mark.innerHTML = icon(tone === "error" ? "alert" : "check");
   toast.append(mark);
-  const text = document.createElement("span");
+  const text = doc.createElement("span");
   text.className = "toast-text";
   text.textContent = friendly ? friendly.message : message;
   toast.append(text);
   // The toast stays short and the clipboard carries everything: a node's
   // rejection reason is far too long to read in a toast but is exactly what
-  // belongs in a bug report. A detail earns a copy control on its own, even when
-  // the message itself classified as a known, non-copyable condition.
-  if (friendly?.copyable === true || detail !== undefined) {
-    toast.append(
-      toastCopyButton(
-        detail === undefined ? (friendly?.message ?? message) : `${message}\n\n${detail}`,
-      ),
-    );
+  // belongs in a bug report. Callers pass that combined text as `details`.
+  if (tone === "error") {
+    toast.append(toastCopyButton(doc, details));
   }
   stack.append(toast);
   animate(
@@ -259,17 +271,18 @@ export const bindCopyButtons = (app: Element | null): void => {
         return;
       }
       buttonBusy(button, true);
-      void navigator.clipboard.writeText(value).then(
+      const clipboard = button.ownerDocument.defaultView?.navigator.clipboard;
+      void (clipboard?.writeText(value) ?? Promise.reject(new Error("Clipboard unavailable"))).then(
         () => {
           if (!scopedStatus(button, "Copied")) {
-            showToast("Copied", "success");
+            showToast("Copied", "success", button);
           }
           buttonBusy(button, false);
           confirmCopyGlyph(button);
         },
         () => {
           scopedStatus(button, "Copy failed");
-          showToast("Copy failed", "error");
+          showToast("Copy failed", "error", button);
           buttonBusy(button, false);
         },
       );
@@ -285,5 +298,5 @@ export const bindCopyButtons = (app: Element | null): void => {
  * template); this performs no sanitisation.
  */
 export const renderFragment = (target: Element, markup: string): void => {
-  target.replaceChildren(document.createRange().createContextualFragment(markup));
+  target.replaceChildren(target.ownerDocument.createRange().createContextualFragment(markup));
 };

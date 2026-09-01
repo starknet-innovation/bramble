@@ -29,6 +29,7 @@ type Flag = { readonly code: string; readonly message: string };
 // 63-hex addresses so they stay inside the Stark field prime that
 // `buildErc20TransferCall` enforces on the recipient.
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -178,13 +179,15 @@ describe("Send review vs dApp invoke card decode/risk parity (#19)", () => {
     expect(sendReview(summaries, flags)).toContain(panel);
   });
 
-  test("a clean transfer shows the decoded summary and no risk panel on either surface", () => {
+  test("a clean transfer keeps Send guidance without repeating it in the takeover", () => {
     const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
 
     expect(flags).toEqual([]);
     expect(reviewPanel(riskFlagMessages(flags))).toBe("");
     expect(dappCard(summaries, flags)).toContain(reviewCallsList(summaries));
     expect(sendReview(summaries, flags)).toContain(reviewCallsList(summaries));
+    expect(dappCard(summaries, flags)).not.toContain("Risk and recovery");
+    expect(sendReview(summaries, flags)).toContain("Risk and recovery");
   });
 
   test("a multicall renders every decoded summary in order on both surfaces", () => {
@@ -355,10 +358,8 @@ describe("Send review vs dApp invoke card fee parity (#189)", () => {
     const card = dappCard(summaries, flags, fee);
     expect(card).toContain(alert);
     expect(card).toContain('data-approval-retry-fee="b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14"');
-    // Approve stays enabled on a failed estimate — deliberate divergence from
-    // Send's Confirm gating, so a flaky RPC cannot block dApp transactions.
-    expect(card).toContain('data-approval-action="approve"');
-    expect(card).not.toContain(
+    // Both submission surfaces fail closed until the fee can be reviewed.
+    expect(card).toContain(
       'data-approval-action="approve" data-approval-id="b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14" type="button" disabled',
     );
   });

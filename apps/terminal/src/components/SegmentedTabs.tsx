@@ -4,7 +4,7 @@
  */
 import type { ReactNode } from "react";
 
-export type SegmentedOption<T extends string> = {
+type SegmentedOption<T extends string> = {
   readonly value: T;
   readonly label: ReactNode;
   /** Optional tone for buy/sell segments (adds `buy`/`sell` classes). */

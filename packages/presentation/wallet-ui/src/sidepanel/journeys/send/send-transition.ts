@@ -3,7 +3,7 @@
  * the Send flow. The progress rail stays live while the browser snapshots only
  * the named stage frame, preserving continuity between review and signing.
  */
-import { prefersReducedMotion } from "../../shared/motion";
+import { transitionTaskStage } from "../../app/rendering/stage-transition";
 
 const STAGE_ORDER = {
   asset: 1,
@@ -15,78 +15,17 @@ const STAGE_ORDER = {
   pending: 3,
   recipient: -1,
   review: 1,
-  reviewing: 1,
   submitted: 3,
 } as const;
 
-type SendStage = keyof typeof STAGE_ORDER;
-const PROPOSAL_STAGE_ORDER = {
-  advanced: 2,
-  amount: 1,
-  asset: 2,
-  recipient: 0,
-  review: 3,
-} as const;
-type ProposalStage = keyof typeof PROPOSAL_STAGE_ORDER;
-type ViewTransition = { readonly finished: Promise<void> };
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (callback: () => void) => ViewTransition;
-};
-
-let transitionSerial = 0;
-
+type VisibleSendStage = keyof typeof STAGE_ORDER;
+type SendStage = VisibleSendStage | "reviewing";
 const isSendStage = (stage: string | undefined): stage is SendStage =>
-  stage !== undefined && Object.hasOwn(STAGE_ORDER, stage);
-
-const transitionStage = <Stage extends string>(
-  doc: Document,
-  previousStage: string | undefined,
-  nextStage: Stage,
-  order: Readonly<Record<Stage, number>>,
-  transitionKey: "proposalTransition" | "sendTransition",
-  transitionIdKey: "proposalTransitionId" | "sendTransitionId",
-  update: () => void,
-): void => {
-  if (
-    previousStage === undefined ||
-    !Object.hasOwn(order, previousStage) ||
-    previousStage === nextStage ||
-    prefersReducedMotion()
-  ) {
-    update();
-    return;
-  }
-  const transitionDocument = doc as ViewTransitionDocument;
-  if (typeof transitionDocument.startViewTransition !== "function") {
-    update();
-    return;
-  }
-
-  const serial = ++transitionSerial;
-  const id = String(serial);
-  const root = doc.documentElement;
-  root.dataset[transitionKey] =
-    order[nextStage] >= order[previousStage as Stage] ? "forward" : "back";
-  root.dataset[transitionIdKey] = id;
-  let updated = false;
-  const cleanup = (): void => {
-    if (root.dataset[transitionIdKey] === id) {
-      delete root.dataset[transitionKey];
-      delete root.dataset[transitionIdKey];
-    }
-  };
-
-  try {
-    const transition = transitionDocument.startViewTransition(() => {
-      updated = true;
-      update();
-    });
-    void transition.finished.then(cleanup, cleanup);
-  } catch {
-    cleanup();
-    if (!updated) update();
-  }
-};
+  stage === "reviewing" || (stage !== undefined && Object.hasOwn(STAGE_ORDER, stage));
+const visibleStage = (stage: SendStage): VisibleSendStage =>
+  stage === "reviewing" ? "details" : stage;
+const isProgressStage = (stage: VisibleSendStage): boolean =>
+  stage === "authorizing" || stage === "broadcasting" || stage === "confirming";
 
 /**
  * Applies one Send-stage update inside a directional named View Transition
@@ -103,33 +42,22 @@ export const transitionSendStage = (
     update();
     return;
   }
-  transitionStage(
+  const previousVisible = visibleStage(previousStage);
+  const nextVisible = visibleStage(nextStage);
+  if (
+    previousVisible === nextVisible ||
+    (isProgressStage(previousVisible) && isProgressStage(nextVisible))
+  ) {
+    update();
+    return;
+  }
+  transitionTaskStage(
     doc,
-    previousStage,
-    nextStage,
+    previousVisible,
+    nextVisible,
     STAGE_ORDER,
     "sendTransition",
     "sendTransitionId",
     update,
   );
 };
-
-/**
- * Applies one multisig proposal-stage update with the same directional motion
- * language as Send while keeping its transition metadata independently scoped.
- */
-export const transitionProposalStage = (
-  doc: Document,
-  previousStage: string | undefined,
-  nextStage: ProposalStage,
-  update: () => void,
-): void =>
-  transitionStage(
-    doc,
-    previousStage,
-    nextStage,
-    PROPOSAL_STAGE_ORDER,
-    "proposalTransition",
-    "proposalTransitionId",
-    update,
-  );

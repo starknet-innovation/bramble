@@ -1,10 +1,12 @@
 /**
  * Approval-gated STRK20 privacy provider operations. Every handler validates
  * sender, origin, connection grant, and payload before touching private state.
+ * All six are dapp-reachable, so every session read here is a non-renewing peek.
  */
 
 import { STRK20_SIGN_INTENTS } from "@mc-wallet/ledger-protocol/intent";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
+
 import {
   quoteStrk20Plan,
   summarizeStrk20Action,
@@ -12,21 +14,29 @@ import {
 } from "@mc-wallet/privacy/service";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { createApprovalContext } from "../approvals/approval-context";
+import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { UnlockSession } from "../runtime/session";
+import type { PassiveUnlockSession } from "../runtime/session";
 import { strk20AccountContext, strk20ServiceForRuntime } from "./strk20-account-context";
+import {
+  type ResolvedAccount,
+  resolveAccount,
+  strk20ErrorMessage,
+} from "./strk20-approval-execution";
 import type {
   Strk20DisclosureApprovalKind,
   Strk20DisclosureRequest,
 } from "./strk20-approval-types";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
-import { type ResolvedAccount, resolveAccount, strk20ErrorMessage } from "./strk20-origin-account";
 import {
   readStrk20BalancesMessage,
   readStrk20InvokeMessage,
@@ -34,7 +44,7 @@ import {
   readStrk20RegisterMessage,
   readStrk20SubaccountMessage,
 } from "./strk20-provider-inputs";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
 
 /**
  * Dependencies shared by the STRK20 provider operation handlers.
@@ -46,7 +56,7 @@ export type Strk20OpsDeps = {
   readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
-  readonly session: UnlockSession;
+  readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
   readonly waiters: SignatureWaiters;
 };
@@ -71,6 +81,17 @@ type Strk20OpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
+const actionTokenAddresses = (actions: readonly Strk20Action[]): readonly string[] =>
+  actions.flatMap((action) => ("token" in action ? [action.token] : []));
+
+const reviewAssetsFor = (
+  resolved: ResolvedAccount,
+  addresses: readonly string[],
+): readonly { readonly address: string; readonly symbol: string }[] =>
+  resolved.preferences.tokens
+    .filter((token) => addresses.some((address) => sameFelt(address, token.address)))
+    .map((token) => ({ address: token.address, symbol: token.symbol }));
+
 const queueDisclosure = async (
   deps: Strk20OpsDeps,
   resolved: ResolvedAccount,
@@ -88,6 +109,16 @@ const queueDisclosure = async (
       kind: input.kind,
       origin: input.origin,
       request: input.request,
+      reviewAssets: reviewAssetsFor(
+        resolved,
+        input.request.type === "register"
+          ? [input.request.token]
+          : input.request.type === "balances"
+            ? input.request.tokens
+            : input.request.type === "prepare"
+              ? actionTokenAddresses(input.request.actions)
+              : [],
+      ),
       summaries: input.summaries,
     });
     notifyApprovalsChanged();
@@ -106,6 +137,10 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
   if (gate) {
     return gate;
   }
+  // Queue admission first: no privacy approval here deduplicates, so an origin
+  // at its cap is refused whatever this request contains — and refusing it now
+  // costs a map filter instead of a vault read plus a pool quote.
+  requireApprovalAdmission(deps.approvals, input.origin);
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
@@ -163,6 +198,10 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
   if (gate) {
     return gate;
   }
+  // Queue admission first: no privacy approval here deduplicates, so an origin
+  // at its cap is refused whatever this request contains — and refusing it now
+  // costs a map filter instead of a vault read plus a pool quote.
+  requireApprovalAdmission(deps.approvals, input.origin);
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
@@ -190,9 +229,24 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   if (gate) {
     return gate;
   }
+  // Queue admission first: no privacy approval here deduplicates, so an origin
+  // at its cap is refused whatever this request contains — and refusing it now
+  // costs a map filter instead of a vault read plus a pool quote.
+  requireApprovalAdmission(deps.approvals, input.origin);
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
+  }
+  // The same recipient policy the wallet's own pool routes apply, before an
+  // approval for a poisoned payment can be queued at all — the site never gets
+  // to put a confirm button in front of the user for it.
+  const refusal = refusePoisonedStrk20Actions(
+    resolved.account,
+    resolved.preferences,
+    input.actions,
+  );
+  if (refusal) {
+    return refusal;
   }
   return queueDisclosure(deps, resolved, {
     kind: "strk20-prepare",
@@ -216,9 +270,24 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   if (gate) {
     return gate;
   }
+  // Queue admission first: no privacy approval here deduplicates, so an origin
+  // at its cap is refused whatever this request contains — and refusing it now
+  // costs a map filter instead of a vault read plus a pool quote.
+  requireApprovalAdmission(deps.approvals, input.origin);
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
+  }
+  // Refused before the plan is even quoted: a private transfer or withdrawal to
+  // an address that mimics a saved contact is the same attack whether the wallet
+  // composed it or the site did.
+  const refusal = refusePoisonedStrk20Actions(
+    resolved.account,
+    resolved.preferences,
+    input.actions,
+  );
+  if (refusal) {
+    return refusal;
   }
   try {
     const plan = await quoteStrk20Plan(strk20ServiceForRuntime(deps.runtimeRpc), {
@@ -231,6 +300,10 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
       context: await createApprovalContext(resolved.account, payload),
       origin: input.origin,
       plan,
+      reviewAssets: reviewAssetsFor(resolved, [
+        ...actionTokenAddresses(input.actions),
+        ...("feeAction" in plan ? [plan.feeAction.token] : []),
+      ]),
       summaries: [...input.actions.map(summarizeStrk20Action), summarizeStrk20Plan(plan)],
     });
     notifyApprovalsChanged();
@@ -249,6 +322,10 @@ const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message,
   if (gate) {
     return gate;
   }
+  // Queue admission first: no privacy approval here deduplicates, so an origin
+  // at its cap is refused whatever this request contains — and refusing it now
+  // costs a map filter instead of a vault read plus a pool quote.
+  requireApprovalAdmission(deps.approvals, input.origin);
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
@@ -262,7 +339,8 @@ const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message,
       type: "subaccount",
     },
     summaries: [
-      `Share a private sub-account commitment for ${input.dappName}`,
+      `Share a private sub-account commitment for ${input.origin}`,
+      `Site-chosen scope label ${input.dappName}`,
       ...(input.nonce === undefined ? [] : [`Nonce ${input.nonce}`]),
     ],
   });
@@ -288,6 +366,8 @@ export const handleStrk20Ops = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  const handler = STRK20_OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(STRK20_OPS_HANDLERS, messageType)
+    ? STRK20_OPS_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message, sender) : null;
 };

@@ -12,7 +12,7 @@ const MAX_ITEMS = 200;
 const DECIMAL_PATTERN = /^(?:0|[1-9][0-9]*)$/;
 
 /** Recent block summary displayed in the Discover chain pulse. */
-export type ChainBlock = {
+type ChainBlock = {
   readonly blockNumber: number;
   readonly timestampMs: number;
   readonly txCount: number;
@@ -20,7 +20,7 @@ export type ChainBlock = {
 };
 
 /** Recent transaction from the newest indexed block. */
-export type ChainTransaction = {
+type ChainTransaction = {
   readonly id: string;
   readonly txHash: string;
   readonly blockNumber: number;
@@ -32,7 +32,7 @@ export type ChainTransaction = {
 };
 
 /** Decoded non-fee event surfaced by Starkscan's indexed event feed. */
-export type ChainEvent = {
+type ChainEvent = {
   readonly id: string;
   readonly txHash: string;
   readonly blockNumber: number;
@@ -46,7 +46,7 @@ export type ChainEvent = {
 };
 
 /** Canonical L1 ↔ L2 message from Starknet's cross-layer message index. */
-export type ChainMessage = {
+type ChainMessage = {
   readonly id: string;
   readonly txHash: string;
   readonly blockNumber: number;
@@ -153,7 +153,9 @@ export const parseWalletActivity = (value: unknown): readonly WalletActivity[] =
     const finalityStatus = text(item["finalityStatus"], 64);
     const detailParts = [
       protocol,
-      transferCount > 0 ? `${transferCount} token ${transferCount === 1 ? "movement" : "movements"}` : null,
+      transferCount > 0
+        ? `${transferCount} token ${transferCount === 1 ? "movement" : "movements"}`
+        : null,
       counterparty === null ? null : shortAddress(counterparty),
     ].filter((part): part is string => part !== null);
     return [
@@ -226,10 +228,7 @@ const parseBlock = (value: unknown): ChainBlock | null => {
   const timestampMs = timestamp(value["timestampIso"]);
   const txCount = integer(value["txCount"]);
   const finalityStatus = text(value["finalityStatus"], 64);
-  return blockNumber === null ||
-    timestampMs === null ||
-    txCount === null ||
-    finalityStatus === null
+  return blockNumber === null || timestampMs === null || txCount === null || finalityStatus === null
     ? null
     : { blockNumber, timestampMs, txCount, finalityStatus };
 };
@@ -375,15 +374,11 @@ export const parseChainPulse = (
   ) {
     throw new Error("Starkscan returned invalid chain activity");
   }
-  const parsedBlocks = blockItems
-    .map(parseBlock)
-    .filter((row): row is ChainBlock => row !== null);
+  const parsedBlocks = blockItems.map(parseBlock).filter((row): row is ChainBlock => row !== null);
   return {
     blocks: parsedBlocks,
     events: eventItems.map(parseEvent).filter((row): row is ChainEvent => row !== null),
-    messages: messageItems
-      .map(parseMessage)
-      .filter((row): row is ChainMessage => row !== null),
+    messages: messageItems.map(parseMessage).filter((row): row is ChainMessage => row !== null),
     transactions: transactionItems
       .map((value) => parseTransaction(value, parsedBlocks[0]))
       .filter((row): row is ChainTransaction => row !== null),
@@ -404,7 +399,7 @@ export const fetchStarkscanBalances = async (
   );
 
 /** Fetches the newest indexed transactions attributed to one connected wallet. */
-export const fetchWalletActivity = async (
+const fetchWalletActivity = async (
   owner: string,
   signal: AbortSignal,
 ): Promise<readonly WalletActivity[]> =>
@@ -428,10 +423,9 @@ const fetchChainPulse = async (signal: AbortSignal): Promise<ChainPulse> => {
   const transactions =
     headBlock === undefined
       ? { items: [] }
-      : await fetchJson<unknown>(
-          `${STARKSCAN_BASE}/block/${headBlock.blockNumber}/txs?limit=24`,
-          { signal },
-        );
+      : await fetchJson<unknown>(`${STARKSCAN_BASE}/block/${headBlock.blockNumber}/txs?limit=24`, {
+          signal,
+        });
   return parseChainPulse(blocks, transactions, events, messages);
 };
 

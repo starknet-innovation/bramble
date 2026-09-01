@@ -22,6 +22,7 @@ import {
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1",
   classHash: "0x2",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -33,6 +34,7 @@ const account: AccountRef = {
 const context: Strk20AccountContext = {
   account,
   config: null,
+  isAuthorized: () => true,
   rpcUrls: ["https://rpc.example"],
   async signHash() {
     return { publicKey: "0x3", r: "0x1", s: "0x2" };
@@ -44,6 +46,7 @@ const context: Strk20AccountContext = {
     return "0x5";
   },
 };
+const reviewedFee = { overallFee: "1000", unit: "FRI" } as const;
 const callAndProof = {
   call: { calldata: ["0x1"], contract_address: "0x10", entry_point: "apply_actions" },
   proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
@@ -224,6 +227,13 @@ describe("STRK20 wallet policy", () => {
         ...context,
         actions: deposit,
         plan: { mode: "account", poolFeeFri: "0x1" },
+      }),
+    ).rejects.toThrow("network fee was not reviewed");
+    await expect(
+      submitStrk20Actions(noRelay, {
+        ...context,
+        actions: deposit,
+        plan: { mode: "account", poolFeeFri: "0x1", reviewedFee },
       }),
     ).resolves.toEqual({ transactionHash: "0x8" });
     await expect(

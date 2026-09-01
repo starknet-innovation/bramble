@@ -17,7 +17,7 @@
  * Per-candidate deployed/balance state comes from the background
  * `ledgerAccountStatus` query, degrading gracefully to "unavailable".
  */
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { RenderData } from "../../app/rendering/render-cache";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { createLedgerOnboardRuntime } from "./onboard-runtime";
@@ -32,7 +32,11 @@ import type { LedgerConnector } from "./sign-session";
 export type LedgerOnboardEntry = {
   readonly bindTriggers: (app: Element | null) => void;
   readonly startAddAccount: () => void;
-  readonly startLedgerSetup: (networkId: string, vaultPassphrase: string) => void;
+  readonly startLedgerSetup: (
+    networkId: string,
+    vaultPassphrase: string,
+    accountContractType: AccountContractType,
+  ) => void;
 };
 
 /**
@@ -46,7 +50,7 @@ export type LedgerOnboardEntry = {
  * which is cleared as soon as the vault is created.
  */
 export const createLedgerOnboardEntry = (deps: {
-  readonly addHd: () => Promise<void>;
+  readonly addHd: (accountContractType: AccountContractType) => Promise<void>;
   readonly cache: RenderData;
   readonly connector: LedgerConnector;
   readonly mount: HTMLElement;
@@ -56,7 +60,11 @@ export const createLedgerOnboardEntry = (deps: {
   readonly wallet: SidepanelWallet;
 }): LedgerOnboardEntry => {
   const { addHd, cache, connector, mount, openImport, openMultisig, refresh, wallet } = deps;
-  let ledgerSetup: { readonly networkId: string; readonly vaultPassphrase: string } | null = null;
+  let ledgerSetup: {
+    readonly accountContractType: AccountContractType;
+    readonly networkId: string;
+    readonly vaultPassphrase: string;
+  } | null = null;
 
   const create = async (account: LedgerAccountRef): Promise<void> => {
     const setup = ledgerSetup;
@@ -68,6 +76,7 @@ export const createLedgerOnboardEntry = (deps: {
         account.derivation.accountIndex,
         account.publicKeyX,
         setup.vaultPassphrase,
+        setup.accountContractType,
       );
       ledgerSetup = null;
       return;
@@ -76,6 +85,7 @@ export const createLedgerOnboardEntry = (deps: {
       account.networkId,
       account.derivation.accountIndex,
       account.publicKeyX,
+      account.accountContractType,
     );
   };
 
@@ -102,9 +112,9 @@ export const createLedgerOnboardEntry = (deps: {
   return {
     bindTriggers: (app) => runtime.bindTriggers(app),
     startAddAccount: () => runtime.startAddAccount(),
-    startLedgerSetup: (networkId, vaultPassphrase) => {
-      ledgerSetup = { networkId, vaultPassphrase };
-      runtime.start();
+    startLedgerSetup: (networkId, vaultPassphrase, accountContractType) => {
+      ledgerSetup = { accountContractType, networkId, vaultPassphrase };
+      runtime.start(accountContractType);
     },
   };
 };

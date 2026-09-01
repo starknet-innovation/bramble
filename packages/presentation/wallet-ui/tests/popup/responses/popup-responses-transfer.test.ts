@@ -22,6 +22,29 @@ describe("isTransferReviewResponse", () => {
     expect(isTransferReviewResponse(validResponse())).toBe(true);
   });
 
+  test("accepts separate invoke and deployment fees for an undeployed account", () => {
+    expect(
+      isTransferReviewResponse({
+        ok: true,
+        review: {
+          ...validReview(),
+          deploymentFee: { overallFee: "2000", unit: "FRI" },
+          deploymentFeeEstimateFailed: false,
+          requiresDeployment: true,
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects an undeployed review missing its deployment fee state", () => {
+    expect(
+      isTransferReviewResponse({
+        ok: true,
+        review: { ...validReview(), requiresDeployment: true },
+      }),
+    ).toBe(false);
+  });
+
   test("accepts a review whose fee estimation failed (fee is null)", () => {
     expect(
       isTransferReviewResponse({

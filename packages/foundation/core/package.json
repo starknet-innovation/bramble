@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     "./errors": "./src/errors.ts",
+    "./hex": "./src/hex.ts",
     "./html": "./src/html.ts",
+    "./http-json": "./src/http-json.ts",
     "./ids": "./src/ids.ts",
     "./json": "./src/json.ts",
     "./network-error": "./src/network-error.ts",

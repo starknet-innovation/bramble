@@ -33,6 +33,7 @@ const makeService = (store = createMemoryStore()) => ({
 const ledgerVault = async () => {
   const { service, store } = makeService();
   const account = await service.createLedgerVault({
+    accountContractType: "openzeppelin",
     accountIndex: 0,
     networkId: "SN_MAIN",
     publicKeyX: "0xdef123",
@@ -232,6 +233,7 @@ describe("deriveLedgerStrk20ViewingKey", () => {
   test("refuses a software account, which derives through Krusty instead", async () => {
     const { service } = makeService();
     const account = await service.createAccount({
+      accountContractType: "openzeppelin",
       mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
       networkId: "SN_MAIN",
       vaultPassphrase,

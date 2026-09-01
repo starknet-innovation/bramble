@@ -18,6 +18,7 @@ import {
   executeResult,
   STRK20_POOL_ADDRESS as poolAddress,
   providerFor,
+  STRK20_REVIEWED_FEE as reviewedFee,
   sdkRuntime as runtime,
   STRK20_SDK_TOKEN as token,
 } from "../support/official-sdk";
@@ -31,7 +32,7 @@ const scope = {
 const depositRequest = {
   ...context,
   actions: [{ amount: "0x1", token, type: "deposit" }],
-  plan: { mode: "account", poolFeeFri: "0x0" },
+  plan: { mode: "account", poolFeeFri: "0x0", reviewedFee },
 } as const;
 
 const depositSdk = () =>

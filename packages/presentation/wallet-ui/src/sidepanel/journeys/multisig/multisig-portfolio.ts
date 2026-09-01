@@ -5,18 +5,20 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
+import { explorerAccountUrl } from "@mc-wallet/wallet-model/networks";
 import type { DiscoveredNft } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
-import { actionTile } from "../../shell/wallet-shell";
+import { actionTile, explorerTile } from "../../shell/wallet-shell";
 import { nftImageMarkup, visibleNftItems } from "../collectibles/nft-views";
 import { visibleHomeBalances } from "../portfolio/home-tabs";
 import { balanceRow } from "../portfolio/token-row";
+import { type CompactIntentList, compactIntentListView } from "./multisig-intent-list";
 
 /**
  * Public portfolio data resolved for one watched multisig address.
@@ -42,7 +44,7 @@ export const EMPTY_MULTISIG_PORTFOLIO: MultisigPortfolioData = {
 };
 
 const portfolioHero = (
-  record: MultisigRecord,
+  record: ArgentMultisigRecord,
   preferences: WalletPreferences | null,
   data: MultisigPortfolioData,
 ): string => {
@@ -50,7 +52,7 @@ const portfolioHero = (
   const hasPrices = visible.some((balance) => data.prices[balance.address] !== undefined);
   const total = hasPrices ? portfolioTotal(visible, data.prices) : null;
   const delta = hasPrices ? portfolioDelta(visible, data.prices, data.changes) : null;
-  return `<section class="hero multisig-portfolio-hero" aria-label="Shared account balance">
+  return `<section class="hero multisig-portfolio-hero" aria-label="Shared account balance" data-live-group>
     <p class="hero-total" data-live-key="multisig-total:${escapeHtml(record.id)}" data-live-value="${total ?? "unknown"}">${total === null ? "—" : escapeHtml(formatFiat(total, data.currency))}</p>
     ${
       delta
@@ -87,7 +89,7 @@ const tokenPanel = (preferences: WalletPreferences | null, data: MultisigPortfol
 };
 
 const collectiblesPanel = (
-  record: MultisigRecord,
+  record: ArgentMultisigRecord,
   preferences: WalletPreferences | null,
   data: MultisigPortfolioData,
 ): string => {
@@ -120,35 +122,69 @@ const collectiblesPanel = (
 
 /**
  * Renders the familiar wallet-home hierarchy for one multisig: portfolio,
- * multisig-specific primary actions, then Tokens, Collectibles, and Proposals.
+ * multisig-specific primary actions, then Tokens, Collectibles, and intents.
+ * Intent rows cross this boundary as structured data and are escaped by the
+ * wallet's intent renderer here.
  */
 export const multisigPortfolio = (input: {
-  readonly canSign: boolean;
+  readonly authorityAvailable: boolean;
+  readonly authorityMessage?: string;
+  readonly canPropose: boolean;
   readonly data: MultisigPortfolioData;
+  readonly deployed?: boolean | null;
+  readonly deploymentPending?: boolean;
   readonly openCount: number;
   readonly preferences: WalletPreferences | null;
-  readonly proposals: string;
-  readonly record: MultisigRecord;
-}): string => `
+  readonly intentList: CompactIntentList;
+  readonly record: ArgentMultisigRecord;
+  readonly signerKnown: boolean;
+}): string => {
+  const openCount =
+    Number.isSafeInteger(input.openCount) && input.openCount > 0 ? input.openCount : 0;
+  const openCountText = escapeHtml(String(openCount));
+  return `
   ${portfolioHero(input.record, input.preferences, input.data)}
   <section class="home-actions multisig-primary-actions" aria-label="Multisig actions">
     <div class="action-row">
-      ${actionTile("multisig-propose", "Propose", "plus", input.canSign)}
+      ${input.deployed === false && !input.deploymentPending ? actionTile("multisig-deploy", "Deploy", "wallet", true) : actionTile("multisig-propose", "Send", "send", input.canPropose)}
       ${actionTile("multisig-receive", "Receive", "qrCode", true)}
       ${actionTile("multisig-signers", "Signers", "users", true)}
-      ${actionTile("multisig-track", "Track", "search", true)}
+      ${explorerTile(explorerAccountUrl(input.record.networkId, input.record.address))}
     </div>
-    ${input.canSign ? "" : '<p class="hint">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'}
+    ${
+      input.deploymentPending
+        ? '<p class="hint multisig-action-note"><strong>Deployment submitted.</strong> Awaiting Starknet confirmation before sending.</p>'
+        : input.deployed === false
+          ? input.record.deployment
+            ? '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Continue the saved setup before sending.</p>'
+            : '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Resume setup to verify and deploy this saved address.</p>'
+          : input.authorityMessage
+            ? `<p class="hint multisig-action-note">${escapeHtml(input.authorityMessage)}</p>`
+            : !input.authorityAvailable
+              ? '<p class="hint multisig-action-note">Deployment and signer authority could not be verified. Retry when network access is restored.</p>'
+              : input.canPropose
+                ? ""
+                : input.signerKnown
+                  ? `<div class="multisig-action-recovery"><p class="hint multisig-action-note"><strong>Signer found.</strong> Add the remaining public signer keys before sending.</p>${button({ attributes: { "data-view": "multisig-signers" }, label: "Complete signer setup", size: "small", variant: "secondary" })}</div>`
+                  : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
+    }
   </section>
   <section class="home-tabs multisig-portfolio-tabs" data-active-tab="assets" aria-label="Shared account">
     <div class="tab-bar">
       <div class="tab-set" role="tablist" aria-label="Shared account sections">
-        <button class="home-tab" data-ms-home-tab="assets" type="button" role="tab" aria-selected="true">Tokens</button>
-        <button class="home-tab" data-ms-home-tab="collectibles" type="button" role="tab" aria-selected="false">Collectibles</button>
-        <button class="home-tab" data-ms-home-tab="proposals" type="button" role="tab" aria-selected="false" aria-label="Proposals, ${input.openCount} open">Proposals${input.openCount > 0 ? `<span class="home-tab-count">${input.openCount}</span>` : ""}</button>
+        <button class="home-tab" id="multisig-tab-assets" data-ms-home-tab="assets" type="button" role="tab" aria-controls="multisig-panel-assets" aria-selected="true" tabindex="0">Tokens</button>
+        <button class="home-tab" id="multisig-tab-collectibles" data-ms-home-tab="collectibles" type="button" role="tab" aria-controls="multisig-panel-collectibles" aria-selected="false" tabindex="-1">Collectibles</button>
+        <button class="home-tab" id="multisig-tab-intents" data-ms-home-tab="intents" type="button" role="tab" aria-controls="multisig-panel-intents" aria-selected="false" aria-label="Signing intents, ${openCountText} open" tabindex="-1">Intents${openCount > 0 ? `<span class="home-tab-count">${openCountText}</span>` : ""}</button>
       </div>
     </div>
-    <div data-ms-home-panel="assets" role="tabpanel">${tokenPanel(input.preferences, input.data)}</div>
-    <div data-ms-home-panel="collectibles" role="tabpanel" hidden>${collectiblesPanel(input.record, input.preferences, input.data)}</div>
-    <div data-ms-home-panel="proposals" role="tabpanel" hidden>${input.proposals}</div>
+    <div id="multisig-panel-assets" data-ms-home-panel="assets" role="tabpanel" aria-labelledby="multisig-tab-assets" tabindex="0">${tokenPanel(input.preferences, input.data)}</div>
+    <div id="multisig-panel-collectibles" data-ms-home-panel="collectibles" role="tabpanel" aria-labelledby="multisig-tab-collectibles" tabindex="0" hidden>${collectiblesPanel(input.record, input.preferences, input.data)}</div>
+    <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>
+      <div class="multisig-intent-sync">
+        <div><strong>Co-signer updates</strong><span>Check securely for intents and signatures shared by known contacts.</span></div>
+        ${button({ attributes: { "data-ms-sync-intents": true }, icon: "refresh", label: "Check for updates", size: "small", variant: "secondary" })}
+      </div>
+      ${compactIntentListView(input.intentList.heading, input.intentList.items, input.intentList.emptyMessage)}
+    </div>
   </section>`;
+};

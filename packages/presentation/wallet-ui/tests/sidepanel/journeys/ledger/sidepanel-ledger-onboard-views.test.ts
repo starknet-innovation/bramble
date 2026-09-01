@@ -17,6 +17,7 @@ import {
 } from "../../../../src/sidepanel/journeys/ledger/onboard-views";
 
 const candidateAccount = (index: number): LedgerAccountRef => ({
+  accountContractType: "openzeppelin",
   address: `0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
   derivation: {
@@ -31,20 +32,26 @@ const candidateAccount = (index: number): LedgerAccountRef => ({
 });
 
 describe("onboarding views", () => {
-  test("the chooser offers four signer models and confirms the selection separately", () => {
+  test("the chooser offers both account contracts for software and Ledger signers", () => {
     const html = addAccountChooser();
-    expect(html).toContain('data-add-kind="hd"');
+    expect(html).toContain('data-add-kind="argent"');
+    expect(html).toContain('data-add-kind="openzeppelin"');
     expect(html).toContain('data-add-kind="import"');
-    expect(html).toContain('data-add-kind="ledger"');
+    expect(html).toContain('data-add-kind="ledger-argent"');
+    expect(html).toContain('data-add-kind="ledger-openzeppelin"');
     expect(html).toContain('data-add-kind="multisig"');
-    expect(html).toContain("Standard Account");
-    expect(html).toContain("Ledger Account");
+    expect(html).toContain("Argent Account");
+    expect(html).toContain("OpenZeppelin Account");
+    expect(html).toContain("Argent Ledger Account");
+    expect(html).toContain("OpenZeppelin Ledger Account");
     expect(html).toContain("Import from private key");
-    expect(html).toContain("Multisig Account");
-    expect(html).toMatch(/data-add-continue[^>]*disabled/);
-    expect(addAccountChooser("multisig")).toMatch(
-      /data-add-kind="multisig"[^>]*aria-pressed="true"/,
+    expect(html).toContain("Argent Multisig");
+    expect(html.indexOf('data-add-kind="openzeppelin"')).toBeLessThan(
+      html.indexOf('data-add-kind="argent"'),
     );
+    expect(html).toContain("Recommended · Create the next account");
+    expect(html).toMatch(/data-add-continue[^>]*disabled/);
+    expect(addAccountChooser("argent")).toMatch(/data-add-kind="argent"[^>]*aria-pressed="true"/);
   });
 
   test("connect, reading, and error device states render their controls", () => {

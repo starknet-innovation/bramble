@@ -24,15 +24,12 @@ import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, WalletScenario } from "../runtime/types";
 import { approvalsScenario } from "./scenarios-approvals";
 import { multisigScenario } from "./scenarios-multisig";
-import {
-  ledgerOnboardingScenario,
-  onboardingScenario,
-  unlockScenario,
-} from "./scenarios-onboarding";
+import { ledgerOnboardingScenario, onboardingScenario } from "./scenarios-onboarding";
 import { privacyScenario } from "./scenarios-privacy";
 import { settingsScenario } from "./scenarios-settings";
 import { ledgerScenario, sendScenario } from "./scenarios-signing";
 import { swapScenario } from "./scenarios-swap";
+import { unlockScenario } from "./scenarios-unlock";
 import { assetsScenario, portfolioScenario } from "./scenarios-wallet";
 
 const NFT_HASH = `0x02${"b".repeat(62)}`;
@@ -110,7 +107,7 @@ const activityScenario: WalletScenario = {
       id: "account-a",
       label: "Daily account",
       narrative: "Only the active account's accepted transactions are rendered.",
-      state: { accountId: softwareAccount.id, entries: 2, scope: "SN_MAIN" },
+      state: { accountId: softwareAccount.id, entries: 5, scope: "SN_MAIN" },
     },
     {
       content: () =>
@@ -142,7 +139,7 @@ const activityScenario: WalletScenario = {
       id: "account-a-restored",
       label: "Switch back",
       narrative: "Returning restores account A without any rows from account B.",
-      state: { accountId: softwareAccount.id, entries: 2, foreignEntries: 0, scope: "SN_MAIN" },
+      state: { accountId: softwareAccount.id, entries: 5, foreignEntries: 0, scope: "SN_MAIN" },
     },
   ],
   description:

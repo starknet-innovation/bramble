@@ -14,7 +14,6 @@ import {
   bindBackup,
   bindContacts,
   bindGroups,
-  bindRestoreAccounts,
   type SettingsUiDeps,
 } from "./settings-ui";
 
@@ -32,7 +31,6 @@ export type SettingsSurfaceDeps = SettingsUiDeps;
 export const bindSettingsSurface = (deps: SettingsSurfaceDeps): void => {
   bindAccountLabel(deps);
   bindAddAccount(deps);
-  bindRestoreAccounts(deps);
   bindImportKey(deps);
   bindAppearance(deps);
   bindBackup(deps);

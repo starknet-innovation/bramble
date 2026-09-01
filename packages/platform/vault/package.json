@@ -12,7 +12,6 @@
     "./network-account": "./src/accounts/network-account.ts",
     "./origin-grants": "./src/service/origin-grants.ts",
     "./reveal": "./src/service/reveal.ts",
-    "./seed-account-scan": "./src/accounts/seed-account-scan.ts",
     "./schema": "./src/schema/schema.ts",
     "./service": "./src/service/service.ts",
     "./service-types": "./src/service/service-types.ts",
@@ -27,6 +26,7 @@
   },
   "dependencies": {
     "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/starknet": "workspace:*",
     "@mc-wallet/store": "workspace:*",
     "@mc-wallet/wallet-model": "workspace:*"
   },

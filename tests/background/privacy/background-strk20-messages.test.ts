@@ -7,7 +7,12 @@ import type { Strk20Service } from "@mc-wallet/privacy/service";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import type { InvokeInput } from "@mc-wallet/starknet/rpc";
 import { toProviderPayload } from "@mc-wallet/wallet-protocol/bridge";
-import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
+import {
+  flushHeld,
+  latestApprovalId,
+  reviewedApprovalFee,
+  waitForPendingApprovals,
+} from "../../support/held";
 import {
   approveHeldStrk20,
   buildStrk20Handler,
@@ -34,15 +39,29 @@ const approveHeld = approveHeldStrk20;
 describe("background strk20 messages", () => {
   test("registers only after an account, network, pool, and token-bound approval", async () => {
     const registerCalls = { value: 0 };
-    const handler = buildHandler({ registerCalls, registered: false });
+    const proveCalls = { value: 0 };
+    const preparedSubmissions: Parameters<Strk20Service["submitPrepared"]>[0][] = [];
+    const handler = buildHandler({
+      preparedSubmissions,
+      proveCalls,
+      registerCalls,
+      registered: false,
+    });
     const result = await approveHeld(
       handler,
       { origin, type: "wallet.strk20Register" },
       "strk20-register",
-      () => expect(registerCalls.value).toBe(0),
+      () => {
+        expect(proveCalls.value).toBe(0);
+        expect(registerCalls.value).toBe(0);
+      },
     );
     expect(result).toEqual({ ok: true, transactionHash: "0x123" });
     expect(registerCalls.value).toBe(1);
+    expect(proveCalls.value).toBe(1);
+    expect(preparedSubmissions).toHaveLength(1);
+    expect(preparedSubmissions[0]?.reviewedFee).toEqual({ overallFee: "1", unit: "FRI" });
+    expect(preparedSubmissions[0]?.calls).toHaveLength(1);
     expect(toProviderPayload(result, "mc_strk20Register")).toEqual({
       result: { transaction_hash: `0x${"123".padStart(64, "0")}` },
     });
@@ -282,6 +301,36 @@ describe("background strk20 messages", () => {
     expect(invoked).toHaveLength(0);
     expect(balanceCalls.value).toBeGreaterThan(0);
     expect(proveCalls.value).toBe(1);
+  });
+
+  test("a public deposit proves only after consent, then requires exact-call fee approval", async () => {
+    const proveCalls = { value: 0 };
+    const preparedSubmissions: Parameters<Strk20Service["submitPrepared"]>[0][] = [];
+    const handler = buildHandler({ preparedSubmissions, proveCalls });
+    const held = handler(
+      {
+        actions: [{ amount: "0x0a", token, type: "deposit" }],
+        origin,
+        type: "wallet.strk20InvokeTransaction",
+      },
+      contentSender,
+    );
+    await flushHeld();
+    const firstId = await latestApprovalId(handler, sender);
+    expect(proveCalls.value).toBe(0);
+    await handler({ id: firstId, type: "wallet.approveOrigin" }, sender);
+
+    const invokeId = await latestApprovalId(handler, sender);
+    expect(invokeId).not.toBe(firstId);
+    expect(proveCalls.value).toBe(1);
+    expect(preparedSubmissions).toHaveLength(0);
+    const reviewedFee = await reviewedApprovalFee(handler, sender, invokeId);
+    await handler({ id: invokeId, reviewedFee, type: "wallet.approveOrigin" }, sender);
+
+    await expect(held).resolves.toEqual({ ok: true, transactionHash: "0x123" });
+    expect(preparedSubmissions).toHaveLength(1);
+    expect(preparedSubmissions[0]?.reviewedFee).toEqual(reviewedFee);
+    expect(preparedSubmissions[0]?.calls).toHaveLength(1);
   });
 
   test("threads the complete active-network service config into the SDK adapter", async () => {

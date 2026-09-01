@@ -6,7 +6,104 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
-is cut. See DEVELOPMENT.md and RELEASING.md.
+is cut. Older entries are kept in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
+See DEVELOPMENT.md and RELEASING.md.
+
+## [Unreleased]
+
+## [0.9.2] - 2026-08-14
+
+Official Argent account contracts, true M-of-N multisig, safer account recovery,
+and the complete remediation of the v0.9.1 comprehensive security audit.
+
+### Added
+- New software and Ledger accounts can use the official Argent Account 0.4 or
+  OpenZeppelin account contract. Private-key import can attach an existing
+  Argent account only when the key is its pinned Stark owner, no guardian is
+  configured, and the exact deployment salt is supplied.
+- Recovery-phrase import numbers words, flags unknown BIP39 words, offers prefix
+  completions while typing, and runs Krusty mnemonic validation before the
+  vault passphrase step.
+
+### Changed
+- Multisig creation, signing, configuration review, and submission now use the
+  official Argent Multisig 0.2 implementation. The former OpenZeppelin-based
+  proposal flow is removed; older release entries describe historical behavior.
+- STRK20 service reads use bounded retries without multiplying retries across
+  nested service layers.
+
+### Security
+- Remediated the comprehensive v0.9.1 audit across encrypted-store freshness
+  and rollback protection, session and origin-grant races, provider admission
+  and event ordering, reviewed fee binding, canonical account identities, KMS
+  key verification, and post-broadcast outcome integrity. Full evidence is in
+  `docs/security-audit/releases/v0.9.1-comprehensive.md`.
+- Argent deployment and signing bind the pinned class, owner, guardian state,
+  deployment salt, chain, nonce, calls, fees, and returned transaction hash.
+  Multisig intent signatures are validated against the exact fresh signer set
+  and threshold before submission.
+
+## [0.9.1] - 2026-08-12
+
+Response to the 31 findings raised by the post-release deep adversarial audit of
+v0.9.0 (`MCW-V09-101`..`131`). No third-party dependency changes. Full detail,
+including the residual on the partially remediated `MCW-V09-127`, is in
+`docs/security-audit/releases/v0.9-deep.md`.
+
+### Security
+- SNIP-12 signing no longer accepts a type graph whose names can reassemble
+  `encodeType` into a different graph. A name carrying a separator let two
+  structures produce one message hash, so a site could obtain a signature over
+  an opaque payload that is valid against a structured order. Each revision is
+  now validated against its own vocabulary under a deny-by-default name grammar
+  (`MCW-V09-101`, High).
+- Multisig proposal ids are derived locally from the reviewed
+  `(to, selector, calldata, salt)` rather than taken from a node's
+  `hash_transaction` answer, which is now only a cross-check that must agree.
+  Stored proposals re-derive their id before confirm, revoke, and execute, so a
+  record written by an earlier version cannot be acted on if its id came from a
+  hostile answer (`MCW-V09-102`, High).
+- Inactivity auto-lock is alarm-driven and now fires in normal use.
+- Balances and history come from the configured Starknet RPC first; the explorer
+  gateway is a per-network opt-in, off by default once an RPC override is set.
+- The approval surface consults the phishing blocklist before opening and takes
+  a 1000 ms per-tab cooldown.
+- Every wallet-initiated fee-bearing action now estimates and displays the
+  maximum network fee before signing, then binds the transaction to that
+  reviewed ceiling. An estimate failure refuses signing.
+- Removed `wallet.signHash` (an unapproved arbitrary-hash signing path with no
+  production caller) and `wallet.grantOrigin`. Neither was dapp-reachable.
+- Malformed successful RPC broadcast responses now retain indeterminate-write
+  semantics, and multisig claims survive an indeterminate broadcast so a lost
+  response cannot reopen blind duplicate signing.
+- Declare approval binds the exact displayed declaration-plus-deployment total,
+  supports fail-closed fee retries, and enforces each component at submission;
+  duplicate multisig proposals and externally revoked confirmations are
+  reconciled through the durable claim ledger.
+- The Chromatic token is scoped only to its main-branch publish step.
+
+### Changed
+- SNIP-12 revision 0 remains signable and a numeric `revision: 1` is accepted.
+  Revision 0 is held to what its encoder resolves: preset field types, `enum`
+  fields, and tuple types are refused there, because the pinned library cannot
+  encode them. Preset *names* may now be declared as ordinary structs on
+  revision 0, a widening for legacy dapps.
+- A `merkletree` leaf must name a declared struct or preset on **both**
+  revisions; `contains: "felt"` is refused, because a raw-felt leaf is the value
+  the site supplied and could stand in for another structure's hash under the
+  same root. Dapps hashing their own allowlist or session leaves must declare
+  the leaf struct.
+- STRK20 sub-account commitments are separated by verified origin rather than a
+  caller-chosen label, so a site holding a commitment for a label sees a
+  different one.
+- Restoring a preferences backup applies only labels, groups, display, theme,
+  hidden tokens, and active network. Every trust-bearing field the review layer
+  reads as ground truth is ignored: RPC overrides, custom networks, token
+  metadata, NFT indexer, STRK20 network and prover endpoints, approval surface,
+  and explorer fallback. Address-book contacts are left untouched in both
+  directions, being the reference set behind the address-poisoning guard.
+- The sign-request card renders domain rows by the payload's actual revision;
+  rows that were never in the hash no longer appear as signed.
 
 ## [Unreleased]
 
@@ -397,88 +494,3 @@ and clearer dapp approval hand-offs.
 - The coverage gate remains enforced at 95%; focused NFT success, malformed
   input, fee retry, wallet failure, and control-recovery tests close the release
   regression without lowering the threshold.
-
-## [0.6.0] - 2026-07-23
-
-Phase 6 security work plus release-hygiene and audit closeout.
-
-### Added
-- First-class Ledger hardware-wallet accounts, including Ledger-only onboarding,
-  adding multiple derived accounts, device-confirmed deploy/send/dapp/typed-data
-  and multisig signing, and a keyless v3 vault migration that never stores a
-  Ledger mnemonic or signing key (#134, #135).
-- Origin-scoped WebHID permission grant through a short-lived extension popup,
-  with timeout/closed-window recovery and explicit selection when more than one
-  granted Ledger is available (#134).
-- A host-ready v0.6 security-audit route recording the reviewed Ledger and
-  multisig boundaries, resolved findings, validation evidence, and residual
-  third-party risk.
-
-### Changed
-- Ledger signing now verifies the expected device and returned signature before
-  every broadcast, fails closed on lock or disconnect, scopes the Buffer
-  compatibility layer to the Ledger boundary, and makes partial multi-account
-  onboarding safely retryable (#134).
-- Multisig declare/deploy operations now use durable atomic claims, preserve an
-  accepted transaction hash across local persistence failures, and do not
-  downgrade pending state when local activity reads fail (#126, #127, #131).
-- Multisig list/detail views refresh on entry, distinguish RPC/storage failures
-  from a real empty result, scope signer confirmation state to the active
-  account, and reject locally impossible actions before a round trip
-  (#128–#130).
-- PR guards fail closed for unknown or feature-like branch prefixes, GitHub
-  Actions are pinned to their current majors, and the Bun/TypeScript/Biome test
-  toolchain and lockfile are refreshed (#136, #143–#145).
-
-### Fixed
-- Added focused side-panel multisig client, response-guard, hydration, and UI
-  regression coverage; corrected the stale multisig artifact comment
-  (#132, #133).
-- The terminal-app lockfile and Vite toolchain now remain reproducible under the
-  repository dependency updates (#125).
-
-## [0.5.0] - 2026-07-16
-
-Phase 5 (hardening, audit & public release — roadmap #83).
-
-### Added
-- In-wallet swaps via the AVNU aggregator: a Swap action between Send and
-  Receive opens a full quote → confirm → execute → receipt flow with live
-  debounced quoting, a searchable verified-token picker (untracked picks are
-  added through the on-chain token flow), value-sanity tiers that warn on
-  bad routes, and an approve-only-sell-token policy gate before signing (#115).
-- Proactive dapp requests: a pending approval takes over the panel's dock
-  views with its full decision card the moment it arrives, with a "Not now"
-  snooze that parks it in Activity (#115).
-- Real on-chain history merged into the activity feed, with per-leg transfer
-  dedup and an explicit flag when only device records are available (#111).
-- On-chain verification of the active account's OZ class hash, surfaced as a
-  verification badge on the account screen (#110).
-- Import a standalone account from a raw Starknet private key, stored only in
-  the encrypted vault (#112).
-- Automated release-on-merge: promoting a `release/*` or `hotfix/*` branch to
-  `main` now cuts the tagged GitHub Release automatically, with the version
-  derived from the merged branch (issue #59, #60).
-
-### Changed
-- Full design-system overhaul: cobalt accent with market semantics split from
-  brand, an anchored bottom dock, de-bordered grouped lists and receipt rows,
-  a restructured settings hub and sub-screens, WCAG AA contrast enforced by
-  test, redesigned toasts with tone chips, and a choreographed swap success
-  moment that returns home on its own (#115).
-- Send review and dApp approval prompts now share one decode/risk pipeline,
-  so both surfaces flag identical calls identically (#109).
-- The release version is single-sourced from `package.json`; the tag, artifact,
-  and changelog all derive from it and a gate fails the release on any drift
-  (closes the gap that shipped `v0.4.0` as `mc-wallet-0.3.0.zip`).
-
-## [0.4.0] - 2026-06-30
-
-### Added
-- First release under the roadmap-driven release-branch model (milestone `v0.4`,
-  Phase 3 — table-stakes parity).
-
-## [0.3.0] - 2026-05-19
-
-### Added
-- Baseline wallet shell established as the initial stable version on `main`.

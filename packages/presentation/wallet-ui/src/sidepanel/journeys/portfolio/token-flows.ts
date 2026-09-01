@@ -249,39 +249,45 @@ export const tokenDetailFlow = (
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
         ${
-          privateReady
-            ? `<div class="private-balance-summary">
+          privacy.error
+            ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
+                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
+                <span class="token-fiat">Try again</span>
+              </button>`
+            : privateReady
+              ? `<div class="private-balance-summary">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-side">
                   <strong class="token-amount">${escapeHtml(`${compactAmount(privateBalance?.formatted ?? "0")} ${token.symbol}`)}</strong>
                   ${privateFiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(privateFiat, currency))}</span>`}
                 </span>
               </div>`
-            : privacy.value
-              ? `<div class="private-balance-summary muted" title="${escapeHtml(pendingLabel)}">
+              : privacy.value
+                ? `<div class="private-balance-summary muted" title="${escapeHtml(pendingLabel)}">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-fiat">${escapeHtml(pendingValue)}</span>
               </div>`
-              : ""
+                : ""
         }
         ${
-          privateReady
-            ? `<div class="token-privacy-actions">${button({
-                attributes: { "data-send-shield": token.id },
-                icon: "shield",
-                label: "Shield",
-              })}${button({
-                attributes: { "data-send-unshield": token.id },
-                label: "Unshield",
-                variant: "secondary",
-              })}</div>`
-            : button({
-                attributes: { "data-privacy-open": token.id },
-                icon: "shield",
-                label: privateActionLabel,
-              })
+          privacy.error
+            ? ""
+            : privateReady
+              ? `<div class="token-privacy-actions">${button({
+                  attributes: { "data-send-shield": token.id },
+                  icon: "shield",
+                  label: "Shield",
+                })}${button({
+                  attributes: { "data-send-unshield": token.id },
+                  label: "Unshield",
+                  variant: "secondary",
+                })}</div>`
+              : button({
+                  attributes: { "data-privacy-open": token.id },
+                  icon: "shield",
+                  label: privateActionLabel,
+                })
         }
-        ${privacy.error ? `<p class="hint">${escapeHtml(privacy.error)}</p>` : ""}
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>

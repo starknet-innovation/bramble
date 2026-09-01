@@ -1,494 +1,396 @@
 /**
- * Transaction-submitting multisig operations: propose, confirm, revoke,
- * execute, deploy a new multisig through the Universal Deployer Contract,
- * and declare the pinned multisig class when a network lacks it. Every
- * submission goes through the shared verified invoke path with an explicitly
- * selected vault account; the multisig contract re-checks signer membership
- * and quorum on-chain, so these handlers can never bypass it.
+ * Frozen-intent signing and exact-hash submission for Argent multisig.
  */
-import type { Call } from "starknet";
-import type { LedgerSignIntent } from "@mc-wallet/ledger-protocol/intent";
 import {
-  buildMultisigConfirmCall,
-  buildMultisigExecuteCall,
-  buildMultisigRevokeCall,
-  buildMultisigSubmitCall,
-  confirmationCompletesQuorum,
-  type MultisigCallInput,
-  type MultisigProposalStatus,
-} from "@mc-wallet/multisig/chain";
-import { type MultisigProposalRecord, multisigProposalId } from "@mc-wallet/multisig/repository";
-import { handleMultisigDeployOps } from "./multisig-deploy-ops";
+  type ArgentMultisigSigningIntent,
+  argentMultisigIntentId,
+  argentMultisigOperationId,
+} from "@mc-wallet/multisig/repository";
+import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
 import {
-  type ConfirmMultisigProposalInput,
-  readConfirmMultisigProposalInput,
-  readMultisigProposalActionInput,
-  readProposeMultisigInput,
-} from "./multisig-inputs";
-import {
-  buildMultisigProposalRecord,
-  defaultSummary,
-  type MultisigContext,
-  type MultisigOpsDeps,
-  multisigContext,
-  multisigRpc,
-  refreshSignerMembership,
-} from "./multisig-ops";
-import {
-  confirmedSignersAfterStatus,
-  confirmGuard,
-  isProposalSubmitPending,
-  revokeGuard,
-} from "./multisig-proposal-status";
-import {
-  claimMultisigProposalOperation,
-  type MultisigProposalOperationKind,
-  recordClaimedMultisigSubmission,
-  recordSubmittedActivity,
-  releaseMultisigOperation,
-} from "./multisig-submission";
-import type { RuntimeResponse } from "../runtime/runtime-types";
+  ArgentMultisigFeeExpiredError,
+  preparedArgentMultisigFee,
+  samePreparedArgentMultisigInvokeV3,
+} from "@mc-wallet/starknet/multisig-invoke";
+import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
+import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
+import { verificationContext } from "@mc-wallet/transactions/verify";
+import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 import { signerForContext } from "../accounts/wallet-ops";
+import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
+import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
+import { captureSessionAuthorization } from "../runtime/session";
+import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { reviewArgentMultisigCalls } from "./multisig-call-review";
+import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
+import {
+  argentMultisigIntentPackage,
+  locallyDerivedImportedIntent,
+  mergeImportedArgentMultisigIntent,
+  normalizedArgentMultisigCalls,
+  readImportIntentInput,
+  readImportIntentSignatureInput,
+  readPrepareIntentInput,
+  readSignIntentInput,
+  readSubmitIntentInput,
+  sortedArgentMultisigSignatures,
+} from "./multisig-inputs";
+import { currentArgentIntentContext } from "./multisig-intent-context";
+import {
+  type ArgentMultisigContext,
+  configSnapshot,
+  currentConfigFor,
+  signerAccountFor,
+} from "./multisig-ops";
+import { resolveSubmission } from "./multisig-submission-resolve";
 
-type MultisigTxHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
-
-type ResolvedProposal = {
-  readonly proposal: MultisigProposalRecord;
-  readonly resolved: MultisigContext;
-};
-
-// Resolves the selected signer + watched record and re-proves signer membership
-// in one step. Every signer-gated submission runs this first so stale registry
-// data can never offer a transaction the chain would reject.
-const resolveMultisigTarget = async (
+const preparationContext = async (
   deps: MultisigOpsDeps,
-  id: string,
-  signerAccountId?: string,
-): Promise<{ readonly error: string } | MultisigContext> => {
-  const resolved = await multisigContext(deps, id, signerAccountId);
-  if ("error" in resolved) {
-    return { error: resolved.error };
+  input: NonNullable<ReturnType<typeof readPrepareIntentInput>>,
+) => {
+  const authorized = captureSessionAuthorization(deps.session);
+  const active = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (active.error !== undefined || !authorized.isCurrent()) {
+    return { error: active.error ?? "wallet locked" } as const;
   }
-  return refreshSignerMembership(deps, resolved);
-};
-
-// Submits one or more calls as a single invoke through the shared path and
-// records activity. The caller's descriptive summary is recorded verbatim: the
-// generic call decoder cannot describe multisig entrypoints, and the dedup
-// guards below match on these summaries, so they must stay deterministic and
-// specific. Batched calls share one transaction, so they succeed or revert
-// together.
-const submitAndRecord = async (
-  deps: MultisigOpsDeps,
-  resolved: MultisigContext,
-  calls: readonly Call[],
-  summary: string,
-  intent: LedgerSignIntent,
-): Promise<string> => {
-  const result = await deps.runtimeRpc.submitInvokeTransaction({
-    account: resolved.account.account,
-    calls,
-    rpcUrls: resolved.rpcUrls,
-    signHash: signerForContext(deps, resolved.account, intent),
-  });
-  await recordSubmittedActivity(deps.activity, {
-    accountId: resolved.record.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: resolved.account.networkId,
-    summary,
-  });
-  return result.transactionHash;
-};
-
-const submitClaimedAndRecord = async (
-  deps: MultisigOpsDeps,
-  resolved: MultisigContext,
-  calls: readonly Call[],
-  summary: string,
-  operationId: string,
-  intent: LedgerSignIntent,
-): Promise<string> => {
-  let result: { readonly transactionHash: string };
-  try {
-    result = await deps.runtimeRpc.submitInvokeTransaction({
-      account: resolved.account.account,
-      calls,
-      rpcUrls: resolved.rpcUrls,
-      signHash: signerForContext(deps, resolved.account, intent),
-    });
-  } catch (error) {
-    await releaseMultisigOperation(deps, operationId);
-    throw error;
-  }
-  await recordClaimedMultisigSubmission(deps, operationId, {
-    accountId: resolved.record.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: resolved.account.networkId,
-    summary,
-  });
-  return result.transactionHash;
-};
-
-const proposalById = async (
-  deps: MultisigOpsDeps,
-  proposalId: string,
-  signerAccountId?: string,
-): Promise<{ readonly error: string } | ResolvedProposal> => {
-  const proposal = (await deps.multisigStore.listProposals()).find(
-    (stored) => stored.id === proposalId,
+  const record = (await deps.multisigStore.listMultisigs()).find(
+    (candidate) => candidate.id === input.multisigId,
   );
-  if (!proposal) {
-    return { error: "proposal not found" };
-  }
-  const resolved = await resolveMultisigTarget(deps, proposal.multisigId, signerAccountId);
-  if ("error" in resolved) {
-    return { error: resolved.error };
-  }
-  return { proposal, resolved };
-};
-
-const requireUntrackedVerification = (
-  proposal: MultisigProposalRecord,
-  untrackedVerified: boolean | undefined,
-): string | null =>
-  proposal.call === null && untrackedVerified !== true
-    ? "verify this proposal on a block explorer or with the proposer, then acknowledge before confirming"
-    : null;
-
-// A wallet-submitted proposal reading as not-found is kept only while its submit
-// transaction is still pending. Once that submit is accepted/rejected, not-found
-// is the authoritative chain state and should be persisted.
-const persistFreshStatus = async (
-  deps: MultisigOpsDeps,
-  proposal: MultisigProposalRecord,
-  status: MultisigProposalStatus,
-  signer: string,
-): Promise<void> => {
-  if (status.state === "not-found" && (await isProposalSubmitPending(deps, proposal))) {
-    return;
-  }
-  await deps.multisigStore.upsertProposal({
-    ...proposal,
-    confirmations: status.confirmations,
-    confirmedBySigner: status.confirmedBySigner,
-    confirmedBySignerAddress: signer,
-    confirmedSignerAddresses: confirmedSignersAfterStatus(
-      proposal,
-      signer,
-      status.confirmedBySigner,
-    ),
-    state: status.state,
-  });
-};
-
-const refreshAfterAction = async (
-  deps: MultisigOpsDeps,
-  found: ResolvedProposal,
-): Promise<void> => {
-  const status = await multisigRpc(deps)
-    .getProposalStatus({
-      address: found.resolved.record.address,
-      rpcUrls: found.resolved.rpcUrls,
-      signer: found.resolved.account.account.address,
-      txId: found.proposal.txId,
-    })
-    .catch(() => null);
-  if (status) {
-    await persistFreshStatus(deps, found.proposal, status, found.resolved.account.account.address);
-  }
-};
-
-const freshProposalStatus = async (
-  deps: MultisigOpsDeps,
-  found: ResolvedProposal,
-): Promise<{ readonly error: string } | MultisigProposalStatus> => {
-  let status: MultisigProposalStatus;
-  try {
-    status = await multisigRpc(deps).getProposalStatus({
-      address: found.resolved.record.address,
-      rpcUrls: found.resolved.rpcUrls,
-      signer: found.resolved.account.account.address,
-      txId: found.proposal.txId,
-    });
-  } catch {
-    return { error: "could not refresh proposal status — try again" };
-  }
-  await persistFreshStatus(deps, found.proposal, status, found.resolved.account.account.address);
-  return status;
-};
-
-const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
-  const input = readProposeMultisigInput(message);
-  if (!input) {
-    return { error: "invalid propose request" };
-  }
-  const target = await resolveMultisigTarget(deps, input.multisigId, input.signerAccountId);
-  if ("error" in target) {
-    return { error: target.error };
-  }
-  const call: MultisigCallInput = {
-    calldata: input.calldata,
-    contractAddress: input.to,
-    entrypoint: input.entrypoint,
-  };
-  const txId = await multisigRpc(deps).computeTransactionId({
-    address: target.record.address,
-    call,
-    rpcUrls: target.rpcUrls,
-    salt: input.salt,
-  });
-  const id = multisigProposalId(target.record.id, txId);
-  if (!id) {
-    return { error: "invalid propose request" };
-  }
-  const summary = defaultSummary(input);
-  const transactionHash = await submitAndRecord(
-    deps,
-    target,
-    [buildMultisigSubmitCall(target.record.address, call, input.salt)],
-    `Propose: ${summary}`,
-    "multisig-propose",
-  );
-  const proposal = buildMultisigProposalRecord({
-    id,
-    input,
-    multisigId: target.record.id,
-    submitTransactionHash: transactionHash,
-    summary,
-    txId,
-  });
-  await deps.multisigStore.upsertProposal(proposal).catch(() => undefined);
-  // No post-broadcast status refresh here: the submit transaction cannot be
-  // mined yet, so the chain would answer not-found for a proposal that was
-  // just optimistically stored as pending.
-  return { ok: true, proposal, transactionHash };
-};
-
-// What one proposal action will broadcast: the calls for a single invoke plus
-// the activity summary describing them.
-type ProposalActionPlan = {
-  readonly calls: readonly Call[];
-  readonly summary: string;
-};
-
-const reserveProposalAction = async (
-  deps: MultisigOpsDeps,
-  found: ResolvedProposal,
-  kind: MultisigProposalOperationKind,
-): Promise<{ readonly error: string } | { readonly operationId: string }> =>
-  claimMultisigProposalOperation(deps, {
-    accountId: found.resolved.account.account.id,
-    kind,
-    networkId: found.resolved.account.networkId,
-    pendingError: "this signer already has a proposal action in progress — wait for it to settle",
-    txId: found.proposal.txId,
-  });
-
-// The atomic mode is allowed only when this confirmation reaches quorum. The
-// contract sees confirm's storage write before execute; a failed execution
-// reverts both calls, which is why the mode remains explicit.
-const planConfirm = (
-  found: ResolvedProposal,
-  status: MultisigProposalStatus,
-  input: ConfirmMultisigProposalInput,
-): ProposalActionPlan | { readonly error: string } => {
-  const { record } = found.resolved;
-  const confirmCall = buildMultisigConfirmCall(record.address, found.proposal.txId);
-  if (input.mode === "confirm-only") {
-    return { calls: [confirmCall], summary: `Confirm: ${found.proposal.summary}` };
-  }
-  const proposalCall = found.proposal.call;
-  if (!proposalCall) {
+  if (!record || record.networkId !== active.networkId) {
     return {
-      error:
-        "this proposal was tracked by id only; executing needs the original call, so confirm it here and execute from the wallet that proposed it",
-    };
+      error: record ? "switch to the multisig network first" : "Argent multisig not found",
+    } as const;
   }
+  const preferences = await deps.preferencesStore.read();
+  const context: ArgentMultisigContext = {
+    active,
+    record,
+    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
+  };
+  const config = await currentConfigFor(deps, context);
+  const review = await reviewArgentMultisigCalls(deps, context, input.calls, config);
+  return review && "error" in review ? review : { authorized, config, context, record, review };
+};
+
+const importedIntentReview = async (deps: MultisigOpsDeps, intent: ArgentMultisigSigningIntent) => {
+  const resolved = await currentArgentIntentContext(deps, intent, false);
+  if ("error" in resolved) return resolved;
+  const review = await reviewArgentMultisigCalls(
+    deps,
+    resolved.context,
+    intent.prepared.calls,
+    resolved.publicConfig,
+  );
+  if (review && "error" in review) return review;
+  const existing = await deps.multisigStore.getIntent(intent.id);
+  return existing && !samePreparedArgentMultisigInvokeV3(existing.prepared, intent.prepared)
+    ? { error: "conflicting Argent multisig intent id" }
+    : { existing, resolved, review };
+};
+const persistSignature = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+  signature: StarkSignature,
+  isAuthorized: () => boolean,
+): Promise<RuntimeResponse> => {
+  const guid = argentSignerGuid(signature.publicKey);
   if (
-    !confirmationCompletesQuorum({
-      confirmations: status.confirmations,
-      quorum: record.quorum,
-      signerHasConfirmed: status.confirmedBySigner,
-      state: status.state,
+    !intent.configSnapshot.signerGuids.includes(guid) ||
+    !verifyStarkSignature({
+      hash: intent.prepared.transactionHash,
+      publicKeyX: signature.publicKey,
+      signature,
     })
   ) {
-    return {
-      error: `this confirmation does not reach quorum (${status.confirmations + 1} of ${record.quorum}), so it cannot execute yet — confirm without executing`,
-    };
+    return { error: "signature is not valid for this exact Argent multisig intent" };
   }
-  return {
-    calls: [
-      confirmCall,
-      buildMultisigExecuteCall(
-        record.address,
-        {
-          calldata: proposalCall.calldata,
-          contractAddress: proposalCall.contractAddress,
-          entrypoint: proposalCall.entrypoint,
-        },
-        proposalCall.salt,
-      ),
-    ],
-    summary: `Confirm and execute: ${found.proposal.summary}`,
+  if (intent.signatures.some((existing) => argentSignerGuid(existing.publicKey) === guid)) {
+    return { error: "this Argent multisig signer already signed the intent" };
+  }
+  if (intent.signatures.length >= intent.configSnapshot.threshold) {
+    return { error: "Argent multisig intent already has its threshold signatures" };
+  }
+  const signatures = sortedArgentMultisigSignatures([...intent.signatures, signature]);
+  const next: ArgentMultisigSigningIntent = {
+    ...intent,
+    signatures,
+    state: signatures.length === intent.configSnapshot.threshold ? "ready" : "collecting",
   };
+  const stored = await deps.multisigStore.upsertIntent(next, isAuthorized);
+  if (stored === "unauthorized") return { error: "wallet locked" };
+  return stored === "stored"
+    ? { intent: next, intentPackage: argentMultisigIntentPackage(next), ok: true }
+    : { error: `Argent multisig intent ${stored}` };
 };
 
-type ConfirmationContext = {
-  readonly found: ResolvedProposal;
-  readonly input: ConfirmMultisigProposalInput;
-  readonly plan: ProposalActionPlan;
-};
-
-const confirmationContext = async (
-  deps: MultisigOpsDeps,
-  message: unknown,
-  type: "wallet.confirmMultisigProposal" | "wallet.prepareMultisigConfirmation",
-): Promise<{ readonly error: string } | ConfirmationContext> => {
-  const input = readConfirmMultisigProposalInput(message, type);
-  if (!input) return { error: "invalid confirm request" };
-  const found = await proposalById(deps, input.proposalId, input.signerAccountId);
-  if ("error" in found) return found;
-  const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
-  if (verifyError) return { error: verifyError };
-  const status = await freshProposalStatus(deps, found);
-  if ("error" in status) return status;
-  const guardError = confirmGuard(status);
-  if (guardError) return { error: guardError };
-  const plan = planConfirm(found, status, input);
-  return "error" in plan ? plan : { found, input, plan };
-};
-
-const prepareMultisigConfirmation: MultisigTxHandler = async (deps, message) => {
-  const context = await confirmationContext(deps, message, "wallet.prepareMultisigConfirmation");
-  if ("error" in context) return context;
-  const fee = await deps.runtimeRpc
-    .estimateInvokeFee({
-      account: context.found.resolved.account.account,
-      calls: context.plan.calls,
-      rpcUrls: context.found.resolved.rpcUrls,
-      signHash: signerForContext(deps, context.found.resolved.account, "multisig-confirm"),
-    })
-    .catch(() => null);
-  return {
-    confirmationReview: {
-      fee,
-      feeEstimateFailed: fee === null,
-      mode: context.input.mode,
-      proposalId: context.input.proposalId,
-      signerAccountId: context.found.resolved.account.account.id,
+const prepareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
+  const input = readPrepareIntentInput(message);
+  if (!input) {
+    return { error: "invalid Argent multisig intent preparation request" };
+  }
+  const resolved = await preparationContext(deps, input);
+  if ("error" in resolved) return resolved;
+  const prepared = await multisigRpc(deps).prepareInvoke({
+    account: resolved.record,
+    calls: input.calls,
+    config: {
+      signerPublicKeys: resolved.config.signerPublicKeys,
+      threshold: resolved.config.threshold,
     },
-    ok: true,
+    rpcUrls: resolved.context.rpcUrls,
+  });
+  if (!resolved.authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
+  const id = argentMultisigIntentId(resolved.record.id, prepared.transactionHash);
+  if (!id) {
+    return { error: "invalid Argent multisig prepared transaction" };
+  }
+  const intent: ArgentMultisigSigningIntent = {
+    accountId: resolved.record.id,
+    configSnapshot: configSnapshot(resolved.config.chain),
+    id,
+    prepared,
+    signatures: [],
+    state: "collecting",
+    summary: resolved.review.summary,
   };
+  const stored = await deps.multisigStore.upsertIntent(intent, resolved.authorized.isCurrent);
+  if (stored === "unauthorized") return { error: "wallet locked" };
+  return stored === "stored"
+    ? {
+        feeReview: preparedArgentMultisigFee(prepared),
+        intent,
+        intentPackage: argentMultisigIntentPackage(intent),
+        ok: true,
+      }
+    : { error: `Argent multisig intent ${stored}` };
 };
 
-const confirmMultisigProposal: MultisigTxHandler = async (deps, message) => {
-  const context = await confirmationContext(deps, message, "wallet.confirmMultisigProposal");
-  if ("error" in context) return context;
-  const claim = await reserveProposalAction(deps, context.found, "confirm");
-  if ("error" in claim) return claim;
-  const transactionHash = await submitClaimedAndRecord(
-    deps,
-    context.found.resolved,
-    context.plan.calls,
-    context.plan.summary,
-    claim.operationId,
-    // Atomic confirm-and-execute is still labelled as a confirmation: it is the
-    // action the user chose, and both calls ride on the one device approval.
-    "multisig-confirm",
+const importIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
+  const input = readImportIntentInput(message);
+  if (!input) {
+    return { error: "invalid Argent multisig intent package" };
+  }
+  const authorized = captureSessionAuthorization(deps.session);
+  const remoteIntent = locallyDerivedImportedIntent(input.package.intent);
+  const reviewed = await importedIntentReview(deps, remoteIntent);
+  if ("error" in reviewed || !authorized.isCurrent()) {
+    return "error" in reviewed ? reviewed : { error: "wallet locked" };
+  }
+  const incoming = { ...remoteIntent, summary: reviewed.review.summary };
+  const intent = reviewed.existing
+    ? mergeImportedArgentMultisigIntent(reviewed.existing, incoming)
+    : incoming;
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
+  const stored = await deps.multisigStore.upsertIntent(intent, authorized.isCurrent);
+  if (stored === "unauthorized") return { error: "wallet locked" };
+  return stored === "stored"
+    ? {
+        feeReview: preparedArgentMultisigFee(intent.prepared),
+        intent,
+        intentPackage: argentMultisigIntentPackage(intent),
+        ok: true,
+      }
+    : { error: `Argent multisig intent ${stored}` };
+};
+
+const resolveLocalSigning = async (
+  deps: MultisigOpsDeps,
+  input: NonNullable<ReturnType<typeof readSignIntentInput>>,
+) => {
+  const authorized = captureSessionAuthorization(deps.session);
+  const intent = await deps.multisigStore.getIntent(input.intentId);
+  if (intent?.state !== "collecting") {
+    return {
+      error: intent ? "Argent multisig intent is not collecting signatures" : "intent not found",
+    } as const;
+  }
+  const resolved = await currentArgentIntentContext(deps, intent);
+  if ("error" in resolved) {
+    return resolved;
+  }
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
+  const signer = signerAccountFor(resolved.context, input.signerAccountId);
+  if (!signer) {
+    return { error: "selected signer account is unavailable on this network" };
+  }
+  const guid = argentSignerGuid(signer.publicKeyX);
+  if (!resolved.config.signerGuids.includes(guid)) {
+    return { error: "selected account is not a current Argent multisig signer" };
+  }
+  if (intent.signatures.some((existing) => argentSignerGuid(existing.publicKey) === guid)) {
+    return { error: "this Argent multisig signer already signed the intent" };
+  }
+  const operationId = argentMultisigOperationId(
+    "sign",
+    intent.accountId,
+    intent.prepared.transactionHash,
+    guid,
   );
-  await refreshAfterAction(deps, context.found).catch(() => undefined);
-  return { ok: true, transactionHash };
-};
-
-const revokeMultisigConfirmation: MultisigTxHandler = async (deps, message) => {
-  const input = readMultisigProposalActionInput(message, "wallet.revokeMultisigConfirmation");
-  if (!input) return { error: "invalid revoke request" };
-  const found = await proposalById(deps, input.proposalId, input.signerAccountId);
-  if ("error" in found) return found;
-  const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
-  if (verifyError) return { error: verifyError };
-  const status = await freshProposalStatus(deps, found);
-  if ("error" in status) return status;
-  const guardError = revokeGuard(status);
-  if (guardError) return { error: guardError };
-  const claim = await reserveProposalAction(deps, found, "revoke");
-  if ("error" in claim) return claim;
-  const transactionHash = await submitClaimedAndRecord(
-    deps,
-    found.resolved,
-    [buildMultisigRevokeCall(found.resolved.record.address, found.proposal.txId)],
-    `Revoke confirmation: ${found.proposal.summary}`,
-    claim.operationId,
-    "multisig-revoke",
-  );
-  await refreshAfterAction(deps, found).catch(() => undefined);
-  return { ok: true, transactionHash };
-};
-
-const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
-  const input = readMultisigProposalActionInput(message, "wallet.executeMultisigProposal");
-  if (!input) return { error: "invalid execute request" };
-  const found = await proposalById(deps, input.proposalId, input.signerAccountId);
-  if ("error" in found) return found;
-  const proposalCall = found.proposal.call;
-  if (!proposalCall) {
+  if (!operationId) {
+    return { error: "invalid Argent multisig signing claim" };
+  }
+  const claim = await deps.multisigStore.claimOperation({
+    accountId: intent.accountId,
+    id: operationId,
+    kind: "sign",
+    signerGuid: guid,
+    target: intent.prepared.transactionHash,
+  });
+  if (claim !== "claimed") {
     return {
       error:
-        "this proposal was tracked by id only; executing needs the original call, so execute it from the wallet that proposed it",
+        claim === "exists"
+          ? "this signer already signed or is signing the intent"
+          : `signing claim ${claim}`,
+    } as const;
+  }
+  return { authorized, intent, operationId, resolved, signer } as const;
+};
+
+const signIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
+  const input = readSignIntentInput(message);
+  if (!input) {
+    return { error: "invalid Argent multisig signing request" };
+  }
+  const signing = await resolveLocalSigning(deps, input);
+  if ("error" in signing) {
+    return signing;
+  }
+  try {
+    // Confirming, not broadcasting: one signer adding their own signature.
+    const context = {
+      account: signing.signer,
+      vaultPassphrase: signing.resolved.context.active.vaultPassphrase,
+    };
+    const signature = await signerForContext(
+      deps,
+      context,
+      "multisig-confirm",
+    )(signing.intent.prepared.transactionHash);
+    const response = await persistSignature(
+      deps,
+      signing.intent,
+      signature,
+      signing.authorized.isCurrent,
+    );
+    if ("error" in response) {
+      await deps.multisigStore.releaseOperation(signing.operationId);
+    }
+    return response;
+  } catch (error) {
+    await deps.multisigStore.releaseOperation(signing.operationId);
+    throw error;
+  }
+};
+
+const importSignature = async (
+  deps: MultisigOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readImportIntentSignatureInput(message);
+  if (!input) {
+    return { error: "invalid Argent multisig signature import" };
+  }
+  const authorized = captureSessionAuthorization(deps.session);
+  const intent = await deps.multisigStore.getIntent(input.intentId);
+  if (intent?.state !== "collecting") {
+    return {
+      error: intent ? "Argent multisig intent is not collecting signatures" : "intent not found",
     };
   }
-  const status = await freshProposalStatus(deps, found);
-  if ("error" in status) {
-    return status;
+  const resolved = await currentArgentIntentContext(deps, intent);
+  if ("error" in resolved || !authorized.isCurrent()) {
+    return "error" in resolved ? resolved : { error: "wallet locked" };
   }
-  if (status.state !== "confirmed") {
-    return { error: `cannot execute a proposal that is ${status.state}` };
-  }
-  const claim = await reserveProposalAction(deps, found, "execute");
-  if ("error" in claim) return claim;
-  const transactionHash = await submitClaimedAndRecord(
-    deps,
-    found.resolved,
-    [
-      buildMultisigExecuteCall(
-        found.resolved.record.address,
-        {
-          calldata: proposalCall.calldata,
-          contractAddress: proposalCall.contractAddress,
-          entrypoint: proposalCall.entrypoint,
-        },
-        proposalCall.salt,
-      ),
-    ],
-    `Execute: ${found.proposal.summary}`,
-    claim.operationId,
-    "multisig-execute",
-  );
-  await refreshAfterAction(deps, found).catch(() => undefined);
-  return { ok: true, transactionHash };
+  return persistSignature(deps, intent, input.signature, authorized.isCurrent);
 };
 
-// One handler per transaction-submitting multisig message type; the router
-// below is a single map lookup and unknown types fall through to null.
-const TX_HANDLERS: Record<string, MultisigTxHandler> = {
-  "wallet.confirmMultisigProposal": confirmMultisigProposal,
-  "wallet.executeMultisigProposal": executeMultisigProposal,
-  "wallet.prepareMultisigConfirmation": prepareMultisigConfirmation,
-  "wallet.proposeMultisigTx": proposeMultisigTx,
-  "wallet.revokeMultisigConfirmation": revokeMultisigConfirmation,
+const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
+  const input = readSubmitIntentInput(message);
+  if (!input) {
+    return { error: "invalid Argent multisig submission request" };
+  }
+  const submission = await resolveSubmission(deps, input);
+  if ("response" in submission) {
+    return submission.response;
+  }
+  let transactionHash: string;
+  try {
+    transactionHash = await multisigRpc(deps).submitPreparedInvoke({
+      config: {
+        signerPublicKeys: submission.intent.signatures.map((signature) => signature.publicKey),
+        threshold: submission.resolved.config.threshold,
+      },
+      prepared: submission.intent.prepared,
+      rpcUrls: submission.resolved.context.rpcUrls,
+      signatures: submission.intent.signatures,
+      isAuthorized: submission.authorized.isCurrent,
+    });
+  } catch (error) {
+    if (!(error instanceof IndeterminateRpcWriteError))
+      await deps.multisigStore.releaseOperation(submission.operationId);
+    if (error instanceof ArgentMultisigFeeExpiredError) {
+      await deps.multisigStore.upsertIntent({ ...submission.intent, state: "stale" });
+      return { error: error.details };
+    }
+    throw error;
+  }
+  const submitted: ArgentMultisigSigningIntent = {
+    ...submission.intent,
+    broadcastTransactionHash: transactionHash,
+    state: "submitted",
+  };
+  // Once broadcast returns a hash the claim must never be released: a failed
+  // journal write is unresolved persistence, not permission to broadcast again.
+  await deps.multisigStore
+    .setOperationHash(submission.operationId, transactionHash)
+    .catch(() => {});
+  await deps.multisigStore.upsertIntent(submitted).catch(() => "invalid" as const);
+  await deps.preferencesStore
+    .read()
+    .then((preferences) =>
+      recordApproveAllowances({
+        assets: verificationContext(submission.resolved.context.record, preferences),
+        calls: normalizedArgentMultisigCalls(submission.intent.prepared.calls),
+        owner: allowanceOwner(submission.resolved.context.record),
+        store: deps.allowanceStore,
+      }),
+    )
+    .catch(() => {});
+  await recordSubmittedActivity(deps.activity, {
+    accountId: submission.intent.accountId,
+    hash: transactionHash,
+    kind: "invoke",
+    networkId: submission.resolved.context.record.networkId,
+    summary: submission.intent.summary,
+  });
+  return { intent: submitted, ok: true, transactionHash };
 };
 
+type IntentHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
+const HANDLERS: Readonly<Record<string, IntentHandler>> = {
+  "wallet.importArgentMultisigIntent": importIntent,
+  "wallet.importArgentMultisigSignature": importSignature,
+  "wallet.prepareArgentMultisigIntent": prepareIntent,
+  "wallet.signArgentMultisigIntent": signIntent,
+  "wallet.submitArgentMultisigIntent": submitIntent,
+};
 /**
- * Handles transaction-submitting multisig messages; returns null for other
- * message types.
+ * Dispatches privileged exact-intent Argent messages.
  */
 export const handleMultisigTxOps = async (
   deps: MultisigOpsDeps,
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = TX_HANDLERS[messageType];
-  return handler ? handler(deps, message) : handleMultisigDeployOps(deps, messageType, message);
+  const handler = Object.hasOwn(HANDLERS, messageType) ? HANDLERS[messageType] : undefined;
+  return handler ? handler(deps, message) : null;
 };

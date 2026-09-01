@@ -13,6 +13,7 @@
  * Ledger paths, Stark hashes, public app/key responses, and raw signatures can
  * cross it. Private keys and device identifiers never do.
  */
+import { isRecord } from "@mc-wallet/core/json";
 import {
   isLedgerBrokerResponse,
   type LedgerBrokerCommand,
@@ -131,9 +132,6 @@ type LedgerBrokerCall =
       readonly method: "signHash";
       readonly path: string;
     };
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isReturnCode = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 0xffff;

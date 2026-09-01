@@ -1,7 +1,8 @@
 /**
  * Pure parsers for NFT gallery runtime messages from extension pages.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
@@ -9,7 +10,7 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 
 const isTokenId = (value: unknown): value is string =>
-  typeof value === "string" && value.length <= 78 && /^(?:0|[1-9][0-9]*)$/.test(value);
+  isBaseUnitsAmount(value) && value.length <= 78;
 
 /**
  * Fields shared by the add-NFT and transfer-NFT requests.
@@ -64,38 +65,65 @@ export const readAddNftInput = (
 
 type NftTransferMessageType = "wallet.reviewNftTransfer" | "wallet.transferNft";
 
+/**
+ * A parsed NFT send or send-review request: the target NFT, the recipient, and
+ * — on a send the panel has already reviewed — the fee estimate that review
+ * displayed, which the background turns into a signing ceiling (MCW-V09-119).
+ */
+export type NftTransferRequest = NftTarget & {
+  readonly recipient: string;
+  readonly reviewedDeploymentFee?: FeeEstimate;
+  readonly reviewedFee?: FeeEstimate;
+};
+
 const readNftTransferInput = (
   message: unknown,
   messageType: NftTransferMessageType,
-): (NftTarget & { readonly recipient: string }) | null => {
+): NftTransferRequest | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["contract", "networkId", "recipient", "tokenId", "type"]) ||
+    !hasOnlyKnownKeys(message, [
+      "contract",
+      "networkId",
+      "recipient",
+      "reviewedDeploymentFee",
+      "reviewedFee",
+      "tokenId",
+      "type",
+    ]) ||
     message["type"] !== messageType ||
     typeof message["recipient"] !== "string" ||
-    !isNonZeroStarkFieldElement(message["recipient"])
+    !isNonZeroStarkFieldElement(message["recipient"]) ||
+    (message["reviewedDeploymentFee"] !== undefined &&
+      !isFeeEstimate(message["reviewedDeploymentFee"])) ||
+    (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"]))
   ) {
     return null;
   }
   const target = readNftTarget(message);
-  return target ? { ...target, recipient: message["recipient"] } : null;
+  return target
+    ? {
+        ...target,
+        recipient: message["recipient"],
+        ...(isFeeEstimate(message["reviewedDeploymentFee"])
+          ? { reviewedDeploymentFee: message["reviewedDeploymentFee"] }
+          : {}),
+        ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
+      }
+    : null;
 };
 
 /**
  * Parses an NFT transfer-review request. Review is read-only; the background
  * still re-parses and re-proves the same fields on the later submit request.
  */
-export const readReviewNftTransferInput = (
-  message: unknown,
-): (NftTarget & { readonly recipient: string }) | null =>
+export const readReviewNftTransferInput = (message: unknown): NftTransferRequest | null =>
   readNftTransferInput(message, "wallet.reviewNftTransfer");
 
 /**
  * Parses a send-NFT request through the verified invoke path.
  */
-export const readTransferNftInput = (
-  message: unknown,
-): (NftTarget & { readonly recipient: string }) | null =>
+export const readTransferNftInput = (message: unknown): NftTransferRequest | null =>
   readNftTransferInput(message, "wallet.transferNft");
 
 /**
@@ -105,11 +133,16 @@ export const readTransferNftInput = (
  */
 export const readDiscoverNftsInput = (
   message: unknown,
-): { readonly includeWatched: boolean; readonly multisigId?: string } | null => {
+): {
+  readonly cached: boolean;
+  readonly includeWatched: boolean;
+  readonly multisigId?: string;
+} | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["includeWatched", "multisigId", "type"]) ||
+    !hasOnlyKnownKeys(message, ["cached", "includeWatched", "multisigId", "type"]) ||
     message["type"] !== "wallet.discoverNfts" ||
+    (message["cached"] !== undefined && message["cached"] !== true) ||
     (message["includeWatched"] !== undefined && typeof message["includeWatched"] !== "boolean") ||
     (message["multisigId"] !== undefined &&
       (typeof message["multisigId"] !== "string" ||
@@ -119,10 +152,22 @@ export const readDiscoverNftsInput = (
     return null;
   }
   return {
+    cached: message["cached"] === true,
     includeWatched: message["includeWatched"] !== false,
     ...(typeof message["multisigId"] === "string" ? { multisigId: message["multisigId"] } : {}),
   };
 };
+
+/**
+ * Parses a cached-first watched-NFT request.
+ */
+export const readLoadWatchedNftsInput = (message: unknown): { readonly cached: boolean } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["cached", "type"]) &&
+  message["type"] === "wallet.loadWatchedNfts" &&
+  (message["cached"] === undefined || message["cached"] === true)
+    ? { cached: message["cached"] === true }
+    : null;
 
 /**
  * Parses a remove-NFT request that targets a watched NFT by its id.

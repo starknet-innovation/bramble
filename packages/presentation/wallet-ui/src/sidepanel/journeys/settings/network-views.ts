@@ -1,20 +1,40 @@
-/** Network selection and advanced endpoint views. */
+/**
+ * Network selection and the advanced-endpoints settings screen: which
+ * infrastructure the wallet talks to on the active network, and which third
+ * party is allowed to see the account address.
+ *
+ * Read-only: submitting a field sends a privileged extension message through
+ * `./endpoint-ui.ts`, and every rendered state comes from the preferences the
+ * background returned. No value here is written directly to storage.
+ */
 
 import { escapeHtml } from "@mc-wallet/core/html";
 import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import { explorerFallbackAllowed, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import { button } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { checkboxField, textField } from "@mc-wallet/ui-kit/fields";
+import { isStarknetNetworkId, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
+import { contextHelp, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { strk20ServicesForm } from "../privacy/privacy-settings-view";
 
 const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   preferences && isStarknetNetworkId(status.networkId)
     ? (preferences.rpcOverrides?.[status.networkId] ?? "")
     : "";
+
+// Devnet is the one network the user hosts, so state what the wallet will dial
+// and the chain id the write-path guard checks before a write fails on it.
+const devnetHint = (status: WalletStatus, preferences: WalletPreferences | null): string => {
+  if (status.networkId !== "SN_DEVNET") {
+    return "";
+  }
+  const override = rpcOverrideFor(status, preferences);
+  const endpoint = escapeHtml(override || STARKNET_NETWORKS.SN_DEVNET.rpcUrls[0]);
+  const elsewhere = override ? "" : " Running yours elsewhere? Set a custom RPC under Advanced.";
+  return `<p class="hint">Expects a node at ${endpoint} started with --chain-id SN_DEVNET.${elsewhere}</p>`;
+};
 
 const strk20ConfigFor = (
   status: WalletStatus,
@@ -27,6 +47,63 @@ const strk20ConfigFor = (
 const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
   preferences?.nftIndexerUrl ?? "";
 
+const explorerApiUrlFor = (status: WalletStatus, preferences: WalletPreferences | null): string =>
+  preferences && isStarknetNetworkId(status.networkId)
+    ? (preferences.explorerApiUrls?.[status.networkId] ?? "")
+    : "";
+
+const nostrRelayUrlFor = (preferences: WalletPreferences | null): string =>
+  preferences?.nostrRelayUrl ?? "";
+
+// Resolved, not stored: an untouched network shows the default this user gets
+// (on for built-in endpoints, off once they configured their own RPC), so the
+// checkbox never claims a decision the user has not made. Preferences that
+// failed to load render as off — the same fail-closed answer the background
+// gives — rather than as a permission the user cannot see the basis for.
+const explorerFallbackFor = (
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+): boolean =>
+  preferences !== null &&
+  isStarknetNetworkId(status.networkId) &&
+  explorerFallbackAllowed(preferences, status.networkId);
+
+const explorerFallbackForm = (
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+  allowed: boolean,
+): string =>
+  `<form id="explorer-fallback-form">
+    ${textField({
+      autocomplete: "off",
+      className: "mono",
+      hint: "Starkscan-compatible data API used only after every RPC fails. Leave empty for the wallet default.",
+      label: `Explorer data API for ${status.network}`,
+      name: "apiUrl",
+      placeholder: "https://…/v1",
+      spellcheck: false,
+      type: "url",
+      value: explorerApiUrlFor(status, preferences),
+    })}
+    <p class="hint">The explorer learns which addresses you hold, and its data cannot be verified against the chain. Turn fallback off to show an RPC error instead.</p>
+    ${checkboxField({
+      checked: allowed,
+      name: "explorerFallback",
+      text: "Use this explorer when my RPC is unreachable",
+    })}
+    ${button({
+      icon: "check",
+      label: "Save explorer settings",
+      type: "submit",
+      variant: "secondary",
+    })}
+    <p id="explorer-fallback-result" role="status"></p>
+  </form>`;
+
+// One collapsed advanced-endpoint editor: a scannable summary row (name +
+// configured/default state) that opens into the form. Keeps the network
+// screen's primary task — picking a network — front and centre, with expert
+// plumbing one deliberate tap deeper.
 const endpointDisclosure = (
   id: string,
   title: string,
@@ -65,6 +142,7 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
           .join("")}
       </div>
       <p class="hint">Switching selects or derives an account on the target network.</p>
+      ${devnetHint(status, preferences)}
       <p id="picker-result" role="status"></p>
     </section>
     <section class="section">
@@ -80,19 +158,28 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
   );
 
 /**
- * Renders the security-sensitive custom service endpoint editor.
+ * Renders the security-sensitive custom service endpoint editor: expert RPC,
+ * prover, NFT-indexer, and explorer-fallback settings, away from the primary
+ * network picker. Read-only — every field submits a privileged message and the
+ * rendered state always comes from the preferences the background returned.
  */
 export const advancedNetworkFlow = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
 ): string => {
   const privacy = strk20ConfigFor(status, preferences);
+  const explorerAllowed = explorerFallbackFor(status, preferences);
   return (
-    flowHeader("Advanced endpoints", status, "Only change infrastructure you trust") +
+    flowHeader("Endpoints", status) +
     flowScreen(
       "advanced-network",
       `<section class="section">
-      <p class="review-flag" role="note">Custom endpoints can observe requests made through them. Leave a field empty to use the wallet default or keep that integration off.</p>
+      <p class="review-flag" role="note">Only use endpoints you trust. Chrome asks before granting access to a new service host.</p>
+      ${contextHelp(
+        "advanced-endpoint-privacy",
+        "What an endpoint can learn",
+        "An RPC, indexer, prover, or relay can observe the requests sent to it, including account or transaction context needed for that service. Configure only infrastructure you trust; clearing a field restores the wallet default or disables the optional integration.",
+      )}
       <div class="disclosure-stack">
         ${endpointDisclosure(
           "rpc",
@@ -120,10 +207,41 @@ export const advancedNetworkFlow = (
           </form>`,
         )}
         ${endpointDisclosure(
+          "explorer-fallback",
+          "Explorer data",
+          `${explorerApiUrlFor(status, preferences) ? "Custom" : "Default"} · ${explorerAllowed ? "Allowed" : "Off"}`,
+          explorerFallbackForm(status, preferences, explorerAllowed),
+        )}
+        ${endpointDisclosure(
           "strk20-services",
           "STRK20 privacy services",
           privacy ? "Configured" : "Off",
           strk20ServicesForm(status.network, privacy),
+        )}
+        ${endpointDisclosure(
+          "nostr-relay",
+          "Multisig coordination relay",
+          nostrRelayUrlFor(preferences) ? "Custom" : "Reviewed defaults",
+          `<form id="nostr-relay-form">
+            ${textField({
+              autocomplete: "off",
+              className: "mono",
+              hint: "Used across networks for encrypted intent handoffs. Every co-signer must select the same relay. Leave empty for the reviewed defaults.",
+              label: "Custom Nostr relay",
+              name: "relayUrl",
+              placeholder: "wss://relay.example",
+              spellcheck: false,
+              type: "url",
+              value: nostrRelayUrlFor(preferences),
+            })}
+            ${button({
+              icon: "check",
+              label: "Save coordination relay",
+              type: "submit",
+              variant: "secondary",
+            })}
+            <p id="nostr-relay-result" role="status"></p>
+          </form>`,
         )}
         ${endpointDisclosure(
           "nft-indexer",
@@ -149,6 +267,19 @@ export const advancedNetworkFlow = (
             })}
             <p id="nft-indexer-result" role="status"></p>
           </form>`,
+        )}
+        ${endpointDisclosure(
+          "reliability-diagnostics",
+          "Reliability diagnostics",
+          preferences?.reliabilityDiagnostics ? "On" : "Off",
+          `${checkboxField({
+            attributes: { id: "reliability-diagnostics" },
+            checked: preferences?.reliabilityDiagnostics ?? false,
+            name: "reliabilityDiagnostics",
+            text: "Keep anonymous RPC and explorer reliability counters on this device",
+          })}
+          <p class="hint">No addresses, sites, transaction data, endpoint URLs, or raw errors are collected. Nothing is uploaded; you choose whether to export it.</p>
+          ${button({ attributes: { id: "diagnostics-export" }, icon: "receive", label: "Download diagnostics" })}`,
         )}
       </div>
     </section>`,

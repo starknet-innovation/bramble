@@ -3,13 +3,13 @@ name: Release integration
 # Broader, post-merge integration for the release-branch model (DEVELOPMENT.md).
 # Runs on every push to a `release/**` branch — i.e. after a feature/fix/chore
 # PR merges into the active release branch. It exercises the heavier steps the
-# fast PR CI deliberately skips: the vendored crypto/contract toolchain, the
+# fast PR CI deliberately skips: the vendored contract toolchain, the
 # extension build, and the reproducible package. This is the "integration"
 # tier; the full E2E + audit + regression suite runs nightly (nightly.yml).
 #
-# The vendor steps need the private Krusty KMS repo + a Rust/Scarb toolchain.
-# They run on the same self-hosted CodeBuild runner CI uses (toolchain present).
-# If a vendor step fails (e.g. private-repo access or toolchain drift) the job
+# The vendor steps need network access plus the contract toolchains. They run on
+# the same self-hosted CodeBuild runner CI uses (toolchain present).
+# If a vendor step fails (e.g. network access or toolchain drift) the job
 # writes a clear explanation to the run summary and then fails honestly — it
 # never fakes success.
 on:
@@ -31,57 +31,19 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-        with:
-          toolchain: 1.96.1
-      # Same cargo/wasm-pack cache key as ci.yml so the integration build reuses
-      # the exact toolchain the vendored krusty artifacts are built with.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-
-      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
-        with:
-          scarb-version: 2.18.0
-      - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
-      # Vendor the Krusty KMS WASM core. On failure, explain the likely cause in
-      # the run summary, then fail (exit 1) — do not mask a real breakage.
-      - name: Vendor Krusty KMS
+      # Verify the pinned production Argent release and official artifacts.
+      - name: Vendor Argent account contracts
         run: |
           set -o pipefail
-          if ! bun run vendor:krusty; then
+          if ! bun run vendor:argent; then
             {
-              echo "### Release integration: \`vendor:krusty\` FAILED"
+              echo "### Release integration: \`vendor:argent\` FAILED"
               echo ""
-              echo "This step needs network access to the (private) Krusty KMS"
-              echo "repository, \`wasm-pack 0.13.1\`, and a Rust toolchain. A failure"
-              echo "here usually means the runner lacks private-repo access or the"
-              echo "toolchain drifted — it is NOT a wallet source-code failure."
-              echo "See CONTRIBUTING.md and scripts/vendor-krusty.ts."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-      # Vendor the pinned multisig contract class (needs scarb 2.18.0 exactly).
-      - name: Vendor multisig contract
-        run: |
-          set -o pipefail
-          if ! bun run vendor:multisig; then
-            {
-              echo "### Release integration: \`vendor:multisig\` FAILED"
-              echo ""
-              echo "This step needs \`scarb 2.18.0\` exactly (the multisig class-hash"
-              echo "pin is only reproducible on that version). A failure here is a"
-              echo "toolchain/vendoring issue, not a wallet source-code failure."
-              echo "See scripts/vendor-multisig.ts."
+              echo "This step needs network access to the pinned official Argent"
+              echo "release. A failure is a provenance/vendoring issue, not a"
+              echo "wallet source-code failure."
+              echo "See scripts/vendor-argent-contracts.ts."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi

@@ -6,6 +6,7 @@
 
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { checkboxField, inputControl, textField } from "@mc-wallet/ui-kit/fields";
+import { RECOVERY_SCAN_LIMITS } from "@mc-wallet/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
@@ -48,6 +49,26 @@ const option = (
     ${icon("chevronRight")}
   </button>`;
 
+const accountContractChoices = (kind: "ledger" | "software"): string => {
+  const attribute = kind === "ledger" ? "data-ledger-account-contract" : "data-account-contract";
+  return `<div class="onboarding-contract-options" role="group" aria-label="Account contract">
+    <button class="onboarding-contract" ${attribute}="openzeppelin" type="button" aria-pressed="true">
+      <span class="onboarding-contract-copy">
+        <span class="onboarding-contract-title"><strong>OpenZeppelin Account</strong><span>Recommended</span></span>
+        <span>${kind === "ledger" ? "Ledger keeps the signer key; OpenZeppelin defines the on-chain account." : "The recommended account model for new MC Wallet accounts."}</span>
+      </span>
+      <span class="onboarding-contract-check">${icon("check")}</span>
+    </button>
+    <button class="onboarding-contract" ${attribute}="argent" type="button" aria-pressed="false">
+      <span class="onboarding-contract-copy">
+        <span class="onboarding-contract-title"><strong>Argent Account</strong><span>Supported</span></span>
+        <span>${kind === "ledger" ? "Use the same Ledger signer with the Argent account model." : "Choose the Argent account model when you prefer it."}</span>
+      </span>
+      <span class="onboarding-contract-check">${icon("check")}</span>
+    </button>
+  </div>`;
+};
+
 /**
  * Renders both recovery grids. Each cell states its 1-based position as content,
  * not a placeholder, so it survives the cell holding a word; the span is
@@ -70,6 +91,7 @@ const recoveryWordInputs = (kind: "generated" | "import"): string =>
             hidden: index >= 12,
           },
           autocomplete: "off",
+          autocapitalize: "off",
           className: "recovery-word",
           inputmode: "text",
           name: `${kind}-word-${index}`,
@@ -196,8 +218,8 @@ const methodStep = (): string => `
 const recoveryStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery" hidden>
     ${flowBack("Back to wallet methods")}
-    ${stepHead("book", "Enter your recovery phrase", "Type each word, or paste the complete phrase into the first field.")}
-    <div class="onboarding-fields">
+    ${stepHead("book", "Enter your recovery phrase", "Type each word, or paste the complete phrase into the first field. Unknown words are flagged as you go.")}
+    <div class="onboarding-fields recovery-fields">
       <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
       <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
       <p id="recovery-result" role="status"></p>
@@ -267,40 +289,81 @@ const passwordStep = (): string => `
     </div>
     <div class="onboarding-step-cta">
       ${button({
-        attributes: { id: "review-account-button" },
+        attributes: { id: "choose-account-contract-button" },
         disabled: true,
-        label: "Review account",
+        label: "Choose account contract",
+      })}
+    </div>
+  </section>`;
+
+const accountContractStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="account-contract" hidden>
+    ${flowBack("Back to passphrase")}
+    ${stepHead("wallet", "Choose your account contract", "This determines the account deployed on Starknet. Your recovery phrase and local vault protection stay the same.")}
+    <div class="onboarding-fields">
+      <input name="accountContractType" type="hidden" value="openzeppelin" />
+      ${accountContractChoices("software")}
+      <p class="hint">MC Wallet supports both account models. OpenZeppelin is the recommended default.</p>
+    </div>
+    <div class="onboarding-step-cta">
+      ${button({
+        attributes: { id: "review-account-button" },
+        label: "Review OpenZeppelin account",
+      })}
+    </div>
+  </section>`;
+
+const recoveryAccountsStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
+    ${flowBack("Back to passphrase")}
+    ${stepHead("wallet", "Find your accounts", "MC Wallet checks the first 20 account indices for both OpenZeppelin and Argent accounts. Accounts with on-chain activity are selected automatically.")}
+    <div class="onboarding-fields">
+      <div class="section-head">
+        <p id="recovery-scan-status" class="hint" role="status">Ready to search.</p>
+        ${iconButton({ attributes: { id: "recovery-scan-retry" }, icon: "refresh", label: "Retry account search" })}
+      </div>
+      <ul class="allowance-list" id="recovery-account-list" aria-label="Recovered accounts"></ul>
+      <details class="disclosure">
+        <summary>Advanced manual index</summary>
+        <div class="disclosure-body onboarding-fields">
+          ${textField({ inputmode: "numeric", label: "Account index", max: RECOVERY_SCAN_LIMITS.maxIndex, min: 0, name: "recoveryManualIndex", type: "number" })}
+          ${button({ attributes: { id: "recovery-manual-search" }, label: "Check this index", variant: "secondary" })}
+        </div>
+      </details>
+      ${mainnetAcknowledgement(
+        "recoveryMainnetAck",
+        "recovery-mainnet-ack",
+        "I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet.",
+      )}
+      <p id="recovery-accounts-result" role="status"></p>
+    </div>
+    <div class="onboarding-step-cta">
+      ${button({
+        attributes: { id: "recover-accounts-button" },
+        disabled: true,
+        label: "Restore selected accounts",
       })}
     </div>
   </section>`;
 
 const accountStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="accounts" hidden>
-    ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Choose accounts to add", "Select the Starknet accounts you want available when setup finishes.")}
+    ${flowBack("Back to account contract")}
+    ${stepHead("wallet", "Review your account", "Confirm the derived public address, then add it to this wallet.")}
     <div class="onboarding-fields">
-      <!-- The phrase's first account. Named "Account 1" to match the rows the
-           scan adds below it, and preselected like them: every row on this screen
-           is an account the phrase has, so the user unselects what they do not
-           want rather than opting in one at a time. -->
       <button
         class="onboarding-account"
         id="account-preview"
         type="button"
-        aria-pressed="true"
+        aria-pressed="false"
       >
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
-          <strong>Account 1</strong>
+          <strong data-preview-label>Primary OpenZeppelin account</strong>
           <span data-preview-address>Deriving account…</span>
         </span>
         <span class="onboarding-account-check">${icon("check")}</span>
       </button>
-      <!-- Accounts this phrase already has on chain beyond the first, filled in
-           by the scan. Empty for a phrase with nothing else deployed or funded,
-           and for a phrase this wallet generated. -->
-      <div id="discovered-accounts" data-discovered-state="idle"></div>
-      <p id="discovered-result" class="hint" role="status"></p>
       ${mainnetAcknowledgement(
         "mainnetAck",
         "mainnet-ack",
@@ -312,17 +375,34 @@ const accountStep = (): string => `
       ${button({
         attributes: { id: "create-wallet-button" },
         disabled: true,
-        label: "Add selected accounts",
+        label: "Add selected account",
         type: "submit",
+      })}
+    </div>
+  </section>`;
+
+const ledgerContractStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="ledger-contract" hidden>
+    ${flowBack("Back to wallet methods")}
+    ${stepHead("shield", "Choose the Ledger account contract", "Your signing key stays on Ledger in either case. This choice only changes the account contract deployed on Starknet.")}
+    <div class="onboarding-fields">
+      ${accountContractChoices("ledger")}
+      <p class="hint">MC Wallet supports both account models. OpenZeppelin is the recommended default.</p>
+    </div>
+    <div class="onboarding-step-cta">
+      ${button({
+        attributes: { id: "ledger-contract-continue" },
+        label: "Continue with OpenZeppelin",
       })}
     </div>
   </section>`;
 
 const ledgerStep = (status: WalletStatus): string => `
   <section class="onboarding-step" data-onboarding-step="ledger" hidden>
-    ${flowBack("Back to wallet methods")}
-    ${stepHead("shield", "Secure this wallet with Ledger", "Set a local vault passphrase, then connect the device and choose accounts.")}
+    ${flowBack("Back to account contract")}
+    ${stepHead("lock", "Protect the Ledger registry", "Create the local vault passphrase used to unlock account labels and settings on this device.")}
     <form id="ledger-setup-form" class="onboarding-fields">
+      <input name="ledgerAccountContractType" type="hidden" value="openzeppelin" />
       ${passwordFields("ledger")}
       <p id="ledger-passphrase-result" role="status"></p>
       ${mainnetAcknowledgement(
@@ -360,7 +440,10 @@ export const onboardingWizard = (status: WalletStatus): string => `
       ${generatedStep()}
       ${verifyStep()}
       ${passwordStep()}
+      ${recoveryAccountsStep()}
+      ${accountContractStep()}
       ${accountStep()}
     </form>
+    ${ledgerContractStep()}
     ${ledgerStep(status)}
   </main>`;

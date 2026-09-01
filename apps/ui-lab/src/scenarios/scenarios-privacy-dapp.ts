@@ -22,7 +22,7 @@ const DAPP_ANONYMIZER = "0x0557890abcdef1234567890abcdef1234567890abcdef12345678
 const FEE_COLLECTOR = "0x0667890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 const OPEN_NOTE_0 = `\${openNoteIds[0]}`;
 
-const context = (marker: string) => ({
+const context = (marker: string): NonNullable<PendingApproval["context"]> => ({
   accountId: softwareAccount.id,
   chainId: "0x534e5f4d41494e",
   networkId: "SN_MAIN",
@@ -37,6 +37,8 @@ const relayFee = {
   token: STRK_TOKEN.address,
   type: "withdraw" as const,
 };
+
+const USDC_REVIEW_ASSET = { address: USDC_ADDRESS, symbol: "USDC" } as const;
 
 const selectiveBalances: PendingApproval = {
   context: context("1"),
@@ -68,6 +70,7 @@ const prepareTransfer: PendingApproval = {
   id: approvalId("203"),
   kind: "strk20-prepare",
   origin: TERMINAL_ORIGIN,
+  reviewAssets: [USDC_REVIEW_ASSET],
   summaries: [
     "Prepare a proof to transfer 25 USDC privately",
     "The site receives a proof for this frozen action only",
@@ -88,6 +91,7 @@ const privateTransfer: PendingApproval = {
   kind: "strk20-invoke",
   origin: TERMINAL_ORIGIN,
   relayFeeAction: relayFee,
+  reviewAssets: [USDC_REVIEW_ASSET, STRK_TOKEN],
   summaries: [
     "Transfer 25 USDC privately to Research treasury",
     "Pay the private relay fee from the STRK private balance",
@@ -108,6 +112,7 @@ const privateWithdrawal: PendingApproval = {
   kind: "strk20-invoke",
   origin: TERMINAL_ORIGIN,
   relayFeeAction: relayFee,
+  reviewAssets: [USDC_REVIEW_ASSET, STRK_TOKEN],
   summaries: [
     "Withdraw 100 USDC to Daily account",
     "The public recipient and amount will be visible on Starknet",
@@ -135,6 +140,7 @@ const dappAnonymizer: PendingApproval = {
   ],
   kind: "strk20-prepare",
   origin: DAPP_ORIGIN,
+  reviewAssets: [ETH_TOKEN],
   summaries: [
     "Create one open ETH note for Private Market",
     "Invoke the reviewed Private Market anonymizer with that note",
@@ -167,6 +173,7 @@ const privateSwap: PendingApproval = {
   insights: ["The wallet verified the AVNU action order, executor, recipient, and fee token."],
   kind: "strk20-prepare",
   origin: TERMINAL_ORIGIN,
+  reviewAssets: [USDC_REVIEW_ASSET, ETH_TOKEN, STRK_TOKEN],
   summaries: [
     "Privately swap 25 USDC for at least 0.0068 ETH",
     "Receive the bought ETH as a new private note",
@@ -206,6 +213,7 @@ const subaccountInvoke: PendingApproval = {
   ],
   kind: "strk20-prepare",
   origin: DAPP_ORIGIN,
+  reviewAssets: [USDC_REVIEW_ASSET],
   summaries: [
     "Open one Private Market position through the scoped sub-account",
     "Collect only the resulting balance difference into private notes",

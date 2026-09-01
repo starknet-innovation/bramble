@@ -5,6 +5,7 @@
  * and duplicate-account rejections.
  */
 import { describe, expect, test } from "bun:test";
+import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import { fakeKms } from "@mc-wallet/testkit/fake-kms";
 import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
@@ -13,11 +14,17 @@ import type { Vault } from "@mc-wallet/vault/schema";
 import { emptyVault } from "@mc-wallet/vault/schema";
 import { activeAccountSecrets, createWalletVaultService } from "@mc-wallet/vault/service";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const vaultKey = "mc-wallet:vault";
 const migrationKey = "mc-wallet:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
+const defaultAccountInput = {
+  accountContractType: "openzeppelin",
+  mnemonic,
+  vaultPassphrase,
+} as const;
 
 const makeService = (kms: KmsPort = fakeKms()) => {
   const store = createMemoryStore();
@@ -58,9 +65,26 @@ const seedVaultService = async (vault: Vault, kms: KmsPort = fakeKms()) => {
 };
 
 describe("vault service guard branches", () => {
+  test("generates mnemonics through KMS", async () => {
+    const { service } = makeService();
+    await expect(service.generateMnemonic()).resolves.toBe(mnemonic);
+  });
+
+  test("fails closed for direct popup vault access", () => {
+    const { encryptedStore } = makeService();
+    expect(() =>
+      createWalletVaultService({
+        actor: "popup",
+        encryptedStore,
+        kms: fakeKms(),
+        migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
+      }),
+    ).toThrow("Storage access denied");
+  });
+
   test("setActiveAccount throws when the account id is absent", async () => {
     const { service } = makeService();
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
     await expect(
       service.setActiveAccount({ accountId: "SN_MAIN:0x9", vaultPassphrase }),
     ).rejects.toThrow("Account not found");
@@ -70,17 +94,21 @@ describe("vault service guard branches", () => {
     // The fake KMS returns a constant keypair, so a second createAccount derives
     // the same address/id.
     const { service } = makeService();
-    await service.createAccount({ mnemonic, vaultPassphrase });
-    await expect(service.createAccount({ mnemonic, vaultPassphrase })).rejects.toThrow(
+    await service.createAccount(defaultAccountInput);
+    await expect(service.createAccount(defaultAccountInput)).rejects.toThrow(
       "Account already exists",
     );
   });
 
   test("addDerivedAccount rejects when the derived id already exists", async () => {
     const { service } = makeService();
-    await service.createAccount({ mnemonic, vaultPassphrase });
+    await service.createAccount(defaultAccountInput);
     await expect(
-      service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase }),
+      service.addDerivedAccount({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        vaultPassphrase,
+      }),
     ).rejects.toThrow("Account already exists");
   });
 
@@ -93,9 +121,29 @@ describe("vault service guard branches", () => {
 
   test("ensureNetworkAccount returns the existing same-network account", async () => {
     const { service } = makeService();
-    const created = await service.createAccount({ mnemonic, vaultPassphrase });
+    const created = await service.createAccount(defaultAccountInput);
     const same = await service.ensureNetworkAccount({ networkId: "SN_MAIN", vaultPassphrase });
     expect(same.id).toBe(created.id);
+  });
+
+  test("ensureNetworkAccount preserves Argent contract semantics", async () => {
+    const { service } = makeService();
+    const mainnet = await service.createAccount({
+      accountContractType: "argent",
+      mnemonic,
+      vaultPassphrase,
+    });
+    const sepolia = await service.ensureNetworkAccount({
+      networkId: "SN_SEPOLIA",
+      vaultPassphrase,
+    });
+
+    expect(sepolia).toMatchObject({
+      accountContractType: "argent",
+      address: mainnet.address,
+      networkId: "SN_SEPOLIA",
+    });
+    expect(sameFelt(sepolia.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)).toBe(true);
   });
 
   test("ensureNetworkAccount throws when the KMS returns an invalid address", async () => {
@@ -109,7 +157,12 @@ describe("vault service guard branches", () => {
       },
     };
     const { service } = makeService(badKms);
-    await service.createAccount({ mnemonic, networkId: "SN_MAIN", vaultPassphrase });
+    await service.createAccount({
+      accountContractType: "openzeppelin",
+      mnemonic,
+      networkId: "SN_MAIN",
+      vaultPassphrase,
+    });
     await expect(
       service.ensureNetworkAccount({ networkId: "SN_SEPOLIA", vaultPassphrase }),
     ).rejects.toThrow("invalid account address");
@@ -121,6 +174,7 @@ describe("vault service guard branches", () => {
     // differently, so the same-key short circuit misses it and the id-collision
     // guard must reject the duplicate rather than overwrite it.
     const mainnet: AccountRef = {
+      accountContractType: "openzeppelin",
       address: "0xaaa",
       classHash: "0x111111",
       derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -130,6 +184,7 @@ describe("vault service guard branches", () => {
       publicKeyY: "0xa2",
     };
     const foreignSepolia: AccountRef = {
+      accountContractType: "openzeppelin",
       address: "0xbbb",
       classHash: "0xabcdef",
       derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -144,7 +199,7 @@ describe("vault service guard branches", () => {
       activeAccountId: mainnet.id,
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 4,
+      schemaVersion: 7,
       signingKeys: [
         { accountId: mainnet.id, privateKey: "0x123456" },
         { accountId: foreignSepolia.id, privateKey: "0x654321" },

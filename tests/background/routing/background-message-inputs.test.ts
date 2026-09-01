@@ -2,21 +2,25 @@
  * Background message parser checks reject ambiguous runtime command shapes.
  */
 import { describe, expect, test } from "bun:test";
-import { readPreviewAccountInput } from "../../../apps/extension/src/background/accounts/account-creation-inputs";
 import {
+  readDiscoverRecoveryAccountsInput,
+  readPreviewAccountInput,
+  readRecoverAccountsInput,
+  readValidateMnemonicInput,
+} from "../../../apps/extension/src/background/accounts/account-creation-inputs";
+import {
+  readActivityInput,
   readAddAccountInput,
   readAddInvokeTransactionInput,
   readApprovalIdInput,
   readCreateAccountInput,
   readGetGrantedAccountsInput,
-  readGrantOriginInput,
   readRequestAccountsInput,
   readRevealSecretsInput,
   readRevokeOriginInput,
   readSaveAddressInput,
   readSetActiveAccountInput,
   readSetActiveNetworkInput,
-  readSignHashInput,
   readSwitchChainInput,
   readTransferInput,
   readTypeOnlyInput,
@@ -34,20 +38,23 @@ describe("background message parsers", () => {
     expect(readTypeOnlyInput({ type: "wallet.lock" }, "wallet.status")).toBe(false);
   });
 
+  test("requires an explicit history refresh before a forced explorer scan", () => {
+    expect(readActivityInput({ forceHistory: true, type: "wallet.activity" })).toBeNull();
+    expect(
+      readActivityInput({ forceHistory: true, refreshHistory: true, type: "wallet.activity" }),
+    ).toEqual({
+      cached: false,
+      forceHistory: true,
+      refreshHistory: true,
+    });
+  });
+
   test("reject extra fields in runtime messages", () => {
     expect(
       readCreateAccountInput({
         debug: true,
         mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
         type: "wallet.createAccount",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
-    expect(
-      readGrantOriginInput({
-        debug: true,
-        origin: "https://example.com",
-        type: "wallet.grantOrigin",
         vaultPassphrase,
       }),
     ).toBeNull();
@@ -61,6 +68,26 @@ describe("background message parsers", () => {
     expect(
       readApprovalIdInput({ debug: true, id: approvalId, type: "wallet.denyOrigin" }),
     ).toBeNull();
+    // The reviewed-fee echo is optional, validated by the shared fee grammar,
+    // and refuses the whole decision when malformed — a dropped ceiling would be
+    // an unbound submission that looks bound.
+    expect(
+      readApprovalIdInput({
+        id: approvalId,
+        reviewedFee: { overallFee: "1000", unit: "FRI" },
+        type: "wallet.approveOrigin",
+      }),
+    ).toEqual({ id: approvalId, reviewedFee: { overallFee: "1000", unit: "FRI" } });
+    expect(
+      readApprovalIdInput({
+        id: approvalId,
+        reviewedFee: { overallFee: "1000", unit: "DOGE" },
+        type: "wallet.approveOrigin",
+      }),
+    ).toBeNull();
+    expect(readApprovalIdInput({ id: approvalId, type: "wallet.approveOrigin" })).toEqual({
+      id: approvalId,
+    });
     expect(
       readRequestAccountsInput({
         debug: true,
@@ -75,14 +102,6 @@ describe("background message parsers", () => {
         type: "wallet.requestAccounts",
       }),
     ).toEqual({ origin: "https://example.com", silent: true });
-    expect(
-      readSignHashInput({
-        debug: true,
-        messageHash: "0x1234",
-        type: "wallet.signHash",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
     expect(
       readSetActiveAccountInput({
         accountId,
@@ -132,22 +151,6 @@ describe("background message parsers", () => {
         mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
         networkId: "toString",
         type: "wallet.createAccount",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
-    expect(
-      readGrantOriginInput({
-        accountId: "not-an-account",
-        origin: "https://example.com",
-        type: "wallet.grantOrigin",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
-    expect(
-      readSignHashInput({
-        accountId: "not-an-account",
-        messageHash: "0x1234",
-        type: "wallet.signHash",
         vaultPassphrase,
       }),
     ).toBeNull();
@@ -205,9 +208,24 @@ describe("background message parsers", () => {
         address: "0x456",
         label: "Treasury",
         networkId: "SN_SEPOLIA",
+        publicKeyX: "0x789",
         type: "wallet.saveAddress",
       }),
-    ).toEqual({ address: "0x456", label: "Treasury", networkId: "SN_SEPOLIA" });
+    ).toEqual({
+      address: "0x456",
+      label: "Treasury",
+      networkId: "SN_SEPOLIA",
+      publicKeyX: "0x789",
+    });
+    expect(
+      readSaveAddressInput({
+        address: "0x456",
+        label: "Treasury",
+        networkId: "SN_SEPOLIA",
+        publicKeyX: "0x0",
+        type: "wallet.saveAddress",
+      }),
+    ).toBeNull();
     expect(
       readAddInvokeTransactionInput({
         calls: [{ calldata: ["0x1", "2"], contractAddress: "0x123", entrypoint: "transfer" }],
@@ -234,14 +252,6 @@ describe("background message parsers", () => {
         type: "wallet.transfer",
       }),
     ).toBeNull();
-    expect(
-      readSignHashInput({
-        accountId,
-        messageHash: "0x1234",
-        type: "wallet.signHash",
-        vaultPassphrase,
-      }),
-    ).toEqual({ accountId, messageHash: "0x1234", vaultPassphrase });
   });
 
   test("reject short vault passphrases before service calls", () => {
@@ -255,23 +265,9 @@ describe("background message parsers", () => {
       }),
     ).toBeNull();
     expect(
-      readGrantOriginInput({
-        origin: "https://example.com",
-        type: "wallet.grantOrigin",
-        vaultPassphrase: shortPassphrase,
-      }),
-    ).toBeNull();
-    expect(
       readGetGrantedAccountsInput({
         origin: "https://example.com",
         type: "wallet.getGrantedAccounts",
-        vaultPassphrase: shortPassphrase,
-      }),
-    ).toBeNull();
-    expect(
-      readSignHashInput({
-        messageHash: "0x1234",
-        type: "wallet.signHash",
         vaultPassphrase: shortPassphrase,
       }),
     ).toBeNull();
@@ -289,7 +285,14 @@ describe("background message parsers", () => {
   });
 
   test("reads add-account messages carrying only a network", () => {
-    expect(readAddAccountInput({ networkId: "SN_MAIN", type: "wallet.addAccount" })).toEqual({
+    expect(
+      readAddAccountInput({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        type: "wallet.addAccount",
+      }),
+    ).toEqual({
+      accountContractType: "openzeppelin",
       networkId: "SN_MAIN",
     });
     expect(readAddAccountInput({ networkId: "SN_BAD", type: "wallet.addAccount" })).toBeNull();
@@ -329,18 +332,39 @@ describe("background message parsers", () => {
         vaultPassphrase,
       }),
     ).toBeNull();
+    expect(
+      readCreateAccountInput({
+        mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+        mnemonicPassphrase: "x".repeat(1_025),
+        type: "wallet.createAccount",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
+    expect(
+      readCreateAccountInput({
+        mnemonic: "x".repeat(513),
+        type: "wallet.createAccount",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
   });
 
   test("reads exact account previews without accepting a vault passphrase", () => {
     const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
     expect(
       readPreviewAccountInput({
+        accountContractType: "openzeppelin",
         accountIndex: 0,
         mnemonic,
         networkId: "SN_SEPOLIA",
         type: "wallet.previewAccount",
       }),
-    ).toEqual({ accountIndex: 0, mnemonic, networkId: "SN_SEPOLIA" });
+    ).toEqual({
+      accountContractType: "openzeppelin",
+      accountIndex: 0,
+      mnemonic,
+      networkId: "SN_SEPOLIA",
+    });
     expect(
       readPreviewAccountInput({
         mnemonic,
@@ -357,6 +381,59 @@ describe("background message parsers", () => {
       }),
     ).toBeNull();
     expect(readPreviewAccountInput({ mnemonic: "  ", type: "wallet.previewAccount" })).toBeNull();
+  });
+
+  test("reads exact mnemonic validation without accepting extra fields", () => {
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+    expect(readValidateMnemonicInput({ mnemonic, type: "wallet.validateMnemonic" })).toEqual({
+      mnemonic,
+    });
+    expect(
+      readValidateMnemonicInput({
+        mnemonic,
+        type: "wallet.validateMnemonic",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
+    expect(
+      readValidateMnemonicInput({ mnemonic: "  ", type: "wallet.validateMnemonic" }),
+    ).toBeNull();
+    expect(readValidateMnemonicInput({ mnemonic, type: "wallet.previewAccount" })).toBeNull();
+  });
+
+  test("accepts only bounded exact recovery discovery and selection payloads", () => {
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+    expect(
+      readDiscoverRecoveryAccountsInput({
+        manualIndex: 21,
+        mnemonic,
+        networkId: "SN_MAIN",
+        type: "wallet.discoverRecoveryAccounts",
+      }),
+    ).toEqual({ manualIndex: 21, mnemonic, networkId: "SN_MAIN" });
+    expect(
+      readDiscoverRecoveryAccountsInput({
+        manualIndex: -1,
+        mnemonic,
+        networkId: "SN_MAIN",
+        type: "wallet.discoverRecoveryAccounts",
+      }),
+    ).toBeNull();
+    const recovery = {
+      mnemonic,
+      networkId: "SN_MAIN",
+      selections: [{ accountContractType: "argent", accountIndex: 3 }],
+      type: "wallet.recoverAccounts",
+      vaultPassphrase,
+    } as const;
+    expect(readRecoverAccountsInput(recovery)).toEqual({
+      mnemonic,
+      networkId: "SN_MAIN",
+      selections: recovery.selections,
+      vaultPassphrase,
+    });
+    expect(readRecoverAccountsInput({ ...recovery, debug: true })).toBeNull();
+    expect(readRecoverAccountsInput({ ...recovery, selections: [] })).toBeNull();
   });
 
   test("reads and rejects origin-revocation messages", () => {

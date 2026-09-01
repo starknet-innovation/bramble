@@ -5,8 +5,7 @@
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { createDiscoveredAccountsPanel } from "../onboarding/discovered-accounts-ui";
-import { addAccountsAtIndexes, restoreOutcomeMessage } from "../onboarding/restore-accounts";
+import { buildInfo } from "../../shell/build-info";
 import { bindGroupControls } from "./group-ui";
 
 /**
@@ -48,11 +47,11 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
     buttonBusy(submitButton, true);
     void deps.wallet.setAccountLabel(accountId, label).then(
       async () => {
-        showToast(label ? "Label saved" : "Label cleared", "success");
+        showToast(label ? "Label saved" : "Label cleared", "success", form);
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Label update failed"), "error");
+        showToast(errorMessage(error, "Label update failed"), "error", form);
         if (result) {
           result.textContent = errorMessage(error, "Label update failed");
         }
@@ -71,73 +70,6 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
 export const bindAddAccount = (deps: SettingsUiDeps): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#new-account");
   button?.addEventListener("click", () => deps.startAddAccount());
-};
-
-/**
- * Binds "Find my other accounts" on the account flow: scans this wallet's
- * recovery phrase for accounts that already exist on chain, lists them with every
- * new one preselected, and adds only what the user confirms.
- *
- * Reachable from the accounts surface rather than only from setup, because a
- * wallet imported before this existed is exactly the wallet that needs it.
- */
-export const bindRestoreAccounts = (deps: SettingsUiDeps): void => {
-  const button = deps.app?.querySelector<HTMLButtonElement>("#restore-accounts");
-  const result = deps.app?.querySelector<HTMLElement>("#new-account-result");
-  const say = (message: string): void => {
-    if (result) {
-      result.textContent = message;
-    }
-  };
-  let found = 0;
-  const panel = createDiscoveredAccountsPanel({
-    confirm: {
-      label: "Add selected accounts",
-      onConfirm: () => {
-        const chosen = panel.selected();
-        if (chosen.length === 0) {
-          say("Select at least one account to add.");
-          return;
-        }
-        say("Adding the selected accounts…");
-        void addAccountsAtIndexes(deps.wallet, deps.networkId(), chosen).then(
-          async (added) => {
-            showToast(restoreOutcomeMessage({ added, found }), "success");
-            // The re-render clears the list, which is right: its selection
-            // described a scan that has now been acted on.
-            await rerender(deps);
-          },
-          (error: unknown) => {
-            say(errorMessage(error, "Could not add the selected accounts"));
-          },
-        );
-      },
-    },
-    container: deps.app?.querySelector<HTMLElement>("#discovered-accounts") ?? null,
-  });
-
-  button?.addEventListener("click", () => {
-    buttonBusy(button, true);
-    say("Checking the chain for accounts from your recovery phrase…");
-    void deps.wallet.scanSeedAccounts().then(
-      (candidates) => {
-        found = candidates.length;
-        const addable = candidates.filter((candidate) => !candidate.alreadyAdded);
-        if (addable.length === 0) {
-          panel.clear();
-          showToast(restoreOutcomeMessage({ added: 0, found }), "success");
-        } else {
-          panel.render(candidates);
-          say("Select the accounts to add, then confirm.");
-        }
-        buttonBusy(button, false);
-      },
-      (error: unknown) => {
-        say(errorMessage(error, "Could not scan for accounts"));
-        buttonBusy(button, false);
-      },
-    );
-  });
 };
 
 /**
@@ -169,11 +101,11 @@ export const bindContacts = (deps: SettingsUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.removeAddress(id).then(
         async () => {
-          showToast("Contact removed", "success");
+          showToast("Contact removed", "success", button);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Contact removal failed"), "error");
+          showToast(errorMessage(error, "Contact removal failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -204,11 +136,12 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
               ? "Wallet requests open as a popup"
               : "Wallet requests open in the side panel",
             "success",
+            button,
           );
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Wallet request preference failed"), "error");
+          showToast(errorMessage(error, "Wallet request preference failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -227,11 +160,11 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.setDisplay({ theme }).then(
         async () => {
-          showToast(`Theme: ${theme}`, "success");
+          showToast(`Theme: ${theme}`, "success", button);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Theme update failed"), "error");
+          showToast(errorMessage(error, "Theme update failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -247,15 +180,59 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
     currencySelect.disabled = true;
     void deps.wallet.setDisplay({ displayCurrency: value }).then(
       async () => {
-        showToast(`Currency: ${value.toUpperCase()}`, "success");
+        showToast(`Currency: ${value.toUpperCase()}`, "success", currencySelect);
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Currency update failed"), "error");
+        showToast(errorMessage(error, "Currency update failed"), "error", currencySelect);
         if (result) {
           result.textContent = errorMessage(error, "Currency update failed");
         }
         currencySelect.disabled = false;
+      },
+    );
+  });
+
+  const diagnosticsToggle = deps.app?.querySelector<HTMLInputElement>("#reliability-diagnostics");
+  diagnosticsToggle?.addEventListener("change", () => {
+    diagnosticsToggle.disabled = true;
+    void deps.wallet.setDisplay({ reliabilityDiagnostics: diagnosticsToggle.checked }).then(
+      async () => {
+        showToast(
+          diagnosticsToggle.checked ? "Local diagnostics enabled" : "Local diagnostics cleared",
+          "success",
+          diagnosticsToggle,
+        );
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        diagnosticsToggle.checked = !diagnosticsToggle.checked;
+        showToast(errorMessage(error, "Diagnostic preference failed"), "error", diagnosticsToggle);
+        diagnosticsToggle.disabled = false;
+      },
+    );
+  });
+
+  const diagnosticsExport = deps.app?.querySelector<HTMLButtonElement>("#diagnostics-export");
+  diagnosticsExport?.addEventListener("click", () => {
+    buttonBusy(diagnosticsExport, true);
+    void deps.wallet.loadDiagnostics().then(
+      (diagnostics) => {
+        const blob = new Blob([JSON.stringify({ build: buildInfo(), diagnostics }, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const anchor = diagnosticsExport.ownerDocument.createElement("a");
+        anchor.href = url;
+        anchor.download = "mc-wallet-diagnostics.json";
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        showToast("Diagnostics downloaded", "success", diagnosticsExport);
+        buttonBusy(diagnosticsExport, false);
+      },
+      (error: unknown) => {
+        showToast(errorMessage(error, "Diagnostic export failed"), "error", diagnosticsExport);
+        buttonBusy(diagnosticsExport, false);
       },
     );
   });
@@ -278,16 +255,16 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
           type: "application/json",
         });
         const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
+        const anchor = exportButton.ownerDocument.createElement("a");
         anchor.href = url;
         anchor.download = "mc-wallet-backup.json";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
-        showToast("Backup downloaded", "success");
+        showToast("Backup downloaded", "success", exportButton);
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Backup export failed"), "error");
+        showToast(errorMessage(error, "Backup export failed"), "error", exportButton);
         buttonBusy(exportButton, false);
       },
     );
@@ -296,7 +273,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
   importButton?.addEventListener("click", () => {
     const file = fileInput?.files?.[0];
     if (!file) {
-      showToast("Choose a backup file first", "error");
+      showToast("Choose a backup file first", "error", importButton);
       return;
     }
     buttonBusy(importButton, true);
@@ -305,11 +282,11 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
       .then((text) => deps.wallet.importPreferences(JSON.parse(text) as unknown))
       .then(
         async () => {
-          showToast("Backup restored", "success");
+          showToast("Backup restored", "success", importButton);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Backup restore failed"), "error");
+          showToast(errorMessage(error, "Backup restore failed"), "error", importButton);
           if (result) {
             result.textContent = errorMessage(error, "Backup restore failed");
           }

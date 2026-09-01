@@ -1,5 +1,5 @@
 import type { HomeTab, SidepanelWallet } from "@mc-wallet/wallet-ui/lab";
-import { bindHomeUi } from "@mc-wallet/wallet-ui/lab";
+import { bindHomeUi, bindReceiveWalletCard } from "@mc-wallet/wallet-ui/lab";
 import { discoveredNft, softwareAccount, statusFor } from "../fixtures/fixtures";
 import {
   allowances,
@@ -13,6 +13,30 @@ import {
 } from "../fixtures/journey-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
 import type { FrameContext, WalletScenario } from "../runtime/types";
+
+const NOSTR_PUBLIC_KEY = "22".repeat(32);
+
+const hydrateReceiveCard = async (context: FrameContext): Promise<void> => {
+  bindReceiveWalletCard({
+    app: context.app,
+    render: async () => undefined,
+    wallet: {
+      loadNostrPublicKey: async () => NOSTR_PUBLIC_KEY,
+    } as unknown as SidepanelWallet,
+  });
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+};
+
+const showAddressOnlyReceiveCard = async (context: FrameContext): Promise<void> => {
+  bindReceiveWalletCard({
+    app: context.app,
+    render: async () => undefined,
+    wallet: {
+      loadNostrPublicKey: async () => Promise.reject(new Error("Coordination unavailable")),
+    } as unknown as SidepanelWallet,
+  });
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+};
 
 const bindFixtureHome = (context: FrameContext): void => {
   let tab: HomeTab = context.app.querySelector(
@@ -79,6 +103,27 @@ const openPortfolioMenu = (context: FrameContext): void => {
 
 export const portfolioScenario: WalletScenario = {
   checkpoints: [
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: {
+            asOf: 1_787_121_000_000,
+            balances: journeyBalances,
+            stale: true,
+          },
+          preferences: journeyPreferences,
+          priceAsOf: 1_787_120_700_000,
+          priceStale: true,
+          prices: journeyPrices,
+          privacy: { error: null, loading: true, value: null },
+        }),
+      id: "saved-data",
+      label: "Saved data during outage",
+      narrative:
+        "Last-known balances remain usable while the orange network indicator reveals capture times on hover or focus.",
+      prepare: bindFixtureHome,
+      state: { balances: "saved", pricing: "saved", recovery: "automatic" },
+    },
     {
       content: () =>
         walletDashboard({
@@ -175,6 +220,21 @@ export const portfolioScenario: WalletScenario = {
       content: () =>
         walletDashboard({
           balanceState: { balances: journeyBalances },
+          deployment: false,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+          view: "deploy-account",
+        }),
+      id: "deploy-account",
+      label: "Deploy account review",
+      narrative:
+        "Single-signer deployment uses a dedicated transaction review and receipt rather than expanding Home.",
+      state: { accountDeployment: "required", task: "review deployment" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
           preferences: journeyPreferences,
           priceStale: true,
           prices: {},
@@ -221,7 +281,7 @@ export const portfolioScenario: WalletScenario = {
   id: "portfolio",
   surface: "sidepanel",
   title: "Home and portfolio",
-  views: ["home"],
+  views: ["home", "deploy-account"],
 };
 
 export const assetsScenario: WalletScenario = {
@@ -231,8 +291,26 @@ export const assetsScenario: WalletScenario = {
       id: "receive",
       label: "Receive",
       narrative:
-        "The active address, QR, copy controls, and network warning form one receiving task.",
-      state: { account: softwareAccount.id, network: "SN_MAIN" },
+        "One versioned wallet card carries the active Starknet address, signer key, and private coordination identity without exposing secret material.",
+      prepare: hydrateReceiveCard,
+      state: { account: softwareAccount.id, contactCard: "complete", network: "SN_MAIN" },
+    },
+    {
+      content: () => walletDashboard({ preferences: journeyPreferences, view: "receive" }),
+      id: "receive-preparing",
+      label: "Receive card preparing",
+      narrative:
+        "The share control waits for the complete local coordination identity rather than exposing a partial contact card.",
+      state: { contactCard: "preparing", share: "disabled" },
+    },
+    {
+      content: () => walletDashboard({ preferences: journeyPreferences, view: "receive" }),
+      id: "receive-address-only",
+      label: "Receive without coordination",
+      narrative:
+        "If secure coordination is unavailable, the address QR remains useful and the unavailable complete card is not presented as shareable.",
+      prepare: showAddressOnlyReceiveCard,
+      state: { contactCard: "address-only", coordination: "unavailable" },
     },
     {
       content: () =>
@@ -308,8 +386,9 @@ export const assetsScenario: WalletScenario = {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "address-book" }),
       id: "address-book",
       label: "Address book",
-      narrative: "Saved recipients remain network-scoped and reusable from Send.",
-      state: { saved: 1 },
+      narrative:
+        "A shared wallet card fills the network-scoped address, signer key, and authenticated coordination identity together; manual fields remain available.",
+      state: { coordination: "ready", import: "wallet card", saved: 1 },
     },
     {
       content: () =>

@@ -3,7 +3,11 @@
  * and graceful offline fallback. Network access is stubbed.
  */
 import { describe, expect, test } from "bun:test";
-import { createPriceService, type HttpResponse } from "@mc-wallet/portfolio/prices";
+import {
+  createPriceService,
+  type HttpResponse,
+  PRICE_CHART_POINT_LIMIT,
+} from "@mc-wallet/portfolio/prices";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
@@ -63,6 +67,14 @@ describe("createPriceService.getPrices", () => {
     expect(calls).toHaveLength(1);
 
     clock.value += 10 * 60 * 1000;
+    const cached = await service.getPrices({
+      addresses: [USDC],
+      cached: true,
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+    expect(cached).toMatchObject({ asOf: 1000, prices: { [USDC]: 2 }, stale: true });
+    expect(calls).toHaveLength(1);
     await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" });
     expect(calls).toHaveLength(2);
   });
@@ -80,7 +92,7 @@ describe("createPriceService.getPrices", () => {
   });
 
   test("returns empty, stale-flagged prices when offline with no cache", async () => {
-    const { service } = makeHarness(() => {
+    const { calls, service } = makeHarness(() => {
       throw new Error("offline");
     });
 
@@ -89,11 +101,13 @@ describe("createPriceService.getPrices", () => {
     expect(
       await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" }),
     ).toEqual({ asOf: null, changes: {}, currency: "usd", prices: {}, stale: true });
+    await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" });
+    expect(calls).toHaveLength(1);
   });
 
   test("falls back to the last-known-good prices when the host becomes unreachable", async () => {
     let online = true;
-    const { clock, service } = makeHarness((url) => {
+    const { calls, clock, service } = makeHarness((url) => {
       if (!online) {
         throw new Error("offline");
       }
@@ -132,6 +146,8 @@ describe("createPriceService.getPrices", () => {
       prices: { [USDC]: 2 },
       stale: true,
     });
+    await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" });
+    expect(calls).toHaveLength(2);
 
     // Host recovers on the next refresh: fresh, non-stale prices with a new asOf.
     online = true;
@@ -169,6 +185,27 @@ describe("createPriceService.getPrices", () => {
     expect(mixed.prices[STRK]).toBeUndefined();
     // No cached data contributed, so the served snapshot is dated to now().
     expect(mixed.asOf).toBe(clock.value);
+  });
+
+  test("ignores unrelated addresses injected into a single-address response", async () => {
+    const { calls, service } = makeHarness((url) =>
+      url.includes(USDC)
+        ? jsonResponse({
+            [STRK]: { eur: 666, gbp: 666, usd: 666 },
+            [USDC]: { eur: 1.5, gbp: 1.2, usd: 2 },
+          })
+        : jsonResponse({ [STRK]: { eur: 3, gbp: 2.5, usd: 4 } }),
+    );
+
+    await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" });
+    const strk = await service.getPrices({
+      addresses: [STRK],
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(strk.prices).toEqual({ [STRK]: 4 });
   });
 
   test("dates a mixed fetch to the oldest contributing capture when serving a cached token", async () => {
@@ -212,6 +249,34 @@ describe("createPriceService.getPrices", () => {
 });
 
 describe("createPriceService.getTokenChart", () => {
+  test("bounds one hostile chart response before caching it", async () => {
+    const points = Array.from({ length: PRICE_CHART_POINT_LIMIT + 1 }, (_, index) => [
+      index,
+      index,
+    ]);
+    const { service } = makeHarness(() => jsonResponse({ prices: points }));
+
+    const chart = await service.getTokenChart({
+      address: USDC,
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+    expect(chart.points).toHaveLength(PRICE_CHART_POINT_LIMIT);
+  });
+
+  test("does not scan past the chart point budget looking for valid rows", async () => {
+    const points: unknown[] = Array.from({ length: PRICE_CHART_POINT_LIMIT }, () => null);
+    points.push([0, 666]);
+    const { service } = makeHarness(() => jsonResponse({ prices: points }));
+
+    const chart = await service.getTokenChart({
+      address: USDC,
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+    expect(chart.points).toEqual([]);
+  });
+
   test("extracts the price column and caches it", async () => {
     const { calls, clock, service } = makeHarness(() =>
       jsonResponse({

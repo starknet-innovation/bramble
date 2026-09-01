@@ -11,6 +11,8 @@ import type {
   AddressBookEntry,
   ApprovalSurfacePreference,
   DisplayCurrency,
+  ExplorerApiOverrides,
+  ExplorerFallback,
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
@@ -28,11 +30,23 @@ export type WalletPreferences = {
   readonly addressBook: readonly AddressBookEntry[];
   readonly customNetworks?: readonly CustomNetwork[];
   readonly displayCurrency?: DisplayCurrency;
+  /** Per-network Starkscan-compatible read API override. */
+  readonly explorerApiUrls?: ExplorerApiOverrides;
+  /**
+   * Per-network opt-in for the third-party explorer read lane. Absent (or
+   * absent for one network) means "never decided", which the wallet resolves
+   * through `explorerFallbackAllowed` rather than by writing a value here.
+   */
+  readonly explorerFallback?: ExplorerFallback;
   readonly groups?: AccountGroups;
   readonly hiddenTokens?: readonly string[];
   readonly nftIndexerUrl?: string;
   readonly nfts?: readonly WatchedNft[];
+  /** Custom relay replacing the reviewed Nostr defaults for explicit multisig handoffs. */
+  readonly nostrRelayUrl?: string;
   readonly rpcOverrides?: RpcOverrides;
+  /** Opt-in process-local aggregate RPC counters; never uploaded automatically. */
+  readonly reliabilityDiagnostics?: boolean;
   readonly schemaVersion: 1;
   readonly strk20Networks?: Strk20NetworkConfigs;
   /** @deprecated Legacy incomplete prover-only setting retained for backup compatibility. */
@@ -66,11 +80,24 @@ export type WalletPreferencesStore = {
     readonly groupId: string;
     readonly member: boolean;
   }) => Promise<WalletPreferences>;
+  /**
+   * Records an explicit per-network choice about the third-party explorer read
+   * lane. Writing `true` accepts that the account address is disclosed to the
+   * explorer once every configured RPC has failed; `false` refuses the lane on
+   * that network. There is deliberately no "clear" case: once the user has
+   * decided, the derived default never silently takes the decision back.
+   */
+  readonly setExplorerFallback: (input: {
+    readonly apiUrl?: string;
+    readonly enabled: boolean;
+    readonly networkId: StarknetNetworkId;
+  }) => Promise<WalletPreferences>;
   readonly setGroupIcon: (input: {
     readonly icon: AccountGroupIcon;
     readonly id: string;
   }) => Promise<WalletPreferences>;
   readonly setNftIndexerUrl: (input: { readonly url: string }) => Promise<WalletPreferences>;
+  readonly setNostrRelayUrl: (input: { readonly relayUrl: string }) => Promise<WalletPreferences>;
   readonly setNftSpam: (input: {
     readonly id: string;
     readonly spam: boolean;
@@ -83,6 +110,7 @@ export type WalletPreferencesStore = {
   readonly setDisplay: (input: {
     readonly approvalSurface?: ApprovalSurfacePreference;
     readonly displayCurrency?: DisplayCurrency;
+    readonly reliabilityDiagnostics?: boolean;
     readonly theme?: ThemeChoice;
   }) => Promise<WalletPreferences>;
   readonly setRpcOverride: (input: {

@@ -16,7 +16,12 @@ import type { RuntimeSender } from "../../../apps/extension/src/background/routi
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
-import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
+import {
+  flushHeld,
+  latestApprovalId,
+  reviewedApprovalFee,
+  waitForPendingApprovals,
+} from "../../support/held";
 import {
   invokeAccount as account,
   invokeContentSender as contentSender,
@@ -64,10 +69,10 @@ describe("per-transaction invoke approval (A-H1)", () => {
     expect(pending[0]?.kind).toBe("invoke");
 
     const id = await latestApprovalId(handler, extensionSender);
-    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
-      ok: true,
-      pending: [],
-    });
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+    await expect(
+      handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender),
+    ).resolves.toEqual({ ok: true, pending: [] });
     await expect(held).resolves.toEqual({ ok: true, transactionHash: "0x7cd" });
     expect(invoked).toHaveLength(1);
     expect(invoked[0]?.account).toEqual(account);
@@ -124,6 +129,15 @@ const makeThrowingSignHarness = () => {
   const activity = memoryActivityLog();
   const invoked: InvokeInput[] = [];
   const rpc = {
+    async estimateInvokeFee() {
+      return { overallFee: "1", unit: "FRI" as const };
+    },
+    async getDeploymentStatus() {
+      return true;
+    },
+    async getTokenBalances() {
+      return [];
+    },
     async submitInvokeTransaction(input: InvokeInput) {
       // Drive the signer first: a device rejection surfaces here, before any
       // broadcast, so `invoked` stays empty on a sign failure (fail-closed).
@@ -155,12 +169,13 @@ describe("invoke approval settles the held request when signing throws (A-H1)", 
     const held = handler(invokeMessage(), contentSender);
     await flushHeld();
     const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
 
     // Approve: the executor's sign step throws, but the applier still settles the
     // held request with the real error rather than leaving the dapp promise open.
-    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
-      error: "device rejected the transaction",
-    });
+    await expect(
+      handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender),
+    ).resolves.toEqual({ error: "device rejected the transaction" });
     await expect(held).resolves.toEqual({ error: "device rejected the transaction" });
     expect(invoked).toHaveLength(0);
     expect(await activity.list()).toHaveLength(0);

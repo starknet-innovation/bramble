@@ -40,7 +40,7 @@ import type { SwapParams, SwapQuote, SwapQuoteParams } from "../types";
 /**
  * Ekubo protocol id for tagging quotes and routing.
  */
-export const EKUBO_PROTOCOL_ID = "ekubo" as const;
+const EKUBO_PROTOCOL_ID = "ekubo" as const;
 
 // Parses a raw smallest-unit integer amount string, rejecting floats and zero.
 const parseRawAmount = (amount: string): bigint => {

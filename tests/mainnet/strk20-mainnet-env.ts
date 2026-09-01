@@ -17,6 +17,10 @@ const PUBLIC_CALLER_ACK = "I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS";
 const RESUME_AFTER_DEPOSIT_ACK = "I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED";
 const STRK_DECIMALS = 18;
 const MAX_DEPOSIT_RAW = 10n ** 18n;
+const SHARED_MAINNET_RPC_HOSTS = new Set([
+  "mainnet.nodes.starknet.org",
+  "wallet.nodes.starknet.org",
+]);
 
 /**
  * Validated live-test inputs. `privateKey` must remain process-local and may be
@@ -43,6 +47,14 @@ const httpsServiceUrl = (value: string | undefined, name: string): string => {
     throw new Error(`${name} must be a valid HTTPS service URL`);
   }
   return url.toString();
+};
+
+const dedicatedRpcUrl = (value: string | undefined): string => {
+  const rpcUrl = httpsServiceUrl(value, "MC_STRK20_E2E_RPC_URL");
+  if (SHARED_MAINNET_RPC_HOSTS.has(new URL(rpcUrl).hostname)) {
+    throw new Error("MC_STRK20_E2E_RPC_URL must be a dedicated test RPC endpoint");
+  }
+  return rpcUrl;
 };
 
 /**
@@ -76,7 +88,7 @@ export const readStrk20MainnetEnvironment = (
     "MC_STRK20_E2E_DISCOVERY_URL",
   );
   const proverUrl = httpsServiceUrl(env["MC_STRK20_E2E_PROVER_URL"], "MC_STRK20_E2E_PROVER_URL");
-  const rpcUrl = httpsServiceUrl(env["MC_STRK20_E2E_RPC_URL"], "MC_STRK20_E2E_RPC_URL");
+  const rpcUrl = dedicatedRpcUrl(env["MC_STRK20_E2E_RPC_URL"]);
   const resumeValue = env["MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK"];
   if (resumeValue !== undefined && resumeValue !== RESUME_AFTER_DEPOSIT_ACK) {
     throw new Error(

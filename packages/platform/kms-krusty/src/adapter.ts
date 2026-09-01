@@ -2,6 +2,7 @@
  * Krusty KMS WASM adapter. Wallet cryptography must enter through this boundary.
  */
 import { WalletError } from "@mc-wallet/core/errors";
+import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@mc-wallet/core/json";
 import type { KmsPort } from "@mc-wallet/vault/kms-port";
 import { isDerivationIndex } from "@mc-wallet/wallet-model/accounts";
 import {
@@ -10,6 +11,14 @@ import {
   isStarkFieldElement,
   isStarkPrivateKey,
 } from "@mc-wallet/wallet-model/networks";
+import {
+  isNostrApplicationData,
+  isNostrPublicKey,
+  MAX_NOSTR_APPLICATION_DATA_BYTES,
+  MAX_NOSTR_EVENT_JSON_BYTES,
+  parseNostrEventJson,
+} from "@mc-wallet/wallet-model/nostr";
+import { isMnemonicPassphrase, isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
 
 type Callable = (...args: unknown[]) => unknown;
 /**
@@ -18,7 +27,10 @@ type Callable = (...args: unknown[]) => unknown;
  */
 const ZERO_SALT = "0x0";
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
-const KRUSTY_RESULT_CLASSES = new Set(["WasmKeypair", "WasmStarkSignature"]);
+const KRUSTY_RESULT_CLASSES = new Set(["WasmKeypair", "WasmNostrPublicKey", "WasmStarkSignature"]);
+const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
+const isNostrIdentifier = (value: string): boolean =>
+  value.length > 0 && value.length <= 128 && /^[ -~]+$/.test(value);
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   if (typeof value !== "object" || value === null) {
@@ -27,9 +39,12 @@ const asRecord = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
+// Reads a field only when it is an own enumerable data property, through the
+// shared boundary predicate: a getter on the WASM module object must never run
+// during validation, and must never answer differently on a second read.
 const ownValue = (record: Record<string, unknown>, field: string): unknown => {
   const descriptor = Object.getOwnPropertyDescriptor(record, field);
-  return descriptor?.enumerable === true && "value" in descriptor ? descriptor.value : undefined;
+  return isOwnDataProperty(descriptor) ? descriptor.value : undefined;
 };
 
 const krustyResultValue = (record: Record<string, unknown>, field: string): unknown => {
@@ -72,12 +87,18 @@ const requireFieldElementField = (value: unknown, field: string): string => {
   if (!isStarkFieldElement(fieldValue)) {
     throw new WalletError(`Krusty KMS result missing field element: ${field}`);
   }
-  return fieldValue;
+  return canonicalFelt(fieldValue) as string;
 };
 
+// Signing scalars are judged by `isStarkPrivateKey`, never by the wider
+// non-zero-felt rule: a value in the [curve order, field prime) gap is a felt
+// but not a key, and the signer would silently reduce it mod n and sign for a
+// different key than the one the vault records. The one shared rule; the same
+// predicate guards the raw-key import, the stored signing key, and the stored
+// viewing key, so no layer accepts a scalar another layer would refuse.
 const requirePrivateKeyField = (value: unknown, field: string): string => {
   const fieldValue = requireFieldElementField(value, field);
-  if (!isNonZeroStarkFieldElement(fieldValue)) {
+  if (!isStarkPrivateKey(fieldValue)) {
     throw new WalletError(`Krusty KMS result missing non-zero private key: ${field}`);
   }
   return fieldValue;
@@ -93,8 +114,6 @@ const requireNonZeroFieldElementField = (value: unknown, field: string): string 
 
 const isMnemonicWordCount = (value: number): boolean =>
   Number.isSafeInteger(value) && MNEMONIC_WORD_COUNTS.some((count) => count === value);
-const isMnemonicText = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0;
 
 /**
  * Wraps an unknown WASM module and validates required Krusty exports.
@@ -106,18 +125,38 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
     typeof init === "function" ? Promise.resolve((init as Callable)()) : Promise.resolve();
 
   const deriveOzAccountAddress = requireFunction(module, "deriveOzAccountAddress");
+  const deriveNostrPublicKey = requireFunction(module, "deriveNostrPublicKey");
   // The scoped derivation, deliberately not the unscoped `deriveStrk20ViewingKey`
   // the KMS also exports — see KmsPort.deriveScopedStrk20ViewingKey.
   const deriveScopedStrk20ViewingKey = requireFunction(module, "deriveScopedStrk20ViewingKey");
-  const foldStrk20ViewingKey = requireFunction(module, "foldStrk20ViewingKey");
-  const strk20ViewingKeyMessageHash = requireFunction(module, "strk20ViewingKeyMessageHash");
   const deriveStarknetKeypair = requireFunction(module, "deriveStarknetKeypair");
+  const foldStrk20ViewingKey = requireFunction(module, "foldStrk20ViewingKey");
   const generateMnemonic = requireFunction(module, "generateMnemonic");
   const getAccountClassHashes = requireFunction(module, "getAccountClassHashes");
+  const openNostrApplicationData = requireFunction(module, "openNostrApplicationData");
   const signStarkHash = requireFunction(module, "signStarkHash");
+  const strk20ViewingKeyMessageHash = requireFunction(module, "strk20ViewingKeyMessageHash");
   const validateMnemonic = requireFunction(module, "validateMnemonic");
+  const wrapNostrApplicationData = requireFunction(module, "wrapNostrApplicationData");
 
   return {
+    async deriveNostrPublicKey(mnemonic, addressIndex, accountIndex, passphrase) {
+      await ready;
+      if (
+        !isMnemonicText(mnemonic) ||
+        !isMnemonicPassphrase(passphrase) ||
+        !isDerivationIndex(addressIndex) ||
+        !isDerivationIndex(accountIndex)
+      ) {
+        throw new WalletError("Invalid Nostr derivation input");
+      }
+      const result = await deriveNostrPublicKey(mnemonic, addressIndex, accountIndex, passphrase);
+      const publicKey = requireStringField(result, "public_key");
+      if (!isNostrPublicKey(publicKey)) {
+        throw new WalletError("Krusty KMS returned an invalid Nostr public key");
+      }
+      return publicKey;
+    },
     async deriveOzAccountAddress(publicKeyX, classHash, salt) {
       await ready;
       if (
@@ -139,22 +178,25 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       if (typeof result !== "string" || !isStarkFieldElement(result)) {
         throw new WalletError("Krusty KMS returned an invalid account address");
       }
-      return result;
+      return canonicalFelt(result) as string;
     },
     async deriveScopedStrk20ViewingKey(privateKey, chainId, poolAddress) {
       await ready;
       if (
-        !isNonZeroStarkFieldElement(privateKey) ||
+        !isStarkPrivateKey(privateKey) ||
         !isNonZeroStarkFieldElement(chainId) ||
         !isNonZeroStarkFieldElement(poolAddress)
       ) {
         throw new WalletError("Invalid STRK20 viewing-key input");
       }
       const result = await deriveScopedStrk20ViewingKey(privateKey, chainId, poolAddress);
-      if (typeof result !== "string" || !isNonZeroStarkFieldElement(result)) {
+      // A viewing key is a signing scalar too, and the encrypted vault already
+      // refuses to store one outside the curve order; checking the same rule
+      // here means the boundary refuses it rather than the storage layer.
+      if (typeof result !== "string" || !isStarkPrivateKey(result)) {
         throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
       }
-      return result;
+      return canonicalFelt(result) as string;
     },
     async foldStrk20ViewingKey(publicKey, messageHash, r, s) {
       await ready;
@@ -198,6 +240,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       await ready;
       if (
         !isMnemonicText(mnemonic) ||
+        !isMnemonicPassphrase(passphrase) ||
         !isDerivationIndex(addressIndex) ||
         !isDerivationIndex(accountIndex)
       ) {
@@ -218,7 +261,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
 
       await ready;
       const result = await generateMnemonic(wordCount);
-      if (typeof result !== "string" || result.trim().length === 0) {
+      if (!isMnemonicText(result)) {
         throw new WalletError("Krusty KMS returned an invalid mnemonic");
       }
       return result;
@@ -233,15 +276,62 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
     },
     async signStarkHash(privateKey, messageHash) {
       await ready;
-      if (!isNonZeroStarkFieldElement(privateKey) || !isStarkFieldElement(messageHash)) {
+      if (!isStarkPrivateKey(privateKey) || !isStarkFieldElement(messageHash)) {
         throw new WalletError("Invalid Stark signing input");
       }
 
       const result = await signStarkHash(privateKey, messageHash);
       return {
         publicKey: requireNonZeroFieldElementField(result, "publicKey"),
-        r: requireNonZeroFieldElementField(result, "r"),
-        s: requireNonZeroFieldElementField(result, "s"),
+        r: requirePrivateKeyField(result, "r"),
+        s: requirePrivateKeyField(result, "s"),
+      };
+    },
+    async openNostrApplicationData(mnemonic, addressIndex, accountIndex, eventJson, passphrase) {
+      await ready;
+      if (
+        !isMnemonicText(mnemonic) ||
+        !isMnemonicPassphrase(passphrase) ||
+        !isDerivationIndex(addressIndex) ||
+        !isDerivationIndex(accountIndex) ||
+        parseNostrEventJson(eventJson)?.kind !== 1_059
+      ) {
+        throw new WalletError("Invalid Nostr application-data input");
+      }
+      const result = await openNostrApplicationData(
+        mnemonic,
+        addressIndex,
+        accountIndex,
+        passphrase,
+        eventJson,
+      );
+      if (
+        typeof result !== "string" ||
+        result.length > MAX_NOSTR_APPLICATION_DATA_BYTES * 2 ||
+        encodedLength(result) > MAX_NOSTR_APPLICATION_DATA_BYTES * 2
+      ) {
+        throw new WalletError("Krusty KMS returned invalid Nostr application data");
+      }
+      let opened: unknown;
+      try {
+        opened = JSON.parse(result);
+      } catch {
+        throw new WalletError("Krusty KMS returned invalid Nostr application data");
+      }
+      if (
+        !isRecord(opened) ||
+        !hasOnlyKnownKeys(opened, ["content", "identifier", "senderPublicKey"]) ||
+        !isNostrApplicationData(opened["content"]) ||
+        typeof opened["identifier"] !== "string" ||
+        !isNostrIdentifier(opened["identifier"]) ||
+        !isNostrPublicKey(opened["senderPublicKey"])
+      ) {
+        throw new WalletError("Krusty KMS returned invalid Nostr application data");
+      }
+      return {
+        content: opened["content"],
+        identifier: opened["identifier"],
+        senderPublicKey: opened["senderPublicKey"],
       };
     },
     async validateMnemonic(mnemonic) {
@@ -253,6 +343,53 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       const result = await validateMnemonic(mnemonic);
       if (typeof result !== "boolean") {
         throw new WalletError("Krusty KMS returned an invalid mnemonic validation result");
+      }
+      return result;
+    },
+    async wrapNostrApplicationData(
+      mnemonic,
+      addressIndex,
+      accountIndex,
+      recipientPublicKey,
+      identifier,
+      content,
+      passphrase,
+    ) {
+      await ready;
+      if (
+        !isMnemonicText(mnemonic) ||
+        !isMnemonicPassphrase(passphrase) ||
+        !isDerivationIndex(addressIndex) ||
+        !isDerivationIndex(accountIndex) ||
+        !isNostrPublicKey(recipientPublicKey) ||
+        !isNostrIdentifier(identifier) ||
+        !isNostrApplicationData(content)
+      ) {
+        throw new WalletError("Invalid Nostr application-data input");
+      }
+      const result = await wrapNostrApplicationData(
+        mnemonic,
+        addressIndex,
+        accountIndex,
+        passphrase,
+        recipientPublicKey,
+        identifier,
+        content,
+      );
+      if (typeof result !== "string") {
+        throw new WalletError("Krusty KMS returned an invalid Nostr gift wrap");
+      }
+      const event = parseNostrEventJson(result);
+      if (
+        !event ||
+        result.length > MAX_NOSTR_EVENT_JSON_BYTES ||
+        encodedLength(result) > MAX_NOSTR_EVENT_JSON_BYTES ||
+        event.kind !== 1_059 ||
+        !event.tags.some(
+          (tag) => tag.length >= 2 && tag[0] === "p" && tag[1] === recipientPublicKey,
+        )
+      ) {
+        throw new WalletError("Krusty KMS returned an invalid Nostr gift wrap");
       }
       return result;
     },

@@ -1,374 +1,499 @@
-/**
- * Multisig DOM bindings at the response/UI boundary: acknowledgement toggles
- * cannot re-enable a statically forbidden signer action, and explicit retry
- * controls rehydrate instead of leaving a false empty state.
- */
-import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
-import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { serializeMultisigReviewPackage } from "../../../../src/sidepanel/journeys/multisig/multisig-model";
+/** DOM bindings forward only exact Argent multisig intents, signatures, and calls. */
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import type {
+  ArgentMultisigDeploymentReview,
+  ArgentMultisigIntentPackage,
+} from "../../../../src/popup/responses/multisig-responses";
+import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
+import { multisigSignersFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
+import {
+  EMPTY_MULTISIG_PORTFOLIO,
+  multisigPortfolio,
+} from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
 import type { MultisigUiDeps } from "../../../../src/sidepanel/journeys/multisig/multisig-ui";
-import { multisigDetailFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-views";
+import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
-import { mountMultisigUi as mount } from "../../../support/multisig-ui-harness";
+import {
+  deferredMultisigUi as deferred,
+  multisigDeploymentForm as deploymentForm,
+  flushMultisigUi as flush,
+  mountMultisigUi as mount,
+  makeMultisigUiClient as testClient,
+} from "../../../support/multisig-ui-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
+describe("bindMultisigs frozen-intent forms", () => {
+  test("manages deployment signers as validated rows instead of list text", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const primary = fixture.status.accounts[0];
+    if (!primary) throw new Error("signer fixture unavailable");
+    const secondary = { ...primary, id: `${primary.networkId}:0x456`, publicKeyX: "0x456" };
+    secondary.address = "0x456";
+    const status = { ...fixture.status, accountCount: 2, accounts: [primary, secondary] };
+    const app = mount(
+      multisigDeployFlow(status, primary, true, defaultWalletPreferences()),
+      await testClient(),
+      status,
+    );
+    const secondarySigner = app.querySelector<HTMLButtonElement>(
+      `[data-deployment-signer="${secondary.id}"]`,
+    );
+    expect(secondarySigner?.hidden).toBe(true);
+    secondarySigner?.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerAccountId"]')?.value).toBe(
+      primary.id,
+    );
 
-describe("bindMultisigs", () => {
-  test("acknowledgement enables only actions allowed by signer state", () => {
-    const app = mount(`
-      <div class="allowance-row">
-        <input type="checkbox" data-ms-ack />
-        <button data-ms-requires-ack="true" data-ms-action-allowed="true" disabled></button>
-        <button data-ms-requires-ack="true" data-ms-action-allowed="false" disabled></button>
-      </div>`);
-    const checkbox = app.querySelector<HTMLInputElement>("[data-ms-ack]");
-    const buttons = app.querySelectorAll<HTMLButtonElement>("[data-ms-requires-ack]");
-    if (checkbox) {
-      checkbox.checked = true;
-      checkbox.dispatchEvent(new Event("change"));
-    }
-    expect(buttons[0]?.disabled).toBe(false);
-    expect(buttons[1]?.disabled).toBe(true);
+    app.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+    const addKey = app.querySelector<HTMLButtonElement>(
+      `[data-participant-key="${secondary.publicKeyX}"]`,
+    );
+    addKey?.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]')?.value).toBe(
+      `${primary.publicKeyX} ${secondary.publicKeyX}`,
+    );
+    expect(app.querySelector("[data-signer-count]")?.textContent).toBe("2 signers");
+    expect(addKey?.hidden).toBe(true);
+    expect(secondarySigner?.hidden).toBe(false);
+    secondarySigner?.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerAccountId"]')?.value).toBe(
+      secondary.id,
+    );
+    const currentSigner = app.querySelector("[data-deployment-signer-current-copy]");
+    expect(currentSigner?.textContent).toContain("0x456");
+    const threshold = app.querySelector<HTMLInputElement>('input[name="threshold"]');
+    if (!threshold) throw new Error("threshold field unavailable");
+    threshold.value = "2";
+    app
+      .querySelector<HTMLButtonElement>(`[data-remove-signer-public-key="${primary.publicKeyX}"]`)
+      ?.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]')?.value).toBe(
+      secondary.publicKeyX,
+    );
+    expect(threshold.value).toBe("1");
+    app.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+    app.querySelector<HTMLButtonElement>('[data-participant-method="public-key"]')?.click();
+    const manual = app.querySelector<HTMLInputElement>("[data-participant-key-input]");
+    const addManual = app.querySelector<HTMLButtonElement>("[data-confirm-participant]");
+    if (!manual || !addManual) throw new Error("participant key controls unavailable");
+    manual.value = "not-a-key";
+    addManual.click();
+    expect(app.querySelector("[data-participant-result]")?.textContent).toContain("valid");
+    manual.value = "0x999";
+    addManual.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]')?.value).toBe(
+      `${secondary.publicKeyX} 0x999`,
+    );
+    expect(app.querySelector("[data-signer-count]")?.textContent).toBe("2 signers");
+    const lastLocalRemove = app.querySelector<HTMLButtonElement>(
+      `[data-remove-signer-public-key="${secondary.publicKeyX}"]`,
+    );
+    expect(lastLocalRemove?.disabled).toBe(true);
+    lastLocalRemove?.click();
+    expect(app.querySelector<HTMLInputElement>('input[name="signerAccountId"]')?.value).toBe(
+      secondary.id,
+    );
   });
-
-  test("the list error retry requests a fresh render", async () => {
-    let renders = 0;
-    const app = mount('<button id="multisig-list-retry" type="button"></button>', async () => {
-      renders += 1;
+  test("keeps approval visible while address and fee review are prepared", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const pending = deferred<typeof fixture.deploymentReview>();
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      await testClient({ reviewDeployment: () => pending.promise }),
+      fixture.status,
+    );
+    const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+    app.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")?.click();
+    form?.requestSubmit();
+    expect(form?.dataset["deploymentStage"]).toBe("approval");
+    expect(app.querySelector("#multisig-deploy-review")?.textContent).toBe("");
+    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
+      "Calculating address and fee",
+    );
+    pending.resolve(fixture.deploymentReview);
+    await flush();
+    expect(form?.dataset["deploymentStage"]).toBe("deploy");
+  });
+  test("keeps an unfunded deployment in review instead of offering broadcast", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const client = await testClient({
+      reviewDeployment: async () => ({
+        ...fixture.deploymentReview,
+        feeAffordability: "insufficient",
+      }),
     });
-    app.querySelector<HTMLButtonElement>("#multisig-list-retry")?.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(renders).toBe(1);
+    let fundingIntent: Parameters<NonNullable<MultisigUiDeps["openFunding"]>>[0] | undefined;
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      client,
+      fixture.status,
+      {
+        openFunding: async (intent) => {
+          fundingIntent = intent;
+        },
+      },
+    );
+
+    app.querySelector<HTMLFormElement>("#multisig-deploy-form")?.requestSubmit();
+    await flush();
+
+    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.hidden).toBe(true);
+    expect(app.querySelector("[data-multisig-check-funding]")?.textContent).toContain(
+      "Check funding",
+    );
+    expect(app.querySelector("[data-multisig-check-funding]")?.className).toContain("secondary");
+    expect(app.querySelector("#multisig-deploy-result")?.textContent).toBe("");
+    const fundingStage = app.querySelector(".multisig-funding-stage");
+    expect(fundingStage?.textContent).toContain("Fund this multisig");
+    expect(fundingStage?.querySelector(".qr-card")).not.toBeNull();
+    expect(
+      app.querySelector(".multisig-funding-stage [data-copy]")?.getAttribute("data-copy"),
+    ).toBe(fixture.deploymentReview.address);
+    app.querySelector<HTMLButtonElement>("[data-multisig-fund-local]")?.click();
+    await flush();
+    expect(fundingIntent).toMatchObject({
+      accountId: signer.id,
+      completeMultisigId: `${fixture.deploymentReview.networkId}:${fixture.deploymentReview.address}`,
+      completeTo: "multisig-deploy",
+      recipient: fixture.deploymentReview.address,
+      source: "public",
+      destination: "public",
+    });
+  });
+  test("turns guided signer changes into exact reviewed multisig intents", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    let prepared: { readonly calls: readonly unknown[]; readonly multisigId: string } | undefined;
+    const client = await testClient({
+      prepareIntent: async (multisigId, calls) => {
+        prepared = { calls, multisigId };
+        return { intent: fixture.intent };
+      },
+    });
+    const app = mount(
+      multisigSignersFlow(
+        fixture.status,
+        fixture.status.accounts[0] ?? null,
+        fixture.view,
+        defaultWalletPreferences(),
+      ),
+      client,
+      fixture.status,
+    );
+    const form = app.querySelector<HTMLFormElement>('[data-ms-manage="add"]');
+    form?.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+    app.querySelector<HTMLButtonElement>('[data-participant-method="public-key"]')?.click();
+    const key = app.querySelector<HTMLInputElement>("[data-participant-key-input]");
+    if (!form || !key) throw new Error("guided participant form unavailable");
+    key.value = "0x999";
+    app.querySelector<HTMLButtonElement>("[data-confirm-participant]")?.click();
+    expect(form.querySelector("[data-participant-selection]")?.textContent).toContain("0x999");
+    form.requestSubmit();
+    await flush();
+
+    expect(prepared).toEqual({
+      calls: [
+        {
+          calldata: ["0x1", "0x1", "0x0", "0x999"],
+          contractAddress: fixture.record.address,
+          entrypoint: "add_signers",
+        },
+      ],
+      multisigId: fixture.record.id,
+    });
+  });
+  test("keeps deployment failures in a copyable toast and resets the review action", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const raw = "RPC: starknet_addDeployAccountTransaction: Resources bounds exceed balance (0).";
+    const client = await testClient({
+      deployMultisig: async () => {
+        throw new Error(raw);
+      },
+    });
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      client,
+      fixture.status,
+    );
+    const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+    form?.requestSubmit();
+    await flush();
+    form?.requestSubmit();
+    await flush();
+
+    expect(app.querySelector("#multisig-deploy-result")?.textContent).not.toContain("RPC:");
+    expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain("Fund 0x");
+    expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();
+    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
+      "Review deployment",
+    );
   });
 
-  test("watching exposes immediate progress and completes with a refreshed account list", async () => {
-    let finish: (() => void) | undefined;
-    let renders = 0;
-    const verification = new Promise<void>((resolve) => {
-      finish = resolve;
+  test("syncs an existing account from its address and opens the matched account", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const captured: unknown[] = [];
+    const opened: unknown[] = [];
+    const client = await testClient({
+      async addMultisig(input) {
+        captured.push(input);
+        return fixture.view;
+      },
     });
     const app = mount(
       `<form id="multisig-add-form">
-        <input name="address" value="0x123" />
-        <input name="name" value="Treasury" />
-        <button type="submit">Verify and watch</button>
-        <p id="multisig-add-result" role="status"></p>
+        <input name="address" value="0x000123" />
+        <button type="submit">Add</button>
       </form>`,
-      async () => {
-        renders += 1;
-      },
-      {
-        multisig: {
-          async addMultisig() {
-            await verification;
-          },
-        } as unknown as MultisigUiDeps["multisig"],
-      },
+      client,
+      fixture.status,
+      { openDetail: (...input) => opened.push(input) },
     );
-    const button = app.querySelector<HTMLButtonElement>('button[type="submit"]');
     app.querySelector<HTMLFormElement>("#multisig-add-form")?.requestSubmit();
-    await Promise.resolve();
-
-    expect(button?.disabled).toBe(true);
-    expect(button?.hasAttribute("data-busy")).toBe(true);
-    expect(app.querySelector("#multisig-add-result")?.textContent).toBe("Contacting Starknet…");
-
-    finish?.();
-    for (let turn = 0; turn < 6; turn += 1) {
-      await Promise.resolve();
-    }
-    expect(renders).toBe(1);
+    await flush();
+    expect(captured).toEqual([
+      {
+        address: "0x123",
+        networkId: "SN_MAIN",
+      },
+    ]);
+    expect(opened).toEqual([[fixture.record.id, "multisig-home"]]);
   });
 
-  test("a stalled watch fails visibly and releases the form", async () => {
-    const nativeSetTimeout = globalThis.setTimeout;
-    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((
-      callback: TimerHandler,
-      delay?: number,
-      ...args: unknown[]
-    ) => {
-      if (delay === 15_000) {
-        queueMicrotask(() => {
-          if (typeof callback === "function") {
-            callback(...args);
-          }
-        });
-        return 0;
-      }
-      return nativeSetTimeout(callback, delay, ...args);
-    }) as typeof setTimeout);
-    try {
-      const app = mount(
-        `<form id="multisig-add-form">
-          <input name="address" value="0x123" />
-          <button type="submit">Verify and watch</button>
-          <p id="multisig-add-result" role="status"></p>
-        </form>`,
-        async () => {},
-        {
-          multisig: {
-            async addMultisig() {
-              await new Promise(() => {});
-            },
-          } as unknown as MultisigUiDeps["multisig"],
-        },
-      );
-      const button = app.querySelector<HTMLButtonElement>('button[type="submit"]');
-      app.querySelector<HTMLFormElement>("#multisig-add-form")?.requestSubmit();
-
-      for (let turn = 0; turn < 8; turn += 1) {
-        await Promise.resolve();
-      }
-
-      expect(app.querySelector("#multisig-add-result")?.textContent).toBe(
-        "Multisig verification took too long. Check the RPC endpoint and retry.",
-      );
-      expect(button?.disabled).toBe(false);
-      expect(button?.hasAttribute("data-busy")).toBe(false);
-    } finally {
-      timeoutSpy.mockRestore();
-    }
-  });
-
-  test("the declare control submits once and exposes immediate progress", async () => {
-    let declarations = 0;
-    let renders = 0;
-    let finish: ((transactionHash: string) => void) | undefined;
-    const submitted = new Promise<string>((resolve) => {
-      finish = resolve;
+  test("normalizes public call fields once and prepares the selected account", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const captured: unknown[] = [];
+    const opened: unknown[] = [];
+    const client = await testClient({
+      async prepareIntent(multisigId, calls) {
+        captured.push({ calls, multisigId });
+        return {
+          feeReview: { overallFee: "44", unit: "FRI" },
+          intent: fixture.intent,
+        };
+      },
     });
     const app = mount(
-      `<button id="multisig-declare" type="button">Declare multisig class</button>
-       <p id="multisig-declare-result" role="status"></p>`,
-      async () => {
-        renders += 1;
-      },
-      {
-        multisig: {
-          async declareClass() {
-            declarations += 1;
-            return submitted;
-          },
-        } as MultisigUiDeps["multisig"],
-      },
+      `<form data-ms-prepare="contract" data-multisig-id="${fixture.record.id}">
+        <input name="contractAddress" value="0x000DEF" />
+        <input name="entrypoint" value=" transfer " />
+        <textarea name="calldata">0x0001, 0x02</textarea>
+        <button type="submit">Prepare</button>
+      </form>`,
+      client,
+      fixture.status,
+      { openIntent: (...args) => opened.push(args) },
     );
-    const declareButton = app.querySelector<HTMLButtonElement>("#multisig-declare");
-    declareButton?.click();
-    declareButton?.click();
-    await Promise.resolve();
-
-    expect(declarations).toBe(1);
-    expect(declareButton?.disabled).toBe(true);
-    expect(declareButton?.hasAttribute("data-busy")).toBe(true);
-    expect(app.querySelector("#multisig-declare-result")?.textContent).toBe("Submitting declare…");
-
-    finish?.("0xdec");
-    for (let turn = 0; turn < 6; turn += 1) {
-      await Promise.resolve();
-    }
-    expect(renders).toBe(1);
+    app.querySelector<HTMLFormElement>("[data-ms-prepare]")?.requestSubmit();
+    await flush();
+    expect(captured).toEqual([
+      {
+        calls: [{ calldata: ["0x1", "0x2"], contractAddress: "0xdef", entrypoint: "transfer" }],
+        multisigId: fixture.record.id,
+      },
+    ]);
+    expect(opened).toEqual([[fixture.record.id, fixture.intent.id]]);
   });
 
-  test("requires a stable review before creating a proposal", async () => {
-    const proposals: unknown[] = [];
+  test("builds a token transfer from recipient, asset, and decimal amount fields", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const captured: unknown[] = [];
+    const prepared = deferred<{ intent: typeof fixture.intent }>();
+    const client = await testClient({
+      async prepareIntent(multisigId, calls) {
+        captured.push({ calls, multisigId });
+        return prepared.promise;
+      },
+    });
     const app = mount(
-      `<form id="multisig-propose-form" data-proposal-mode="advanced" data-signer-account-id="SN_MAIN:0x123">
-        <input name="summary" value="Pay contributor" />
-        <input name="to" value="0x123" />
-        <input name="entrypoint" value="transfer" />
-        <textarea name="calldata">0x456, 0x1</textarea>
-        <input name="salt" value="0x789" />
-        <div id="multisig-propose-review"></div>
-        <button type="submit">Review proposal</button>
-        <p id="multisig-propose-result"></p>
+      `<form data-ms-prepare="transfer" data-multisig-id="${fixture.record.id}">
+        <input name="recipient" value="0xabc" />
+        <input name="amount" value="1.25" />
+        <input name="tokenAddress" value="0x000DEF" />
+        <input name="tokenBalance" value="500" />
+        <input name="tokenDecimals" value="2" />
+        <input name="tokenPrice" value="2" />
+        <button type="submit">Review</button>
       </form>`,
-      async () => {},
+      client,
+      fixture.status,
+    );
+    const form = app.querySelector<HTMLFormElement>("[data-ms-prepare]");
+    const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    form?.requestSubmit();
+    await flush();
+    expect(form?.getAttribute("aria-busy")).toBe("true");
+    expect(button?.disabled).toBe(true);
+    expect(button?.textContent).toContain("Preparing review…");
+    expect(captured).toEqual([
       {
-        multisig: {
-          async proposeTransaction(proposal) {
-            proposals.push(proposal);
-            return "0xabc";
+        calls: [
+          {
+            calldata: ["0xabc", "0x7d", "0x0"],
+            contractAddress: "0xdef",
+            entrypoint: "transfer",
           },
-        } as MultisigUiDeps["multisig"],
-        selectedMultisigId: () => "SN_MAIN:0x999",
+        ],
+        multisigId: fixture.record.id,
       },
-    );
-    const form = app.querySelector<HTMLFormElement>("#multisig-propose-form");
-    const submit = app.querySelector<HTMLButtonElement>('button[type="submit"]');
+    ]);
+    prepared.resolve({ intent: fixture.intent });
+    await flush();
+  });
 
-    form?.requestSubmit();
-    expect(proposals).toEqual([]);
-    expect(form?.dataset["proposalStage"]).toBe("review");
-    expect(app.querySelector("#multisig-propose-review")?.textContent).toContain(
-      "Transaction details",
-    );
-    expect(submit?.textContent).toContain("Review proposal");
-
-    form?.requestSubmit();
-    await Promise.resolve();
-    expect(proposals).toEqual([
-      {
-        calldata: ["0x456", "0x1"],
-        entrypoint: "transfer",
-        multisigId: "SN_MAIN:0x999",
-        salt: "0x789",
-        signerAccountId: "SN_MAIN:0x123",
-        summary: "Pay contributor",
-        to: "0x123",
+  test("imports the complete validated intent package without projecting fields", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const imported: ArgentMultisigIntentPackage[] = [];
+    const opened: unknown[] = [];
+    const client = await testClient({
+      async importIntent(intentPackage) {
+        imported.push(intentPackage);
+        return { intent: fixture.intent };
       },
+    });
+    const app = mount(
+      `<form id="multisig-track-form">
+        <textarea name="intentPackage">${JSON.stringify(fixture.intentPackage)}</textarea>
+        <button type="submit">Import</button>
+      </form>`,
+      client,
+      fixture.status,
+      { openIntent: (...args) => opened.push(args) },
+    );
+    app.querySelector<HTMLFormElement>("#multisig-track-form")?.requestSubmit();
+    await flush();
+    expect(imported).toEqual([fixture.intentPackage]);
+    expect(opened).toEqual([[fixture.record.id, fixture.intent.id]]);
+  });
+
+  test("binds a signature to the frozen intent id and explicitly selected signer", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signed: unknown[] = [];
+    const client = await testClient({
+      async signIntent(intentId, signerAccountId) {
+        signed.push({ intentId, signerAccountId });
+        return { intent: fixture.intent };
+      },
+    });
+    const app = mount(
+      `<article data-ms-intent="${fixture.intent.id}">
+        <select name="signerAccountId"><option value="${fixture.status.activeAccountId}">Signer</option></select>
+        <button data-ms-sign="${fixture.intent.id}" type="button">Sign</button>
+      </article>`,
+      client,
+      fixture.status,
+    );
+    app.querySelector<HTMLButtonElement>("[data-ms-sign]")?.click();
+    await flush();
+    expect(signed).toEqual([
+      { intentId: fixture.intent.id, signerAccountId: fixture.status.activeAccountId },
     ]);
   });
 
-  test("imports a review package into the selected multisig tracking flow", async () => {
-    const multisig: MultisigRecord = {
-      address: "0x999",
-      id: "SN_MAIN:0x999",
-      networkId: "SN_MAIN",
-      quorum: 1,
-      signers: ["0x123"],
-    };
-    const proposal: MultisigProposalRecord = {
-      call: {
-        calldata: ["0x1"],
-        contractAddress: "0x456",
-        entrypoint: "transfer",
-        salt: "0x2",
-      },
-      confirmations: 0,
-      id: `${multisig.id}:0x789`,
-      multisigId: multisig.id,
-      state: "pending",
-      summary: "Pay contributor",
-      txId: "0x789",
-    };
-    const tracked: unknown[] = [];
-    const app = mount(
-      `<form id="multisig-track-form">
-        <input name="txId" />
-        <input name="summary" />
-        <textarea name="reviewPackage"></textarea>
-        <button type="submit">Track</button>
-        <p id="multisig-track-result"></p>
-      </form>`,
-      async () => {},
-      {
-        multisig: {
-          async trackProposal(...args: unknown[]) {
-            tracked.push(args);
-          },
-        } as unknown as MultisigUiDeps["multisig"],
-        selectedMultisigId: () => multisig.id,
-      },
-    );
-    const packageInput = app.querySelector<HTMLTextAreaElement>('textarea[name="reviewPackage"]');
-    if (packageInput) {
-      packageInput.value = serializeMultisigReviewPackage(multisig, proposal);
-    }
-    app.querySelector<HTMLFormElement>("#multisig-track-form")?.requestSubmit();
-    await Promise.resolve();
+  test("discards a deployment review that resolves after the form is edited", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const pending = deferred<typeof fixture.deploymentReview>();
+    const client = await testClient({ reviewDeployment: () => pending.promise });
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const app = mount(deploymentForm(signer.id, signer.publicKeyX), client, fixture.status);
+    const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    const salt = form?.elements.namedItem("salt");
+    if (!(salt instanceof HTMLInputElement)) throw new Error("salt field unavailable");
+    salt.value = "0x2";
+    salt.dispatchEvent(new Event("input", { bubbles: true }));
+    pending.resolve(fixture.deploymentReview);
+    await flush();
 
-    expect(tracked).toEqual([[multisig.id, proposal.txId, proposal.summary, proposal.call]]);
+    expect(app.querySelector("#multisig-deploy-review")?.textContent).toBe("");
+    expect(form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+    expect(form?.querySelector('button[type="submit"]')?.textContent).toContain(
+      "Review deployment",
+    );
   });
 
-  test("reviews a confirmation with another owned signer without switching portfolios", async () => {
-    const first: AccountRef = {
-      address: "0x123",
-      classHash: "0x456",
-      derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-      id: "SN_MAIN:0x123",
-      networkId: "SN_MAIN",
-      publicKeyX: "0x789",
-      publicKeyY: "0xabc",
-    };
-    const second: AccountRef = {
-      ...first,
-      address: "0x234",
-      derivation: { accountIndex: 1, addressIndex: 0, kind: "starknet-bip44" },
-      id: "SN_MAIN:0x234",
-      publicKeyX: "0x890",
-      publicKeyY: "0xbcd",
-    };
-    const status = {
-      accountCount: 2,
-      accounts: [first, second],
-      activeAccountId: first.id,
-      hasVault: true,
-      locked: false,
-      network: "Starknet Mainnet",
-      networkId: "SN_MAIN",
-      networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
-      ready: true,
-    } as const;
-    const record: MultisigRecord = {
-      address: "0x999",
-      id: "SN_MAIN:0x999",
-      name: "Treasury",
-      networkId: "SN_MAIN",
-      quorum: 2,
-      signers: [first.address, second.address],
-    };
-    const proposal: MultisigProposalRecord = {
-      call: { calldata: ["0x1"], contractAddress: "0x456", entrypoint: "transfer", salt: "0x0" },
-      confirmations: 1,
-      confirmedBySigner: true,
-      confirmedBySignerAddress: first.address,
-      confirmedSignerAddresses: [first.address],
-      id: `${record.id}:0x789`,
-      multisigId: record.id,
-      state: "pending",
-      summary: "Pay contributor",
-      txId: "0x789",
-    };
-    const calls: string[] = [];
+  test("keeps only the newest deployment review when requests resolve out of order", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const pending: ReturnType<typeof deferred<ArgentMultisigDeploymentReview>>[] = [];
+    const client = await testClient({
+      reviewDeployment: () => {
+        const request = deferred<typeof fixture.deploymentReview>();
+        pending.push(request);
+        return request.promise;
+      },
+    });
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const app = mount(deploymentForm(signer.id, signer.publicKeyX), client, fixture.status);
+    const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    const salt = form?.elements.namedItem("salt");
+    if (!(salt instanceof HTMLInputElement)) throw new Error("salt field unavailable");
+    salt.value = "0x2";
+    salt.dispatchEvent(new Event("input", { bubbles: true }));
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+
+    pending[1]?.resolve({ ...fixture.deploymentReview, address: "0x999", salt: "0x2" });
+    await flush();
+    const reviewPanel = app.querySelector<HTMLElement>("#multisig-deploy-review");
+    const newest = reviewPanel?.innerHTML;
+    expect(newest).toContain("0x999");
+    expect(newest).toContain("0x2");
+    expect(newest).toContain("What will happen");
+    expect(newest).toContain("Risk and recovery");
+    expect(newest).toContain("Maximum cost and constraints");
+    expect(newest).toContain("Technical details");
+    pending[0]?.resolve(fixture.deploymentReview);
+    await flush();
+
+    expect(reviewPanel?.innerHTML).toBe(newest);
+    expect(form?.querySelector('button[type="submit"]')?.textContent).toContain("Deploy multisig");
+  });
+
+  test("bounds the intent count and links shared-account tabs in keyboard order", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const client = await testClient();
     const app = mount(
-      multisigDetailFlow(status, first, record, [proposal]),
-      async () => {
-        calls.push("render");
-      },
-      {
-        multisig: {
-          async confirmProposal(input: { proposalId: string; signerAccountId: string }) {
-            calls.push(`confirm:${input.proposalId}:${input.signerAccountId}`);
-            return "0xabc";
-          },
-          async prepareConfirmation(input: {
-            mode: "confirm-and-execute" | "confirm-only";
-            proposalId: string;
-            signerAccountId: string;
-          }) {
-            return {
-              fee: { overallFee: "1", unit: "FRI" },
-              feeEstimateFailed: false,
-              ...input,
-            };
-          },
-        } as unknown as MultisigUiDeps["multisig"],
-        wallet: {
-          async loadStatus() {
-            return status;
-          },
-        } as unknown as MultisigUiDeps["wallet"],
-      },
+      multisigPortfolio({
+        authorityAvailable: true,
+        canPropose: true,
+        data: EMPTY_MULTISIG_PORTFOLIO,
+        intentList: { emptyMessage: "No intents", heading: "Intents", items: [] },
+        openCount: '" autofocus onfocus="alert(1)' as unknown as number,
+        preferences: null,
+        record: fixture.record,
+        signerKnown: true,
+      }),
+      client,
+      fixture.status,
     );
-
-    expect(app.querySelector(`[data-ms-confirm-signer="${first.id}"]`)).toBeNull();
-    const open = app.querySelector<HTMLButtonElement>(`[data-ms-confirm-open="${proposal.id}"]`);
-    open?.click();
-    const panel = app.querySelector<HTMLElement>(`[data-ms-confirm-panel="${proposal.id}"]`);
-    expect(panel?.hidden).toBe(false);
-    expect(
-      panel?.querySelector(`[data-ms-confirm-signer="${second.id}"]`)?.getAttribute("aria-pressed"),
-    ).toBe("true");
-
-    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-    panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]")?.click();
-    expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toBe(
-      "Authorizing one atomic confirmation and execution…",
+    const tabs = Array.from(app.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]"));
+    const panels = Array.from(app.querySelectorAll<HTMLElement>("[data-ms-home-panel]"));
+    expect(tabs[2]?.getAttribute("aria-label")).toBe("Signing intents, 0 open");
+    const selectedTab = tabs[1];
+    if (!selectedTab) throw new Error("collectibles tab unavailable");
+    expect(tabs.map((tab) => tab.getAttribute("aria-controls"))).toEqual(
+      panels.map((panel) => panel.id),
     );
-    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-    expect(calls).toEqual([`confirm:${proposal.id}:${second.id}`, "render"]);
+    expect(panels.map((panel) => panel.getAttribute("aria-labelledby"))).toEqual(
+      tabs.map((tab) => tab.id),
+    );
+    expect(panels.map((panel) => panel.tabIndex)).toEqual([0, 0, 0]);
+
+    tabs[0]?.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight" }));
+    expect(tabs.map((tab) => [tab.getAttribute("aria-selected"), tab.tabIndex])).toEqual([
+      ["false", -1],
+      ["true", 0],
+      ["false", -1],
+    ]);
+    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true]);
+    expect(document.activeElement).toBe(selectedTab);
   });
 });

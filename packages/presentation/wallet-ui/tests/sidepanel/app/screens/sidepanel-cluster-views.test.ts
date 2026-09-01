@@ -112,7 +112,7 @@ describe("cluster views", () => {
     expect(html).toContain("normally confirms quickly");
     expect(html).toContain("checks immediately");
     expect(html).toContain("fee-bumped, replaced, or cancelled");
-    expect(html).toMatch(/tx-status pending"[^>]*title="/);
+    expect(html).toMatch(/tx-kind-transfer pending"[^>]*title="/);
 
     const settled = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       { ...pendingTx, status: "accepted" as const },
@@ -120,13 +120,28 @@ describe("cluster views", () => {
     expect(settled).not.toContain("fee-bumped, replaced, or cancelled");
   });
 
-  test("home links to the NFT gallery and settings links to allowances", () => {
+  test("home and settings expose their task destinations", () => {
     const home = dashboard("home", status, [], preferences, { balances: [] });
     expect(home).toContain('data-view="nfts"');
     const settings = dashboard("settings", status, [], preferences, { balances: [] });
-    expect(settings).toContain('data-view="security"');
-    const security = dashboard("security", status, [], preferences, { balances: [] });
-    expect(security).toContain('data-view="allowances"');
+    expect(settings).toContain('data-view="allowances"');
+    expect(settings).toContain('data-view="reveal"');
+    expect(settings).toContain("Reveal recovery secrets");
+  });
+
+  test("a site request names the paused task without repeating return guidance", () => {
+    const pending = [
+      {
+        id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
+        kind: "connect" as const,
+        origin: "https://dapp.example",
+      },
+    ];
+    const html = dashboard("send", status, pending, preferences, { balances: [] });
+
+    expect(html).toContain("Send paused");
+    expect(html).not.toContain("Finish, deny, or review later to return where you left off.");
+    expect(html).toContain('aria-label="Paused wallet task"');
   });
 
   test("allowance flow lists tracked approvals with a revoke control", () => {
@@ -150,6 +165,63 @@ describe("cluster views", () => {
     expect(html).toContain("1,000");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
+  });
+
+  // MCW-V09-108: a record the wallet can only bound from below (an increase on
+  // top of a grant made elsewhere) must not be printed as if it were the
+  // standing allowance — that understatement is what hid a drainer's reach.
+  test("an allowance the wallet can only bound from below renders as 'at least'", () => {
+    const listing = (view: AllowanceView): string =>
+      dashboard(
+        "allowances",
+        status,
+        [],
+        preferences,
+        { balances: [] },
+        null,
+        [],
+        [],
+        {},
+        [],
+        null,
+        [view],
+      );
+
+    expect(listing({ ...allowance, lowerBound: true })).toContain("at least 1,000");
+    // The hint paragraph explains the wording, so assert on the row itself.
+    expect(listing(allowance)).not.toContain("at least 1,000");
+    // An unlimited lower bound is still unlimited, so the badge wins.
+    expect(listing({ ...allowance, amount: (1n << 128n).toString(), lowerBound: true })).toContain(
+      "Unlimited",
+    );
+    // A bound of zero bounds nothing: the pair is approved for an amount this
+    // wallet cannot state, and "at least 0" would read as harmless.
+    const unknown = listing({ ...allowance, amount: "0", lowerBound: true });
+    expect(unknown).toContain("an unknown amount");
+    expect(unknown).not.toContain("at least 0");
+  });
+
+  // MCW-V09-108(c): an ERC721 `approve(to, item_id)` on a contract the wallet
+  // cannot classify carries an item id where an ERC20 carries an amount, and
+  // the ERC20 revoke — `approve(spender, 0)` — would APPROVE item #0 there. The
+  // row therefore states its uncertainty and offers no revoke control.
+  test("an approval on an unconfirmed contract is labelled and offers no revoke", () => {
+    const html = dashboard(
+      "allowances",
+      status,
+      [],
+      preferences,
+      { balances: [] },
+      null,
+      [],
+      [],
+      {},
+      [],
+      null,
+      [{ ...allowance, unconfirmedToken: true }],
+    );
+    expect(html).toContain("may be an NFT item id");
+    expect(html).not.toContain("data-revoke-allowance");
   });
 
   test("NFT gallery grids visible NFTs and routes watch and hidden management", () => {

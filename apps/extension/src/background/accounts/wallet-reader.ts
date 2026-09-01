@@ -11,10 +11,9 @@
  * inputs to the service behind the vault boundary.
  */
 
-import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
-import type { Vault } from "@mc-wallet/vault/schema";
 import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
+import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
+import type { Vault } from "@mc-wallet/vault/schema";
 import type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
@@ -25,13 +24,20 @@ import type {
   DeriveLedgerStrk20ViewingKeyInput,
   EnsureNetworkAccountInput,
   ImportRawKeyAccountInput,
+  OpenNostrApplicationDataBatchInput,
+  OpenNostrApplicationDataInput,
   OriginGrantInput,
   RevokeOriginInput,
   SetActiveAccountInput,
   SignHashInput,
   WalletStatus as VaultStatus,
   WalletVaultService,
+  WrapNostrApplicationDataBatchInput,
+  WrapNostrApplicationDataInput,
 } from "@mc-wallet/vault/service";
+import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
+import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 
 /**
  * Narrow wallet service surface consumed by background message dispatch.
@@ -67,6 +73,16 @@ export type WalletStatusReader = {
   }) => Promise<string>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
+  /** Derives only the wallet-level public Nostr identity. */
+  readonly nostrPublicKey?: (vaultPassphrase: string) => Promise<string>;
+  /** Opens one authenticated NIP-59 application event inside Krusty. */
+  readonly openNostrApplicationData?: (
+    input: OpenNostrApplicationDataInput,
+  ) => Promise<NostrApplicationData>;
+  /** Opens a bounded Nostr inbox with one encrypted-vault read. */
+  readonly openNostrApplicationDataBatch?: (
+    input: OpenNostrApplicationDataBatchInput,
+  ) => Promise<readonly (NostrApplicationData | null)[]>;
   /**
    * Imports an account from a raw private key. Optional on this narrow dispatch
    * type so partial test stubs stay valid; the wired vault service always
@@ -75,12 +91,13 @@ export type WalletStatusReader = {
   readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
+  /** Atomically restores a confirmed set of phrase-derived accounts. */
+  readonly recoverAccounts?: (input: RecoverVaultAccountsInput) => Promise<readonly AccountRef[]>;
   /**
-   * Finds the HD accounts this vault's phrase already has on chain, using the
-   * caller's `probe` for every chain answer. Returns public metadata only and
-   * writes nothing. Optional so partial test stubs stay valid.
+   * Krusty mnemonic check for onboarding. Optional only for partial test stubs;
+   * production fails closed when absent.
    */
-  readonly scanSeedAccounts?: WalletVaultService["scanSeedAccounts"];
+  readonly validateMnemonic?: (mnemonic: string) => Promise<boolean>;
   readonly getGrantedAccounts: (
     origin: string,
     vaultPassphrase: string,
@@ -92,6 +109,12 @@ export type WalletStatusReader = {
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
   readonly status: () => Promise<VaultStatus>;
+  /** Creates one recipient-specific NIP-59 event inside Krusty. */
+  readonly wrapNostrApplicationData?: (input: WrapNostrApplicationDataInput) => Promise<string>;
+  /** Creates a bounded recipient batch with one encrypted-vault read. */
+  readonly wrapNostrApplicationDataBatch?: (
+    input: WrapNostrApplicationDataBatchInput,
+  ) => Promise<readonly (string | null)[]>;
 };
 
 /**
@@ -135,6 +158,15 @@ export const createWalletReader = (
     async generateMnemonic() {
       return (await required()).generateMnemonic();
     },
+    async nostrPublicKey(vaultPassphrase) {
+      return (await required()).nostrPublicKey(vaultPassphrase);
+    },
+    async openNostrApplicationData(input) {
+      return (await required()).openNostrApplicationData(input);
+    },
+    async openNostrApplicationDataBatch(input) {
+      return (await required()).openNostrApplicationDataBatch(input);
+    },
     async getGrantedAccounts(origin, vaultPassphrase) {
       return (await required()).getGrantedAccounts(origin, vaultPassphrase);
     },
@@ -147,8 +179,11 @@ export const createWalletReader = (
     async previewAccount(input) {
       return (await required()).previewAccount(input);
     },
-    async scanSeedAccounts(input) {
-      return (await required()).scanSeedAccounts(input);
+    async recoverAccounts(input) {
+      return (await required()).recoverAccounts(input);
+    },
+    async validateMnemonic(mnemonic) {
+      return (await required()).validateMnemonic(mnemonic);
     },
     async readVault(vaultPassphrase) {
       return (await required()).readVault(vaultPassphrase);
@@ -167,6 +202,12 @@ export const createWalletReader = (
       return resolved
         ? resolved.status()
         : { accountCount: 0, activeAccountId: null, hasVault: false, locked: true, ready: false };
+    },
+    async wrapNostrApplicationData(input) {
+      return (await required()).wrapNostrApplicationData(input);
+    },
+    async wrapNostrApplicationDataBatch(input) {
+      return (await required()).wrapNostrApplicationDataBatch(input);
     },
   };
 };

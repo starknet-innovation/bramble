@@ -12,6 +12,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createSidepanelRuntime, emptyStatus } from "../../../src/sidepanel/runtime/runtime";
+import { unavailableStatus } from "../../../src/sidepanel/runtime/runtime-status";
 import {
   APPROVAL_ID,
   account,
@@ -43,11 +44,14 @@ describe("createSidepanelRuntime — emptyStatus and no-runtime fallback", () =>
     expect(status.network).toBe("Unavailable");
   });
 
-  test("loadStatus falls back to emptyStatus when no runtime is injected", async () => {
+  test("loadStatus falls back to the unavailable status when no runtime is injected", async () => {
     // sendMessage resolves undefined (runtime?.sendMessage short-circuits), so
-    // every guard fails and the fallbacks fire.
+    // every guard fails and the fallbacks fire. An unanswered status read is a
+    // fault, not evidence of a fresh browser: it must not paint the first-run
+    // screen (MCW-V09-126).
     const wallet = createSidepanelRuntime();
-    expect(await wallet.loadStatus()).toEqual(emptyStatus());
+    expect(await wallet.loadStatus()).toEqual(unavailableStatus());
+    expect((await wallet.loadStatus()).hasVault).toBe(true);
     expect(await wallet.loadBalances()).toEqual({ error: "balances unavailable" });
     expect(await wallet.connectedSites()).toEqual([]);
     await expect(wallet.generateMnemonic()).rejects.toThrow("wallet unavailable");
@@ -57,105 +61,127 @@ describe("createSidepanelRuntime — emptyStatus and no-runtime fallback", () =>
 describe("account lifecycle wrappers", () => {
   test("addAccount returns the created account id and sends the network", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
-    expect(await wallet.addAccount("SN_MAIN")).toBe(account.id);
-    expect(sent[0]).toEqual({ networkId: "SN_MAIN", type: "wallet.addAccount" });
+    expect(await wallet.addAccount("SN_SEPOLIA", "openzeppelin")).toBe(account.id);
+    expect(sent[0]).toEqual({
+      accountContractType: "openzeppelin",
+      networkId: "SN_SEPOLIA",
+      type: "wallet.addAccount",
+    });
   });
 
   test("addAccount throws on an error envelope", async () => {
-    await expect(runtimeReturning(errorEnvelope).addAccount("SN_MAIN")).rejects.toThrow("boom");
+    await expect(
+      runtimeReturning(errorEnvelope).addAccount("SN_MAIN", "openzeppelin"),
+    ).rejects.toThrow("boom");
   });
 
   test("addAccount throws its fallback when the reply is unrecognised", async () => {
-    await expect(runtimeReturning({ ok: true }).addAccount("SN_MAIN")).rejects.toThrow(
-      "add account failed",
-    );
-  });
-
-  test("addAccount carries an explicit HD index when restoring", async () => {
-    const { sent, wallet } = captureRuntime(createAccountResponse);
-    expect(await wallet.addAccount("SN_MAIN", 7)).toBe(account.id);
-    // Without the index the background takes the lowest free position, which
-    // would land a restored account at the wrong address.
-    expect(sent[0]).toEqual({ accountIndex: 7, networkId: "SN_MAIN", type: "wallet.addAccount" });
-  });
-
-  test("scanSeedAccounts returns the candidates and carries no payload", async () => {
-    const candidates = [
-      {
-        accountIndex: 3,
-        address: "0xabc",
-        alreadyAdded: false,
-        deployed: true,
-        funded: false,
-      },
-    ];
-    const { sent, wallet } = captureRuntime({ candidates, ok: true });
-    expect(await wallet.scanSeedAccounts()).toEqual(candidates);
-    // The network and passphrase come from wallet state, so the request carries
-    // nothing a caller could redirect.
-    expect(sent[0]).toEqual({ type: "wallet.scanSeedAccounts" });
-  });
-
-  test("scanSeedAccounts rejects a malformed candidate rather than offering it", async () => {
-    // An address that is not a field element cannot be derived, so offering to
-    // restore it would produce an account the wallet cannot reach.
     await expect(
-      runtimeReturning({
-        candidates: [
-          { accountIndex: 0, address: "nope", alreadyAdded: false, deployed: true, funded: false },
-        ],
-        ok: true,
-      }).scanSeedAccounts(),
-    ).rejects.toThrow("Could not scan for accounts");
-  });
-
-  test("scanSeedAccounts throws on an error envelope", async () => {
-    await expect(runtimeReturning(errorEnvelope).scanSeedAccounts()).rejects.toThrow("boom");
+      runtimeReturning({ ok: true }).addAccount("SN_MAIN", "openzeppelin"),
+    ).rejects.toThrow("add account failed");
   });
 
   test("importAccount returns the imported id and carries the raw key only in the request", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
-    expect(await wallet.importAccount("SN_MAIN", "0xdeadbeef")).toBe(account.id);
+    expect(await wallet.importAccount("SN_SEPOLIA", "0xdeadbeef", "openzeppelin")).toBe(account.id);
     expect(sent[0]).toEqual({
-      networkId: "SN_MAIN",
+      accountContractType: "openzeppelin",
+      networkId: "SN_SEPOLIA",
       privateKey: "0xdeadbeef",
       type: "wallet.importAccount",
     });
   });
 
   test("importAccount throws on failure", async () => {
-    await expect(runtimeReturning(errorEnvelope).importAccount("SN_MAIN", "0x1")).rejects.toThrow(
-      "boom",
-    );
+    await expect(
+      runtimeReturning(errorEnvelope).importAccount("SN_MAIN", "0x1", "openzeppelin"),
+    ).rejects.toThrow("boom");
   });
 
   test("createAccount resolves void on success and forwards the vault passphrase", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
-    await expect(wallet.createAccount("seed words", "SN_MAIN", "pass")).resolves.toBeUndefined();
+    await expect(
+      wallet.createAccount("seed words", "SN_SEPOLIA", "pass", "openzeppelin"),
+    ).resolves.toBeUndefined();
     expect(sent[0]).toEqual({
+      accountContractType: "openzeppelin",
       mnemonic: "seed words",
-      networkId: "SN_MAIN",
+      networkId: "SN_SEPOLIA",
       type: "wallet.createAccount",
       vaultPassphrase: "pass",
     });
   });
 
   test("createAccount throws 'wallet unavailable' when the reply fails the guard", async () => {
-    await expect(runtimeReturning({}).createAccount("s", "SN_MAIN", "p")).rejects.toThrow(
-      "wallet unavailable",
-    );
+    await expect(
+      runtimeReturning({}).createAccount("s", "SN_MAIN", "p", "openzeppelin"),
+    ).rejects.toThrow("wallet unavailable");
   });
 
   test("previewAccount returns public metadata and pins the first derivation index", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
-    await expect(wallet.previewAccount("seed words", "SN_SEPOLIA")).resolves.toEqual(account);
+    await expect(
+      wallet.previewAccount("seed words", "SN_SEPOLIA", "openzeppelin"),
+    ).resolves.toEqual(account);
     expect(sent[0]).toEqual({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       mnemonic: "seed words",
       networkId: "SN_SEPOLIA",
       type: "wallet.previewAccount",
     });
-    await expect(runtimeReturning({}).previewAccount("seed", "SN_MAIN")).rejects.toThrow(
+    await expect(
+      runtimeReturning({}).previewAccount("seed", "SN_MAIN", "openzeppelin"),
+    ).rejects.toThrow("account preview unavailable");
+  });
+
+  test("discovers and restores an exact confirmed recovery selection", async () => {
+    const discovery = {
+      candidates: [{ account, deployed: true, funded: false }],
+      complete: false,
+      nextIndex: 4,
+      ok: true as const,
+    };
+    const discovered = captureRuntime(discovery);
+    await expect(
+      discovered.wallet.discoverRecoveryAccounts("seed words", "SN_SEPOLIA", 12),
+    ).resolves.toEqual(discovery);
+    expect(discovered.sent[0]).toEqual({
+      manualIndex: 12,
+      mnemonic: "seed words",
+      networkId: "SN_SEPOLIA",
+      type: "wallet.discoverRecoveryAccounts",
+    });
+
+    const restored = captureRuntime({ accounts: [account], ok: true });
+    const selections = [{ accountContractType: "openzeppelin" as const, accountIndex: 0 }];
+    await expect(
+      restored.wallet.recoverAccounts("seed words", "SN_SEPOLIA", "pass", selections),
+    ).resolves.toEqual([account]);
+    expect(restored.sent[0]).toEqual({
+      mnemonic: "seed words",
+      networkId: "SN_SEPOLIA",
+      selections,
+      type: "wallet.recoverAccounts",
+      vaultPassphrase: "pass",
+    });
+    await expect(runtimeReturning({}).discoverRecoveryAccounts("seed", "SN_MAIN")).rejects.toThrow(
+      "account discovery unavailable",
+    );
+  });
+
+  test("rejects account replies outside the requested network or contract", async () => {
+    const wallet = runtimeReturning(createAccountResponse);
+    await expect(wallet.addAccount("SN_MAIN", "openzeppelin")).rejects.toThrow(
+      "add account failed",
+    );
+    await expect(
+      wallet.createAccount("seed words", "SN_SEPOLIA", "pass", "argent"),
+    ).rejects.toThrow("wallet unavailable");
+    await expect(wallet.importAccount("SN_MAIN", "0xdeadbeef", "openzeppelin")).rejects.toThrow(
+      "import account failed",
+    );
+    await expect(wallet.previewAccount("seed words", "SN_SEPOLIA", "argent")).rejects.toThrow(
       "account preview unavailable",
     );
   });
@@ -210,6 +236,28 @@ describe("approvals and connected sites", () => {
     expect(sent[0]).toEqual({ id: APPROVAL_ID, type: "wallet.approveOrigin" });
   });
 
+  // The reviewed figure the card was painting travels with the approval, so the
+  // background can hold the submission to it and refuse if its own copy moved
+  // after the paint. A denial commits to no fee, so it carries none.
+  test("decideApproval carries the card's reviewed fee on an approval only", async () => {
+    const reviewedFee = { overallFee: "1000", unit: "FRI" } as const;
+    const approving = captureRuntime(accountsResponse);
+    await expect(
+      approving.wallet.decideApproval(APPROVAL_ID, true, reviewedFee),
+    ).resolves.toBeUndefined();
+    expect(approving.sent[0]).toEqual({
+      id: APPROVAL_ID,
+      reviewedFee,
+      type: "wallet.approveOrigin",
+    });
+
+    const denying = captureRuntime(pendingApprovalsResponse);
+    await expect(
+      denying.wallet.decideApproval(APPROVAL_ID, false, reviewedFee),
+    ).resolves.toBeUndefined();
+    expect(denying.sent[0]).toEqual({ id: APPROVAL_ID, type: "wallet.denyOrigin" });
+  });
+
   test("decideApproval denies via denyOrigin and accepts a pending-list echo", async () => {
     const { sent, wallet } = captureRuntime(pendingApprovalsResponse);
     await expect(wallet.decideApproval(APPROVAL_ID, false)).resolves.toBeUndefined();
@@ -254,6 +302,18 @@ describe("secret and mnemonic flows", () => {
     await expect(runtimeReturning({}).generateMnemonic()).rejects.toThrow("wallet unavailable");
   });
 
+  test("validateMnemonic returns the Krusty verdict and throws otherwise", async () => {
+    const { sent, wallet } = captureRuntime({ ok: true, valid: true });
+    await expect(wallet.validateMnemonic("seed words")).resolves.toBe(true);
+    expect(sent[0]).toEqual({ mnemonic: "seed words", type: "wallet.validateMnemonic" });
+    await expect(
+      runtimeReturning({ ok: true, valid: false }).validateMnemonic("bad"),
+    ).resolves.toBe(false);
+    await expect(runtimeReturning({}).validateMnemonic("seed")).rejects.toThrow(
+      "mnemonic validation unavailable",
+    );
+  });
+
   test("revealSecrets returns the whole reveal response and throws on failure", async () => {
     const { sent, wallet } = captureRuntime(revealSecretsResponse);
     expect(await wallet.revealSecrets("pass")).toEqual(revealSecretsResponse);
@@ -277,6 +337,12 @@ describe("activity feed", () => {
     const { sent, wallet } = captureRuntime({ activity: [activityEntry], ok: true });
     await wallet.loadActivity("SN_MAIN:0x999");
     expect(sent[0]).toEqual({ accountId: "SN_MAIN:0x999", type: "wallet.activity" });
+  });
+
+  test("loadActivity can force an explicit history refresh", async () => {
+    const { sent, wallet } = captureRuntime({ activity: [activityEntry], ok: true });
+    await wallet.loadActivity(undefined, false, true, true);
+    expect(sent[0]).toEqual({ forceHistory: true, refreshHistory: true, type: "wallet.activity" });
   });
 
   test("loadActivity defaults historyUnavailable to false when omitted", async () => {
@@ -340,18 +406,42 @@ describe("token and preference wrappers", () => {
       wallet.setDisplay({
         approvalSurface: "popup",
         displayCurrency: "eur",
+        reliabilityDiagnostics: true,
         theme: "dark",
       }),
     ).resolves.toBeUndefined();
     expect(sent[0]).toEqual({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      reliabilityDiagnostics: true,
       theme: "dark",
       type: "wallet.setDisplay",
     });
     await expect(runtimeReturning({}).setDisplay({ theme: "light" })).rejects.toThrow(
       "display update failed",
     );
+  });
+
+  test("loadDiagnostics accepts only the sanitized report shape", async () => {
+    const diagnostics = {
+      accountCount: 2,
+      collectionEnabled: true,
+      explorer: [{ count: 1, latencyMs: 30, outcome: "ok", service: "starkscan" }],
+      hasVault: true,
+      locked: false,
+      networkId: "SN_MAIN",
+      ready: true,
+      rpc: [{ count: 3, endpoint: "wallet-gateway", latencyMs: 42, outcome: "ok" }],
+    } as const;
+    await expect(runtimeReturning({ diagnostics, ok: true }).loadDiagnostics()).resolves.toEqual(
+      diagnostics,
+    );
+    await expect(
+      runtimeReturning({
+        diagnostics: { ...diagnostics, address: "0x123" },
+        ok: true,
+      }).loadDiagnostics(),
+    ).rejects.toThrow("diagnostic export failed");
   });
 
   test("setRpcOverride resolves on preferences and throws otherwise", async () => {
@@ -361,6 +451,22 @@ describe("token and preference wrappers", () => {
     await expect(runtimeReturning({}).setRpcOverride("SN_MAIN", "https://x")).rejects.toThrow(
       "rpc endpoint update failed",
     );
+  });
+
+  test("setExplorerFallback only replaces the API URL when one is supplied", async () => {
+    const { sent, wallet } = captureRuntime(preferencesResponse);
+    await wallet.setExplorerFallback("SN_MAIN", false);
+    await wallet.setExplorerFallback("SN_MAIN", true, "https://explorer.example/v1");
+
+    expect(sent).toEqual([
+      { enabled: false, networkId: "SN_MAIN", type: "wallet.setExplorerFallback" },
+      {
+        apiUrl: "https://explorer.example/v1",
+        enabled: true,
+        networkId: "SN_MAIN",
+        type: "wallet.setExplorerFallback",
+      },
+    ]);
   });
 
   test("setStrk20NetworkConfig resolves on preferences and throws otherwise", async () => {

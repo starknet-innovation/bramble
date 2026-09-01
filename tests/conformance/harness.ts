@@ -18,7 +18,7 @@ import { createUnlockSession } from "../../apps/extension/src/background/runtime
 import { ACCOUNT, CALL_AND_PROOF, ORIGIN } from "./spec-fixtures";
 
 /** Extension id every harness sender claims. */
-export const EXTENSION_ID = "extension-id";
+const EXTENSION_ID = "extension-id";
 /** A privileged extension-page sender (drives approve/deny + pending list). */
 export const EXTENSION_SENDER: RuntimeSender = {
   id: EXTENSION_ID,
@@ -88,7 +88,7 @@ const walletStub = (bump: Bump) => ({
       activeAccountId: ACCOUNT.id,
       mnemonic: null,
       originGrants: [{ accountIds: [ACCOUNT.id], origin: ORIGIN }],
-      schemaVersion: 4 as const,
+      schemaVersion: 7 as const,
       signingKeys: [{ accountId: ACCOUNT.id, privateKey: "0x123456" }],
     };
   },
@@ -154,11 +154,14 @@ const strk20Stub = (bump: Bump): Strk20Service => ({
 });
 
 const rpcStub = (bump: Bump): RuntimeRpc => ({
+  async estimateDeclareFee() {
+    return { overallFee: "1", unit: "FRI" };
+  },
   async estimateInvokeFee() {
     return { overallFee: "1", unit: "FRI" };
   },
   async getDeploymentStatus() {
-    return false;
+    return true;
   },
   async getNftOwner() {
     return "0x0";

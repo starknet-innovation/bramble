@@ -11,6 +11,22 @@ import { MOTION, RADIUS, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const HOME_STYLES = `
+  .tx-kind-icon {
+    align-items: center;
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-text);
+    display: flex;
+    flex: none;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+  }
+  .tx-kind-icon .icon { height: 18px; width: 18px; }
+  .tx-kind-icon.accepted { color: var(--mc-positive); }
+  .tx-kind-icon.pending { color: var(--mc-warning); }
+  .tx-kind-icon.preconfirmed { color: var(--mc-positive); opacity: 0.68; }
+  .tx-kind-icon.rejected, .tx-kind-icon.reverted { color: var(--mc-danger); }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger
      block so it cannot be skimmed past. Icon and text share one baseline. */
@@ -313,7 +329,8 @@ export const HOME_STYLES = `
     .drawer-root[data-open="true"] .drawer-list li, .copy-confirm .icon,
     #refresh-button[data-busy] .icon, #activity-refresh[data-busy] .icon,
     #detect-tokens[data-busy] .icon,
-    #swap-confirm-button[data-busy] .icon { animation: none; }
+    #swap-confirm-button[data-busy] .icon,
+    .account-net.degraded .dot { animation: none; }
     button, input, select, textarea {
       transition:
         background ${MOTION.pressMs}ms ${MOTION.ease},

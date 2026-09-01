@@ -12,6 +12,7 @@ import { createUnlockSession } from "../../../apps/extension/src/background/runt
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -81,6 +82,9 @@ const makeHandler = (unlocked: boolean) => {
   }
   const handler = createMessageHandler(walletStub, "extension-id", {
     runtimeRpc: makeRuntimeRpc({
+      async estimateAccountDeploymentFee() {
+        return { overallFee: "7", unit: "FRI" };
+      },
       async getDeploymentStatus(input) {
         statusCalls.push(input);
         return false;
@@ -137,11 +141,19 @@ describe("background deployment messages", () => {
 
   test("submits a deployment for the active account and returns its hash", async () => {
     const { deployCalls, handler } = makeHandler(true);
-    const response = await handler({ type: "wallet.deployAccount" }, extensionSender);
+    const review = await handler({ type: "wallet.deployAccount" }, extensionSender);
+    expect(review).toEqual({ feeReview: { overallFee: "7", unit: "FRI" }, ok: true });
+    expect(deployCalls).toHaveLength(0);
+
+    const response = await handler(
+      { reviewedFee: { overallFee: "7", unit: "FRI" }, type: "wallet.deployAccount" },
+      extensionSender,
+    );
 
     expect(response).toEqual({ ok: true, transactionHash: "0x7abc" });
     expect(deployCalls).toHaveLength(1);
     expect(deployCalls[0]?.account).toEqual(account);
+    expect(deployCalls[0]?.reviewedFee).toEqual({ overallFee: "7", unit: "FRI" });
     expect(typeof deployCalls[0]?.signHash).toBe("function");
   });
 });

@@ -7,11 +7,14 @@ import {
   withTransactionAlerts,
 } from "../../journeys/approvals/tx-alerts-ui";
 import type { RuntimeApi } from "../../runtime/runtime";
-import { createRefreshScheduler } from "./refresh-scheduler";
+import { createRefreshScheduler, type RefreshReason } from "./refresh-scheduler";
+import type { MutationRefresh } from "./runtime-refresh";
 
 type RefreshLifecycleOptions = {
-  readonly mutationRuntime: { readonly setListener: (listener: () => void) => void };
-  readonly render: (status: WalletStatus) => Promise<void>;
+  readonly mutationRuntime: {
+    readonly setListener: (listener: (refresh: MutationRefresh) => void) => void;
+  };
+  readonly render: (status: WalletStatus, refreshReason?: RefreshReason) => Promise<void>;
   readonly runtime: RuntimeApi | undefined;
   readonly wallet: TransactionAlertReader & { readonly loadStatus: () => Promise<WalletStatus> };
 };
@@ -26,18 +29,20 @@ export const startRefreshLifecycle = ({
   wallet,
 }: RefreshLifecycleOptions): void => {
   const scheduler = createRefreshScheduler({
-    refresh: withTransactionAlerts(wallet, async () => render(await wallet.loadStatus())),
+    refresh: (reason) =>
+      withTransactionAlerts(document, wallet, async () =>
+        render(await wallet.loadStatus(), reason),
+      )(),
     visible: () => document.visibilityState === "visible",
   });
-  mutationRuntime.setListener(scheduler.afterAction);
+  mutationRuntime.setListener((refresh) => {
+    if (refresh === "burst") scheduler.afterAction();
+    else scheduler.refreshNow();
+  });
   runtime?.onMessage?.addListener((message) => {
-    if (isWalletEventMessage(message)) scheduler.afterAction();
+    if (isWalletEventMessage(message)) scheduler.refreshNow();
   });
   document.addEventListener("visibilitychange", scheduler.visibilityChanged);
-  window.addEventListener("focus", () => {
-    scheduler.start();
-    scheduler.afterAction();
-  });
   window.addEventListener("pagehide", scheduler.stop, { once: true });
   scheduler.start();
 };

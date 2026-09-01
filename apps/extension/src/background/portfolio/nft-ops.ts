@@ -5,30 +5,34 @@
  * preference mutations handled in preference-ops.ts.
  */
 
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { buildErc721TransferCall, buildErc1155TransferCall } from "@mc-wallet/portfolio/nft";
 import { unavailableNftIndexer } from "@mc-wallet/portfolio/nft-indexer";
 import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
 import type { NftStandard } from "@mc-wallet/starknet/rpc";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
+import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
+import { refuseOnPoisonedRecipient, verifyCalls } from "@mc-wallet/transactions/verify";
+import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
+import {
+  activeAccountContext,
+  networkRpcUrls,
+  observedAccountContext,
+} from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
+import { captureSessionAuthorization } from "../runtime/session";
+import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
-import { readTypeOnlyInput } from "../routing/message-inputs";
+import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
+import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
 import {
   type NftTarget,
   readAddNftInput,
   readDiscoverNftsInput,
+  readLoadWatchedNftsInput,
   readReviewNftTransferInput,
   readTransferNftInput,
 } from "./nft-inputs";
-import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import {
-  resolveReviewFee,
-  signerForContext,
-  verificationContext,
-  type WalletOpsDeps,
-} from "../accounts/wallet-ops";
+import { cachedNfts } from "./nft-snapshot-cache";
 
 // Bounds how many on-chain ERC721 owner / ERC1155 balance re-proofs run at once
 // during discovery.
@@ -60,7 +64,7 @@ const ownedNftStandard = async (
     rpcUrls,
     tokenId: target.tokenId,
   });
-  return BigInt(owner) === BigInt(accountAddress) ? "ERC721" : null;
+  return sameFelt(owner, accountAddress) ? "ERC721" : null;
 };
 
 // Re-proves ownership of one discovery candidate on-chain, returning the NFT
@@ -224,16 +228,15 @@ const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<Runt
   if (standard === null) {
     return { error: "this account does not own that NFT" };
   }
-  return {
-    ok: true,
-    preferences: await deps.preferencesStore.addNft({
-      contract: input.contract,
-      ...(input.label === undefined ? {} : { label: input.label }),
-      networkId: input.networkId,
-      owner: context.account.address,
-      tokenId: input.tokenId,
-    }),
-  };
+  const updated = await deps.preferencesStore.addNft({
+    contract: input.contract,
+    ...(input.label === undefined ? {} : { label: input.label }),
+    networkId: input.networkId,
+    owner: context.account.address,
+    tokenId: input.tokenId,
+  });
+  await deps.nftSnapshots?.clear(context.account.id, context.networkId).catch(() => undefined);
+  return { ok: true, preferences: updated };
 };
 
 type NftTransferInput = NonNullable<ReturnType<typeof readTransferNftInput>>;
@@ -288,38 +291,34 @@ const handleReviewNftTransfer = async (
     return { error: prepared.error };
   }
   const { call, context, report, rpcUrls } = prepared;
-  const deployed = await deps.runtimeRpc
-    .getDeploymentStatus({ accountAddress: context.account.address, rpcUrls })
-    .catch(() => true);
-  const estimated = deployed
-    ? await deps.runtimeRpc
-        .estimateInvokeFee({
-          account: context.account,
-          calls: [call],
-          rpcUrls,
-          signHash: signerForContext(deps, context, "send-collectible"),
-        })
-        .catch(() => null)
-    : null;
-  const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  const fees = await reviewWalletFundedFees(deps.runtimeRpc, {
+    account: context.account,
+    calls: [call],
+    rpcUrls,
+    signHash: signerForContext(deps, context, "send-collectible"),
+  });
   // Fee-affordability guard (issue 191): the NFT itself never spends STRK, so
   // only the estimate is compared against the balance. Warn-only, fail-open.
   const feeAffordability = resolveFeeAffordability({
     balance:
-      fee === null ? null : await readStrkBalance(deps, context.account, prepared.preferences),
-    fee,
+      fees.totalFee === null
+        ? null
+        : await readStrkBalance(deps, context.account, prepared.preferences),
+    fee: fees.totalFee,
   });
   return {
     ok: true,
     review: {
-      fee,
+      deploymentFee: fees.deploymentFee,
+      deploymentFeeEstimateFailed: fees.deploymentFeeEstimateFailed,
+      fee: fees.fee,
       feeAffordability,
-      feeEstimateFailed,
+      feeEstimateFailed: fees.feeEstimateFailed,
       // The target is an on-chain ownership-proven NFT contract, so the generic
       // "unknown token contract" warning is inapplicable. Recipient warnings
       // remain intact, including the submission-blocking poisoning check.
       flags: report.flags.filter((flag) => flag.code !== "unknown-contract"),
-      requiresDeployment: !deployed,
+      requiresDeployment: fees.requiresDeployment,
       summaries: report.calls.map((decoded) => decoded.summary),
     },
   };
@@ -338,25 +337,36 @@ const handleTransferNft = async (
     return { error: prepared.error };
   }
   const { call, context, report, rpcUrls } = prepared;
-  // NFT sends now run through pre-sign verification: block a recipient that
-  // mimics one of the wallet's saved addresses before anything is signed.
-  const poisoning = report.flags.find((flag) => flag.code === "address-poisoning");
-  if (poisoning) {
-    return { error: poisoning.message };
+  const authorized = captureSessionAuthorization(deps.session);
+  // Pre-sign verification through the one shared recipient policy: a recipient
+  // that mimics a saved address is refused before anything is signed, in the
+  // same words every other send line uses.
+  const refusal = refuseOnPoisonedRecipient(report);
+  if (refusal) {
+    return refusal;
   }
+  if (!input.reviewedFee) {
+    return FEE_REVIEW_REQUIRED;
+  }
+  // Same bind as the ERC20 send: the fee the review step rendered is the
+  // ceiling this send may sign under (MCW-V09-119).
   const result = await deps.runtimeRpc.submitInvokeTransaction({
     account: context.account,
     calls: [call],
+    isAuthorized: authorized.isCurrent,
+    ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
+    reviewedFee: input.reviewedFee,
     rpcUrls,
     signHash: signerForContext(deps, context, "send-collectible"),
   });
-  await deps.activity.record({
+  await recordSubmittedActivity(deps.activity, {
     accountId: context.account.id,
     hash: result.transactionHash,
     kind: "invoke",
     networkId: context.networkId,
     summary: report.calls[0]?.summary ?? `Send NFT #${input.tokenId}`,
   });
+  await deps.nftSnapshots?.clear(context.account.id, context.networkId).catch(() => undefined);
   return { ok: true, transactionHash: result.transactionHash };
 };
 
@@ -368,7 +378,8 @@ const handleDiscoverNfts = async (
   if (!input) {
     return { error: "invalid discover nfts request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  // Panel-poll traffic: observe the session, never extend it.
+  const context = await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
     return { error: context.error };
   }
@@ -382,29 +393,35 @@ const handleDiscoverNfts = async (
   if (owner === undefined) {
     return { error: "multisig not found on the active network" };
   }
-  const preferences = await deps.preferencesStore.read();
-  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
-  const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
-  const candidates = await indexer.listOwnedNfts({
-    address: owner,
-    indexerUrl: preferences.nftIndexerUrl ?? null,
-    networkId: context.networkId,
-  });
-  const watched = watchedCandidates(preferences, context.networkId, owner);
-  const watchedIds = new Set(watched.map((nft) => nft.id));
-  const candidatesToVerify = input.includeWatched
-    ? mergeNftCandidates(candidates, watched)
-    : candidates.filter((nft) => !watchedIds.has(nft.id));
-  // Never trust the indexer's ownership claim: re-prove each token through its
-  // ERC721 owner or ERC1155 balance surface, dropping any the account no longer
-  // owns (or that fail to read) so the gallery only shows verified holdings.
-  const owned = await filterOwnedNfts(deps, candidatesToVerify, owner, rpcUrls);
-  // Only explicitly watched NFTs resolve their token_uri/uri here. This preserves
-  // the gallery's anti-tracking boundary: unsolicited airdrops never make the
-  // extension contact an attacker-controlled metadata host in the background.
-  const hydrated = input.includeWatched
-    ? await enrichWatchedNfts(deps, owned, watchedIds, rpcUrls)
-    : owned;
+  const accountId = input.multisigId ?? context.account.id;
+  const hydrated = await cachedNfts(
+    deps,
+    {
+      accountId,
+      lane: input.includeWatched ? "complete" : "indexed",
+      networkId: context.networkId,
+    },
+    async () => {
+      const preferences = await deps.preferencesStore.read();
+      const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
+      const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
+      const candidates = await indexer.listOwnedNfts({
+        address: owner,
+        indexerUrl: preferences.nftIndexerUrl ?? null,
+        networkId: context.networkId,
+      });
+      const watched = watchedCandidates(preferences, context.networkId, owner);
+      const watchedIds = new Set(watched.map((nft) => nft.id));
+      const candidatesToVerify = input.includeWatched
+        ? mergeNftCandidates(candidates, watched)
+        : candidates.filter((nft) => !watchedIds.has(nft.id));
+      // Indexer ownership remains untrusted: every fresh snapshot re-proves it.
+      const owned = await filterOwnedNfts(deps, candidatesToVerify, owner, rpcUrls);
+      // Unsolicited airdrops still never trigger attacker-controlled metadata.
+      return input.includeWatched ? enrichWatchedNfts(deps, owned, watchedIds, rpcUrls) : owned;
+    },
+    input.cached,
+  );
   return { nfts: hydrated, ok: true };
 };
 
@@ -412,22 +429,30 @@ const handleLoadWatchedNfts = async (
   deps: WalletOpsDeps,
   message: unknown,
 ): Promise<RuntimeResponse> => {
-  if (!readTypeOnlyInput(message, "wallet.loadWatchedNfts")) {
+  const input = readLoadWatchedNftsInput(message);
+  if (!input) {
     return { error: "invalid watched nft request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  // Panel-poll traffic: observe the session, never extend it.
+  const context = await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
     return { error: context.error };
   }
-  const preferences = await deps.preferencesStore.read();
-  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
   return {
-    nfts: await loadWatchedNfts(
+    nfts: await cachedNfts(
       deps,
-      preferences,
-      context.networkId,
-      context.account.address,
-      rpcUrls,
+      { accountId: context.account.id, lane: "watched", networkId: context.networkId },
+      async () => {
+        const preferences = await deps.preferencesStore.read();
+        return loadWatchedNfts(
+          deps,
+          preferences,
+          context.networkId,
+          context.account.address,
+          networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
+        );
+      },
+      input.cached,
     ),
     ok: true,
   };

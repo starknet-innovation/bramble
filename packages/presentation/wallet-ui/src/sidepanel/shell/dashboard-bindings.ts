@@ -4,11 +4,15 @@
  * from the side panel entrypoint to keep it within the size budget.
  */
 
+import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { parseWalletContactCard, walletContactCard } from "@mc-wallet/wallet-model/preferences";
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
-import { errorCause } from "../runtime/response-error";
 import type { SidepanelWallet } from "../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../shared/dom";
+import { errorCause } from "../runtime/runtime-errors";
+import { buttonBusy, errorMessage, renderFragment, showToast } from "../shared/dom";
+import { accountLabel } from "../shared/parts";
+import { qrSvg } from "../shared/qr";
 
 /**
  * Shared context: the app root, the runtime client, and a full re-render.
@@ -30,6 +34,39 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
   const result = app?.querySelector<HTMLElement>("#address-result");
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
 
+  const walletCardField = form?.querySelector<HTMLTextAreaElement>('[name="walletCard"]');
+  if (form && walletCardField)
+    walletCardField.addEventListener("change", () => {
+      const value = walletCardField.value.trim();
+      if (!value) {
+        walletCardField.setCustomValidity("");
+        return;
+      }
+      const card = parseWalletContactCard(value);
+      const networkId = form.elements.namedItem("networkId");
+      const currentNetwork = networkId instanceof HTMLInputElement ? networkId.value : "";
+      if (!card || card.networkId !== currentNetwork) {
+        const message = card
+          ? "This wallet card belongs to a different network."
+          : "That wallet card is not recognized.";
+        walletCardField.setCustomValidity(message);
+        if (result) result.textContent = message;
+        return;
+      }
+      walletCardField.setCustomValidity("");
+      for (const [name, value] of [
+        ["address", card.address],
+        ["publicKeyX", card.publicKeyX ?? ""],
+        ["nostrPublicKey", card.nostrPublicKey ?? ""],
+      ] as const) {
+        const input = form.elements.namedItem(name);
+        if (input instanceof HTMLInputElement) input.value = value;
+      }
+      if (result) result.textContent = "Wallet card verified. Add a label, then save.";
+      const label = form.elements.namedItem("label");
+      if (label instanceof HTMLInputElement) label.focus({ preventScroll: true });
+    });
+
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(form);
@@ -39,17 +76,19 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         String(data.get("label") ?? ""),
         String(data.get("address") ?? "").trim(),
         String(data.get("networkId") ?? ""),
+        String(data.get("publicKeyX") ?? "").trim() || undefined,
+        String(data.get("nostrPublicKey") ?? "").trim() || undefined,
       )
       .then(
         async () => {
-          showToast("Address saved", "success");
+          showToast("Address saved", "success", form);
           if (result) {
             result.textContent = "Address saved";
           }
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Address save failed"), "error");
+          showToast(errorMessage(error, "Address save failed"), "error", form);
           if (result) {
             result.textContent = errorMessage(error, "Address save failed");
           }
@@ -57,6 +96,61 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         },
       );
   });
+};
+
+/** Saturates the account's public wallet card without putting Nostr derivation in polling. */
+export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => {
+  const root = app?.querySelector<HTMLElement>("[data-receive-wallet-card]");
+  const address = root?.dataset["receiveAddress"];
+  const networkId = root?.dataset["receiveNetwork"];
+  const publicKeyX = root?.dataset["receiveSignerKey"];
+  if (!root || !address || !isStarknetNetworkId(networkId) || !publicKeyX) return;
+  void wallet.loadNostrPublicKey().then(
+    (nostrPublicKey) => {
+      if (!root.isConnected) return;
+      const card = walletContactCard({ address, networkId, nostrPublicKey, publicKeyX });
+      const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
+      const cardCopy = root.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
+      const keyRow = root.querySelector<HTMLElement>("[data-nostr-key-row]");
+      const keyStatus = keyRow?.querySelector<HTMLElement>("[data-nostr-key-status]");
+      const keyValue = keyRow?.querySelector<HTMLElement>("[data-nostr-key-value]");
+      const key = root.querySelector<HTMLElement>("[data-nostr-key]");
+      const keyCopy = keyRow?.querySelector<HTMLButtonElement>("[data-copy]");
+      if (qr) renderFragment(qr, qrSvg(card, "QR code for wallet contact card"));
+      if (qr) qr.removeAttribute("aria-busy");
+      root.dataset["walletCardState"] = "ready";
+      if (cardCopy) {
+        cardCopy.dataset["copy"] = card;
+        cardCopy.disabled = false;
+        if (cardCopy.lastChild) cardCopy.lastChild.textContent = "Copy wallet card";
+      }
+      if (keyStatus) keyStatus.hidden = true;
+      if (key) {
+        key.textContent = accountLabel(nostrPublicKey);
+        key.title = nostrPublicKey;
+      }
+      if (keyCopy) keyCopy.dataset["copy"] = nostrPublicKey;
+      if (keyValue) keyValue.hidden = false;
+    },
+    () => {
+      if (!root.isConnected) return;
+      const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
+      const cardCopy = root.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
+      const keyStatus = root.querySelector<HTMLElement>("[data-nostr-key-status]");
+      const keyValue = root.querySelector<HTMLElement>("[data-nostr-key-value]");
+      if (qr) {
+        renderFragment(qr, qrSvg(address, "QR code for account address"));
+        qr.removeAttribute("aria-busy");
+      }
+      root.dataset["walletCardState"] = "unavailable";
+      if (cardCopy) cardCopy.hidden = true;
+      if (keyStatus) {
+        keyStatus.textContent = "Coordination is unavailable. Share the account address instead.";
+        keyStatus.hidden = false;
+      }
+      if (keyValue) keyValue.hidden = true;
+    },
+  );
 };
 
 /**
@@ -105,18 +199,34 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
         result.textContent =
           action === "approve" ? "Approved. Signing and broadcasting…" : "Rejecting request…";
       }
-      void wallet.decideApproval(id, action === "approve").then(
+      // The fee this card painted, read back off the control that was clicked
+      // rather than from any later status refresh, so the figure the user saw is
+      // the figure the decision reports. A card that showed no fee reports none.
+      const overallFee = button.dataset["approvalFee"];
+      const unit = button.dataset["approvalFeeUnit"];
+      const reviewedFee =
+        overallFee !== undefined && unit !== undefined ? { overallFee, unit } : undefined;
+      void wallet.decideApproval(id, action === "approve", reviewedFee).then(
         async () => {
-          showToast(action === "approve" ? "Request approved" : "Request denied", "success");
+          showToast(
+            action === "approve" ? "Request approved" : "Request denied",
+            "success",
+            button,
+          );
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
           const message = errorMessage(error, "Approval failed");
-          // The node's reason, when the background sent one. It goes in the
-          // card's own status line (which can wrap) and into the toast's
-          // clipboard, so the user can both read and report why it failed.
+          // The node's reason, when the background sent one. Too long to read in
+          // a toast, but exactly what belongs in a bug report, so it rides in the
+          // clipboard text rather than the visible line.
           const detail = errorCause(error);
-          showToast(message, "error", detail);
+          showToast(
+            message,
+            "error",
+            button,
+            detail === undefined ? message : `${message}\n\n${detail}`,
+          );
           if (result) {
             result.textContent = detail === undefined ? message : `${message}: ${detail}`;
           }
@@ -144,7 +254,7 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
       void wallet.retryApprovalFee(id).then(
         async () => render(await wallet.loadStatus()),
         (error: unknown) => {
-          showToast(errorMessage(error, "Fee estimate failed"), "error");
+          showToast(errorMessage(error, "Fee estimate failed"), "error", button);
           buttonBusy(button, false);
         },
       );

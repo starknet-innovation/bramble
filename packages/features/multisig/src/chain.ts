@@ -1,376 +1,490 @@
 /**
- * OpenZeppelin MultisigComponent (v3.0.0) operations: pure calldata builders
- * for submit/confirm/revoke/execute plus on-chain reads for quorum, signers,
- * and per-transaction state. Confirmations are ordinary invokes from each
- * signer's own account, so no new signing or key material is involved — the
- * multisig contract itself enforces signer membership and quorum on-chain.
- * All inputs are validated as field elements before any calldata is built,
- * and malformed RPC responses throw rather than degrade.
+ * Read-only Argent multisig account operations. This module never prepares or
+ * hashes a transaction: the platform owns those Starknet details. It only
+ * validates calls and reads the pinned account's current authority snapshot.
  */
-
 import { WalletError } from "@mc-wallet/core/errors";
-import { createRpcProvider, withRpcFallback } from "@mc-wallet/starknet/provider";
 import {
+  ARGENT_MULTISIG_CONTRACT,
+  ARGENT_MULTISIG_MAX_SIGNERS,
+  argentSignerGuid,
+} from "@mc-wallet/starknet/account-contracts";
+import {
+  type ArgentMultisigCall,
+  isArgentMultisigCalls,
+} from "@mc-wallet/starknet/multisig-invoke";
+import {
+  createRpcProvider,
+  isContractNotFoundError,
+  timedRpcFetch,
+  withRpcFallback,
+} from "@mc-wallet/starknet/provider";
+import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
-  canonicalFelt as sharedCanonicalFelt,
+  sameFelt,
 } from "@mc-wallet/wallet-model/networks";
-import { type Call, hash, type RpcProvider, type RpcProviderOptions } from "starknet";
+import { hash, type RpcProvider } from "starknet";
+import { withPinnedBlock } from "./chain-pinned-read";
+import { parseArgentMultisigConfigChange } from "./config-change";
 
 /**
- * Shared multisig limits. These are the single source of truth consumed by
- * the input parsers, the storage validators, and the deploy builder — keep
- * them here so the layers can never silently desynchronize.
+ * Shared limits for account configuration and frozen signing intents.
  */
 export const MULTISIG_LIMITS = {
-  /** Maximum felts in one proposal's inner calldata. */
-  calldataFelts: 64,
-  /** Maximum user-facing multisig name length. */
+  /** Maximum user-facing account name length. */
   nameLength: 48,
-  /** Maximum signers accepted for watching or deploying a multisig. */
-  signers: 32,
-  /** Maximum user-facing proposal summary length. */
+  /** Maximum signer count enforced by Argent Multisig 0.2. */
+  signers: ARGENT_MULTISIG_MAX_SIGNERS,
+  /** Maximum user-facing signing-intent summary length. */
   summaryLength: 120,
 } as const;
 
-const MAX_CALLDATA_FELTS = MULTISIG_LIMITS.calldataFelts;
-const MAX_SIGNERS = MULTISIG_LIMITS.signers;
 const MULTISIG_READ_TIMEOUT_MS = 6_000;
 
-// Multisig verification is an interactive read and must not leave the wallet
-// parked behind starknet.js's unbounded default fetch. The timeout aborts the
-// current endpoint so withRpcFallback can try the next configured RPC.
-const timedMultisigFetch: NonNullable<RpcProviderOptions["baseFetch"]> = (input, init) =>
-  fetch(input, { ...init, signal: AbortSignal.timeout(MULTISIG_READ_TIMEOUT_MS) });
-
 const multisigReadProvider = (nodeUrl: string): RpcProvider =>
-  createRpcProvider(nodeUrl, { baseFetch: timedMultisigFetch });
+  createRpcProvider(nodeUrl, { baseFetch: timedRpcFetch(MULTISIG_READ_TIMEOUT_MS) });
 
 /**
- * One inner call a multisig proposal will execute, using the entrypoint name
- * (the selector is derived at build time with the standard Starknet keccak).
+ * Re-export the platform's canonical prepared-call shape.
  */
-export type MultisigCallInput = {
-  readonly calldata: readonly string[];
-  readonly contractAddress: string;
-  readonly entrypoint: string;
-};
+export type { ArgentMultisigCall } from "@mc-wallet/starknet/multisig-invoke";
+/**
+ * Re-export the single-sourced trust-boundary validators for prepared calls.
+ */
+export {
+  isArgentMultisigCall,
+  isArgentMultisigCalls,
+} from "@mc-wallet/starknet/multisig-invoke";
+
+const FORBIDDEN_SELF_CALL_SELECTORS = new Set(
+  ["execute_after_upgrade", "perform_upgrade"].map(hash.getSelectorFromName),
+);
 
 /**
- * Chain-derived lifecycle state of a multisig proposal, mirroring the
- * component's `TransactionState` enum.
+ * Re-exports strict config decoding/review helpers. Untrusted or semantically
+ * invalid transitions throw before preparation and expose no key material.
  */
-export type MultisigProposalState = "confirmed" | "executed" | "not-found" | "pending";
+export {
+  type ArgentMultisigConfigChange,
+  type ArgentMultisigConfigReview,
+  type ArgentMultisigPublicConfig,
+  argentMultisigConfigChangeCall,
+  nextArgentMultisigPublicConfig,
+  parseArgentMultisigConfigChange,
+  reviewArgentMultisigConfigChange,
+} from "./config-change";
 
 /**
- * On-chain multisig configuration.
+ * Mirrors stable Argent Multisig 0.2's call-set restriction before review:
+ * multi-call transactions may not contain a self-call, and its two internal
+ * upgrade callbacks may never be invoked directly. Throws on violation so a
+ * forbidden call cannot be presented as an ordinary signing intent.
  */
-export type MultisigConfig = {
-  readonly quorum: number;
-  readonly signers: readonly string[];
-};
-
-/**
- * Inputs for reading multisig configuration by contract address.
- */
-export type MultisigConfigInput = {
-  readonly address: string;
-  readonly rpcUrls: readonly string[];
-};
-
-/**
- * Inputs for reading one proposal's state, confirmation count, and whether a
- * specific signer has confirmed it.
- */
-export type MultisigProposalStatusInput = {
-  readonly address: string;
-  readonly rpcUrls: readonly string[];
-  readonly signer: string;
-  readonly txId: string;
-};
-
-/**
- * Proposal status snapshot read from the multisig contract.
- */
-export type MultisigProposalStatus = {
-  readonly confirmations: number;
-  readonly confirmedBySigner: boolean;
-  readonly state: MultisigProposalState;
-};
-
-/**
- * Inputs for computing a proposal's transaction id via the contract's own
- * `hash_transaction` view, so the wallet never re-implements the Pedersen
- * scheme locally.
- */
-export type MultisigTransactionIdInput = {
-  readonly address: string;
-  readonly call: MultisigCallInput;
-  readonly rpcUrls: readonly string[];
-  readonly salt: string;
-};
-
-const ENTRYPOINT_PATTERN = /^[a-z_][a-z0-9_]{0,63}$/;
-
-/**
- * Checks a proposal entrypoint name before deriving a selector from it.
- */
-export const isMultisigEntrypoint = (value: unknown): value is string =>
-  typeof value === "string" && ENTRYPOINT_PATTERN.test(value);
-
-/**
- * Checks an inner-call shape (addresses, entrypoint, calldata felts) before
- * it is stored or compiled into multisig calldata.
- */
-export const isMultisigCallInput = (value: MultisigCallInput): boolean =>
-  isNonZeroStarkFieldElement(value.contractAddress) &&
-  isMultisigEntrypoint(value.entrypoint) &&
-  value.calldata.length <= MAX_CALLDATA_FELTS &&
-  value.calldata.every((felt) => isStarkFieldElement(felt));
-
-// Every call site validates the value as a field element first, so the shared
-// converter cannot return null here; the fallback only satisfies the types.
-const canonicalFelt = (value: string): string => sharedCanonicalFelt(value) ?? value;
-
-const requireCall = (call: MultisigCallInput): MultisigCallInput => {
-  if (!isMultisigCallInput(call)) {
-    throw new WalletError("Invalid multisig call");
+export const requireSafeArgentMultisigCalls = (
+  accountAddress: string,
+  calls: readonly ArgentMultisigCall[],
+): void => {
+  if (!isArgentMultisigCalls(calls)) {
+    throw new WalletError("Invalid Argent multisig calls");
   }
-  return call;
+  const selfCalls = calls.filter((call) => sameFelt(call.contractAddress, accountAddress));
+  if (calls.length > 1 && selfCalls.length > 0) {
+    throw new WalletError("Argent multisig batches cannot contain account self-calls");
+  }
+  const call = selfCalls[0];
+  if (call) {
+    if (FORBIDDEN_SELF_CALL_SELECTORS.has(hash.getSelectorFromName(call.entrypoint))) {
+      throw new WalletError("Argent multisig internal upgrade callbacks cannot be called directly");
+    }
+    parseArgentMultisigConfigChange(accountAddress, call);
+  }
 };
 
-const requireFelt = (value: string, label: string): string => {
-  if (!isStarkFieldElement(value)) {
-    throw new WalletError(`Invalid multisig ${label}`);
-  }
-  return canonicalFelt(value);
+/**
+ * Fresh authority snapshot read from a pinned Argent Multisig 0.2 account.
+ */
+export type ArgentMultisigConfig = {
+  readonly classHash: string;
+  readonly signerGuids: readonly string[];
+  readonly threshold: number;
+};
+
+/**
+ * Fresh authority state exposed without collapsing trust failures. Unknown or
+ * malformed values are rejected at the response boundary.
+ */
+export type ArgentMultisigAuthorityStatus =
+  | "available"
+  | "invalid-config"
+  | "network-unavailable"
+  | "undeployed"
+  | "unsupported-class"
+  | "unsupported-signers";
+
+/**
+ * Non-Stark signer linked by the pinned account. The GUID is untrusted until
+ * matched to accepted contract events; this wallet never signs for this type.
+ */
+export type ArgentUnsupportedSigner = {
+  readonly guid: string;
+  readonly type: "eip191" | "secp256k1" | "secp256r1" | "webauthn";
+};
+
+/**
+ * Signer material recovered from accepted `SignerLinked` events. Invalid event
+ * data fails closed instead of returning a partial signer identity.
+ */
+export type ArgentSignerDiscovery = {
+  readonly signerPublicKeys: readonly string[];
+  readonly unsupportedSigners: readonly ArgentUnsupportedSigner[];
+};
+
+/**
+ * Inputs for reading one Argent multisig account's authority configuration.
+ */
+export type ArgentMultisigConfigInput = {
+  readonly address: string;
+  readonly makeProvider?: ((nodeUrl: string) => RpcProvider) | undefined;
+  readonly rpcUrls: readonly string[];
+};
+
+/**
+ * Inputs for checking one GUID against fresh on-chain signer membership.
+ */
+export type ArgentSignerMembershipInput = ArgentMultisigConfigInput & {
+  readonly signerGuid: string;
+};
+
+/**
+ * Inputs for recovering current Stark signer public keys from linked events.
+ */
+export type ArgentSignerDiscoveryInput = ArgentMultisigConfigInput & {
+  readonly signerGuids: readonly string[];
 };
 
 const requireAddress = (value: string): string => {
-  if (!isNonZeroStarkFieldElement(value)) {
-    throw new WalletError("Invalid multisig address");
+  const canonical = canonicalFelt(value);
+  if (canonical === null || !isNonZeroStarkFieldElement(canonical)) {
+    throw new WalletError("Invalid Argent multisig address");
   }
-  return canonicalFelt(value);
+  return canonical;
 };
 
-// Serializes (to, selector, calldata, salt) exactly as the component's
-// external entrypoints expect: the inner call flattened with a length prefix.
-const innerCallCalldata = (call: MultisigCallInput, salt: string): string[] => {
-  const checked = requireCall(call);
-  return [
-    canonicalFelt(checked.contractAddress),
-    hash.getSelectorFromName(checked.entrypoint),
-    `0x${checked.calldata.length.toString(16)}`,
-    ...checked.calldata.map(canonicalFelt),
-    requireFelt(salt, "salt"),
-  ];
+const requireGuid = (value: string): string => {
+  const canonical = canonicalFelt(value);
+  if (canonical === null || !isNonZeroStarkFieldElement(canonical)) {
+    throw new WalletError("Invalid Argent signer GUID");
+  }
+  return canonical;
 };
 
-/**
- * Builds the `submit_transaction` invoke that proposes one inner call.
- */
-export const buildMultisigSubmitCall = (
-  multisigAddress: string,
-  call: MultisigCallInput,
-  salt: string,
-): Call => ({
-  calldata: innerCallCalldata(call, salt),
-  contractAddress: requireAddress(multisigAddress),
-  entrypoint: "submit_transaction",
-});
-
-/**
- * Builds the `confirm_transaction` invoke for a proposal id.
- */
-export const buildMultisigConfirmCall = (multisigAddress: string, txId: string): Call => ({
-  calldata: [requireFelt(txId, "transaction id")],
-  contractAddress: requireAddress(multisigAddress),
-  entrypoint: "confirm_transaction",
-});
-
-/**
- * Builds the `revoke_confirmation` invoke for a proposal id.
- */
-export const buildMultisigRevokeCall = (multisigAddress: string, txId: string): Call => ({
-  calldata: [requireFelt(txId, "transaction id")],
-  contractAddress: requireAddress(multisigAddress),
-  entrypoint: "revoke_confirmation",
-});
-
-/**
- * Builds the `execute_transaction` invoke. The component re-derives the
- * proposal id from these parameters, so they must be the exact call and salt
- * that were proposed.
- */
-export const buildMultisigExecuteCall = (
-  multisigAddress: string,
-  call: MultisigCallInput,
-  salt: string,
-): Call => ({
-  calldata: innerCallCalldata(call, salt),
-  contractAddress: requireAddress(multisigAddress),
-  entrypoint: "execute_transaction",
-});
-
-/**
- * Checks whether one more confirmation brings a pending proposal to quorum,
- * i.e. whether this signer is the last one needed and can therefore confirm
- * and execute in a single transaction. Pure: callers pass a freshly read
- * quorum and confirmation count, and the component re-checks both on-chain, so
- * a stale `true` can only waste fees — it can never bypass quorum.
- */
-export const confirmationCompletesQuorum = (input: {
-  readonly confirmations: number;
-  readonly quorum: number;
-  readonly signerHasConfirmed: boolean;
-  readonly state: MultisigProposalState;
-}): boolean =>
-  input.state === "pending" &&
-  !input.signerHasConfirmed &&
-  Number.isSafeInteger(input.confirmations) &&
-  input.confirmations >= 0 &&
-  Number.isSafeInteger(input.quorum) &&
-  input.quorum > 0 &&
-  input.confirmations + 1 === input.quorum;
-
-const feltAt = (response: readonly string[], index: number, label: string): bigint => {
+const feltAt = (response: readonly string[], index: number, label: string): string => {
   const value = response[index];
   if (typeof value !== "string" || !isStarkFieldElement(value)) {
-    throw new WalletError(`Invalid multisig ${label} response`);
+    throw new WalletError(`Invalid Argent multisig ${label} response`);
   }
-  return BigInt(value);
+  return canonicalFelt(value) ?? value;
 };
 
-const smallNumberAt = (response: readonly string[], index: number, label: string): number => {
-  const value = Number(feltAt(response, index, label));
+const boundedNumberAt = (response: readonly string[], index: number, label: string): number => {
+  const value = Number(BigInt(feltAt(response, index, label)));
   if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
-    throw new WalletError(`Invalid multisig ${label} response`);
+    throw new WalletError(`Invalid Argent multisig ${label} response`);
   }
   return value;
 };
 
-/**
- * Decodes the component's `TransactionState` enum from its serialized variant
- * index. Exported for tests; unknown variants throw.
- */
-export const decodeMultisigState = (variant: number): MultisigProposalState => {
-  const states: readonly MultisigProposalState[] = [
-    "not-found",
-    "pending",
-    "confirmed",
-    "executed",
-  ];
-  const state = states[variant];
-  if (!state) {
-    throw new WalletError("Invalid multisig state response");
+const actionableReadError = (error: unknown): never => {
+  if (error instanceof Error && /abort|timeout/i.test(`${error.name} ${error.message}`)) {
+    throw new WalletError(
+      "Argent multisig verification took too long. Check the RPC endpoint and retry.",
+    );
   }
-  return state;
+  throw error;
+};
+
+const firstDeploymentBlock = async (
+  provider: RpcProvider,
+  account: string,
+  latestBlockHash: string,
+  latestBlock: number,
+): Promise<number> => {
+  const currentClassHash = await provider.getClassHashAt(account, latestBlockHash);
+  if (
+    typeof currentClassHash !== "string" ||
+    !isStarkFieldElement(currentClassHash) ||
+    !sameFelt(currentClassHash, ARGENT_MULTISIG_CONTRACT.classHash)
+  ) {
+    throw new WalletError("Account is not the pinned Argent Multisig 0.2 class");
+  }
+  let low = 0;
+  let high = latestBlock;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    try {
+      const classHash = await provider.getClassHashAt(account, middle);
+      if (typeof classHash !== "string" || !isStarkFieldElement(classHash)) {
+        throw new WalletError("Invalid Argent multisig class response");
+      }
+      high = middle;
+    } catch (error) {
+      if (!isContractNotFoundError(error)) throw error;
+      low = middle + 1;
+    }
+  }
+  return low;
+};
+
+type LinkedSigner =
+  | { readonly guid: string; readonly publicKey: string; readonly type: "starknet" }
+  | ({ readonly guid: string } & ArgentUnsupportedSigner);
+
+const SIGNER_TYPES: Readonly<Record<string, ArgentUnsupportedSigner["type"]>> = {
+  "0x1": "secp256k1",
+  "0x2": "secp256r1",
+  "0x3": "eip191",
+  "0x4": "webauthn",
+};
+
+const linkedSigner = (
+  keys: readonly string[],
+  data: readonly string[],
+  signerGuids: readonly string[],
+): LinkedSigner | null => {
+  const guid = feltAt(keys, 1, "signer event");
+  if (!signerGuids.includes(guid)) return null;
+  const discriminator = feltAt(data, 0, "signer event");
+  if (discriminator !== "0x0") {
+    const type = SIGNER_TYPES[discriminator];
+    if (!type) throw new WalletError("Invalid Argent multisig signer event");
+    return { guid, type };
+  }
+  const publicKey = feltAt(data, 1, "signer event");
+  if (!isNonZeroStarkFieldElement(publicKey) || !sameFelt(argentSignerGuid(publicKey), guid)) {
+    throw new WalletError("Invalid Argent multisig signer event");
+  }
+  return { guid, publicKey, type: "starknet" };
+};
+
+const rememberLinkedSigner = (
+  byGuid: Map<string, LinkedSigner>,
+  signer: LinkedSigner | null,
+): void => {
+  if (!signer) return;
+  const existing = byGuid.get(signer.guid);
+  if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(signer)) {
+    throw new WalletError("Conflicting Argent multisig signer events");
+  }
+  byGuid.set(signer.guid, signer);
+};
+
+const signerKeysFromEvents = async (
+  provider: RpcProvider,
+  account: string,
+  signerGuids: readonly string[],
+  deploymentBlock: number,
+  acceptedBlockHash: string,
+): Promise<ArgentSignerDiscovery> => {
+  const byGuid = new Map<string, LinkedSigner>();
+  let continuationToken: string | undefined;
+  let pages = 0;
+  do {
+    const chunk = await provider.getEvents({
+      address: account,
+      chunk_size: 100,
+      ...(continuationToken === undefined ? {} : { continuation_token: continuationToken }),
+      from_block: { block_number: deploymentBlock },
+      keys: [[hash.getSelectorFromName("SignerLinked")], [...signerGuids]],
+      to_block: { block_hash: acceptedBlockHash },
+    });
+    pages += 1;
+    if (pages > 256) {
+      throw new WalletError("Argent multisig signer history is too large to verify");
+    }
+    for (const event of chunk.events) {
+      rememberLinkedSigner(byGuid, linkedSigner(event.keys, event.data, signerGuids));
+    }
+    continuationToken = chunk.continuation_token;
+  } while (continuationToken !== undefined);
+  const signers = signerGuids.flatMap((guid) => {
+    const signer = byGuid.get(guid);
+    return signer ? [signer] : [];
+  });
+  return {
+    signerPublicKeys: signers.flatMap((signer) =>
+      signer.type === "starknet" ? [signer.publicKey] : [],
+    ),
+    unsupportedSigners: signers.flatMap((signer) => (signer.type === "starknet" ? [] : [signer])),
+  };
 };
 
 /**
- * Reads a multisig's quorum and signer set through Starknet RPC. Throws when
- * the contract does not expose the MultisigComponent views, which is how a
- * non-multisig address is rejected before it can be watched.
+ * Recovers current Stark signer public keys from the pinned contract's
+ * accepted `SignerLinked` history. Every recovered Stark key is re-derived
+ * against the fresh GUID input; other supported Argent schemes are classified
+ * so callers never ask the user for an impossible Stark key.
  */
-export const getMultisigConfig = async ({
+export const getArgentMultisigSignerPublicKeys = async ({
   address,
+  makeProvider,
   rpcUrls,
-}: MultisigConfigInput): Promise<MultisigConfig> => {
-  const multisig = requireAddress(address);
+  signerGuids,
+}: ArgentSignerDiscoveryInput): Promise<ArgentSignerDiscovery> => {
+  const account = requireAddress(address);
+  const guids = signerGuids.map(requireGuid);
+  if (
+    guids.length < 1 ||
+    guids.length > MULTISIG_LIMITS.signers ||
+    new Set(guids).size !== guids.length
+  ) {
+    throw new WalletError("Invalid Argent signer GUIDs");
+  }
+  try {
+    return await withRpcFallback(
+      rpcUrls,
+      async (provider) =>
+        withPinnedBlock(provider, async ({ blockHash, blockNumber }) => {
+          const deploymentBlock = await firstDeploymentBlock(
+            provider,
+            account,
+            blockHash,
+            blockNumber,
+          );
+          return signerKeysFromEvents(provider, account, guids, deploymentBlock, blockHash);
+        }),
+      makeProvider ?? multisigReadProvider,
+    );
+  } catch (error) {
+    return actionableReadError(error);
+  }
+};
+
+/**
+ * Reads class hash, threshold, and signer GUIDs at ONE pinned block, so the
+ * threshold and the signer set can never describe two different states.
+ */
+const argentMultisigConfigAtBlock = async (
+  provider: RpcProvider,
+  account: string,
+  blockHash: string,
+): Promise<ArgentMultisigConfig> => {
+  const classHash = await provider.getClassHashAt(account, blockHash);
+  if (
+    typeof classHash !== "string" ||
+    !isStarkFieldElement(classHash) ||
+    !sameFelt(classHash, ARGENT_MULTISIG_CONTRACT.classHash)
+  ) {
+    throw new WalletError("Account is not the pinned Argent Multisig 0.2 class");
+  }
+  const [thresholdResponse, signersResponse] = await Promise.all([
+    provider.callContract(
+      { calldata: [], contractAddress: account, entrypoint: "get_threshold" },
+      blockHash,
+    ),
+    provider.callContract(
+      { calldata: [], contractAddress: account, entrypoint: "get_signer_guids" },
+      blockHash,
+    ),
+  ]);
+  if (thresholdResponse.length !== 1) {
+    throw new WalletError("Invalid Argent multisig threshold response");
+  }
+  const threshold = boundedNumberAt(thresholdResponse, 0, "threshold");
+  const count = boundedNumberAt(signersResponse, 0, "signers");
+  if (
+    count === 0 ||
+    count > MULTISIG_LIMITS.signers ||
+    threshold === 0 ||
+    threshold > count ||
+    signersResponse.length !== count + 1
+  ) {
+    throw new WalletError("Invalid Argent multisig signers response");
+  }
+  const signerGuids = Array.from({ length: count }, (_, index) =>
+    feltAt(signersResponse, index + 1, "signers"),
+  );
+  if (
+    signerGuids.some((guid) => !isNonZeroStarkFieldElement(guid)) ||
+    new Set(signerGuids).size !== signerGuids.length
+  ) {
+    throw new WalletError("Invalid Argent multisig signers response");
+  }
+  signerGuids.sort((left, right) =>
+    BigInt(left) < BigInt(right) ? -1 : BigInt(left) > BigInt(right) ? 1 : 0,
+  );
+  return {
+    classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+    signerGuids,
+    threshold,
+  };
+};
+
+/**
+ * Reads class hash, threshold, and ordered signer GUIDs. Any non-pinned class,
+ * malformed response, duplicate GUID, or transport exhaustion fails closed.
+ */
+export const getArgentMultisigConfig = async ({
+  address,
+  makeProvider,
+  rpcUrls,
+}: ArgentMultisigConfigInput): Promise<ArgentMultisigConfig> => {
+  const account = requireAddress(address);
+  try {
+    return await withRpcFallback(
+      rpcUrls,
+      async (provider) =>
+        withPinnedBlock(provider, ({ blockHash }) =>
+          argentMultisigConfigAtBlock(provider, account, blockHash),
+        ),
+      makeProvider ?? multisigReadProvider,
+    );
+  } catch (error) {
+    return actionableReadError(error);
+  }
+};
+
+/**
+ * Reads membership for one signer GUID from the pinned account. This is a
+ * freshness check for authorization, never a substitute for signature verification.
+ */
+export const isArgentMultisigSignerGuid = async ({
+  address,
+  makeProvider,
+  rpcUrls,
+  signerGuid,
+}: ArgentSignerMembershipInput): Promise<boolean> => {
+  const account = requireAddress(address);
+  const guid = requireGuid(signerGuid);
   try {
     return await withRpcFallback(
       rpcUrls,
       async (provider) => {
-        const [quorumResponse, signersResponse] = await Promise.all([
-          provider.callContract(
-            { calldata: [], contractAddress: multisig, entrypoint: "get_quorum" },
-            "latest",
-          ),
-          provider.callContract(
-            { calldata: [], contractAddress: multisig, entrypoint: "get_signers" },
-            "latest",
-          ),
-        ]);
-        const quorum = smallNumberAt(quorumResponse, 0, "quorum");
-        const count = smallNumberAt(signersResponse, 0, "signers");
+        const classHash = await provider.getClassHashAt(account, "latest");
         if (
-          quorum === 0 ||
-          count === 0 ||
-          count > MAX_SIGNERS ||
-          signersResponse.length !== count + 1
+          typeof classHash !== "string" ||
+          !isStarkFieldElement(classHash) ||
+          !sameFelt(classHash, ARGENT_MULTISIG_CONTRACT.classHash)
         ) {
-          throw new WalletError("Invalid multisig signers response");
+          throw new WalletError("Account is not the pinned Argent Multisig 0.2 class");
         }
-        const signers = Array.from({ length: count }, (_, index) =>
-          canonicalFelt(`0x${feltAt(signersResponse, index + 1, "signers").toString(16)}`),
+        const response = await provider.callContract(
+          { calldata: [guid], contractAddress: account, entrypoint: "is_signer_guid" },
+          "latest",
         );
-        return { quorum, signers };
+        if (response.length !== 1) {
+          throw new WalletError("Invalid Argent multisig signer membership response");
+        }
+        const member = feltAt(response, 0, "signer membership");
+        if (member !== "0x0" && member !== "0x1") {
+          throw new WalletError("Invalid Argent multisig signer membership response");
+        }
+        return member === "0x1";
       },
-      multisigReadProvider,
+      makeProvider ?? multisigReadProvider,
     );
   } catch (error) {
-    if (error instanceof Error && /abort|timeout/i.test(`${error.name} ${error.message}`)) {
-      throw new WalletError(
-        "Multisig verification took too long. Check the RPC endpoint and retry.",
-      );
-    }
-    throw error;
+    return actionableReadError(error);
   }
-};
-
-/**
- * Reads one proposal's lifecycle state, confirmation count, and whether the
- * given signer has confirmed it.
- */
-export const getMultisigProposalStatus = async ({
-  address,
-  rpcUrls,
-  signer,
-  txId,
-}: MultisigProposalStatusInput): Promise<MultisigProposalStatus> => {
-  const multisig = requireAddress(address);
-  const id = requireFelt(txId, "transaction id");
-  const signerFelt = requireAddress(signer);
-  return withRpcFallback(rpcUrls, async (provider) => {
-    const [stateResponse, confirmationsResponse, confirmedByResponse] = await Promise.all([
-      provider.callContract(
-        { calldata: [id], contractAddress: multisig, entrypoint: "get_transaction_state" },
-        "latest",
-      ),
-      provider.callContract(
-        { calldata: [id], contractAddress: multisig, entrypoint: "get_transaction_confirmations" },
-        "latest",
-      ),
-      provider.callContract(
-        { calldata: [id, signerFelt], contractAddress: multisig, entrypoint: "is_confirmed_by" },
-        "latest",
-      ),
-    ]);
-    return {
-      confirmations: smallNumberAt(confirmationsResponse, 0, "confirmations"),
-      confirmedBySigner: feltAt(confirmedByResponse, 0, "confirmation") === 1n,
-      state: decodeMultisigState(smallNumberAt(stateResponse, 0, "state")),
-    };
-  });
-};
-
-/**
- * Computes a proposal's transaction id by calling the contract's own
- * `hash_transaction` view with the inner call and salt.
- */
-export const computeMultisigTransactionId = async ({
-  address,
-  call,
-  rpcUrls,
-  salt,
-}: MultisigTransactionIdInput): Promise<string> => {
-  const multisig = requireAddress(address);
-  const calldata = innerCallCalldata(call, salt);
-  return withRpcFallback(rpcUrls, async (provider) => {
-    const response = await provider.callContract(
-      { calldata, contractAddress: multisig, entrypoint: "hash_transaction" },
-      "latest",
-    );
-    return `0x${feltAt(response, 0, "transaction id").toString(16)}`;
-  });
 };

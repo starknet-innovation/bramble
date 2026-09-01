@@ -15,7 +15,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
-import { flushHeld, latestApprovalId } from "../../support/held";
+import { flushHeld, latestApprovalId, reviewedApprovalFee } from "../../support/held";
 import {
   invokeAccount as account,
   invokeContentSender as contentSender,
@@ -33,6 +33,18 @@ const makeRejectingSubmitHarness = (reason: unknown) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const rpc = {
+    // The estimate has to succeed: a reviewed fee is what binds the user's
+    // consent, and an approval without one is refused before it can submit
+    // (MCW-V09-119). The failure under test is the broadcast, not the quote.
+    async estimateInvokeFee() {
+      return { overallFee: "1", unit: "FRI" as const };
+    },
+    async getDeploymentStatus() {
+      return true;
+    },
+    async getTokenBalances() {
+      return [];
+    },
     async submitInvokeTransaction(): Promise<never> {
       throw reason;
     },
@@ -64,10 +76,13 @@ describe("a rejected invoke explains itself to the panel only", () => {
     const held = handler(invokeMessage(), contentSender);
     await flushHeld();
     const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
 
     // The panel's own response carries the reason, so the side panel can show and
     // copy why the transaction died.
-    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
+    await expect(
+      handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender),
+    ).resolves.toEqual({
       detail: `41 Transaction execution error ${REASON}`,
       error: "invoke request failed",
     });
@@ -82,9 +97,12 @@ describe("a rejected invoke explains itself to the panel only", () => {
     const held = handler(invokeMessage(), contentSender);
     await flushHeld();
     const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
 
     // Nothing to add, so the field is omitted rather than echoing the message.
-    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
+    await expect(
+      handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender),
+    ).resolves.toEqual({
       error: "invoke request failed",
     });
     await expect(held).resolves.toEqual({ error: "invoke request failed" });

@@ -1,596 +1,741 @@
-import type { MultisigProposalRecord } from "@mc-wallet/multisig/repository";
+/**
+ * Argent multisig lifecycle checkpoints. Route coverage is necessary but not
+ * sufficient here: the frozen-intent review, threshold progress, stale
+ * authority, deployment availability, and recovery states must be directly
+ * inspectable before the shared-account experience can ship.
+ */
+import { isRecord } from "@mc-wallet/core/json";
 import {
-  bindMultisigProposalForm,
+  type ArgentMultisigView,
   bindMultisigs,
   createMultisigClient,
-  type MultisigUiDeps,
-  multisigAddFlow,
-  multisigDeployFlow,
-  multisigDetailFlow,
-  multisigProposeFlow,
-  multisigReceiveFlow,
-  multisigSignersFlow,
-  multisigsFlow,
-  multisigTrackFlow,
-  multisigWatchFlow,
-  serializeMultisigReviewPackage,
+  createSidepanelRuntime,
 } from "@mc-wallet/wallet-ui/lab";
 import {
-  balances,
-  discoveredNft,
-  multisig,
-  pendingProposal,
+  argentCollectingIntent,
+  argentMultisig,
+  argentReadyIntent,
+  argentReplacementIntent,
+  argentSoftwareAccount,
+  argentStaleIntent,
+  argentSubmittedIntent,
   preferences,
-  RECIPIENT_ADDRESS,
+  secondAccount,
   softwareAccount,
   statusFor,
-  USDC_ADDRESS,
 } from "../fixtures/fixtures";
-import { walletDashboard } from "../runtime/scenario-dashboard";
-import { updateForm } from "../runtime/scenario-runtime";
+import { STRK_TOKEN } from "../fixtures/journey-fixtures";
+import { type DashboardOptions, walletDashboard } from "../runtime/scenario-dashboard";
+import { nextTurn } from "../runtime/scenario-runtime";
 import type { FrameContext, ScenarioCheckpoint, WalletScenario } from "../runtime/types";
-import { multisigReviewCheckpoints, showSharedTab } from "./scenarios-multisig-review";
 
-const multisigCheckpoint = (
-  id: string,
-  label: string,
-  narrative: string,
-  content: () => string,
-  state: Readonly<Record<string, unknown>>,
-  prepare?: (context: FrameContext) => void,
-): ScenarioCheckpoint => ({
-  content,
-  id,
-  label,
-  narrative,
-  ...(prepare ? { prepare } : {}),
-  state,
-});
-
-const confirmedProposal: MultisigProposalRecord = {
-  ...pendingProposal,
-  confirmations: 2,
-  confirmedBySigner: true,
-  state: "confirmed",
+const baseStatus = statusFor(softwareAccount);
+const base: DashboardOptions = {
+  multisigClassDeclared: true,
+  multisigs: [argentMultisig],
+  preferences: { ...preferences, tokens: [...preferences.tokens, STRK_TOKEN] },
+  selectedMultisigId: argentMultisig.record.id,
+  status: {
+    ...baseStatus,
+    accountCount: baseStatus.accounts.length + 1,
+    accounts: [...baseStatus.accounts, argentSoftwareAccount],
+  },
 };
 
-const awaitingOwnedSigner: MultisigProposalRecord = {
-  ...pendingProposal,
-  confirmedBySigner: true,
-  confirmedBySignerAddress: softwareAccount.address,
-  confirmedSignerAddresses: [softwareAccount.address],
-};
-
-const untrackedProposal: MultisigProposalRecord = {
-  ...pendingProposal,
-  call: null,
-  confirmations: 0,
-  confirmedBySigner: false,
-  id: `${multisig.id}:0x902`,
-  summary: "Shared proposal — verify on explorer",
-  txId: "0x902",
-};
-
-const executedProposal: MultisigProposalRecord = {
-  ...confirmedProposal,
-  confirmations: 2,
-  id: `${multisig.id}:0x903`,
-  state: "executed",
-  summary: "Completed research payment",
-  txId: "0x903",
-};
-
-const showAdvancedProposal = (context: FrameContext): void => {
-  context.app.querySelectorAll<HTMLElement>("[data-proposal-stage-panel]").forEach((panel) => {
-    const target = panel;
-    target.hidden = target.dataset["proposalStagePanel"] !== "advanced";
-  });
-  const form = context.app.querySelector<HTMLFormElement>("#multisig-propose-form");
-  if (form) form.dataset["proposalMode"] = "advanced";
-  const options = context.app.querySelector<HTMLElement>("[data-proposal-options]");
-  if (options) options.hidden = false;
-};
-
-const bindProposalJourney = (context: FrameContext): void => {
-  const client = createMultisigClient({
-    sendMessage: async () => ({ error: "UI Lab blocks proposal submission" }),
-  });
-  bindMultisigProposalForm({
-    app: context.app,
-    multisig: client,
-    openDetail: () => context.emit({ detail: "return to shared account", kind: "state" }),
-    runAction: () => undefined,
-    selectedMultisigId: () => multisig.id,
-    setResult: (id, message) => {
-      const result = context.app.querySelector(`#${id}`);
-      if (result) result.textContent = message;
+const bindFixtureMultisig = (
+  context: FrameContext,
+  feeAffordability: "insufficient" | "ok" = "ok",
+): void => {
+  const runtime = {
+    sendMessage: async (message: unknown): Promise<unknown> => {
+      if (
+        isRecord(message) &&
+        message["type"] === "wallet.reviewArgentMultisigDeployment" &&
+        typeof message["networkId"] === "string" &&
+        typeof message["salt"] === "string" &&
+        typeof message["signerAccountId"] === "string" &&
+        Array.isArray(message["signerPublicKeys"]) &&
+        message["signerPublicKeys"].every((key) => typeof key === "string") &&
+        Number.isSafeInteger(message["threshold"])
+      ) {
+        return {
+          deploymentReview: {
+            address: argentMultisig.record.address,
+            fee: { overallFee: "252237000000000000", unit: "FRI" },
+            feeAffordability,
+            ...(typeof message["name"] === "string" && message["name"].length > 0
+              ? { name: message["name"] }
+              : {}),
+            networkId: message["networkId"],
+            salt: message["salt"],
+            signerAccountId: message["signerAccountId"],
+            signerPublicKeys: message["signerPublicKeys"],
+            threshold: message["threshold"],
+          },
+          ok: true,
+        };
+      }
+      if (isRecord(message) && message["type"] === "wallet.deployArgentMultisig") {
+        const { deployment: _fixtureDeployment, ...record } = argentMultisig.record;
+        return {
+          address: argentMultisig.record.address,
+          multisig: { ...argentMultisig, deployed: false, record },
+          ok: true,
+          transactionHash: "0x456",
+        };
+      }
+      if (isRecord(message) && message["type"] === "wallet.removeArgentMultisigIntent") {
+        return { ok: true };
+      }
+      if (
+        isRecord(message) &&
+        message["type"] === "wallet.resolveMultisigSigner" &&
+        typeof message["address"] === "string"
+      ) {
+        return {
+          ok: true,
+          signer: {
+            accountContractType: "openzeppelin",
+            address: message["address"],
+            publicKeyX: "0x789",
+          },
+        };
+      }
+      return { error: "UI Lab blocks non-fixture runtime requests" };
     },
-  });
-};
-
-const prepareProposal =
-  (stage: "amount" | "review") =>
-  (context: FrameContext): void => {
-    bindProposalJourney(context);
-    context.app
-      .querySelector<HTMLButtonElement>(`[data-proposal-recipient="${RECIPIENT_ADDRESS}"]`)
-      ?.click();
-    updateForm(context, "#proposal-amount-input", "125");
-    if (stage === "review") {
-      context.app.querySelector<HTMLButtonElement>("#proposal-review-button")?.click();
-    }
   };
-
-const showDeploymentRules = (context: FrameContext): void => {
-  context.app.querySelectorAll<HTMLElement>("[data-deploy-stage]").forEach((panel) => {
-    const target = panel;
-    target.hidden = target.dataset["deployStage"] !== "rules";
-  });
-};
-
-const openSharedAccountDrawer = (context: FrameContext): void => {
-  const drawer = context.app.querySelector<HTMLElement>(".drawer-root");
-  if (drawer) drawer.dataset["open"] = "true";
-};
-
-const showSharedCollectibles = (context: FrameContext): void =>
-  showSharedTab(context, "collectibles");
-
-const showSharedProposals = (context: FrameContext): void => showSharedTab(context, "proposals");
-
-const showConfirmationReview = (context: FrameContext): void => {
   bindMultisigs({
     app: context.app,
-    multisig: {
-      async confirmProposal() {
-        throw new Error("UI Lab blocks transaction submission");
-      },
-      async prepareConfirmation(input: {
-        mode: "confirm-and-execute" | "confirm-only";
-        proposalId: string;
-        signerAccountId: string;
-      }) {
-        return {
-          fee: { overallFee: "240000000000000", unit: "FRI" },
-          feeEstimateFailed: false,
-          ...input,
-        };
-      },
-    },
+    multisig: createMultisigClient(runtime),
     openDetail: () => undefined,
+    openIntent: () => undefined,
     openList: () => undefined,
     render: async () => undefined,
-    selectedMultisigId: () => multisig.id,
-    wallet: {
-      loadStatus: async () => statusFor(),
-    },
-  } as unknown as MultisigUiDeps);
-  showSharedProposals(context);
-  context.app.querySelector<HTMLButtonElement>("[data-ms-confirm-open]")?.click();
-  context.emit({ detail: "Confirmation review opened", kind: "action" });
+    selectedMultisigId: () => argentMultisig.record.id,
+    wallet: createSidepanelRuntime(runtime),
+  });
 };
 
-const showImportedReviewPackage = (context: FrameContext): void => {
-  const input = context.app.querySelector<HTMLTextAreaElement>('textarea[name="reviewPackage"]');
-  if (input) {
-    input.value = serializeMultisigReviewPackage(multisig, pendingProposal);
+const prepareDeploymentReview =
+  (feeAffordability: "insufficient" | "ok") =>
+  async (context: FrameContext): Promise<void> => {
+    bindFixtureMultisig(context, feeAffordability);
+    const form = context.app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+    if (!form) throw new Error("Missing production multisig deployment form");
+    form.requestSubmit();
+    await nextTurn();
+  };
+
+const prepareDeploymentApproval = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context);
+  const continueButton = context.app.querySelector<HTMLButtonElement>(
+    "[data-multisig-deploy-continue]",
+  );
+  if (!continueButton) throw new Error("Missing production multisig approval action");
+  continueButton.click();
+  await nextTurn();
+};
+
+const revealDeploymentParticipant = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context);
+  const open = context.app.querySelector<HTMLButtonElement>("[data-open-participant-picker]");
+  if (!open) throw new Error("Missing production participant picker action");
+  open.click();
+  await nextTurn();
+};
+
+const revealDeploymentWalletCard = async (context: FrameContext): Promise<void> => {
+  await revealDeploymentParticipant(context);
+  const method = context.app.querySelector<HTMLButtonElement>(
+    '[data-participant-method="wallet-card"]',
+  );
+  if (!method) throw new Error("Missing production wallet-card participant method");
+  method.click();
+  await nextTurn();
+};
+
+const revealManagementParticipant = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context);
+  const add = [...context.app.querySelectorAll<HTMLDetailsElement>("details.disclosure")].find(
+    (details) => details.textContent?.includes("Add participant"),
+  );
+  if (!add) throw new Error("Missing production signer-management participant action");
+  add.open = true;
+  add.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+  context.app.querySelector<HTMLButtonElement>('[data-participant-method="public-key"]')?.click();
+  await nextTurn();
+};
+
+const prepareDeploymentSubmitted = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context, "ok");
+  const form = context.app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+  if (!form) throw new Error("Missing production multisig deployment form");
+  form.requestSubmit();
+  await nextTurn();
+  form.requestSubmit();
+  await nextTurn();
+};
+
+const revealIntentPanel = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context);
+  const tab = context.app.querySelector<HTMLButtonElement>('[data-ms-home-tab="intents"]');
+  if (tab) {
+    tab.click();
+    await nextTurn();
+  } else if (!context.app.querySelector("[data-ms-intent]")) {
+    throw new Error("Missing production multisig intent review");
   }
 };
 
-const portfolio = {
-  balances: { balances },
-  changes: { [USDC_ADDRESS]: 0.42 },
-  currency: "usd" as const,
-  nfts: [discoveredNft],
-  prices: { [USDC_ADDRESS]: 1 },
+const revealCollaboration = async (context: FrameContext): Promise<void> => {
+  await revealIntentPanel(context);
+  const collaboration = context.app.querySelector<HTMLDetailsElement>(".multisig-collaboration");
+  if (!collaboration) throw new Error("Missing production co-signer handoff");
+  collaboration.open = true;
+  await nextTurn();
 };
 
-export const multisigScenario: WalletScenario = {
-  checkpoints: [
-    multisigCheckpoint(
-      "add",
-      "Add a Multisig account",
-      "Create and add-existing are separate tasks with explicit membership semantics.",
-      () => multisigAddFlow(statusFor(), softwareAccount),
-      { choices: ["create", "add-existing"], membershipChange: false },
-    ),
-    multisigCheckpoint(
-      "list",
-      "Watched multisigs",
-      "The overview exposes quorum and open work before navigation.",
-      () =>
-        multisigsFlow(
-          statusFor(),
-          softwareAccount,
-          [multisig],
-          [pendingProposal],
-          false,
-          "current",
-        ),
-      { openProposals: 1, quorum: 2, sync: "current" },
-    ),
-    multisigCheckpoint(
-      "watch",
-      "Watch multisig",
-      "Membership verification is isolated from the watched-contract list.",
-      () => multisigWatchFlow(statusFor(), softwareAccount),
-      { task: "watch", view: "multisig-watch" },
-    ),
-    multisigCheckpoint(
-      "proposal",
-      "Multisig home",
-      "Shared value, quorum context, compact actions, and open work follow the familiar portfolio hierarchy.",
-      () =>
-        walletDashboard({
-          balanceState: portfolio.balances,
-          changes: portfolio.changes,
-          multisigNfts: portfolio.nfts ?? [],
-          multisigProposals: [pendingProposal],
-          multisigSync: "current",
-          multisigs: [multisig],
-          selectedMultisigId: multisig.id,
-          view: "multisig-home",
-        }),
-      { confirmations: 1, proposalId: pendingProposal.txId, state: "pending" },
-    ),
-    multisigCheckpoint(
-      "proposal-search-recent",
-      "Recent proposal search",
-      "Fresh signer and quorum state remains usable while bounded event discovery is labelled separately.",
-      () =>
-        walletDashboard({
-          balanceState: portfolio.balances,
-          multisigProposals: [pendingProposal],
-          multisigSync: "proposal-discovery-recent",
-          multisigs: [multisig],
-          selectedMultisigId: multisig.id,
-          view: "multisig-home",
-        }),
-      { config: "current", proposalDiscovery: "recent" },
-    ),
-    {
-      content: () =>
-        walletDashboard({
-          activity: [
-            {
-              accountId: multisig.id,
-              hash: "0x904",
-              kind: "invoke",
-              networkId: "SN_MAIN",
-              status: "accepted",
-              submittedAt: 1_785_171_200_000,
-              summary: "Propose: Pay 100 USDC to research treasury",
-            },
-          ],
-          multisigs: [multisig],
-          selectedMultisigId: multisig.id,
-          view: "activity",
-        }),
-      id: "shared-activity",
-      label: "Shared account activity",
-      narrative:
-        "The dock, header, export boundary, and transaction feed remain scoped to the shared account rather than the current signer.",
-      state: { accountScope: multisig.id, signerBleed: false, view: "activity" },
-    },
-    multisigCheckpoint(
-      "configuration-unavailable",
-      "Configuration unavailable",
-      "A fixed support code identifies the failed RPC lane without leaking endpoint details.",
-      () =>
-        walletDashboard({
-          balanceState: portfolio.balances,
-          multisigProposals: [pendingProposal],
-          multisigSync: "configuration-unavailable",
-          multisigs: [multisig],
-          selectedMultisigId: multisig.id,
-          view: "multisig-home",
-        }),
-      { config: "unavailable", supportCode: "MC-MS-CONFIG-RPC" },
-    ),
-    {
-      content: () =>
-        walletDashboard({
-          balanceState: portfolio.balances,
-          changes: portfolio.changes,
-          multisigNfts: portfolio.nfts ?? [],
-          multisigProposals: [pendingProposal],
-          multisigSync: "current",
-          multisigs: [multisig],
-          selectedMultisigId: multisig.id,
-          view: "multisig-home",
-        }),
-      id: "collectibles",
-      label: "Shared collectibles",
-      narrative:
-        "Ownership-verified collectibles remain partitioned to the shared account beside its token portfolio.",
-      prepare: showSharedCollectibles,
-      state: { accountType: "shared", tab: "collectibles" },
-    },
-    {
-      content: () =>
-        walletDashboard({
-          multisigProposals: [pendingProposal],
-          multisigs: [multisig],
-          selectedMultisigId: multisig.id,
-          view: "multisig-home",
-        }),
-      id: "drawer",
-      label: "Shared account in drawer",
-      narrative:
-        "Multisigs sit alongside single-signer accounts with explicit account type, threshold, and open-work heuristics.",
-      prepare: openSharedAccountDrawer,
-      state: { accountType: "shared", openProposals: 1, quorum: 2 },
-    },
-    {
-      content: () =>
-        walletDashboard({
-          multisigProposals: [pendingProposal],
-          multisigs: [multisig],
-          selectedMultisigId: multisig.id,
-          view: "account",
-        }),
-      id: "account-management",
-      label: "Manage signer and Multisig accounts",
-      narrative:
-        "The account manager presents shared and signer accounts as peer identities while keeping their signing semantics explicit.",
-      state: { accountTypes: ["signer", "multisig"], selected: multisig.id },
-    },
-    ...multisigReviewCheckpoints(portfolio),
-    {
-      content: () =>
-        walletDashboard({
-          balanceState: portfolio.balances,
-          changes: portfolio.changes,
-          multisigNfts: portfolio.nfts ?? [],
-          multisigProposals: [awaitingOwnedSigner],
-          multisigSync: "current",
-          multisigs: [multisig],
-          selectedMultisigId: multisig.id,
-          view: "multisig-home",
-        }),
-      id: "confirm-owned-signer",
-      label: "Confirm with an owned signer",
-      narrative:
-        "The wallet intersects on-chain signer rules with locally-owned accounts, excludes a signer already confirmed, and requires a focused review before signing.",
-      prepare: showConfirmationReview,
-      state: {
-        alreadyConfirmed: softwareAccount.id,
-        eligibleSigners: 2,
-        reviewRequired: true,
-      },
-    },
-    multisigCheckpoint(
-      "receive",
-      "Receive to shared account",
-      "The QR and copy action use the Multisig contract address, never the active signer's address.",
-      () => multisigReceiveFlow(statusFor(), multisig),
-      { addressScope: "multisig", view: "multisig-receive" },
-    ),
-    multisigCheckpoint(
-      "signers",
-      "Signers and quorum",
-      "Membership and threshold inspection no longer compete with proposal actions.",
-      () => multisigSignersFlow(statusFor(), softwareAccount, multisig),
-      { quorum: 2, signers: 3, view: "multisig-signers" },
-    ),
-    multisigCheckpoint(
-      "track",
-      "Track shared proposal",
-      "A pasted id remains call-less and requires explicit independent verification before signing.",
-      () => multisigTrackFlow(statusFor(), multisig),
-      { noteTrust: "local only", view: "multisig-track" },
-    ),
-    {
-      content: () => multisigTrackFlow(statusFor(), multisig),
-      id: "track-package",
-      label: "Import review package",
-      narrative:
-        "A secret-free package restores the exact public call only after the background re-hashes it through the selected multisig contract.",
-      prepare: showImportedReviewPackage,
-      state: {
-        callTrust: "contract-derived id match",
-        networkRequests: "hash_transaction and proposal views",
-        packageSecrets: 0,
-      },
-    },
-    multisigCheckpoint(
-      "ready",
-      "Ready to execute",
-      "Reaching quorum changes the next action without hiding the reviewed call.",
-      () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [confirmedProposal],
-          false,
-          "current",
-          preferences,
-          "multisig-home",
-          portfolio,
-        ),
-      { confirmations: 2, proposalId: pendingProposal.txId, state: "confirmed" },
-    ),
-    {
-      content: () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [confirmedProposal],
-          false,
-          "current",
-          preferences,
-          "multisig-home",
-          portfolio,
-        ),
-      id: "ready-proposal",
-      label: "Ready proposal detail",
-      narrative:
-        "The proposal tab keeps the decoded action and quorum-sensitive next step one deliberate click away from the shared portfolio.",
-      prepare: showSharedProposals,
-      state: { confirmations: 2, proposalId: pendingProposal.txId, tab: "proposals" },
-    },
-    multisigCheckpoint(
-      "registry-unavailable",
-      "Registry unavailable",
-      "Cached public data remains visible with a fixed background-registry support code and retry path.",
-      () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [pendingProposal],
-          true,
-          "background-unavailable",
-          preferences,
-          "multisig-home",
-          portfolio,
-        ),
-      { cached: true, sync: "background-unavailable" },
-    ),
-    multisigCheckpoint(
-      "propose",
-      "Create guided proposal",
-      "A familiar token transfer is primary while arbitrary calldata remains an explicit advanced path.",
-      () => multisigProposeFlow(statusFor(), multisig, preferences, portfolio),
-      { action: "send-token", calldata: "derived and reviewed", view: "multisig-propose" },
-      bindProposalJourney,
-    ),
-    {
-      content: () => multisigProposeFlow(statusFor(), multisig, preferences, portfolio),
-      id: "propose-amount",
-      label: "Proposal token and amount",
-      narrative:
-        "Token, amount, shared balance, recipient, network, and source account stay in one focused decision.",
-      prepare: prepareProposal("amount"),
-      state: { amount: "125 USDC", recipient: "Research treasury", stage: "amount" },
-    },
-    {
-      content: () => multisigProposeFlow(statusFor(), multisig, preferences, portfolio),
-      id: "propose-review",
-      label: "Review transfer proposal",
-      narrative:
-        "The common transfer summary leads; decoded contract parameters remain available without dominating the task.",
-      prepare: prepareProposal("review"),
-      state: { call: "USDC.transfer", reviewRequired: true, stage: "review" },
-    },
-    {
-      content: () => multisigProposeFlow(statusFor(), multisig, preferences, portfolio),
-      id: "propose-advanced",
-      label: "Advanced contract proposal",
-      narrative:
-        "Raw target, method, and calldata are still available without competing with the common transfer path.",
-      prepare: showAdvancedProposal,
-      state: { mode: "advanced", rawCalldata: true },
-    },
-    multisigCheckpoint(
-      "deploy-checking",
-      "Check deploy class",
-      "Deployment remains disabled until the pinned class status resolves.",
-      () => multisigDeployFlow(statusFor(), softwareAccount, null, preferences),
-      { class: "checking", view: "multisig-deploy" },
-    ),
-    multisigCheckpoint(
-      "deploy-declare",
-      "Declare before deploy",
-      "A missing class exposes the one-time declaration and its fee-bearing boundary.",
-      () =>
-        multisigDeployFlow(
-          statusFor(),
-          softwareAccount,
-          { declarationPending: false, declared: false },
-          preferences,
-        ),
-      { class: "missing", deployEnabled: false },
-    ),
-    multisigCheckpoint(
-      "deploy-declaration-pending",
-      "Declaration pending",
-      "The submitted transaction stays visible and deployment remains locked until the pinned class is confirmed on-chain.",
-      () =>
-        multisigDeployFlow(
-          statusFor(),
-          softwareAccount,
-          {
-            declarationPending: true,
-            declared: false,
-            transactionHash: "0xdec",
-          },
-          preferences,
-        ),
-      { class: "pending", deployEnabled: false, transactionHash: "0xdec" },
-    ),
-    multisigCheckpoint(
+const revealIntentTechnical = async (context: FrameContext): Promise<void> => {
+  await revealIntentPanel(context);
+  const technical = context.app.querySelector<HTMLDetailsElement>(".decision-technical");
+  if (!technical) throw new Error("Missing production intent inspection");
+  technical.open = true;
+  await nextTurn();
+};
+
+const prepareTransferComposer = async (context: FrameContext): Promise<void> => {
+  bindFixtureMultisig(context);
+  const picker = context.app.querySelector<HTMLDetailsElement>(".multisig-recipient-picker");
+  if (!picker) throw new Error("Missing production multisig recipient picker");
+  picker.open = true;
+  const recipient = Array.from(
+    context.app.querySelectorAll<HTMLButtonElement>("[data-ms-propose-recipient]"),
+  ).find((button) => button.textContent?.includes("Research treasury"));
+  recipient?.click();
+  const amount = context.app.querySelector<HTMLInputElement>(
+    '#multisig-propose-form input[name="amount"]',
+  );
+  if (!recipient || !amount) throw new Error("Missing production multisig transfer controls");
+  amount.value = "25";
+  amount.dispatchEvent(new Event("input", { bubbles: true }));
+  amount.blur();
+  await nextTurn();
+};
+
+const revealAdvancedCall = async (context: FrameContext): Promise<void> => {
+  const details = context.app.querySelector<HTMLDetailsElement>(".multisig-advanced-call");
+  if (!details) throw new Error("Missing production multisig advanced call disclosure");
+  details.open = true;
+  await nextTurn();
+};
+
+const checkpoint = (
+  id: string,
+  label: string,
+  narrative: string,
+  options: DashboardOptions,
+  state: Readonly<Record<string, unknown>>,
+  showIntents = false,
+): ScenarioCheckpoint => ({
+  content: () => walletDashboard({ ...base, ...options }),
+  id,
+  label,
+  narrative,
+  ...(showIntents ? { prepare: revealIntentPanel } : {}),
+  state,
+});
+
+const unavailableAuthority: ArgentMultisigView = {
+  ...argentMultisig,
+  authorityStatus: "network-unavailable",
+  config: null,
+  deployed: null,
+};
+const { currentConfig: _incompleteCurrentConfig, ...incompleteSignerRecord } =
+  argentMultisig.record;
+const incompleteSignerConfig: ArgentMultisigView = {
+  ...argentMultisig,
+  record: incompleteSignerRecord,
+};
+const unsupportedSignerAuthority: ArgentMultisigView = {
+  ...argentMultisig,
+  authorityStatus: "unsupported-signers",
+  config: {
+    classHash: argentMultisig.record.classHash,
+    signerGuids: ["0x123"],
+    threshold: 1,
+  },
+  record: incompleteSignerRecord,
+  unsupportedSigners: [{ guid: "0x123", type: "webauthn" }],
+};
+const undeployedMultisig: ArgentMultisigView = {
+  ...argentMultisig,
+  authorityStatus: "undeployed",
+  config: null,
+  deployed: false,
+};
+const { currentConfig: _pendingConfig, ...pendingDeploymentRecord } = argentMultisig.record;
+const pendingDeploymentMultisig: ArgentMultisigView = {
+  ...argentMultisig,
+  authorityStatus: "undeployed",
+  config: null,
+  deployed: null,
+  deploymentPending: true,
+  record: pendingDeploymentRecord,
+};
+const {
+  currentConfig: _currentConfig,
+  deployment: _deployment,
+  ...watchedUndeployedRecord
+} = argentMultisig.record;
+const watchedUndeployedMultisig: ArgentMultisigView = {
+  authorityStatus: "undeployed",
+  config: null,
+  deployed: false,
+  record: watchedUndeployedRecord,
+  unsupportedSigners: [],
+};
+const externalOnlyDeployment: ArgentMultisigView = {
+  ...watchedUndeployedMultisig,
+  record: {
+    ...watchedUndeployedRecord,
+    currentConfig: { signerPublicKeys: ["0x999"], threshold: 1 },
+    deployment: { salt: "0x0", signerPublicKeys: ["0x999"], threshold: 1 },
+  },
+};
+const changedAuthority: ArgentMultisigView = {
+  ...argentMultisig,
+  config: {
+    ...(argentMultisig.config ?? {
+      classHash: argentMultisig.record.classHash,
+      signerGuids: [],
+      threshold: 2,
+    }),
+    signerGuids: [...(argentMultisig.config?.signerGuids ?? []), "0x999"],
+  },
+};
+const softwareSignature = argentReadyIntent.signatures.find(
+  (signature) => signature.publicKey === softwareAccount.publicKeyX,
+);
+if (!softwareSignature) {
+  throw new Error("UI Lab multisig fixture is missing the software signer signature");
+}
+const locallySignedIntent = {
+  ...argentCollectingIntent,
+  signatures: [softwareSignature],
+};
+const softwareSignerOnly = {
+  ...statusFor(softwareAccount),
+  accountCount: 1,
+  accounts: [softwareAccount],
+};
+const observerOnly = {
+  ...statusFor(secondAccount),
+  accountCount: 1,
+  accounts: [secondAccount],
+};
+
+const checkpoints: readonly ScenarioCheckpoint[] = [
+  checkpoint(
+    "empty",
+    "No shared accounts",
+    "The first-run state explains the two deliberate paths: create a new account or add an existing address.",
+    { multisigs: [], selectedMultisigId: null, view: "multisigs" },
+    { accounts: 0, task: "choose setup path" },
+  ),
+  checkpoint(
+    "list",
+    "Shared account list",
+    "Quorum and open work are visible before the user changes portfolio identity.",
+    { multisigIntents: [argentCollectingIntent], selectedMultisigId: null, view: "multisigs" },
+    { openIntents: 1, quorum: "2 of 2" },
+  ),
+  checkpoint(
+    "add",
+    "Choose setup path",
+    "Creating and watching are separate tasks with explicit trust consequences.",
+    { selectedMultisigId: null, view: "multisig-add" },
+    { choices: ["create", "add"] },
+  ),
+  checkpoint(
+    "watch",
+    "Add shared address",
+    "One address syncs a deployed account or becomes a verified deployment handoff when it is still counterfactual.",
+    { selectedMultisigId: null, view: "multisig-watch" },
+    { input: "address only", verification: "chain or deployment review" },
+  ),
+  checkpoint(
+    "deploy-class-check",
+    "Deployment unavailable",
+    "A missing pinned class fails closed and explains the network prerequisite instead of rendering a dead form.",
+    { multisigClassDeclared: false, selectedMultisigId: null, view: "multisig-deploy" },
+    { class: "not declared" },
+  ),
+  {
+    ...checkpoint(
       "deploy-ready",
-      "Deploy ready",
-      "Wallet accounts and contacts form a staged signer picker before quorum and deterministic salt review.",
-      () =>
-        multisigDeployFlow(
-          statusFor(),
-          softwareAccount,
-          { declarationPending: false, declared: true },
-          preferences,
-        ),
-      { class: "declared", deployEnabled: true, signerSources: ["wallet", "address-book"] },
+      "Choose participants",
+      "The account name and participant identities form the first decision in one four-stage creation flow.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { class: "declared", step: "participants" },
     ),
+    prepare: bindFixtureMultisig,
+  },
+  {
+    ...checkpoint(
+      "deploy-participant",
+      "Add participant",
+      "Known identities stay one tap away while an external participant can be resolved from an address, added from a public key, or imported as a complete wallet card.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { detailType: "account address", step: "participant" },
+    ),
+    prepare: revealDeploymentParticipant,
+  },
+  {
+    ...checkpoint(
+      "deploy-wallet-card",
+      "Add complete wallet contact",
+      "A labelled wallet card adds the Starknet signer and authenticated Nostr coordination identity as one participant, then returns to creation.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { detailType: "wallet card", step: "participant" },
+    ),
+    prepare: revealDeploymentWalletCard,
+  },
+  {
+    ...checkpoint(
+      "deploy-approval",
+      "Set approval policy",
+      "Threshold, deployment signer, and advanced salt form one focused decision after the signer set is complete.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { class: "declared", step: "approval", threshold: 2 },
+    ),
+    prepare: prepareDeploymentApproval,
+  },
+  {
+    ...checkpoint(
+      "deploy-reviewed",
+      "Review deployment",
+      "The predicted address, irreversible authority, fee ceiling, and exact constructor fit the extension surface before confirmation.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { class: "declared", funding: "ready", threshold: 2 },
+    ),
+    prepare: prepareDeploymentReview("ok"),
+  },
+  {
+    ...checkpoint(
+      "deploy-funding",
+      "Funding required",
+      "An unfunded counterfactual address is caught before broadcast and names the recovery action.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { class: "declared", funding: "required", threshold: 2 },
+    ),
+    prepare: prepareDeploymentReview("insufficient"),
+  },
+  {
+    ...checkpoint(
+      "deploy-submitted",
+      "Deployment submitted",
+      "The transaction hash and account stay visible after broadcast while Starknet confirms deployment.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { deployment: "submitted", outcome: "pending" },
+    ),
+    prepare: prepareDeploymentSubmitted,
+  },
+  checkpoint(
+    "home-deployment-required",
+    "Deployment required",
+    "A shared counterfactual address can be watched before deployment and replaces the disabled Send action with the exact recovery step.",
+    { multisigs: [watchedUndeployedMultisig], view: "multisig-home" },
+    { action: "complete setup", deployed: false },
+  ),
+  checkpoint(
+    "home-deployment-pending",
+    "Deployment confirming",
+    "A submitted deployment cannot reappear as a second deployment action while Starknet confirms it.",
+    { multisigs: [pendingDeploymentMultisig], view: "multisig-home" },
+    { action: "wait for confirmation", deployed: null },
+  ),
+  {
+    ...checkpoint(
+      "deploy-recover",
+      "Resume watched address",
+      "The wallet collects the missing constructor and binds fee review to the watched address so an incorrect signer set, threshold, or salt cannot deploy a different account.",
+      { multisigs: [watchedUndeployedMultisig], view: "multisig-deploy" },
+      { constructor: "address-bound", deployed: false },
+    ),
+    prepare: bindFixtureMultisig,
+  },
+  checkpoint(
+    "signers-watch-only",
+    "Unsupported signer type",
+    "A passkey or other supported Argent signer stays recognizable and watch-only without asking for an impossible Stark public key.",
+    { multisigs: [unsupportedSignerAuthority], view: "multisig-signers" },
+    { recovery: "watch only", signerType: "webauthn" },
+  ),
+  checkpoint(
+    "deploy-resume",
+    "Resume saved setup",
+    "The wallet restores the original signer set, threshold, salt, and eligible deployment signer, then resumes at Approval instead of repeating Participants.",
+    { multisigs: [undeployedMultisig], view: "multisig-deploy" },
+    { constructor: "restored", deployed: false },
+  ),
+  {
+    ...checkpoint(
+      "deploy-signer-required",
+      "Deployment signer required",
+      "A restored external-only signer set cannot advance until one account owned by this wallet is added as the deployment signer.",
+      { multisigs: [externalOnlyDeployment], view: "multisig-deploy" },
+      { recovery: "add local signer", step: "participants" },
+    ),
+    prepare: bindFixtureMultisig,
+  },
+  checkpoint(
+    "home",
+    "Shared portfolio",
+    "A shared account behaves like a selected portfolio while keeping quorum context and shared actions explicit.",
+    { multisigIntents: [argentCollectingIntent], view: "multisig-home" },
+    { openIntents: 1, view: "portfolio" },
+  ),
+  checkpoint(
+    "home-empty",
+    "Shared portfolio without work",
+    "The empty proposal lane offers a clear next action without weakening the shared-account identity.",
+    { multisigIntents: [], view: "multisig-home" },
+    { openIntents: 0 },
+    true,
+  ),
+  checkpoint(
+    "home-observer-proposal",
+    "Observer can propose",
+    "Preparing an off-chain transaction is available even when this browser does not own a signer; signature collection remains a separate capability.",
+    { multisigIntents: [], status: observerOnly, view: "multisig-home" },
+    { localSigner: "unavailable", proposal: "available" },
+    true,
+  ),
+  checkpoint(
+    "home-intents",
+    "Condensed open work",
+    "Home keeps each intent to one scannable line before opening the focused review.",
+    { multisigIntents: [argentReadyIntent], view: "multisig-home" },
+    { openIntents: 1, view: "condensed" },
+    true,
+  ),
+  checkpoint(
+    "home-stale-intent",
+    "One transaction after a fee change",
+    "Old fee hashes collapse into one logical row, preserving the strongest signed attempt without crowding the portfolio.",
     {
-      content: () =>
-        multisigDeployFlow(
-          statusFor(),
-          softwareAccount,
-          { declarationPending: false, declared: true },
-          preferences,
-        ),
-      id: "deploy-rules",
-      label: "Review signer rules",
-      narrative:
-        "The final deployment view aggregates the selected signer set, quorum, and salt without the chooser competing for space.",
-      prepare: showDeploymentRules,
-      state: { approvals: "1 of 1", stage: "rules" },
+      multisigIntents: [
+        argentStaleIntent,
+        argentReplacementIntent,
+        { ...argentReplacementIntent, id: `${argentReplacementIntent.id}:empty`, signatures: [] },
+      ],
+      view: "multisig-home",
     },
-    multisigCheckpoint(
-      "shared-untracked",
-      "Untracked proposal",
-      "A pasted proposal id requires explicit external verification before signing.",
-      () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [untrackedProposal],
-          false,
-          "current",
-          preferences,
-          "multisig-home",
-          portfolio,
-        ),
-      { call: "unavailable", verificationAcknowledgement: true },
+    { openIntents: 1, state: "not-submitted", view: "condensed" },
+    true,
+  ),
+  checkpoint(
+    "intent-collecting",
+    "Collect signatures",
+    "Human outcome and risk lead; fee ceiling, threshold progress, and exact identity remain verifiable.",
+    { multisigIntents: [argentCollectingIntent], view: "multisig-detail" },
+    { signatures: 0, state: "collecting", threshold: 2 },
+    true,
+  ),
+  checkpoint(
+    "intent-ready",
+    "Ready to submit",
+    "Submission appears only after the verified threshold is complete and fresh authority still matches.",
+    {
+      multisigIntents: [
+        {
+          ...argentCollectingIntent,
+          id: `${argentCollectingIntent.id}:other`,
+          summary: "Another pending transaction",
+        },
+        argentReadyIntent,
+      ],
+      selectedMultisigIntentId: argentReadyIntent.id,
+      view: "multisig-detail",
+    },
+    { signatures: 2, state: "ready", threshold: 2 },
+    true,
+  ),
+  {
+    ...checkpoint(
+      "intent-handoff",
+      "Co-signer handoff",
+      "The full package, verified signature import, and advanced fragment export are separated by the job each action performs.",
+      { multisigIntents: [argentReadyIntent], view: "multisig-detail" },
+      { disclosure: "open", task: "co-signer handoff" },
+      true,
     ),
-    multisigCheckpoint(
-      "executed",
-      "Executed proposal",
-      "Final state remains readable and removes actions that no longer apply.",
-      () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [executedProposal],
-          false,
-          "current",
-          preferences,
-          "multisig-home",
-          portfolio,
-        ),
-      { actionsAvailable: false, state: "executed" },
+    prepare: revealCollaboration,
+  },
+  checkpoint(
+    "intent-submitted",
+    "Transaction submitted",
+    "A completed multisig submission becomes a familiar receipt with direct Activity and shared-account destinations.",
+    {
+      multisigIntents: [argentSubmittedIntent],
+      selectedMultisigIntentId: argentSubmittedIntent.id,
+      view: "multisig-detail",
+    },
+    { outcome: "submitted", state: "receipt" },
+    true,
+  ),
+  checkpoint(
+    "intent-signed-local",
+    "Local signer complete",
+    "After this wallet signs, sharing becomes the next action and signing is not offered twice.",
+    {
+      multisigIntents: [locallySignedIntent],
+      status: softwareSignerOnly,
+      view: "multisig-detail",
+    },
+    { localSigner: "signed", signatures: 1, state: "collecting", threshold: 2 },
+    true,
+  ),
+  checkpoint(
+    "intent-no-local-signer",
+    "No eligible local signer",
+    "A watch-only participant is directed to share the package without seeing an unusable signer action.",
+    {
+      multisigIntents: [argentCollectingIntent],
+      status: observerOnly,
+      view: "multisig-detail",
+    },
+    { localSigner: "unavailable", signatures: 0, state: "collecting", threshold: 2 },
+    true,
+  ),
+  checkpoint(
+    "intent-stale",
+    "Not submitted · retry or update",
+    "A fee-rejected attempt says nothing was sent, makes the existing fee update the recommended next step, and keeps the exact signed retry available as a fallback.",
+    {
+      multisigIntents: [argentStaleIntent, argentReplacementIntent],
+      selectedMultisigIntentId: argentStaleIntent.id,
+      view: "multisig-detail",
+    },
+    { state: "not-submitted" },
+    true,
+  ),
+  {
+    ...checkpoint(
+      "intent-fee-replacement",
+      "Fee-updated transaction",
+      "The replacement explains that its new hash cannot reuse approvals from the previous attempt.",
+      {
+        multisigIntents: [argentStaleIntent, argentReplacementIntent],
+        selectedMultisigIntentId: argentReplacementIntent.id,
+        view: "multisig-detail",
+      },
+      { lifecycle: "replacement", signatures: 1, threshold: 2 },
+      true,
     ),
-  ],
+    prepare: revealIntentTechnical,
+  },
+  checkpoint(
+    "authority-unavailable",
+    "Authority unavailable",
+    "Missing fresh signer authority disables proposal preparation and signature collection.",
+    { multisigs: [unavailableAuthority], view: "multisig-detail" },
+    { authority: "unavailable", failClosed: true },
+  ),
+  checkpoint(
+    "authority-changed",
+    "Authority changed",
+    "A changed signer set is shown as a blocking mismatch against the frozen snapshot.",
+    {
+      multisigIntents: [argentReadyIntent],
+      multisigs: [changedAuthority],
+      view: "multisig-detail",
+    },
+    { authority: "mismatch", failClosed: true },
+    true,
+  ),
+  checkpoint(
+    "signers",
+    "Current signer authority",
+    "Recognizable signer identities and guided authority changes replace raw contract-call composition.",
+    { view: "multisig-signers" },
+    { actions: ["add", "replace", "remove", "threshold"], threshold: 2 },
+  ),
+  {
+    ...checkpoint(
+      "signers-participant",
+      "Add signer participant",
+      "Signer management uses the same participant task and returns to threshold review after a public key is selected.",
+      { view: "multisig-signers" },
+      { detailType: "public key", step: "participant" },
+    ),
+    prepare: revealManagementParticipant,
+  },
+  {
+    ...checkpoint(
+      "signers-incomplete",
+      "Signer recovery fallback",
+      "Address-only join normally syncs signer keys from chain history; this fallback asks only for keys the RPC could not recover.",
+      {
+        multisigs: [incompleteSignerConfig],
+        status: softwareSignerOnly,
+        view: "multisig-signers",
+      },
+      { recovery: "missing Stark public keys", threshold: 2 },
+    ),
+    prepare: bindFixtureMultisig,
+  },
+  checkpoint(
+    "track",
+    "Import signing intent",
+    "An external intent package enters through an explicit verification task, not a generic paste surface.",
+    { view: "multisig-track" },
+    { task: "verify intent package" },
+  ),
+  checkpoint(
+    "receive",
+    "Receive into multisig",
+    "The exact shared address and network remain visually bound to the selected identity.",
+    { view: "multisig-receive" },
+    { task: "receive" },
+  ),
+  {
+    ...checkpoint(
+      "propose",
+      "Compose token transfer",
+      "The common path uses saved recipients, tracked assets, token logos, balances, and human amounts before review.",
+      { view: "multisig-propose" },
+      { task: "compose token transfer" },
+    ),
+    prepare: prepareTransferComposer,
+  },
+  {
+    ...checkpoint(
+      "propose-advanced",
+      "Advanced contract call",
+      "Exact target, entrypoint, and calldata remain available without dominating the common transfer journey.",
+      { view: "multisig-propose" },
+      { disclosure: "advanced", task: "compose contract call" },
+    ),
+    prepare: revealAdvancedCall,
+  },
+  checkpoint(
+    "sync-error",
+    "Shared-account sync failure",
+    "Previously known identity stays visible while current authority and work are marked unavailable.",
+    { multisigsError: true, selectedMultisigId: null, view: "multisigs" },
+    { recovery: "retry", sync: "failed" },
+  ),
+];
+
+export const multisigScenario: WalletScenario = {
+  checkpoints,
   description:
-    "Shared-account home, guided proposal and deployment flows, decoded effects, independent review, quorum transitions, and degraded refresh state.",
+    "Argent deployment, watched identity, portfolio, exact-intent review, signature threshold, authority drift, and recovery.",
   id: "multisig",
   surface: "sidepanel",
-  title: "Multisig operations",
+  title: "Argent multisig",
   views: [
     "multisigs",
     "multisig-add",

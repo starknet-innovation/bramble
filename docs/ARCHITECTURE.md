@@ -65,35 +65,55 @@ tokens show no price; spam-flagged tokens cannot yet be force-pinned to home (th
 tokens flow); custom tokens whose on-chain symbol is not a `[A-Z0-9]{2,12}` ticker are rejected;
 there is no dedicated remove-token action (hide instead).
 
-## Account class
+## Account classes
 
-Accounts use the OpenZeppelin `AccountUpgradeable` preset, pinned by Krusty KMS.
+Every software, imported-key, and Ledger account records an explicit contract type. New-account
+screens offer the stable Argent Account or the existing OpenZeppelin `AccountUpgradeable`; the
+choice is part of address derivation, deployment, signature serialization, and the versioned vault
+schema, so it cannot be changed after creation.
 
 - Preset: OpenZeppelin `AccountUpgradeable`, Cairo `openzeppelin_presets` v3.0.0.
 - Pinned class hash:
   `0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381`
-  (identical on Mainnet and Sepolia). Source of truth: the vendored Krusty KMS
-  manifest `crates/kms/src/oz_account_class_manifest.json` at the commit pinned
-  in `scripts/vendor-krusty.ts`. Address derivation matches `ozAccountDeployment`
+  (identical on Mainnet and Sepolia). Source of truth: `OZ_ACCOUNT_CLASS_HASH` in
+  `packages/foundation/wallet-model/src/accounts/accounts.ts`, cross-checked against the published
+  Krusty package by the known-answer vectors in `scripts/check-krusty-adapter.ts`. Address
+  derivation matches `accountDeployment`
   in `packages/platform/starknet/src/transactions/deployment.ts` (constructor `constructor(public_key: felt252)`).
+- Devnet: run the node as `starknet-devnet --chain-id SN_DEVNET`, matching `STARKNET_NETWORKS.SN_DEVNET`; a
+  default devnet reports Sepolia's id and the write-path guard rejects it. A local devnet also declares only its
+  OWN account class, so `getOzAccountClassHash` resolves `SN_DEVNET` to the class the node predeclares
+  (`devnet_getConfig` -> `account_contract_class_hash`) — same preset and constructor, derivation unchanged. It is
+  devnet-VERSION specific and pinned by no CI gate. Argent accounts stay unavailable on a devnet that has not
+  declared that class itself. Devnet derives its predeployed accounts' keys from the node seed but deploys them
+  at its own fixed salt, while the OZ path tries only `["0x0", publicKeyX]` (`deployment.ts`) — so importing a
+  predeployed key yields a fresh counterfactual address, not the pre-funded one.
 - Audit: OpenZeppelin Contracts for Cairo audit reports —
   <https://github.com/OpenZeppelin/cairo-contracts/tree/main/audits> (API docs:
   <https://docs.openzeppelin.com/contracts-cairo/3.x/api/account#AccountUpgradeable>).
+- Argent Account 0.4.0 class hash:
+  `0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f`;
+  compiled class hash:
+  `0x0294a323246c017d00a98f11942e1e38d562c97bc79426742110a14ce497e9b5`.
+  It is pinned to Argent's `update-2024Q2` release at commit
+  `1352198956f36fb35fa544c4e46a3507a3ec20e3`. Its constructor and account
+  signature encoding come from `@mc-wallet/starknet/account-contracts`.
+  The pin deliberately uses Argent's latest non-prerelease production line,
+  not the newer v0.5 prerelease that upstream marks unsupported by Ready.
+  The [May 2024 ChainSecurity report](https://github.com/argentlabs/argent-contracts-starknet/blob/1352198956f36fb35fa544c4e46a3507a3ec20e3/audit/ChainSecurity_Argent_Argent_Account_audit-2024-05.pdf)
+  covers the pinned Account and Multisig release; its scope and assumptions are
+  evidence about those contracts, not an audit of MC Wallet's integration.
 
 ### Verification
 
-Verified DECLARED on both networks with `starknet_getClass` against the
-Cartridge endpoints the wallet used at the time, on 2026-07-07 (RPC spec
-`0.10.2` mainnet, `0.9.0` sepolia); the class resolved with the
-`UpgradeableImpl` + `AccountMixinImpl` ABI on both. The wallet has since moved
-to the wallet-owned gateway in front of the Starknet Foundation public nodes,
-so re-run against those:
+Both supported account classes are declared on Mainnet and Sepolia. Re-run the
+check against the wallet-owned gateway with either pinned class hash:
 
 ```bash
 for NET in mainnet sepolia; do
   curl -s -X POST "https://wallet.nodes.starknet.org/rpc/$NET/v0_10" \
     -H 'content-type: application/json' \
-    -d '{"jsonrpc":"2.0","id":1,"method":"starknet_getClass","params":{"block_id":"latest","class_hash":"0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"}}' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"starknet_getClass","params":{"block_id":"latest","class_hash":"0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"}}' \
     | head -c 80; echo " <- $NET";
 done
 ```
@@ -104,8 +124,8 @@ a networked host and expect the same result.
 
 ## Ledger Hardware Accounts
 
-Ledger accounts use the same pinned OpenZeppelin account class, but the vault stores only public
-account metadata: the account address, public-key x-coordinate, account index, and canonical
+Ledger accounts can use either supported single-signer account class, but the vault stores only
+public account metadata: the contract type, account address, public-key x-coordinate, account index, and canonical
 EIP-2645 path `m/2645'/1195502025'/734980059'/0'/<index>'/0`. No Ledger mnemonic or signing key enters MC
 Wallet. A Ledger-only vault therefore has `mnemonic: null` and no `signingKeys` entry for its
 accounts; a mixed vault may contain both software and Ledger account records.
@@ -214,7 +234,7 @@ the vault passphrase. `apps/extension/src/background/accounts/import-inputs.ts` 
 canonical, non-zero Stark private key. Dapps cannot reach this message type.
 
 `deriveImportedAccount` keeps key handling inside the existing Krusty boundary: Krusty recovers the
-public key and derives the pinned OpenZeppelin account address, and the wallet rejects invalid KMS
+public key and derives the explicitly selected account-contract address, and the wallet rejects invalid KMS
 outputs. No local key-derivation or signing fallback exists. The account is tagged
 `imported-raw-key`; the private key is written only to the encrypted vault signing-key collection,
 the imported account becomes active, and an existing account is rejected. Invalid input, a locked
@@ -368,16 +388,17 @@ serialized before broadcast and prove against mature historical state. See
 
 ## Krusty KMS
 
-Wallet checks and cryptography require vendored WASM from Krusty KMS.
+Wallet checks and cryptography require the exact published Krusty KMS WASM package.
 
 ```bash
-bun run vendor:krusty
+bun install --frozen-lockfile
 bun run check
 ```
 
-The vendor script checks out the pinned Krusty KMS commit in `scripts/vendor-krusty.ts`.
-The build requires `vendor/krusty-kms/crates/wasm/pkg` and copies its runtime files into
-`dist/vendor/krusty-kms/pkg`.
+`package.json` pins the version and `bun.lock` pins the immutable registry tarball. Before import,
+`scripts/check-krusty-adapter.ts` verifies the package metadata, JavaScript and WASM digests, known
+wallet vectors, and authenticated Nostr round trip. The build copies those installed runtime bytes
+into `dist/dependencies/krusty-kms`.
 
 ## Extension
 
@@ -410,68 +431,53 @@ constraint, not a wallet limitation.
 
 ## Multisig
 
-Settings → Multisigs manages shared accounts built on OpenZeppelin's audited
-`MultisigComponent` (Cairo v3.0.0, the version already pinned via Krusty). This
-is the governance-style model: each participant keeps their own single-key
-account, and submit/confirm/revoke/execute are ordinary invokes from that
-account through the existing verified send path — no new client-side
-cryptography, no off-chain signature aggregation, and nothing stored in the
-encrypted vault (multisig addresses, signers, and proposals are public
-on-chain data, kept in the plain `mc-wallet:multisigs` store).
+Settings → Multisigs manages true Argent M-of-N account contracts. Argent Multisig does not keep an
+on-chain proposal/confirmation queue: one final `INVOKE` carries exactly the threshold number of
+member signatures, sorted by Argent signer GUID. MC Wallet therefore stores public, frozen V3
+signing intents—not OpenZeppelin proposal ids—and never places a multisig in the encrypted
+single-signer `AccountRef` registry.
 
-- Watch: adding a multisig by address reads `get_quorum`/`get_signers`
-  on-chain and requires the active account to be a signer. Signer sets and
-  quorums refresh from chain on the detail screen.
-- Propose: single-call proposals (contract, entrypoint, calldata felts, salt).
-  The transaction id comes from the contract's own `hash_transaction` view, so
-  the wallet never re-implements the Pedersen scheme. Submitting does not
-  confirm; the proposer confirms like any other signer.
-- Coordinate: proposal ids are copyable and can be tracked from another signer's wallet. Refresh
-  performs a bounded, paginated `TransactionSubmitted` event scan, then reads every discovered id
-  back through the contract. Exhausting the RPC page budget reports an incomplete scan.
-- Review elsewhere: the proposer can copy a deterministic, secret-free package containing the
-  public multisig identity, proposal id, call, salt, and summary. The background recomputes its id
-  through `hash_transaction` before persisting the call. An id-only import remains call-less and
-  requires explicit independent verification before confirmation.
-- Confirm: review binds signer, proposal, network, decoded effect, fee, and explicit mode. A
-  quorum-reaching confirmation may batch `confirm_transaction` and `execute_transaction`; target
-  failure reverts the invoke, while a durable background claim prevents duplicate broadcasts.
-- Deploy: the pinned `MultisigWallet` class (`contracts/multisig`) deploys through the public UDC
-  with `not_from_zero = 0`, binding its address to class, signers, quorum, and salt. If undeclared,
-  the deploy screen offers a user-paid declaration after re-verifying the bundled Sierra class.
+- Watch: the wallet requires the pinned class and reads `get_threshold`, `get_signer_guids`, and
+  signer membership from chain before accepting or signing an intent.
+- Prepare: the background freezes calls, sender, chain, nonce, resource bounds, tip, data
+  availability modes, paymaster/account-deployment data, and the resulting transaction hash.
+- Sign: every fragment is verified against that exact hash, current on-chain membership, and the
+  frozen signer snapshot. Duplicate, foreign, malformed, or out-of-order signatures are refused.
+- Submit: only a threshold-complete signature array is serialized and broadcast with the exact
+  prepared V3 fields. Nothing is re-estimated or silently changed after review.
+- Deploy: the native Argent account deployment binds the salt, threshold, and GUID-sorted signer
+  set. Self-deployment uses the contract's dedicated single-member deploy signature.
 
-Pinned class (reproduce with scarb `2.18.0` via `bun run vendor:multisig`; verify with `bun run check:multisig`):
-
-- Class hash: `0xbb216b0643679b992e7953b6ea6f5057804237053e79fdd064cf2b5adea035`
-- Compiled class hash: `0x42d945a7f59ead19b20435fbea7d168449299b03d71f8da205517166a2c80c8`
-
-`bun run test:multisig-contract` proves same-call confirmation visibility and
-full rollback on target failure against the pinned Cairo component.
-Known limitations (v1): proposals are single-call; signer/quorum changes use custom self-calls;
-event discovery is bounded and RPC-dependent; below-quorum confirmations pay separate fees; and
-proposals plus review packages contain public transaction data.
+Pinned Argent Multisig 0.2.0 class hash:
+`0x07aeca3456816e3b833506d7cc5c1313d371fbdb0ae95ee70af72a4ddbf42594`;
+compiled class hash:
+`0x010972dc21f31635a6e90d524295e4e356a565e21dd1dbe986c476dbe9d0f8c9`.
+`bun run vendor:argent && bun run check:argent` verifies the exact upstream release commit and all
+official ABI/Sierra/CASM digests without copying GPL contract artifacts into the extension bundle.
+The verification checkout retains upstream's GPL-3.0 license under the ignored `vendor/` directory;
+the distributed extension contains only class identifiers and independently implemented ABI wiring.
 
 ## Allowance manager
 
-Settings → Allowances lists the ERC20 approvals granted through this wallet
-(spender, token, amount, account, network) and revokes any with one tap by
-submitting `approve(spender, 0)` through the same verified send path as
-transfers. Approvals are recorded from decoded `approve` calls when a dapp invoke
-is submitted; the plain store lives at `mc-wallet:allowances`, outside the
-encrypted vault. Enumerating allowances granted on other sites requires an
-on-chain indexer and is a follow-up — only approvals made through this wallet are
-tracked today.
+Settings → Allowances lists the ERC20 approvals this wallet granted — the active account's own
+plus any a watched multisig it signs for executed (read-only: those need a separate signing intent) — and revokes
+one with `approve(spender, 0)` through the verified send path. Every submitting path files what it
+granted; the store applies the arithmetic (`applyDelta`, one serialized read-modify-write) where
+`approve` sets, an increase adds, a decrease subtracts, and a delta over an unseen base stores
+`lowerBound`, shown as "at least N". Each record's live `allowance(owner, spender)` is then read
+directly and adopted when it is at least the tracked figure. Collection approvals are excluded and
+reviewed as their own kinds: an ERC721 `approve` carries a token id, so a "revoke" would approve
+item 0. The store `mc-wallet:allowances` sits outside the vault.
 
 ## NFT gallery
 
 Home → NFTs merges auto-discovered collectibles with watched `nfts` preferences (contract, token
 id, network, optional label, spam flag).
-Indexer claims are re-proved on-chain against the active account before display;
-explicitly watched NFTs also resolve ERC-721/1155 metadata without auto-fetching
-attacker-controlled airdrop URLs. The detail screen shows the resolved artwork
-and attributes, then sends through a two-phase review → confirm flow. Review
-re-proves ownership, detects ERC-721 versus ERC-1155, decodes the exact call,
-screens the recipient, and estimates the fee without broadcasting. Confirmation
+Indexer claims are re-proved on-chain against the active account before display; explicitly
+watched NFTs also resolve ERC-721/1155 metadata without auto-fetching attacker-controlled airdrop
+URLs. The detail screen shows the resolved artwork and attributes, then sends through a two-phase
+review → confirm flow. Review re-proves ownership, detects ERC-721 versus ERC-1155, decodes the
+exact call, screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
 On unlock and resync, watched NFTs hydrate through an ownership-proven metadata lane without
 waiting for the optional indexer.
@@ -481,10 +487,9 @@ eagerly so the hidden Collectibles panel is warm when opened.
 
 ## Reproducible Builds
 Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen lockfile,
-`wasm-pack 0.13.1`, scarb `2.18.0` (enforced by
-`scripts/vendor-multisig.ts`) with exact OpenZeppelin versions in
-`contracts/multisig/Scarb.toml`, GitHub Actions by commit SHA, and the Krusty
-KMS source at the commit recorded in `scripts/vendor-krusty.ts`. The Privacy SDK source and browser
+the exact published Krusty KMS package and both runtime-file digests, the exact Argent
+account-contract release and official artifact digests, and GitHub Actions by commit SHA. The
+Privacy SDK source and browser
 bundle digest are pinned by its vendor/check scripts. Reproduce a release, then compare
 `artifacts/*.zip.sha256` against the CI artifact checksum:
 

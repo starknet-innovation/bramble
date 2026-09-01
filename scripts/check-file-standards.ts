@@ -3,14 +3,15 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { actionReferences, isPinnedActionReference, WORKFLOW_DIR } from "./workflow-inventory";
 
 const MAX_LINES = 500;
 const EXCLUDED = new Set([
   ".claude",
+  ".dev-profile",
   ".git",
   ".impeccable",
   ".playwright-cli",
-  "apps",
   "artifacts",
   "bun.lock",
   "dist",
@@ -25,6 +26,16 @@ const EXCLUDED = new Set([
   "test-results",
   "vendor",
 ]);
+/**
+ * Directories skipped by full path rather than by name. `apps/` now holds the
+ * shipped extension next to two projects this gate has never covered (the
+ * hosted terminal and the Storybook UI lab), so excluding the whole tree by
+ * name — as this list did while `src/` was the extension root — would silently
+ * disable every `apps/extension/src` rule below, including the secret-material
+ * and browser-global boundaries. Skipping by path keeps the extension scanned.
+ */
+const EXCLUDED_PATHS = new Set(["apps/terminal", "apps/ui-lab"]);
+const BINARY_EXTENSIONS = [".jpg", ".png", ".wasm", ".webp", ".zip"] as const;
 const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/background/index.ts",
   "apps/extension/src/content/index.ts",
@@ -56,125 +67,9 @@ const RAW_ERROR_BOUNDARY_FILES = new Set([
   "apps/extension/src/background/index.ts",
   "apps/extension/src/content/index.ts",
 ]);
-const SECRET_MATERIAL_FILES = new Set([
-  "apps/extension/src/background/ledger/account-hash-signer.ts",
-  "apps/extension/src/background/accounts/account-creation-inputs.ts",
-  // Keeps the unlocked vault credential inside the privileged worker while
-  // coordinating fail-closed network/vault commits; never persists or emits it.
-  "apps/extension/src/background/runtime/active-network-mutation.ts",
-  "apps/extension/src/background/provider/add-chain-ops.ts",
-  "apps/extension/src/background/approvals/approval-decisions.ts",
-  "apps/extension/src/background/transactions/chain-ops.ts",
-  "apps/extension/src/background/portfolio/discovery-ops.ts",
-  "apps/extension/src/background/transactions/declare-ops.ts",
-  "apps/extension/src/background/accounts/import-inputs.ts",
-  "apps/extension/src/background/ledger/ledger-ops.ts",
-  "apps/extension/src/background/ledger/ledger-sign-queue.ts",
-  "apps/extension/src/background/ledger/ledger-signer.ts",
-  "apps/extension/src/background/approvals/signature-waiters.ts",
-  "apps/extension/src/background/index.ts",
-  "apps/extension/src/background/routing/message-inputs.ts",
-  // Wires collaborators by name only. Its sole match is the `./signature-waiters`
-  // import path; it holds no secret material and touches no key operations.
-  "apps/extension/src/background/routing/message-context.ts",
-  "apps/extension/src/background/routing/messages.ts",
-  "apps/extension/src/background/provider/provider-ops.ts",
-  "apps/extension/src/background/settings/origins-ops.ts",
-  "apps/extension/src/background/privacy/strk20-account-context.ts",
-  // Recovery-phrase scan handler: holds the unlocked passphrase only to reach the
-  // vault service, and returns public account metadata alone.
-  "apps/extension/src/background/accounts/seed-scan-ops.ts",
-  // Post-approval appliers split from strk20-ops by trust step. They take the
-  // unlocked passphrase only to build the protected signer for an operation the
-  // user already reviewed; nothing is persisted or logged.
-  "apps/extension/src/background/privacy/strk20-approval-execution.ts",
-  // Origin-to-account resolution shared by strk20-ops and its appliers, so both
-  // agree on which account a site may act as. The passphrase transits into the
-  // caller's signer wiring and is never returned across a boundary.
-  "apps/extension/src/background/privacy/strk20-origin-account.ts",
-  "apps/extension/src/background/privacy/strk20-ops.ts",
-  // Active-account context split from strk20-wallet-ops; the vault passphrase
-  // only transits into the protected signer wiring, never logged or stored.
-  "apps/extension/src/background/privacy/strk20-op-context.ts",
-  "apps/extension/src/background/privacy/strk20-wallet-ops.ts",
-  // Viewing-key custody split from strk20-wallet-ops. It resolves the retained
-  // key to test whether one exists — presence is a vault fact nothing else can
-  // answer — and discards the value immediately without returning or logging it.
-  "apps/extension/src/background/privacy/strk20-viewing-key-state.ts",
-  "apps/extension/src/background/runtime/runtime-state.ts",
-  "apps/extension/src/background/runtime/runtime-types.ts",
-  "apps/extension/src/background/runtime/session.ts",
-  "packages/platform/ledger-protocol/src/broker.ts",
-  "apps/extension/src/background/routing/unlock-errors.ts",
-  "apps/extension/src/background/accounts/wallet-ops.ts",
-  "apps/extension/src/background/accounts/wallet-reader.ts",
-  "apps/extension/src/background/ledger/ledger-inputs.ts",
-  "packages/platform/kms-krusty/src/adapter.ts",
-  "packages/foundation/wallet-model/src/accounts/signing.ts",
-  // Pure length policy only; carries no passphrase value across a boundary.
-  "packages/foundation/wallet-model/src/preferences/passphrase.ts",
-  "packages/testing/testkit/src/fake-kms.ts",
-  "packages/presentation/wallet-ui/src/popup/responses/responses.ts",
-  "packages/presentation/wallet-ui/src/popup/responses/responses-ledger.ts",
-  "packages/foundation/wallet-protocol/src/provider/results.ts",
-  "packages/foundation/wallet-protocol/src/provider/bridge.ts",
-  // Sends the phrase being recovered to the privileged scan so setup can list its
-  // accounts before a vault exists; never stores, logs, or receives one back.
-  "packages/presentation/wallet-ui/src/sidepanel/runtime/accounts-runtime-client.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/gate-views.ts",
-  "packages/platform/ledger-protocol/src/client.ts",
-  "packages/platform/ledger-protocol/src/errors.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/first-run.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/onboard-entry.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/runtime-client.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-runtime.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-session.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-views.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
-  // Compares the two vault-passphrase fields to report whether they agree. Reads
-  // their values only to compare them; stores, logs, and returns nothing.
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/vault-passphrase-fields.ts",
-  // Passes the phrase being recovered to the privileged create message so a
-  // restored wallet can start from the account the user chose; never stores or
-  // logs one.
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/restore-accounts.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
-  "packages/features/transactions/src/routing/ledger-verify.ts",
-  "packages/platform/starknet/src/rpc/provider.ts",
-  "packages/platform/starknet/src/rpc/rpc.ts",
-  "packages/features/privacy/src/policy/call-set-signer.ts",
-  "packages/features/privacy/src/sdk/official-sdk-service.ts",
-  // CallSet signing and viewing-key wiring extracted from official-sdk-service;
-  // same Krusty-delegated boundary, no secret ever stored or logged here.
-  "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
-  "packages/features/privacy/src/paymaster/paymaster.ts",
-  "packages/features/privacy/src/service.ts",
-  "packages/platform/vault/src/accounts/account-secrets.ts",
-  "packages/platform/vault/src/encrypted-store.ts",
-  "packages/platform/vault/src/kms-port.ts",
-  "packages/platform/vault/src/schema/migrations.ts",
-  "packages/platform/vault/src/schema/schema.ts",
-  "packages/platform/vault/src/schema/store-migration.ts",
-  "packages/platform/vault/src/accounts/accounts.ts",
-  // Walks HD positions using the vault's stored phrase. Derives public metadata
-  // only and discards every intermediate; the phrase is read from an
-  // already-decrypted vault and never returned, logged, or re-persisted.
-  "packages/platform/vault/src/accounts/seed-account-scan.ts",
-  "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
-  "packages/platform/vault/src/accounts/network-account.ts",
-  // Origin-grant read-modify-writes split from vault-service; the passphrase
-  // transits into the injected vault io and is never stored or logged.
-  "packages/platform/vault/src/service/origin-ops.ts",
-  "packages/platform/vault/src/service/reveal.ts",
-  "packages/platform/vault/src/service/service.ts",
-  "packages/platform/vault/src/service/service-types.ts",
-]);
+
+import { SECRET_MATERIAL_FILES } from "./file-standards-allowlists";
+
 const SECRET_MATERIAL_PATTERN =
   /\b(?:accountSecrets|mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
 const SUPPRESSION_MARKERS = [
@@ -200,7 +95,6 @@ const hasControlByte = (text: string): boolean => {
 };
 const DYNAMIC_CODE_PATTERN =
   /\b(?:eval|importScripts)\s*\(|\bnew Function\b|\b(?:setTimeout|setInterval)\s*\(\s*["']|import\s*\(\s*["']https?:\/\//;
-const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
 const HTML_SINK_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
@@ -243,11 +137,11 @@ const isProductionTypeScript = (file: string): boolean =>
 
 const hasExportDoc = (lines: readonly string[], index: number): boolean => {
   for (let previous = index - 1; previous >= 0; previous -= 1) {
-    const line = lines[previous]?.trim();
+    const line = lines[previous]?.trim() ?? "";
     if (line === "") {
       continue;
     }
-    return line === "*/";
+    return line === "*/" || (line.startsWith("/**") && line.endsWith("*/"));
   }
   return false;
 };
@@ -257,14 +151,17 @@ const walk = async (dir: string): Promise<string[]> => {
   const files: string[] = [];
 
   for (const entry of entries) {
-    if (EXCLUDED.has(entry.name)) {
+    const path = join(dir, entry.name);
+    if (EXCLUDED.has(entry.name) || EXCLUDED_PATHS.has(path)) {
       continue;
     }
 
-    const path = join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await walk(path)));
-    } else if (entry.isFile()) {
+    } else if (
+      entry.isFile() &&
+      !BINARY_EXTENSIONS.some((extension) => entry.name.endsWith(extension))
+    ) {
       files.push(path);
     }
   }
@@ -312,13 +209,14 @@ for (const file of await walk(".")) {
     failures.push(`${file} must live under its primary module directory`);
   }
 
-  if (file.startsWith(".github/workflows/")) {
-    lines.forEach((line, index) => {
-      const actionRef = line.match(/^\s*-\s+uses:\s*(\S+)/)?.[1];
-      if (actionRef && !GITHUB_ACTION_REF_PATTERN.test(actionRef)) {
-        failures.push(`${file}:${index + 1} GitHub Actions must be pinned to commit SHAs`);
+  if (file.startsWith(`${WORKFLOW_DIR}/`)) {
+    // Extraction and the pin rule are shared with the workflow security policy
+    // (./workflow-inventory), so neither gate can be the looser of the two.
+    for (const { line, reference } of actionReferences(text)) {
+      if (!isPinnedActionReference(reference)) {
+        failures.push(`${file}:${line} GitHub Actions must be pinned to commit SHAs`);
       }
-    });
+    }
   }
 
   if (file.endsWith(".ts") && /\.postMessage\([\s\S]{0,400},\s*["']\*["']/.test(text)) {

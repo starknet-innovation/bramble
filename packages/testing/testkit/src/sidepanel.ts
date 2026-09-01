@@ -7,12 +7,13 @@
  */
 
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
 
 /**
  * Canonical active mainnet account.
  */
-export const account: AccountRef = {
+export const account: DerivedAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -25,7 +26,7 @@ export const account: AccountRef = {
 /**
  * A second mainnet account for multi-account layouts.
  */
-export const secondAccount: AccountRef = {
+export const secondAccount: DerivedAccountRef = {
   ...account,
   address: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 1, kind: "starknet-bip44" },

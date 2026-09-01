@@ -2,6 +2,8 @@
  * Encrypted store checks cover round trips and wrong-passphrase failure.
  */
 import { describe, expect, test } from "bun:test";
+import type { Json } from "@mc-wallet/core/json";
+import type { KeyValueStore } from "@mc-wallet/store/kv";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import {
   createEncryptedStore,
@@ -29,6 +31,7 @@ describe("createEncryptedStore", () => {
     expect(isVaultPassphrase(`  ${"a".repeat(10)}  `)).toBe(false);
     expect(isVaultPassphrase(42)).toBe(false);
     expect(isVaultPassphrase(undefined)).toBe(false);
+    expect(isVaultPassphrase("a".repeat(1_025))).toBe(false);
   });
 
   test("requires explicit encryption scopes", async () => {
@@ -74,6 +77,65 @@ describe("createEncryptedStore", () => {
     const raw = await store.get(vaultKey);
     expect(JSON.stringify(raw)).not.toContain("accounts");
     await expect(encrypted.read("correct horse battery staple")).resolves.toEqual(vault);
+  });
+
+  test("rejects replay of an older envelope while its independent marker stays current", async () => {
+    const store = createMemoryStore();
+    const freshness = createMemoryStore();
+    const encrypted = createEncryptedStore(store, vaultKey, freshness);
+    await encrypted.write({ revision: 1 }, "correct horse battery staple");
+    const oldEnvelope = await store.get(vaultKey);
+    await encrypted.write({ revision: 2 }, "correct horse battery staple");
+
+    await store.set(vaultKey, oldEnvelope as Json);
+    await expect(encrypted.read("correct horse battery staple")).rejects.toThrow(
+      "Encrypted store rollback detected",
+    );
+  });
+
+  test("recovers each interrupted commit point without losing the last committed value", async () => {
+    for (const failAt of [1, 2, 3]) {
+      const backend = createMemoryStore();
+      const freshness = createMemoryStore();
+      let writes = 0;
+      let armed = false;
+      const faulting = (target: KeyValueStore): KeyValueStore => ({
+        get: (key) => target.get(key),
+        remove: (key) => target.remove(key),
+        async set(key, value) {
+          writes += 1;
+          if (armed && writes === failAt) {
+            armed = false;
+            throw new Error(`injected commit write ${failAt}`);
+          }
+          await target.set(key, value);
+        },
+      });
+      const encrypted = createEncryptedStore(faulting(backend), vaultKey, faulting(freshness));
+      await encrypted.write({ revision: 1 }, "correct horse battery staple");
+      writes = 0;
+      armed = true;
+
+      await expect(
+        encrypted.write({ revision: 2 }, "correct horse battery staple"),
+      ).rejects.toThrow(`injected commit write ${failAt}`);
+      const recovered = await encrypted.read("correct horse battery staple");
+      expect(recovered).toEqual({ revision: failAt === 3 ? 2 : 1 });
+    }
+  });
+
+  test("rejects rollback of the entire local profile while sync freshness remains current", async () => {
+    const store = createMemoryStore();
+    const freshness = createMemoryStore();
+    const encrypted = createEncryptedStore(store, vaultKey, freshness);
+    await encrypted.write({ revision: 1 }, "correct horse battery staple");
+    const oldEnvelope = await store.get(vaultKey);
+    await encrypted.write({ revision: 2 }, "correct horse battery staple");
+
+    await store.set(vaultKey, oldEnvelope as Json);
+    await expect(encrypted.read("correct horse battery staple")).rejects.toThrow(
+      "Encrypted store rollback detected",
+    );
   });
 
   test("rejects the wrong passphrase", async () => {
@@ -176,7 +238,7 @@ describe("createEncryptedStore", () => {
 
     await store.set(preferencesKey, raw);
     await expect(preferencesStore.read("correct horse battery staple")).rejects.toThrow(
-      "Invalid encrypted store envelope",
+      "Encrypted store commit state missing",
     );
   });
 
@@ -283,5 +345,105 @@ describe("createEncryptedStore", () => {
     await store.set(vaultKey, legacy as never);
     await expect(encrypted.upgradeLegacyEnvelope("wrong horse battery staple")).rejects.toThrow();
     expect((await store.get(vaultKey)) as unknown).toEqual(legacy);
+  });
+
+  test("rejects every older v2 envelope after the store commits its v3 migration", async () => {
+    const store = createMemoryStore();
+    const freshness = createMemoryStore();
+    const encrypted = createEncryptedStore(store, vaultKey, freshness);
+    const scope = `mc-wallet:encrypted-store:${vaultKey}`;
+    const earlier = await legacyEnvelope({ revision: 1 }, "correct horse battery staple", scope);
+    const latest = await legacyEnvelope({ revision: 2 }, "correct horse battery staple", scope);
+
+    // Both snapshots predate freshness tracking; only the latest is present
+    // when migration establishes the independent store-wide authority.
+    await store.set(vaultKey, earlier as never);
+    await store.set(vaultKey, latest as never);
+    await encrypted.upgradeLegacyEnvelope("correct horse battery staple");
+
+    await store.set(vaultKey, earlier as never);
+    await expect(encrypted.read("correct horse battery staple")).rejects.toThrow(
+      "Encrypted store rollback detected",
+    );
+  });
+
+  test("rejects v2 after a fresh store has committed v3", async () => {
+    const store = createMemoryStore();
+    const freshness = createMemoryStore();
+    const encrypted = createEncryptedStore(store, vaultKey, freshness);
+    const legacy = await legacyEnvelope(
+      { revision: 1 },
+      "correct horse battery staple",
+      `mc-wallet:encrypted-store:${vaultKey}`,
+    );
+
+    await encrypted.write({ revision: 2 }, "correct horse battery staple");
+    await store.set(vaultKey, legacy as never);
+    await expect(encrypted.read("correct horse battery staple")).rejects.toThrow(
+      "Encrypted store rollback detected",
+    );
+  });
+
+  test("recovers every interrupted v2-to-v3 migration write", async () => {
+    for (const failAt of [1, 2, 3, 4]) {
+      const backend = createMemoryStore();
+      const freshnessBackend = createMemoryStore();
+      let writes = 0;
+      let armed = false;
+      const faulting = (target: KeyValueStore): KeyValueStore => ({
+        get: (key) => target.get(key),
+        remove: (key) => target.remove(key),
+        async set(key, value) {
+          writes += 1;
+          if (armed && writes === failAt) {
+            armed = false;
+            throw new Error(`injected migration write ${failAt}`);
+          }
+          await target.set(key, value);
+        },
+      });
+      const encrypted = createEncryptedStore(
+        faulting(backend),
+        vaultKey,
+        faulting(freshnessBackend),
+      );
+      const legacy = await legacyEnvelope(
+        { schemaVersion: 1 },
+        "correct horse battery staple",
+        `mc-wallet:encrypted-store:${vaultKey}`,
+      );
+      await backend.set(vaultKey, legacy as never);
+      armed = true;
+
+      await expect(encrypted.upgradeLegacyEnvelope("correct horse battery staple")).rejects.toThrow(
+        `injected migration write ${failAt}`,
+      );
+      await expect(encrypted.read("correct horse battery staple")).resolves.toEqual({
+        schemaVersion: 1,
+      });
+    }
+  });
+
+  test("rejects v2 when its store-wide marker has lost commit state", async () => {
+    const store = createMemoryStore();
+    const freshness = createMemoryStore();
+    const encrypted = createEncryptedStore(store, vaultKey, freshness);
+    const legacy = await legacyEnvelope(
+      { revision: 1 },
+      "correct horse battery staple",
+      `mc-wallet:encrypted-store:${vaultKey}`,
+    );
+    await store.set(vaultKey, legacy as never);
+    await encrypted.upgradeLegacyEnvelope("correct horse battery staple");
+    const upgraded = await store.get(vaultKey);
+    if (!isEncryptedEnvelope(upgraded) || upgraded.version !== 3) {
+      throw new Error("upgrade did not persist a committed envelope");
+    }
+
+    await freshness.remove(`${vaultKey}:commit:${upgraded.lineage}`);
+    await store.set(vaultKey, legacy as never);
+    await expect(encrypted.read("correct horse battery staple")).rejects.toThrow(
+      "Encrypted store rollback detected",
+    );
   });
 });

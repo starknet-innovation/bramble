@@ -44,14 +44,15 @@ describe("createApprovalQueue", () => {
     expect(queue.list()).toEqual([]);
   });
 
-  test("removes approved and denied requests", () => {
+  test("claims requests exactly once", () => {
     const queue = createApprovalQueue();
     const approved = queue.request("https://approve.example");
     const denied = queue.request("https://deny.example");
 
-    expect(queue.approve("not-a-uuid")).toBeNull();
-    expect(queue.approve(approved.id)).toEqual(approved);
-    expect(queue.deny(denied.id)).toEqual(denied);
+    expect(queue.claim("not-a-uuid")).toBeNull();
+    expect(queue.claim(approved.id)?.approval).toEqual(approved);
+    expect(queue.claim(approved.id)).toBeNull();
+    expect(queue.claim(denied.id)?.approval).toEqual(denied);
     expect(queue.list()).toEqual([]);
   });
 
@@ -80,8 +81,10 @@ describe("createApprovalQueue", () => {
     }
 
     expect(queue.request("https://app-0.example")).toEqual(first);
-    expect(() => queue.request("https://overflow.example")).toThrow("Too many pending approvals");
+    const overflow = queue.request("https://overflow.example");
     expect(queue.list()).toHaveLength(MAX_PENDING_APPROVALS);
+    expect(queue.get(first.id)).toBeNull();
+    expect(queue.get(overflow.id)).toEqual(overflow);
   });
 
   test("queues watch-asset prompts per origin and token", () => {

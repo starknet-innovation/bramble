@@ -152,6 +152,33 @@ describe("NFT send review", () => {
     expect(app.querySelector("#nft-review-panel")?.textContent).toContain("Submitted to Starknet");
   });
 
+  test("echoes separate undeployed-account fee ceilings into NFT submission", async () => {
+    const { app, calls } = mount({
+      deploymentFee: { overallFee: "2000", unit: "FRI" },
+      deploymentFeeEstimateFailed: false,
+      fee: { overallFee: "1000", unit: "FRI" },
+      feeAffordability: "ok",
+      feeEstimateFailed: false,
+      flags: [],
+      requiresDeployment: true,
+      summaries: ["Deploy + send NFT #5"],
+    });
+    recipientInput(app).value = RECIPIENT;
+
+    submit(app);
+    await flush();
+    expect(app.querySelector("#nft-review-panel")?.textContent).toContain(
+      "Estimated account deployment fee",
+    );
+    submit(app);
+    await flush();
+
+    expect(calls.transfer[0]?.slice(-2)).toEqual([
+      { overallFee: "1000", unit: "FRI" },
+      { overallFee: "2000", unit: "FRI" },
+    ]);
+  });
+
   test("editing the recipient invalidates the completed review", async () => {
     const { app, calls } = mount();
     const input = recipientInput(app);

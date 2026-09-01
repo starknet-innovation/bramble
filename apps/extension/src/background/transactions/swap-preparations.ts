@@ -5,12 +5,13 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
+import { isSha256Digest } from "@mc-wallet/core/ids";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { Call } from "starknet";
 import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalRiskFlag } from "../approvals/approvals";
 
 const MAX_SWAP_PREPARATIONS = 20;
-const PREPARATION_ID_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 /**
  * Frozen swap execution and review metadata held only by the background.
@@ -23,6 +24,12 @@ export type SwapPreparation = {
   readonly context: ApprovalContext;
   readonly flags: readonly ApprovalRiskFlag[];
   readonly id: string;
+  // The minimum output the frozen route actually carries, decoded from its
+  // calldata by the build policy — a decimal display string. It travels with
+  // the preparation so the confirm card states the figure the transaction
+  // enforces rather than one the panel computed alongside it.
+  readonly minBuyAmount: string;
+  readonly reviewedFee: FeeEstimate;
   readonly sellSymbol: string;
   readonly summaries: readonly string[];
 };
@@ -33,7 +40,9 @@ export type SwapPreparation = {
 export type SwapPreparationReview = {
   readonly flags: readonly ApprovalRiskFlag[];
   readonly id: string;
+  readonly minBuyAmount: string;
   readonly payloadDigest: string;
+  readonly reviewedFee: FeeEstimate;
   readonly summaries: readonly string[];
 };
 
@@ -51,6 +60,8 @@ export const swapPreparationPayload = (
   buySymbol: preparation.buySymbol,
   calls: preparation.calls,
   flags: preparation.flags,
+  minBuyAmount: preparation.minBuyAmount,
+  reviewedFee: preparation.reviewedFee,
   sellSymbol: preparation.sellSymbol,
   summaries: preparation.summaries,
 });
@@ -71,7 +82,7 @@ export const createSwapPreparationStore = (): SwapPreparationStore => {
   const pending = new Map<string, SwapPreparation>();
   return {
     claim(id) {
-      if (!PREPARATION_ID_PATTERN.test(id)) {
+      if (!isSha256Digest(id)) {
         return null;
       }
       const preparation = pending.get(id);
@@ -83,7 +94,7 @@ export const createSwapPreparationStore = (): SwapPreparationStore => {
     },
     put(preparation) {
       const copy = clonePreparation(preparation);
-      if (!PREPARATION_ID_PATTERN.test(copy.id) || copy.id !== copy.context.payloadDigest) {
+      if (!isSha256Digest(copy.id) || copy.id !== copy.context.payloadDigest) {
         throw new WalletError("Invalid swap preparation commitment");
       }
       pending.set(copy.id, copy);
@@ -97,7 +108,9 @@ export const createSwapPreparationStore = (): SwapPreparationStore => {
       return {
         flags: copy.flags.map((flag) => ({ ...flag })),
         id: copy.id,
+        minBuyAmount: copy.minBuyAmount,
         payloadDigest: copy.context.payloadDigest,
+        reviewedFee: { ...copy.reviewedFee },
         summaries: [...copy.summaries],
       };
     },

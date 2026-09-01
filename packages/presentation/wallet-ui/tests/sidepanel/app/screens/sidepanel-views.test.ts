@@ -1,8 +1,4 @@
-/**
- * Side panel template checks: dock screens share the shell, flow screens are
- * dedicated goal journeys with back navigation, and wallet flows stay
- * separated.
- */
+/** Side-panel template and navigation contract checks. */
 import { describe, expect, test } from "bun:test";
 import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
 import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
@@ -47,8 +43,8 @@ describe("sidepanel views", () => {
     expect(dock).not.toContain('data-view="receive"');
     expect(html).toContain('aria-controls="wallet-screen-home"');
     expect(html).toContain('aria-selected="true"');
-    expect(dock).toContain('class="nav-tooltip"');
-    expect(dock).not.toContain('class="tab-label"');
+    expect(dock).toContain('class="nav-label"');
+    expect(dock).not.toContain('class="nav-tooltip"');
   });
 
   test("home keeps the frequent actions together, not settings or activity", () => {
@@ -73,9 +69,9 @@ describe("sidepanel views", () => {
 
     expect(html).toContain('id="wallet-screen-receive"');
     expect(html).toContain(account.address);
+    expect(html).toContain(`data-copy="${account.publicKeyX}"`);
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
-    expect(html).not.toContain("wallet-dock");
-    expect(html).not.toContain('role="tablist"');
+    expect(html).not.toMatch(/wallet-dock|role="tablist"/);
     expect(html).not.toContain('id="lock-button"');
   });
 
@@ -87,7 +83,10 @@ describe("sidepanel views", () => {
     expect(html).toContain('data-view="address-book"');
     expect(html).toContain('data-view="appearance"');
     expect(html).toContain('data-view="request-settings"');
-    expect(html).toContain('data-view="security"');
+    expect(html).toContain('data-view="connected-sites"');
+    expect(html).toContain('data-view="allowances"');
+    expect(html).toContain('data-view="backup"');
+    expect(html).toContain('data-view="reveal"');
     expect(html).not.toContain('id="active-network"');
     expect(html).not.toContain('id="active-account"');
     expect(html).not.toContain('data-theme-id="dark"');
@@ -144,7 +143,11 @@ describe("sidepanel views", () => {
 
   test("lets the activity screen approve or deny each request by id", () => {
     const pending = [
-      { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", origin: "https://dapp.example" },
+      {
+        id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
+        kind: "connect" as const,
+        origin: "https://dapp.example",
+      },
     ];
     const html = dashboard("activity", status, pending, preferences, { balances: [] });
 
@@ -161,11 +164,9 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="swap-sell-amount"');
     expect(html).toContain('id="swap-flip"');
     expect(html).toContain('id="swap-review"');
-    // Confirm and success stages ship hidden; the bindings stage them. The
-    // success moment carries the drawn ring + check marks.
     expect(html).toMatch(/id="swap-confirm" hidden/);
-    // The quote-sanity warning slot ships hidden; the bindings surface it when
-    // a route returns materially less value than it costs.
+    expect(html).toContain('<div id="swap-confirm-receipt"></div>');
+    expect(html).not.toMatch(/<dl[^>]*id="swap-confirm-receipt"/);
     expect(html).toMatch(/id="swap-warning"[^>]*hidden/);
     expect(html).toMatch(/id="swap-success"[^>]*hidden/);
     expect(html).toContain('class="swap-success-ring"');
@@ -181,15 +182,14 @@ describe("sidepanel views", () => {
     expect(html).toMatch(/id="send-review-button" type="submit" disabled/);
   });
 
-  test("shows a deploy chip only when the account is not deployed", () => {
+  test("shows a deployment recovery chip only when the account is not deployed", () => {
     const undeployed = dashboard("home", status, [], preferences, { balances: [] }, false);
     const deployed = dashboard("home", status, [], preferences, { balances: [] }, true);
     const unknown = dashboard("home", status, [], preferences, { balances: [] }, null);
 
-    expect(undeployed).toContain('id="deploy-button"');
-    expect(undeployed).toContain("Not deployed");
-    expect(deployed).not.toContain('id="deploy-button"');
-    expect(unknown).not.toContain('id="deploy-button"');
+    expect(undeployed).toContain('class="deploy-notice"');
+    expect(deployed).not.toContain('class="deploy-notice"');
+    expect(unknown).not.toContain('class="deploy-notice"');
   });
 
   test("deploying stays disabled until the account can pay the fee in STRK", () => {
@@ -207,20 +207,27 @@ describe("sidepanel views", () => {
     const empty = dashboard("home", status, [], preferences, { balances: [] }, false);
     const funded = dashboard("home", status, [], preferences, { balances: [strkBalance] }, false);
 
-    // An empty account can only produce a failed fee estimate, so the action is
-    // present (the state still needs stating) but not actionable.
-    expect(empty).toMatch(/id="deploy-button"[^>]*disabled/);
-    expect(empty).toContain("Not deployed — receive STRK first");
-    expect(funded).toMatch(/id="deploy-button"(?![^>]*disabled)/);
-    expect(funded).toContain("Not deployed — deploy now");
+    expect(empty).toContain('data-view="receive"');
+    expect(empty).toContain("Fund with STRK");
+    expect(funded).toContain('data-view="deploy-account"');
+    expect(funded).toContain("Deploy account");
+  });
+
+  test("deploys a single-signer account in a dedicated transaction flow", () => {
+    const html = dashboard("deploy-account", status, [], preferences, { balances: [] }, false);
+    expect(html).toContain('id="wallet-screen-deploy-account"');
+    expect(html).toContain('id="deploy-review-stage"');
+    expect(html).toContain("What will happen");
+    expect(html).toContain("Risk and recovery");
+    expect(html).toContain("Review deployment");
+    expect(html).toMatch(/id="deploy-success"[^>]*hidden/);
+    expect(html).not.toContain("wallet-dock");
   });
 
   test("send flow reviews before it sends, without a fee-speed control", () => {
     const html = dashboard("send", status, [], preferences, { balances: [] });
 
     expect(html).toContain('id="review-panel"');
-    // No speed choice is offered and none is submitted: every send used the
-    // node's standard fee anyway, so the control said nothing.
     expect(html).not.toContain('name="speed"');
     expect(html).not.toContain(">Speed<");
     expect(html).toContain("Review send");
@@ -243,7 +250,7 @@ describe("sidepanel views", () => {
       },
     ]);
 
-    expect(html).toContain('class="tx-status accepted"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-transfer accepted"');
     expect(html).toContain("Send 1.5 ETH to");
     expect(html).toContain('id="activity-export"');
     expect(html).toContain('id="activity-refresh"');
@@ -399,7 +406,7 @@ describe("sidepanel views", () => {
     expect(backupExport).toContain('id="backup-export"');
     const backupRestore = dashboard("backup-restore", status, [], preferences, { balances: [] });
     expect(backupRestore).toContain('id="backup-import"');
-    expect(backupRestore).toContain('id="backup-file"');
+    expect(backupRestore).toContain("Saved contacts and tracked assets");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain('class="wallet-dock"');
   });
@@ -409,16 +416,8 @@ describe("sidepanel views", () => {
 
     expect(html).toContain('id="new-account"');
     expect(html).toContain("Add account");
-  });
-
-  test("settings links to the reveal-secrets flow", () => {
-    expect(WALLET_VIEWS).toContain("reveal");
-    const html = dashboard("settings", status, [], preferences, { balances: [] });
-
-    expect(html).toContain('data-view="security"');
-    const security = dashboard("security", status, [], preferences, { balances: [] });
-    expect(security).toContain('data-view="reveal"');
-    expect(security).toContain("Reveal recovery secrets");
+    expect(html).toContain("Signer public key");
+    expect(html).toContain(`data-copy="${account.publicKeyX}"`);
   });
 
   test("reveal flow re-authenticates and masks secrets until tapped", () => {
@@ -439,9 +438,9 @@ describe("sidepanel views", () => {
 
   test("reveal flow warns that the recovery phrase does not restore an imported active account", () => {
     // A raw-key-imported account is not derived from the wallet phrase; the
-    // screen must say so, using only the provenance already in status (never a
-    // secret), so a user does not wrongly trust the phrase as its backup.
+    // screen must use only public provenance so users trust the right backup.
     const imported = {
+      accountContractType: "openzeppelin" as const,
       address: "0xa11ceded",
       classHash: account.classHash,
       derivation: { kind: "imported-raw-key" as const },
@@ -465,14 +464,15 @@ describe("sidepanel views", () => {
   });
 
   test("contacts can be removed from the address book flow", () => {
+    const contact = { address: "0x1", id: "c", label: "A", networkId: "SN_MAIN" as const };
     const withContact = {
       ...preferences,
-      addressBook: [
-        { address: "0x123", id: "SN_MAIN:0x123", label: "Ada", networkId: "SN_MAIN" as const },
-      ],
+      addressBook: [{ ...contact, publicKeyX: "0xabc" }],
     };
     const html = dashboard("address-book", status, [], withContact, { balances: [] });
-    expect(html).toContain('data-remove-address="SN_MAIN:0x123"');
+    expect(html).toContain(`data-remove-address="${contact.id}"`);
+    expect(html).toContain('name="publicKeyX"');
+    expect(html).toContain('data-copy="0xabc"');
   });
 
   test("renders balances as labelled token rows with a refresh control", () => {

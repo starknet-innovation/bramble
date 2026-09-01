@@ -9,6 +9,10 @@ import {
 } from "@mc-wallet/settings/preferences";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 
+// The stored spelling of "0x123": every entry address is canonicalized by the
+// shared id builder (MCW-V09-110), so the id is derived from this form.
+const CANONICAL_123 = `0x${"0".repeat(61)}123`;
+
 describe("createPreferencesStore", () => {
   test("creates default network, token, and address book preferences", async () => {
     const preferences = await createPreferencesStore({ store: createMemoryStore() }).read();
@@ -28,12 +32,26 @@ describe("createPreferencesStore", () => {
       address: "0x123",
       label: "Treasury",
       networkId: "SN_DEVNET",
+      publicKeyX: "0x000abc",
     });
 
+    // Stored in the one canonical spelling every entry id is derived from
+    // (MCW-V09-110), so a contact re-saved in another spelling of the same
+    // address replaces it rather than joining it.
     await expect(preferences.read()).resolves.toMatchObject({
       activeNetworkId: "SN_DEVNET",
-      addressBook: [{ address: "0x123", id: "SN_DEVNET:0x123", label: "Treasury" }],
+      addressBook: [
+        {
+          address: CANONICAL_123,
+          id: `SN_DEVNET:${CANONICAL_123}`,
+          label: "Treasury",
+          publicKeyX: "0xabc",
+        },
+      ],
     });
+
+    await preferences.saveAddress({ address: "0x123", label: "Vault", networkId: "SN_DEVNET" });
+    expect((await preferences.read()).addressBook[0]?.publicKeyX).toBe("0xabc");
   });
 
   test("rejects malformed stored preferences", async () => {
@@ -111,6 +129,19 @@ describe("createPreferencesStore", () => {
     await expect(
       preferences.setRpcOverride({ networkId: "SN_DEVNET", rpcUrl: "http://127.0.0.1:5050/rpc" }),
     ).resolves.toMatchObject({ rpcOverrides: { SN_DEVNET: "http://127.0.0.1:5050/rpc" } });
+  });
+
+  test("stores and clears a secure custom Nostr relay", async () => {
+    const preferences = createPreferencesStore({ store: createMemoryStore() });
+
+    await preferences.setNostrRelayUrl({ relayUrl: " wss://relay.team.example/multisig " });
+    expect((await preferences.read()).nostrRelayUrl).toBe("wss://relay.team.example/multisig");
+
+    await expect(preferences.setNostrRelayUrl({ relayUrl: "ws://relay.example" })).rejects.toThrow(
+      "Invalid Nostr relay endpoint",
+    );
+    await preferences.setNostrRelayUrl({ relayUrl: "" });
+    expect((await preferences.read()).nostrRelayUrl).toBeUndefined();
   });
 
   test("stores and clears complete per-network STRK20 service routing", async () => {
@@ -239,15 +270,17 @@ describe("createPreferencesStore", () => {
     await preferences.setDisplay({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      reliabilityDiagnostics: true,
       theme: "dark",
     });
     await preferences.saveAddress({ address: "0x123", label: "Ada", networkId: "SN_MAIN" });
-    await preferences.removeAddress("SN_MAIN:0x123");
+    await preferences.removeAddress(`SN_MAIN:${CANONICAL_123}`);
 
     const stored = await preferences.read();
     expect(stored.accountLabels?.[accountId]).toBe("Savings");
     expect(stored.approvalSurface).toBe("popup");
     expect(stored.displayCurrency).toBe("eur");
+    expect(stored.reliabilityDiagnostics).toBe(true);
     expect(stored.theme).toBe("dark");
     expect(stored.addressBook).toEqual([]);
 

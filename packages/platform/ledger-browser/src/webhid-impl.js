@@ -17,6 +17,7 @@ import TransportWebHID from "@ledgerhq/hw-transport-webhid";
 import TransportWebUSB from "@ledgerhq/hw-transport-webusb";
 import {
   exactLedgerDevice,
+  ledgerApduHidDevices,
   readLedgerOsAndRestoreStarknet,
 } from "@mc-wallet/ledger-protocol/device-transition";
 import { Buffer } from "buffer";
@@ -25,9 +26,10 @@ const deviceIds = new WeakMap();
 const knownDevices = new Map();
 let nextDeviceId = 0;
 
-// Ledger's APDU HID collection is vendor-defined usage page 0xFFA0. This
-// deliberately excludes the same Nano's FIDO collection at 0xF1D0.
-const ledgerHidUsagePage = 0xffa0;
+// Ledger's APDU HID collection (vendor-defined usage page 0xFFA0) is PREFERRED
+// when selecting among granted devices, never used to filter the chooser: see
+// `ledgerApduHidDevices`. A Ledger sitting in the Starknet app would otherwise
+// not appear in the picker at all.
 
 const transports = {
   hid: TransportWebHID,
@@ -186,7 +188,11 @@ const listedDevices = async (kind) => {
     return [];
   }
   try {
-    return await transports[kind].list();
+    const listed = await transports[kind].list();
+    // Ledger's transport lists by vendor id alone, so one physical Ledger can
+    // arrive as several collections. Preferring the APDU collection keeps a
+    // single device from reading as two and from binding its FIDO collection.
+    return kind === "hid" ? ledgerApduHidDevices(listed) : listed;
   } catch {
     return [];
   }
@@ -271,10 +277,17 @@ export const requestTransportRaw = async (kind) => {
     // requires requestDevice() to consume the transient activation from the
     // Connect click; even an innocent capability preflight can otherwise make
     // the picker disappear without presenting a device list.
+    // Vendor id only, matching Ledger's own WebHID transport. Adding the APDU
+    // usage page here hid a Ledger that had the Starknet app open — the very
+    // state the wallet asks the user to be in — while the same device showed up
+    // from the dashboard. The APDU collection is preferred below, after the
+    // picker has already shown every Ledger the user can physically see.
     const requestedDevices = navigator.hid.requestDevice({
-      filters: [{ vendorId: ledgerUSBVendorId, usagePage: ledgerHidUsagePage }],
+      filters: [{ vendorId: ledgerUSBVendorId }],
     });
-    const [device] = await requestedDevices;
+    // Chrome can return one entry per top-level collection for a single physical
+    // Ledger, so the first entry is not necessarily the APDU one.
+    const [device] = ledgerApduHidDevices(await requestedDevices);
     if (!device) {
       throw new DOMException("No Ledger selected", "NotFoundError");
     }

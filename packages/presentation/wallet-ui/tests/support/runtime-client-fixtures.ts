@@ -14,6 +14,7 @@ const ON_CHAIN = "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a
 // A compact guard-valid account used by response-wrapper tests. It remains
 // separate from the rendering fixture so these envelopes stay easy to read.
 export const account = {
+  accountContractType: "openzeppelin" as const,
   address: "0x123",
   classHash: "0xabc",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },
@@ -34,19 +35,23 @@ export const walletStatus = {
   hasVault: true,
   locked: false,
   network: "Starknet Sepolia",
-  networkId: "SN_SEPOLIA",
-  networks: [{ id: "SN_SEPOLIA", name: "Starknet Sepolia" }],
+  networkId: "SN_SEPOLIA" as const,
+  networks: [{ id: "SN_SEPOLIA" as const, name: "Starknet Sepolia" }],
   ready: true,
 };
 
+// The address is the canonical 64-hex-digit spelling and the id is the
+// `tokenConfigId` shape built from it: this fixture stands in for a row the
+// token store would have accepted, so a shorter spelling here would make the
+// shared corpus a counterexample to the popup's TokenBalance = TokenConfig rule.
 export const tokenBalance = {
-  address: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+  address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
   balance: "100",
   decimals: 6,
   formatted: "0.0001",
-  id: "SN_SEPOLIA:USDC:0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+  id: "SN_SEPOLIA:USDC:0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
   name: "USD Coin",
-  networkId: "SN_SEPOLIA",
+  networkId: "SN_SEPOLIA" as const,
   symbol: "USDC",
 };
 
@@ -78,7 +83,7 @@ export const connectedSitesResponse = {
 
 export const pendingApprovalsResponse = {
   ok: true as const,
-  pending: [{ id: APPROVAL_ID, origin: "https://example.com" }],
+  pending: [{ id: APPROVAL_ID, kind: "connect" as const, origin: "https://example.com" }],
 };
 
 export const accountsResponse = { accounts: [account], ok: true as const };

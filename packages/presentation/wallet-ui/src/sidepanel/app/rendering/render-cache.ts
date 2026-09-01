@@ -7,10 +7,8 @@
 
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { MultisigClassState } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
-import type { MultisigSyncState } from "../../journeys/multisig/multisig-sync";
 import { emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
 
 // The price snapshot as the runtime client returns it; the cache's price fields
@@ -33,8 +31,8 @@ export type RenderData = {
   allowances: Awaited<ReturnType<SidepanelWallet["loadAllowances"]>>;
   multisigs: LoadedMultisigs;
   multisigsError: boolean;
-  multisigSync: MultisigSyncState;
-  multisigClassDeclared: MultisigClassState | "error" | null;
+  multisigsNetworkId: string | null;
+  multisigClassDeclared: boolean | "error" | null;
   multisigBalanceId: string | null;
   multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
   multisigNftId: string | null;
@@ -62,10 +60,7 @@ export type RenderData = {
  * Empty account-scoped NFT lanes used on account/network switches so an old
  * gallery never flashes while fresh ownership proofs are in flight.
  */
-export const emptyNftCache = (): Pick<
-  RenderData,
-  "discoveredNfts" | "indexedNfts" | "watchedNfts"
-> => ({
+const emptyNftCache = (): Pick<RenderData, "discoveredNfts" | "indexedNfts" | "watchedNfts"> => ({
   discoveredNfts: [],
   indexedNfts: [],
   watchedNfts: [],
@@ -75,7 +70,7 @@ export const emptyNftCache = (): Pick<
  * Empty account-scoped activity lane used during account/network switches so
  * transactions and degraded-history state never flash under another account.
  */
-export const emptyActivityCache = (): Pick<RenderData, "historyUnavailable" | "transactions"> => ({
+const emptyActivityCache = (): Pick<RenderData, "historyUnavailable" | "transactions"> => ({
   historyUnavailable: false,
   transactions: [],
 });
@@ -105,8 +100,8 @@ export const updateRenderScope = (
           multisigClassDeclared: null,
           multisigNftId: null,
           multisigNfts: [],
-          multisigSync: null,
           multisigsError: false,
+          ...(networkChanged ? { multisigsNetworkId: null } : {}),
         }
       : {}),
   });
@@ -121,9 +116,9 @@ export const updateRenderScope = (
  */
 export const emptyRenderCache = (): RenderData => ({
   allowances: [],
-  multisigs: { multisigs: [], proposals: [] },
+  multisigs: { intents: [], multisigs: [] },
   multisigsError: false,
-  multisigSync: null,
+  multisigsNetworkId: null,
   multisigClassDeclared: null,
   multisigBalanceId: null,
   multisigBalances: { error: "multisig balances unavailable" },

@@ -113,13 +113,12 @@ const changeBadge = (change: number | undefined): string => {
 
 /**
  * Public/private split shown inside a unified row's dropdown. `unavailable`
- * covers both a failed discovery (with its message) and a network without
- * STRK20 configuration.
+ * stays terse; the copyable retry toast owns the diagnostic.
  */
 export type PrivateBreakdown =
   | { readonly kind: "loading" }
   | { readonly kind: "ready"; readonly balance: string; readonly formatted: string }
-  | { readonly kind: "unavailable"; readonly message: string }
+  | { readonly kind: "unavailable" }
   /** Registration broadcast, not yet visible to the privacy indexer. */
   | { readonly kind: "pending" }
   /**
@@ -163,7 +162,7 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
         ? "Discovering…"
         : breakdown.kind === "pending"
           ? "Registration pending…"
-          : `<span title="${escapeHtml(breakdown.message)}">Unavailable</span>`;
+          : "Unavailable";
   return `<div class="token-breakdown-row${breakdown.kind === "ready" ? "" : " muted"}">
       <span class="token-breakdown-label">${icon("lock")}Private balance</span>
       <span class="token-breakdown-value">${value}</span>
@@ -188,7 +187,7 @@ export const unifiedBalanceRow = (
   },
 ): string => {
   const fiat = tokenFiatValue(token.formatted, price);
-  return `<li class="token-row token-unified">
+  return `<li class="token-row token-unified" data-live-group>
     <details class="token-disclosure">
       <summary aria-label="Show ${escapeHtml(token.symbol)} balance breakdown">
         ${tokenGlyph(token.address, token.symbol)}
@@ -224,7 +223,7 @@ export const balanceRow = (
   options: { readonly private?: boolean } = {},
 ): string => {
   const fiat = tokenFiatValue(token.formatted, price);
-  return `<li class="token-row">
+  return `<li class="token-row" data-live-group>
     <button class="token-open" type="button" data-token-detail="${escapeHtml(token.id)}">
       ${tokenGlyph(token.address, token.symbol)}
       <div class="token-copy">

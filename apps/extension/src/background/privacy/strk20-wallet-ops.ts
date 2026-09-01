@@ -8,26 +8,34 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { type LedgerStrk20Intents, STRK20_SIGN_INTENTS } from "@mc-wallet/ledger-protocol/intent";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
-import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
 import {
+  prepareStrk20Registration,
   readStrk20Balances,
   readStrk20RegistrationStatus,
-  registerStrk20Account,
+  type Strk20SubmissionResult,
   submitStrk20Actions,
 } from "@mc-wallet/privacy/service";
-import { systemClock } from "@mc-wallet/transactions/activity";
-import { approvalPayloadMatchesContext, createApprovalContext } from "../approvals/approval-context";
+import { verificationContext } from "@mc-wallet/transactions/verify";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import {
+  approvalPayloadMatchesContext,
+  createApprovalContext,
+} from "../approvals/approval-context";
+import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { readTypeOnlyInput } from "../routing/message-inputs";
+import { activeAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
   assertPublicPoolSpendAffordable,
   errorText,
+  estimatePublicStrk20Fee,
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
+import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
 import { handleStrk20SendOps } from "./strk20-send-ops";
 import { needsViewingKeyCeremony, viewingKeyCustodyDisclosure } from "./strk20-viewing-key-state";
 import { readStrk20WalletExecuteInput } from "./strk20-wallet-inputs";
@@ -35,19 +43,16 @@ import {
   type Strk20WalletPreparation,
   strk20WalletPreparationPayload,
 } from "./strk20-wallet-preparations";
+import {
+  hasPendingRegistration,
+  STRK20_REGISTRATION_SUMMARY,
+  stateResponse,
+} from "./strk20-wallet-state";
 
 /**
  * Re-exported deps type so existing wiring keeps one import site.
  */
 export type { Strk20WalletOpsDeps } from "./strk20-op-context";
-
-/**
- * Activity summary recorded for a pool registration. Exported because the
- * pending-registration derivation below matches on it: that entry is the only
- * durable local record that a registration was broadcast, so the string is
- * load-bearing in two places and must never be duplicated as a literal.
- */
-export const STRK20_REGISTRATION_SUMMARY = "Activate private balances";
 
 /**
  * How long a broadcast registration is trusted over the privacy indexer. The
@@ -56,133 +61,15 @@ export const STRK20_REGISTRATION_SUMMARY = "Activate private balances";
  * attempt that truly never landed leaves the user able to retry rather than
  * locked out of the flow forever.
  */
-const REGISTRATION_PENDING_WINDOW_MS = 30 * 60_000;
 
-// A registration the privacy indexer cannot see yet. Derived from the activity
-// log rather than stored separately: the registration is already recorded there
-// with its hash, and background reconciliation already advances that entry, so a
-// rejected or reverted attempt drops out of this check on its own.
-const hasPendingRegistration = async (
-  deps: Strk20WalletOpsDeps,
-  context: ActivePrivacyContext,
-): Promise<boolean> => {
-  const now = (deps.now ?? systemClock)();
-  const entries = await deps.activity.list();
-  return entries.some(
-    (entry) =>
-      entry.summary === STRK20_REGISTRATION_SUMMARY &&
-      entry.accountId === context.accountContext.account.id &&
-      entry.networkId === context.accountContext.account.networkId &&
-      entry.status !== "rejected" &&
-      entry.status !== "reverted" &&
-      now - entry.submittedAt < REGISTRATION_PENDING_WINDOW_MS,
-  );
-};
-
-// The fee is a hard input to every pool route, and it is readable without the
-// viewing key. Returning a state without it leaves Send in an endless "Checking",
-// so an unavailable reader or a failed read rejects the whole request.
-const requirePoolFee = async (
-  service: ReturnType<typeof strk20ServiceForRuntime>,
-  context: ActivePrivacyContext,
-): Promise<string> => {
-  if (!service.poolFee) {
-    throw new Error("Private pool fee is unavailable. Retry the balance check.");
-  }
-  return service.poolFee(context.accountContext);
-};
-
-const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
-  // Reads only. Registration is named because it is the one action this surface
-  // offers an account that has none, and no read reaches a signer.
-  const context = await resolvePrivacyContext(deps, STRK20_SIGN_INTENTS.register);
-  if ("error" in context) {
-    return { error: context.error };
-  }
-  try {
-    const service = strk20ServiceForRuntime(deps.runtimeRpc);
-    // Every private read below needs the viewing key. A Ledger account that has
-    // not run the device ceremony for this pool has none, which is a recoverable
-    // setup state, not a failure — answer with it instead of attempting reads
-    // that would all fail, and report no balances rather than implying zero.
-    if (await needsViewingKeyCeremony(context)) {
-      // Registration still has to be read, and read from the pool directly: an
-      // account restored from its phrase or re-added on a new device is already
-      // registered on chain while holding no key locally. Reporting it as
-      // unregistered offered to register a second time, which the pool refuses —
-      // the account needs its key derived, not another registration.
-      return {
-        ok: true,
-        strk20State: {
-          accountId: context.accountContext.account.id,
-          balances: [],
-          networkId: context.accountContext.account.networkId,
-          poolFeeFri: await requirePoolFee(service, context),
-          registration: await readStrk20RegistrationStatus(service, {
-            ...context.accountContext,
-            subject: context.accountContext.account.address,
-            token: context.token.address,
-          }),
-          relayConfigured: context.accountContext.config?.paymaster !== undefined,
-          privateBalances: "setup-required",
-        },
-      };
-    }
-    const status = await readStrk20RegistrationStatus(service, {
-      ...context.accountContext,
-      token: context.token.address,
-    });
-    // An accepted-but-unindexed registration reads as `pending` rather than
-    // `unregistered`, so no surface offers to register a second time while the
-    // first one is still settling.
-    const registration =
-      status === "registered"
-        ? "registered"
-        : (await hasPendingRegistration(deps, context))
-          ? "pending"
-          : "unregistered";
-    const balances =
-      registration === "registered"
-        ? await readStrk20Balances(strk20ServiceForRuntime(deps.runtimeRpc), {
-            ...context.accountContext,
-            tokens: context.preferences.tokens
-              .filter((token) => token.networkId === context.accountContext.account.networkId)
-              .map((token) => token.address),
-          })
-        : [];
-    const poolFeeFri = await requirePoolFee(service, context);
-    return {
-      ok: true,
-      strk20State: {
-        accountId: context.accountContext.account.id,
-        balances: balances.map((entry) => {
-          const token = context.preferences.tokens.find(
-            (candidate) =>
-              candidate.networkId === context.accountContext.account.networkId &&
-              sameFelt(candidate.address, entry.token),
-          );
-          return {
-            balance: entry.balance,
-            formatted: token ? formatTokenAmount(BigInt(entry.balance), token.decimals) : "0",
-            symbol: token?.symbol ?? "Token",
-            token: entry.token,
-            tokenId: token?.id ?? "",
-          };
-        }),
-        networkId: context.accountContext.account.networkId,
-        poolFeeFri,
-        relayConfigured: context.accountContext.config?.paymaster !== undefined,
-        registration,
-        privateBalances: "ready",
-      },
-    };
-  } catch (error) {
-    return { error: errorText(error, "Private balances unavailable") };
-  }
-};
+export { STRK20_REGISTRATION_SUMMARY } from "./strk20-wallet-state";
 
 const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
-  const context = await resolvePrivacyContext(deps, STRK20_SIGN_INTENTS.register);
+  // User-initiated: the user pressed "activate private balances".
+  const context = await resolvePrivacyContext(deps, {
+    active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    intents: STRK20_SIGN_INTENTS.register,
+  });
   if ("error" in context) {
     return { error: context.error };
   }
@@ -217,8 +104,15 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
     }
     const poolFeeFri = await service.poolFee(context.accountContext);
     await assertPublicPoolSpendAffordable(deps, context, poolFeeFri);
+    const prepared = await prepareStrk20Registration(service, {
+      ...context.accountContext,
+      poolFeeFri,
+    });
+    const networkFee = await estimatePublicStrk20Fee(deps, context, prepared.calls, prepared.proof);
     const unsigned = {
+      ...prepared,
       kind: "register" as const,
+      networkFee,
       poolAddress: config.poolAddress,
       poolFeeFri,
       summaries: [
@@ -311,21 +205,48 @@ const executePreparation = async (
   if (!preparation) {
     return { error: "Privacy preparation not found" };
   }
-  const context = await resolvePrivacyContext(
-    deps,
-    signIntentsFor(preparation.kind),
-    preparation.token.id,
-  );
+  // User-initiated: the user confirmed a reviewed preparation.
+  const context = await resolvePrivacyContext(deps, {
+    active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    intents: signIntentsFor(preparation.kind),
+    tokenId: preparation.token.id,
+  });
   if ("error" in context) {
     return { error: context.error };
   }
   if (!(await preparationStillMatches(preparation, context))) {
     return { error: "Privacy preparation changed" };
   }
+  // Re-applied after review, exactly as the dapp-facing invoke re-applies it
+  // after consent: the contact this recipient mimics may have been saved while
+  // the confirmation was on screen, and this is the last point before the batch
+  // is proved and relayed. A registration names no recipient.
+  const refusal =
+    preparation.kind === "register"
+      ? null
+      : refusePoisonedStrk20Actions(
+          context.accountContext.account,
+          context.preferences,
+          preparation.actions,
+        );
+  if (refusal) {
+    return refusal;
+  }
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
     const result = await submitPreparation(deps, service, preparation, context);
-    await deps.activity.record({
+    // Entering the pool approves it to pull the deposit and its fee from the
+    // account's PUBLIC balance, so those grants are tracked exactly like any
+    // other approval this wallet submits — see `Strk20SubmissionResult`. Filed
+    // BEFORE the activity line so a failing activity write cannot lose the
+    // record of a grant that is already on chain.
+    await recordApproveAllowances({
+      assets: verificationContext(context.accountContext.account, context.preferences),
+      calls: result.allowanceGrants ?? [],
+      owner: allowanceOwner(context.accountContext.account),
+      store: deps.allowanceStore,
+    });
+    await recordSubmittedActivity(deps.activity, {
       accountId: context.accountContext.account.id,
       ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
       hash: result.transactionHash,
@@ -345,12 +266,12 @@ const submitPreparation = async (
   service: ReturnType<typeof strk20ServiceForRuntime>,
   preparation: Strk20WalletPreparation,
   context: ActivePrivacyContext,
-): Promise<{ readonly transactionHash: string }> => {
+): Promise<Strk20SubmissionResult> => {
   if (preparation.kind === "deposit") {
     return submitPreparedDeposit(deps, service, preparation, context);
   }
   if (preparation.kind === "transfer" || preparation.kind === "withdraw") {
-    return submitPreparedPrivateBatch(service, preparation, context);
+    return submitPreparedPrivateBatch(deps, service, preparation, context);
   }
   const registration = await readStrk20RegistrationStatus(service, {
     ...context.accountContext,
@@ -360,10 +281,13 @@ const submitPreparation = async (
     throw new Error("Private balances are already active");
   }
   await assertPublicPoolSpendAffordable(deps, context, preparation.poolFeeFri);
-  return registerStrk20Account(service, {
+  const result = await service.submitPrepared({
     ...context.accountContext,
-    poolFeeFri: preparation.poolFeeFri,
+    calls: preparation.calls,
+    proof: preparation.proof,
+    reviewedFee: preparation.networkFee,
   });
+  return { allowanceGrants: preparation.allowanceGrants, ...result };
 };
 
 // A third-party private credit can only be encoded for a recipient whose
@@ -388,14 +312,30 @@ const assertRecipientRegistration = async (
   }
 };
 
+const assertCurrentRecipientPolicy = async (
+  deps: Strk20WalletOpsDeps,
+  preparation: Exclude<Strk20WalletPreparation, { readonly kind: "register" }>,
+  context: ActivePrivacyContext,
+): Promise<void> => {
+  const refusal = refusePoisonedStrk20Actions(
+    context.accountContext.account,
+    await deps.preferencesStore.read(),
+    preparation.actions,
+  );
+  if (refusal) {
+    throw new WalletError(refusal.error);
+  }
+};
+
 // Transfers and withdrawals share their submission guard: both spend shielded
 // balance through the relay, so both re-check registration and the balance at
 // submit time rather than trusting the reviewed preparation.
 const submitPreparedPrivateBatch = async (
+  deps: Strk20WalletOpsDeps,
   service: ReturnType<typeof strk20ServiceForRuntime>,
   preparation: Extract<Strk20WalletPreparation, { readonly kind: "transfer" | "withdraw" }>,
   context: ActivePrivacyContext,
-): Promise<{ readonly transactionHash: string }> => {
+): Promise<Strk20SubmissionResult> => {
   const registration = await readStrk20RegistrationStatus(service, {
     ...context.accountContext,
     token: context.token.address,
@@ -413,11 +353,12 @@ const submitPreparedPrivateBatch = async (
   return submitStrk20Actions(service, {
     ...context.accountContext,
     actions: preparation.actions,
-    ...(preparation.kind === "transfer"
-      ? {
-          beforeProof: () => assertRecipientRegistration(service, preparation.recipient, context),
-        }
-      : {}),
+    beforeProof: async () => {
+      if (preparation.kind === "transfer") {
+        await assertRecipientRegistration(service, preparation.recipient, context);
+      }
+      await assertCurrentRecipientPolicy(deps, preparation, context);
+    },
     plan: preparation.plan,
   });
 };
@@ -427,7 +368,7 @@ const submitPreparedDeposit = async (
   service: ReturnType<typeof strk20ServiceForRuntime>,
   preparation: Extract<Strk20WalletPreparation, { readonly kind: "deposit" }>,
   context: ActivePrivacyContext,
-): Promise<{ readonly transactionHash: string }> => {
+): Promise<Strk20SubmissionResult> => {
   if (preparation.plan.mode !== "account") {
     throw new Error("Shielding route changed");
   }
@@ -444,12 +385,15 @@ const submitPreparedDeposit = async (
   if (registration !== "registered") {
     throw new Error("Private registration is no longer active");
   }
-  return submitStrk20Actions(service, {
+  await assertRecipientRegistration(service, preparation.recipient, context);
+  await assertCurrentRecipientPolicy(deps, preparation, context);
+  const result = await service.submitPrepared({
     ...context.accountContext,
-    actions: preparation.actions,
-    beforeProof: () => assertRecipientRegistration(service, preparation.recipient, context),
-    plan: preparation.plan,
+    calls: preparation.calls,
+    proof: preparation.proof,
+    reviewedFee: preparation.networkFee,
   });
+  return { allowanceGrants: preparation.allowanceGrants, ...result };
 };
 
 /**

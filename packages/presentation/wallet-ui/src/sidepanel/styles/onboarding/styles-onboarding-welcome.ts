@@ -20,19 +20,19 @@ export const ONBOARDING_WELCOME_STYLES = `
     display: flex;
     flex: 1;
     justify-content: center;
-    min-height: 330px;
+    min-height: 400px;
     position: relative;
-    width: min(100%, 330px);
+    width: min(100%, 400px);
   }
   .orbit-field {
-    --orbit-core-size: 146px;
-    --orbit-inner-size: 178px;
-    --orbit-middle-size: 214px;
-    --orbit-outer-size: 286px;
-    --orbit-wide-size: 250px;
-    height: 330px;
+    --orbit-core-size: 150px;
+    --orbit-inner-size: 200px;
+    --orbit-middle-size: 250px;
+    --orbit-outer-size: 350px;
+    --orbit-wide-size: 300px;
+    height: 400px;
     position: relative;
-    width: 330px;
+    width: 400px;
   }
   .orbit-ring {
     border-radius: ${RADIUS.full};
@@ -199,6 +199,17 @@ export const ONBOARDING_WELCOME_STYLES = `
   }
   @media (hover: hover) and (pointer: fine) {
     .onboarding-launch:hover { color: var(--mc-text); }
+  }
+  @media (max-width: 400px) {
+    .orbit-field {
+      --orbit-core-size: min(150px, calc(100vw - 224px));
+      --orbit-inner-size: min(200px, calc(100vw - 180px));
+      --orbit-middle-size: min(250px, calc(100vw - 136px));
+      --orbit-outer-size: min(350px, calc(100vw - 48px));
+      --orbit-wide-size: min(300px, calc(100vw - 92px));
+      height: 100vw;
+      width: 100vw;
+    }
   }
   @media (max-height: 760px) {
     .onboarding-orbit { min-height: 260px; transform: scale(0.88); }

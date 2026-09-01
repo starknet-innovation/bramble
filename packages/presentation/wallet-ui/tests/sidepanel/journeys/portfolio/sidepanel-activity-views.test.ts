@@ -4,7 +4,8 @@
  * history while retaining a clear route to review them.
  */
 import { describe, expect, test } from "bun:test";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
+import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { account } from "@mc-wallet/testkit/sidepanel";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
@@ -28,6 +29,7 @@ const status: WalletStatus = {
 const pending: readonly PendingApproval[] = [
   {
     id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
+    kind: "connect",
     origin: "https://dapp.example",
   },
 ];
@@ -42,20 +44,21 @@ const transaction: ActivityEntry = {
   summary: "Send 1 STRK",
 };
 
-const multisig: MultisigRecord = {
+const multisig: ArgentMultisigRecord = {
+  accountContractType: "argent-multisig",
   address: "0x999",
+  classHash: ARGENT_MULTISIG_CONTRACT.classHash,
   id: "SN_MAIN:0x999",
   name: "Treasury",
   networkId: "SN_MAIN",
-  quorum: 1,
-  signers: [account.address],
 };
 
 describe("activity journey boundaries", () => {
   test("keeps dApp decision controls out of account transaction history", () => {
     const html = activityScreen(pending, status, [transaction], false);
 
-    expect(html).toContain("Only Starknet Mainnet activity for the active account.");
+    expect(html).toContain('<h1 aria-label="Activity on Starknet Mainnet">Activity</h1>');
+    expect(html).not.toContain("Only Starknet Mainnet activity");
     expect(html).toContain("Send 1 STRK");
     expect(html).toContain('data-view="requests"');
     expect(html).toContain("1");
@@ -73,16 +76,51 @@ describe("activity journey boundaries", () => {
     expect(html).not.toContain('class="tx-list"');
   });
 
-  test("offers an outbound explorer link beside the copy control", () => {
+  test("uses the transaction summary as the sole explorer action", () => {
     const html = activityScreen(pending, status, [transaction], false);
 
     expect(html).toContain('href="https://starkscan.co/tx/0x123"');
-    expect(html).toContain('data-tx-explorer="0x123"');
-    expect(html).toContain("View transaction on Starkscan");
+    expect(html).toContain('class="tx-summary-link"');
+    expect(html).toContain('aria-label="Send 1 STRK. accepted. View transaction on Starkscan"');
     // A new browsing context, never one that can reach back into the panel.
     expect(html).toContain('target="_blank" rel="noopener noreferrer"');
-    // The copy control stays: the link is additive.
-    expect(html).toContain('data-copy="0x123"');
+    expect(html).not.toContain('data-copy="0x123"');
+    expect(html).not.toContain("0x123…0x123");
+  });
+
+  test("uses distinct accessible glyphs for common transaction outcomes", () => {
+    const html = activityScreen(
+      [],
+      status,
+      [
+        transaction,
+        { ...transaction, hash: "0x124", kind: "invoke", summary: "Swap 1 STRK for USDC" },
+        { ...transaction, hash: "0x125", kind: "invoke", summary: "Stake 10 STRK" },
+        { ...transaction, hash: "0x126", kind: "invoke", summary: "Unstake 10 STRK" },
+        { ...transaction, hash: "0x127", kind: "invoke", summary: "Claim rewards" },
+        { ...transaction, hash: "0x128", kind: "invoke", summary: "Private transfer 5 USDC" },
+      ],
+      false,
+    );
+
+    expect(html).toContain(
+      'class="tx-kind-icon tx-kind-transfer accepted" aria-label="Transfer, accepted"',
+    );
+    expect(html).toContain(
+      'class="tx-kind-icon tx-kind-swap accepted" aria-label="Swap, accepted"',
+    );
+    expect(html).toContain(
+      'class="tx-kind-icon tx-kind-stake accepted" aria-label="Stake, accepted"',
+    );
+    expect(html).toContain(
+      'class="tx-kind-icon tx-kind-unstake accepted" aria-label="Unstake, accepted"',
+    );
+    expect(html).toContain(
+      'class="tx-kind-icon tx-kind-reward accepted" aria-label="Claim rewards, accepted"',
+    );
+    expect(html).toContain(
+      'class="tx-kind-icon tx-kind-private accepted" aria-label="Private transaction, accepted"',
+    );
   });
 
   test("omits the explorer link on a network that has none", () => {
@@ -91,7 +129,8 @@ describe("activity journey boundaries", () => {
 
     expect(html).not.toContain("data-tx-explorer");
     expect(html).not.toContain("starkscan.co");
-    expect(html).toContain('data-copy="0x123"');
+    expect(html).not.toContain('data-copy="0x123"');
+    expect(html).toContain('<span class="sr-only">. accepted.</span>');
   });
 
   test("labels and exposes the selected shared-account activity scope", () => {
@@ -104,7 +143,7 @@ describe("activity journey boundaries", () => {
     );
 
     expect(html).toContain(`data-activity-account-id="${multisig.id}"`);
-    expect(html).toContain("Only Starknet Mainnet activity for Treasury.");
-    expect(html).not.toContain("for the active account");
+    expect(html).toContain('<h1 aria-label="Activity on Starknet Mainnet">Activity</h1>');
+    expect(html).not.toContain("activity for Treasury");
   });
 });

@@ -88,25 +88,6 @@ describe("ledgerSignScreen", () => {
     expect(render({ kind: "submitting" })).toContain("Signature received");
   });
 
-  test("discloses the padded hash in every phase so the device can be compared", () => {
-    // The device signs a fixed-width 32-byte value, so the screen shows the
-    // padded form; a shortest-form felt would differ from the device by its
-    // dropped leading zeros and defeat the comparison.
-    const padded = `0x${"0".repeat(61)}abc`;
-    const phases: readonly LedgerSignView["phase"][] = [
-      { kind: "connect" },
-      { kind: "confirming" },
-      { kind: "submitting" },
-      { code: "device-locked", kind: "error", message: "Unlock your Ledger." },
-    ];
-    for (const phase of phases) {
-      const html = render(phase);
-      expect(html).toContain("Hash being signed");
-      expect(html).toContain(padded);
-      expect(html).not.toContain(">0xabc<");
-    }
-  });
-
   test("states what the signature authorizes in every phase", () => {
     // Under blind signing the device shows only a bare hash, so this line is the
     // sole description of the operation the user gets. It must be present
@@ -166,5 +147,46 @@ describe("ledgerSignScreen", () => {
       status,
     );
     expect(html).not.toContain("Account ");
+  });
+
+  test("every phase shows the signing hash at the padded width the device displays", () => {
+    // A realistic full-width hash, not a short stub: the panel must render the
+    // same 64 digits the device is handed, so a narrower rendering would ask the
+    // user to compare two different spellings of one number.
+    // 63 digits — the widest a felt can be under the field prime — so padding to
+    // the device's 64 adds exactly one leading zero.
+    const messageHash = `0x${"3f".repeat(31)}a`;
+    const padded = `0x0${messageHash.slice(2)}`;
+    for (const phase of [
+      { kind: "connect" },
+      { kind: "confirming" },
+      { kind: "verifying" },
+      { kind: "submitting" },
+      // Including the phase a user may retry from: the comparison has to be on
+      // screen there too, not only on the happy path.
+      { code: "device-locked", kind: "error", message: "Unlock your Ledger." },
+    ] as const) {
+      const html = ledgerSignScreen({ phase, request: { ...request, messageHash } }, status);
+      expect(html).toContain("Hash shown on your Ledger");
+      // Copy hands over the unbroken padded value, never the grouped rendering.
+      expect(html).toContain(`data-copy="${padded}"`);
+      // Grouped in fours for character-by-character comparison; reading only
+      // those exact groups must recover the padded hash the device receives.
+      const value = html.split('<p class="ledger-hash-value">')[1]?.split("</p>")[0] ?? "";
+      const rendered = `0x${Array.from(value.matchAll(/<span>([0-9a-f]{4})<\/span>/g), (match) => match[1]).join("")}`;
+      expect(rendered).toBe(padded);
+      // 64 digits in groups of four.
+      expect(value.match(/<span>[0-9a-f]{4}<\/span>/g)).toHaveLength(16);
+    }
+  });
+
+  test("a short hash is padded rather than shown at its narrow width", () => {
+    const html = ledgerSignScreen(
+      { phase: { kind: "confirming" }, request: { ...request, messageHash: "0xabc" } },
+      status,
+    );
+    const value = html.split('<p class="ledger-hash-value">')[1]?.split("</p>")[0] ?? "";
+    const rendered = `0x${Array.from(value.matchAll(/<span>([0-9a-f]{4})<\/span>/g), (match) => match[1]).join("")}`;
+    expect(rendered).toBe(`0x${"abc".padStart(64, "0")}`);
   });
 });

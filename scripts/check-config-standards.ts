@@ -55,7 +55,6 @@ const tsconfigJson = await readJson("tsconfig.json");
 const buildScript = await readFile("apps/extension/build.ts", "utf8");
 const ciWorkflow = await readFile(".github/workflows/ci.yml", "utf8");
 const packageScript = await readFile("scripts/package-extension.ts", "utf8");
-const vendorKrustyScript = await readFile("scripts/vendor-krusty.ts", "utf8");
 const vendorPrivacyScript = await readFile("scripts/vendor-privacy-sdk.ts", "utf8");
 failures.push(...(await workflowSecurityFailures()));
 
@@ -127,8 +126,8 @@ if (
   failures.push("package.json must stay private ESM mc-wallet package metadata");
 }
 
-if (biomeJson["$schema"] !== "https://biomejs.dev/schemas/2.5.6/schema.json") {
-  failures.push("biome.json schema must stay pinned to 2.5.6");
+if (biomeJson["$schema"] !== "https://biomejs.dev/schemas/2.5.8/schema.json") {
+  failures.push("biome.json schema must stay pinned to 2.5.8");
 }
 
 const biomeVcs = isRecord(biomeJson["vcs"]) ? biomeJson["vcs"] : null;
@@ -143,11 +142,12 @@ if (
   !hasStringList(biomeFiles?.["includes"], [
     "**",
     "!.claude",
+    "!.dev-profile",
     "!.impeccable",
     "!.playwright-cli",
-    "!apps",
+    "!apps/terminal",
+    "!apps/ui-lab",
     "!bun.lock",
-    "!contracts/multisig/target",
     "!dist",
     "!node_modules",
     "!output",
@@ -380,7 +380,6 @@ if (
 }
 
 failures.push(
-  ...vendorPinFailures(vendorKrustyScript, "scripts/vendor-krusty.ts", "KRUSTY_KMS_REVISION"),
   ...vendorPinFailures(
     vendorPrivacyScript,
     "scripts/vendor-privacy-sdk.ts",
@@ -393,12 +392,10 @@ if (EXPECTED_RUNTIME_FILES.join("\n") !== PINNED_RUNTIME_FILES.join("\n")) {
 }
 
 const ciCommands = [
-  "cargo install wasm-pack --locked --version 0.13.1",
   "bun install --frozen-lockfile",
   "bun run test:e2e:install",
   "bun run check:files",
-  "bun run vendor:krusty",
-  "bun run vendor:multisig",
+  "bun run vendor:argent",
   "bun run vendor:privacy",
   "bun run check",
   "bun run check:coverage",
@@ -415,6 +412,9 @@ for (const command of ciCommands) {
   }
   previousCiCommand = index;
 }
+// Release-artifact policy lives in ./artifact-policy, which locates the upload
+// step through the shared pin grammar in ./workflow-inventory rather than
+// re-deriving it.
 failures.push(...artifactPolicyFailures(buildScript, ciWorkflow, packageScript));
 
 if (failures.length > 0) {

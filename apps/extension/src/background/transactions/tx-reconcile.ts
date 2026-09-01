@@ -10,7 +10,8 @@
  * `./tx-monitor.ts` (every scope, on a cadence), so a transaction keeps being
  * verified after the user closes the side panel.
  */
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+
+import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
 import {
   type ActivityEntry,
@@ -19,7 +20,8 @@ import {
   type ActivityScope,
   activityForScope,
 } from "@mc-wallet/transactions/activity";
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { mergeActivity } from "@mc-wallet/transactions/tx-history";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import {
@@ -144,6 +146,7 @@ export const reconcileScope = async (
   deps: ReconcileDeps,
   scope: ActivityScope,
   nowMs: number,
+  includeSlow = false,
 ): Promise<readonly ActivityEntry[]> => {
   // A background alarm may be waiting through multiple RPC fallbacks. The
   // Activity view must remain responsive: return its current durable snapshot
@@ -153,13 +156,27 @@ export const reconcileScope = async (
   }
   return runReconciliation(async () => {
     const entries = activityForScope(await deps.activity.list(), scope);
-    const due = entries.filter((entry) => isObserved(entry, nowMs));
+    const due = entries.filter((entry) =>
+      includeSlow ? isObserved(entry, nowMs) : isObservedAt(entry, "fast", nowMs),
+    );
     const outcomes = { ...expiredOutcomes(entries, nowMs), ...(await chainOutcomes(deps, due)) };
     return Object.keys(outcomes).length === 0
       ? entries
       : deps.activity.updateStatuses(outcomes, scope);
   });
 };
+
+/** Serializes a discovered-history merge with every status reconciliation. */
+export const mergeReconciledHistory = (
+  deps: ReconcileDeps,
+  scope: ActivityScope,
+  onChain: readonly ActivityEntry[],
+): Promise<readonly ActivityEntry[]> =>
+  runReconciliation(async () => {
+    const merged = mergeActivity(activityForScope(await deps.activity.list(), scope), onChain);
+    await deps.activity.replaceScope?.(merged, scope).catch(() => undefined);
+    return merged;
+  });
 
 /**
  * Reconciles every scope that has a transaction due on the given cadence. Used

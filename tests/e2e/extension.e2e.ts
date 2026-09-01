@@ -12,7 +12,7 @@ import {
   openPendingWalletSurface,
   resolveConnectionApproval,
   resolvePendingApproval,
-  VAULT_PASSPHRASE,
+  unlockWallet,
 } from "./wallet-helpers";
 
 test("keeps wallet setup out of the side panel", async ({ extension }) => {
@@ -31,7 +31,7 @@ test("loads the dedicated full-screen onboarding surface", async ({ extension })
   await expect(onboarding.getByRole("link", { name: "Open full-screen setup" })).toHaveCount(0);
 });
 
-test("completes an imported wallet in full-screen onboarding", async ({ extension }) => {
+test("discovers and restores an imported wallet in a fresh profile", async ({ extension }) => {
   const onboarding = await extension.openExtensionPage("onboarding.html");
 
   await importWalletFromPhrase(onboarding, IMPORT_MNEMONIC);
@@ -58,6 +58,7 @@ test("loads the dedicated Ledger hardware session surface", async ({ extension }
     "aria-pressed",
     "true",
   );
+  await expect(ledger.getByText(/Hardware preview/)).toBeVisible();
   await expect(ledger.getByRole("button", { name: /Bluetooth/ })).toHaveAttribute(
     "aria-pressed",
     "false",
@@ -73,15 +74,35 @@ test("imports an existing recovery phrase without backup verification", async ({
   await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
 });
 
+// localtest.me is a public name for 127.0.0.1: it resolves if the rule is gone.
+test("blocks egress to external hosts", async ({ extension }) => {
+  const page = await extension.context.newPage();
+  const failure = await page.goto("http://localtest.me/").catch((error: Error) => error.message);
+
+  expect(failure).toContain("ERR_NAME_NOT_RESOLVED");
+});
+
+// Every read fails under the suite-wide blackhole; the panel must say so.
+test("degrades honestly when network reads fail", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
+
+  // Fiat prices are mainnet-only, which a fresh profile selects by default.
+  await expect(sidepanel.getByText("Live prices are temporarily unavailable.")).toBeVisible();
+
+  await sidepanel.getByRole("tab", { name: "Activity" }).click();
+  await expect(sidepanel.getByText(/Couldn't load on-chain history/)).toBeVisible();
+});
+
 test("creates a wallet and approves a dapp connection", async ({ extension }) => {
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);
 
-  const terminalLink = sidepanel.getByRole("link", { name: "Open trade terminal" });
-  await expect(terminalLink).toBeVisible();
-  await expect(terminalLink).toHaveAttribute("href", "https://mc-wallet-terminal.vercel.app");
-  await expect(terminalLink).toHaveAttribute("target", "_blank");
-  await expect(terminalLink).toHaveAttribute("rel", "noopener noreferrer");
+  const starkscanLink = sidepanel.getByRole("link", { name: "Open Starkscan" });
+  await expect(starkscanLink).toBeVisible();
+  await expect(starkscanLink).toHaveAttribute("href", "https://starkscan.co/");
+  await expect(starkscanLink).toHaveAttribute("target", "_blank");
+  await expect(starkscanLink).toHaveAttribute("rel", "noopener noreferrer");
 
   await sidepanel.getByRole("button", { name: "Lock wallet" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Welcome back" })).toBeVisible();
@@ -98,8 +119,7 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
     await expect(sidepanel.getByText("Site request waiting")).toBeVisible();
     await expect(sidepanel.getByText(dappServer.origin)).toBeVisible();
 
-    await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
-    await sidepanel.getByRole("button", { name: "Unlock" }).click();
+    await unlockWallet(sidepanel);
 
     await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
 
@@ -150,7 +170,7 @@ test("signs SNIP-12 typed data through the injected provider approval", async ({
     await resolvePendingApproval(sidepanel, "Sign request", dappServer.origin, "approve");
 
     await expect(dapp.getByTestId("sign-result")).toContainText('"status":"resolved"');
-    // A SNIP-12 signature is returned to the dapp as an [r, s] felt array.
+    // The default OpenZeppelin account returns the Stark signature pair directly.
     await expect(dapp.getByTestId("sign-result")).toContainText(
       /"signature":\["0x[0-9a-f]+","0x[0-9a-f]+"\]/,
     );
