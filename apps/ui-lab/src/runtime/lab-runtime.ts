@@ -19,7 +19,7 @@ const labMarkup = (selectedId: string): string => `
   <section class="ui-lab" aria-label="Bramble UI Lab">
     <header class="lab-topbar">
       <div class="lab-brand">
-        <span class="lab-mark" aria-hidden="true">MC</span>
+        <span class="lab-mark" aria-hidden="true">B</span>
         <span class="lab-brand-copy">
           <strong>Wallet UI Lab</strong>
           <span>Production UI · deterministic fixture runtime</span>

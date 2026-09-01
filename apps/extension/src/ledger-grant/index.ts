@@ -144,7 +144,7 @@ const render = (): void => {
   const shell = element("section", "grant-shell");
   const header = element("header", "grant-header");
   const brand = element("span", "grant-brand");
-  brand.append(textElement("span", "grant-brand-mark", "MC"), textElement("strong", "", "Bramble"));
+  brand.append(textElement("span", "grant-brand-mark", "B"), textElement("strong", "", "Bramble"));
   const once = element("span", "grant-once");
   once.append(element("span", "grant-once-dot"), document.createTextNode("Secure device session"));
   header.append(brand, once);

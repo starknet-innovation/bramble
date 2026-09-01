@@ -176,7 +176,7 @@ const welcomeStep = (ready: boolean): string => `
         <span class="orbit-track orbit-track-core orbit-track-core-a">
           <span class="orbit-node"><span class="orbit-node-surface">${icon("coins")}</span></span>
         </span>
-        <span class="orbit-core"><strong>MC</strong><span>Wallet</span></span>
+        <span class="orbit-core"><strong>B</strong><span>Bramble</span></span>
       </div>
     </div>
     <div class="onboarding-welcome-actions">
