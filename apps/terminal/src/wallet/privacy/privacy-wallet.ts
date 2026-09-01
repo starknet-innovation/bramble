@@ -170,7 +170,7 @@ const readCallAndProof = (value: unknown): PrivateCallAndProof | null => {
 
 const requestFrom = (wallet: { readonly request?: unknown } | null): WalletRequest => {
   if (!wallet || typeof wallet.request !== "function") {
-    throw new Error("Connect MC Wallet to use private balances.");
+    throw new Error("Connect Bramble to use private balances.");
   }
   return wallet.request as WalletRequest;
 };
@@ -199,7 +199,7 @@ export const requestPrivateBalances = async (
 };
 
 /**
- * Requests MC Wallet's approval-gated one-time pool registration. This is an
+ * Requests Bramble's approval-gated one-time pool registration. This is an
  * MC-namespaced capability because the standard STRK20 API defines the
  * NOT_REGISTERED error but no registration method.
  */

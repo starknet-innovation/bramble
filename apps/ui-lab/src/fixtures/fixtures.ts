@@ -172,7 +172,7 @@ export const discoveredNft: DiscoveredNft = {
   ],
   collection: "MC Test Collection",
   contract: NFT_CONTRACT,
-  description: "A deterministic collectible used only inside the MC Wallet UI Lab.",
+  description: "A deterministic collectible used only inside the Bramble UI Lab.",
   id: nftId,
   image: "/nft-fixture.svg",
   name: "Proof of Participation #342",

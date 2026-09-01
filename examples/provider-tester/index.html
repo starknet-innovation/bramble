@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MC Wallet — Provider Tester</title>
+    <title>Bramble — Provider Tester</title>
     <style>
       :root {
         --bg: #0a0a0a;
@@ -138,11 +138,11 @@
   </head>
   <body>
     <main>
-      <h1>MC Wallet — Provider Tester</h1>
+      <h1>Bramble — Provider Tester</h1>
       <p class="lede">
         Walk through every injected-provider scenario end to end. Serve this page on
         <code>http://localhost</code> (the extension injects on localhost and https), open it in a tab
-        with MC Wallet installed and unlocked, then run each step top to bottom.
+        with Bramble installed and unlocked, then run each step top to bottom.
       </p>
 
       <div id="no-provider" class="banner">
@@ -163,7 +163,7 @@
       <section class="scenario" data-step="1">
         <header><h2>1 · Detect provider</h2></header>
         <p class="why">Reads <code>window.starknet_bramble</code> and its get-starknet metadata (id, name, version, icon).</p>
-        <p class="expect"><b>Expect:</b> id <code>mc-wallet</code>, name <code>MC Wallet</code>, version <code>0.1.0</code>, and an inline icon.</p>
+        <p class="expect"><b>Expect:</b> id <code>bramble</code>, name <code>Bramble</code>, version <code>0.1.0</code>, and an inline icon.</p>
         <div class="controls"><button type="button" data-run="detect">Detect</button></div>
         <div class="result" id="r-detect"></div>
       </section>
@@ -363,7 +363,7 @@
         async sign() {
           const address = connected[0] ?? provider()?.selectedAddress ?? "0x0";
           const typedData = {
-            domain: { name: "MC Wallet Tester", version: "1", chainId: provider()?.chainId ?? MAINNET },
+            domain: { name: "Bramble Tester", version: "1", chainId: provider()?.chainId ?? MAINNET },
             primaryType: "Message",
             types: {
               StarkNetDomain: [
@@ -373,7 +373,7 @@
               ],
               Message: [{ name: "contents", type: "felt" }],
             },
-            message: { contents: "MC Wallet provider test" },
+            message: { contents: "Bramble provider test" },
           };
           show("r-sign", "Awaiting your decision in the wallet (this call holds)…");
           void address;

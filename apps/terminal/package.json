@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "MC Wallet Trade Terminal — a standalone Starknet trade terminal that connects to the MC Wallet browser extension as a dApp.",
+  "description": "Bramble Trade Terminal — a standalone Starknet trade terminal that connects to the Bramble browser extension as a dApp.",
   "scripts": {
     "dev": "vite",
     "dev:full": "bunx vercel@58.9.1 dev",

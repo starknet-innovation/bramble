@@ -74,7 +74,7 @@ export type LedgerAppVersion = {
 };
 
 /**
- * Ledger models whose current firmware line mc-wallet supports. The model is
+ * Ledger models whose current firmware line Bramble supports. The model is
  * resolved from Ledger's device target id, never from a browser-provided label.
  */
 export type LedgerDeviceModel = "nano-x" | "nano-s-plus" | "stax" | "flex" | "nano-gen5";
@@ -88,7 +88,7 @@ export type LedgerFirmwareVersion = {
 };
 
 /**
- * Pinned Starknet app policy floor accepted by mc-wallet. Future releases do
+ * Pinned Starknet app policy floor accepted by Bramble. Future releases do
  * not block the user. This gate is not a signing trust decision: the background
  * still verifies every returned signature.
  */

@@ -23,7 +23,7 @@ document.head.append(managerChromeStyles);
 addons.setConfig({
   theme: create({
     base: "dark",
-    brandTitle: "MC Wallet UI Lab",
+    brandTitle: "Bramble UI Lab",
     colorPrimary: tokens["--mc-accent"],
     colorSecondary: tokens["--mc-muted"],
     appBg: tokens["--mc-bg"],

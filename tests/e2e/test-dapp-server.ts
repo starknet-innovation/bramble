@@ -18,7 +18,7 @@ const dappHtml = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>MC Wallet E2E Dapp</title>
+    <title>Bramble E2E Dapp</title>
   </head>
   <body>
     <p data-testid="provider-status">missing</p>

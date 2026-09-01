@@ -1,6 +1,6 @@
-# MC Wallet UI Lab
+# Bramble UI Lab
 
-An isolated Storybook HTML workbench for reviewing production MC Wallet templates, bindings,
+An isolated Storybook HTML workbench for reviewing production Bramble templates, bindings,
 styles, and motion at the real wallet dimensions. It uses deterministic fixture responses only:
 there is no browser-extension runtime, vault, signer, Ledger transport, production RPC, or
 broadcast path.

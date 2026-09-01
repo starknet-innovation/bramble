@@ -144,10 +144,7 @@ const render = (): void => {
   const shell = element("section", "grant-shell");
   const header = element("header", "grant-header");
   const brand = element("span", "grant-brand");
-  brand.append(
-    textElement("span", "grant-brand-mark", "MC"),
-    textElement("strong", "", "MC Wallet"),
-  );
+  brand.append(textElement("span", "grant-brand-mark", "MC"), textElement("strong", "", "Bramble"));
   const once = element("span", "grant-once");
   once.append(element("span", "grant-once-dot"), document.createTextNode("Secure device session"));
   header.append(brand, once);
@@ -171,7 +168,7 @@ const render = (): void => {
   const validationNotice = textElement(
     "p",
     "grant-footnote",
-    "Hardware preview · MC Wallet's complete physical device matrix is still in progress. Use with trusted-test funds only.",
+    "Hardware preview · Bramble's complete physical device matrix is still in progress. Use with trusted-test funds only.",
   );
   const methodOptions = element("div", "grant-method-options");
   const cableMethod = element("button", "grant-method");
@@ -219,7 +216,7 @@ const render = (): void => {
   const footnote = textElement(
     "p",
     "grant-footnote",
-    "MC Wallet validates the Starknet app, but your keys never leave your Ledger.",
+    "Bramble validates the Starknet app, but your keys never leave your Ledger.",
   );
 
   const setStatus = (
@@ -252,11 +249,11 @@ const render = (): void => {
         ? [
             readinessStep("1", "Enable Bluetooth, then power your Ledger off and back on"),
             readinessStep("2", "Stay on the Ledger dashboard and pair it in Chrome"),
-            readinessStep("3", "MC Wallet will check firmware, then open Starknet"),
+            readinessStep("3", "Bramble will check firmware, then open Starknet"),
           ]
         : [
             readinessStep("1", "Unlock your Ledger and connect a data-capable USB cable"),
-            readinessStep("2", "MC Wallet will check firmware, then open Starknet"),
+            readinessStep("2", "Bramble will check firmware, then open Starknet"),
             readinessStep("3", "Choose your Ledger in Chrome, then click Connect"),
           ]),
     );
@@ -348,7 +345,7 @@ const render = (): void => {
     } else if (failure === "permission-blocked") {
       setStatus(
         "Chrome blocked device access",
-        "Reconnect the Ledger and check Chrome's device permissions for MC Wallet.",
+        "Reconnect the Ledger and check Chrome's device permissions for Bramble.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "POLICY"), diagnostics),
       );
@@ -415,7 +412,7 @@ const render = (): void => {
       }
       setStatus(
         "Checking firmware and Starknet",
-        "MC Wallet is checking device software and reading a public account key. Nothing is signed.",
+        "Bramble is checking device software and reading a public account key. Nothing is signed.",
         "info",
         `Transport · ${transportLabel(transport)} · Firmware, app, and key handshake`,
       );
@@ -431,7 +428,7 @@ const render = (): void => {
       });
       setStatus(
         "Ledger connected",
-        `Starknet ${version.major}.${version.minor}.${version.patch} verified. MC Wallet is ready to continue.`,
+        `Starknet ${version.major}.${version.minor}.${version.patch} verified. Bramble is ready to continue.`,
         "success",
         `Transport · ${transportLabel(transport)} · Secure session active`,
       );
@@ -484,7 +481,7 @@ const render = (): void => {
   if (!sessionId) {
     button.disabled = true;
     setStatus(
-      "Open Ledger from MC Wallet",
+      "Open Ledger from Bramble",
       "This hardware tab needs a fresh secure session from the wallet.",
       "danger",
       "Support code · MC-LDG-SESSION",

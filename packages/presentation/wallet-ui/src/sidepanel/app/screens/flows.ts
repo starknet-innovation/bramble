@@ -185,7 +185,7 @@ export const importKeyFlow = (status: WalletStatus): string =>
         })}
         ${textField({
           autocomplete: "off",
-          hint: "Argent only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for MC Wallet's public-key salt.",
+          hint: "Argent only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for Bramble's public-key salt.",
           label: "Argent deployment salt (optional)",
           name: "deploymentSalt",
           placeholder: "0x…",

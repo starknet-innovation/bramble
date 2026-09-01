@@ -4,13 +4,13 @@ title: User guide
 permalink: /user-guide/
 ---
 
-# MC Wallet — User Guide
+# Bramble — User Guide
 
-MC Wallet is a Starknet wallet that lives in your browser's **side panel**. This
+Bramble is a Starknet wallet that lives in your browser's **side panel**. This
 guide is for people *using* the wallet. If you are building or contributing to
 it, start with the [engineering onboarding](../engineering/) instead.
 
-> **Mainnet moves real funds.** MC Wallet runs on Starknet Mainnet by default.
+> **Mainnet moves real funds.** Bramble runs on Starknet Mainnet by default.
 > Starknet Sepolia (testnet) and a local devnet are also available from the
 > network selector — use a testnet while you are learning.
 
@@ -20,7 +20,7 @@ it, start with the [engineering onboarding](../engineering/) instead.
 
 ### Install
 
-MC Wallet is a Manifest V3 browser extension. Download a published extension
+Bramble is a Manifest V3 browser extension. Download a published extension
 archive from the
 [GitHub Releases page](https://github.com/starknet-innovation/mc-wallet/releases),
 verify it against the accompanying `.sha256` file, extract it, then open
@@ -30,7 +30,7 @@ see the [README](https://github.com/starknet-innovation/mc-wallet#quick-start).
 
 ### First run
 
-On a fresh installation, MC Wallet opens a dedicated full-browser onboarding
+On a fresh installation, Bramble opens a dedicated full-browser onboarding
 tab. It is used only for setup; normal wallet activity remains in the browser
 side panel. If you close the onboarding tab, click the toolbar icon and use
 **Open full-screen setup** to return to it.
@@ -46,7 +46,7 @@ side panel. If you close the onboarding tab, click the toolbar icon and use
    create the wallet until the words match.
 4. Set a **vault passphrase** of at least **12 characters**. This encrypts the
    wallet on *this* device; it is not your recovery phrase.
-5. Review and explicitly select the derived account. MC Wallet supports both
+5. Review and explicitly select the derived account. Bramble supports both
    account models; **OpenZeppelin Account** is the recommended default and
    **Argent Account** remains available. Setup defaults to Starknet Mainnet, so
    tick the **real-funds acknowledgement**.
@@ -71,8 +71,8 @@ unlock screen. Enter your vault passphrase to reach the dashboard.
 ### Set up with a Ledger
 
 Choose **Add an existing wallet**, then **Ledger hardware wallet**. Ledger
-accounts are keyless in MC Wallet: the private key never leaves the device, and
-recovery is handled by the Ledger's own recovery phrase, not by an MC Wallet
+accounts are keyless in Bramble: the private key never leaves the device, and
+recovery is handled by the Ledger's own recovery phrase, not by an Bramble
 software recovery phrase. This is a trusted-testers preview until the physical
 device and transport matrix in issue #224 is complete; no model or connection
 method is advertised as production-validated yet.
@@ -91,7 +91,7 @@ ready. Use the dashboard to send transfers, receive (share your address), switch
 networks, and deploy.
 
 To attach an existing Argent Account 0.4 from a private key, enter its original
-deployment salt during import. Before signing, MC Wallet verifies the pinned
+deployment salt during import. Before signing, Bramble verifies the pinned
 account class, Stark owner, and absence of a guardian at one accepted block.
 Accounts using another signer type or a guardian are not supported and fail
 closed.
@@ -112,7 +112,7 @@ preconfirmed, accepted, or failed network status in **Activity**.
 ### Private balances and STRK20
 
 Private-balance discovery is opt-in. Activating it publishes a one-time
-viewing-key commitment for the account so MC Wallet can discover private notes;
+viewing-key commitment for the account so Bramble can discover private notes;
 it does **not** publish the viewing key or private balance. Activation may need a
 proof, account authorization, network fee, and time for the indexer to catch up.
 The wallet keeps **submitted** and **discoverable** as separate states.
@@ -126,8 +126,8 @@ cannot use a privacy path that requires a viewing key the wallet cannot derive.
 
 ### Connect to a dApp
 
-MC Wallet injects `window.starknet_bramble` and is discoverable through
-get-starknet / starknetkit. On a Starknet site, choose to connect MC Wallet and
+Bramble injects `window.starknet_bramble` and is discoverable through
+get-starknet / starknetkit. On a Starknet site, choose to connect Bramble and
 approve the connection in the side panel. Grants are **per-origin**: each
 connected site sees only itself, never the sites you connected elsewhere.
 
@@ -151,7 +151,7 @@ reads the name, image, description, and attributes from the token's `token_uri`
 
 ### Multisig
 
-MC Wallet supports the pinned Argent Multisig account contract. You can deploy
+Bramble supports the pinned Argent Multisig account contract. You can deploy
 a new account or add an existing account by its address and current signer
 authority. The wallet verifies the live signer GUIDs and threshold, freezes the
 exact Starknet transaction and fee ceiling, and collects signatures from
@@ -166,7 +166,7 @@ proposal or confirmation state.
 For encrypted Nostr coordination, each participant first saves the other participant's complete
 wallet card so the Stark signer key and coordination key stay bound to one contact. The intent owner
 chooses **Share securely with co-signers**; the other participant opens the same shared account and
-chooses **Check for co-signer updates**. MC Wallet uses the reviewed relay defaults unless a user
+chooses **Check for co-signer updates**. Bramble uses the reviewed relay defaults unless a user
 sets **Settings → Network → Advanced endpoints → Multisig coordination relay**. A custom relay
 replaces the defaults, so participants must select infrastructure that can receive the same events.
 Relay access is one-shot and user initiated; manual copy-and-paste remains available as a fallback.
@@ -201,7 +201,7 @@ periodically limits how much a compromised dApp contract can move.
 
 - Your recovery phrase is the master key. Write it on paper; never photograph it,
   paste it into a website, or store it in cloud notes.
-- MC Wallet never asks for your recovery phrase to "verify" or "sync" anything
+- Bramble never asks for your recovery phrase to "verify" or "sync" anything
   after setup. Any site or message that does is a scam.
 - The **vault passphrase** unlocks the wallet on one device only. Losing it means
   re-restoring from the recovery phrase; losing the recovery phrase means the
@@ -209,14 +209,14 @@ periodically limits how much a compromised dApp contract can move.
 
 ### Recognising phishing
 
-MC Wallet flags sketchy sites before you connect: it checks a domain blocklist
+Bramble flags sketchy sites before you connect: it checks a domain blocklist
 and detects lookalike / punycode domains (e.g. a site spoofing a real one with
 swapped characters). It also keeps a per-origin connection history so you can see
 what you have connected to. If the wallet warns you about a site, stop.
 
 ### What "fails closed" means for you
 
-If the wallet's crypto core (Krusty KMS) is unavailable, MC Wallet **refuses to
+If the wallet's crypto core (Krusty KMS) is unavailable, Bramble **refuses to
 act** rather than falling back to a weaker path — onboarding buttons stay
 disabled and no wallet is created. There is no local signing fallback. This is
 deliberate: the wallet would rather do nothing than do something unsafe with your

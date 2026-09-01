@@ -55,7 +55,7 @@ const accountContractChoices = (kind: "ledger" | "software"): string => {
     <button class="onboarding-contract" ${attribute}="openzeppelin" type="button" aria-pressed="true">
       <span class="onboarding-contract-copy">
         <span class="onboarding-contract-title"><strong>OpenZeppelin Account</strong><span>Recommended</span></span>
-        <span>${kind === "ledger" ? "Ledger keeps the signer key; OpenZeppelin defines the on-chain account." : "The recommended account model for new MC Wallet accounts."}</span>
+        <span>${kind === "ledger" ? "Ledger keeps the signer key; OpenZeppelin defines the on-chain account." : "The recommended account model for new Bramble accounts."}</span>
       </span>
       <span class="onboarding-contract-check">${icon("check")}</span>
     </button>
@@ -198,7 +198,7 @@ const welcomeStep = (ready: boolean): string => `
 const methodStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="method" hidden>
     ${flowBack("Back to welcome")}
-    ${stepHead("wallet", "Choose how to add your wallet", "Bring an existing Starknet wallet into MC Wallet.")}
+    ${stepHead("wallet", "Choose how to add your wallet", "Bring an existing Starknet wallet into Bramble.")}
     <div class="onboarding-options">
       ${option(
         "recovery-method-button",
@@ -250,7 +250,7 @@ const generatedStep = (): string => `
         label: "Show recovery phrase",
         variant: "secondary",
       })}
-      <p class="hint">Anyone with these words controls the wallet. MC Wallet cannot recover them for you.</p>
+      <p class="hint">Anyone with these words controls the wallet. Bramble cannot recover them for you.</p>
       <p id="generate-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
@@ -282,7 +282,7 @@ const verifyStep = (): string => `
 const passwordStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="password" hidden>
     ${flowBack("Back")}
-    ${stepHead("lock", "Create your vault passphrase", "You will use this to unlock MC Wallet on this device.")}
+    ${stepHead("lock", "Create your vault passphrase", "You will use this to unlock Bramble on this device.")}
     <div class="onboarding-fields">
       ${passwordFields()}
       <p id="passphrase-result" role="status"></p>
@@ -303,7 +303,7 @@ const accountContractStep = (): string => `
     <div class="onboarding-fields">
       <input name="accountContractType" type="hidden" value="openzeppelin" />
       ${accountContractChoices("software")}
-      <p class="hint">MC Wallet supports both account models. OpenZeppelin is the recommended default.</p>
+      <p class="hint">Bramble supports both account models. OpenZeppelin is the recommended default.</p>
     </div>
     <div class="onboarding-step-cta">
       ${button({
@@ -316,7 +316,7 @@ const accountContractStep = (): string => `
 const recoveryAccountsStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
     ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Find your accounts", "MC Wallet checks the first 20 account indices for both OpenZeppelin and Argent accounts. Accounts with on-chain activity are selected automatically.")}
+    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for both OpenZeppelin and Argent accounts. Accounts with on-chain activity are selected automatically.")}
     <div class="onboarding-fields">
       <div class="section-head">
         <p id="recovery-scan-status" class="hint" role="status">Ready to search.</p>
@@ -387,7 +387,7 @@ const ledgerContractStep = (): string => `
     ${stepHead("shield", "Choose the Ledger account contract", "Your signing key stays on Ledger in either case. This choice only changes the account contract deployed on Starknet.")}
     <div class="onboarding-fields">
       ${accountContractChoices("ledger")}
-      <p class="hint">MC Wallet supports both account models. OpenZeppelin is the recommended default.</p>
+      <p class="hint">Bramble supports both account models. OpenZeppelin is the recommended default.</p>
     </div>
     <div class="onboarding-step-cta">
       ${button({
@@ -421,7 +421,7 @@ const ledgerStep = (status: WalletStatus): string => `
   </section>`;
 
 /**
- * First-run wizard. It preserves MC Wallet's real creation and Ledger paths
+ * First-run wizard. It preserves Bramble's real creation and Ledger paths
  * while presenting each decision as one focused, reversible step.
  */
 export const onboardingWizard = (status: WalletStatus): string => `
@@ -430,7 +430,7 @@ export const onboardingWizard = (status: WalletStatus): string => `
   OWN-WORLD: Achromatic panel, generous dark field, crisp controls, orbital linework, semantic green/red only.
   STORY: Choose a wallet path, supply only the required credential, protect it, select the account, finish.
   FIRST VIEWPORT: One centered wallet stage; an orbiting MC mark leads to two full-width actions at the foot.
-  FORM: Staged wallet setup based on the supplied reference flow, adapted to MC Wallet trust boundaries.
+  FORM: Staged wallet setup based on the supplied reference flow, adapted to Bramble trust boundaries.
   -->
   <main class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
     <form id="create-form" class="onboarding-flow" data-wallet-ready="${status.ready}" novalidate>

@@ -15,7 +15,7 @@ collected. Chrome's current policy requires prominent disclosure for all data co
 
 ### Detailed description
 
-MC Wallet is a self-custodial Starknet wallet built for clear transaction review and resilient daily
+Bramble is a self-custodial Starknet wallet built for clear transaction review and resilient daily
 use. Create or recover OpenZeppelin and Argent accounts, inspect balances and activity, connect to
 dapps, send assets, swap tokens, and manage shared Argent multisig accounts.
 
@@ -25,13 +25,13 @@ reviewed in a trusted wallet surface before approval. Cached public data keeps t
 during temporary network disruption, while visible freshness indicators distinguish saved data from
 current network state.
 
-Reliability diagnostics are optional and off by default. If enabled, MC Wallet keeps only anonymous,
+Reliability diagnostics are optional and off by default. If enabled, Bramble keeps only anonymous,
 separate process-local counts for RPC endpoint classes and the optional Starkscan explorer service,
 with outcome classes and average latency. It never includes addresses, sites, hashes, calldata,
 endpoint URLs, or raw errors, and nothing is uploaded automatically. The user may download the
 report and decide whether to share it with support.
 
-MC Wallet is non-custodial software. Keep your recovery phrase offline. No maintainer or support
+Bramble is non-custodial software. Keep your recovery phrase offline. No maintainer or support
 agent will ask for it.
 
 ## Dashboard fields

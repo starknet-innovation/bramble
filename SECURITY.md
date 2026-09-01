@@ -1,6 +1,6 @@
 # Security Policy
 
-MC Wallet is a browser-extension wallet that handles private keys, encrypted
+Bramble is a browser-extension wallet that handles private keys, encrypted
 vault state, and dapp permissions. We take security reports seriously and
 appreciate responsible disclosure.
 

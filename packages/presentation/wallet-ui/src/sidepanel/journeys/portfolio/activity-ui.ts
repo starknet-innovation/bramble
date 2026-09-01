@@ -64,7 +64,7 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
         const url = URL.createObjectURL(blob);
         const anchor = exportButton.ownerDocument.createElement("a");
         anchor.href = url;
-        anchor.download = "mc-wallet-activity.csv";
+        anchor.download = "bramble-activity.csv";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         const toast = activityExportToast(historyUnavailable);

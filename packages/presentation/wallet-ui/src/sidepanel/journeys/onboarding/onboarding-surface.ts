@@ -28,7 +28,7 @@ export const onboardingLaunch = (): string => `
     <div class="gate-head">
       <p class="eyebrow">Wallet setup</p>
       <h1>Set up in a browser tab</h1>
-      <p class="lede">MC Wallet uses a full-screen setup so every recovery, protection, and account choice stays clear.</p>
+      <p class="lede">Bramble uses a full-screen setup so every recovery, protection, and account choice stays clear.</p>
     </div>
     <div class="onboarding-gate-actions">
       ${actionLink({
@@ -50,14 +50,14 @@ export const onboardingComplete = (): string => `
     <div class="gate-head">
       <p class="eyebrow">Setup complete</p>
       <h1>You’re all set</h1>
-      <p class="lede">Your account is ready in MC Wallet. Open the side panel to receive assets, connect to an app, or deploy when you’re ready.</p>
+      <p class="lede">Your account is ready in Bramble. Open the side panel to receive assets, connect to an app, or deploy when you’re ready.</p>
     </div>
     <div class="onboarding-complete-details">
       <div class="onboarding-complete-detail">${icon("lock")} <span>Vault encrypted locally on this device</span></div>
       <div class="onboarding-complete-detail">${icon("shield")} <span>Recovery and signing material stay behind the wallet boundary</span></div>
     </div>
     <div class="onboarding-complete-actions">
-      ${button({ attributes: { id: "onboarding-open-wallet" }, label: "Open MC Wallet" })}
+      ${button({ attributes: { id: "onboarding-open-wallet" }, label: "Open Bramble" })}
       <p id="onboarding-complete-result" class="hint" role="status"></p>
     </div>
   </main>`;
@@ -78,7 +78,7 @@ export const bindOnboardingCompletion = (
     const sidePanel = browser?.sidePanel;
     if (typeof windowId !== "number" || !sidePanel?.open) {
       if (result) {
-        result.textContent = "Open MC Wallet from the browser toolbar to continue.";
+        result.textContent = "Open Bramble from the browser toolbar to continue.";
       }
       return;
     }
@@ -89,7 +89,7 @@ export const bindOnboardingCompletion = (
     void sidePanel.open({ windowId }).then(closeSurface, () => {
       button.disabled = false;
       if (result) {
-        result.textContent = "Open MC Wallet from the browser toolbar to continue.";
+        result.textContent = "Open Bramble from the browser toolbar to continue.";
       }
     });
   });

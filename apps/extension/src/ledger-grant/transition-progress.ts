@@ -16,19 +16,19 @@ export type LedgerTransitionProgress = {
 
 const PROGRESS: Readonly<Record<LedgerTransitionPhase, LedgerTransitionProgress>> = {
   "checking-device": {
-    message: "MC Wallet is confirming which app is open. Nothing is signed.",
+    message: "Bramble is confirming which app is open. Nothing is signed.",
     title: "Checking Ledger state",
   },
   "returning-to-dashboard": {
-    message: "MC Wallet is returning the device to its dashboard before reading firmware.",
+    message: "Bramble is returning the device to its dashboard before reading firmware.",
     title: "Preparing firmware check",
   },
   "reconnecting-dashboard": {
-    message: "MC Wallet is reconnecting to the same device and confirming its dashboard.",
+    message: "Bramble is reconnecting to the same device and confirming its dashboard.",
     title: "Reconnecting to your Ledger",
   },
   "checking-firmware": {
-    message: "MC Wallet is validating the device model and installed OS version.",
+    message: "Bramble is validating the device model and installed OS version.",
     title: "Checking Ledger firmware",
   },
   "opening-starknet": {
@@ -36,11 +36,11 @@ const PROGRESS: Readonly<Record<LedgerTransitionPhase, LedgerTransitionProgress>
     title: "Approve opening Starknet",
   },
   "reconnecting-starknet": {
-    message: "MC Wallet is reconnecting to the same device after the app transition.",
+    message: "Bramble is reconnecting to the same device after the app transition.",
     title: "Starknet is opening",
   },
   "confirming-starknet": {
-    message: "MC Wallet is verifying the app before reading a public account key.",
+    message: "Bramble is verifying the app before reading a public account key.",
     title: "Confirming Starknet",
   },
 };

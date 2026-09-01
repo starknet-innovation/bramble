@@ -38,7 +38,7 @@ export const saveNotes = (notes: readonly FeedbackNote[]): void => {
 
 const noteMarkdown = (notes: readonly FeedbackNote[]): string =>
   [
-    "# MC Wallet UI Lab feedback",
+    "# Bramble UI Lab feedback",
     "",
     ...notes.flatMap((note) => [`## ${note.scenario} / ${note.checkpoint}`, "", note.text, ""]),
   ].join("\n");
@@ -47,7 +47,7 @@ export const downloadMarkdown = (notes: readonly FeedbackNote[]): void => {
   const url = URL.createObjectURL(new Blob([noteMarkdown(notes)], { type: "text/markdown" }));
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "mc-wallet-ui-lab-feedback.md";
+  anchor.download = "bramble-ui-lab-feedback.md";
   anchor.click();
   URL.revokeObjectURL(url);
 };

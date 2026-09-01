@@ -144,7 +144,7 @@ export const resolveAccount = async (
   }
 };
 
-/** Finds MC Wallet first, while preserving standards-based Starknet wallet fallback. */
+/** Finds Bramble first, while preserving standards-based Starknet wallet fallback. */
 export const resolveWallet = async (): Promise<StarknetWindowObject | null> => {
   return waitForInjectedBramble(INJECTION_TIMEOUT_MS);
 };

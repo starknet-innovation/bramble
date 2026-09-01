@@ -40,11 +40,17 @@ import {
 // Pinned separator for (https://example.com, "Example"). The value is a wallet
 // identity: silently changing the derivation would strand every sub-account a
 // site has already been shown, so it is asserted literally rather than
-// recomputed from the implementation. It is 30 hex characters, not a 0x felt,
+// recomputed from the implementation.
+//
+// It moved once, when SCOPE_DOMAIN was rebranded from `mc-wallet/...` to
+// `bramble/strk20-subaccount/v1`. That is a deliberate pre-release break: every
+// (origin, label) pair derives a new separator, so nothing derived under the old
+// domain is reachable. Re-derived independently as
+// sha256("<domain>|<origin>|<label>")[:30], not copied from the failing run. It is 30 hex characters, not a 0x felt,
 // because the pinned SDK short-string-encodes every string dapp name and
 // starknet.js rejects a short string over 31 bytes — see
 // strk20-subaccount-sdk-boundary.test.ts, which drives the real encoder.
-const EXAMPLE_COM_SCOPE = "d4b5ddb6229476c950b321c359fdf7";
+const EXAMPLE_COM_SCOPE = "49889a0d8866de58dafba23c59d93e";
 
 const preferences = {
   ...defaultWalletPreferences(),

@@ -34,7 +34,7 @@ declare global {
       readonly id: "bramble";
       readonly isConnected: boolean;
       readonly isPreauthorized: () => Promise<boolean>;
-      readonly name: "MC Wallet";
+      readonly name: "Bramble";
       readonly off: (event: unknown, handler: unknown) => void;
       readonly on: (event: unknown, handler: unknown) => void;
       readonly request: (args: unknown) => Promise<unknown>;
@@ -162,7 +162,7 @@ const starknetWallet = {
       return false;
     }
   },
-  name: "MC Wallet" as const,
+  name: "Bramble" as const,
   off: events.off,
   on: events.on,
   request,

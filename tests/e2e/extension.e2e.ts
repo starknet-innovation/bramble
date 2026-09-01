@@ -111,7 +111,7 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
   try {
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
 
     await dapp.getByTestId("connect").click();
     await expect(dapp.getByTestId("connect-result")).toHaveText("pending");
@@ -233,11 +233,11 @@ test("detects the injected provider after a page reload", async ({ extension }) 
   try {
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
 
     await dapp.reload();
     await dapp.getByTestId("detect").click();
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
   } finally {
     await dappServer.close();
   }

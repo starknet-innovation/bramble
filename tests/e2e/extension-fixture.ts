@@ -69,7 +69,7 @@ export const launchExtension = async (
   options: LaunchExtensionOptions = {},
 ): Promise<LoadedExtension> => {
   const ownedProfile = options.userDataDir === undefined;
-  const userDataDir = options.userDataDir ?? (await mkdtemp(resolve(tmpdir(), "mc-wallet-e2e-")));
+  const userDataDir = options.userDataDir ?? (await mkdtemp(resolve(tmpdir(), "bramble-e2e-")));
   const context = await chromium.launchPersistentContext(userDataDir, {
     args: [
       `--disable-extensions-except=${distPath}`,

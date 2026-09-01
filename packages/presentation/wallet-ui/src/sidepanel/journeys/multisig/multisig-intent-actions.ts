@@ -138,7 +138,7 @@ const collaborationTools = (
           : `<section class="multisig-handoff-section">
               <div class="multisig-handoff-copy">
                 <strong>Share the reviewed transaction</strong>
-                <p>Copies the transaction and every signature collected so far for another MC Wallet signer.</p>
+                <p>Copies the transaction and every signature collected so far for another Bramble signer.</p>
               </div>
               <div class="multisig-collaboration-actions">
                 ${

@@ -1,7 +1,7 @@
 /**
  * Wallet connection context for the trade terminal.
  *
- * Connects directly to the injected MC Wallet provider (preferring
+ * Connects directly to the injected Bramble provider (preferring
  * window.starknet_bramble), exposes the connected account and address, and
  * drives the Connect / Disconnect buttons throughout the shell.
  *
@@ -128,7 +128,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     try {
       const target = await resolveWallet();
       if (target === null) {
-        throw new Error("No Starknet wallet detected. Install the MC Wallet extension.");
+        throw new Error("No Starknet wallet detected. Install the Bramble extension.");
       }
       const addresses = await requestAccounts(target);
       const nextAddress = addresses[0];

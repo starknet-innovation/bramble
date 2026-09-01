@@ -117,7 +117,7 @@ const phaseBody = (view: LedgerSignView): string => {
     return `<p>Approve the request on your Ledger. The wallet verifies the returned signature before it can be used.</p>${cancelButton()}`;
   }
   if (phase.kind === "submitting") {
-    return "<p>Signature received. MC Wallet is completing its final verification and returning it to the transaction.</p>";
+    return "<p>Signature received. Bramble is completing its final verification and returning it to the transaction.</p>";
   }
   if (phase.kind === "devices") {
     return `<p>More than one Ledger is connected. Choose the device that holds this account.</p>

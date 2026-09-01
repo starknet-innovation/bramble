@@ -1,6 +1,6 @@
 <div align="center">
 
-# MC Wallet
+# Bramble
 
 ### A Starknet wallet that lives in your browser side panel.
 

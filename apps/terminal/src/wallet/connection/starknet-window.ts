@@ -1,7 +1,7 @@
 /**
  * Types + discovery helpers for the injected Starknet wallet provider.
  *
- * The terminal is a dApp: it talks to the MC Wallet browser extension through
+ * The terminal is a dApp: it talks to the Bramble browser extension through
  * the wallet's injected `window.starknet_bramble` provider (a standard
  * Starknet Wallet API object). We prefer that provider specifically, but
  * fall back to any other injected Starknet wallet so the terminal is usable for
@@ -28,12 +28,12 @@ export type StarknetWindowObject = {
 };
 
 /**
- * The window key the MC Wallet extension injects its provider under.
+ * The window key the Bramble extension injects its provider under.
  */
 const BRAMBLE_WINDOW_KEY = "starknet_bramble" as const;
 
 /**
- * Substring used to recognise the MC Wallet among discovered providers when the
+ * Substring used to recognise the Bramble among discovered providers when the
  * exact injected key is unavailable.
  */
 const BRAMBLE_NAME_MATCH = /bramble/i;
@@ -52,7 +52,7 @@ const INJECTION_POLL_INTERVAL_MS = 50 as const;
 export const INJECTION_TIMEOUT_MS = 3000 as const;
 
 /**
- * Reads the MC Wallet provider directly off the window, if the extension has
+ * Reads the Bramble provider directly off the window, if the extension has
  * injected it. Returns null in SSR or when the extension is absent.
  */
 const readInjectedBramble = (): StarknetWindowObject | null => {
@@ -63,7 +63,7 @@ const readInjectedBramble = (): StarknetWindowObject | null => {
 };
 
 /**
- * Picks the MC Wallet from a list of discovered providers, matching first on the
+ * Picks the Bramble from a list of discovered providers, matching first on the
  * canonical id, then on a name substring. Returns null when none match.
  */
 const pickBramble = (wallets: readonly StarknetWindowObject[]): StarknetWindowObject | null =>
@@ -112,7 +112,7 @@ const scanInjectedStarknetWallets = (): readonly StarknetWindowObject[] => {
 };
 
 /**
- * Resolves the injected MC Wallet provider, waiting for the extension to inject
+ * Resolves the injected Bramble provider, waiting for the extension to inject
  * it rather than reading `window` once. Resolves as soon as the provider
  * appears; on timeout, falls back to any injected Starknet provider (dev). This
  * fixes the "clicking Connect does nothing" race where the click beat injection.

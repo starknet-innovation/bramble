@@ -63,7 +63,7 @@ export const punkMetadataUri = (id: number): string => {
   const metadata = {
     name: `Starknet Test Punk #${id}`,
     description:
-      "An ERC721 interoperability test token minted with MC Wallet. Uses the corresponding CryptoPunks catalog image for non-commercial testing; not affiliated with CryptoPunks.",
+      "An ERC721 interoperability test token minted with Bramble. Uses the corresponding CryptoPunks catalog image for non-commercial testing; not affiliated with CryptoPunks.",
     image: punkImageUrl(id),
     external_url: `${OFFICIAL_PUNK_DETAILS_BASE}${id}`,
     attributes: [

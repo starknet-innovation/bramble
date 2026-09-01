@@ -224,7 +224,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         const url = URL.createObjectURL(blob);
         const anchor = diagnosticsExport.ownerDocument.createElement("a");
         anchor.href = url;
-        anchor.download = "mc-wallet-diagnostics.json";
+        anchor.download = "bramble-diagnostics.json";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         showToast("Diagnostics downloaded", "success", diagnosticsExport);
@@ -257,7 +257,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
         const url = URL.createObjectURL(blob);
         const anchor = exportButton.ownerDocument.createElement("a");
         anchor.href = url;
-        anchor.download = "mc-wallet-backup.json";
+        anchor.download = "bramble-backup.json";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         showToast("Backup downloaded", "success", exportButton);

@@ -6,7 +6,7 @@
  * live transport while the side panel performs the current read or sign.
  *
  * The channel name contains an unguessable per-tab capability and both ends
- * validate every message. Only canonical mc-wallet Ledger paths and Stark field
+ * validate every message. Only canonical Bramble Ledger paths and Stark field
  * hashes may reach the device. Responses carry public app/key data or a raw
  * signature over the caller-supplied hash; no seed, private key, vault secret,
  * raw transport error, or device identifier crosses the channel.
@@ -22,7 +22,7 @@ const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}
 /**
  * Prefix for the same-extension BroadcastChannel used by one Ledger window
  */
-export const LEDGER_BROKER_CHANNEL_PREFIX = "mc-wallet-ledger-v1:";
+export const LEDGER_BROKER_CHANNEL_PREFIX = "bramble-ledger-v1:";
 
 /**
  * A validated session capability parsed from the grant-tab URL fragment.

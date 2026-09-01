@@ -183,7 +183,7 @@ export const bindMultisigParticipantPicker = (
     const card = parseWalletContactCard(walletCardInput?.value.trim() ?? "");
     const label = labelInput?.value.trim() ?? "";
     const message = !card
-      ? "Paste a valid MC Wallet card."
+      ? "Paste a valid Bramble card."
       : card.networkId !== screen.dataset["participantNetwork"]
         ? "That wallet card belongs to a different network."
         : !card.publicKeyX || !card.nostrPublicKey

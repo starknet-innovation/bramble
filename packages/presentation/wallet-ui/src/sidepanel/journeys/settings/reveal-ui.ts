@@ -55,7 +55,7 @@ export const revealFlow = (status: WalletStatus): string => {
       "reveal",
       `<section class="section reveal-warning" role="note">
       <p class="reveal-danger">${icon("alert")}Anyone who sees these can take your funds.</p>
-      <p class="hint">Reveal only in private. MC Wallet will never ask you for them. They are shown once here and never leave this screen.</p>
+      <p class="hint">Reveal only in private. Bramble will never ask you for them. They are shown once here and never leave this screen.</p>
     </section>
     <section class="section">
       <form id="reveal-form">

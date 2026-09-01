@@ -42,7 +42,7 @@ const quotedTransaction = async (
     const type = transaction["type"];
     return new Response(
       JSON.stringify({
-        id: "mc-wallet-strk20",
+        id: "bramble-strk20",
         jsonrpc: "2.0",
         result: {
           fee: {
@@ -114,7 +114,7 @@ describe("relay quote approvals", () => {
       if (body.method === "paymaster_executeTransaction") {
         submittedSignature = body.params.transaction.invoke?.signature;
         return Response.json({
-          id: "mc-wallet-strk20",
+          id: "bramble-strk20",
           jsonrpc: "2.0",
           result: { transaction_hash: "0xabc" },
         });
@@ -127,7 +127,7 @@ describe("relay quote approvals", () => {
         OutsideExecutionVersion.V2,
       );
       return Response.json({
-        id: "mc-wallet-strk20",
+        id: "bramble-strk20",
         jsonrpc: "2.0",
         result: {
           fee: {

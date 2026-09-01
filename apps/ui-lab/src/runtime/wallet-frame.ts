@@ -6,7 +6,7 @@ import type { LabSurface, LabTheme } from "./types";
 const DESIGN_CONTRACT = `
 <!--
 THESIS: A precise review bench makes wallet state, motion, and trust boundaries inspectable.
-OWN-WORLD: MC Wallet Clean Mono; achromatic interaction, honest success and failure colour.
+OWN-WORLD: Bramble Clean Mono; achromatic interaction, honest success and failure colour.
 STORY: Choose a scenario, inspect the wallet, step through its state machine, then leave feedback.
 FIRST VIEWPORT: The wallet frame and current checkpoint lead; controls and evidence sit beside it.
 FORM: A workbench, not a marketing page. Dense enough for review, quiet enough for concentration.

@@ -117,7 +117,7 @@ const createRuntime = (
   timers: Array<() => void> = [],
 ): GrantSessionRuntime => ({
   channel: (name) => {
-    expect(name).toBe(`mc-wallet-ledger-v1:${SESSION_ID}`);
+    expect(name).toBe(`bramble-ledger-v1:${SESSION_ID}`);
     return fake.channel;
   },
   sessionId: () => SESSION_ID,

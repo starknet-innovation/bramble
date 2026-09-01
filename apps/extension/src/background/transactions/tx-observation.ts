@@ -177,5 +177,5 @@ export const failureNoticeMessage = (entry: ActivityEntry): string => {
   if (entry.status === "rejected") {
     return `Starknet dropped "${entry.summary}" after confirming it. The transaction did not happen.`;
   }
-  return `MC Wallet could not confirm "${entry.summary}". Check it on an explorer before retrying.`;
+  return `Bramble could not confirm "${entry.summary}". Check it on an explorer before retrying.`;
 };

@@ -1,7 +1,7 @@
 /**
  * STRK20 shielded-pool action shapes consumed by the privacy protocol module.
  *
- * These are the canonical STRK20_ACTION types the MC Wallet extension's native
+ * These are the canonical STRK20_ACTION types the Bramble extension's native
  * shielded-pool surface (wallet_strk20*, Wallet-API 0.10.3) already understands.
  * Only the type declarations the terminal's privacy builders emit are ported
  * here; the extension's runtime validators/readers (readStrk20Actions,

@@ -53,7 +53,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
   const [recipient, setRecipient] = useState("");
   const [pool, setPool] = useState<PrivacyPoolSnapshot | null>(null);
   const [balances, setBalances] = useState<ReadonlyMap<bigint, string>>(new Map());
-  const [status, setStatus] = useState("Connect MC Wallet to inspect private balances.");
+  const [status, setStatus] = useState("Connect Bramble to inspect private balances.");
   const [busy, setBusy] = useState(false);
   const [swapReview, setSwapReview] = useState<SwapReview | null>(null);
   const [registration, setRegistration] = useState<"active" | "required" | "unknown">("unknown");
@@ -108,7 +108,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
 
   const activatePrivateBalances = async (): Promise<void> => {
     setBusy(true);
-    setStatus("Opening MC Wallet for one-time registration review…");
+    setStatus("Opening Bramble for one-time registration review…");
     try {
       const transactionHash = await registerPrivate();
       setRegistration("active");
@@ -145,7 +145,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
 
   const quotePrivateSwap = async (): Promise<void> => {
     if (!address) {
-      setStatus("Connect MC Wallet before preparing a private swap.");
+      setStatus("Connect Bramble before preparing a private swap.");
       return;
     }
     setBusy(true);
@@ -241,7 +241,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
           ))}
           <div className="privacy-trust">
             <small>Execution boundary</small>
-            <strong>MC Wallet</strong>
+            <strong>Bramble</strong>
             <span>Review · prove · authorize</span>
           </div>
         </aside>
@@ -258,7 +258,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
           {!isConnected ? (
             <div className="privacy-connect">
               <LockKeyhole size={28} />
-              <h3>Connect MC Wallet</h3>
+              <h3>Connect Bramble</h3>
               <p>Private state is requested only after an explicit action.</p>
               <button disabled={isConnecting} onClick={() => void connect()} type="button">
                 {isConnecting ? "Checking wallet…" : "Connect wallet"}

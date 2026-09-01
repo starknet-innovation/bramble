@@ -4,7 +4,7 @@ title: Start here for engineers
 permalink: /engineering/
 ---
 
-# MC Wallet — Start Here for Engineers
+# Bramble — Start Here for Engineers
 
 A reading order and two orientation diagrams for people working on the codebase.
 It threads the existing docs together and makes the enforced import-layering and

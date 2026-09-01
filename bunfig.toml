@@ -15,6 +15,6 @@
 preload = ["./tests/support/test-preload.ts"]
 coverageReporter = ["text"]
 # Vendored dependencies keep their own suites and coverage policies. They are
-# not repository tests and must not dilute MC Wallet's aggregate source floor.
+# not repository tests and must not dilute Bramble's aggregate source floor.
 pathIgnorePatterns = ["vendor/**"]
 coveragePathIgnorePatterns = ["vendor/**"]

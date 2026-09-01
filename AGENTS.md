@@ -1,4 +1,4 @@
-# Agent Guide — MC Wallet
+# Agent Guide — Bramble
 
 Browser-extension wallet for Starknet. Bun + strict TypeScript, no framework. This file is the
 operational guide for coding agents; `CONTRIBUTING.md` holds the binding architecture/security

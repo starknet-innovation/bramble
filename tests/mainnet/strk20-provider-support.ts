@@ -64,7 +64,7 @@ export const requestLiveProvider = (page: Page, request: LiveProviderRequest): P
       }
     ).starknet_bramble;
     if (!wallet) {
-      throw new Error("MC Wallet provider unavailable");
+      throw new Error("Bramble provider unavailable");
     }
     try {
       return await wallet.request(input);
@@ -89,7 +89,7 @@ export const connectLiveProvider = (page: Page): Promise<readonly string[]> =>
       }
     ).starknet_bramble;
     if (!wallet) {
-      throw new Error("MC Wallet provider unavailable");
+      throw new Error("Bramble provider unavailable");
     }
     return wallet.enable();
   });

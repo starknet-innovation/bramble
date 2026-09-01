@@ -125,7 +125,7 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
   },
   {
     fromVersion: 6,
-    // MC Wallet's first Argent account release derived every address with the
+    // Bramble's first Argent account release derived every address with the
     // public key as its salt. Retain that exact historical convention while
     // allowing later imports to carry an explicit upstream deployment salt.
     migrate(value) {

@@ -1,7 +1,7 @@
 /**
  * Standalone Ledger-grant stylesheet composed entirely from the extension's
  * shared skin and scale tokens. Native Chrome USB/HID pickers remain browser
- * chrome; this styles the trusted MC Wallet handoff and its safe diagnostic
+ * chrome; this styles the trusted Bramble handoff and its safe diagnostic
  * states so the one-time permission step feels continuous with the side panel.
  */
 import {

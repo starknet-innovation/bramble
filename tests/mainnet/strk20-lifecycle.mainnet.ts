@@ -373,7 +373,7 @@ test("runs the STRK20 core lifecycle through an acknowledged public caller", asy
     const protocolFee = await readProtocolFee(provider);
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
 
     await test.step("Connect only the funded account", async () => {
       const connection = connectLiveProvider(dapp);

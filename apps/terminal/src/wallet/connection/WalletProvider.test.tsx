@@ -44,7 +44,7 @@ const makeWallet = () => {
     id: "bramble",
     isPreauthorized: vi.fn(async () => false),
     invoke,
-    name: "MC Wallet",
+    name: "Bramble",
     on: vi.fn((event: WalletEvent, listener: (...args: never[]) => void) => {
       listeners.set(event, listener);
     }),
@@ -340,7 +340,7 @@ describe("WalletProvider", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fast send" }));
     await waitFor(() => expect(wallet.invoke).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("button", { name: "Continue in wallet" })).toBeNull();
-    expect(screen.getByText("Request sent to MC Wallet")).toBeTruthy();
+    expect(screen.getByText("Request sent to Bramble")).toBeTruthy();
     await act(async () => release());
     await waitFor(() =>
       expect(screen.getByTestId("transaction-result").textContent).toBe("0xabc"),

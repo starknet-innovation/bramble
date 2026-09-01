@@ -17,7 +17,7 @@ export type LiveDappServer = {
 
 const html = `<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8" /><title>MC Wallet STRK20 mainnet E2E</title></head>
+  <head><meta charset="utf-8" /><title>Bramble STRK20 mainnet E2E</title></head>
   <body><p data-testid="provider-status">missing</p>
     <script>
       const refresh = () => {

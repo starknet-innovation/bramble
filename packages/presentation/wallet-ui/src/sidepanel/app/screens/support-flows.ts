@@ -65,7 +65,7 @@ export const addressBookFlow = (
           ${textareaField({
             autocomplete: "off",
             className: "mono",
-            hint: "Paste a shared MC Wallet card to fill the address, signer key, and coordination identity together.",
+            hint: "Paste a shared Bramble card to fill the address, signer key, and coordination identity together.",
             label: "Wallet card (optional)",
             name: "walletCard",
             placeholder: "mcw:contact:1:…",

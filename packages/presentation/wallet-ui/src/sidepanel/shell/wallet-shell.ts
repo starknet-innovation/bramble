@@ -29,7 +29,7 @@ export const walletHeader = (
     ? (multisig.name ?? "Multisig account")
     : account
       ? accountDisplayName(account, preferences)
-      : "MC Wallet";
+      : "Bramble";
   const address = multisig?.address ?? account?.address;
   const network = status.network
     .replace(/^Starknet Mainnet$/, "Starknet")

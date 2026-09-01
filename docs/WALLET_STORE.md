@@ -6,7 +6,7 @@ permalink: /wallet-store/
 
 # Wallet store architecture and update safety
 
-This document is the reviewed persistence contract for MC Wallet. It covers the store layout at
+This document is the reviewed persistence contract for Bramble. It covers the store layout at
 the v6 encrypted-vault schema, account identity and scoping, mutation rules, Chrome extension
 updates, and the custody boundary for a future Ledger-derived STRK20 viewing key.
 

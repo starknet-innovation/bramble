@@ -16,7 +16,7 @@ const scenarioOptions = (selectedId: string): string =>
 
 const labMarkup = (selectedId: string): string => `
   <style>${LAB_STYLES}</style>
-  <section class="ui-lab" aria-label="MC Wallet UI Lab">
+  <section class="ui-lab" aria-label="Bramble UI Lab">
     <header class="lab-topbar">
       <div class="lab-brand">
         <span class="lab-mark" aria-hidden="true">MC</span>
@@ -49,7 +49,7 @@ const labMarkup = (selectedId: string): string => `
               data-lab-frame
               referrerpolicy="no-referrer"
               sandbox="allow-forms allow-same-origin"
-              title="MC Wallet production UI fixture"
+              title="Bramble production UI fixture"
             ></iframe>
             <span class="device-label" data-lab-device-label></span>
           </div>

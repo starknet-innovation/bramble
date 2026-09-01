@@ -403,7 +403,7 @@ describe("STRK20 proof maturity", () => {
         new Response(
           JSON.stringify({
             error: { code: -32_000, message: "failed" },
-            id: "mc-wallet-strk20",
+            id: "bramble-strk20",
             jsonrpc: "2.0",
           }),
         ),

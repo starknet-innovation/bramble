@@ -135,7 +135,7 @@ const PROVISIONAL_TX_HINT: Partial<Record<ActivityEntry["status"], string>> = {
   pending:
     "Broadcast accepted. Starknet normally confirms quickly, and this wallet checks immediately. A pending transaction can't be fee-bumped, replaced, or cancelled.",
   preconfirmed:
-    "Pre-confirmed by the block proposer, so the result is known but not yet final. MC Wallet keeps checking in the background and will tell you if it does not settle.",
+    "Pre-confirmed by the block proposer, so the result is known but not yet final. Bramble keeps checking in the background and will tell you if it does not settle.",
 };
 
 /**

@@ -262,7 +262,7 @@ const rpc = async (
   let response: Response;
   try {
     response = await http(url, {
-      body: JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0", method, params }),
+      body: JSON.stringify({ id: "bramble-strk20", jsonrpc: "2.0", method, params }),
       headers: { "content-type": "application/json" },
       method: "POST",
       signal: AbortSignal.timeout(PAYMASTER_TIMEOUT_MS),
@@ -289,7 +289,7 @@ const rpc = async (
     !isRecord(body) ||
     !hasOnlyKnownKeys(body, ["error", "id", "jsonrpc", "result"]) ||
     body["jsonrpc"] !== "2.0" ||
-    body["id"] !== "mc-wallet-strk20"
+    body["id"] !== "bramble-strk20"
   ) {
     throw lostAnswer(method);
   }

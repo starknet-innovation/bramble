@@ -191,7 +191,7 @@ export const backupHubFlow = (status: WalletStatus): string => {
         <p class="hint">Backup files include wallet preferences for reference. Restore applies only organization and display choices; saved contacts, tracked assets, and trust settings stay unchanged.</p>
         ${
           hasLedgerAccount
-            ? '<p class="review-flag" role="note">Ledger accounts are not restored by this backup or by MC Wallet’s recovery phrase. Recover them with the Ledger device and its Ledger recovery phrase.</p>'
+            ? '<p class="review-flag" role="note">Ledger accounts are not restored by this backup or by Bramble’s recovery phrase. Recover them with the Ledger device and its Ledger recovery phrase.</p>'
             : ""
         }
       </section>`,

@@ -5,7 +5,7 @@ import { type Call, OutsideExecutionVersion, outsideExecution } from "starknet";
 
 const config = { feeToken: "0x3", url: "https://paymaster.example" };
 const response = (result: unknown): Response =>
-  new Response(JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0", result }), {
+  new Response(JSON.stringify({ id: "bramble-strk20", jsonrpc: "2.0", result }), {
     headers: { "content-type": "application/json" },
     status: 200,
   });
