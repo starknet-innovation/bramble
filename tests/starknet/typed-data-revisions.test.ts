@@ -19,8 +19,8 @@
  * revisions lives in `typed-data-injectivity.test.ts`.
  */
 import { describe, expect, test } from "bun:test";
-import { snip12Vocabulary } from "@mc-wallet/starknet/snip12-vocabulary";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { snip12Vocabulary } from "@bramble/starknet/snip12-vocabulary";
+import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
 import { typedData as snip12 } from "starknet";
 
 const ACCOUNT = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";

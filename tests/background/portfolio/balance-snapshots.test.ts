@@ -1,8 +1,8 @@
 /** Durable balance snapshots stay scoped, validated, and bounded. */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { getTokenBalances } from "@mc-wallet/starknet/rpc";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { getTokenBalances } from "@bramble/starknet/rpc";
+import { createMemoryStore } from "@bramble/store/kv";
 import type { RpcProvider } from "starknet";
 import {
   BALANCE_SNAPSHOTS_KEY,

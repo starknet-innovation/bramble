@@ -2,7 +2,7 @@
  * Public signer-account metadata and exact runtime validation. These values
  * carry no signing material and are safe to project outside the vault.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,

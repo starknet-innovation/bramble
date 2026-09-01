@@ -23,14 +23,14 @@ import {
   fetchBoundedJson,
   HTTP_BODY_LIMITS,
   HTTP_REQUEST_TIMEOUT_MS,
-} from "@mc-wallet/core/http-json";
-import { isRecord, isSafeDecimals } from "@mc-wallet/core/json";
+} from "@bramble/core/http-json";
+import { isRecord, isSafeDecimals } from "@bramble/core/json";
 import {
   isStarkFieldElement,
   STARKNET_NETWORKS,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { AVNU_MULTI_ROUTE_SWAP } from "./avnu-route";
 
 /**

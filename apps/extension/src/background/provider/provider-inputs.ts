@@ -4,13 +4,13 @@
  * parses the panel-only fee-retry request, which is privileged and never
  * reachable from content scripts.
  */
-import { isUuid } from "@mc-wallet/core/ids";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
+import { isUuid } from "@bramble/core/ids";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { normalizeWalletOrigin } from "@bramble/core/origin";
 import {
   isProviderWatchAsset,
   type ProviderWatchAsset,
-} from "@mc-wallet/wallet-protocol/watch-asset";
+} from "@bramble/wallet-protocol/watch-asset";
 
 /**
  * Parses dapp permission queries from content-script traffic.

@@ -5,19 +5,19 @@
  * relay instead.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
-} from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/provider";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-model/networks";
+import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import { CallData, hash } from "starknet";
 import type { Strk20PaymasterConfig } from "../config";

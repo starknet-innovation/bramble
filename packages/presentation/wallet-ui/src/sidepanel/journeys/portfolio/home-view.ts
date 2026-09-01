@@ -4,10 +4,10 @@
  * portfolio state cannot push routing back over the repository size limit.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { explorerAccountUrl, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { explorerAccountUrl, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { DiscoveredNft, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";

@@ -1,17 +1,17 @@
 /** Privileged read-only first-run account derivation and mnemonic checks. */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   defaultWalletPreferences,
   type TokenConfig,
   type WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
-import { type DerivedAccountRef, isDerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/settings/preferences";
+import { type DerivedAccountRef, isDerivedAccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
   RECOVERY_SCAN_LIMITS,
   type RecoveryAccountCandidate,
-} from "@mc-wallet/wallet-model/recovery";
+} from "@bramble/wallet-model/recovery";
 import {
   readDiscoverRecoveryAccountsInput,
   readPreviewAccountInput,

@@ -6,13 +6,13 @@
  * (the fail-closed edge for adding a seed account later).
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { MAX_LEDGER_STRK20_VIEWING_KEYS } from "@mc-wallet/vault/account-secrets";
-import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { isVaultV7 } from "@mc-wallet/vault/schema";
-import { createWalletVaultService } from "@mc-wallet/vault/service";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { createMemoryStore } from "@bramble/store/kv";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { MAX_LEDGER_STRK20_VIEWING_KEYS } from "@bramble/vault/account-secrets";
+import { createEncryptedStore } from "@bramble/vault/encrypted-store";
+import { isVaultV7 } from "@bramble/vault/schema";
+import { createWalletVaultService } from "@bramble/vault/service";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const vaultKey = "mc-wallet:vault";

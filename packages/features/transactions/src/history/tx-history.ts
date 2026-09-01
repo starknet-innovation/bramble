@@ -13,16 +13,16 @@
  * re-checked by `isActivityEntry` at the message boundary before they render.
  */
 
-import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
-import { type ActivityEntry, isUnresolvedActivityStatus } from "@mc-wallet/transactions/activity";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
+import { type ActivityEntry, isUnresolvedActivityStatus } from "@bramble/transactions/activity";
 import {
   canonicalFelt,
   isStarkFieldElement,
   type StarknetNetworkId,
   sameFelt,
   uint256Felts,
-} from "@mc-wallet/wallet-model/networks";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/networks";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import { hash } from "starknet";
 
 const MAX_SUMMARY_LENGTH = 200;

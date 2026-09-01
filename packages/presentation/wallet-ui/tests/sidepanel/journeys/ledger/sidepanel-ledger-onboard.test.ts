@@ -7,10 +7,10 @@
  * `sidepanel-ledger-onboard-views.test.ts`.
  */
 import { describe, expect, test } from "bun:test";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import {
   createLedgerOnboardController,
   enumerateLedgerPubKeys,

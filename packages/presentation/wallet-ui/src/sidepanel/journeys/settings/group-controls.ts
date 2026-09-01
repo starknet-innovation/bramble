@@ -8,16 +8,16 @@
  * templates here — the canonical place to rename, re-icon, or delete a group.
  * Behaviour lives in ./group-ui.ts; styles in ./styles-home.ts.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import {
   type AccountGroup,
   type AccountGroupIcon,
   type AccountGroups,
   GROUP_ICONS,
-} from "@mc-wallet/settings/groups";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { inputControl } from "@mc-wallet/ui-kit/fields";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/settings/groups";
+import { button } from "@bramble/ui-kit/controls";
+import { inputControl } from "@bramble/ui-kit/fields";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { icon } from "../../shared/icons";
 
 /**

@@ -1,9 +1,9 @@
 /** Durable public sync receipts for encrypted multisig coordination. */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { createMemoryStore, type KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
-import { isNostrEventId, isNostrRelayUrl } from "@mc-wallet/wallet-model/nostr";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import { isAccountId } from "@bramble/wallet-model/accounts";
+import { isNostrEventId, isNostrRelayUrl } from "@bramble/wallet-model/nostr";
 
 /** Browser-local key for non-secret relay sync metadata. */
 export const NOSTR_COORDINATION_STORE_KEY = "mc-wallet:nostr-coordination:v1";

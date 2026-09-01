@@ -427,10 +427,10 @@ The repository must enforce the architecture offline:
 Fast local commands operate on one package and its dependents:
 
 ```bash
-bun run --filter @mc-wallet/wallet-protocol test
-bun run --filter @mc-wallet/privacy check
-bun run --filter @mc-wallet/wallet-ui test
-bun run --filter @mc-wallet/extension build
+bun run --filter @bramble/wallet-protocol test
+bun run --filter @bramble/privacy check
+bun run --filter @bramble/wallet-ui test
+bun run --filter @bramble/extension build
 ```
 
 The release gate remains authoritative and comprehensive:

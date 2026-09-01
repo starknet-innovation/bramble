@@ -6,7 +6,7 @@
  * switch prompt can never reconnect an origin the user has disconnected.
  */
 import { describe, expect, test } from "bun:test";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";

@@ -5,7 +5,7 @@
  * confirmation). Composed last in ./styles.ts so its reduced-motion block wins
  * over every earlier animation and transition.
  */
-import { MOTION, RADIUS, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { MOTION, RADIUS, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.

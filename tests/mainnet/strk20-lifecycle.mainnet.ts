@@ -6,11 +6,11 @@
  * account to the actions and is not a privacy-preserving production route.
  */
 
-import { STRK20_MAINNET_POOL } from "@mc-wallet/privacy/config";
-import { sanitizeStrk20Detail } from "@mc-wallet/privacy/official-sdk-errors";
-import { buildErc20ApproveCall } from "@mc-wallet/starknet/rpc-assets";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { isStrk20CallAndProof, type Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
+import { sanitizeStrk20Detail } from "@bramble/privacy/official-sdk-errors";
+import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { isStrk20CallAndProof, type Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { Page } from "@playwright/test";
 import { RpcProvider } from "starknet";
 import { expect, test } from "../e2e/fixtures";

@@ -1,8 +1,8 @@
 /** Validated runtime client for privileged Argent multisig operations. */
-import type { ArgentMultisigCall } from "@mc-wallet/multisig/chain";
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { ArgentMultisigCall } from "@bramble/multisig/chain";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import {
   type ArgentMultisigDeploymentReview,
   type ArgentMultisigIntentPackage,

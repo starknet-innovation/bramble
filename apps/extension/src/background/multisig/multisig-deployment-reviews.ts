@@ -1,7 +1,7 @@
 /**
  * Session-scoped one-time binding between deployment review and submission.
  */
-import type { KeyValueStore } from "@mc-wallet/store/kv";
+import type { KeyValueStore } from "@bramble/store/kv";
 import type { ArgentMultisigDeploymentReview } from "./multisig-inputs";
 
 const MAX_DEPLOYMENT_REVIEWS = 20;

@@ -18,8 +18,8 @@ import {
   summarizeStrk20Action,
   summarizeStrk20Plan,
   unavailableStrk20Service,
-} from "@mc-wallet/privacy/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/privacy/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 
 const account: AccountRef = {
   accountContractType: "openzeppelin",

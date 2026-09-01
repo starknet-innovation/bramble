@@ -5,7 +5,7 @@
  * the side panel UI.
  */
 import { describe, expect, test } from "bun:test";
-import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE, TYPE } from "@bramble/ui-kit/tokens";
 import { SIDEPANEL_STYLES } from "../../../src/sidepanel/styles/index";
 
 describe("sidepanel styles", () => {

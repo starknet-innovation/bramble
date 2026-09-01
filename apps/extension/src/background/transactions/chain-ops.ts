@@ -4,16 +4,16 @@
  * switches. Split from messages.ts to keep it within the size budget.
  */
 
-import { walletErrorMessage } from "@mc-wallet/core/errors";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { serializeAccountSignature } from "@mc-wallet/starknet/account-contracts";
-import { typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { walletErrorMessage } from "@bramble/core/errors";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
+import { typedDataHash } from "@bramble/starknet/typed-data";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";

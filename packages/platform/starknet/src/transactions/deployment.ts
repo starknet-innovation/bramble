@@ -3,14 +3,14 @@
  * plus status reads and submissions for OpenZeppelin accounts.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   STARKNET_NETWORKS,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { type Account, CallData, hash, type RpcProvider } from "starknet";
 import {
   ARGENT_ACCOUNT_CONTRACT,

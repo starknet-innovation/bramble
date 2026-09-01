@@ -1,5 +1,5 @@
-import { dockNavigation, menuLink, menuRow, optionRow } from "@mc-wallet/ui-kit/navigation";
-import { flowHeader, homeTabs } from "@mc-wallet/wallet-ui/lab";
+import { dockNavigation, menuLink, menuRow, optionRow } from "@bramble/ui-kit/navigation";
+import { flowHeader, homeTabs } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
 import { discoveredNft, statusFor } from "../../fixtures/fixtures";
 import {

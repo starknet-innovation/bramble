@@ -1,8 +1,8 @@
 /** Imported/derived account model and index-selection invariants. */
 import { describe, expect, test } from "bun:test";
-import { nextAccountIndex, sameWalletKey } from "@mc-wallet/vault/accounts";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { nextAccountIndex, sameWalletKey } from "@bramble/vault/accounts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { isAccountRef } from "@bramble/wallet-model/accounts";
 
 const imported = {
   accountContractType: "openzeppelin",

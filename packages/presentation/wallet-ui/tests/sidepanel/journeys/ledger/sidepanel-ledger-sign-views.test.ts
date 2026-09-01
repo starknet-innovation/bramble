@@ -4,7 +4,7 @@
  * being signed with. Errors surface escaped catalog recovery copy.
  */
 import { describe, expect, test } from "bun:test";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type {
   LedgerSignRequestSummary,
   WalletStatus,

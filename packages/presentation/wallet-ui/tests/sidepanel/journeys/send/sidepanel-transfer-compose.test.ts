@@ -9,8 +9,8 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import type { SendIntent } from "../../../../src/sidepanel/journeys/send/send-model";
 import { bindTransferCompose } from "../../../../src/sidepanel/journeys/send/transfer-compose-ui";

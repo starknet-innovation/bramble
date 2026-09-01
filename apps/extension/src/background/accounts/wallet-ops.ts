@@ -1,22 +1,18 @@
 /** RPC-backed wallet operations dispatched from the background message handler. */
 
-import type { MultisigStore } from "@mc-wallet/multisig/repository";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import {
-  buildErc20TransferCall,
-  type FeeEstimate,
-  parseTokenAmount,
-} from "@mc-wallet/starknet/rpc";
-import { type ActivityLog, systemClock } from "@mc-wallet/transactions/activity";
-import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
+import type { MultisigStore } from "@bramble/multisig/repository";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "@bramble/starknet/rpc";
+import { type ActivityLog, systemClock } from "@bramble/transactions/activity";
+import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { type BalanceSnapshotStore, cachedBalances } from "../portfolio/balance-snapshots";
@@ -87,7 +83,7 @@ export type WalletOpsDeps = {
  * re-deriving is the point: every caller resolves to the one network-filtered
  * implementation, so no path reviews against a wider context than another.
  */
-export { verificationContext } from "@mc-wallet/transactions/verify";
+export { verificationContext } from "@bramble/transactions/verify";
 
 /**
  * Builds a hash signer for a resolved active-account context without exposing

@@ -1,6 +1,6 @@
 /** Frozen STRK20 submission routes shared by policy and review summaries. */
 
-import type { FeeEstimate } from "@mc-wallet/wallet-protocol/fee-estimate";
+import type { FeeEstimate } from "@bramble/wallet-protocol/fee-estimate";
 import type { PaymasterAuthorizationReview } from "../paymaster/paymaster-typed-data";
 
 /**

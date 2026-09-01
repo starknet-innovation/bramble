@@ -14,8 +14,8 @@
  * strings. The INVOKE_CALL used by the STRK20_CALL_AND_PROOF result is a
  * separate, prover-produced shape and keeps its `entry_point` field.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { STARK_FIELD_PRIME } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { STARK_FIELD_PRIME } from "@bramble/wallet-model/networks";
 
 const HEX_FELT_PATTERN = /^0x[0-9a-fA-F]+$/;
 // A calldata placeholder the wallet resolves during action assembly:

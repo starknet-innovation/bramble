@@ -8,9 +8,9 @@
  * flow. No WebHID or background is touched.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import {
   createLedgerOnboardRuntime,
   type LedgerOnboardRuntimeDeps,

@@ -4,15 +4,15 @@
  * boundary; the vault passphrase is taken from the unlocked session, so the
  * message carries only the target network and the private key.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { type AccountContractType, isAccountContractType } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
   isStarkPrivateKey,
   normalizeFeltInput,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 /**
  * Parsed raw-key import request: a valid target network plus a private key

@@ -1,11 +1,11 @@
 /** Pure stable Argent multisig deployment form. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { selectField, textField } from "@mc-wallet/ui-kit/fields";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { selectField, textField } from "@bramble/ui-kit/fields";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigView,

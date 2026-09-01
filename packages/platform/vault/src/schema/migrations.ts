@@ -1,14 +1,14 @@
 /**
  * Pure vault migrations. Every branch must be deterministic and tested.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
 import {
   canonicalAccountId,
   canonicalLegacyAccountRef,
   type LegacyAccountRef,
-} from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/accounts";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 import {
   CURRENT_SCHEMA_VERSION,
   isVaultV1,

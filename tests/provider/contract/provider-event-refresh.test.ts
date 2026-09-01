@@ -1,6 +1,6 @@
 /** Content provider event ordering and coalescing regression checks. */
 import { describe, expect, test } from "bun:test";
-import type { ProviderEvent } from "@mc-wallet/wallet-protocol/events";
+import type { ProviderEvent } from "@bramble/wallet-protocol/events";
 import { createProviderEventRefresh } from "../../../apps/extension/src/content/provider-event-refresh";
 import { flushHeld } from "../../support/held";
 

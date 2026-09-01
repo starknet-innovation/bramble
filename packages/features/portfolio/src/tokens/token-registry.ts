@@ -12,8 +12,8 @@ import {
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { type TokenConfig, withTokenId } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/networks";
+import { type TokenConfig, withTokenId } from "@bramble/wallet-model/preferences";
 
 /**
  * A registry token without its derived preference id.

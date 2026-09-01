@@ -4,13 +4,13 @@
  * the browser under test.
  */
 
-import { isServiceUrl } from "@mc-wallet/core/service-url";
-import { parseTokenAmount } from "@mc-wallet/starknet/rpc";
+import { isServiceUrl } from "@bramble/core/service-url";
+import { parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   isNonZeroStarkFieldElement,
   isStarkPrivateKey,
   normalizeFeltInput,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 const MAINNET_ACK = "I_UNDERSTAND_THIS_WRITES_TO_MAINNET";
 const PUBLIC_CALLER_ACK = "I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS";

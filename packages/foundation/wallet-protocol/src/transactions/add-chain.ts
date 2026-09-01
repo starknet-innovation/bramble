@@ -4,9 +4,9 @@
  * descriptor is rejected identically on both sides of the wire.
  */
 
-import { hasOnlyKnownKeys, isNetworkLabel, isRecord, type Json } from "@mc-wallet/core/json";
-import { isOptionalServiceUrlList, isServiceUrlList } from "@mc-wallet/core/service-url";
-import { isCanonicalChainId } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isNetworkLabel, isRecord, type Json } from "@bramble/core/json";
+import { isOptionalServiceUrlList, isServiceUrlList } from "@bramble/core/service-url";
+import { isCanonicalChainId } from "@bramble/wallet-model/networks";
 
 /**
  * A custom Starknet chain a dapp asks the wallet to add, after bridge

@@ -1,12 +1,12 @@
 /** Submission-side privacy-paymaster contract tests. */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "@mc-wallet/privacy/paymaster";
-import { STRK20_SUBMISSION_UNAVAILABLE } from "@mc-wallet/privacy/service";
+import { WalletError } from "@bramble/core/errors";
+import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "@bramble/privacy/paymaster";
+import { STRK20_SUBMISSION_UNAVAILABLE } from "@bramble/privacy/service";
 import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
-} from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/provider";
 import {
   paymasterCall as call,
   paymasterChainId as chainId,

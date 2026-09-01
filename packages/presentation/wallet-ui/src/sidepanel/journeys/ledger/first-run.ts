@@ -7,8 +7,8 @@
  * passphrase; this module never touches the device or the vault directly.
  */
 
-import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+import { type AccountContractType, isAccountContractType } from "@bramble/wallet-model/accounts";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import { showToast } from "../../shared/dom";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-ack";
 

@@ -5,11 +5,11 @@
  * these exercise end-to-end lives in tests/wallet/origin-grants.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import type { KmsPort } from "@mc-wallet/vault/kms-port";
-import { createWalletVaultService } from "@mc-wallet/vault/service";
+import { createMemoryStore } from "@bramble/store/kv";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { createEncryptedStore } from "@bramble/vault/encrypted-store";
+import type { KmsPort } from "@bramble/vault/kms-port";
+import { createWalletVaultService } from "@bramble/vault/service";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const vaultKey = "mc-wallet:vault";

@@ -12,10 +12,10 @@
  * scrollable layout because its list can grow past the viewport. All spacing is
  * drawn from the scale tokens in the stylesheet — no inline pixel values here.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
-import { emptyState, pill } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
+import { escapeHtml } from "@bramble/core/html";
+import { emptyState, pill } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { menuRow } from "@bramble/ui-kit/navigation";
 import { icon } from "../../shared/icons";
 import { accountLabel } from "../../shared/parts";
 import type { LedgerCandidate, LedgerOnboardAddKind } from "./onboard-session";

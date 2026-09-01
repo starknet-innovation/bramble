@@ -3,14 +3,14 @@
  * signer adapter, endpoint failover, and RPC error classification.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { parseRetryAfterMilliseconds } from "@mc-wallet/core/http-json";
-import { isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { parseRetryAfterMilliseconds } from "@bramble/core/http-json";
+import { isRecord } from "@bramble/core/json";
 import {
   isNonZeroStarkFieldElement,
   STARKNET_RPC_SPEC_VERSION,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { RpcProvider, type RpcProviderOptions } from "starknet";
 import { RpcRefusedError, RpcTransportError, timedRpcFetch } from "./rpc-transport";
 

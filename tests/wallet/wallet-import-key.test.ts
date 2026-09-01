@@ -4,13 +4,13 @@
  * is routed to the encrypted vault (never plaintext, never echoed).
  */
 import { describe, expect, test } from "bun:test";
-import { argentAccountAddress } from "@mc-wallet/starknet/account-contracts";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { deriveImportedAccount } from "@mc-wallet/vault/accounts";
-import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { createWalletVaultService } from "@mc-wallet/vault/service";
-import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { argentAccountAddress } from "@bramble/starknet/account-contracts";
+import { createMemoryStore } from "@bramble/store/kv";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { deriveImportedAccount } from "@bramble/vault/accounts";
+import { createEncryptedStore } from "@bramble/vault/encrypted-store";
+import { createWalletVaultService } from "@bramble/vault/service";
+import { isAccountRef } from "@bramble/wallet-model/accounts";
 import { ec } from "starknet";
 import { readImportAccountInput } from "../../apps/extension/src/background/accounts/import-inputs";
 

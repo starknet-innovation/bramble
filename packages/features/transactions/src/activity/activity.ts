@@ -2,17 +2,17 @@
  * Local activity log for transactions this wallet submitted. Plain data kept
  * outside the encrypted vault; the clock stays injectable for tests.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@mc-wallet/transactions/alerts";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@bramble/transactions/alerts";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 export { activityToCsv } from "./activity-csv";
 

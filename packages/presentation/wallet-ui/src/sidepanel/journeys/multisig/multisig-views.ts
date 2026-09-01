@@ -1,23 +1,23 @@
 /** Pure screens for stable Argent multisig accounts and frozen intents. */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import {
   type ArgentMultisigConfigReview,
   type ArgentMultisigPublicConfig,
   reviewArgentMultisigConfigChange,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { preparedArgentMultisigFee } from "@mc-wallet/starknet/multisig-invoke";
-import { verificationContext, verifyCalls } from "@mc-wallet/transactions/verify";
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { preparedArgentMultisigFee } from "@bramble/starknet/multisig-invoke";
+import { verificationContext, verifyCalls } from "@bramble/transactions/verify";
+import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { menuRow } from "@bramble/ui-kit/navigation";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";

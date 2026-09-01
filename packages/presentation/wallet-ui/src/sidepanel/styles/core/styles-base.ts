@@ -20,7 +20,7 @@ import {
   TRACKING,
   TYPE,
   WEIGHT,
-} from "@mc-wallet/ui-kit/tokens";
+} from "@bramble/ui-kit/tokens";
 
 /**
  * Base stylesheet fragment consumed by SIDEPANEL_STYLES.

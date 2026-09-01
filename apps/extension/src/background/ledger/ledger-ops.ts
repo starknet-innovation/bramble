@@ -9,8 +9,8 @@
  * extension-page senders; no dapp origin can reach the device or the vault.
  */
 
-import { knownTokensForNetwork } from "@mc-wallet/portfolio/token-registry";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import {

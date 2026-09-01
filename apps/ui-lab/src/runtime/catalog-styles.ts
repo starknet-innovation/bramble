@@ -1,4 +1,4 @@
-import { RADIUS, SHADOW, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { RADIUS, SHADOW, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Storybook-only layout for presenting production design-system specimens.

@@ -20,8 +20,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { submitInvokeTransaction } from "@mc-wallet/starknet/rpc-submit";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { type Call, logger, type RpcProvider } from "starknet";
 
 logger.setLogLevel("FATAL");

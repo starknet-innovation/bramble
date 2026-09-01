@@ -1,5 +1,5 @@
 /** Argent multisig portfolio styles. */
-import { EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Stylesheet fragment for current Argent multisig surfaces.

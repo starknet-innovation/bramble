@@ -1,7 +1,7 @@
 /** Account-creation runtime messages kept together so every path carries its contract type. */
 
-import type { AccountContractType, AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { RecoveryAccountSelection } from "@mc-wallet/wallet-model/recovery";
+import type { AccountContractType, AccountRef } from "@bramble/wallet-model/accounts";
+import type { RecoveryAccountSelection } from "@bramble/wallet-model/recovery";
 import { isCreateAccountResponse } from "../../popup/responses/responses";
 import {
   isRecoveredAccountsResponse,

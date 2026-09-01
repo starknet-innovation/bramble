@@ -6,7 +6,7 @@
  * and every colour rides the skin tokens. Composed after the structure layer
  * in ./styles.ts.
  */
-import { CONTROL, EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Swap stylesheet fragment consumed by SIDEPANEL_STYLES.

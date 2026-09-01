@@ -6,15 +6,15 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { UI_COMPONENTS, UI_FOUNDATIONS } from "@mc-wallet/ui-kit/catalog";
-import { emptyState, pill, receipt } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { selectField, textField } from "@mc-wallet/ui-kit/fields";
-import { uiAttributes } from "@mc-wallet/ui-kit/html-attributes";
-import { ICON_NAMES } from "@mc-wallet/ui-kit/icons";
-import type { WalletStatus } from "@mc-wallet/wallet-ui/lab";
-import { onboarding } from "@mc-wallet/wallet-ui/lab";
+import { UI_COMPONENTS, UI_FOUNDATIONS } from "@bramble/ui-kit/catalog";
+import { emptyState, pill, receipt } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { selectField, textField } from "@bramble/ui-kit/fields";
+import { uiAttributes } from "@bramble/ui-kit/html-attributes";
+import { ICON_NAMES } from "@bramble/ui-kit/icons";
+import type { WalletStatus } from "@bramble/wallet-ui/lab";
+import { onboarding } from "@bramble/wallet-ui/lab";
 import {
   COMPONENT_STORY_COVERAGE,
   FOUNDATION_STORY_COVERAGE,

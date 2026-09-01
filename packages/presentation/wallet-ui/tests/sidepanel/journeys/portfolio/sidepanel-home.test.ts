@@ -5,9 +5,9 @@
  * actions live in one overflow menu.
  */
 import { describe, expect, test } from "bun:test";
-import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";

@@ -11,12 +11,12 @@
  * eventually disagree about what "honest" means.
  */
 
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { createActivityLog } from "@mc-wallet/transactions/activity";
-import { avnuRouterAddress, type SwapCall, type SwapService } from "@mc-wallet/transactions/avnu";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { createMemoryStore } from "@bramble/store/kv";
+import { createActivityLog } from "@bramble/transactions/activity";
+import { avnuRouterAddress, type SwapCall, type SwapService } from "@bramble/transactions/avnu";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";

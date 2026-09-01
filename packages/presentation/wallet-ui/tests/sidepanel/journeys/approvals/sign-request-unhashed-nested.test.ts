@@ -16,7 +16,7 @@
  * carries the difference only in the not-signed block.
  */
 import { describe, expect, test } from "bun:test";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
 import { typedData as snip12 } from "starknet";
 import { signRequestView } from "../../../../src/sidepanel/shared/sign-request";
 import {

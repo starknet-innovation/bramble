@@ -1,4 +1,4 @@
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
 import type { Preview } from "@storybook/html-vite";
 
 const preview: Preview = {

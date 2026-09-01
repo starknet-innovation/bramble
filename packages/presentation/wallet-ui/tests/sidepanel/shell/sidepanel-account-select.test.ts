@@ -10,9 +10,9 @@
  * opens its members picker without navigating away.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { AccountGroup } from "@mc-wallet/settings/groups";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
+import type { AccountGroup } from "@bramble/settings/groups";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../src/popup/responses/responses";
 import { accountFlow } from "../../../src/sidepanel/app/screens/flows";
 import type { WalletView } from "../../../src/sidepanel/app/screens/views";

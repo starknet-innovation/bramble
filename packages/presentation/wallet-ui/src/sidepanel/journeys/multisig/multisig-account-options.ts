@@ -4,7 +4,7 @@
  * opening one preserves its contract-account identity without changing the
  * vault's active signing account.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import { icon } from "../../shared/icons";
 import { accountAvatar, accountLabel } from "../../shared/parts";

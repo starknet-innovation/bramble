@@ -13,12 +13,12 @@
  * might trust.
  *
  * This is a pure view over untrusted input: it renders whatever it is handed,
- * including payloads the hashing boundary in `@mc-wallet/starknet/typed-data`
+ * including payloads the hashing boundary in `@bramble/starknet/typed-data`
  * refuses, and never decides whether a request may be signed.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
-import { isRecord } from "@mc-wallet/core/json";
-import { RADIUS, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { escapeHtml } from "@bramble/core/html";
+import { isRecord } from "@bramble/core/json";
+import { RADIUS, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 import { decodeSignRequest } from "./sign-request-decode";
 import type { SignRequestRow, SignRequestSplit } from "./sign-request-rows";
 import { SIGN_ROW_LIMIT, signRawText, signValueText } from "./sign-request-text";

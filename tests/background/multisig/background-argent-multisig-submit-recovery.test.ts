@@ -4,7 +4,7 @@ import {
   type ArgentMultisigSigningIntent,
   argentMultisigOperationId,
   memoryMultisigStore,
-} from "@mc-wallet/multisig/repository";
+} from "@bramble/multisig/repository";
 import {
   HARNESS_MULTISIG_ID,
   HARNESS_TARGET,

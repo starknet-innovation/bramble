@@ -6,8 +6,8 @@
  * the shell re-renders (leaving the screen).
  */
 
-import { button } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
+import { button } from "@bramble/ui-kit/controls";
+import { textField } from "@bramble/ui-kit/fields";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";

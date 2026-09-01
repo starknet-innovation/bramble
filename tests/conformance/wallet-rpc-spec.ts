@@ -11,8 +11,8 @@
  * and the `SpecMethod` type live in spec-fixtures.ts.
  */
 
-import type { ProviderMethod } from "@mc-wallet/wallet-protocol/bridge";
-import { SUPPORTED_SPECS } from "@mc-wallet/wallet-protocol/versions";
+import type { ProviderMethod } from "@bramble/wallet-protocol/bridge";
+import { SUPPORTED_SPECS } from "@bramble/wallet-protocol/versions";
 import {
   ACCOUNT,
   ADDRESS,

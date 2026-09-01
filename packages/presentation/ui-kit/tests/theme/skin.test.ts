@@ -3,8 +3,8 @@
  */
 import { expect, test } from "bun:test";
 
-import { defaultSkin } from "@mc-wallet/ui-kit/default-skin";
-import { applySkin, type Skin } from "@mc-wallet/ui-kit/skin";
+import { defaultSkin } from "@bramble/ui-kit/default-skin";
+import { applySkin, type Skin } from "@bramble/ui-kit/skin";
 
 test("applySkin writes every default token to the target root", () => {
   const applied: Record<string, string> = {};

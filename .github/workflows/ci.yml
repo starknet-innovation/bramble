@@ -226,7 +226,7 @@ jobs:
       - run: bun run check:audit
       # Terminal shares the root lockfile but remains a standalone dapp; verify
       # its production bundle before the extension release pipeline.
-      - run: bun run --filter @mc-wallet/terminal build
+      - run: bun run --filter @bramble/terminal build
       - run: bun run test:e2e:install
       - run: bun run check:files
       - run: bun run vendor:argent

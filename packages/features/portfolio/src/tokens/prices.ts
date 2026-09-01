@@ -1,9 +1,9 @@
 /** Cached fiat prices and charts with bounded, last-known-good storage. */
-import type { BoundedHttpFetch, BoundedHttpResponse } from "@mc-wallet/core/http-json";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { DisplayCurrency } from "@mc-wallet/wallet-model/preferences";
+import type { BoundedHttpFetch, BoundedHttpResponse } from "@bramble/core/http-json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import type { KeyValueStore } from "@bramble/store/kv";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { DisplayCurrency } from "@bramble/wallet-model/preferences";
 import {
   fetchAddressPrices,
   fetchChartPoints,

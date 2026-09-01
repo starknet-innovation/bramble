@@ -6,12 +6,12 @@
  * oldest entry once it fills past its bound.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   createEncryptedStore,
   encryptJson,
   isEncryptedEnvelope,
-} from "@mc-wallet/vault/encrypted-store";
+} from "@bramble/vault/encrypted-store";
 
 const vaultKey = "mc-wallet:vault";
 const passphrase = "correct horse battery staple";

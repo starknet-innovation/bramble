@@ -8,10 +8,10 @@
  * The device is a fake signer (a starknet.js key) — no hardware or transport.
  */
 import { describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { Vault } from "@bramble/vault/schema";
+import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { ec } from "starknet";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
 import {

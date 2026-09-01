@@ -7,15 +7,15 @@
  * notions of what the origin may see.
  */
 
-import { grantedAccountIdsFor } from "@mc-wallet/vault/origin-grants";
-import type { Vault } from "@mc-wallet/vault/schema";
+import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
+import type { Vault } from "@bramble/vault/schema";
 import type {
   CreateVaultAccountInput,
   OriginGrantInput,
   SignHashInput,
   WalletStatus,
-} from "@mc-wallet/vault/service";
-import type { AccountRef, DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/vault/service";
+import type { AccountRef, DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
 /**

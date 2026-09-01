@@ -7,9 +7,9 @@
  *    result so the error-result passthrough returns are hit.
  */
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_ORIGIN_GUARD } from "@mc-wallet/permissions/blocklist";
-import { memoryOriginHistory } from "@mc-wallet/permissions/origin-history";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+import { DEFAULT_ORIGIN_GUARD } from "@bramble/permissions/blocklist";
+import { memoryOriginHistory } from "@bramble/permissions/origin-history";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import {
   type ApprovalDecisionDeps,
   handleApprovalDecision,

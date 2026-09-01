@@ -2,33 +2,33 @@
  * MV3 background entrypoint. All privileged wallet state stays behind this worker.
  */
 
-import { untrustedFetch } from "@mc-wallet/core/http-json";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { createNostrCoordinationStore } from "@mc-wallet/multisig/coordination";
-import { createMultisigStore } from "@mc-wallet/multisig/repository";
-import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
-import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
-import { createPhishingFeed } from "@mc-wallet/permissions/phishing-feed";
-import { createPriceService, unavailablePriceService } from "@mc-wallet/portfolio/prices";
-import { createStrk20MaturityStore } from "@mc-wallet/privacy/maturity-store";
+import { untrustedFetch } from "@bramble/core/http-json";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { createNostrCoordinationStore } from "@bramble/multisig/coordination";
+import { createMultisigStore } from "@bramble/multisig/repository";
+import { createOriginGuard } from "@bramble/permissions/blocklist";
+import { createOriginHistoryStore } from "@bramble/permissions/origin-history";
+import { createPhishingFeed } from "@bramble/permissions/phishing-feed";
+import { createPriceService, unavailablePriceService } from "@bramble/portfolio/prices";
+import { createStrk20MaturityStore } from "@bramble/privacy/maturity-store";
 import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
-} from "@mc-wallet/privacy/official-sdk-service";
-import { unavailableStrk20Service } from "@mc-wallet/privacy/service";
+} from "@bramble/privacy/official-sdk-service";
+import { unavailableStrk20Service } from "@bramble/privacy/service";
 import {
   type ApprovalSurfacePreference,
   createPreferencesStore,
   type WalletPreferences,
-} from "@mc-wallet/settings/preferences";
-import { setReliabilityDiagnosticsEnabled } from "@mc-wallet/starknet/rpc-diagnostics";
-import { createActivityLog, systemClock } from "@mc-wallet/transactions/activity";
-import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { createSwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
-import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { createWalletVaultService } from "@mc-wallet/vault/service";
-import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@mc-wallet/vault/store-migration";
-import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+} from "@bramble/settings/preferences";
+import { setReliabilityDiagnosticsEnabled } from "@bramble/starknet/rpc-diagnostics";
+import { createActivityLog, systemClock } from "@bramble/transactions/activity";
+import { createAllowanceStore } from "@bramble/transactions/allowance-store";
+import { createSwapService, unavailableSwapService } from "@bramble/transactions/avnu";
+import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
+import { createWalletVaultService } from "@bramble/vault/service";
+import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@bramble/vault/store-migration";
+import type { WalletEventMessage } from "@bramble/wallet-protocol/events";
 import * as krustyModule from "/dependencies/krusty-kms/krusty_kms_wasm.js";
 import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 import {

@@ -42,7 +42,7 @@
  * and reviewed. That is the intended direction — a wallet that guesses at an
  * unreviewed ABI is signing calldata nobody has read.
  */
-import { asFelt, canonicalFelt, sameFelt, uint256Felts } from "@mc-wallet/wallet-model/networks";
+import { asFelt, canonicalFelt, sameFelt, uint256Felts } from "@bramble/wallet-model/networks";
 
 /**
  * The single exchange entry point this wallet builds against. AVNU's exchange

@@ -3,7 +3,7 @@
 import {
   ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE,
   isArgentMultisigFeeExpiredMessage,
-} from "@mc-wallet/starknet/multisig-invoke";
+} from "@bramble/starknet/multisig-invoke";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { feeReplacementIntentFor, parseArgentMultisigSignature } from "./multisig-model";
 import type { MultisigUiDeps } from "./multisig-ui-deps";

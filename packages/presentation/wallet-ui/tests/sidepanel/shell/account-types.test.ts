@@ -6,8 +6,8 @@ import { expect, test } from "bun:test";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
-} from "@mc-wallet/starknet/account-contracts";
-import { knownAccountType } from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/starknet/account-contracts";
+import { knownAccountType } from "@bramble/wallet-ui/lab";
 
 const OZ_CLASS_HASH = "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381";
 

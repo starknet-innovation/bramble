@@ -6,14 +6,14 @@
  * labelled with where it came from, so the origin of each is clear.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import {
   type AllowanceView,
   isUnlimitedAllowance,
-} from "@mc-wallet/transactions/allowance-discovery";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/transactions/allowance-discovery";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { accountLabel, contextHelp, flowHeader, flowScreen } from "../../shared/parts";
 import { compactAmount } from "./token-row";

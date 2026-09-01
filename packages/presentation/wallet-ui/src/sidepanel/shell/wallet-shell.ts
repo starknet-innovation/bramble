@@ -3,13 +3,13 @@
  * notice, action tiles, and undeployed-account notice.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { callout } from "@mc-wallet/ui-kit/content";
-import { button, iconButton, iconLink } from "@mc-wallet/ui-kit/controls";
-import { dockNavigation } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { escapeHtml } from "@bramble/core/html";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { callout } from "@bramble/ui-kit/content";
+import { button, iconButton, iconLink } from "@bramble/ui-kit/controls";
+import { dockNavigation } from "@bramble/ui-kit/navigation";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { type IconName, icon } from "../shared/icons";
 import { accountAvatar, accountDisplayName, type WalletView } from "../shared/parts";

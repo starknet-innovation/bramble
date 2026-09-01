@@ -4,7 +4,7 @@
  * deterministic state machine to the grant tab's DOM.
  */
 
-import type { LedgerTransitionPhase } from "@mc-wallet/ledger-protocol/device-transition";
+import type { LedgerTransitionPhase } from "@bramble/ledger-protocol/device-transition";
 
 /**
  * Fixed non-sensitive copy rendered for one Ledger transition phase.

@@ -10,8 +10,8 @@
  * user more than one notice.
  */
 import { describe, expect, test } from "bun:test";
-import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
+import type { TransactionStatusReport } from "@bramble/starknet/rpc";
+import type { ActivityEntry } from "@bramble/transactions/activity";
 import {
   expiredObservations,
   failureNoticeMessage,

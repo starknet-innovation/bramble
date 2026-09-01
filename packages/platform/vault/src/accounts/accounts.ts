@@ -2,8 +2,8 @@
  * Starknet account derivation through Krusty KMS with no local crypto fallback.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
+import { WalletError } from "@bramble/core/errors";
+import { verifyStarkSignature } from "@bramble/starknet/signature-verify";
 import type {
   AccountContractType,
   AccountRef,
@@ -11,12 +11,12 @@ import type {
   ImportedAccountRef,
   LedgerAccountRef,
   LedgerPubKeyEntry,
-} from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
   LEDGER_EIP2645_APPLICATION,
   ledgerAccountPath,
-} from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/wallet-model/ledger-path";
 import {
   canonicalFelt,
   DEFAULT_NETWORK,
@@ -25,8 +25,8 @@ import {
   isStarkPrivateKey,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { isMnemonicPassphrase, isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/networks";
+import { isMnemonicPassphrase, isMnemonicText } from "@bramble/wallet-model/passphrase";
 import type { KmsPort } from "../kms-port";
 import { deriveAccountContractAddress, resolveAccountClassHash } from "./account-contract";
 

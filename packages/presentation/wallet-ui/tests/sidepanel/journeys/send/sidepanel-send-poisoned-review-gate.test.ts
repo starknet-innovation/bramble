@@ -11,8 +11,8 @@
  * blocked everything could not pass.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/journeys/send/send-views";
 import {

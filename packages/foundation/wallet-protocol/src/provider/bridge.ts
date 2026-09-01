@@ -2,10 +2,10 @@
  * Pure provider bridge rules shared by the injected page script and content script.
  */
 
-import { isUuid } from "@mc-wallet/core/ids";
-import type { Json } from "@mc-wallet/core/json";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
+import { isUuid } from "@bramble/core/ids";
+import type { Json } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isWalletOrigin } from "@bramble/core/origin";
 import {
   providerStrk20Balances,
   providerStrk20CallAndProof,

@@ -1,7 +1,7 @@
 /** Side-panel template and navigation contract checks. */
 import { describe, expect, test } from "bun:test";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard, WALLET_VIEWS } from "../../../../src/sidepanel/app/screens/views";
 import {

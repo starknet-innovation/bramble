@@ -1,19 +1,16 @@
 /** Stable Argent Multisig 0.2 signer-management decoding and state transitions. */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   ARGENT_MULTISIG_MAX_SIGNERS,
   normalizeArgentMultisigConfig,
-} from "@mc-wallet/starknet/account-contracts";
-import {
-  type ArgentMultisigCall,
-  isArgentMultisigCalls,
-} from "@mc-wallet/starknet/multisig-invoke";
+} from "@bramble/starknet/account-contracts";
+import { type ArgentMultisigCall, isArgentMultisigCalls } from "@bramble/starknet/multisig-invoke";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 const CONFIG_ENTRYPOINTS = new Set([
   "add_signers",

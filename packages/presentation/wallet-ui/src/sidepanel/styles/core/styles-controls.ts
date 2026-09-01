@@ -12,7 +12,7 @@
  * Feedback transforms ride the strong ease-out curve — never an overshoot on
  * the press-down frame the user watches most.
  */
-import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 // Chevron shape for the select control, consumed as a CSS mask so the glyph is
 // PAINTED by the skin's muted token — a mask reads only the alpha channel, so

@@ -1,10 +1,10 @@
 /** Shared participant picker for multisig setup and signer management. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { inputControl, textareaField } from "@mc-wallet/ui-kit/fields";
-import { icon } from "@mc-wallet/ui-kit/icons";
-import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
-import { parseWalletContactCard } from "@mc-wallet/wallet-model/preferences";
+import { escapeHtml } from "@bramble/core/html";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { inputControl, textareaField } from "@bramble/ui-kit/fields";
+import { icon } from "@bramble/ui-kit/icons";
+import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
+import { parseWalletContactCard } from "@bramble/wallet-model/preferences";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { accountAvatar, accountLabel } from "../../shared/parts";
 import type { MultisigClient } from "./multisig-runtime";

@@ -2,7 +2,7 @@
  * Key-value storage checks prove raw adapters reject lossy JSON writes.
  */
 import { afterEach, expect, test } from "bun:test";
-import { assertStorageKey, createMemoryStore } from "@mc-wallet/store/kv";
+import { assertStorageKey, createMemoryStore } from "@bramble/store/kv";
 import { createBrowserLocalStore } from "../../apps/extension/src/browser-storage";
 
 type FakeStorageArea = {

@@ -6,10 +6,10 @@
  * the large CONTRACT_CLASS is never surfaced in the approval snapshot.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { DeclareInput } from "@mc-wallet/starknet/rpc";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { DeclareInput } from "@bramble/starknet/rpc";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";

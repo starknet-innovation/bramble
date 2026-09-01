@@ -1,12 +1,12 @@
 /** Focused add, signer, receive, and intent-import screens for Argent multisig. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { selectField, textareaField, textField } from "@mc-wallet/ui-kit/fields";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";

@@ -2,7 +2,7 @@
  * Private-balance disclosure, activation, and shielding journey styles.
  */
 
-import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Privacy styles inherit every color from the active skin.

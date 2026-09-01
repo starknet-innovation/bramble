@@ -12,7 +12,7 @@
  * ride --mc-positive/--mc-danger so a gain, success, or risk always reads by
  * meaning rather than decorative hue.
  */
-import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 import { SIGN_REQUEST_STYLES } from "../../shared/sign-request";
 
 /**

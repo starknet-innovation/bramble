@@ -4,9 +4,9 @@
  * until a single confirm action atomically claims them.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isSha256Digest } from "@mc-wallet/core/ids";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { WalletError } from "@bramble/core/errors";
+import { isSha256Digest } from "@bramble/core/ids";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { Call } from "starknet";
 import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalRiskFlag } from "../approvals/approvals";

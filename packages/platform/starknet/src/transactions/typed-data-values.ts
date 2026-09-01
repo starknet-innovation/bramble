@@ -34,12 +34,7 @@
  * here throws or hashes; it only answers "would the declared shape describe this
  * value", and a `false` means the caller must refuse the payload outright.
  */
-import {
-  hasOnlyArrayEntries,
-  isOwnDataProperty,
-  isRecord,
-  JSON_BUDGETS,
-} from "@mc-wallet/core/json";
+import { hasOnlyArrayEntries, isOwnDataProperty, isRecord, JSON_BUDGETS } from "@bramble/core/json";
 import { snip12Scalar } from "./snip12-scalars";
 import {
   ENUM_TYPE,

@@ -6,18 +6,18 @@
  * is produced.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   prepareStrk20Registration,
   readStrk20Balances,
   readStrk20RegistrationStatus,
   type Strk20SubmissionResult,
   submitStrk20Actions,
-} from "@mc-wallet/privacy/service";
-import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
-import { systemClock } from "@mc-wallet/transactions/activity";
-import { verificationContext } from "@mc-wallet/transactions/verify";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/privacy/service";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
+import { systemClock } from "@bramble/transactions/activity";
+import { verificationContext } from "@bramble/transactions/verify";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import {
   approvalPayloadMatchesContext,
   createApprovalContext,

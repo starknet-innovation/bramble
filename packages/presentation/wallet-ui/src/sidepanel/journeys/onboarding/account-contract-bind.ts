@@ -1,6 +1,6 @@
 /** Account-contract choice bindings shared by software and first-run Ledger setup. */
 
-import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { isAccountContractType } from "@bramble/wallet-model/accounts";
 
 type AccountContractChoiceDeps = {
   readonly app: Element | null;

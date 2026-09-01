@@ -9,7 +9,7 @@ import {
   decodeTransferEvent,
   type HistoryEvent,
   TRANSFER_EVENT_KEY,
-} from "@mc-wallet/transactions/tx-history";
+} from "@bramble/transactions/tx-history";
 
 const ACCOUNT = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const OTHER = "0x0777000000000000000000000000000000000000000000000000000000000abc";

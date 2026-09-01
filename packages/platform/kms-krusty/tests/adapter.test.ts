@@ -2,8 +2,8 @@
  * Krusty adapter checks prove WASM outputs are validated at the crypto boundary.
  */
 import { describe, expect, test } from "bun:test";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { STARK_CURVE_ORDER } from "@mc-wallet/wallet-model/networks";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { STARK_CURVE_ORDER } from "@bramble/wallet-model/networks";
 
 const createModule = (signatureR = "0x1") => ({
   deriveNostrPublicKey() {

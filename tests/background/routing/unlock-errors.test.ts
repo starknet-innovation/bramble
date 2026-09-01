@@ -3,9 +3,9 @@
  * keeping a corrupt store envelope distinct.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { createEncryptedStore, encryptJson } from "@mc-wallet/vault/encrypted-store";
+import { WalletError } from "@bramble/core/errors";
+import { createMemoryStore } from "@bramble/store/kv";
+import { createEncryptedStore, encryptJson } from "@bramble/vault/encrypted-store";
 import { unlockFailureError } from "../../../apps/extension/src/background/routing/unlock-errors";
 
 const vaultKey = "mc-wallet:vault";

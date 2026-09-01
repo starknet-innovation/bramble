@@ -17,24 +17,20 @@ import {
   assertLedgerDeviceReady,
   type LedgerDeviceClient,
   ledgerPublicKeyX,
-} from "@mc-wallet/ledger-protocol/client";
-import {
-  asLedgerRejection,
-  LedgerRejection,
-  ledgerMessage,
-} from "@mc-wallet/ledger-protocol/errors";
+} from "@bramble/ledger-protocol/client";
+import { asLedgerRejection, LedgerRejection, ledgerMessage } from "@bramble/ledger-protocol/errors";
 import {
   closeLedgerSessionQuietly,
   type LedgerConnector,
   type LedgerDeviceChoice,
   type LedgerDeviceSession,
-} from "@mc-wallet/ledger-protocol/session";
+} from "@bramble/ledger-protocol/session";
 import type {
   AccountContractType,
   LedgerAccountRef,
   LedgerPubKeyEntry,
-} from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@bramble/wallet-model/ledger-path";
 
 /**
  * Number of account indices read per enumeration page (a page is `start` …

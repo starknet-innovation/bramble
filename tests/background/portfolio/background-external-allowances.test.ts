@@ -6,14 +6,14 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore, defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { isUnlimitedAllowance } from "@mc-wallet/transactions/allowance-discovery";
-import type { TrackedAllowanceScan } from "@mc-wallet/transactions/allowance-scan";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { verificationContext } from "@mc-wallet/transactions/verify-decode";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createPreferencesStore, defaultWalletPreferences } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import { isUnlimitedAllowance } from "@bramble/transactions/allowance-discovery";
+import type { TrackedAllowanceScan } from "@bramble/transactions/allowance-scan";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import { verificationContext } from "@bramble/transactions/verify-decode";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   allowanceOwner,
   recordApproveAllowances,

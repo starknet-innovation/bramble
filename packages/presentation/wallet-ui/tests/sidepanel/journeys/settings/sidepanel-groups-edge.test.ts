@@ -9,8 +9,8 @@
  * restoration across the full-repaint that each mutation triggers.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { AccountGroups } from "@mc-wallet/settings/groups";
-import { preferences } from "@mc-wallet/testkit/sidepanel";
+import type { AccountGroups } from "@bramble/settings/groups";
+import { preferences } from "@bramble/testkit/sidepanel";
 import {
   captureRepaintFocus,
   focusMemo,

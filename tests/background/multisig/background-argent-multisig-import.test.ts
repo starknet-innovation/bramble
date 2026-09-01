@@ -2,7 +2,7 @@
  * Cross-wallet intent import and destructive-removal guards.
  */
 import { describe, expect, test } from "bun:test";
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import {
   HARNESS_MULTISIG_ID,
   HARNESS_TARGET,

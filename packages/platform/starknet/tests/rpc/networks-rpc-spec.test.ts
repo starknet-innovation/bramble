@@ -8,8 +8,8 @@
  * finality, `proof`/`proofFacts` invoke fields) fail quietly rather than loudly.
  */
 import { expect, test } from "bun:test";
-import { createRpcProvider } from "@mc-wallet/starknet/provider";
-import { STARKNET_NETWORKS, STARKNET_RPC_SPEC_VERSION } from "@mc-wallet/wallet-model/networks";
+import { createRpcProvider } from "@bramble/starknet/provider";
+import { STARKNET_NETWORKS, STARKNET_RPC_SPEC_VERSION } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 
 // The wallet gateway and Foundation fallback nodes share this domain. Third-

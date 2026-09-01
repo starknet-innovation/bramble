@@ -1,7 +1,7 @@
 /** Complete Receive cards never expose a partial coordination identity. */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import { account } from "@bramble/testkit/sidepanel";
 import { receiveAddressView } from "../../../src/sidepanel/journeys/send/receive-view";
 import type { SidepanelWallet } from "../../../src/sidepanel/runtime/runtime";
 import { bindReceiveWalletCard } from "../../../src/sidepanel/shell/dashboard-bindings";

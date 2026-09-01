@@ -1,8 +1,8 @@
-import { escapeHtml } from "@mc-wallet/core/html";
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { defaultSkin } from "@mc-wallet/ui-kit/default-skin";
-import type { Skin } from "@mc-wallet/ui-kit/skin";
-import { EASE, MOTION, RADIUS, SHADOW, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { escapeHtml } from "@bramble/core/html";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { defaultSkin } from "@bramble/ui-kit/default-skin";
+import type { Skin } from "@bramble/ui-kit/skin";
+import { EASE, MOTION, RADIUS, SHADOW, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 import type { Meta } from "@storybook/html-vite";
 import {
   CATALOG_META,

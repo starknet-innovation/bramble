@@ -3,7 +3,7 @@
  * stage, while one restrained orbital motif gives setup a distinct motion
  * language without introducing new colour semantics.
  */
-import { EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 const ONBOARDING_TRANSITION = {
   enterMs: 300,

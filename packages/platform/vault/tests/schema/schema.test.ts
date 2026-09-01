@@ -2,7 +2,7 @@
  * Vault schema checks reject ambiguous decrypted wallet state.
  */
 import { describe, expect, test } from "bun:test";
-import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { ARGENT_ACCOUNT_CONTRACT } from "@bramble/starknet/account-contracts";
 import {
   CURRENT_SCHEMA_VERSION,
   emptyVault,
@@ -11,15 +11,15 @@ import {
   isVaultV4,
   isVaultV5,
   isVaultV7,
-} from "@mc-wallet/vault/schema";
+} from "@bramble/vault/schema";
 import {
   type AccountRef,
   isAccountId,
   isAccountIdForNetwork,
   isKeylessAccount,
-} from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 
 const account = {
   address: "0x123",

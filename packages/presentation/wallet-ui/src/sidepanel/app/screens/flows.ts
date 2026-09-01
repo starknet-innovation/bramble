@@ -1,15 +1,15 @@
 /** Focused side-panel task screens opened from the wallet dock. */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import { receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { selectField, textareaField, textField } from "@mc-wallet/ui-kit/fields";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
+import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import { receipt } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
+import { menuRow } from "@bramble/ui-kit/navigation";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { ConnectedSite, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { multisigAccountOptions } from "../../journeys/multisig/multisig-account-options";

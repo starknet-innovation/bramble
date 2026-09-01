@@ -5,7 +5,7 @@
  * through untouched.
  */
 import { describe, expect, test } from "bun:test";
-import type { AccountGroups } from "@mc-wallet/settings/groups";
+import type { AccountGroups } from "@bramble/settings/groups";
 import {
   CREATE_GROUP_PANEL,
   healTransientGroupState,

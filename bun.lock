@@ -5,28 +5,28 @@
     "": {
       "name": "mc-wallet",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/kms-krusty": "workspace:*",
-        "@mc-wallet/ledger-protocol": "workspace:*",
-        "@mc-wallet/multisig": "workspace:*",
-        "@mc-wallet/permissions": "workspace:*",
-        "@mc-wallet/portfolio": "workspace:*",
-        "@mc-wallet/privacy": "workspace:*",
-        "@mc-wallet/settings": "workspace:*",
-        "@mc-wallet/starknet": "workspace:*",
-        "@mc-wallet/store": "workspace:*",
-        "@mc-wallet/transactions": "workspace:*",
-        "@mc-wallet/ui-kit": "workspace:*",
-        "@mc-wallet/vault": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
-        "@mc-wallet/wallet-protocol": "workspace:*",
-        "@mc-wallet/wallet-ui": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/kms-krusty": "workspace:*",
+        "@bramble/ledger-protocol": "workspace:*",
+        "@bramble/multisig": "workspace:*",
+        "@bramble/permissions": "workspace:*",
+        "@bramble/portfolio": "workspace:*",
+        "@bramble/privacy": "workspace:*",
+        "@bramble/settings": "workspace:*",
+        "@bramble/starknet": "workspace:*",
+        "@bramble/store": "workspace:*",
+        "@bramble/transactions": "workspace:*",
+        "@bramble/ui-kit": "workspace:*",
+        "@bramble/vault": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
+        "@bramble/wallet-protocol": "workspace:*",
+        "@bramble/wallet-ui": "workspace:*",
         "@starknetfoundation/krusty-kms-wasm": "0.10.0",
         "starknet": "10.0.2",
       },
       "devDependencies": {
         "@biomejs/biome": "2.5.8",
-        "@mc-wallet/testkit": "workspace:*",
+        "@bramble/testkit": "workspace:*",
         "@playwright/test": "1.62.1",
         "@types/bun": "1.3.14",
         "@types/node": "26.2.0",
@@ -37,32 +37,32 @@
       },
     },
     "apps/extension": {
-      "name": "@mc-wallet/extension",
+      "name": "@bramble/extension",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/kms-krusty": "workspace:*",
-        "@mc-wallet/ledger-browser": "workspace:*",
-        "@mc-wallet/ledger-protocol": "workspace:*",
-        "@mc-wallet/multisig": "workspace:*",
-        "@mc-wallet/permissions": "workspace:*",
-        "@mc-wallet/portfolio": "workspace:*",
-        "@mc-wallet/privacy": "workspace:*",
-        "@mc-wallet/settings": "workspace:*",
-        "@mc-wallet/starknet": "workspace:*",
-        "@mc-wallet/store": "workspace:*",
-        "@mc-wallet/transactions": "workspace:*",
-        "@mc-wallet/ui-kit": "workspace:*",
-        "@mc-wallet/vault": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
-        "@mc-wallet/wallet-protocol": "workspace:*",
-        "@mc-wallet/wallet-ui": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/kms-krusty": "workspace:*",
+        "@bramble/ledger-browser": "workspace:*",
+        "@bramble/ledger-protocol": "workspace:*",
+        "@bramble/multisig": "workspace:*",
+        "@bramble/permissions": "workspace:*",
+        "@bramble/portfolio": "workspace:*",
+        "@bramble/privacy": "workspace:*",
+        "@bramble/settings": "workspace:*",
+        "@bramble/starknet": "workspace:*",
+        "@bramble/store": "workspace:*",
+        "@bramble/transactions": "workspace:*",
+        "@bramble/ui-kit": "workspace:*",
+        "@bramble/vault": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
+        "@bramble/wallet-protocol": "workspace:*",
+        "@bramble/wallet-ui": "workspace:*",
         "buffer": "6.0.3",
         "starknet": "10.0.2",
       },
     },
     "apps/terminal": {
-      "name": "@mc-wallet/terminal",
+      "name": "@bramble/terminal",
       "version": "0.1.0",
       "dependencies": {
         "@avnu/avnu-sdk": "4.2.0",
@@ -88,19 +88,19 @@
       },
     },
     "apps/ui-lab": {
-      "name": "@mc-wallet/ui-lab",
+      "name": "@bramble/ui-lab",
       "version": "0.1.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/ledger-protocol": "workspace:*",
-        "@mc-wallet/multisig": "workspace:*",
-        "@mc-wallet/privacy": "workspace:*",
-        "@mc-wallet/settings": "workspace:*",
-        "@mc-wallet/starknet": "workspace:*",
-        "@mc-wallet/transactions": "workspace:*",
-        "@mc-wallet/ui-kit": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
-        "@mc-wallet/wallet-ui": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/ledger-protocol": "workspace:*",
+        "@bramble/multisig": "workspace:*",
+        "@bramble/privacy": "workspace:*",
+        "@bramble/settings": "workspace:*",
+        "@bramble/starknet": "workspace:*",
+        "@bramble/transactions": "workspace:*",
+        "@bramble/ui-kit": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
+        "@bramble/wallet-ui": "workspace:*",
       },
       "devDependencies": {
         "@biomejs/biome": "2.5.8",
@@ -120,7 +120,7 @@
       },
     },
     "apps/website": {
-      "name": "@mc-wallet/website",
+      "name": "@bramble/website",
       "version": "0.1.0",
       "dependencies": {
         "@fontsource-variable/instrument-sans": "5.3.0",
@@ -144,193 +144,193 @@
       },
     },
     "packages/features/multisig": {
-      "name": "@mc-wallet/multisig",
+      "name": "@bramble/multisig",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/starknet": "workspace:*",
-        "@mc-wallet/store": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/starknet": "workspace:*",
+        "@bramble/store": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
         "starknet": "10.0.2",
       },
     },
     "packages/features/permissions": {
-      "name": "@mc-wallet/permissions",
+      "name": "@bramble/permissions",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/store": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/store": "workspace:*",
       },
     },
     "packages/features/portfolio": {
-      "name": "@mc-wallet/portfolio",
+      "name": "@bramble/portfolio",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/store": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/store": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
         "starknet": "10.0.2",
       },
     },
     "packages/features/privacy": {
-      "name": "@mc-wallet/privacy",
+      "name": "@bramble/privacy",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/starknet": "workspace:*",
-        "@mc-wallet/store": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
-        "@mc-wallet/wallet-protocol": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/starknet": "workspace:*",
+        "@bramble/store": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
+        "@bramble/wallet-protocol": "workspace:*",
         "starknet": "10.0.2",
       },
     },
     "packages/features/settings": {
-      "name": "@mc-wallet/settings",
+      "name": "@bramble/settings",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/portfolio": "workspace:*",
-        "@mc-wallet/privacy": "workspace:*",
-        "@mc-wallet/store": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/portfolio": "workspace:*",
+        "@bramble/privacy": "workspace:*",
+        "@bramble/store": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
       },
     },
     "packages/features/transactions": {
-      "name": "@mc-wallet/transactions",
+      "name": "@bramble/transactions",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/starknet": "workspace:*",
-        "@mc-wallet/store": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/starknet": "workspace:*",
+        "@bramble/store": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
         "starknet": "10.0.2",
       },
     },
     "packages/foundation/core": {
-      "name": "@mc-wallet/core",
+      "name": "@bramble/core",
       "version": "0.0.0",
     },
     "packages/foundation/wallet-model": {
-      "name": "@mc-wallet/wallet-model",
+      "name": "@bramble/wallet-model",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
+        "@bramble/core": "workspace:*",
       },
     },
     "packages/foundation/wallet-protocol": {
-      "name": "@mc-wallet/wallet-protocol",
+      "name": "@bramble/wallet-protocol",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
       },
     },
     "packages/platform/kms-krusty": {
-      "name": "@mc-wallet/kms-krusty",
+      "name": "@bramble/kms-krusty",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/vault": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/vault": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
       },
     },
     "packages/platform/ledger-browser": {
-      "name": "@mc-wallet/ledger-browser",
+      "name": "@bramble/ledger-browser",
       "version": "0.0.0",
       "dependencies": {
+        "@bramble/core": "workspace:*",
+        "@bramble/ledger-protocol": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
         "@ledgerhq/devices": "8.17.0",
         "@ledgerhq/hw-app-starknet": "3.0.2",
         "@ledgerhq/hw-transport-web-ble": "6.35.0",
         "@ledgerhq/hw-transport-webhid": "6.36.0",
         "@ledgerhq/hw-transport-webusb": "6.35.0",
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/ledger-protocol": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
         "buffer": "6.0.3",
       },
       "devDependencies": {
-        "@mc-wallet/testkit": "workspace:*",
+        "@bramble/testkit": "workspace:*",
       },
     },
     "packages/platform/ledger-protocol": {
-      "name": "@mc-wallet/ledger-protocol",
+      "name": "@bramble/ledger-protocol",
       "version": "0.0.0",
       "dependencies": {
+        "@bramble/core": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
         "@ledgerhq/devices": "8.17.0",
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
       },
       "devDependencies": {
-        "@mc-wallet/testkit": "workspace:*",
+        "@bramble/testkit": "workspace:*",
       },
     },
     "packages/platform/starknet": {
-      "name": "@mc-wallet/starknet",
+      "name": "@bramble/starknet",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
-        "@mc-wallet/wallet-protocol": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
+        "@bramble/wallet-protocol": "workspace:*",
         "starknet": "10.0.2",
       },
     },
     "packages/platform/store": {
-      "name": "@mc-wallet/store",
+      "name": "@bramble/store",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
+        "@bramble/core": "workspace:*",
       },
     },
     "packages/platform/vault": {
-      "name": "@mc-wallet/vault",
+      "name": "@bramble/vault",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/starknet": "workspace:*",
-        "@mc-wallet/store": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/starknet": "workspace:*",
+        "@bramble/store": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
       },
       "devDependencies": {
-        "@mc-wallet/testkit": "workspace:*",
+        "@bramble/testkit": "workspace:*",
       },
     },
     "packages/presentation/ui-kit": {
-      "name": "@mc-wallet/ui-kit",
+      "name": "@bramble/ui-kit",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
       },
     },
     "packages/presentation/wallet-ui": {
-      "name": "@mc-wallet/wallet-ui",
+      "name": "@bramble/wallet-ui",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/core": "workspace:*",
-        "@mc-wallet/ledger-protocol": "workspace:*",
-        "@mc-wallet/multisig": "workspace:*",
-        "@mc-wallet/portfolio": "workspace:*",
-        "@mc-wallet/privacy": "workspace:*",
-        "@mc-wallet/settings": "workspace:*",
-        "@mc-wallet/starknet": "workspace:*",
-        "@mc-wallet/transactions": "workspace:*",
-        "@mc-wallet/ui-kit": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
-        "@mc-wallet/wallet-protocol": "workspace:*",
+        "@bramble/core": "workspace:*",
+        "@bramble/ledger-protocol": "workspace:*",
+        "@bramble/multisig": "workspace:*",
+        "@bramble/portfolio": "workspace:*",
+        "@bramble/privacy": "workspace:*",
+        "@bramble/settings": "workspace:*",
+        "@bramble/starknet": "workspace:*",
+        "@bramble/transactions": "workspace:*",
+        "@bramble/ui-kit": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
+        "@bramble/wallet-protocol": "workspace:*",
         "starknet": "10.0.2",
       },
       "devDependencies": {
+        "@bramble/store": "workspace:*",
+        "@bramble/testkit": "workspace:*",
         "@happy-dom/global-registrator": "20.11.2",
-        "@mc-wallet/store": "workspace:*",
-        "@mc-wallet/testkit": "workspace:*",
       },
     },
     "packages/testing/testkit": {
-      "name": "@mc-wallet/testkit",
+      "name": "@bramble/testkit",
       "version": "0.0.0",
       "dependencies": {
-        "@mc-wallet/settings": "workspace:*",
-        "@mc-wallet/wallet-model": "workspace:*",
+        "@bramble/settings": "workspace:*",
+        "@bramble/wallet-model": "workspace:*",
       },
     },
   },
@@ -376,6 +376,50 @@
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.8", "", { "os": "win32", "cpu": "x64" }, "sha512-I2czzXTY61f3nFJxXoMDq80t7MivxDEnCjE+8sDKoFfcKMaoQdkqhIFQ3KyY0XLzeSpUBYeNAXgD+iOV/BU0VA=="],
 
     "@blazediff/core": ["@blazediff/core@1.9.1", "", {}, "sha512-ehg3jIkYKulZh+8om/O25vkvSsXXwC+skXmyA87FFx6A/45eqOkZsBltMw/TVteb0mloiGT8oGRTcjRAz66zaA=="],
+
+    "@bramble/core": ["@bramble/core@workspace:packages/foundation/core"],
+
+    "@bramble/extension": ["@bramble/extension@workspace:apps/extension"],
+
+    "@bramble/kms-krusty": ["@bramble/kms-krusty@workspace:packages/platform/kms-krusty"],
+
+    "@bramble/ledger-browser": ["@bramble/ledger-browser@workspace:packages/platform/ledger-browser"],
+
+    "@bramble/ledger-protocol": ["@bramble/ledger-protocol@workspace:packages/platform/ledger-protocol"],
+
+    "@bramble/multisig": ["@bramble/multisig@workspace:packages/features/multisig"],
+
+    "@bramble/permissions": ["@bramble/permissions@workspace:packages/features/permissions"],
+
+    "@bramble/portfolio": ["@bramble/portfolio@workspace:packages/features/portfolio"],
+
+    "@bramble/privacy": ["@bramble/privacy@workspace:packages/features/privacy"],
+
+    "@bramble/settings": ["@bramble/settings@workspace:packages/features/settings"],
+
+    "@bramble/starknet": ["@bramble/starknet@workspace:packages/platform/starknet"],
+
+    "@bramble/store": ["@bramble/store@workspace:packages/platform/store"],
+
+    "@bramble/terminal": ["@bramble/terminal@workspace:apps/terminal"],
+
+    "@bramble/testkit": ["@bramble/testkit@workspace:packages/testing/testkit"],
+
+    "@bramble/transactions": ["@bramble/transactions@workspace:packages/features/transactions"],
+
+    "@bramble/ui-kit": ["@bramble/ui-kit@workspace:packages/presentation/ui-kit"],
+
+    "@bramble/ui-lab": ["@bramble/ui-lab@workspace:apps/ui-lab"],
+
+    "@bramble/vault": ["@bramble/vault@workspace:packages/platform/vault"],
+
+    "@bramble/wallet-model": ["@bramble/wallet-model@workspace:packages/foundation/wallet-model"],
+
+    "@bramble/wallet-protocol": ["@bramble/wallet-protocol@workspace:packages/foundation/wallet-protocol"],
+
+    "@bramble/wallet-ui": ["@bramble/wallet-ui@workspace:packages/presentation/wallet-ui"],
+
+    "@bramble/website": ["@bramble/website@workspace:apps/website"],
 
     "@bramus/specificity": ["@bramus/specificity@2.4.2", "", { "dependencies": { "css-tree": "^3.0.0" }, "bin": { "specificity": "bin/cli.js" } }, "sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw=="],
 
@@ -488,50 +532,6 @@
     "@ledgerhq/hw-transport-webusb": ["@ledgerhq/hw-transport-webusb@6.35.0", "", { "dependencies": { "@ledgerhq/devices": "8.16.0", "@ledgerhq/errors": "^6.37.0", "@ledgerhq/hw-transport": "6.35.5", "@ledgerhq/logs": "^6.17.0" } }, "sha512-8fBNqzQnyR3pKLE2AVxCAc54nHMEKz9/eAYLDENVRuDp+A23lBJYWErxSyoZ6riCM19jIhRvtHjB0o4PXpa2tg=="],
 
     "@ledgerhq/logs": ["@ledgerhq/logs@6.17.0", "", {}, "sha512-yra33g5q/AU7+PwAws+GaVpQGUuxnDREjVBnviJjcaJLVKuLzI4pnj8Bd3nY3fypM5k1yZEYKEXfUuGFUjP2+w=="],
-
-    "@mc-wallet/core": ["@mc-wallet/core@workspace:packages/foundation/core"],
-
-    "@mc-wallet/extension": ["@mc-wallet/extension@workspace:apps/extension"],
-
-    "@mc-wallet/kms-krusty": ["@mc-wallet/kms-krusty@workspace:packages/platform/kms-krusty"],
-
-    "@mc-wallet/ledger-browser": ["@mc-wallet/ledger-browser@workspace:packages/platform/ledger-browser"],
-
-    "@mc-wallet/ledger-protocol": ["@mc-wallet/ledger-protocol@workspace:packages/platform/ledger-protocol"],
-
-    "@mc-wallet/multisig": ["@mc-wallet/multisig@workspace:packages/features/multisig"],
-
-    "@mc-wallet/permissions": ["@mc-wallet/permissions@workspace:packages/features/permissions"],
-
-    "@mc-wallet/portfolio": ["@mc-wallet/portfolio@workspace:packages/features/portfolio"],
-
-    "@mc-wallet/privacy": ["@mc-wallet/privacy@workspace:packages/features/privacy"],
-
-    "@mc-wallet/settings": ["@mc-wallet/settings@workspace:packages/features/settings"],
-
-    "@mc-wallet/starknet": ["@mc-wallet/starknet@workspace:packages/platform/starknet"],
-
-    "@mc-wallet/store": ["@mc-wallet/store@workspace:packages/platform/store"],
-
-    "@mc-wallet/terminal": ["@mc-wallet/terminal@workspace:apps/terminal"],
-
-    "@mc-wallet/testkit": ["@mc-wallet/testkit@workspace:packages/testing/testkit"],
-
-    "@mc-wallet/transactions": ["@mc-wallet/transactions@workspace:packages/features/transactions"],
-
-    "@mc-wallet/ui-kit": ["@mc-wallet/ui-kit@workspace:packages/presentation/ui-kit"],
-
-    "@mc-wallet/ui-lab": ["@mc-wallet/ui-lab@workspace:apps/ui-lab"],
-
-    "@mc-wallet/vault": ["@mc-wallet/vault@workspace:packages/platform/vault"],
-
-    "@mc-wallet/wallet-model": ["@mc-wallet/wallet-model@workspace:packages/foundation/wallet-model"],
-
-    "@mc-wallet/wallet-protocol": ["@mc-wallet/wallet-protocol@workspace:packages/foundation/wallet-protocol"],
-
-    "@mc-wallet/wallet-ui": ["@mc-wallet/wallet-ui@workspace:packages/presentation/wallet-ui"],
-
-    "@mc-wallet/website": ["@mc-wallet/website@workspace:apps/website"],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.2", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || ^2.0.0-alpha.3", "@emnapi/runtime": "^1.7.1 || ^2.0.0-alpha.3" } }, "sha512-JfB4kuJQjaoHuCTseIINHtHWeJnvgEcxjwA5t/Y00ZgaOO1Crz3fjT/p8kT28zA/Caz7oiUMn3d6H2yOVCVwuw=="],
 
@@ -1439,6 +1439,14 @@
 
     "zod": ["zod@4.4.3", "", {}, "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="],
 
+    "@bramble/website/@vitejs/plugin-react": ["@vitejs/plugin-react@6.1.1", "", { "dependencies": { "@rolldown/pluginutils": "^1.0.1" }, "peerDependencies": { "@rolldown/plugin-babel": "^0.1.7 || ^0.2.0", "babel-plugin-react-compiler": "^1.0.0", "oxc-transform-react": "^0.145.0", "vite": "^8.0.0" }, "optionalPeers": ["@rolldown/plugin-babel", "babel-plugin-react-compiler", "oxc-transform-react"] }, "sha512-yxLaQV9gkhS8ezJqCM6+ndU7mDY6gqAg75NQ+0IjwEI8IYOmQCgkRwHKVSfWXW076DsqMo0Dk+0FK1U+M5RgFw=="],
+
+    "@bramble/website/lucide-react": ["lucide-react@1.38.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-xZCyBd/wiVUDactoCc+42TjL0aB7EBOXsuX+tjz+W/sGzw2KhHpL1NOH3FIaVUcpimvUBpIYfz34Ofj9S5JEzQ=="],
+
+    "@bramble/website/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
+
+    "@bramble/website/vite": ["vite@8.2.2", "", { "dependencies": { "lightningcss": "^1.33.0", "picomatch": "^4.0.5", "postcss": "^8.5.26", "rolldown": "~1.2.4", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.4.0 || ^0.5.0", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-cFKLV/PRgAUlIRm5WjMjJ86jrftzpqcgH+Us+DS8mI3CDNiH30Whrz8uHL3+MOLPAgqbMBAqWdAHAphOAM+z/Q=="],
+
     "@happy-dom/global-registrator/happy-dom": ["happy-dom@20.11.2", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-7MB+bJLkxu3SowAfBJbjW+c55kNz5tkR45gu2qzrxznezhLeN5YIlJbwUgSzlGc+qWoZ8Ykg71H5ezz69xixrw=="],
 
     "@ledgerhq/hw-transport-web-ble/@ledgerhq/devices": ["@ledgerhq/devices@8.16.0", "", { "dependencies": { "semver": "7.7.3" } }, "sha512-brXLPzkvGM3D5YNsWQ25P5G4SmWdSNBed9W8wKoOIRLGdRfvE+bg9mzFty0iZ+aRLBkLoXwX7xKIL9zUi6LBKQ=="],
@@ -1452,14 +1460,6 @@
     "@ledgerhq/hw-transport-webusb/@ledgerhq/devices": ["@ledgerhq/devices@8.16.0", "", { "dependencies": { "semver": "7.7.3" } }, "sha512-brXLPzkvGM3D5YNsWQ25P5G4SmWdSNBed9W8wKoOIRLGdRfvE+bg9mzFty0iZ+aRLBkLoXwX7xKIL9zUi6LBKQ=="],
 
     "@ledgerhq/hw-transport-webusb/@ledgerhq/hw-transport": ["@ledgerhq/hw-transport@6.35.5", "", { "dependencies": { "@ledgerhq/devices": "8.16.0", "@ledgerhq/errors": "^6.37.0", "@ledgerhq/logs": "^6.17.0", "events": "^3.3.0" } }, "sha512-P4+wtLewLWgxPtIb90h5kjpzXVlC6f4IBQBmvowVFkInvZt34ffXkX7wa5KfMzu4l3cqCcpNSqtPSCMp+0vuqg=="],
-
-    "@mc-wallet/website/@vitejs/plugin-react": ["@vitejs/plugin-react@6.1.1", "", { "dependencies": { "@rolldown/pluginutils": "^1.0.1" }, "peerDependencies": { "@rolldown/plugin-babel": "^0.1.7 || ^0.2.0", "babel-plugin-react-compiler": "^1.0.0", "oxc-transform-react": "^0.145.0", "vite": "^8.0.0" }, "optionalPeers": ["@rolldown/plugin-babel", "babel-plugin-react-compiler", "oxc-transform-react"] }, "sha512-yxLaQV9gkhS8ezJqCM6+ndU7mDY6gqAg75NQ+0IjwEI8IYOmQCgkRwHKVSfWXW076DsqMo0Dk+0FK1U+M5RgFw=="],
-
-    "@mc-wallet/website/lucide-react": ["lucide-react@1.38.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-xZCyBd/wiVUDactoCc+42TjL0aB7EBOXsuX+tjz+W/sGzw2KhHpL1NOH3FIaVUcpimvUBpIYfz34Ofj9S5JEzQ=="],
-
-    "@mc-wallet/website/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
-
-    "@mc-wallet/website/vite": ["vite@8.2.2", "", { "dependencies": { "lightningcss": "^1.33.0", "picomatch": "^4.0.5", "postcss": "^8.5.26", "rolldown": "~1.2.4", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.4.0 || ^0.5.0", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-cFKLV/PRgAUlIRm5WjMjJ86jrftzpqcgH+Us+DS8mI3CDNiH30Whrz8uHL3+MOLPAgqbMBAqWdAHAphOAM+z/Q=="],
 
     "@noble/curves/@noble/hashes": ["@noble/hashes@1.6.0", "", {}, "sha512-YUULf0Uk4/mAA89w+k3+yUYh6NrEvxZa5T6SY3wlMvE2chHkxFUUIDI8/XW1QSC357iA5pSnqt7XEhvFOqmDyQ=="],
 
@@ -1567,11 +1567,11 @@
 
     "vitest/vite": ["vite@8.1.5", "", { "dependencies": { "lightningcss": "^1.32.0", "picomatch": "^4.0.5", "postcss": "^8.5.17", "rolldown": "~1.1.5", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.3.0", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-7ULLwsCdYx/nRyrpiEwvqb5TFHrMVZyBt+rg/OAXT7rgj/z+DtTDyKFeLAdDkubDVDKD8jOsndmy7m55XcfUsw=="],
 
+    "@bramble/website/vite/postcss": ["postcss@8.5.26", "", { "dependencies": { "nanoid": "^3.3.17", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ=="],
+
     "@happy-dom/global-registrator/happy-dom/entities": ["entities@7.0.1", "", {}, "sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA=="],
 
     "@happy-dom/global-registrator/happy-dom/whatwg-mimetype": ["whatwg-mimetype@3.0.0", "", {}, "sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q=="],
-
-    "@mc-wallet/website/vite/postcss": ["postcss@8.5.26", "", { "dependencies": { "nanoid": "^3.3.17", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ=="],
 
     "@oxc-parser/binding-wasm32-wasi/@emnapi/core/@emnapi/wasi-threads": ["@emnapi/wasi-threads@1.2.1", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w=="],
 

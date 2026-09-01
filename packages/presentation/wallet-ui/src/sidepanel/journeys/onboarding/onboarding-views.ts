@@ -4,9 +4,9 @@
  * escaped controls and never reads or stores wallet material.
  */
 
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { checkboxField, inputControl, textField } from "@mc-wallet/ui-kit/fields";
-import { RECOVERY_SCAN_LIMITS } from "@mc-wallet/wallet-model/recovery";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { checkboxField, inputControl, textField } from "@bramble/ui-kit/fields";
+import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";

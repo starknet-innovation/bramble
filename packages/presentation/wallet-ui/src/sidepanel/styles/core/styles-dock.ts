@@ -2,7 +2,7 @@
  * Persistent wallet-dock styling. Each root keeps a visible label so users do
  * not have to memorize icon meaning or discover navigation through hover.
  */
-import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Dock stylesheet fragment consumed after the base layout layer.

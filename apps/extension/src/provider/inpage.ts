@@ -11,10 +11,10 @@ import {
   readProviderRequestArguments,
   readProviderResponse,
   walletRpcException,
-} from "@mc-wallet/wallet-protocol/bridge";
-import { createProviderEventHub, readProviderEvent } from "@mc-wallet/wallet-protocol/events";
-import { isHexChainId } from "@mc-wallet/wallet-protocol/results";
-import { invalidRequestPayload } from "@mc-wallet/wallet-protocol/rpc-errors";
+} from "@bramble/wallet-protocol/bridge";
+import { createProviderEventHub, readProviderEvent } from "@bramble/wallet-protocol/events";
+import { isHexChainId } from "@bramble/wallet-protocol/results";
+import { invalidRequestPayload } from "@bramble/wallet-protocol/rpc-errors";
 
 type PendingRequest = {
   readonly reject: (error: Error) => void;

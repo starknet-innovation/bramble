@@ -4,8 +4,8 @@
  * queued, closing the spoof where one page claims another's origin.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   type AddChainOpsDeps,
   handleAddChainOps,

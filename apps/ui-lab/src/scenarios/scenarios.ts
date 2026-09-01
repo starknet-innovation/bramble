@@ -4,7 +4,7 @@ import {
   nftDetailFlow,
   nftGalleryFlow,
   nftSendFlow,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 import {
   discoveredNft,
   invokeApproval,

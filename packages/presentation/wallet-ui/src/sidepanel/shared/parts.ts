@@ -2,14 +2,14 @@
  * Shared side panel template atoms used by dock and flow screens.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { shortAddress } from "@mc-wallet/transactions/verify-decode";
-import { emptyState, pill } from "@mc-wallet/ui-kit/content";
-import { iconButton } from "@mc-wallet/ui-kit/controls";
-import { type IconName, icon } from "@mc-wallet/ui-kit/icons";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { shortAddress } from "@bramble/transactions/verify-decode";
+import { emptyState, pill } from "@bramble/ui-kit/content";
+import { iconButton } from "@bramble/ui-kit/controls";
+import { type IconName, icon } from "@bramble/ui-kit/icons";
+import { menuRow } from "@bramble/ui-kit/navigation";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
 
 export { accountAvatar } from "../shell/account-avatar";

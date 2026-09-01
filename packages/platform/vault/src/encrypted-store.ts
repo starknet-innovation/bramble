@@ -1,10 +1,10 @@
 /**
  * Encrypted JSON store using Web Crypto for local-at-rest browser extension data.
  */
-import { invariant, WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isRecord, type Json } from "@mc-wallet/core/json";
-import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@mc-wallet/store/kv";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+import { invariant, WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isRecord, type Json } from "@bramble/core/json";
+import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@bramble/store/kv";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

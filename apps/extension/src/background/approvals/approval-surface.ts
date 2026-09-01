@@ -2,9 +2,9 @@
  * Browser boundary for opening the wallet approval surface from a dapp gesture.
  */
 
-import { isRecord } from "@mc-wallet/core/json";
-import type { OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { ApprovalSurfacePreference } from "@mc-wallet/settings/preferences";
+import { isRecord } from "@bramble/core/json";
+import type { OriginGuard } from "@bramble/permissions/blocklist";
+import type { ApprovalSurfacePreference } from "@bramble/settings/preferences";
 import { APPROVAL_SURFACE_MESSAGES, type RuntimeSender, senderOrigins } from "../routing/senders";
 
 /**

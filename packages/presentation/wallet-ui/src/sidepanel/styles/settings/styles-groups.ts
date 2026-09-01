@@ -6,7 +6,7 @@
  * before the home layer in ./styles.ts so home's reduced-motion block still
  * wins over everything here.
  */
-import { CONTROL, RADIUS, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, RADIUS, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Group-management stylesheet fragment consumed by SIDEPANEL_STYLES.

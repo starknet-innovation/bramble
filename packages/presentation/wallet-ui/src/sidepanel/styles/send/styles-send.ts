@@ -4,7 +4,7 @@
  * Motion is reserved for active work and the final submitted receipt, with a
  * complete reduced-motion cut.
  */
-import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Send-flow stylesheet fragment consumed by SIDEPANEL_STYLES.

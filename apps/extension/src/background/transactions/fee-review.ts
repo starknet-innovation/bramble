@@ -1,6 +1,6 @@
 /** Shared fail-closed response for wallet-initiated network-fee reviews. */
 
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 
 /**

@@ -1,7 +1,7 @@
 /**
  * Shared navigation-row templates for settings hubs and chooser lists.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import { badge } from "./content";
 import { type UiAttributes, uiAttributes, uiClassNames } from "./html-attributes";
 import { type IconName, icon } from "./icons";

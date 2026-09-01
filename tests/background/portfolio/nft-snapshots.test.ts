@@ -1,6 +1,6 @@
 /** Durable NFT snapshots remain validated, scoped, and removable after mutations. */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   createNftSnapshotStore,
   NFT_SNAPSHOTS_KEY,

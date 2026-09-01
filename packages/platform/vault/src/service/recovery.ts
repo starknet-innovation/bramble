@@ -1,11 +1,11 @@
 /** Atomic multi-account restoration inside the encrypted vault boundary. */
-import { WalletError } from "@mc-wallet/core/errors";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
   isRecoveryAccountSelection,
   RECOVERY_SCAN_LIMITS,
   type RecoveryAccountSelection,
-} from "@mc-wallet/wallet-model/recovery";
+} from "@bramble/wallet-model/recovery";
 import { deriveAccount } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";

@@ -97,7 +97,7 @@ schema, so it cannot be changed after creation.
   `0x0294a323246c017d00a98f11942e1e38d562c97bc79426742110a14ce497e9b5`.
   It is pinned to Argent's `update-2024Q2` release at commit
   `1352198956f36fb35fa544c4e46a3507a3ec20e3`. Its constructor and account
-  signature encoding come from `@mc-wallet/starknet/account-contracts`.
+  signature encoding come from `@bramble/starknet/account-contracts`.
   The pin deliberately uses Argent's latest non-prerelease production line,
   not the newer v0.5 prerelease that upstream marks unsupported by Ready.
   The [May 2024 ChainSecurity report](https://github.com/argentlabs/argent-contracts-starknet/blob/1352198956f36fb35fa544c4e46a3507a3ec20e3/audit/ChainSecurity_Argent_Argent_Account_audit-2024-05.pdf)

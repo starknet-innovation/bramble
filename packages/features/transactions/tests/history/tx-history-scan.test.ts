@@ -6,14 +6,14 @@
  * read is dropped rather than dated with a guess.
  */
 import { describe, expect, test } from "bun:test";
-import { MAX_HISTORY_ENTRIES, TRANSFER_EVENT_KEY } from "@mc-wallet/transactions/tx-history";
+import { MAX_HISTORY_ENTRIES, TRANSFER_EVENT_KEY } from "@bramble/transactions/tx-history";
 import {
   collectTransactionHistory,
   type HistoryEventFilter,
   type HistoryRpc,
   scanTransactionHistory,
-} from "@mc-wallet/transactions/tx-history-scan";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/transactions/tx-history-scan";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { RpcProvider } from "starknet";
 
 const ACCOUNT = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";

@@ -8,10 +8,10 @@
  * ./styles-swap.ts.
  */
 
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { inputControl } from "@mc-wallet/ui-kit/fields";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { inputControl } from "@bramble/ui-kit/fields";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";

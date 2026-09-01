@@ -10,7 +10,7 @@
  * DIVIDERS for separation (never rings around content), values right-aligned
  * with tabular/mono voices where the data warrants it.
  */
-import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Structured-content stylesheet fragment consumed by SIDEPANEL_STYLES.

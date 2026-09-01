@@ -11,15 +11,15 @@
  * per-harness state record so one scan cannot leak into the next.
  */
 
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { prepareArgentMultisigInvokeV3WithProvider } from "@mc-wallet/starknet/multisig-invoke";
-import { avnuRouterAddress, type SwapService } from "@mc-wallet/transactions/avnu";
-import { grantedAccountIdsFor } from "@mc-wallet/vault/origin-grants";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { Strk20Service } from "@bramble/privacy/service";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { prepareArgentMultisigInvokeV3WithProvider } from "@bramble/starknet/multisig-invoke";
+import { avnuRouterAddress, type SwapService } from "@bramble/transactions/avnu";
+import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
+import type { Vault } from "@bramble/vault/schema";
+import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { ec, RpcProvider } from "starknet";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { avnuRouteCalldata } from "./avnu-route-fixture";
@@ -279,7 +279,7 @@ const required = <Method>(method: Method | undefined, name: string): Method => {
  * handler that echoed it would go unnoticed. Every method wrapped here is a
  * method whose real implementation reaches the key: the official adapter builds
  * its transfers client with a `viewingKeyProvider` (see
- * @mc-wallet/privacy's official-sdk-transfers), and `prepare`,
+ * @bramble/privacy's official-sdk-transfers), and `prepare`,
  * `privateBalances`, `registrationStatus`, `register`, `subaccountCommitment`
  * `prepareRegistration`, `prepareAccountActions`, `subaccountCommitment` and
  * `submitActions` all go through that client. `poolFee`, `quoteActions` and

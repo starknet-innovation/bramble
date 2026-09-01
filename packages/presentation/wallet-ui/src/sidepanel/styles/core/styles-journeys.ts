@@ -3,7 +3,7 @@
  * and compact management subflows. All color and scale values come from the
  * shared skin tokens.
  */
-import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Journey-specific styles composed after shared component structure.

@@ -9,7 +9,7 @@
  * happy-dom with fakes. Markup comes from the escaped onboarding templates,
  * inserted through the audited dom.ts fragment sink.
  */
-import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { renderFragment } from "../../shared/dom";
 import {

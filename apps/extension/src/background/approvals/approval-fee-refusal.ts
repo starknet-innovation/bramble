@@ -1,6 +1,6 @@
 /** Fee-echo validation performed before an approval is consumed. */
 
-import { type FeeEstimate, sameFeeEstimate, sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
+import { type FeeEstimate, sameFeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import type { PendingApproval } from "./approvals";

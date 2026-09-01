@@ -7,17 +7,17 @@ import {
   MULTISIG_LIMITS,
   requireSafeArgentMultisigCalls,
   reviewArgentMultisigConfigChange,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import {
   type ArgentMultisigSigningIntent,
   multisigAddressBookEntry,
-} from "@mc-wallet/multisig/repository";
+} from "@bramble/multisig/repository";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/verify";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import type { ArgentMultisigContext } from "./multisig-ops";
 

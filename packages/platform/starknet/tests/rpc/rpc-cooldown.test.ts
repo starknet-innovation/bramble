@@ -6,8 +6,8 @@ import {
   timedRpcFetch,
   withRpcFallback,
   withRpcWrite,
-} from "@mc-wallet/starknet/rpc";
-import { RpcTransportError } from "@mc-wallet/starknet/rpc-transport";
+} from "@bramble/starknet/rpc";
+import { RpcTransportError } from "@bramble/starknet/rpc-transport";
 import type { RpcProvider } from "starknet";
 
 describe("RPC endpoint cooldown", () => {

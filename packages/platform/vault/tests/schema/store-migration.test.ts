@@ -3,15 +3,15 @@
  * interrupted-write recovery, idempotence, and fail-closed source validation.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { migrateVault } from "@mc-wallet/vault/migrations";
-import { isVaultV7 } from "@mc-wallet/vault/schema";
+import { createMemoryStore } from "@bramble/store/kv";
+import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
+import { migrateVault } from "@bramble/vault/migrations";
+import { isVaultV7 } from "@bramble/vault/schema";
 import {
   readMigratedVault,
   VAULT_MIGRATION_STORE_KEY,
   VAULT_STORE_KEY,
-} from "@mc-wallet/vault/store-migration";
+} from "@bramble/vault/store-migration";
 
 const vaultPassphrase = "correct horse battery staple";
 const account = {

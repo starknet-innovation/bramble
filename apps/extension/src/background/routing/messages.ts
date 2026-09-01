@@ -1,6 +1,6 @@
 /** Typed extension message handling for the background service worker. */
-import { activeAccountSecrets } from "@mc-wallet/vault/service";
-import { DEFAULT_NETWORK } from "@mc-wallet/wallet-model/networks";
+import { activeAccountSecrets } from "@bramble/vault/service";
+import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { readCreateAccountInput } from "../accounts/account-creation-inputs";
 import { readImportAccountInput } from "../accounts/import-inputs";
 import { handleWalletOps, type WalletOpsDeps } from "../accounts/wallet-ops";

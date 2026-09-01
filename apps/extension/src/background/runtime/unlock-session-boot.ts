@@ -15,7 +15,7 @@
  * still holds no browser globals.
  */
 
-import type { KeyValueStore } from "@mc-wallet/store/kv";
+import type { KeyValueStore } from "@bramble/store/kv";
 import { createUnlockSession, type UnlockSession, type UnlockSessionStore } from "./session";
 import { createSessionExpiryTimer, type SessionAlarmsApi } from "./session-expiry-alarm";
 

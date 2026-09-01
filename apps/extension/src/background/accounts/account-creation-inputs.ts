@@ -3,27 +3,27 @@
  * Both reject unknown keys and malformed derivation indices before anything
  * reaches the Krusty KMS boundary.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
-import type { CreateVaultAccountInput } from "@mc-wallet/vault/service";
-import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
-import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import type { AccountDerivationInput } from "@bramble/vault/accounts";
+import type { CreateVaultAccountInput } from "@bramble/vault/service";
+import type { RecoverVaultAccountsInput } from "@bramble/vault/service-types";
+import { isAccountContractType } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
   normalizeFeltInput,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import {
   isMnemonicPassphrase,
   isMnemonicText,
   isVaultPassphrase,
-} from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/passphrase";
 import {
   isRecoveryAccountIndex,
   isRecoveryAccountSelection,
   RECOVERY_SCAN_LIMITS,
-} from "@mc-wallet/wallet-model/recovery";
+} from "@bramble/wallet-model/recovery";
 
 const readOptionalIndex = (value: unknown): number | null | undefined => {
   if (value === undefined) {

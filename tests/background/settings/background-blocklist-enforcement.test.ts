@@ -5,7 +5,7 @@
  * signTypedData, and switchChain — not just at requestAccounts.
  */
 import { describe, expect, test } from "bun:test";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";

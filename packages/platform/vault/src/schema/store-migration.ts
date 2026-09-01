@@ -3,7 +3,7 @@
  * steps live in `migrations.ts`; this module owns the storage side effects that
  * can only run after unlock supplies the vault passphrase.
  */
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import type { EncryptedStore } from "../encrypted-store";
 import { migrateVault } from "./migrations";
 import { isVaultV7, type Vault } from "./schema";

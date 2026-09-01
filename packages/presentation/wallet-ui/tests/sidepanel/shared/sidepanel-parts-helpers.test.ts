@@ -4,7 +4,7 @@
  * whole, fractional, and unparseable inputs.
  */
 import { describe, expect, test } from "bun:test";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   accountAvatar,
   accountDisplayName,

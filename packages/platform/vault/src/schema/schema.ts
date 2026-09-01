@@ -1,8 +1,8 @@
 /**
  * Versioned vault schema and validators for decrypted wallet state.
  */
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import { isWalletOrigin } from "@bramble/core/origin";
 import {
   type AccountRef,
   ARGENT_ACCOUNT_CLASS_HASH,
@@ -15,9 +15,9 @@ import {
   isLegacyV6AccountRef,
   type LegacyAccountRef,
   type LegacyV6AccountRef,
-} from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt, isStarkPrivateKey, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/accounts";
+import { canonicalFelt, isStarkPrivateKey, sameFelt } from "@bramble/wallet-model/networks";
+import { isMnemonicText } from "@bramble/wallet-model/passphrase";
 import {
   type AccountSecretRef,
   hasValidAccountSecretBindings,

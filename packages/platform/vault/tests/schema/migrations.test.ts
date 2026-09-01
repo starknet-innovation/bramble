@@ -2,14 +2,10 @@
  * Migration checks prove vault schemas move deterministically or fail closed.
  */
 import { describe, expect, test } from "bun:test";
-import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import {
-  CURRENT_SCHEMA_VERSION,
-  migrateVault,
-  VAULT_MIGRATIONS,
-} from "@mc-wallet/vault/migrations";
-import { isVaultV1, isVaultV6, isVaultV7 } from "@mc-wallet/vault/schema";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+import { ARGENT_ACCOUNT_CONTRACT } from "@bramble/starknet/account-contracts";
+import { CURRENT_SCHEMA_VERSION, migrateVault, VAULT_MIGRATIONS } from "@bramble/vault/migrations";
+import { isVaultV1, isVaultV6, isVaultV7 } from "@bramble/vault/schema";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 
 const legacyVault = {
   accounts: [

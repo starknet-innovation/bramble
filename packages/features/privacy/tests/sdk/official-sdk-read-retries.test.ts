@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { createOfficialStrk20Service } from "@mc-wallet/privacy/official-sdk-service";
+import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import {
   officialBuilder as builder,
   STRK20_SDK_CONTEXT as context,

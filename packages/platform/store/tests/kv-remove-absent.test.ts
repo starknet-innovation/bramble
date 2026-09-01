@@ -4,7 +4,7 @@
  * read undefined.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 
 describe("createMemoryStore remove/absent-key branches", () => {
   test("returns undefined for a key that was never set", async () => {

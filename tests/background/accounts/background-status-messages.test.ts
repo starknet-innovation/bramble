@@ -2,9 +2,9 @@
  * Background status message checks prove public wallet state is derived from vault state.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import type { WalletStatus } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { WalletStatus } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";

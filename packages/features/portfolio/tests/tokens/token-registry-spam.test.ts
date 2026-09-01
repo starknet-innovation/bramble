@@ -4,7 +4,7 @@
  * letter homoglyphs like VV->W and V->U (A-L9).
  */
 import { describe, expect, test } from "bun:test";
-import { type SpamCandidate, tokenSpamReasons } from "@mc-wallet/portfolio/token-registry";
+import { type SpamCandidate, tokenSpamReasons } from "@bramble/portfolio/token-registry";
 
 // Must match the USDC alias registered in the portfolio token registry.
 const USDC_ALIAS = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";

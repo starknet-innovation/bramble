@@ -5,11 +5,11 @@
  * and address book entries.
  */
 import { describe, expect, test } from "bun:test";
-import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
+import { account, preferences } from "@bramble/testkit/sidepanel";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { accountFlow, backupFlow, sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 

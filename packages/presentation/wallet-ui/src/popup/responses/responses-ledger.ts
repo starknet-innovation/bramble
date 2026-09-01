@@ -7,10 +7,10 @@
  * No secret material crosses: a Ledger reply carries only public keys, indices,
  * paths, and a public `(r, s)` pair.
  */
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
-import { isAccountId, isAccountRef, type LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { isLedgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import { isAccountId, isAccountRef, type LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { isLedgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 /**
  * A pending device-sign the side panel that owns the Ledger transport must

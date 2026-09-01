@@ -2,9 +2,9 @@
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import { verificationContext } from "@mc-wallet/transactions/verify";
-import { canonicalFelt, STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/multisig/repository";
+import { verificationContext } from "@bramble/transactions/verify";
+import { canonicalFelt, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import { recordSubmittedActivity } from "../transactions/activity-recording";

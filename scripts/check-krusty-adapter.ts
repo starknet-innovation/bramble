@@ -9,9 +9,9 @@
 
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { deriveAccount } from "@mc-wallet/vault/accounts";
-import { DEFAULT_NETWORK, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { deriveAccount } from "@bramble/vault/accounts";
+import { DEFAULT_NETWORK, isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 const packageName = "@starknetfoundation/krusty-kms-wasm";
 const packageVersion = "0.10.0";

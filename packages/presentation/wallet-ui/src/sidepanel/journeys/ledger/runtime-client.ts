@@ -7,7 +7,7 @@
  * account index, a derivation path, and a public `(r, s)` signature pair.
  */
 
-import type { AccountContractType, LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerPubKeyEntry } from "@bramble/wallet-model/accounts";
 import {
   isCreateAccountResponse,
   isErrorResponse,

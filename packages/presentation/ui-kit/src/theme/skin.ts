@@ -1,7 +1,7 @@
 /**
  * Swappable UI skin tokens for popup rendering.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 
 /**
  * CSS variable tokens every replaceable skin must provide.

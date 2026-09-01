@@ -6,22 +6,19 @@
  * public `(r, s)` signature pair.
  */
 
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   type AccountContractType,
   isAccountContractType,
   type LedgerPubKeyEntry,
-} from "@mc-wallet/wallet-model/accounts";
-import {
-  isLedgerAccountIndex,
-  MAX_LEDGER_ACCOUNT_BATCH,
-} from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/wallet-model/accounts";
+import { isLedgerAccountIndex, MAX_LEDGER_ACCOUNT_BATCH } from "@bramble/wallet-model/ledger-path";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 const isFeltString = (value: unknown): value is string =>
   typeof value === "string" && isStarkFieldElement(value);

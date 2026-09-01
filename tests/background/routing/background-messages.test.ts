@@ -6,9 +6,9 @@
  * Sender trust gates live in background-sender-gates.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore, defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { CreateVaultAccountInput, OriginGrantInput } from "@mc-wallet/vault/service";
+import { createPreferencesStore, defaultWalletPreferences } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { CreateVaultAccountInput, OriginGrantInput } from "@bramble/vault/service";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createLedgerSignQueue } from "../../../apps/extension/src/background/ledger/ledger-sign-queue";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";

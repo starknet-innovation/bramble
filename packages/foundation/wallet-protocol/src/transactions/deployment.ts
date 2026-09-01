@@ -2,7 +2,7 @@
  * wallet_deploymentData result validation for the dapp provider bridge. Split
  * from bridge-results.ts to keep each provider module within the size cap.
  */
-import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isJson, isRecord } from "@bramble/core/json";
 import type { ProviderDeploymentData } from "../provider/results";
 
 const isPaddedFelt = (value: unknown): value is string =>

@@ -14,7 +14,7 @@
  * the transition collapses to no animation (the entrypoint also skips the
  * transition entirely, cutting straight to the new screen).
  */
-import { EASE } from "@mc-wallet/ui-kit/tokens";
+import { EASE } from "@bramble/ui-kit/tokens";
 
 /**
  * View-transition stylesheet fragment consumed by SIDEPANEL_STYLES.

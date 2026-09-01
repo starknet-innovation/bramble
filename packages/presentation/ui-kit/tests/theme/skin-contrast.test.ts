@@ -8,9 +8,9 @@
  * uses, so their ink pairings are gated too.
  */
 import { describe, expect, test } from "bun:test";
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { defaultSkin } from "@mc-wallet/ui-kit/default-skin";
-import type { Skin, SkinToken } from "@mc-wallet/ui-kit/skin";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { defaultSkin } from "@bramble/ui-kit/default-skin";
+import type { Skin, SkinToken } from "@bramble/ui-kit/skin";
 
 const AA_NORMAL_TEXT = 4.5;
 

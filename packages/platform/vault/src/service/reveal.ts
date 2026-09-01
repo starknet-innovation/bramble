@@ -1,5 +1,5 @@
 /** Privileged, re-authenticated vault-secret reveal boundary. */
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import type { Vault } from "../schema/schema";
 import type { RevealedSecrets } from "./service-types";
 

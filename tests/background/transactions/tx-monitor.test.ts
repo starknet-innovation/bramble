@@ -6,8 +6,8 @@
  * of throwing on worker start.
  */
 import { describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { memoryActivityLog } from "@bramble/transactions/activity";
 import {
   type AlarmsApi,
   startTransactionMonitor,

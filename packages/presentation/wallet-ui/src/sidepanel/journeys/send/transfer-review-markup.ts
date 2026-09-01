@@ -1,7 +1,7 @@
 /**
  * Shared decoded-transfer review markup used by Send and NFT transfer flows.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { accountLabel } from "../../shared/parts";
 import {

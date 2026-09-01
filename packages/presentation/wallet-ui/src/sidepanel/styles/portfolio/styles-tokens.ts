@@ -11,8 +11,8 @@
  * tokens below.
  */
 
-import { resolveSpring } from "@mc-wallet/ui-kit/spring";
-import { EASE, SHADOW } from "@mc-wallet/ui-kit/tokens";
+import { resolveSpring } from "@bramble/ui-kit/spring";
+import { EASE, SHADOW } from "@bramble/ui-kit/tokens";
 
 const springDefault = resolveSpring("default");
 const springDrawer = resolveSpring("drawer");

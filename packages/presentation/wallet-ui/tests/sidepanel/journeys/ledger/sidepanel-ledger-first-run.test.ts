@@ -9,9 +9,9 @@
  * The device is an injected fake connector — no WebHID or background.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
 import { bindLedgerFirstRun } from "../../../../src/sidepanel/journeys/ledger/first-run";

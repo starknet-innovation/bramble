@@ -8,26 +8,26 @@
  * fails these, because drift is only ever visible between two callers.
  */
 import { describe, expect, test } from "bun:test";
-import { isNetworkLabel } from "@mc-wallet/core/json";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { STRK20_MAX_POOL_FEE } from "@mc-wallet/privacy/service";
-import { decodeUint256Response } from "@mc-wallet/starknet/rpc-assets";
+import { isNetworkLabel } from "@bramble/core/json";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { STRK20_MAX_POOL_FEE } from "@bramble/privacy/service";
+import { decodeUint256Response } from "@bramble/starknet/rpc-assets";
 import {
   parseAllowanceAmount,
   UNLIMITED_ALLOWANCE_THRESHOLD,
-} from "@mc-wallet/transactions/allowance-discovery";
-import { decodeAllowanceCall } from "@mc-wallet/transactions/allowances";
-import { isVaultV5 } from "@mc-wallet/vault/schema";
-import { isCustomNetwork } from "@mc-wallet/wallet-model/custom-network";
+} from "@bramble/transactions/allowance-discovery";
+import { decodeAllowanceCall } from "@bramble/transactions/allowances";
+import { isVaultV5 } from "@bramble/vault/schema";
+import { isCustomNetwork } from "@bramble/wallet-model/custom-network";
 import {
   isStarkFieldElement,
   isStarkPrivateKey,
   STARK_CURVE_ORDER,
   UINT128_LIMIT,
   uint256Felts,
-} from "@mc-wallet/wallet-model/networks";
-import { isProviderChain, readProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
-import { toProviderPayload } from "@mc-wallet/wallet-protocol/results";
+} from "@bramble/wallet-model/networks";
+import { isProviderChain, readProviderChain } from "@bramble/wallet-protocol/add-chain";
+import { toProviderPayload } from "@bramble/wallet-protocol/results";
 import { readImportAccountInput } from "../../apps/extension/src/background/accounts/import-inputs";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";

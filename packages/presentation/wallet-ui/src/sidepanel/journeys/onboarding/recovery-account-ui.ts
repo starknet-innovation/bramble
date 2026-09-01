@@ -3,8 +3,8 @@
 import type {
   RecoveryAccountCandidate,
   RecoveryAccountSelection,
-} from "@mc-wallet/wallet-model/recovery";
-import { isRecoveryAccountIndex, RECOVERY_SCAN_LIMITS } from "@mc-wallet/wallet-model/recovery";
+} from "@bramble/wallet-model/recovery";
+import { isRecoveryAccountIndex, RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";

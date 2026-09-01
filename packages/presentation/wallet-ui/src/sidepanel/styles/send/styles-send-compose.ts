@@ -13,7 +13,7 @@ import {
   SPACE,
   TYPE,
   WEIGHT,
-} from "@mc-wallet/ui-kit/tokens";
+} from "@bramble/ui-kit/tokens";
 
 /**
  * Send composition stylesheet fragment consumed after the shared Send layer.

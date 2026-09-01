@@ -9,7 +9,7 @@ import {
   MAX_DISCOVERED_NFTS,
   type NftIndexerHttp,
   unavailableNftIndexer,
-} from "@mc-wallet/portfolio/nft-indexer";
+} from "@bramble/portfolio/nft-indexer";
 
 const address = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const indexerUrl = "https://indexer.example/api/";

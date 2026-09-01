@@ -1,6 +1,6 @@
 /** Actionable classification for expired Argent multisig fee-price bounds. */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import { RpcError } from "starknet";
 
 /**

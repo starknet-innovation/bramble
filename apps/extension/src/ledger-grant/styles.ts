@@ -14,7 +14,7 @@ import {
   TRACKING,
   TYPE,
   WEIGHT,
-} from "@mc-wallet/ui-kit/tokens";
+} from "@bramble/ui-kit/tokens";
 
 /**
  * Token-driven stylesheet for `ledger-grant.html`.

@@ -1,7 +1,7 @@
 /**
  * Deny-by-default storage capability checks for extension actors.
  */
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 
 /**
  * Extension actor identities used for store access checks.

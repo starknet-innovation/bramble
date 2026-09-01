@@ -22,9 +22,9 @@
  *    the leaf, so the property holds where signing is actually decided.
  */
 import { describe, expect, test } from "bun:test";
-import { snip12Scalar } from "@mc-wallet/starknet/snip12-scalars";
-import { isTypedDataShape } from "@mc-wallet/starknet/typed-data";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { snip12Scalar } from "@bramble/starknet/snip12-scalars";
+import { isTypedDataShape } from "@bramble/starknet/typed-data";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import { typedData as snip12 } from "starknet";
 
 type Revision = "0" | "1";

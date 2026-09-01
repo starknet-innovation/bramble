@@ -3,10 +3,10 @@
  * sender's public account solely to pay the pool fee.
  */
 import { describe, expect, test } from "bun:test";
-import { createOfficialStrk20Service } from "@mc-wallet/privacy/official-sdk-service";
-import { buildErc20ApproveCall } from "@mc-wallet/starknet/rpc-assets";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
+import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { OutsideExecutionVersion, outsideExecution } from "starknet";
 import {
   officialBuilder as builder,

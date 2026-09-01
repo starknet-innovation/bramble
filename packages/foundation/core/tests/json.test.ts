@@ -11,7 +11,7 @@ import {
   isStringArray,
   type JsonBudget,
   normalizeFeltBigints,
-} from "@mc-wallet/core/json";
+} from "@bramble/core/json";
 
 test("isRecord accepts only plain JSON records", () => {
   const inherited = Object.assign(Object.create({ target: "mc-wallet:content" }), {

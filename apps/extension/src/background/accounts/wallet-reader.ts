@@ -11,9 +11,9 @@
  * inputs to the service behind the vault boundary.
  */
 
-import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
-import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
-import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountDerivationInput } from "@bramble/vault/accounts";
+import type { NostrApplicationData } from "@bramble/vault/kms-port";
+import type { Vault } from "@bramble/vault/schema";
 import type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
@@ -33,10 +33,10 @@ import type {
   WalletVaultService,
   WrapNostrApplicationDataBatchInput,
   WrapNostrApplicationDataInput,
-} from "@mc-wallet/vault/service";
-import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
-import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+} from "@bramble/vault/service";
+import type { RecoverVaultAccountsInput } from "@bramble/vault/service-types";
+import type { AccountRef, LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 
 /**
  * Narrow wallet service surface consumed by background message dispatch.

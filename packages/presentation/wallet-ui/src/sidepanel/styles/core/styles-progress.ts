@@ -2,7 +2,7 @@
  * Shared indeterminate progress motion. This is a framework-free CSS/SVG
  * adaptation of Amicro's Liquid Dots treatment; see THIRD_PARTY_NOTICES.md.
  */
-import { CONTROL, MOTION, RADIUS, SIZE, SPACE } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SIZE, SPACE } from "@bramble/ui-kit/tokens";
 
 /**
  * Liquid Dots styles shared by Send, approvals, and Ledger signing.

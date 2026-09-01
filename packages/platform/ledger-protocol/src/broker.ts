@@ -12,9 +12,9 @@
  * raw transport error, or device identifier crosses the channel.
  */
 
-import { isRecord } from "@mc-wallet/core/json";
-import { isLedgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { isRecord } from "@bramble/core/json";
+import { isLedgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { isStarkFieldElement } from "@bramble/wallet-model/networks";
 import { isLedgerRejectionCode, type LedgerRejectionCode } from "./errors";
 
 const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;

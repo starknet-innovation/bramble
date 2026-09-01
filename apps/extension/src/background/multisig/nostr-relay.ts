@@ -5,7 +5,7 @@ import {
   MAX_NOSTR_BATCH_ITEMS,
   type NostrEvent,
   parseNostrEventJson,
-} from "@mc-wallet/wallet-model/nostr";
+} from "@bramble/wallet-model/nostr";
 import {
   createNostrRelayPool,
   hasNostrRecipientTag,

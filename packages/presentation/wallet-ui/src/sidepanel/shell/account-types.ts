@@ -8,9 +8,9 @@
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
-} from "@mc-wallet/starknet/account-contracts";
-import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/starknet/account-contracts";
+import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 
 /**
  * Normalises a felt-encoded hash to its canonical `0x` hex form so hashes that

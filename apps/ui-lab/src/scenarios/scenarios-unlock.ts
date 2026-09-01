@@ -1,4 +1,4 @@
-import { bindUnlock, createSidepanelRuntime, locked } from "@mc-wallet/wallet-ui/lab";
+import { bindUnlock, createSidepanelRuntime, locked } from "@bramble/wallet-ui/lab";
 import { invokeApproval } from "../fixtures/fixtures";
 import { lockedStatus } from "../fixtures/journey-fixtures";
 import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";

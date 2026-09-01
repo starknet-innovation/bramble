@@ -1,5 +1,5 @@
 /** Multisig participant selection and public-key sharing styles. */
-import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Token-only styles for the participant sub-flow and public-key copy action.

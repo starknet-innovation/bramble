@@ -5,18 +5,18 @@
  * errors around that dependency boundary.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import { REVIEWED_FEE_REQUIRED } from "@mc-wallet/starknet/rpc-submit";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import { WalletError } from "@bramble/core/errors";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { REVIEWED_FEE_REQUIRED } from "@bramble/starknet/rpc-submit";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import type {
   Strk20Action,
   Strk20BalanceEntry,
   Strk20CallAndProof,
   Strk20Proof,
-} from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { Strk20NetworkConfig } from "./config";
 import { canonicalStrk20PoolFee, STRK20_SERVICE_UNAVAILABLE } from "./policy/fee-policy";

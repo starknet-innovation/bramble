@@ -6,7 +6,7 @@
  * a plain fake.
  */
 import { describe, expect, test } from "bun:test";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import {
   account,
   captureRuntime,

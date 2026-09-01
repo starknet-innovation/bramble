@@ -3,14 +3,14 @@
  * export stay validated and deterministic.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   activityForScope,
   activityToCsv,
   createActivityLog,
   memoryActivityLog,
-} from "@mc-wallet/transactions/activity";
-import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@mc-wallet/transactions/alerts";
+} from "@bramble/transactions/activity";
+import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@bramble/transactions/alerts";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const OTHER_ACCOUNT_ID =

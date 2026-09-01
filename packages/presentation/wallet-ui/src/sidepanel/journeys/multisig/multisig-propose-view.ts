@@ -1,10 +1,10 @@
 /** Familiar transaction composer for frozen Argent multisig signing intents. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { inputControl, textareaField, textField } from "@mc-wallet/ui-kit/fields";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { inputControl, textareaField, textField } from "@bramble/ui-kit/fields";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";

@@ -1,15 +1,15 @@
 /** Deterministic property checks for the wallet's highest-risk untrusted boundaries. */
 import { describe, expect, test } from "bun:test";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { migrateVault } from "@mc-wallet/vault/migrations";
-import { emptyVault, isVaultV7 } from "@mc-wallet/vault/schema";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { migrateVault } from "@bramble/vault/migrations";
+import { emptyVault, isVaultV7 } from "@bramble/vault/schema";
 import {
   canonicalFelt,
   isStarkFieldElement,
   isStarkPrivateKey,
   STARK_FIELD_PRIME,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import fc from "fast-check";
 import {
   readDiscoverRecoveryAccountsInput,

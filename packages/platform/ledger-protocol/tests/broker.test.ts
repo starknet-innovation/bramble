@@ -8,8 +8,8 @@ import {
   isLedgerBrokerResponse,
   ledgerBrokerChannelName,
   ledgerBrokerSessionFromHash,
-} from "@mc-wallet/ledger-protocol/broker";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/ledger-protocol/broker";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 
 const SESSION_ID = "2db2df18-12db-4d66-9b38-02dc16460ce3";
 

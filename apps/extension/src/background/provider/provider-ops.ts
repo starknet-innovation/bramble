@@ -1,22 +1,22 @@
 /** Dapp provider operations validate origin and phishing policy on every request. */
 
-import { walletErrorMessage } from "@mc-wallet/core/errors";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import { mapStrk20StageError } from "@mc-wallet/privacy/official-sdk-errors";
-import { unavailableStrk20Service } from "@mc-wallet/privacy/service";
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
-import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { standingAllowanceTotals } from "@mc-wallet/transactions/allowances";
+import { walletErrorMessage } from "@bramble/core/errors";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import { mapStrk20StageError } from "@bramble/privacy/official-sdk-errors";
+import { unavailableStrk20Service } from "@bramble/privacy/service";
+import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { FeeEstimate } from "@bramble/starknet/rpc";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import { standingAllowanceTotals } from "@bramble/transactions/allowances";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";

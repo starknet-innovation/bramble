@@ -18,9 +18,9 @@
  * Sign-path classification therefore keys off that return code, not a message.
  */
 
+import { LedgerRejection, type LedgerRejectionCode } from "@bramble/ledger-protocol/errors";
+import type { DeviceSignature } from "@bramble/wallet-model/signing";
 import { identifyTargetId } from "@ledgerhq/devices";
-import { LedgerRejection, type LedgerRejectionCode } from "@mc-wallet/ledger-protocol/errors";
-import type { DeviceSignature } from "@mc-wallet/wallet-model/signing";
 
 // Minimal structural mirrors of the `@ledgerhq/hw-app-starknet` `Response*`
 // shapes this flow actually reads. Declared locally on purpose: importing the

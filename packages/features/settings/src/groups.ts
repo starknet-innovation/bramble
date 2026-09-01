@@ -11,9 +11,9 @@
  * operation is a pure function returning a fresh immutable array, validated the
  * same way the plain preferences store validates its other collections.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "@mc-wallet/core/json";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "@bramble/core/json";
+import { isAccountId } from "@bramble/wallet-model/accounts";
 
 /**
  * Curated Lucide glyphs offered for groups, driving the icon picker. Each name

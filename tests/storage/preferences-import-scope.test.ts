@@ -13,9 +13,9 @@ import {
   defaultWalletPreferences,
   PREFERENCES_STORE_KEY,
   type WalletPreferences,
-} from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 
 const HOSTILE_RPC = "https://attacker.example/rpc";
 const HOSTILE_INDEXER = "https://attacker.example/indexer";

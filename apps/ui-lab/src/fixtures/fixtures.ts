@@ -1,23 +1,23 @@
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
   argentSignerGuid,
   normalizeArgentMultisigConfig,
-} from "@mc-wallet/starknet/account-contracts";
-import { argentMultisigTransactionHash } from "@mc-wallet/starknet/multisig-invoke";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/starknet/account-contracts";
+import { argentMultisigTransactionHash } from "@bramble/starknet/multisig-invoke";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type {
   ArgentMultisigView,
   DiscoveredNft,
   PendingApproval,
   TokenBalance,
   WalletStatus,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 
 export const SOFTWARE_ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";
 export const LEDGER_ADDRESS = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";

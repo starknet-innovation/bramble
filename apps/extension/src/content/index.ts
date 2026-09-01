@@ -8,9 +8,9 @@ import {
   readProviderRequest,
   toProviderPayload,
   toRuntimeMessage,
-} from "@mc-wallet/wallet-protocol/bridge";
-import { addressesFromPayload, isWalletEventMessage } from "@mc-wallet/wallet-protocol/events";
-import { invalidRequestPayload, unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
+} from "@bramble/wallet-protocol/bridge";
+import { addressesFromPayload, isWalletEventMessage } from "@bramble/wallet-protocol/events";
+import { invalidRequestPayload, unknownError } from "@bramble/wallet-protocol/rpc-errors";
 import { createProviderEventRefresh } from "./provider-event-refresh";
 import { createProviderRequestAdmission } from "./provider-request-admission";
 

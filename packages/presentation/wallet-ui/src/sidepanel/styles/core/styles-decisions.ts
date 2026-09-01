@@ -1,5 +1,5 @@
 /** Shared decision hierarchy and interrupted-task continuity styles. */
-import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Review anatomy and dApp-takeover continuity fragment consumed by SIDEPANEL_STYLES.

@@ -5,11 +5,11 @@
  * it or the persisted `submitting` guard wedges every later privacy operation.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { memoryStrk20MaturityStore } from "@mc-wallet/privacy/maturity";
-import { createOfficialStrk20Service } from "@mc-wallet/privacy/official-sdk-service";
-import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
-import { submitInvokeTransaction } from "@mc-wallet/starknet/rpc-submit";
+import { WalletError } from "@bramble/core/errors";
+import { memoryStrk20MaturityStore } from "@bramble/privacy/maturity";
+import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
 import type { RpcProvider } from "starknet";
 import {
   STRK20_SDK_ACCOUNT as account,

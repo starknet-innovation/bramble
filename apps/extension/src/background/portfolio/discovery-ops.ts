@@ -6,14 +6,14 @@
  * deployment data is still gated to an origin that holds a connection grant.
  */
 
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { accountDeployment } from "@mc-wallet/starknet/deployment";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import { API_VERSION_PATTERN } from "@mc-wallet/wallet-protocol/results";
-import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@mc-wallet/wallet-protocol/versions";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { normalizeWalletOrigin } from "@bramble/core/origin";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { accountDeployment } from "@bramble/starknet/deployment";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { API_VERSION_PATTERN } from "@bramble/wallet-protocol/results";
+import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@bramble/wallet-protocol/versions";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";

@@ -4,15 +4,12 @@
  * admits the keyless account only at the current schema.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  ARGENT_ACCOUNT_CONTRACT,
-  argentAccountAddress,
-} from "@mc-wallet/starknet/account-contracts";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { deriveLedgerAccount, deriveLedgerAccountRefs } from "@mc-wallet/vault/accounts";
-import { isVaultV2, isVaultV7, type Vault } from "@mc-wallet/vault/schema";
-import { isAccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet/account-contracts";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { deriveLedgerAccount, deriveLedgerAccountRefs } from "@bramble/vault/accounts";
+import { isVaultV2, isVaultV7, type Vault } from "@bramble/vault/schema";
+import { isAccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 
 // The fake KMS derives address = 0x<publicKeyX-hex><classHash[2..8]>, so a fixed
 // public key and the SN_MAIN class hash 0x111111 pin a known counterfactual

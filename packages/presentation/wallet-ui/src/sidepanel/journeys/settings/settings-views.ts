@@ -4,11 +4,11 @@
  * screens so a security-sensitive task never competes with unrelated options.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { button, segmentedControl } from "@mc-wallet/ui-kit/controls";
-import { selectField, textField } from "@mc-wallet/ui-kit/fields";
-import { menuLink } from "@mc-wallet/ui-kit/navigation";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { button, segmentedControl } from "@bramble/ui-kit/controls";
+import { selectField, textField } from "@bramble/ui-kit/fields";
+import { menuLink } from "@bramble/ui-kit/navigation";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { type BuildInfo, buildInfo } from "../../shell/build-info";

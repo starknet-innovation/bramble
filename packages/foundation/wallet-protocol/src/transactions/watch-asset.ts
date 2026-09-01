@@ -2,8 +2,8 @@
  * Pure validation of dapp watch-asset request params (SNIP wallet_watchAsset),
  * shared by the provider bridge before a request reaches the background.
  */
-import { hasOnlyKnownKeys, isRecord, isSafeDecimals, type Json } from "@mc-wallet/core/json";
-import { isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isRecord, isSafeDecimals, type Json } from "@bramble/core/json";
+import { isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 
 /**
  * Dapp-provided ERC20 watch-asset options after bridge validation.

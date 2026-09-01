@@ -5,16 +5,16 @@
  * and duplicate-account rejections.
  */
 import { describe, expect, test } from "bun:test";
-import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import type { KmsPort } from "@mc-wallet/vault/kms-port";
-import type { Vault } from "@mc-wallet/vault/schema";
-import { emptyVault } from "@mc-wallet/vault/schema";
-import { activeAccountSecrets, createWalletVaultService } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { ARGENT_ACCOUNT_CONTRACT } from "@bramble/starknet/account-contracts";
+import { createMemoryStore } from "@bramble/store/kv";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { createEncryptedStore } from "@bramble/vault/encrypted-store";
+import type { KmsPort } from "@bramble/vault/kms-port";
+import type { Vault } from "@bramble/vault/schema";
+import { emptyVault } from "@bramble/vault/schema";
+import { activeAccountSecrets, createWalletVaultService } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const vaultKey = "mc-wallet:vault";

@@ -17,8 +17,8 @@
  * browser/DOM boundary exercised against Chromium and physical hardware.
  */
 
-import { serveLedgerBroker } from "@mc-wallet/ledger-browser/broker-server";
-import { probeLedgerGrantClient } from "@mc-wallet/ledger-browser/grant-session";
+import { serveLedgerBroker } from "@bramble/ledger-browser/broker-server";
+import { probeLedgerGrantClient } from "@bramble/ledger-browser/grant-session";
 import {
   closeGrantTransport,
   type LedgerGrantTransportDiagnostics,
@@ -26,15 +26,15 @@ import {
   readGrantTransportDiagnostics,
   requestGrantTransport,
   supportedGrantTransportKinds,
-} from "@mc-wallet/ledger-browser/grant-transport";
-import { type LedgerTransport, newStarknetClient } from "@mc-wallet/ledger-browser/webhid";
+} from "@bramble/ledger-browser/grant-transport";
+import { type LedgerTransport, newStarknetClient } from "@bramble/ledger-browser/webhid";
 import {
   ledgerBrokerChannelName,
   ledgerBrokerSessionFromHash,
-} from "@mc-wallet/ledger-protocol/broker";
-import { LedgerRejection, ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { applySkin } from "@mc-wallet/ui-kit/skin";
+} from "@bramble/ledger-protocol/broker";
+import { LedgerRejection, ledgerMessage } from "@bramble/ledger-protocol/errors";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { applySkin } from "@bramble/ui-kit/skin";
 import {
   alternateLedgerTransport,
   type LedgerConnectionMethod,

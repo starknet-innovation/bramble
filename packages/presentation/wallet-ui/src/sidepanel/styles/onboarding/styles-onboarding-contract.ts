@@ -1,7 +1,7 @@
 /**
  * Account-contract choice rows shared by software and Ledger onboarding.
  */
-import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Account-contract selector stylesheet fragment.

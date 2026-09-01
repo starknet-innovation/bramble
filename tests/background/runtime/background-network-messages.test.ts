@@ -2,11 +2,11 @@
  * Background network message checks prove network switches keep account state reactive.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import type { EnsureNetworkAccountInput, WalletStatus } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import type { EnsureNetworkAccountInput, WalletStatus } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import {

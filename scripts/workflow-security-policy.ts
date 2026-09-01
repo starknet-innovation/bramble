@@ -151,7 +151,7 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
             echo "::notice::Chromatic is not configured; GitHub Pages remains the published UI Lab."
             exit 0
           fi
-          bun run --filter @mc-wallet/ui-lab chromatic`,
+          bun run --filter @bramble/ui-lab chromatic`,
     `${path} must expose the Chromatic token only to the main-push publish step`,
   );
   if (source.split("CHROMATIC_PROJECT_TOKEN").length - 1 !== 3) {

@@ -1,10 +1,10 @@
-import { ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
+import { ledgerMessage } from "@bramble/ledger-protocol/errors";
 import {
   type AccountContractType,
   isAccountContractType,
   type LedgerAccountRef,
-} from "@mc-wallet/wallet-model/accounts";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import {
   addAccountChooser,
   bindOnboarding,
@@ -16,7 +16,7 @@ import {
   ledgerReadingPrompt,
   onboarding,
   onboardingComplete,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 import { argentSoftwareAccount, ledgerAccount, softwareAccount } from "../fixtures/fixtures";
 import { emptyWalletStatus } from "../fixtures/journey-fixtures";
 import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";

@@ -3,7 +3,7 @@
  * and orbital choreography are restrained, framework-free adaptations of Amicro
  * motion ideas; see THIRD_PARTY_NOTICES.md.
  */
-import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Full-screen onboarding welcome composition and motion.

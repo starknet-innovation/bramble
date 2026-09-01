@@ -1,13 +1,13 @@
 /** Linear exact-review binding for stable Argent multisig creation. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import { button as buttonMarkup } from "@mc-wallet/ui-kit/controls";
+import { escapeHtml } from "@bramble/core/html";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
+import { button as buttonMarkup } from "@bramble/ui-kit/controls";
 import {
   explorerTransactionUrl,
   isNonZeroStarkFieldElement,
   normalizeFeltInput,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import { transitionTaskStage } from "../../app/rendering/stage-transition";
 import type { SidepanelWallet } from "../../runtime/runtime";

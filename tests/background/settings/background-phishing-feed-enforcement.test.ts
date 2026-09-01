@@ -6,8 +6,8 @@
  * post-release phishing domain "starknet-rewards-2026.com".
  */
 import { describe, expect, test } from "bun:test";
-import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createOriginGuard } from "@bramble/permissions/blocklist";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";

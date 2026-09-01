@@ -1,14 +1,14 @@
 /** Wallet vault service: privileged account metadata persistence behind encryption. */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
-import { assertStoreAccess, type StoreActor } from "@mc-wallet/store/access";
-import { isAccountId, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import { isWalletOrigin } from "@bramble/core/origin";
+import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
+import { isAccountId, isKeylessAccount } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isStarkFieldElement,
   isStarkPrivateKey,
-} from "@mc-wallet/wallet-model/networks";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/networks";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import {
   LEDGER_STRK20_VIEWING_KEY_SCHEME,
   ledgerStrk20ScopeFor,

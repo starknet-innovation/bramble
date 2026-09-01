@@ -4,8 +4,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { createStrk20MaturityStore } from "@mc-wallet/privacy/maturity-store";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createStrk20MaturityStore } from "@bramble/privacy/maturity-store";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const scope = {
   accountId: "SN_SEPOLIA:0xabc",

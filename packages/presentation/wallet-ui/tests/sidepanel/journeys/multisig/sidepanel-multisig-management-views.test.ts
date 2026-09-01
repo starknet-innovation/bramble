@@ -1,6 +1,6 @@
 /** Argent multisig management screens expose guided, bounded account controls. */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { multisigAccountOptions } from "../../../../src/sidepanel/journeys/multisig/multisig-account-options";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import {

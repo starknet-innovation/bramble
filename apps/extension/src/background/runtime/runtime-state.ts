@@ -2,23 +2,23 @@
  * Shared background status helpers for wallet runtime messages.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   defaultWalletPreferences,
   type WalletPreferences,
   type WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import type { Vault } from "@mc-wallet/vault/schema";
-import { findVaultAccount } from "@mc-wallet/vault/vault-account";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/settings/preferences";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import type { Vault } from "@bramble/vault/schema";
+import { findVaultAccount } from "@bramble/vault/vault-account";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   DEFAULT_NETWORK,
   STARKNET_NETWORKS,
   type StarknetNetwork,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import type { NetworkOption, WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
+} from "@bramble/wallet-model/networks";
+import type { NetworkOption, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { runGuardedNetworkMutation } from "./active-network-mutation";
 import {

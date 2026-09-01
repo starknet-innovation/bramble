@@ -4,7 +4,7 @@ import {
   nftGalleryCard,
   reviewPanel,
   visibleNftItems,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
 import { discoveredNft, invokeApproval, preferences, statusFor } from "../../fixtures/fixtures";
 import {

@@ -4,8 +4,8 @@
  * to audit independently.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { WalletError } from "@bramble/core/errors";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { BigNumberish } from "starknet";
 import { STRK20_SERVICE_UNAVAILABLE } from "../service";
 import type {

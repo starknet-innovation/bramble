@@ -4,14 +4,14 @@
  * null-mnemonic retention shape, and rejects unsupported schema versions.
  */
 import { describe, expect, test } from "bun:test";
-import { CURRENT_SCHEMA_VERSION, migrateVault } from "@mc-wallet/vault/migrations";
+import { CURRENT_SCHEMA_VERSION, migrateVault } from "@bramble/vault/migrations";
 import {
   isVaultV1,
   isVaultV7,
   type VaultV1,
   type VaultV2,
   type VaultV7,
-} from "@mc-wallet/vault/schema";
+} from "@bramble/vault/schema";
 
 const accountA = {
   address: "0x123",

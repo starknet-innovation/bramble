@@ -4,7 +4,7 @@
  * on-chain account history.
  */
 
-import { activityToCsv } from "@mc-wallet/transactions/activity";
+import { activityToCsv } from "@bramble/transactions/activity";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast, type ToastTone } from "../../shared/dom";

@@ -5,7 +5,7 @@
  * capture helper live here so both halves drive identical envelopes.
  */
 
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { createSidepanelRuntime } from "../../src/sidepanel/runtime/runtime";
 
 export const APPROVAL_ID = "123e4567-e89b-42d3-a456-426614174000";

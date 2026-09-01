@@ -1,13 +1,13 @@
 /** Bindings for watched Argent multisigs and frozen signing intents. */
 
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { buildErc20TransferCall, parseTokenAmount } from "@mc-wallet/starknet/rpc";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { buildErc20TransferCall, parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   canonicalFelt,
   normalizeFeltInput,
   STRK_TOKEN_ADDRESS,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";

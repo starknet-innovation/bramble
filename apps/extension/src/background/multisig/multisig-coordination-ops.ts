@@ -1,18 +1,18 @@
 /** Explicit Nostr share and sync operations for existing Argent multisig intents. */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
+} from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import type { NostrApplicationData } from "@bramble/vault/kms-port";
 import {
   isNostrApplicationData,
   isNostrPublicKey,
   type NostrEvent,
-} from "@mc-wallet/wallet-model/nostr";
-import type { AddressBookEntry } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/nostr";
+import type { AddressBookEntry } from "@bramble/wallet-model/preferences";
 import { runActiveStateMutation } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";

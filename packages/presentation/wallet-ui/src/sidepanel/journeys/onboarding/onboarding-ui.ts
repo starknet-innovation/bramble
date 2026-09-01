@@ -1,7 +1,7 @@
 /** First-run recovery, account preview, and persistence bindings. */
 
-import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+import { type AccountContractType, isAccountContractType } from "@bramble/wallet-model/accounts";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";

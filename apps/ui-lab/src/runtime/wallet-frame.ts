@@ -1,6 +1,6 @@
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { defaultSkin } from "@mc-wallet/ui-kit/default-skin";
-import { SIDEPANEL_STYLES } from "@mc-wallet/wallet-ui/lab";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { defaultSkin } from "@bramble/ui-kit/default-skin";
+import { SIDEPANEL_STYLES } from "@bramble/wallet-ui/lab";
 import type { LabSurface, LabTheme } from "./types";
 
 const DESIGN_CONTRACT = `

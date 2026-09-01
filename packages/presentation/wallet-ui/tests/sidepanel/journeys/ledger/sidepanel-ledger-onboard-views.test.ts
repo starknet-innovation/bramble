@@ -4,8 +4,8 @@
  * picker with deployed status, balance, duplicate handling, and selected count.
  */
 import { describe, expect, test } from "bun:test";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { LedgerCandidate } from "../../../../src/sidepanel/journeys/ledger/onboard-session";
 import {
   addAccountChooser,

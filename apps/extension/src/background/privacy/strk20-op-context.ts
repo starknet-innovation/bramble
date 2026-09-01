@@ -5,12 +5,12 @@
  * missing network configuration, Ledger accounts, and untracked tokens.
  */
 
-import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { withTokenId } from "@mc-wallet/wallet-model/preferences";
-import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+import { canonicalStrk20PoolFee } from "@bramble/privacy/service";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { withTokenId } from "@bramble/wallet-model/preferences";
+import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { type ActiveAccountContext, networkRpcUrls } from "../runtime/runtime-state";

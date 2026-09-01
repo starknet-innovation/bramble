@@ -1,6 +1,6 @@
 /** Review summaries and invoke conversion for STRK20 wire values. */
 
-import type { Strk20Action, Strk20InvokeCall } from "@mc-wallet/wallet-protocol/strk20";
+import type { Strk20Action, Strk20InvokeCall } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { Strk20SubmissionPlan } from "./submission-plan";
 

@@ -1,16 +1,16 @@
-import type { AccountGroups } from "@mc-wallet/settings/groups";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import { allowanceId } from "@mc-wallet/transactions/allowance-store";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
-import { withTokenId } from "@mc-wallet/wallet-model/preferences";
+import type { AccountGroups } from "@bramble/settings/groups";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import { allowanceId } from "@bramble/transactions/allowance-store";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { DEFAULT_TOKENS } from "@bramble/wallet-model/networks";
+import { withTokenId } from "@bramble/wallet-model/preferences";
 import type {
   ConnectedSite,
   PendingApproval,
   TokenBalance,
   WalletStatus,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 import { ledgerAccount, preferences, softwareAccount, statusFor, USDC_ADDRESS } from "./fixtures";
 
 const mainnetToken = (symbol: "ETH" | "STRK") => {

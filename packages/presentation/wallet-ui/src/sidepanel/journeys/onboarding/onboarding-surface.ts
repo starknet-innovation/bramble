@@ -1,7 +1,7 @@
 /**
  * Dedicated full-page onboarding completion UI and Chrome side-panel handoff.
  */
-import { actionLink, button } from "@mc-wallet/ui-kit/controls";
+import { actionLink, button } from "@bramble/ui-kit/controls";
 import { icon } from "../../shared/icons";
 
 /**

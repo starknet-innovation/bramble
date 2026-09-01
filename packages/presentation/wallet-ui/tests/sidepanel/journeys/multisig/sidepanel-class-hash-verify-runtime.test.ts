@@ -6,7 +6,7 @@
  * (never a fabricated "verified" verdict).
  */
 import { describe, expect, test } from "bun:test";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import {
   emptyRenderCache,
   updateRenderScope,

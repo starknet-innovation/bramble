@@ -1,5 +1,5 @@
 {
-  "name": "@mc-wallet/starknet",
+  "name": "@bramble/starknet",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -28,9 +28,9 @@
     "test": "bun test --preload ../../../tests/support/test-preload.ts ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*",
-    "@mc-wallet/wallet-protocol": "workspace:*",
+    "@bramble/core": "workspace:*",
+    "@bramble/wallet-model": "workspace:*",
+    "@bramble/wallet-protocol": "workspace:*",
     "starknet": "10.0.2"
   }
 }

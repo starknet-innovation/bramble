@@ -17,7 +17,7 @@
  * Per-candidate deployed/balance state comes from the background
  * `ledgerAccountStatus` query, degrading gracefully to "unavailable".
  */
-import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import type { RenderData } from "../../app/rendering/render-cache";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { createLedgerOnboardRuntime } from "./onboard-runtime";

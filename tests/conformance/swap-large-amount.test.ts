@@ -11,10 +11,10 @@
  * message the side panel actually emits against the real background reader.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { isRecord } from "@mc-wallet/core/json";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
+import { isRecord } from "@bramble/core/json";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { DEFAULT_TOKENS } from "@bramble/wallet-model/networks";
 import { readSwapPrepareInput } from "../../apps/extension/src/background/transactions/swap-inputs";
 import type {
   TokenBalance,

@@ -5,7 +5,7 @@
  * both files stay within the size budget.
  */
 import { describe, expect, test } from "bun:test";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 

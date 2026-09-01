@@ -1,5 +1,5 @@
 /** Primary side-panel UI and its scene-preserving paint loop. */
-import type { LedgerConnector } from "@mc-wallet/ledger-protocol/session";
+import type { LedgerConnector } from "@bramble/ledger-protocol/session";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { actionableApprovals } from "../journeys/approvals/approval-screen";
 import { bindLedgerFirstRun } from "../journeys/ledger/first-run";

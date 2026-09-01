@@ -9,14 +9,14 @@
  * background boundary before it is trusted. Ownership itself is proven over RPC
  * elsewhere (`owner_of`); nothing here authorizes a transfer.
  */
-import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@bramble/core/json";
 
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 const MAX_TOKEN_ID_DIGITS = 78;
 const MAX_TEXT_LENGTH = 128;

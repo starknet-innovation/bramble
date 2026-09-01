@@ -2,16 +2,16 @@
  * Encrypted store checks cover round trips and wrong-passphrase failure.
  */
 import { describe, expect, test } from "bun:test";
-import type { Json } from "@mc-wallet/core/json";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { Json } from "@bramble/core/json";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   createEncryptedStore,
   decryptJson,
   encryptJson,
   isEncryptedEnvelope,
-} from "@mc-wallet/vault/encrypted-store";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/vault/encrypted-store";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 
 const vaultKey = "mc-wallet:vault";
 const preferencesKey = "mc-wallet:preferences";

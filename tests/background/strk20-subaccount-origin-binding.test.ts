@@ -12,11 +12,11 @@
  * be shown a commitment it could never name in an action.
  */
 import { describe, expect, test } from "bun:test";
-import { type Strk20Service, unavailableStrk20Service } from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { isStrk20DappName, type Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { type Strk20Service, unavailableStrk20Service } from "@bramble/privacy/service";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import { isStrk20DappName, type Strk20Action } from "@bramble/wallet-protocol/strk20";
 import {
   executeStrk20DisclosureApproval,
   executeStrk20InvokeApproval,

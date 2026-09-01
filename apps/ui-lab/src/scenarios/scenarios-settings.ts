@@ -1,4 +1,4 @@
-import { showToast } from "@mc-wallet/wallet-ui/lab";
+import { showToast } from "@bramble/wallet-ui/lab";
 import { ledgerAccount, softwareAccount, statusFor } from "../fixtures/fixtures";
 import { connectedSites, importedStatus, journeyPreferences } from "../fixtures/journey-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";

@@ -13,9 +13,9 @@ import {
   readProviderResponse,
   toProviderPayload,
   toRuntimeMessage,
-} from "@mc-wallet/wallet-protocol/bridge";
-import { invalidRequestPayload, unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
-import { readProviderWatchAsset } from "@mc-wallet/wallet-protocol/watch-asset";
+} from "@bramble/wallet-protocol/bridge";
+import { invalidRequestPayload, unknownError } from "@bramble/wallet-protocol/rpc-errors";
+import { readProviderWatchAsset } from "@bramble/wallet-protocol/watch-asset";
 import {
   readGetPermissionsInput,
   readWatchAssetInput,

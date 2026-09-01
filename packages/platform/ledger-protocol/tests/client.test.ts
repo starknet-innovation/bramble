@@ -17,8 +17,8 @@ import {
   ledgerSignHashOnDevice,
   MC_LEDGER_OS_MIN,
   MC_LEDGER_STARKNET_APP_MIN,
-} from "@mc-wallet/ledger-protocol/client";
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
+} from "@bramble/ledger-protocol/client";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
 
 const OK = { errorMessage: "No errors", returnCode: 0x9000 };
 

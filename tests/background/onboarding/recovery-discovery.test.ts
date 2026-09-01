@@ -1,15 +1,15 @@
 /** Bounded dual-contract recovery discovery and resumable progress. */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { AccountDerivationInput } from "@bramble/vault/accounts";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   type DerivedAccountRef,
   OPENZEPPELIN_ACCOUNT_CLASS_HASH,
-} from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
-import type { RecoveryAccountCandidate } from "@mc-wallet/wallet-model/recovery";
+} from "@bramble/wallet-model/accounts";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
+import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import { handleOnboardingOps } from "../../../apps/extension/src/background/onboarding/onboarding-ops";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
 import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";

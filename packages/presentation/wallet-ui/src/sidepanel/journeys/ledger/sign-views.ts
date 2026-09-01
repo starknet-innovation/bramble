@@ -11,12 +11,12 @@
  * approval can happen without the comparison being on screen.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { pill } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import { ledgerAccountIndexOfPath } from "@mc-wallet/wallet-model/ledger-path";
-import { paddedFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import { pill } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { menuRow } from "@bramble/ui-kit/navigation";
+import { ledgerAccountIndexOfPath } from "@bramble/wallet-model/ledger-path";
+import { paddedFelt } from "@bramble/wallet-model/networks";
 import type { LedgerSignRequestSummary, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountLabel } from "../../shared/parts";

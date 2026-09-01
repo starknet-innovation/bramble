@@ -1,6 +1,6 @@
 /** Adversarial relay-quote checks for fee theft and public-account linkage. */
 import { describe, expect, test } from "bun:test";
-import { buildStrk20PaymasterPlan } from "@mc-wallet/privacy/paymaster";
+import { buildStrk20PaymasterPlan } from "@bramble/privacy/paymaster";
 import { type Call, OutsideExecutionVersion, outsideExecution } from "starknet";
 
 const config = { feeToken: "0x3", url: "https://paymaster.example" };

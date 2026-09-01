@@ -2,13 +2,13 @@
  * Pure popup response validators for background runtime data.
  */
 
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
-import { type ActivityEntry, isActivityEntry } from "@mc-wallet/transactions/activity";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import { type ActivityEntry, isActivityEntry } from "@bramble/transactions/activity";
 import {
   isHexChainId,
   isStarkFieldElement,
   isStarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 /**
  * Re-exported approval and connected-site validators for one import path.
@@ -77,16 +77,16 @@ export {
   isClassHashVerificationResponse,
 } from "./responses-verify";
 
-import { isWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import { type AllowanceView, isAllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import { type AccountRef, isAccountId, isAccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { NetworkOption, WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
+import { isWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import { type AllowanceView, isAllowanceView } from "@bramble/transactions/allowance-discovery";
+import { type AccountRef, isAccountId, isAccountRef } from "@bramble/wallet-model/accounts";
+import type { NetworkOption, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import { type PendingApprovalsResponse, readPendingApprovals } from "./approvals-responses";
 
 /**
  * Shared wallet status and network response shapes after runtime validation.
  */
-export type { NetworkOption, WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
+export type { NetworkOption, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 
 /**
  * Popup account-import response accepted from the background boundary.

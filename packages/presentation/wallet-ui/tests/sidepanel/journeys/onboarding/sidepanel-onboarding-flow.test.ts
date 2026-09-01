@@ -8,8 +8,8 @@ import type {
   AccountContractType,
   AccountRef,
   DerivedAccountRef,
-} from "@mc-wallet/wallet-model/accounts";
-import type { RecoveryAccountSelection } from "@mc-wallet/wallet-model/recovery";
+} from "@bramble/wallet-model/accounts";
+import type { RecoveryAccountSelection } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";

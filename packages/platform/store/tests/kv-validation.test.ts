@@ -1,6 +1,6 @@
 /** In-memory key-value boundary tests. */
 import { expect, test } from "bun:test";
-import { assertStorageKey, createMemoryStore } from "@mc-wallet/store/kv";
+import { assertStorageKey, createMemoryStore } from "@bramble/store/kv";
 
 test("memory storage rejects invalid writes and snapshots valid JSON", async () => {
   const store = createMemoryStore();

@@ -5,7 +5,7 @@
  * validateMnemonic returning a real boolean vs a non-boolean WASM result.
  */
 import { describe, expect, test } from "bun:test";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 

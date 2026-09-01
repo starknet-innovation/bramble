@@ -9,11 +9,11 @@
  * happen to agree.
  */
 import { describe, expect, test } from "bun:test";
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { TokenConfig } from "@mc-wallet/settings/preferences";
-import { buildErc20TransferCall, parseTokenAmount } from "@mc-wallet/starknet/rpc";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { escapeHtml } from "@bramble/core/html";
+import type { TokenConfig } from "@bramble/settings/preferences";
+import { buildErc20TransferCall, parseTokenAmount } from "@bramble/starknet/rpc";
+import { verifyCalls } from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { Call } from "starknet";
 import type { PendingApproval, WalletStatus } from "../../../src/popup/responses/responses";
 import { approvalCard } from "../../../src/sidepanel/journeys/approvals/approval-cards";

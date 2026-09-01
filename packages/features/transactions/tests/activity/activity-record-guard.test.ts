@@ -5,8 +5,8 @@
  * Complements activity-store.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { createActivityLog } from "@mc-wallet/transactions/activity";
+import { createMemoryStore } from "@bramble/store/kv";
+import { createActivityLog } from "@bramble/transactions/activity";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 

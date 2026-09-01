@@ -4,9 +4,9 @@
  * proving block before a dependent proof is created.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { IndeterminateRpcWriteError, isTransportRpcError } from "@mc-wallet/starknet/provider";
-import { canonicalFelt, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { IndeterminateRpcWriteError, isTransportRpcError } from "@bramble/starknet/provider";
+import { canonicalFelt, isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import {
   memoryStrk20MaturityStore,
