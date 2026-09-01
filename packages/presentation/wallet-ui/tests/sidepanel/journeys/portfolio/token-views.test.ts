@@ -91,7 +91,7 @@ describe("token views", () => {
     expect(html).toContain('data-live-value="2000">$2,000.00</p>');
     expect(html).toContain(">1.00</p>");
     expect(html).not.toContain("Fake USD");
-    expect(html).toContain("1 hidden");
+    expect(html).toContain("1 not shown");
     expect(html).toContain('data-view="tokens"');
     expect(html).toMatch(/data-token-detail="SN_MAIN:ETH:/);
   });

@@ -119,6 +119,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@mc-wallet/wallet-ui",
     "@mc-wallet/wallet-model",
   ],
+  "@mc-wallet/website": [],
   "@mc-wallet/wallet-model": ["@mc-wallet/core"],
   "@mc-wallet/wallet-protocol": ["@mc-wallet/core", "@mc-wallet/wallet-model"],
   "@mc-wallet/wallet-ui": [
