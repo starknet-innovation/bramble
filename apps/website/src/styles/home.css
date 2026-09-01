@@ -104,6 +104,45 @@
   transform: translateX(0);
 }
 
+.wallet-success-mark {
+  position: absolute;
+  top: 22.53%;
+  left: 50%;
+  z-index: 2;
+  width: 19%;
+  color: var(--wallet-positive);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.wallet-success-mark svg {
+  display: block;
+  width: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3.2;
+}
+
+.wallet-success-ring {
+  animation: wallet-success-draw 480ms var(--ease-out) 40ms forwards;
+  stroke-dasharray: 158;
+  stroke-dashoffset: 158;
+}
+
+.wallet-success-check {
+  animation: wallet-success-draw 280ms var(--ease-out) 430ms forwards;
+  stroke-dasharray: 32;
+  stroke-dashoffset: 32;
+}
+
+@keyframes wallet-success-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 .wallet-hotspots {
   position: absolute;
   inset: 0;

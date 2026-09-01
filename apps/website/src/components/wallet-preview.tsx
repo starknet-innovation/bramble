@@ -122,6 +122,16 @@ export const WalletPreview = () => {
         );
       })}
 
+      {screen === "success" ? (
+        <span aria-hidden="true" className="wallet-success-mark">
+          <svg viewBox="0 0 56 56">
+            <title>Transaction successful</title>
+            <circle className="wallet-success-ring" cx="28" cy="28" r="25" />
+            <path className="wallet-success-check" d="M18 29.5l7 7 14-15" />
+          </svg>
+        </span>
+      ) : null}
+
       {screen === "home" ? (
         <fieldset aria-label="Try the wallet preview" className="wallet-hotspots">
           <button

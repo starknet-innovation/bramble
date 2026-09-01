@@ -30,6 +30,7 @@
   --secondary-foreground: #171717;
   --muted: #ececea;
   --muted-foreground: #62625e;
+  --wallet-positive: #4ade80;
   --border: #d6d6d2;
   --ring: #171717;
   --radius: 0.875rem;
@@ -48,6 +49,7 @@
 html {
   background: var(--background);
   color: var(--foreground);
+  overscroll-behavior-y: none;
   scroll-behavior: smooth;
   scrollbar-color: #8a8a84 var(--background);
 }
@@ -59,6 +61,7 @@ body {
   color: var(--foreground);
   font-family: "Instrument Sans Variable", "Helvetica Neue", sans-serif;
   font-synthesis: none;
+  overscroll-behavior-y: none;
   text-rendering: optimizeLegibility;
 }
 

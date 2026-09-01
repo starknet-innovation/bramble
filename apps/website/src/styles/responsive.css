@@ -187,4 +187,10 @@
   .wallet-screen {
     transition: none;
   }
+
+  .wallet-success-ring,
+  .wallet-success-check {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
 }
