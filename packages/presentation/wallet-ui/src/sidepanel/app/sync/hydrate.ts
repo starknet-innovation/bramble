@@ -359,7 +359,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (activeView === "home") {
     fill(
-      () => deployment.load(status, activeView),
+      () => deployment.load(status, activeView, refreshReason === "action"),
       (value) => {
         cache.deployment = value;
       },
