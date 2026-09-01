@@ -46,7 +46,7 @@ export {
 /**
  * Browser storage key for the new Argent-only registry format.
  */
-export const MULTISIG_STORE_KEY = "mc-wallet:argent-multisigs:v2";
+export const MULTISIG_STORE_KEY = "bramble:argent-multisigs:v2";
 
 const MAX_MULTISIGS = 20;
 const MAX_INTENTS = 100;

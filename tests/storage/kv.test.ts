@@ -33,7 +33,7 @@ afterEach(() => {
 test("memory store rejects lossy JSON writes", async () => {
   const store = createMemoryStore();
 
-  await expect(store.set("mc-wallet:test", { amount: Number.NaN })).rejects.toThrow(
+  await expect(store.set("bramble:test", { amount: Number.NaN })).rejects.toThrow(
     "Invalid JSON value",
   );
 });
@@ -48,18 +48,18 @@ test("memory store snapshots JSON across the storage boundary", async () => {
   const store = createMemoryStore();
   const value = { nested: { ok: true } };
 
-  await store.set("mc-wallet:test", value);
+  await store.set("bramble:test", value);
   value.nested.ok = false;
-  const firstRead = (await store.get("mc-wallet:test")) as typeof value;
+  const firstRead = (await store.get("bramble:test")) as typeof value;
   firstRead.nested.ok = false;
 
-  await expect(store.get("mc-wallet:test")).resolves.toEqual({ nested: { ok: true } });
+  await expect(store.get("bramble:test")).resolves.toEqual({ nested: { ok: true } });
 });
 
 test("storage keys require a lowercase wallet token path", () => {
-  expect(() => assertStorageKey("mc-wallet:")).toThrow("Storage key must be namespaced");
-  expect(() => assertStorageKey("mc-wallet:bad key")).toThrow("Storage key must be namespaced");
-  expect(() => assertStorageKey("mc-wallet:vault")).not.toThrow();
+  expect(() => assertStorageKey("bramble:")).toThrow("Storage key must be namespaced");
+  expect(() => assertStorageKey("bramble:bad key")).toThrow("Storage key must be namespaced");
+  expect(() => assertStorageKey("bramble:vault")).not.toThrow();
 });
 
 test("browser store rejects lossy JSON before chrome writes", async () => {
@@ -79,7 +79,7 @@ test("browser store rejects lossy JSON before chrome writes", async () => {
   };
 
   const store = createBrowserLocalStore();
-  await expect(store.set("mc-wallet:test", { amount: Number.POSITIVE_INFINITY })).rejects.toThrow(
+  await expect(store.set("bramble:test", { amount: Number.POSITIVE_INFINITY })).rejects.toThrow(
     "Invalid JSON value",
   );
   expect(writes).toBe(0);

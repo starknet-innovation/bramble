@@ -6,7 +6,7 @@ import { isAccountId } from "@bramble/wallet-model/accounts";
 import { isNostrEventId, isNostrRelayUrl } from "@bramble/wallet-model/nostr";
 
 /** Browser-local key for non-secret relay sync metadata. */
-export const NOSTR_COORDINATION_STORE_KEY = "mc-wallet:nostr-coordination:v1";
+export const NOSTR_COORDINATION_STORE_KEY = "bramble:nostr-coordination:v1";
 
 const MAX_CHECKPOINTS = 20;
 const MAX_SEEN_EVENT_IDS = 200;

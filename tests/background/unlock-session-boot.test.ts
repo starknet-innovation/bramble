@@ -12,7 +12,7 @@ import type { SessionAlarmsApi } from "../../apps/extension/src/background/runti
 import { createBackgroundUnlockSession } from "../../apps/extension/src/background/runtime/unlock-session-boot";
 import { vaultPassphrase } from "../support/background-wallet-stub";
 
-const SESSION_STORE_KEY = "mc-wallet:session";
+const SESSION_STORE_KEY = "bramble:session";
 
 const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 

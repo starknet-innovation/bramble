@@ -29,7 +29,7 @@ describe("createActivityLog record guard", () => {
     >);
 
     expect(await log.list()).toEqual([]);
-    expect(await store.get("mc-wallet:activity")).toBeUndefined();
+    expect(await store.get("bramble:activity")).toBeUndefined();
   });
 
   test("drops an entry with an unknown transaction kind", async () => {

@@ -23,9 +23,9 @@ describe("vault recovery", () => {
   test("restores selected OZ and Argent coordinates in one encrypted vault", async () => {
     const store = createMemoryStore();
     const service = createWalletVaultService({
-      encryptedStore: createEncryptedStore(store, "mc-wallet:vault"),
+      encryptedStore: createEncryptedStore(store, "bramble:vault"),
       kms: indexedKms(),
-      migrationStore: createEncryptedStore(store, "mc-wallet:vault-migration"),
+      migrationStore: createEncryptedStore(store, "bramble:vault-migration"),
     });
     const accounts = await service.recoverAccounts({
       mnemonic,
@@ -42,7 +42,7 @@ describe("vault recovery", () => {
     expect(vault.accounts).toEqual(accounts);
     expect(vault.activeAccountId).toBe(accounts[0]?.id ?? null);
     expect(vault.signingKeys).toHaveLength(2);
-    expect(JSON.stringify(await store.get("mc-wallet:vault"))).not.toContain(mnemonic);
+    expect(JSON.stringify(await store.get("bramble:vault"))).not.toContain(mnemonic);
   });
 
   test("does not write a partial recovery when one derivation fails", async () => {
@@ -55,9 +55,9 @@ describe("vault recovery", () => {
       },
     };
     const service = createWalletVaultService({
-      encryptedStore: createEncryptedStore(store, "mc-wallet:vault"),
+      encryptedStore: createEncryptedStore(store, "bramble:vault"),
       kms,
-      migrationStore: createEncryptedStore(store, "mc-wallet:vault-migration"),
+      migrationStore: createEncryptedStore(store, "bramble:vault-migration"),
     });
 
     await expect(
@@ -71,6 +71,6 @@ describe("vault recovery", () => {
         vaultPassphrase,
       }),
     ).rejects.toThrow("KMS unavailable");
-    expect(await store.get("mc-wallet:vault")).toBeUndefined();
+    expect(await store.get("bramble:vault")).toBeUndefined();
   });
 });

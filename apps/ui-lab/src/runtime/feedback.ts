@@ -1,4 +1,4 @@
-const FEEDBACK_KEY = "mc-wallet:ui-lab-feedback:v1";
+const FEEDBACK_KEY = "bramble:ui-lab-feedback:v1";
 
 export type FeedbackNote = {
   readonly checkpoint: string;

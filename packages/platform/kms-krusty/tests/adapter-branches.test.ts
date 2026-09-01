@@ -31,7 +31,7 @@ const createModule = (overrides: Record<string, unknown> = {}) => ({
   openNostrApplicationData() {
     return JSON.stringify({
       content: "payload",
-      identifier: "mc-wallet.multisig",
+      identifier: "bramble.multisig",
       senderPublicKey: "22".repeat(32),
     });
   },

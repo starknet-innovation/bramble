@@ -4,15 +4,15 @@ import { authorizeOrigin, serviceUrl } from "../../../api/_lib/security";
 import gatewayHandler from "../../../api/strk20/gateway";
 import vercelConfig from "../../../vercel.json";
 
-const originalExtensionOrigins = process.env.MC_WALLET_EXTENSION_ORIGINS;
+const originalExtensionOrigins = process.env.BRAMBLE_EXTENSION_ORIGINS;
 const originalDiscoveryUpstream = process.env.STRK20_DISCOVERY_UPSTREAM;
 
 afterEach(() => {
   vi.unstubAllGlobals();
   if (originalExtensionOrigins === undefined) {
-    delete process.env.MC_WALLET_EXTENSION_ORIGINS;
+    delete process.env.BRAMBLE_EXTENSION_ORIGINS;
   } else {
-    process.env.MC_WALLET_EXTENSION_ORIGINS = originalExtensionOrigins;
+    process.env.BRAMBLE_EXTENSION_ORIGINS = originalExtensionOrigins;
   }
   if (originalDiscoveryUpstream === undefined) {
     delete process.env.STRK20_DISCOVERY_UPSTREAM;
@@ -71,7 +71,7 @@ describe("privacy gateway security configuration", () => {
   });
 
   it("fails closed without a released extension origin", () => {
-    delete process.env.MC_WALLET_EXTENSION_ORIGINS;
+    delete process.env.BRAMBLE_EXTENSION_ORIGINS;
     const target = response();
     expect(
       authorizeOrigin(
@@ -84,7 +84,7 @@ describe("privacy gateway security configuration", () => {
 
   it("accepts only exact well-formed configured extension origins", () => {
     const origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
-    process.env.MC_WALLET_EXTENSION_ORIGINS = origin;
+    process.env.BRAMBLE_EXTENSION_ORIGINS = origin;
     const target = response();
     expect(
       authorizeOrigin(
@@ -95,7 +95,7 @@ describe("privacy gateway security configuration", () => {
     ).toBe(true);
     expect(target.headers.get("Access-Control-Allow-Origin")).toBe(origin);
 
-    process.env.MC_WALLET_EXTENSION_ORIGINS = "*";
+    process.env.BRAMBLE_EXTENSION_ORIGINS = "*";
     expect(
       authorizeOrigin(
         { headers: { origin }, method: "GET" } as ApiRequest,
@@ -106,7 +106,7 @@ describe("privacy gateway security configuration", () => {
   });
 
   it("accepts Chrome's originless privileged extension fetch shape", () => {
-    delete process.env.MC_WALLET_EXTENSION_ORIGINS;
+    delete process.env.BRAMBLE_EXTENSION_ORIGINS;
     const target = response();
     expect(
       authorizeOrigin(
@@ -126,7 +126,7 @@ describe("privacy gateway security configuration", () => {
   });
 
   it("accepts Chrome's origin-stamped privileged extension POST shape", () => {
-    delete process.env.MC_WALLET_EXTENSION_ORIGINS;
+    delete process.env.BRAMBLE_EXTENSION_ORIGINS;
     const target = response();
     expect(
       authorizeOrigin(
@@ -147,7 +147,7 @@ describe("privacy gateway security configuration", () => {
   });
 
   it("rejects web origins and malformed extension origins on the privileged shape", () => {
-    delete process.env.MC_WALLET_EXTENSION_ORIGINS;
+    delete process.env.BRAMBLE_EXTENSION_ORIGINS;
     for (const origin of [
       "https://attacker.example",
       "chrome-extension://short",
@@ -172,7 +172,7 @@ describe("privacy gateway security configuration", () => {
   });
 
   it("rejects originless websites and navigation-shaped requests", () => {
-    delete process.env.MC_WALLET_EXTENSION_ORIGINS;
+    delete process.env.BRAMBLE_EXTENSION_ORIGINS;
     for (const headers of [
       {},
       { "sec-fetch-dest": "empty", "sec-fetch-mode": "cors", "sec-fetch-site": "cross-site" },
@@ -200,7 +200,7 @@ describe("privacy gateway security configuration", () => {
 
   it("rejects an oversized upstream response before buffering its body", async () => {
     const origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
-    process.env.MC_WALLET_EXTENSION_ORIGINS = origin;
+    process.env.BRAMBLE_EXTENSION_ORIGINS = origin;
     process.env.STRK20_DISCOVERY_UPSTREAM = "https://private.example";
     vi.stubGlobal(
       "fetch",

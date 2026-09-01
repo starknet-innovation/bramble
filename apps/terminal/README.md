@@ -64,7 +64,7 @@ STRK20_DISCOVERY_UPSTREAM=
 STRK20_PROVER_UPSTREAM=
 STRK20_PAYMASTER_UPSTREAM=https://starknet.paymaster.avnu.fi
 AVNU_PAYMASTER_API_KEY=
-MC_WALLET_EXTENSION_ORIGINS=chrome-extension://<released-extension-id>
+BRAMBLE_EXTENSION_ORIGINS=chrome-extension://<released-extension-id>
 TERMINAL_ALLOWED_ORIGINS=https://mc-wallet-terminal.vercel.app,http://localhost:3000
 ```
 
@@ -72,7 +72,7 @@ Never prefix upstream URLs or the paymaster key with `VITE_`; Vite variables
 are browser-readable. The public gateway URL is visible by design, while the
 upstream discovery/prover URLs stay server-side.
 
-`MC_WALLET_EXTENSION_ORIGINS` accepts only exact Chrome extension origins. This
+`BRAMBLE_EXTENSION_ORIGINS` accepts only exact Chrome extension origins. This
 blocks other browser origins but is not cryptographic build attestation: a
 standalone HTTP client can spoof an Origin header, and no secret can safely be
 embedded in an extension. Production must additionally apply Vercel Firewall

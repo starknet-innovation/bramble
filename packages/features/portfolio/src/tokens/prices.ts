@@ -18,12 +18,12 @@ import {
 export { PRICE_CHART_POINT_LIMIT } from "./prices-feed";
 
 /** Browser storage key for the fiat price cache. */
-const PRICES_STORE_KEY = "mc-wallet:prices";
+const PRICES_STORE_KEY = "bramble:prices";
 
 /**
  * Browser storage key for the 7-day market chart cache.
  */
-export const CHARTS_STORE_KEY = "mc-wallet:charts";
+export const CHARTS_STORE_KEY = "bramble:charts";
 
 const PRICE_TTL_MS = 5 * 60 * 1000;
 const PRICE_RETRY_BACKOFF_MS = 60_000;

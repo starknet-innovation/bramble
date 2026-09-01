@@ -12,7 +12,7 @@ import { serializeStoreMutations } from "@bramble/store/mutation";
 /**
  * Browser storage key for the origin first-seen history.
  */
-export const ORIGIN_HISTORY_STORE_KEY = "mc-wallet:origin-history";
+export const ORIGIN_HISTORY_STORE_KEY = "bramble:origin-history";
 
 const MAX_ORIGINS = 500;
 

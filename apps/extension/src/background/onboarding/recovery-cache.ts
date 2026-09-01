@@ -12,7 +12,7 @@ import {
   type RecoveryAccountCandidate,
 } from "@bramble/wallet-model/recovery";
 
-const RECOVERY_DISCOVERY_KEY = "mc-wallet:recovery-discovery";
+const RECOVERY_DISCOVERY_KEY = "bramble:recovery-discovery";
 
 /** Public progress retained across service-worker restarts, never across browser restarts. */
 type RecoveryDiscoverySnapshot = {

@@ -23,15 +23,15 @@ type PendingRequest = {
 
 declare global {
   interface Window {
-    readonly mcWallet?: {
-      readonly isMcWallet: true;
+    readonly bramble?: {
+      readonly isBramble: true;
       readonly request: (args: unknown) => Promise<unknown>;
     };
-    readonly starknet_mcWallet?: {
+    readonly starknet_bramble?: {
       readonly chainId?: string;
       readonly enable: () => Promise<readonly string[]>;
       readonly icon: string;
-      readonly id: "mc-wallet";
+      readonly id: "bramble";
       readonly isConnected: boolean;
       readonly isPreauthorized: () => Promise<boolean>;
       readonly name: "MC Wallet";
@@ -151,7 +151,7 @@ const starknetWallet = {
     return addresses;
   },
   icon: WALLET_ICON,
-  id: "mc-wallet" as const,
+  id: "bramble" as const,
   get isConnected(): boolean {
     return connectedAddresses.length > 0;
   },
@@ -172,20 +172,20 @@ const starknetWallet = {
   version: "0.1.0" as const,
 };
 
-if (!window.mcWallet) {
-  Object.defineProperty(window, "mcWallet", {
+if (!window.bramble) {
+  Object.defineProperty(window, "bramble", {
     configurable: false,
     enumerable: false,
     value: Object.freeze({
-      isMcWallet: true,
+      isBramble: true,
       request,
     }),
     writable: false,
   });
 }
 
-if (!window.starknet_mcWallet) {
-  Object.defineProperty(window, "starknet_mcWallet", {
+if (!window.starknet_bramble) {
+  Object.defineProperty(window, "starknet_bramble", {
     configurable: false,
     enumerable: false,
     value: Object.freeze(starknetWallet),
@@ -193,5 +193,5 @@ if (!window.starknet_mcWallet) {
   });
 }
 
-window.dispatchEvent(new Event("mc-wallet#initialized"));
+window.dispatchEvent(new Event("bramble#initialized"));
 window.dispatchEvent(new Event("starknet#initialized"));

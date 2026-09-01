@@ -29,7 +29,7 @@ describe("recovery discovery cache", () => {
     await cache.write(snapshot);
     expect(await cache.read()).toEqual(snapshot);
 
-    await store.set("mc-wallet:recovery-discovery", { ...snapshot, mnemonic: "must not persist" });
+    await store.set("bramble:recovery-discovery", { ...snapshot, mnemonic: "must not persist" });
     expect(await cache.read()).toBeNull();
   });
 });

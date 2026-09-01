@@ -254,7 +254,7 @@ export const readImportIntentSignatureInput = (
  */
 export type ArgentMultisigIntentPackage = {
   readonly intent: ArgentMultisigSigningIntent;
-  readonly kind: "mc-wallet.argent-multisig-intent";
+  readonly kind: "bramble.argent-multisig-intent";
   readonly version: 1;
 };
 
@@ -265,7 +265,7 @@ export const argentMultisigIntentPackage = (
   intent: ArgentMultisigSigningIntent,
 ): ArgentMultisigIntentPackage => ({
   intent,
-  kind: "mc-wallet.argent-multisig-intent",
+  kind: "bramble.argent-multisig-intent",
   version: 1,
 });
 
@@ -330,7 +330,7 @@ export const readImportIntentInput = (
     message["type"] !== "wallet.importArgentMultisigIntent" ||
     !isRecord(message["package"]) ||
     !hasOnlyKnownKeys(message["package"], ["intent", "kind", "version"]) ||
-    message["package"]["kind"] !== "mc-wallet.argent-multisig-intent" ||
+    message["package"]["kind"] !== "bramble.argent-multisig-intent" ||
     message["package"]["version"] !== 1 ||
     !isArgentMultisigSigningIntent(message["package"]["intent"])
   ) {

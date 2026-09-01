@@ -14,8 +14,8 @@ import { isAccountRef } from "@bramble/wallet-model/accounts";
 import { ec } from "starknet";
 import { readImportAccountInput } from "../../apps/extension/src/background/accounts/import-inputs";
 
-const vaultKey = "mc-wallet:vault";
-const migrationKey = "mc-wallet:vault-migration";
+const vaultKey = "bramble:vault";
+const migrationKey = "bramble:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 // Clearly-fake test vector; not a real key.
 const importedKey = "0xfeedface";

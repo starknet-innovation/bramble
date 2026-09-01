@@ -14,7 +14,7 @@ import {
 } from "@bramble/core/json";
 
 test("isRecord accepts only plain JSON records", () => {
-  const inherited = Object.assign(Object.create({ target: "mc-wallet:content" }), {
+  const inherited = Object.assign(Object.create({ target: "bramble:content" }), {
     id: "123e4567-e89b-42d3-a456-426614174000",
     method: "mc_accounts",
   });

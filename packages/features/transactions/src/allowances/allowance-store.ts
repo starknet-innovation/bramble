@@ -34,7 +34,7 @@ import {
 /**
  * Browser storage key for the allowance log.
  */
-export const ALLOWANCE_STORE_KEY = "mc-wallet:allowances";
+export const ALLOWANCE_STORE_KEY = "bramble:allowances";
 
 /**
  * Retention bounds for the allowance log.

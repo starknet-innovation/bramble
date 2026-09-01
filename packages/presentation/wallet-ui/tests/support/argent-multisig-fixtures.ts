@@ -125,7 +125,7 @@ export const makeArgentMultisigFixture = async (
     intent,
     intentPackage: {
       intent,
-      kind: "mc-wallet.argent-multisig-intent",
+      kind: "bramble.argent-multisig-intent",
       version: 1,
     },
     readyIntent,

@@ -9,7 +9,7 @@ import { isStarknetNetworkId, type StarknetNetworkId } from "@bramble/wallet-mod
 /**
  * Browser-local key for bounded, non-secret portfolio snapshots.
  */
-export const BALANCE_SNAPSHOTS_KEY = "mc-wallet:balance-snapshots";
+export const BALANCE_SNAPSHOTS_KEY = "bramble:balance-snapshots";
 
 const MAX_SCOPES = 50;
 const BALANCE_SNAPSHOT_TTL_MS = 60_000;

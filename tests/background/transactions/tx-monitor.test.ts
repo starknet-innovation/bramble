@@ -86,8 +86,8 @@ describe("transaction monitor", () => {
     ).toBe(true);
     await scheduled();
     expect(created).toEqual([
-      { name: "mc-wallet:tx-observe-fast", periodInMinutes: FAST_OBSERVATION_PERIOD_MINUTES },
-      { name: "mc-wallet:tx-observe-slow", periodInMinutes: SLOW_OBSERVATION_PERIOD_MINUTES },
+      { name: "bramble:tx-observe-fast", periodInMinutes: FAST_OBSERVATION_PERIOD_MINUTES },
+      { name: "bramble:tx-observe-slow", periodInMinutes: SLOW_OBSERVATION_PERIOD_MINUTES },
     ]);
     expect(SLOW_OBSERVATION_PERIOD_MINUTES).toBeGreaterThan(FAST_OBSERVATION_PERIOD_MINUTES);
   });
@@ -96,11 +96,11 @@ describe("transaction monitor", () => {
   // would restart its period, so a worker woken more often than once a minute
   // would keep pushing the fast alarm's deadline out and it would never fire.
   test("leaves an already-scheduled alarm alone when the worker restarts", async () => {
-    const { alarms, created } = makeAlarms(["mc-wallet:tx-observe-fast"]);
+    const { alarms, created } = makeAlarms(["bramble:tx-observe-fast"]);
     const { deps } = makeDeps();
     startTransactionMonitor({ browser: { alarms }, deps, now: () => 0, ready: storageReady });
     await scheduled();
-    expect(created.map((alarm) => alarm.name)).toEqual(["mc-wallet:tx-observe-slow"]);
+    expect(created.map((alarm) => alarm.name)).toEqual(["bramble:tx-observe-slow"]);
   });
 
   test("reconciles on a known alarm and ignores anything else", async () => {
@@ -108,7 +108,7 @@ describe("transaction monitor", () => {
     const { deps } = makeDeps();
     startTransactionMonitor({ browser: { alarms }, deps, now: () => 0, ready: storageReady });
     fire("some-other-extension-alarm");
-    fire("mc-wallet:tx-observe-fast");
+    fire("bramble:tx-observe-fast");
     await Promise.resolve();
     // With no observed entries the reconciler short-circuits before any read,
     // so the assertion that matters is simply that neither call threw.
@@ -137,7 +137,7 @@ describe("transaction monitor", () => {
       now: () => 0,
       ready: ready.promise,
     });
-    fire("mc-wallet:tx-observe-fast");
+    fire("bramble:tx-observe-fast");
     await scheduled();
     expect(activityReads).toBe(0);
 
@@ -168,7 +168,7 @@ describe("transaction monitor", () => {
       now: () => 0,
       ready: ready.promise,
     });
-    fire("mc-wallet:tx-observe-fast");
+    fire("bramble:tx-observe-fast");
     ready.reject(new Error("storage lockdown failed"));
     await scheduled();
     expect(activityReads).toBe(0);
@@ -204,8 +204,8 @@ describe("transaction monitor", () => {
       now: () => 0,
       ready: storageReady,
     });
-    fire("mc-wallet:tx-observe-fast");
-    fire("mc-wallet:tx-observe-slow");
+    fire("bramble:tx-observe-fast");
+    fire("bramble:tx-observe-slow");
     await scheduled();
     expect(calls).toBe(1);
 
@@ -234,7 +234,7 @@ describe("transaction monitor", () => {
       now: () => 0,
       ready: storageReady,
     });
-    expect(() => fire("mc-wallet:tx-observe-slow")).not.toThrow();
+    expect(() => fire("bramble:tx-observe-slow")).not.toThrow();
     await Promise.resolve();
   });
 

@@ -43,11 +43,11 @@ const eventRefresh = createProviderEventRefresh({
 });
 
 const injectProvider = (): void => {
-  if (!runtime || document.documentElement.dataset["mcWalletInjected"] === "true") {
+  if (!runtime || document.documentElement.dataset["brambleInjected"] === "true") {
     return;
   }
 
-  document.documentElement.dataset["mcWalletInjected"] = "true";
+  document.documentElement.dataset["brambleInjected"] = "true";
   const script = document.createElement("script");
   script.src = runtime.getURL("provider/inpage.js");
   script.onload = () => script.remove();

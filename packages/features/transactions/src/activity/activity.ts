@@ -19,8 +19,8 @@ export { activityToCsv } from "./activity-csv";
 /**
  * Browser storage key for the activity log.
  */
-const ACTIVITY_STORE_KEY = "mc-wallet:activity";
-const ACTIVITY_HISTORY_SYNC_KEY = "mc-wallet:activity-history-sync";
+const ACTIVITY_STORE_KEY = "bramble:activity";
+const ACTIVITY_HISTORY_SYNC_KEY = "bramble:activity-history-sync";
 
 const MAX_ENTRIES_PER_SCOPE = 200;
 const MAX_SYNC_SCOPES = 50;

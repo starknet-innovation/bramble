@@ -34,10 +34,10 @@ describe("content provider event refresh", () => {
     await flushHeld();
 
     expect(posted).toEqual([
-      { data: "0x1", event: "networkChanged", target: "mc-wallet:page" },
-      { data: first, event: "accountsChanged", target: "mc-wallet:page" },
-      { data: "0x2", event: "networkChanged", target: "mc-wallet:page" },
-      { data: latest, event: "accountsChanged", target: "mc-wallet:page" },
+      { data: "0x1", event: "networkChanged", target: "bramble:page" },
+      { data: first, event: "accountsChanged", target: "bramble:page" },
+      { data: "0x2", event: "networkChanged", target: "bramble:page" },
+      { data: latest, event: "accountsChanged", target: "bramble:page" },
     ]);
     expect(reads).toBe(2);
   });

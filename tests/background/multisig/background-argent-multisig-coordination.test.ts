@@ -267,21 +267,21 @@ describe("Argent multisig Nostr coordination", () => {
 
     expect(
       trustedSharedIntent(
-        { content, identifier: "mc-wallet.multisig", senderPublicKey },
+        { content, identifier: "bramble.multisig", senderPublicKey },
         [contact],
         records,
       ),
     ).not.toBeNull();
     expect(
       trustedSharedIntent(
-        { content, identifier: "mc-wallet.multisig", senderPublicKey: "22".repeat(32) },
+        { content, identifier: "bramble.multisig", senderPublicKey: "22".repeat(32) },
         [contact],
         records,
       ),
     ).toBeNull();
     expect(
       trustedSharedIntent(
-        { content, identifier: "mc-wallet.multisig", senderPublicKey },
+        { content, identifier: "bramble.multisig", senderPublicKey },
         [{ ...contact, publicKeyX: "0x123" }],
         records,
       ),

@@ -5,7 +5,7 @@ import type { KeyValueStore } from "@bramble/store/kv";
 import type { ArgentMultisigDeploymentReview } from "./multisig-inputs";
 
 const MAX_DEPLOYMENT_REVIEWS = 20;
-const REVIEW_STORE_KEY = "mc-wallet:argent-multisig-deployment-reviews";
+const REVIEW_STORE_KEY = "bramble:argent-multisig-deployment-reviews";
 const reviewKey = (review: ArgentMultisigDeploymentReview): string =>
   JSON.stringify([
     review.address,

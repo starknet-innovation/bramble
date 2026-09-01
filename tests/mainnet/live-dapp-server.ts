@@ -21,7 +21,7 @@ const html = `<!doctype html>
   <body><p data-testid="provider-status">missing</p>
     <script>
       const refresh = () => {
-        const wallet = window.starknet_mcWallet;
+        const wallet = window.starknet_bramble;
         document.querySelector('[data-testid="provider-status"]').textContent =
           wallet ? [wallet.id, wallet.name, wallet.version].join("|") : "missing";
       };

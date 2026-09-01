@@ -111,7 +111,7 @@ describe("allowance log total bound", () => {
     const oversized = Array.from({ length: ALLOWANCE_LIMITS.entriesTotal + 40 }, (_, index) =>
       asRecord(input(index % 8, index)),
     );
-    await kv.set("mc-wallet:allowances", oversized);
+    await kv.set("bramble:allowances", oversized);
 
     const store = createAllowanceStore({ store: kv });
     await store.record(input(0, 90_001));

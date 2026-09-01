@@ -288,7 +288,7 @@ export const createEncryptedStore = (
   freshnessStore: KeyValueStore = store,
 ): EncryptedStore => {
   assertStorageKey(key);
-  const scope = `mc-wallet:encrypted-store:${key}`;
+  const scope = `bramble:encrypted-store:${key}`;
   const commitKey = (lineage: string): string => `${key}:commit:${lineage}`;
   // This authority is deliberately store-wide, not keyed to the one v2
   // envelope present during migration. Once any v3 commit for this store is

@@ -201,7 +201,7 @@ but may add a keyless Ledger account. Every migration is adjacent and determinis
 
 Chrome preserves `storage.local` across an update but clears `storage.session`. `runtime.onInstalled`
 therefore cannot migrate an encrypted vault: it has no passphrase. The first authenticated read runs
-the pure schema chain, verifies an encrypted `mc-wallet:vault-migration` stage, then verifies the
+the pure schema chain, verifies an encrypted `bramble:vault-migration` stage, then verifies the
 primary before cleanup. A worker stop leaves either the old primary or an authenticated recovery
 copy; invalid data never reaches the primary write. See [Wallet store architecture](WALLET_STORE.md).
 
@@ -280,7 +280,7 @@ so events never leak wallet state to unconnected sites.
 
 ## dApp Provider
 
-The injected `window.starknet_mcWallet` object follows the get-starknet/starknetkit
+The injected `window.starknet_bramble` object follows the get-starknet/starknetkit
 `StarknetWindowObject` shape: `id`, `name`, `version`, an inline `data:` URI `icon`, `isConnected`,
 `selectedAddress`, `on`/`off`, `enable`, and `request`. `chainId` is initialized lazily from
 `wallet_requestChainId` after `enable` and kept current from `networkChanged` events;
@@ -348,7 +348,7 @@ and reputation signals before a connection is approved:
     eth-phishing-detect, `https://metamask.github.io/eth-phishing-detect/v1/config.json`)
     under an explicit new host permission (`https://metamask.github.io/*`).
   - The payload is validated before use and cached in plain (non-secret) local
-    storage under `mc-wallet:phishing-feed`. Wire format is
+    storage under `bramble:phishing-feed`. Wire format is
     `{ "blocklist": string[], "version"?: number }`; the eth-phishing-detect
     `blacklist` key is accepted as an alias and its fuzzy/whitelist fields are
     ignored (the wallet's own heuristics cover lookalikes).
@@ -373,7 +373,7 @@ and reputation signals before a connection is approved:
   `ethereum.org`) raise warnings without blocking, so real sites are never
   denied by heuristics alone.
 - Site reputation: the first time an origin requests accounts is persisted in
-  `packages/features/permissions/src/origin-history.ts` (key `mc-wallet:origin-history`) using an
+  `packages/features/permissions/src/origin-history.ts` (key `bramble:origin-history`) using an
   injected clock. Approval cards show first-seen, prior-connection, risky-TLD,
   and lookalike insights prominently before the user grants access.
 
@@ -467,7 +467,7 @@ granted; the store applies the arithmetic (`applyDelta`, one serialized read-mod
 `lowerBound`, shown as "at least N". Each record's live `allowance(owner, spender)` is then read
 directly and adopted when it is at least the tracked figure. Collection approvals are excluded and
 reviewed as their own kinds: an ERC721 `approve` carries a token id, so a "revoke" would approve
-item 0. The store `mc-wallet:allowances` sits outside the vault.
+item 0. The store `bramble:allowances` sits outside the vault.
 
 ## NFT gallery
 

@@ -13,7 +13,7 @@ import {
   isEncryptedEnvelope,
 } from "@bramble/vault/encrypted-store";
 
-const vaultKey = "mc-wallet:vault";
+const vaultKey = "bramble:vault";
 const passphrase = "correct horse battery staple";
 
 describe("encrypted store failure branches", () => {
@@ -27,7 +27,7 @@ describe("encrypted store failure branches", () => {
       iv: "@@@@not base64@@@@",
       kdf: "PBKDF2-SHA-256",
       salt: btoa("0123456789abcdef"),
-      scope: `mc-wallet:encrypted-store:${vaultKey}`,
+      scope: `bramble:encrypted-store:${vaultKey}`,
       version: 2,
     };
     expect(isEncryptedEnvelope(envelope)).toBe(false);
@@ -49,7 +49,7 @@ describe("encrypted store failure branches", () => {
     const envelope = await encryptJson(
       { schemaVersion: 1 },
       passphrase,
-      `mc-wallet:encrypted-store:${vaultKey}`,
+      `bramble:encrypted-store:${vaultKey}`,
     );
     // Flip the stored ciphertext to a different (still base64, still valid
     // length) value so the AES-GCM auth tag check fails on decrypt.

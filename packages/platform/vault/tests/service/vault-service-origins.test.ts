@@ -12,8 +12,8 @@ import type { KmsPort } from "@bramble/vault/kms-port";
 import { createWalletVaultService } from "@bramble/vault/service";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
-const vaultKey = "mc-wallet:vault";
-const migrationKey = "mc-wallet:vault-migration";
+const vaultKey = "bramble:vault";
+const migrationKey = "bramble:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 const defaultAccountInput = {
   accountContractType: "openzeppelin",

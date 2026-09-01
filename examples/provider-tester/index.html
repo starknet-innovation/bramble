@@ -162,7 +162,7 @@
 
       <section class="scenario" data-step="1">
         <header><h2>1 · Detect provider</h2></header>
-        <p class="why">Reads <code>window.starknet_mcWallet</code> and its get-starknet metadata (id, name, version, icon).</p>
+        <p class="why">Reads <code>window.starknet_bramble</code> and its get-starknet metadata (id, name, version, icon).</p>
         <p class="expect"><b>Expect:</b> id <code>mc-wallet</code>, name <code>MC Wallet</code>, version <code>0.1.0</code>, and an inline icon.</p>
         <div class="controls"><button type="button" data-run="detect">Detect</button></div>
         <div class="result" id="r-detect"></div>
@@ -268,14 +268,14 @@
         el.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
       };
 
-      const provider = () => window.starknet_mcWallet;
+      const provider = () => window.starknet_bramble;
 
       // Wait for the injected provider (it dispatches starknet#initialized).
       const ready = new Promise((resolve) => {
         if (provider()) return resolve(provider());
         const onInit = () => provider() && resolve(provider());
         window.addEventListener("starknet#initialized", onInit);
-        window.addEventListener("mc-wallet#initialized", onInit);
+        window.addEventListener("bramble#initialized", onInit);
         // Fallback poll for late injection.
         const iv = setInterval(() => {
           if (provider()) {

@@ -19,7 +19,7 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 
-const STORE_KEY = "mc-wallet:strk20-maturity";
+const STORE_KEY = "bramble:strk20-maturity";
 const MAX_RECORDS = 100;
 
 type StoredMaturity = Strk20MaturityRecord & Strk20MaturityScope;

@@ -7,7 +7,7 @@ import { AVNU_API, EXTENDED_API_BASE } from "./src/protocols/constants";
 
 // Standalone SPA build for the MC Wallet Trade Terminal. This app is NOT part
 // of the extension bundle — it is served as an ordinary web app and connects to
-// the MC Wallet extension at runtime via the injected window.starknet_mcWallet
+// the MC Wallet extension at runtime via the injected window.starknet_bramble
 // provider.
 //
 // DEV PROXY (CORS fix)

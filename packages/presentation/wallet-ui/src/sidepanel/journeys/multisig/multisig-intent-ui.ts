@@ -79,7 +79,7 @@ const bindCopies = (deps: MultisigUiDeps): void => {
           if (!intent) throw new Error("Signing intent unavailable");
           return copyText(
             button,
-            JSON.stringify({ intent, kind: "mc-wallet.argent-multisig-intent", version: 1 }),
+            JSON.stringify({ intent, kind: "bramble.argent-multisig-intent", version: 1 }),
             "Intent package copied",
           );
         })

@@ -13,9 +13,9 @@ const vaultPassphrase = "correct horse battery staple";
 
 const serviceFor = (kms: KmsPort, store = createMemoryStore()) =>
   createWalletVaultService({
-    encryptedStore: createEncryptedStore(store, "mc-wallet:vault"),
+    encryptedStore: createEncryptedStore(store, "bramble:vault"),
     kms,
-    migrationStore: createEncryptedStore(store, "mc-wallet:vault-migration"),
+    migrationStore: createEncryptedStore(store, "bramble:vault-migration"),
   });
 
 describe("wallet Nostr identity", () => {
@@ -29,7 +29,7 @@ describe("wallet Nostr identity", () => {
           if (eventJson === "invalid") throw new Error("invalid gift wrap");
           return {
             content: eventJson,
-            identifier: "mc-wallet.multisig",
+            identifier: "bramble.multisig",
             senderPublicKey: "22".repeat(32),
           };
         },
@@ -50,7 +50,7 @@ describe("wallet Nostr identity", () => {
         isAuthorized,
         items: ["44", "55"].map((prefix) => ({
           content: "payload",
-          identifier: "mc-wallet.multisig",
+          identifier: "bramble.multisig",
           recipientPublicKey: prefix.repeat(32),
         })),
         vaultPassphrase,
@@ -65,7 +65,7 @@ describe("wallet Nostr identity", () => {
     ).resolves.toEqual([
       {
         content: "valid",
-        identifier: "mc-wallet.multisig",
+        identifier: "bramble.multisig",
         senderPublicKey: "22".repeat(32),
       },
       null,
@@ -93,7 +93,7 @@ describe("wallet Nostr identity", () => {
         isAuthorized: () => authorized,
         items: ["44", "55"].map((prefix) => ({
           content: "payload",
-          identifier: "mc-wallet.multisig",
+          identifier: "bramble.multisig",
           recipientPublicKey: prefix.repeat(32),
         })),
         vaultPassphrase,
@@ -114,7 +114,7 @@ describe("wallet Nostr identity", () => {
         calls.push(args);
         return {
           content: "payload",
-          identifier: "mc-wallet.multisig",
+          identifier: "bramble.multisig",
           senderPublicKey: "22".repeat(32),
         };
       },
@@ -131,7 +131,7 @@ describe("wallet Nostr identity", () => {
     });
     const wrapped = await service.wrapNostrApplicationData({
       content: "payload",
-      identifier: "mc-wallet.multisig",
+      identifier: "bramble.multisig",
       recipientPublicKey: "44".repeat(32),
       vaultPassphrase,
     });
@@ -141,7 +141,7 @@ describe("wallet Nostr identity", () => {
       service.openNostrApplicationData({ eventJson: wrapped, vaultPassphrase }),
     ).resolves.toMatchObject({ content: "payload" });
     expect(calls).toEqual([
-      [mnemonic, 0, 0, "44".repeat(32), "mc-wallet.multisig", "payload"],
+      [mnemonic, 0, 0, "44".repeat(32), "bramble.multisig", "payload"],
       [mnemonic, 0, 0],
       [mnemonic, 0, 0, wrapped],
     ]);
@@ -149,7 +149,7 @@ describe("wallet Nostr identity", () => {
 
   test("fails closed for a mnemonic-less vault", async () => {
     const store = createMemoryStore();
-    const encryptedStore = createEncryptedStore(store, "mc-wallet:vault");
+    const encryptedStore = createEncryptedStore(store, "bramble:vault");
     await encryptedStore.write(
       { accounts: [], activeAccountId: null, originGrants: [], schemaVersion: 1, signingKeys: [] },
       vaultPassphrase,
@@ -157,7 +157,7 @@ describe("wallet Nostr identity", () => {
     const service = createWalletVaultService({
       encryptedStore,
       kms: fakeKms(),
-      migrationStore: createEncryptedStore(store, "mc-wallet:vault-migration"),
+      migrationStore: createEncryptedStore(store, "bramble:vault-migration"),
     });
 
     await expect(service.nostrPublicKey(vaultPassphrase)).rejects.toThrow(
@@ -166,7 +166,7 @@ describe("wallet Nostr identity", () => {
     await expect(
       service.wrapNostrApplicationData({
         content: "payload",
-        identifier: "mc-wallet.multisig",
+        identifier: "bramble.multisig",
         recipientPublicKey: "44".repeat(32),
         vaultPassphrase,
       }),

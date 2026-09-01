@@ -1,7 +1,7 @@
 # MC Wallet — Provider Tester
 
 A standalone dApp page that exercises every method of the injected wallet
-provider (`window.starknet_mcWallet`) so you can walk through and confirm the
+provider (`window.starknet_bramble`) so you can walk through and confirm the
 wallet behaves correctly end to end.
 
 ## Why it must be served (not opened as a file)

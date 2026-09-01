@@ -134,7 +134,7 @@ export const parseArgentMultisigIntentPackage = (
     const value: unknown = JSON.parse(raw);
     return isRecord(value) &&
       hasOnlyKnownKeys(value, ["intent", "kind", "version"]) &&
-      value["kind"] === "mc-wallet.argent-multisig-intent" &&
+      value["kind"] === "bramble.argent-multisig-intent" &&
       value["version"] === 1 &&
       isArgentMultisigSigningIntent(value["intent"])
       ? (value as ArgentMultisigIntentPackage)

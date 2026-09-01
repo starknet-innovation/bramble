@@ -11,12 +11,12 @@ import { isVaultV7, type Vault } from "./schema";
 /**
  * Browser storage key for the primary encrypted wallet vault.
  */
-export const VAULT_STORE_KEY = "mc-wallet:vault";
+export const VAULT_STORE_KEY = "bramble:vault";
 
 /**
  * Temporary encrypted staging key used only while committing a vault update.
  */
-export const VAULT_MIGRATION_STORE_KEY = "mc-wallet:vault-migration";
+export const VAULT_MIGRATION_STORE_KEY = "bramble:vault-migration";
 
 /**
  * Primary and staging encrypted stores participating in one vault migration.

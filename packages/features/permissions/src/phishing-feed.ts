@@ -36,7 +36,7 @@ const systemClock = (): number => Date.now();
 /**
  * Browser-storage key for the cached phishing feed. Plain (non-secret) data.
  */
-export const PHISHING_FEED_STORE_KEY = "mc-wallet:phishing-feed";
+export const PHISHING_FEED_STORE_KEY = "bramble:phishing-feed";
 const PHISHING_CACHE_VERSION = 1;
 
 /**

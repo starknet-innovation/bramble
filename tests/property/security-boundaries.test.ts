@@ -154,7 +154,7 @@ const validModule = (overrides: Record<string, unknown> = {}) => ({
   openNostrApplicationData: () =>
     JSON.stringify({
       content: "payload",
-      identifier: "mc-wallet.multisig",
+      identifier: "bramble.multisig",
       senderPublicKey: "22".repeat(32),
     }),
   signStarkHash: () => ({ publicKey: "0xabc", r: "0x1", s: "0x2" }),

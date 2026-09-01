@@ -17,8 +17,8 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { sameFelt } from "@bramble/wallet-model/networks";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
-const vaultKey = "mc-wallet:vault";
-const migrationKey = "mc-wallet:vault-migration";
+const vaultKey = "bramble:vault";
+const migrationKey = "bramble:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 const defaultAccountInput = {
   accountContractType: "openzeppelin",

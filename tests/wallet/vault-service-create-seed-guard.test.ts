@@ -15,8 +15,8 @@ import { createWalletVaultService } from "@bramble/vault/service";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const otherMnemonic = "legal winner thank year wave sausage worth useful legal winner thank yellow";
-const vaultKey = "mc-wallet:vault";
-const migrationKey = "mc-wallet:vault-migration";
+const vaultKey = "bramble:vault";
+const migrationKey = "bramble:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 
 // The shared fake returns one constant keypair for every phrase, which would

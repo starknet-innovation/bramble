@@ -126,7 +126,7 @@ cannot use a privacy path that requires a viewing key the wallet cannot derive.
 
 ### Connect to a dApp
 
-MC Wallet injects `window.starknet_mcWallet` and is discoverable through
+MC Wallet injects `window.starknet_bramble` and is discoverable through
 get-starknet / starknetkit. On a Starknet site, choose to connect MC Wallet and
 approve the connection in the side panel. Grants are **per-origin**: each
 connected site sees only itself, never the sites you connected elsewhere.

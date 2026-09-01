@@ -19,7 +19,7 @@ import type { KeyValueStore } from "@bramble/store/kv";
 import { createUnlockSession, type UnlockSession, type UnlockSessionStore } from "./session";
 import { createSessionExpiryTimer, type SessionAlarmsApi } from "./session-expiry-alarm";
 
-const SESSION_STORE_KEY = "mc-wallet:session";
+const SESSION_STORE_KEY = "bramble:session";
 
 // The extension's session storage area, narrowed to the three operations the
 // unlock session needs and scoped to its one key. Absent when the caller has no

@@ -15,7 +15,7 @@ issues against the current `main`.
 Security-relevant areas include, but are not limited to:
 
 - The extension surface: background service worker, side panel, content script,
-  and injected provider bridge (`window.starknet_mcWallet`).
+  and injected provider bridge (`window.starknet_bramble`).
 - Cryptography and the encrypted vault: key handling, encrypted stores, schema
   validation, and unlock/session flows.
 - The provider bridge and message handling between page, content script, and

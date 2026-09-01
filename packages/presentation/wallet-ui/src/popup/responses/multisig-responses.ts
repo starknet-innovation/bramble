@@ -45,7 +45,7 @@ export type ArgentMultisigView = {
  */
 export type ArgentMultisigIntentPackage = {
   readonly intent: ArgentMultisigSigningIntent;
-  readonly kind: "mc-wallet.argent-multisig-intent";
+  readonly kind: "bramble.argent-multisig-intent";
   readonly version: 1;
 };
 
@@ -174,7 +174,7 @@ const isView = (value: unknown): value is ArgentMultisigView =>
 const isIntentPackage = (value: unknown): value is ArgentMultisigIntentPackage =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["intent", "kind", "version"]) &&
-  value["kind"] === "mc-wallet.argent-multisig-intent" &&
+  value["kind"] === "bramble.argent-multisig-intent" &&
   value["version"] === 1 &&
   isArgentMultisigSigningIntent(value["intent"]);
 

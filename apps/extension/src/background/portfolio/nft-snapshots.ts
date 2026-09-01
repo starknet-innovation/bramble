@@ -9,7 +9,7 @@ import { isStarknetNetworkId, type StarknetNetworkId } from "@bramble/wallet-mod
 /**
  * Public browser-storage key for bounded NFT ownership snapshots.
  */
-export const NFT_SNAPSHOTS_KEY = "mc-wallet:nft-snapshots";
+export const NFT_SNAPSHOTS_KEY = "bramble:nft-snapshots";
 const MAX_SNAPSHOTS = 100;
 
 /**

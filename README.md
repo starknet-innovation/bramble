@@ -17,7 +17,7 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 
 - **Accounts & transfers** — choose an OpenZeppelin or Argent account backed by the encrypted software vault, with deploy/send/receive and network switching. Ledger hardware support is available to trusted testers while its physical compatibility matrix is completed.
 - **Onboarding & recovery** — a dedicated full-page first-install flow for creating, importing, or connecting a Ledger; seed-phrase backup includes on-screen verification, while Ledger accounts stay keyless.
-- **dApp connect** — injects `window.starknet_mcWallet` (get-starknet compatible), with per-origin grants so connected sites never see each other.
+- **dApp connect** — injects `window.starknet_bramble` (get-starknet compatible), with per-origin grants so connected sites never see each other.
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
 - **NFT gallery** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`.
 - **Multisig** — create or import true Argent M-of-N account contracts, collect exact-hash signatures from local owners, and submit from the shared account.

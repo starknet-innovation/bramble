@@ -29,7 +29,7 @@ import {
   nativeNostrRelayTransport,
 } from "./nostr-relay";
 
-const MULTISIG_NOSTR_IDENTIFIER = "mc-wallet.multisig";
+const MULTISIG_NOSTR_IDENTIFIER = "bramble.multisig";
 const NOSTR_SYNC_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
 // NIP-59 backdates gift wraps by up to two days. The extra day preserves a
 // safe overlap while cutting subsequent relay scans from 30 days to three.

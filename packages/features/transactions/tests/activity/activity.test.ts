@@ -130,7 +130,7 @@ describe("createActivityLog", () => {
 
   test("drops malformed stored entries instead of trusting them", async () => {
     const store = createMemoryStore();
-    await store.set("mc-wallet:activity", [
+    await store.set("bramble:activity", [
       {
         accountId: ACCOUNT_ID,
         hash: "0x1",
@@ -204,7 +204,7 @@ describe("activityToCsv", () => {
 
   test("exports blank detail cells for entries lacking the optional fields", async () => {
     const store = createMemoryStore();
-    await store.set("mc-wallet:activity", [
+    await store.set("bramble:activity", [
       {
         accountId: ACCOUNT_ID,
         hash: "0x1",
@@ -398,7 +398,7 @@ describe("provisional status and tracking fields", () => {
 
   test("loads entries stored before the tracking fields existed", async () => {
     const store = createMemoryStore();
-    await store.set("mc-wallet:activity", [
+    await store.set("bramble:activity", [
       {
         accountId: ACCOUNT_ID,
         hash: "0x1",
@@ -415,7 +415,7 @@ describe("provisional status and tracking fields", () => {
 
   test("rejects stored entries with a malformed tracking field", async () => {
     const store = createMemoryStore();
-    await store.set("mc-wallet:activity", [
+    await store.set("bramble:activity", [
       {
         accountId: ACCOUNT_ID,
         failureNotice: "shown",

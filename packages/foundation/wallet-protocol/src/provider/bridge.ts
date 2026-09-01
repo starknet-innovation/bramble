@@ -44,10 +44,10 @@ import type { RuntimeMessage } from "./runtime-message";
 
 /** Marker for page-to-content wallet provider requests.
  */
-export const CONTENT_TARGET = "mc-wallet:content";
+export const CONTENT_TARGET = "bramble:content";
 /** Marker for content-to-page wallet provider responses.
  */
-export const PAGE_TARGET = "mc-wallet:page";
+export const PAGE_TARGET = "bramble:page";
 /** Maximum unresolved in-page provider requests kept in memory.
  */
 export const MAX_PENDING_PROVIDER_REQUESTS = 100;

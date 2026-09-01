@@ -147,7 +147,7 @@ describe("Argent multisig intent import", () => {
         state: "accepted",
         summary: "Harmless unsigned note",
       },
-      kind: "mc-wallet.argent-multisig-intent",
+      kind: "bramble.argent-multisig-intent",
       version: 1,
     };
     const target = await makeMultisigHarness();
@@ -197,7 +197,7 @@ describe("Argent multisig intent import", () => {
         ),
       );
     }
-    const readyPackage = { intent: signed, kind: "mc-wallet.argent-multisig-intent", version: 1 };
+    const readyPackage = { intent: signed, kind: "bramble.argent-multisig-intent", version: 1 };
     const completed = await target.handler(
       { package: readyPackage, type: "wallet.importArgentMultisigIntent" },
       harnessExtensionSender,

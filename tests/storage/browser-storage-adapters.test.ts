@@ -67,13 +67,13 @@ describe("createBrowserSessionStore", () => {
 
     const store = createBrowserSessionStore();
     // Absent key falls back to undefined rather than an object wrapper.
-    expect(await store.get("mc-wallet:session")).toBeUndefined();
+    expect(await store.get("bramble:session")).toBeUndefined();
 
-    await store.set("mc-wallet:session", { unlocked: true });
-    expect(writes).toEqual([{ "mc-wallet:session": { unlocked: true } }]);
-    expect(await store.get("mc-wallet:session")).toEqual({ unlocked: true });
+    await store.set("bramble:session", { unlocked: true });
+    expect(writes).toEqual([{ "bramble:session": { unlocked: true } }]);
+    expect(await store.get("bramble:session")).toEqual({ unlocked: true });
 
-    await store.remove("mc-wallet:session");
-    expect(await store.get("mc-wallet:session")).toBeUndefined();
+    await store.remove("bramble:session");
+    expect(await store.get("bramble:session")).toBeUndefined();
   });
 });

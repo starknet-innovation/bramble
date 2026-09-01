@@ -93,7 +93,7 @@ const giftWrap = await kms.wrapNostrApplicationData(
   0,
   0,
   nostrPublicKey,
-  "mc-wallet.check",
+  "bramble.check",
   "round-trip",
 );
 const opened = await kms.openNostrApplicationData(mnemonic, 0, 0, giftWrap);
@@ -104,7 +104,7 @@ if (
   !isStarkFieldElement(viewingKey) ||
   BigInt(viewingKey) === 0n ||
   opened.content !== "round-trip" ||
-  opened.identifier !== "mc-wallet.check" ||
+  opened.identifier !== "bramble.check" ||
   opened.senderPublicKey !== nostrPublicKey ||
   ![signature.publicKey, signature.r, signature.s].every(isStarkFieldElement)
 ) {

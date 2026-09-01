@@ -76,7 +76,7 @@ export type {
 /**
  * Browser storage key for non-secret wallet preferences.
  */
-export const PREFERENCES_STORE_KEY = "mc-wallet:preferences";
+export const PREFERENCES_STORE_KEY = "bramble:preferences";
 
 type WalletPreferencesStoreOptions = {
   readonly actor?: StoreActor;
