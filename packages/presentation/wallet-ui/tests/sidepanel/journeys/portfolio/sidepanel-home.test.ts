@@ -130,6 +130,29 @@ describe("sidepanel home", () => {
     expect(html).toContain('id="refresh-button" role="menuitem"');
   });
 
+  test("home names filtered balances by their action, not as user-hidden tokens", () => {
+    const token = {
+      address: "0x123",
+      decimals: 18,
+      id: "SN_MAIN:FILTERED:0x123",
+      name: "Filtered token",
+      networkId: "SN_MAIN" as const,
+      symbol: "FILTERED",
+    };
+    const html = homeTabs(
+      { balances: [{ ...token, balance: "1", formatted: "0.000000000000000001" }] },
+      { ...preferences, hiddenTokens: [token.id], tokens: [token] },
+      {},
+      {},
+      "usd",
+      status,
+    );
+
+    expect(html).toContain("Manage tokens");
+    expect(html).toContain("1 not shown");
+    expect(html).not.toContain("Hidden tokens");
+  });
+
   test("collectibles tab reuses watched NFTs and hides spam", () => {
     const withNfts: WalletPreferences = {
       ...preferences,
