@@ -59,13 +59,14 @@ Day to day:
 bun run check       # types, lint, standards, unit tests
 bun run format      # Biome autofix
 bun run test:e2e    # Playwright end-to-end (run test:e2e:install once first)
-bun run dev:session # headed browser on a kept profile, onboards/unlocks itself
+MC_E2E_LIVE_NETWORK=1 bun run dev:session # explicit live-network manual session
 ```
 
-`dev:session` is development-only. It onboards from a recovery phrase published in this repository,
-so its accounts are public by construction — never send real funds to an address it shows, and read
-the header of `tests/e2e/dev-session.ts` before pointing `MC_DEV_MNEMONIC` at a phrase of your own.
-The wallet it creates is kept in a git-ignored `.dev-profile/`; delete that directory to start over.
+`dev:session` is development-only and refuses to start without the explicit live-network flag shown
+above. It onboards from a recovery phrase published in this repository, so its accounts are public
+by construction — never send real funds to an address it shows, and read the header of
+`tests/e2e/dev-session.ts` before pointing `MC_DEV_MNEMONIC` at a phrase of your own. The wallet it
+creates is kept in a git-ignored `.dev-profile/`; delete that directory to start over.
 
 ### Offline checks
 

@@ -43,10 +43,6 @@ export const startRefreshLifecycle = ({
     if (isWalletEventMessage(message)) scheduler.refreshNow();
   });
   document.addEventListener("visibilitychange", scheduler.visibilityChanged);
-  window.addEventListener("focus", () => {
-    scheduler.start();
-    scheduler.refreshNow();
-  });
   window.addEventListener("pagehide", scheduler.stop, { once: true });
   scheduler.start();
 };

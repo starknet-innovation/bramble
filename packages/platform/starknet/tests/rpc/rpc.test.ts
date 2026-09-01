@@ -445,7 +445,7 @@ describe("endpoint refusals versus submission ambiguity", () => {
   });
 
   test("a real JSON-RPC error and a large body are left alone", async () => {
-    // `error` as an OBJECT with a code is the node answering; never a refusal.
+    // Contract errors remain semantic even though the one rate-limit code is a refusal.
     await expect(
       refusalFetch('{"jsonrpc":"2.0","id":1,"error":{"code":20,"message":"Contract not found"}}')(
         "https://selected.example",
