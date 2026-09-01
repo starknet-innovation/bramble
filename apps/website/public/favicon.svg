@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>Bramble</title>
+  <rect width="64" height="64" rx="17" fill="#171717"/>
+  <path d="M18 47V22c0-4 3-7 7-7h14c5 0 9 4 9 9 0 4-3 7-7 8 5 1 8 4 8 9 0 5-4 9-10 9H18Z" stroke="#F5F5F3" stroke-width="5" stroke-linejoin="round"/>
+  <path d="m18 31-6-4m6 13-6 4m36-15 6-4m-7 17 6 4" stroke="#F5F5F3" stroke-width="3" stroke-linecap="round"/>
+</svg>

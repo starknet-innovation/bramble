@@ -282,8 +282,8 @@ const tokensPanel = (
         ? menuRow({
             attributes: { "data-view": "tokens" },
             icon: "coins",
-            label: "Hidden tokens",
-            value: `${hiddenCount} hidden`,
+            label: "Manage tokens",
+            value: `${hiddenCount} not shown`,
           })
         : ""
     }
