@@ -5,6 +5,11 @@
   margin: 0 auto;
 }
 
+.site-shell--privacy {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
 .reading-hero {
   display: grid;
   gap: 1.5rem;

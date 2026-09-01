@@ -5,7 +5,7 @@ import { Brand } from "./brand";
 import { Button } from "./ui/button";
 
 type SiteShellProps = {
-  readonly active: "docs" | "home" | "support";
+  readonly active: "docs" | "home" | "privacy" | "support";
   readonly children: ReactNode;
 };
 
@@ -41,6 +41,7 @@ export const SiteShell = ({ active, children }: SiteShellProps) => (
       <nav aria-label="Footer navigation">
         <a href="/docs/">Docs</a>
         <a href="/support/">Support</a>
+        <a href="/privacy/">Privacy</a>
         <a href="https://github.com/starknet-innovation/mc-wallet">Source</a>
       </nav>
     </footer>
