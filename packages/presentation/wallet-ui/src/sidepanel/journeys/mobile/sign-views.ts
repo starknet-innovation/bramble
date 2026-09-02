@@ -22,27 +22,14 @@ import { escapeHtml } from "@mc-wallet/core/html";
 import { pill } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { textareaField } from "@mc-wallet/ui-kit/fields";
-import { paddedFelt } from "@mc-wallet/wallet-model/networks";
 import type { MobilePqSignRequestSummary, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountLabel } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
+import { feltCheckBlock } from "./felt-check";
 import type { MobilePqSignView } from "./sign-session";
 
 const addressOfAccountId = (accountId: string): string => accountId.split(":")[1] ?? accountId;
-
-// Hex digits per rendered group, matching the Ledger takeover: a 64-digit hash
-// is far easier to track in short groups than as one unbroken run. Presentational
-// only — the copied value and the value signed stay unbroken.
-const HASH_GROUP_SIZE = 4;
-
-const hashGroups = (digits: string): readonly string[] => {
-  const groups: string[] = [];
-  for (let index = 0; index < digits.length; index += HASH_GROUP_SIZE) {
-    groups.push(digits.slice(index, index + HASH_GROUP_SIZE));
-  }
-  return groups;
-};
 
 const signerLine = (request: MobilePqSignRequestSummary): string =>
   `<div class="ledger-signer-line">
@@ -81,19 +68,12 @@ const requestBlock = (view: MobilePqSignView): string =>
  * The hash the phone is asked to blind-sign, at the full padded width. The phone
  * cannot show the user what it means, so this is the only screen that can.
  */
-const phoneHashCheck = (request: MobilePqSignRequestSummary): string => {
-  const hash = paddedFelt(request.messageHash) ?? request.messageHash;
-  const digits = hash.startsWith("0x") ? hash.slice(2) : hash;
-  return `<section class="ledger-hash-check">
-    <div class="ledger-hash-head">
-      <p class="context-label">Hash your phone will sign</p>
-    </div>
-    <p class="ledger-hash-value"><code>${escapeHtml("0x")}${hashGroups(digits)
-      .map((group) => `<span>${escapeHtml(group)}</span>`)
-      .join("")}</code></p>
-    <p class="ledger-hash-help">Your phone shows this same hash. Compare the two and approve on the phone only if they match. Nothing is submitted until the wallet has verified what comes back.</p>
-  </section>`;
-};
+const phoneHashCheck = (request: MobilePqSignRequestSummary): string =>
+  feltCheckBlock({
+    help: "Your phone shows this same hash. Compare the two and approve on the phone only if they match. Nothing is submitted until the wallet has verified what comes back.",
+    label: "Hash your phone will sign",
+    value: request.messageHash,
+  });
 
 const cancelButton = (): string =>
   button({

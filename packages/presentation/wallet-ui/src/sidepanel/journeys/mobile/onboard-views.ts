@@ -19,16 +19,19 @@ import { textareaField } from "@mc-wallet/ui-kit/fields";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
+import { feltCheckBlock } from "./felt-check";
 import type { MobilePqEnrollView } from "./onboard-session";
 
-const challengeBlock = (challenge: string): string => `
-  <section class="ledger-hash-check">
-    <div class="ledger-hash-head">
-      <p class="context-label">Challenge to sign</p>
-    </div>
-    <p class="ledger-hash-value"><code>${escapeHtml(challenge)}</code></p>
-    <p class="ledger-hash-help">Your phone shows this same challenge. Compare the two and approve on the phone only if they match. Single-use.</p>
-  </section>`;
+// Rendered exactly as the signing takeover renders a transaction hash, through
+// the same block: the phone pads the challenge to 32 big-endian bytes and shows
+// what it signed, so a challenge printed here at its shorter spelling made the
+// comparison this screen exists for fail on every felt with a leading zero.
+const challengeBlock = (challenge: string): string =>
+  feltCheckBlock({
+    help: "Your phone shows this same challenge. Compare the two and approve on the phone only if they match. Single-use.",
+    label: "Challenge to sign",
+    value: challenge,
+  });
 
 const cancelButton = (): string =>
   button({

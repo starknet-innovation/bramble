@@ -329,6 +329,12 @@ The enrollment form now asks for **one** value: the app's reply, which carries t
 was pinned as `ML_DSA_ACCOUNT_CLASS_HASH`; the rest collapsed into the reply because a device that
 can produce three values can produce them in one string. Each removal deletes a way to get an
 unspendable address by typing.
+The name the user typed on the phone becomes the account's name: enrollment writes it to the
+same account-label preference the rename control uses, so the two devices call one account one
+thing and the user can still change it. Both screens also render the felt they ask the user to
+compare — the challenge here, the transaction hash on the signing takeover — through one block,
+padded to the 32 bytes the phone signs and grouped in fours. The challenge was previously printed
+at the wallet's own shorter spelling, so any felt with a leading zero read as a mismatch.
 
 One rough edge remains, and it is not about crypto: **the enrollment challenge lives in
 service-worker memory.** Chrome MV3 terminates the worker after roughly 30 seconds idle, and the user

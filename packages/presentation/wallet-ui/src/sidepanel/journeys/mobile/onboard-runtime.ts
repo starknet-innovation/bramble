@@ -35,7 +35,10 @@ export type MobilePqOnboardRuntimeDeps = {
   readonly networkId: () => string;
   readonly refresh: () => Promise<void>;
   readonly status: () => WalletStatus;
-  readonly wallet: Pick<SidepanelWallet, "addMobilePqAccount" | "loadMobilePqEnrollChallenge">;
+  readonly wallet: Pick<
+    SidepanelWallet,
+    "addMobilePqAccount" | "loadMobilePqEnrollChallenge" | "setAccountLabel"
+  >;
 };
 
 /**
@@ -112,7 +115,20 @@ export const createMobilePqOnboardRuntime = (
     ...(deps.bluetooth === undefined ? {} : { bluetooth: deps.bluetooth }),
     challenge: () => wallet.loadMobilePqEnrollChallenge(),
     enroll: async (draft) => {
-      await wallet.addMobilePqAccount({ ...draft, networkId: networkId() });
+      const accountId = await wallet.addMobilePqAccount({ ...draft, networkId: networkId() });
+      // The name the user typed on their phone becomes the account's name here,
+      // through the same label preference the rename control writes, so it is
+      // theirs to change afterwards rather than a second naming scheme. Without
+      // this the account falls back to a nickname derived from its address, and
+      // the phone and the wallet call the same account two different things.
+      //
+      // A failed label must not fail the enrollment: the account exists by now
+      // and is spendable, and reporting a naming problem as "that device could
+      // not be added" would send the user to create it again. The name the
+      // decoder accepted is non-empty and at most 64 characters, which is
+      // exactly what the label validator takes, so there is nothing left here
+      // but a storage failure the next write will report too.
+      await wallet.setAccountLabel(accountId, draft.deviceId).catch(() => undefined);
     },
     networkId,
     onEnrolled: refresh,

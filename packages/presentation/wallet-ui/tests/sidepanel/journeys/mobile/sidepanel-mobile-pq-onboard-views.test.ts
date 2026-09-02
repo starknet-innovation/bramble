@@ -1,7 +1,8 @@
 /**
- * The enrollment templates. These cover the one failure mode a pure-template
- * test can catch and a controller test cannot: a refusal that renders into the
- * DOM but is invisible to the person it is for.
+ * The enrollment templates. These cover the failure modes a pure-template test
+ * can catch and a controller test cannot: a refusal that renders into the DOM
+ * but is invisible to the person it is for, and a challenge spelled differently
+ * from the way the phone spells it.
  *
  * That happened. Both mobile journeys carried `class="form-error"`, which no
  * stylesheet defines, so the reason inherited `.ledger-phase-body > p` and was
@@ -16,6 +17,10 @@ import { mobilePqEnrollScreen } from "../../../../src/sidepanel/journeys/mobile/
 import { SIDEPANEL_STYLES } from "../../../../src/sidepanel/styles/index";
 
 const CHALLENGE = "0x02f4c1a83b7e6d095c2a1f8b4e7d3c60a9f5e2b8d1c4a7f03e6b9d2c5a8f1e40";
+
+// The challenge is rendered in groups of four, so the digits are only contiguous
+// once the grouping spans come out. Same treatment the sign-view test uses.
+const ungrouped = (html: string): string => html.replaceAll("<span>", "").replaceAll("</span>", "");
 const status = { network: "SN_DEVNET" } as never;
 const screen = (
   phase: MobilePqEnrollView["phase"],
@@ -40,9 +45,38 @@ describe("post-quantum enrollment screen", () => {
     for (const transport of ["bluetooth", "clipboard"] as const) {
       const html = screen({ kind: "collect" }, transport, true);
       expect(html).toContain("Challenge to sign");
-      expect(html).toContain(CHALLENGE);
+      expect(ungrouped(html)).toContain(CHALLENGE);
       expect(html).not.toContain(`data-copy="${CHALLENGE}"`);
     }
+  });
+
+  test("the challenge is padded to the width the phone signs and shows", () => {
+    // The phone pads the challenge to 32 big-endian bytes before signing, and
+    // displays what it signed. A wallet that printed the wallet's own shorter
+    // spelling made the two screens disagree about the value on every felt with
+    // a leading zero — on the screen whose only job is asking "do these match?".
+    const html = ungrouped(
+      mobilePqEnrollScreen(
+        {
+          bluetoothAvailable: false,
+          challenge: "0x2f",
+          offer: "b2ZmZXI",
+          phase: { kind: "collect" },
+          transport: "clipboard",
+        },
+        status,
+      ),
+    );
+
+    expect(html).toContain(`0x${"0".repeat(62)}2f`);
+  });
+
+  test("the challenge is grouped like the hash on the signing screen", () => {
+    const html = screen({ kind: "collect" });
+
+    // Groups of four, the Ledger takeover's treatment, so a 64-digit value can
+    // be tracked across two screens by eye.
+    expect(html).toContain("<span>02f4</span><span>c1a8</span>");
   });
 
   test("the Bluetooth path shows no offer to copy", () => {
@@ -96,7 +130,7 @@ describe("post-quantum enrollment screen", () => {
   test("keeps the form and the challenge available after a refusal", () => {
     const html = screen({ kind: "error", message: "no" });
     expect(html).toContain("data-mobile-pq-enroll-submit");
-    expect(html).toContain(CHALLENGE);
+    expect(ungrouped(html)).toContain(CHALLENGE);
   });
 
   test("asks for one paste and nothing the wallet can derive or pin", () => {
