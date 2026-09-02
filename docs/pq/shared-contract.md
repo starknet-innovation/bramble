@@ -385,7 +385,7 @@ bun run build            # produces dist/
 ```bash
 # in krusty-kms, on feat/mobile-pq-signer
 cd crates/wasm && wasm-pack build --release --target web --scope starknetfoundation --out-dir pkg
-cd pkg && npm pkg set version=0.11.0-pq.0 && npm pack --pack-destination ../../../mc-wallet/vendor
+cd pkg && npm pkg set version=0.11.0-pq.0 && npm pack --pack-destination ../../../../mc-wallet/vendor
 shasum -a 256 krusty_kms_wasm.js krusty_kms_wasm_bg.wasm
 
 # in mc-wallet
@@ -398,6 +398,13 @@ The `wasm-pack` invocation is the one krusty's own `publish-npm.yml` runs, so th
 package that workflow would publish, plus the ML-DSA exports. Keep the `-pq.0` suffix: it is what
 makes a local build impossible to mistake for a registry release, and `check-krusty-adapter.ts`
 asserts the installed manifest carries exactly that version.
+
+**The build is reproducible on one machine, so a rebuild with no Rust change is a no-op.** Measured
+2026-09-02: deleting `pkg/` and rebuilding reproduced both runtime files byte for byte, and `npm
+pack` reproduced the tarball's SHA-512 exactly — nothing to update, no `bun install`, no digest
+edit. So if a rebuild *does* move a digest, something real changed. This says nothing about
+cross-machine reproducibility: `wasm-opt` is off for this crate, but LLVM and wasm-bindgen versions
+still reach the output, which is why the digests are pinned rather than assumed.
 
 Delete the old tarball when you add a new one — two in `vendor/` and it stops being obvious which
 one the lockfile resolves.

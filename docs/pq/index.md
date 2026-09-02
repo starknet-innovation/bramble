@@ -63,7 +63,7 @@ until the surface is reviewed, so this branch consumes a **local build of the sa
 ```bash
 # in krusty-kms, on feat/mobile-pq-signer (v0.11.0 + the ML-DSA exports)
 cd crates/wasm && wasm-pack build --release --target web --scope starknetfoundation --out-dir pkg
-cd pkg && npm pkg set version=0.11.0-pq.0 && npm pack --pack-destination ../../../mc-wallet/vendor
+cd pkg && npm pkg set version=0.11.0-pq.0 && npm pack --pack-destination ../../../../mc-wallet/vendor
 # in mc-wallet
 bun install   # re-pins the tarball's SHA-512 in bun.lock
 ```
