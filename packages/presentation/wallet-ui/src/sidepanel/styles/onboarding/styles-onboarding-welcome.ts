@@ -155,7 +155,9 @@ export const ONBOARDING_WELCOME_STYLES = `
     transform: translate(-50%, -50%) rotate(-3deg);
     width: 104px;
   }
-  .orbit-core strong { font-size: 29px; letter-spacing: -0.08em; line-height: 1; }
+  /* The mark, not a letter: sized so the bird's eye and wing separation still
+     read at the card's 104px, which is where a smaller glyph loses them. */
+  .orbit-core .brand-glyph { height: 52px; width: 52px; }
   .orbit-core span { font-size: ${TYPE.micro.size}; font-weight: ${WEIGHT.semibold}; margin-top: 5px; }
   .onboarding-welcome-actions { display: grid; gap: ${SPACE.sm}; width: 100%; }
   .onboarding-launch {

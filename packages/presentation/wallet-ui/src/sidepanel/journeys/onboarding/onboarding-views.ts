@@ -8,6 +8,7 @@ import { button, iconButton } from "@bramble/ui-kit/controls";
 import { checkboxField, inputControl, textField } from "@bramble/ui-kit/fields";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import { BRAMBLE_MARK } from "../../shared/brand-mark";
 import { icon } from "../../shared/icons";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 
@@ -176,7 +177,7 @@ const welcomeStep = (ready: boolean): string => `
         <span class="orbit-track orbit-track-core orbit-track-core-a">
           <span class="orbit-node"><span class="orbit-node-surface">${icon("coins")}</span></span>
         </span>
-        <span class="orbit-core"><strong>B</strong><span>Bramble</span></span>
+        <span class="orbit-core">${BRAMBLE_MARK}<span>Bramble</span></span>
       </div>
     </div>
     <div class="onboarding-welcome-actions">
