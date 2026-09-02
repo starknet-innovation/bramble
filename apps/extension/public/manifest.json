@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Bramble: Starknet Wallet",
   "version": "0.10.0",
-  "description": "Starknet browser extension wallet shell.",
+  "description": "Self-custodial Starknet wallet with private balances, Ledger and multisig support.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",

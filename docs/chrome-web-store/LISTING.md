@@ -9,7 +9,10 @@ collected. Chrome's current policy requires prominent disclosure for all data co
 - **Name:** Bramble: Starknet Wallet
 - **Category:** Productivity
 - **Primary language:** English
-- **Summary:** A self-custodial Starknet wallet for accounts, dapps, privacy and multisig, with a trusted-tester Ledger preview.
+- **Summary:** Self-custodial Starknet wallet with private balances, Ledger and multisig support.
+  - This is the manifest `description`, which the dashboard shows as "Summary (from
+    package)". Chrome caps it at 132 characters; the two must stay identical, so edit
+    both or neither.
 - **Single purpose:** Securely manage Starknet accounts and review, sign, and submit user-approved
   Starknet transactions from Chrome.
 
