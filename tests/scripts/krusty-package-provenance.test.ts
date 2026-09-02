@@ -1,26 +1,39 @@
-/** Published Krusty package provenance and extension-packaging policy. */
+/**
+ * Krusty package provenance and extension-packaging policy.
+ *
+ * This branch consumes a local wasm-pack build carrying the unpublished ML-DSA
+ * exports instead of a registry release, so the specifier is a vendor/ tarball.
+ * The provenance model is unchanged and is what these tests hold: bun.lock
+ * pins the tarball by SHA-512, `check-krusty-adapter.ts` pins both runtime
+ * files by SHA-256 before the import, and the extension is built only from the
+ * installed package bytes — never from a Krusty source checkout.
+ */
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { readWorkflowSources } from "../../scripts/workflow-inventory";
 
 const packageName = "@starknetfoundation/krusty-kms-wasm";
-const packageVersion = "0.10.0";
+const packageVersion = "0.11.0-pq.0";
+const packageSpecifier = "file:vendor/starknetfoundation-krusty-kms-wasm-0.11.0-pq.0.tgz";
 
-describe("published Krusty package", () => {
+describe("the installed Krusty package", () => {
   test("is an exact runtime dependency with no source-vendoring script", async () => {
     const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
       readonly dependencies?: Readonly<Record<string, unknown>>;
       readonly scripts?: Readonly<Record<string, unknown>>;
     };
-    expect(manifest.dependencies?.[packageName]).toBe(packageVersion);
+    expect(manifest.dependencies?.[packageName]).toBe(packageSpecifier);
+    // The lockfile still pins immutable bytes: a resolved tarball plus its
+    // SHA-512, the same guarantee the registry specifier carried.
     expect(await readFile("bun.lock", "utf8")).toMatch(
-      /@starknetfoundation\/krusty-kms-wasm@0\.10\.0.*sha512-/,
+      /@starknetfoundation\/krusty-kms-wasm@vendor\/[^"]+\.tgz".*sha512-/,
     );
+    expect(await Bun.file(packageSpecifier.replace("file:", "")).exists()).toBe(true);
     expect(manifest.scripts?.["vendor:krusty"]).toBeUndefined();
     expect(await Bun.file("scripts/vendor-krusty.ts").exists()).toBe(false);
   });
 
-  test("pins both published runtime files before importing the package", async () => {
+  test("pins both runtime files before importing the package", async () => {
     const source = await readFile("scripts/check-krusty-adapter.ts", "utf8");
     const digestLoop = source.indexOf("for (const [path, expectedDigest]");
     const packageImport = source.indexOf(

@@ -1,9 +1,6 @@
 /** First-run recovery, account preview, and persistence bindings. */
 
-import {
-  isStarkCurveContractType,
-  type StarkCurveContractType,
-} from "@mc-wallet/wallet-model/accounts";
+import { isStarkCurveContractType } from "@mc-wallet/wallet-model/accounts";
 import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -80,7 +77,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   let previewMatchesInput = false;
   let previewGeneration = 0;
   let mnemonicGeneration = 0;
-  const accountContractType = (): StarkCurveContractType | null =>
+  const accountContractType = () =>
     isStarkCurveContractType(accountContractInput?.value) ? accountContractInput.value : null;
 
   const stepFor = (id: string): HTMLElement | undefined =>

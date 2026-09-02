@@ -23,10 +23,8 @@ import {
   isErrorResponse,
   isFeeReviewResponse,
   isPreferencesResponse,
-  isPricesResponse,
   isRevealSecretsResponse,
   isSupportDiagnosticsResponse,
-  isTokenChartResponse,
   isTransactionAlertsResponse,
   isTransferResponse,
   isTransferReviewResponse,
@@ -93,6 +91,7 @@ export { emptyStatus } from "./runtime-status";
 import { createAccountRuntimeClient } from "./runtime-accounts";
 import { responseError } from "./runtime-errors";
 import { createAccountGroupClient } from "./runtime-groups";
+import { createPriceRuntimeClient } from "./runtime-prices";
 import { unavailableStatus } from "./runtime-status";
 
 /**
@@ -109,6 +108,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
   return {
     ...createLedgerRuntimeClient(sendMessage),
     ...createMobilePqRuntimeClient(sendMessage),
+    ...createPriceRuntimeClient(sendMessage),
     ...createNftRuntimeClient(sendMessage),
     ...createOnboardingRuntimeClient(sendMessage),
     ...createPrivacyRuntimeClient(sendMessage),
@@ -287,30 +287,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return response.suggestions;
       }
       throw responseError(response, "token detection failed");
-    },
-    async loadPrices(cached = false): Promise<{
-      readonly asOf: number | null;
-      readonly changes: Readonly<Record<string, number>>;
-      readonly prices: Readonly<Record<string, number>>;
-      readonly stale: boolean;
-    }> {
-      const response = await sendMessage({
-        ...(cached ? { cached: true } : {}),
-        type: "wallet.prices",
-      });
-      if (!isPricesResponse(response)) {
-        return { asOf: null, changes: {}, prices: {}, stale: false };
-      }
-      return {
-        asOf: response.asOf ?? null,
-        changes: response.changes ?? {},
-        prices: response.prices,
-        stale: response.stale ?? false,
-      };
-    },
-    async loadTokenChart(address: string): Promise<readonly number[]> {
-      const response = await sendMessage({ address, type: "wallet.tokenChart" });
-      return isTokenChartResponse(response) ? response.points : [];
     },
     async setTokenHidden(tokenId: string, hidden: boolean): Promise<void> {
       const response = await sendMessage({ hidden, tokenId, type: "wallet.setTokenHidden" });

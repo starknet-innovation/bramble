@@ -41,6 +41,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Wires collaborators by name only. Its sole match is the `./signature-waiters`
   // import path; it holds no secret material and touches no key operations.
   "apps/extension/src/background/routing/message-context.ts",
+  // The dapp-connection routes split out of messages.ts. They peek the unlock
+  // session to answer an untrusted page and hand the credential straight to the
+  // vault read; it is never logged, persisted, or returned across a message.
+  "apps/extension/src/background/routing/messages-connect.ts",
   "apps/extension/src/background/routing/messages.ts",
   "apps/extension/src/background/provider/provider-ops.ts",
   "apps/extension/src/background/settings/origins-ops.ts",

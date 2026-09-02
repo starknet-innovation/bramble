@@ -69,9 +69,7 @@ if (
 }
 for (const [path, expectedDigest] of Object.entries(expectedRuntimeDigests)) {
   if ((await artifactDigest(path)) !== expectedDigest) {
-    throw new Error(
-      `Krusty KMS runtime does not match ${packageName}@${packageVersion}: ${path}`,
-    );
+    throw new Error(`Krusty KMS runtime does not match ${packageName}@${packageVersion}: ${path}`);
   }
 }
 

@@ -151,6 +151,10 @@ const validModule = (overrides: Record<string, unknown> = {}) => ({
   }),
   generateMnemonic: () => MNEMONIC,
   getAccountClassHashes: () => "{}",
+  mlDsaEstimationSignature: () => ["0x1"],
+  mlDsaKeyCommitment: () => "0xabc",
+  mlDsaSignaturePayload: () => ["0x1"],
+  mlDsaVerify: () => true,
   openNostrApplicationData: () =>
     JSON.stringify({
       content: "payload",

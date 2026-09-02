@@ -28,6 +28,7 @@ import {
 } from "./key-boundary-fixtures";
 import { MOBILE_PQ_KEY_BOUNDARY_MESSAGES } from "./key-boundary-mobile-pq-messages";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "./key-boundary-multisig-messages";
+import { NFT_TRANSFER_KEY_BOUNDARY_MESSAGES } from "./key-boundary-nft-messages";
 import { RECOVERY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-recovery-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "./key-boundary-strk20-messages";
 import type { KeyBoundaryMessage } from "./key-boundary-types";
@@ -298,27 +299,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     },
     sender: extensionSender,
   },
-  {
-    message: {
-      contract: NFT_CONTRACT,
-      networkId: "SN_MAIN",
-      recipient: KEY_BOUNDARY_RECIPIENT,
-      tokenId: "1",
-      type: "wallet.reviewNftTransfer",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      contract: NFT_CONTRACT,
-      networkId: "SN_MAIN",
-      recipient: KEY_BOUNDARY_RECIPIENT,
-      reviewedFee: { overallFee: "1", unit: "FRI" },
-      tokenId: "1",
-      type: "wallet.transferNft",
-    },
-    sender: extensionSender,
-  },
+  ...NFT_TRANSFER_KEY_BOUNDARY_MESSAGES,
   {
     live: async (ids) => ({ id: ids.allowanceId }),
     message: { id: "", type: "wallet.revokeAllowance" },

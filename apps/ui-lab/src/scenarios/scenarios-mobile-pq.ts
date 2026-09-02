@@ -38,10 +38,15 @@ const mobilePqCheckpoint = (
   label: string,
   narrative: string,
 ): ScenarioCheckpoint => {
+  // The storyboard is the copy-and-paste journey, so it renders the screen the
+  // user gets when Bluetooth is unavailable: the envelope is the screen, not a
+  // fallback behind a choice.
   const view: MobilePqSignView = {
+    bluetoothAvailable: false,
     envelope: encodeMobilePqSignEnvelope(mobilePqRequest),
     phase,
     request: mobilePqRequest,
+    transport: "clipboard",
   };
   return {
     content: () => mobilePqSignScreen(view, statusFor(mobilePqAccount)),
@@ -105,7 +110,16 @@ const enrollCheckpoint = (
   state: ScenarioCheckpoint["state"],
 ): ScenarioCheckpoint => ({
   content: () =>
-    mobilePqEnrollScreen({ challenge: ENROLL_CHALLENGE, offer: ENROLL_OFFER, phase }, statusFor()),
+    mobilePqEnrollScreen(
+      {
+        bluetoothAvailable: false,
+        challenge: ENROLL_CHALLENGE,
+        offer: ENROLL_OFFER,
+        phase,
+        transport: "clipboard",
+      },
+      statusFor(),
+    ),
   id,
   label,
   narrative,

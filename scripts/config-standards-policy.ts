@@ -42,7 +42,11 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@mc-wallet/wallet-ui": "workspace:*",
   "@mc-wallet/wallet-model": "workspace:*",
   "@mc-wallet/wallet-protocol": "workspace:*",
-  "@starknetfoundation/krusty-kms-wasm": "0.10.0",
+  // A local wasm-pack build of krusty v0.11.0 plus the four unpublished ML-DSA
+  // exports, packed into vendor/ and pinned through bun.lock like any tarball.
+  // scripts/check-krusty-adapter.ts holds the version and byte digests.
+  "@starknetfoundation/krusty-kms-wasm":
+    "file:vendor/starknetfoundation-krusty-kms-wasm-0.11.0-pq.0.tgz",
   starknet: "10.0.2",
 };
 

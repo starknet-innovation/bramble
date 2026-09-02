@@ -65,11 +65,13 @@ import {
   createActiveStateCoordinator,
   unavailablePreferencesStore,
 } from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
 import {
   createSwapPreparationStore,
   type SwapPreparationStore,
 } from "../transactions/swap-preparations";
+import type { RuntimeSender } from "./senders";
 
 /**
  * Everything the runtime router hands to a sub-handler.
@@ -105,6 +107,18 @@ export type RouterContext = {
   readonly wallet: WalletStatusReader;
   readonly watchAssetAdmission: WatchAssetAdmission;
 };
+
+/**
+ * One route in the background's message table. Every handler answers `null` for
+ * a message type it does not own, so the router can try each in turn; anything
+ * else is the final response for that message.
+ */
+export type RouterHandler = (
+  ctx: RouterContext,
+  messageType: string,
+  message: unknown,
+  sender: RuntimeSender | undefined,
+) => Promise<RuntimeResponse | null>;
 
 /**
  * Named optional collaborators for {@link createMessageHandler}.

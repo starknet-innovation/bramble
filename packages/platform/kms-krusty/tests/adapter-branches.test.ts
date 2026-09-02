@@ -122,7 +122,6 @@ describe("validateMnemonic output validation", () => {
   });
 });
 
-
 // Pins the export name this adapter binds: upstream kept `deriveStrk20ViewingKey`
 // for a derivation that ignores the chain and pool, so binding to that name would
 // return a wrong-scope key with no error anywhere. wasm-bindgen drops surplus

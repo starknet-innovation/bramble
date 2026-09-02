@@ -55,8 +55,25 @@ milestone with an open upstream dependency, and it is a mobile one. M1.5 was not
 plan: it exists because a real phone turned out to be buildable against a blind-signing contract,
 which decoupled "does the hardware do what we claim" from "can the phone prove what it signs".
 
-M3's `check:krusty` item is also closed — the pin now points at a commit on the public krusty
-branch, so `bun run vendor:krusty` works on any machine.
+M3's `check:krusty` item is also closed, though the mechanism changed on 2026-09-02: wallet `main`
+deleted `scripts/vendor-krusty.ts` and now consumes the published `@starknetfoundation/krusty-kms-wasm`
+package with both runtime files SHA-256-pinned. The ML-DSA exports are not published and will not be
+until the surface is reviewed, so this branch consumes a **local build of the same package** instead:
+
+```bash
+# in krusty-kms, on feat/mobile-pq-signer (v0.11.0 + the ML-DSA exports)
+cd crates/wasm && wasm-pack build --release --target web --scope starknetfoundation --out-dir pkg
+cd pkg && npm pkg set version=0.11.0-pq.0 && npm pack --pack-destination ../../../mc-wallet/vendor
+# in mc-wallet
+bun install   # re-pins the tarball's SHA-512 in bun.lock
+```
+
+Then update `packageVersion` and both digests in `scripts/check-krusty-adapter.ts`. The provenance
+model is unchanged — an immutable tarball pinned by the lockfile, its two runtime files pinned by
+digest before import — and `tests/scripts/krusty-package-provenance.test.ts` holds exactly that. The
+`-pq.0` suffix is deliberate: it can never be mistaken for a registry release. No Rust toolchain is
+needed to *build the wallet*, only to regenerate the tarball. When the ML-DSA surface lands upstream
+and is published, delete the tarball and put a plain version back.
 
 M1 is the milestone that matters. It exercises the widened signature type, the account contract
 family, the vault migration, the queue, and the message-shape validators — the entire risky half of
@@ -111,7 +128,7 @@ What closed since 2026-08-31:
 | Key protection | settled and implemented: authenticate per signature, satisfied by biometry **or** the device passcode. Binding to the enrolled biometric set was rejected — with no recovery path, adding a fingerprint would strand the account |
 | The class hash | **no longer pasted.** Pinned in the wallet and independently in the phone, which is what makes a derivation mismatch surface as two different addresses instead of one wrong one |
 | Mobile crypto surface | a second, narrow C ABI — `crates/ffi-mobile` in krusty-kms, five functions over public material only, packaging its own XCFramework and jniLibs |
-| The krusty pin | a pushed commit on a public branch, so `bun run vendor:krusty` no longer needs a local checkout |
+| The krusty pin | a local wasm-pack build of krusty v0.11.0 plus the ML-DSA exports, packed to `vendor/*.tgz` and pinned through `bun.lock`; the vendoring script main deleted is not resurrected |
 | Chain binding | the sign envelope carries `networkId`, so the phone refuses a chain its key was not registered against |
 | The public send | the ERC-20 transfer path now forwards the ML-DSA calldata builders — it was the one submit path that did not, and it failed *after* the user approved a fee |
 

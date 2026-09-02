@@ -1,5 +1,6 @@
 /** Atomic multi-account restoration inside the encrypted vault boundary. */
 import { WalletError } from "@mc-wallet/core/errors";
+import { isStarkCurveContractType } from "@mc-wallet/wallet-model/accounts";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import {
   isRecoveryAccountSelection,
@@ -9,7 +10,7 @@ import {
 import { deriveAccount } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { isVaultV7, type Vault } from "../schema/schema";
+import { isVaultV8, type Vault } from "../schema/schema";
 
 /** Privileged recovery input; the phrase and unlock credential never leave this boundary. */
 export type RecoverVaultAccountsInput = {
@@ -49,10 +50,17 @@ export const recoverVaultAccounts = async (
     throw new WalletError("Wallet already exists");
   }
   const derived = [];
-  for (const selection of input.selections) {
+  for (const { accountContractType, accountIndex } of input.selections) {
+    // A paired-phone account's key is generated in the phone's secure hardware
+    // and is non-exportable, so no phrase can re-derive it. Restoring one here
+    // would write an account whose signer nobody holds, so it fails closed.
+    if (!isStarkCurveContractType(accountContractType)) {
+      throw new WalletError("A paired-phone account cannot be recovered from a phrase");
+    }
     derived.push(
       await deriveAccount(kms, {
-        ...selection,
+        accountContractType,
+        accountIndex,
         mnemonic: input.mnemonic,
         networkId: input.networkId,
       }),
@@ -68,7 +76,7 @@ export const recoverVaultAccounts = async (
     mnemonic: input.mnemonic,
     signingKeys: derived.map(({ account, privateKey }) => ({ accountId: account.id, privateKey })),
   };
-  if (!isVaultV7(next)) throw new WalletError("Invalid recovered vault");
+  if (!isVaultV8(next)) throw new WalletError("Invalid recovered vault");
   await encryptedStore.write(next, input.vaultPassphrase);
   return next.accounts;
 };

@@ -75,3 +75,16 @@ export const EXCLUDED_DIRECTORIES = new Set([
   "test-results",
   "vendor",
 ]);
+
+/**
+ * Whether a dependency specifier pins one immutable thing rather than a range.
+ *
+ * A `file:` tarball under vendor/ qualifies, and is stricter than a version: it
+ * names bytes committed to this repository rather than a registry entry, and
+ * `check-krusty-adapter.ts` pins their SHA-256 before import. A bare directory
+ * path would not qualify — its contents can change under a frozen lockfile.
+ */
+export const isExactVersion = (version: string): boolean =>
+  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version) ||
+  /^file:vendor\/[\w.@-]+\.tgz$/.test(version) ||
+  version === "workspace:*";

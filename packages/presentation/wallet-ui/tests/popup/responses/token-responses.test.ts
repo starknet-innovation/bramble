@@ -2,11 +2,11 @@
  * Token response validator checks for detection, prices, and charts.
  */
 import { describe, expect, test } from "bun:test";
+import { isDetectTokensResponse } from "../../../src/popup/responses/responses";
 import {
-  isDetectTokensResponse,
   isPricesResponse,
   isTokenChartResponse,
-} from "../../../src/popup/responses/responses";
+} from "../../../src/popup/responses/responses-prices";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 const suggestion = {

@@ -354,27 +354,20 @@ TypeScript sides have to be developed against each other locally. This section i
 
 ### Topology: one checkout, two consumers
 
-`vendor/krusty-kms/` is **gitignored** by the wallet (`.gitignore:12`), so it is not a submodule and
-the wallet's git never sees what is inside it.
-
 ```
-~/dev/krusty-kms                 <- your working tree, your branch
+~/dev/krusty-kms                 <- your working tree, feat/mobile-pq-signer
      |
-     +-- fetched by --> mc-wallet/vendor/krusty-kms   (extension, via wasm-pack)
-     +-- cargo build --> libkms                       (mobile, via C ABI)
+     +-- wasm-pack + npm pack --> mc-wallet/vendor/*.tgz   (extension)
+     +-- cargo build ----------> libkms                    (mobile, via C ABI)
 ```
 
-**Keep `vendor/krusty-kms` as its own clone and fetch from your working tree**, which is what the
-recipe below does. This is the arrangement that has actually been used; earlier revisions of this
-document recommended symlinking the wallet's `vendor/` at a single checkout instead.
-
-> **Why not the symlink**
->
-> It looks simpler — one tree, no fetch — but `bun run vendor:krusty` ends with
-> `git checkout --detach <REV>`, which would detach HEAD inside your working clone. Worse, the
-> provenance gate requires the vendored checkout to sit on a specific commit with a clean worktree,
-> which is precisely what a working tree is not. Going through a real fetch means the pin and the
-> shipped wasm always describe the same source.
+Since 2026-09-02 the wallet no longer vendors krusty source. Wallet `main` deleted
+`scripts/vendor-krusty.ts` and consumes the published `@starknetfoundation/krusty-kms-wasm` package,
+verifying its manifest shape and both runtime files by SHA-256 before import. The ML-DSA exports are
+unpublished — the surface is unreviewed and will not be published to get a proof of concept running —
+so this branch consumes **a local build of that same package**: a tarball committed under `vendor/`
+and installed through `bun.lock` like any other. That keeps main's provenance model intact rather
+than resurrecting a build path the wallet team deliberately removed.
 
 ### The two loops
 
@@ -387,75 +380,51 @@ bun run build            # produces dist/
 # reload the unpacked extension in chrome://extensions
 ```
 
-**Touching Rust** — one extra step, roughly 30–60s incremental.
+**Touching Rust** — rebuild the package and re-pin it. Roughly a minute.
 
 ```bash
-cd vendor/krusty-kms && wasm-pack build crates/wasm --target web --out-dir pkg
-cd - && bun run build
+# in krusty-kms, on feat/mobile-pq-signer
+cd crates/wasm && wasm-pack build --release --target web --scope starknetfoundation --out-dir pkg
+cd pkg && npm pkg set version=0.11.0-pq.0 && npm pack --pack-destination ../../../mc-wallet/vendor
+shasum -a 256 krusty_kms_wasm.js krusty_kms_wasm_bg.wasm
+
+# in mc-wallet
+bun install                                    # re-pins the tarball SHA-512 in bun.lock
+# paste both digests into scripts/check-krusty-adapter.ts
+bun run check:krusty && bun run build
 ```
 
-`crates/wasm/pkg/` is gitignored inside krusty-kms too, so the rebuilt artifact is picked up with
-no git state to fight, and `apps/extension/build.ts` copies both files into `dist/vendor/`.
+The `wasm-pack` invocation is the one krusty's own `publish-npm.yml` runs, so the tarball is the
+package that workflow would publish, plus the ML-DSA exports. Keep the `-pq.0` suffix: it is what
+makes a local build impossible to mistake for a registry release, and `check-krusty-adapter.ts`
+asserts the installed manifest carries exactly that version.
+
+Delete the old tarball when you add a new one — two in `vendor/` and it stops being obvious which
+one the lockfile resolves.
+
+> **Why not a `file:` directory instead of a tarball**
+>
+> A directory dependency would save the `npm pack` step, but its contents can change under a frozen
+> lockfile, and every rebuild would silently invalidate the SHA-256 pins the gate enforces. A
+> tarball is immutable bytes with a lockfile integrity hash — the same guarantee the registry
+> specifier carried, which is the whole point of not diverging from main here.
 
 **No TypeScript type plumbing is needed when you add a WASM export.** The adapter takes the module
 as an untrusted value and validates it structurally (`asRecord`, `ownValue`, `KRUSTY_RESULT_CLASSES`
 in `kms-krusty/src/adapter.ts`), so nothing flows from the generated `.d.ts`. New exports are
 validated at the boundary like everything else.
 
-### Building locally without a pushed commit
+### The build gates the package, so a stale tarball fails loudly
 
-`apps/extension/build.ts:89` runs `bun run check:krusty` **as part of the build**, so "just don't run
-the check" does not work — `bun run build` itself fails and there is no `dist/` to load.
+`apps/extension/build.ts` runs `bun run check:krusty` as part of the build, so a tarball whose bytes
+do not match the pinned digests fails `bun run build` and leaves no `dist/` to load. That is the
+intended behaviour and the reason the digests are worth updating in the same commit as a rebuild:
+the alternative everyone reaches for otherwise is skipping the check and forgetting.
 
-`scripts/check-krusty-adapter.ts` gates on four things: the checkout sits on `KRUSTY_KMS_REVISION`,
-the worktree is clean, `krusty_kms_wasm.js` matches `expectedGlueDigest`, and a set of known-answer
-vectors still reproduce (a reference mnemonic, address, public key, signature and viewing key).
-
-Earlier revisions of this document proposed an `MC_KRUSTY_LOCAL=1` escape that skipped the three
-provenance gates and kept the vectors. **It was never built, and it turned out not to be needed.**
-Pinning to a commit satisfies all four gates honestly. **Since 2026-09-02 the pin is a pushed
-commit on the public krusty branch**, so `bun run vendor:krusty` fetches it from GitHub with no
-local checkout and works in CI. The recipe below is for iterating on krusty *before* pushing.
-
-```bash
-# 1. commit in your krusty-kms working tree; any branch is fine
-git -C ~/dev/krusty-kms commit -am "feat: ..."
-SHA=$(git -C ~/dev/krusty-kms rev-parse HEAD)
-
-# 2. point KRUSTY_KMS_REVISION in scripts/vendor-krusty.ts at that SHA
-
-# 3. let the vendor script fetch it from your local tree, not GitHub
-git -C vendor/krusty-kms remote set-url origin ~/dev/krusty-kms
-bun run vendor:krusty
-git -C vendor/krusty-kms remote set-url origin https://github.com/starknet-innovation/krusty-kms.git
-
-# 4. update expectedGlueDigest in scripts/check-krusty-adapter.ts
-shasum -a 256 vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm.js
-```
-
-Going through `bun run vendor:krusty` rather than calling `wasm-pack` by hand matters: it applies the
-pinned toolchain (`KRUSTY_KMS_TOOLCHAIN`) and the `--remap-path-prefix` flags, which is what makes
-the glue digest comparable to the one CI will compute later.
-
-**The one property this does not give you is remote reproducibility.** The SHA is not on `origin`, so
-`bun run vendor:krusty` fails on any other machine and in CI. Two consequences:
-
-- Do not commit `scripts/vendor-krusty.ts` with a local-only SHA, or treat it explicitly as a local
-  checkpoint. CI will fail on it.
-- When the branch is pushed and merged, re-point `KRUSTY_KMS_REVISION` at the resulting SHA and
-  regenerate the digest. If the merge squashes or rebases, that is a different SHA than the branch's.
-
-> **The shortcut to avoid**
->
-> `vendor/krusty-kms/.gitignore` ignores `crates/wasm/pkg/`, so you *can* drop a freshly built `pkg/`
-> into an old checkout and bump only the digest. `check:krusty` passes — `git status` still reads
-> clean. Don't: the pin then claims a revision the shipped wasm was not built from, which is the one
-> provenance property that gate exists to protect. Its own header says nothing detects a `pkg/`
-> produced after vendoring.
-
-That is roughly six lines across `check-krusty-adapter.ts` and `build.ts`, and it is more honest
-than the alternative everyone reaches for otherwise, which is commenting out line 89 and
-forgetting.
+The gate also re-runs main's known-answer vectors — a reference mnemonic, address, public key,
+signature, viewing key, and a Nostr round trip — through the real adapter. Those passing against a
+krusty v0.11.0 build is the evidence that moving off the published 0.10.0 package changed no
+wallet-facing derivation.
 
 ### The mobile side has none of this
 
@@ -471,12 +440,15 @@ In order, once, at the end:
 
 1. krusty-kms branch merges upstream, with its own `docs/design/` note and regenerated
    `ffi-kms.h.snapshot` and `wasm-exports.txt` baselines.
-2. Bump `KRUSTY_KMS_REVISION` in `scripts/vendor-krusty.ts`.
-3. Restore the GitHub remote on `vendor/krusty-kms` and run `bun run vendor:krusty`.
-4. Recompute `expectedGlueDigest` from the freshly built glue and update it in the same commit —
-   the comment in `check-krusty-adapter.ts` requires it to move together with the revision.
-5. `bun run check` clean, and the pinned SHA reachable on `origin` — a local-only SHA passes here
-   and fails in CI.
+2. That merge publishes `@starknetfoundation/krusty-kms-wasm` through krusty's `publish-npm.yml`.
+3. In the wallet, replace the `file:vendor/*.tgz` specifier with the published version, `bun install`,
+   and delete the tarball from `vendor/`.
+4. Update `packageVersion` and both digests in `scripts/check-krusty-adapter.ts`, the specifier in
+   `scripts/config-standards-policy.ts`, and the constants in
+   `tests/scripts/krusty-package-provenance.test.ts`, all in the same commit.
+5. Revert the `file:` branch of `isExactVersion` in `scripts/workspace-architecture-policy.ts` — it
+   exists only for this arrangement and should not outlive it.
+6. `bun run check` clean.
 
 ## The stub account — never needed
 

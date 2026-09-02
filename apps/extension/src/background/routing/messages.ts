@@ -6,8 +6,6 @@ import { readImportAccountInput } from "../accounts/import-inputs";
 import { handleWalletOps, type WalletOpsDeps } from "../accounts/wallet-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { handleApprovalDecision } from "../approvals/approval-decisions";
-import { enrichApprovals } from "../approvals/approval-insights";
-import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { handleMobilePqOps } from "../devices/mobile-pq-ops";
 import { handleLedgerOps } from "../ledger/ledger-ops";
 import { handleMultisigCoordinationOps } from "../multisig/multisig-coordination-ops";
@@ -41,11 +39,14 @@ import { supportDiagnosticsResponse } from "../support/diagnostics";
 import { handleChainOps } from "../transactions/chain-ops";
 import { handleDeclareOps } from "../transactions/declare-ops";
 import { handleSwapOps } from "../transactions/swap-ops";
-import { type MessageHandlerOptions, type RouterContext, routerContext } from "./message-context";
+import {
+  type MessageHandlerOptions,
+  type RouterContext,
+  type RouterHandler,
+  routerContext,
+} from "./message-context";
 import {
   readAddAccountInput,
-  readGetGrantedAccountsInput,
-  readRequestAccountsInput,
   readRevealSecretsInput,
   readSetActiveAccountInput,
   readSetActiveNetworkInput,
@@ -53,19 +54,13 @@ import {
   readUnlockInput,
 } from "./message-inputs";
 import {
-  isClaimedSenderOrigin,
-  isExtensionPageSender,
-  parseGatedMessage,
-  type RuntimeSender,
-} from "./senders";
+  handleGetGrantedAccounts,
+  handlePendingApprovals,
+  handleRequestAccounts,
+} from "./messages-connect";
+import { isExtensionPageSender, parseGatedMessage, type RuntimeSender } from "./senders";
 import { unlockFailureError } from "./unlock-errors";
 
-type RouterHandler = (
-  ctx: RouterContext,
-  messageType: string,
-  message: unknown,
-  sender: RuntimeSender | undefined,
-) => Promise<RuntimeResponse | null>;
 const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   activeStateCoordinator: ctx.activeStateCoordinator,
   activity: ctx.activity,
@@ -208,84 +203,6 @@ const handleRevealSecrets: RouterHandler = async (ctx, messageType, message) => 
     await ctx.wallet.readVault(input.vaultPassphrase),
   );
   return { mnemonic, ok: true, privateKey };
-};
-
-const handleGetGrantedAccounts: RouterHandler = async (ctx, messageType, message, sender) => {
-  if (messageType !== "wallet.getGrantedAccounts") {
-    return null;
-  }
-  const input = readGetGrantedAccountsInput(message);
-  if (!input) {
-    return { error: "invalid granted accounts request" };
-  }
-  if (input.vaultPassphrase && !isExtensionPageSender(sender, ctx.extensionId)) {
-    return { error: "privileged sender required" };
-  }
-  if (!isClaimedSenderOrigin(sender, ctx.extensionId, input.origin)) {
-    return { error: "sender origin mismatch" };
-  }
-  // A blocklisted origin must see no accounts even if it holds an old grant.
-  if (ctx.guard.isBlocked(input.origin)) {
-    return { accounts: [], ok: true };
-  }
-  // Peek, never renew: re-querying grants must not extend the unlock lifetime.
-  const vaultPassphrase = input.vaultPassphrase ?? ctx.session.peekPassphrase();
-  if (!vaultPassphrase) {
-    return { error: "wallet locked" };
-  }
-  return {
-    accounts: await ctx.wallet.getGrantedAccounts(input.origin, vaultPassphrase),
-    ok: true,
-  };
-};
-
-const handlePendingApprovals: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.pendingApprovals") {
-    return null;
-  }
-  if (!readTypeOnlyInput(message, "wallet.pendingApprovals")) {
-    return { error: "invalid pending approvals request" };
-  }
-  return {
-    ok: true,
-    pending: await enrichApprovals(ctx.approvals.list(), ctx.originHistory, ctx.guard),
-  };
-};
-
-const handleRequestAccounts: RouterHandler = async (ctx, messageType, message, sender) => {
-  if (messageType !== "wallet.requestAccounts") {
-    return null;
-  }
-  const input = readRequestAccountsInput(message);
-  if (!input) {
-    return { error: "invalid request accounts request" };
-  }
-  if (!isClaimedSenderOrigin(sender, ctx.extensionId, input.origin)) {
-    return { error: "sender origin mismatch" };
-  }
-  if (ctx.guard.isBlocked(input.origin)) {
-    return { error: "origin blocked" };
-  }
-  // Peek, never renew. `wallet_requestAccounts` with `silent_mode` is reachable
-  // from any open page and answers without a prompt, so a site could otherwise
-  // hold the wallet unlocked forever just by calling it on a timer.
-  const passphrase = ctx.session.peekPassphrase();
-  if (passphrase) {
-    const accounts = await ctx.wallet.getGrantedAccounts(input.origin, passphrase);
-    if (accounts.length > 0) {
-      // Record the origin only once it is actually connecting, so the enricher
-      // still reports "first time seen" for a new site's approval.
-      await ctx.originHistory.record(input.origin);
-      return { accounts, ok: true };
-    }
-  }
-  if (input.silent) {
-    return { accounts: [], ok: true };
-  }
-  // Queue a connection approval and hold the response until the user approves.
-  const approval = ctx.approvals.request(input.origin);
-  notifyApprovalsChanged();
-  return ctx.waiters.register(approval.id);
 };
 
 const handleSetActiveAccount: RouterHandler = async (ctx, messageType, message) => {

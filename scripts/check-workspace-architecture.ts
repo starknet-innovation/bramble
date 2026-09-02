@@ -10,6 +10,7 @@ import {
   DEVELOPMENT_SOURCE_FILES,
   EXCLUDED_DIRECTORIES,
   EXTENSION_SURFACE_EDGES,
+  isExactVersion,
   NON_LITERAL_MODULE_LOADS,
   STRUCTURED_SOURCE_ROOTS,
 } from "./workspace-architecture-policy";
@@ -208,9 +209,6 @@ const dependencyEntries = (manifest: Manifest): Array<readonly [string, string]>
   ...Object.entries(manifest.dependencies ?? {}),
   ...Object.entries(manifest.devDependencies ?? {}),
 ];
-
-const isExactVersion = (version: string): boolean =>
-  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version) || version === "workspace:*";
 
 for (const workspace of workspaces) {
   if (workspace.manifest.private !== true || workspace.manifest.type !== "module") {

@@ -192,15 +192,13 @@ Recovery boundaries are deliberately explicit:
 4. Exercise `readMigratedVault` staging, verification, restart recovery, and idempotence tests.
 5. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-The vault schema is currently at **v8**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"`
-derivation whose path, index, and `LedgerW` marker must agree and which has no `signingKeys` entry.
-v4 adds encrypted `accountSecrets`, which public `AccountRef` records may never contain, retaining
-exact account, chain, pool, and scheme provenance. v5 canonicalizes every account identity and
-dependent reference; v6 records account-contract semantics explicitly; v7 retains the exact Argent
-deployment salt. v8 admits a `"mobile-pq"` derivation — a paired phone whose ML-DSA key lives in
-device hardware — which likewise has no `signingKeys` entry and may hold no account secret. Vaults
-migrated from v1 carry `mnemonic: null`; they cannot add software accounts or reveal a phrase until
-re-created, but may add a keyless account. Every migration is adjacent (`v0 → v1 → … → v8`).
+The vault schema is at **v8**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation
+whose path, index, and `LedgerW` marker must agree and with no `signingKeys` entry. v4 adds
+encrypted `accountSecrets`, never on a public `AccountRef`, with exact account, chain, pool, and
+scheme provenance. v5–v7 canonicalize account identities, record contract semantics, and retain the
+Argent salt. v8 admits a `"mobile-pq"` derivation: a paired phone whose hardware-held ML-DSA key
+needs no `signingKeys` entry or account secret. A v1-migrated vault carries `mnemonic: null`: no
+software account or phrase reveal, keyless only. Migrations are adjacent (`v0 → … → v8`).
 
 Chrome preserves `storage.local` across an update but clears `storage.session`. `runtime.onInstalled`
 therefore cannot migrate an encrypted vault: it has no passphrase. The first authenticated read runs
