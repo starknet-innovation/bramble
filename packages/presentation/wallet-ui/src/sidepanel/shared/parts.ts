@@ -137,6 +137,15 @@ export const isWalletView = (value: unknown): value is WalletView =>
 export const accountLabel = (address: string): string => shortAddress(address);
 
 /**
+ * Light summary text for an account-group disclosure: "N accounts detected"
+ * when the scan found active (deployed or funded) accounts, empty otherwise.
+ * Plain text (callers own the markup) shared by the recovery-phrase and Ledger
+ * import pickers so the two flows describe detection identically.
+ */
+export const accountsDetectedText = (detected: number): string =>
+  detected === 0 ? "" : `${detected} ${detected === 1 ? "account" : "accounts"} detected`;
+
+/**
  * Renders a native, repaint-persistent explanation for protocol concepts. The
  * copy is escaped and stays collapsed until requested, keeping expert detail
  * available without making it part of the primary decision plane.

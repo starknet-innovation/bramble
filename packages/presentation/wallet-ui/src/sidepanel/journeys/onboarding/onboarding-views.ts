@@ -348,7 +348,18 @@ const recoveryAccountsStep = (): string => `
         <p id="recovery-scan-status" class="hint" role="status">Ready to search.</p>
         ${iconButton({ attributes: { id: "recovery-scan-retry" }, icon: "refresh", label: "Retry account search" })}
       </div>
-      <ul class="allowance-list" id="recovery-account-list" aria-label="Recovered accounts"></ul>
+      <details class="disclosure account-group" data-recovery-group="openzeppelin">
+        <summary>Bramble accounts<span data-detected></span></summary>
+        <div class="disclosure-body">
+          <ul class="allowance-list" aria-label="Recovered Bramble accounts"></ul>
+        </div>
+      </details>
+      <details class="disclosure account-group" data-recovery-group="argent">
+        <summary>Ready accounts<span data-detected></span></summary>
+        <div class="disclosure-body">
+          <ul class="allowance-list" aria-label="Recovered Ready accounts"></ul>
+        </div>
+      </details>
       <details class="disclosure">
         <summary>Advanced manual index</summary>
         <div class="disclosure-body onboarding-fields">
@@ -412,7 +423,6 @@ const ledgerStep = (status: WalletStatus): string => `
     ${flowBack("Back to wallet methods")}
     ${stepHead("lock", "Protect the Ledger registry", "Create the local vault passphrase used to unlock account labels and settings on this device.")}
     <form id="ledger-setup-form" class="onboarding-fields">
-      <input name="ledgerAccountContractType" type="hidden" value="openzeppelin" />
       ${passwordFields("ledger")}
       <p id="ledger-passphrase-result" role="status"></p>
       ${mainnetAcknowledgement(

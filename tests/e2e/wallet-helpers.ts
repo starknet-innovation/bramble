@@ -97,7 +97,11 @@ const protectAndRecoverAccounts = async (onboarding: Page, passphrase: string): 
   await onboarding.getByRole("button", { name: "Find my accounts" }).click();
   await expect(onboarding.getByRole("heading", { name: "Find your accounts" })).toBeVisible();
   await expect(onboarding.locator("#recovery-scan-status")).toContainText("Search complete");
-  await onboarding.locator('#recovery-account-list input[type="checkbox"]').first().check();
+  // The mocked chain reports no activity, so the Bramble group starts closed
+  // with nothing auto-selected: open it and pick the first index by hand.
+  const brambleGroup = onboarding.locator('[data-recovery-group="openzeppelin"]');
+  await brambleGroup.locator("summary").click();
+  await brambleGroup.locator('input[type="checkbox"]').first().check();
   await onboarding.locator('input[name="recoveryMainnetAck"]').check();
   await onboarding.getByRole("button", { name: "Restore selected accounts" }).click();
 };

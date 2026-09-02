@@ -30,12 +30,14 @@ import type {
   LedgerPubKeyEntry,
 } from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@bramble/wallet-model/ledger-path";
-import type {
-  LedgerCandidate,
-  LedgerCandidateState,
-  LedgerOnboardAddKind,
-  LedgerOnboardController,
-  LedgerOnboardControllerDeps,
+import {
+  type LedgerCandidate,
+  type LedgerCandidateState,
+  type LedgerOnboardAddKind,
+  type LedgerOnboardController,
+  type LedgerOnboardControllerDeps,
+  ledgerCandidateActive,
+  ledgerCandidateSelectable,
 } from "./onboard-types";
 
 /** Re-exports the controller's documented type surface from its size-budget split. */
@@ -103,13 +105,12 @@ export const createLedgerOnboardController = (
   deps: LedgerOnboardControllerDeps,
 ): LedgerOnboardController => {
   let candidates: readonly LedgerCandidate[] = [];
-  let accountContractType: AccountContractType = "openzeppelin";
   const createdIds = new Set<string>();
   let devices: readonly LedgerDeviceChoice[] = [];
   let selectedDeviceId: string | null = null;
   let selectedAddKind: LedgerOnboardAddKind | null = null;
   let chooserStage: "add" | "import" = "add";
-  const selected = new Set<number>();
+  const selected = new Set<string>();
   let nextIndex = 0;
   let busy = false;
   let flowEpoch = 0;
@@ -150,9 +151,9 @@ export const createLedgerOnboardController = (
 
   // Append a freshly derived page as pending (Checking…) rows and advance the
   // page cursor, then paint so new indices appear before their on-chain state.
-  const appendPage = (accounts: readonly LedgerAccountRef[], startIndex: number): void => {
+  const appendPage = (accounts: readonly LedgerAccountRef[], nextStartIndex: number): void => {
     candidates = [...candidates, ...accounts.map(toCandidate)];
-    nextIndex = startIndex + accounts.length;
+    nextIndex = nextStartIndex;
     renderPicker();
   };
 
@@ -161,6 +162,13 @@ export const createLedgerOnboardController = (
   const applyDescribed = (described: readonly LedgerCandidate[]): void => {
     const byId = new Map(described.map((item) => [item.account.id, item] as const));
     candidates = candidates.map((item) => byId.get(item.account.id) ?? item);
+    // Every active account is selected by default; the user deselects rather
+    // than hunts. Runs once per candidate (when its on-chain state resolves).
+    for (const item of described) {
+      if (ledgerCandidateActive(item) && ledgerCandidateSelectable(item)) {
+        selected.add(item.account.id);
+      }
+    }
     renderPicker();
   };
 
@@ -197,11 +205,17 @@ export const createLedgerOnboardController = (
       const entries = await deps.enumerate(session.client, startIndex, session.readiness);
       await closeLedgerSessionQuietly(session);
       session = null;
-      const accounts = await deps.derive(entries, accountContractType);
+      // Both contract families derive from the same device keys, so the picker
+      // can group existing Bramble and Ready accounts side by side.
+      const [bramble, ready] = await Promise.all([
+        deps.derive(entries, "openzeppelin"),
+        deps.derive(entries, "argent"),
+      ]);
+      const accounts = [...bramble, ...ready];
       if (epoch !== flowEpoch) {
         return;
       }
-      appendPage(accounts, startIndex);
+      appendPage(accounts, startIndex + entries.length);
       const described = await describePage(accounts);
       if (epoch === flowEpoch) {
         applyDescribed(described);
@@ -282,25 +296,21 @@ export const createLedgerOnboardController = (
     );
   };
 
-  const runToggle = (accountIndex: number): void => {
-    const candidate = candidates.find(
-      (item) => item.account.derivation.accountIndex === accountIndex,
-    );
-    if (!candidate || candidate.duplicate) {
+  const runToggle = (accountId: string): void => {
+    const candidate = candidates.find((item) => item.account.id === accountId);
+    if (!candidate || !ledgerCandidateSelectable(candidate)) {
       return;
     }
-    if (selected.has(accountIndex)) {
-      selected.delete(accountIndex);
+    if (selected.has(accountId)) {
+      selected.delete(accountId);
     } else {
-      selected.add(accountIndex);
+      selected.add(accountId);
     }
     renderPicker();
   };
 
   const runAddSelected = async (): Promise<void> => {
-    const chosen = candidates.filter(
-      (item) => !item.duplicate && selected.has(item.account.derivation.accountIndex),
-    );
+    const chosen = candidates.filter((item) => !item.duplicate && selected.has(item.account.id));
     if (busy || chosen.length === 0) {
       return;
     }
@@ -310,7 +320,7 @@ export const createLedgerOnboardController = (
       for (const candidate of chosen) {
         await deps.create(candidate.account);
         createdIds.add(candidate.account.id);
-        selected.delete(candidate.account.derivation.accountIndex);
+        selected.delete(candidate.account.id);
         candidates = candidates.map((item) =>
           item.account.id === candidate.account.id ? { ...item, duplicate: true } : item,
         );
@@ -362,8 +372,6 @@ export const createLedgerOnboardController = (
 
   const choose = (kind: LedgerOnboardAddKind): void => {
     if (kind === "ledger" || kind === "import-ledger") {
-      // Every account contract this wallet creates is the Bramble account.
-      accountContractType = "openzeppelin";
       resetState();
       deps.render({ kind: "connect" });
     } else if (kind === "regular") {
@@ -414,13 +422,12 @@ export const createLedgerOnboardController = (
       resetState();
       deps.render({ kind: "chooser", selected: null });
     },
-    start(contractType = "openzeppelin") {
+    start() {
       resetState();
-      accountContractType = contractType;
       deps.render({ kind: "connect" });
     },
-    toggle(accountIndex) {
-      runToggle(accountIndex);
+    toggle(accountId) {
+      runToggle(accountId);
     },
   };
 };

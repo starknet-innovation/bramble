@@ -108,17 +108,33 @@ describe("recovery scan Ready gate", () => {
     click(app, "#password-continue-button");
     await tick();
 
-    const rows = Array.from(app.querySelectorAll<HTMLLIElement>("#recovery-account-list li"));
-    expect(rows.length).toBe(2);
-    const readyRow = rows.find((row) => row.textContent?.includes("Ready account"));
-    const readyCheckbox = readyRow?.querySelector<HTMLInputElement>("input.select-check");
+    const groupRows = (contractType: string): readonly HTMLLIElement[] =>
+      Array.from(app.querySelectorAll<HTMLLIElement>(`[data-recovery-group="${contractType}"] li`));
+    expect(groupRows("openzeppelin").length).toBe(1);
+    expect(groupRows("argent").length).toBe(1);
+
+    const readyGroup = app.querySelector<HTMLDetailsElement>('[data-recovery-group="argent"]');
+    const readyCheckbox =
+      groupRows("argent")[0]?.querySelector<HTMLInputElement>("input.select-check");
     expect(readyCheckbox?.disabled).toBe(true);
     expect(readyCheckbox?.checked).toBe(false);
-    expect(readyRow?.textContent).toContain("Bramble only imports existing Ready accounts");
-    // The Bramble candidate stays selectable (and auto-selected: deployed).
-    const brambleRow = rows.find((row) => row.textContent?.includes("Bramble account"));
-    const brambleCheckbox = brambleRow?.querySelector<HTMLInputElement>("input.select-check");
+    expect(groupRows("argent")[0]?.textContent).toContain(
+      "Bramble only imports existing Ready accounts",
+    );
+    // No active Ready accounts: no detected count, and the group stays closed.
+    expect(readyGroup?.textContent).not.toContain("detected");
+    expect(readyGroup?.open).toBe(false);
+
+    // The Bramble candidate stays selectable (auto-selected: deployed), its
+    // group reports the detection and opens itself.
+    const brambleGroup = app.querySelector<HTMLDetailsElement>(
+      '[data-recovery-group="openzeppelin"]',
+    );
+    const brambleCheckbox =
+      groupRows("openzeppelin")[0]?.querySelector<HTMLInputElement>("input.select-check");
     expect(brambleCheckbox?.disabled).toBe(false);
     expect(brambleCheckbox?.checked).toBe(true);
+    expect(brambleGroup?.textContent).toContain("1 account detected");
+    expect(brambleGroup?.open).toBe(true);
   });
 });

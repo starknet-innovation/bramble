@@ -1,146 +1,24 @@
 /**
  * Coverage for the Ledger onboarding controller: connect reads the first
- * page, "Show more" appends the next, toggling selects indexes, "Add
- * selected" adds exactly those, and the chooser routes regular/import/ledger.
- * Enumeration itself is covered in `sidepanel-ledger-enumerate.test.ts`; pure
- * template coverage lives in `sidepanel-ledger-onboard-views.test.ts`.
+ * page, "Show more" appends the next, toggling selects account ids, "Add
+ * selected" adds exactly those, and active accounts self-select. Enumeration
+ * is covered in `sidepanel-ledger-enumerate.test.ts`, the chooser routes in
+ * `sidepanel-ledger-chooser.test.ts`, and pure templates in
+ * `sidepanel-ledger-onboard-views.test.ts`.
  */
 import { describe, expect, test } from "bun:test";
-import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
 import { LedgerRejection } from "@bramble/ledger-protocol/errors";
-import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
-import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
-import {
-  createLedgerOnboardController,
-  type LedgerOnboardControllerDeps,
-  type LedgerOnboardView,
-} from "../../../../src/sidepanel/journeys/ledger/onboard-session";
+import { createLedgerOnboardController } from "../../../../src/sidepanel/journeys/ledger/onboard-session";
 import type { LedgerConnector } from "../../../../src/sidepanel/journeys/ledger/sign-session";
-
-const version = (major: number) => ({
-  errorMessage: "No errors",
-  major,
-  minor: major === 2 ? 4 : 0,
-  patch: 0,
-  returnCode: 0x9000,
-});
-
-// A device whose pubkey per index is deterministic (0x1, 0x2, …), so the test
-// can assert the enumerated entries and that paths track their index.
-const enumerateClient = (appMajor: number): LedgerDeviceClient => ({
-  getOsVersion: () => Promise.resolve({ targetId: 0x33000004, version: "2.7.1" }),
-  getAppVersion: () => Promise.resolve(version(appMajor)),
-  getPubKey: (path: string) => {
-    const index = Number(path.split("/").at(-1)?.replace(/'.*$/, "") ?? "0");
-    return Promise.resolve({
-      errorMessage: "No errors",
-      publicKey: new Uint8Array([...new Array(31).fill(0), index + 1, ...new Array(32).fill(0)]),
-      returnCode: 0x9000,
-    });
-  },
-  signHash: () => Promise.reject(new Error("unused")),
-});
-
-const candidateAccount = (index: number): LedgerAccountRef => ({
-  accountContractType: "openzeppelin",
-  address: `0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  derivation: {
-    accountIndex: index,
-    eip2645application: "LedgerW",
-    kind: "ledger",
-    path: ledgerAccountPath(index),
-  },
-  id: `SN_MAIN:0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
-  networkId: "SN_MAIN",
-  publicKeyX: `0x${index + 1}`,
-});
-
-const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
-
-const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> = {}) => {
-  const views: (LedgerOnboardView | null)[] = [];
-  const created: number[] = [];
-  let refreshed = 0;
-  let closed = 0;
-  let cancels = 0;
-  let hdAdds = 0;
-  let imports = 0;
-  let multisigs = 0;
-  // request() hands back an OWNED session; its close bumps a counter so tests
-  // assert the enumeration transport is released on every outcome.
-  const connector: LedgerConnector = {
-    openConnected: () => Promise.resolve(null),
-    request: () =>
-      Promise.resolve({
-        client: enumerateClient(2),
-        close: () => {
-          closed += 1;
-          return Promise.resolve();
-        },
-      }),
-  };
-  const deps: LedgerOnboardControllerDeps = {
-    addHd: () => {
-      hdAdds += 1;
-      return Promise.resolve();
-    },
-    connector,
-    create: (account) => {
-      created.push(account.derivation.accountIndex);
-      return Promise.resolve();
-    },
-    derive: (entries) =>
-      Promise.resolve(entries.map((entry) => candidateAccount(entry.accountIndex))),
-    describe: (account) =>
-      Promise.resolve({ balance: "1 STRK", deployed: account.derivation.accountIndex === 0 }),
-    enumerate: (_client, startIndex) =>
-      Promise.resolve([0, 1].map((offset) => candidateAccount(startIndex + offset))).then(
-        (accounts) =>
-          accounts.map((account) => ({
-            accountIndex: account.derivation.accountIndex,
-            publicKeyX: account.publicKeyX,
-          })),
-      ),
-    existingIds: () => new Set<string>(),
-    onCancel: () => {
-      cancels += 1;
-    },
-    openImport: () => {
-      imports += 1;
-    },
-    openMultisig: () => {
-      multisigs += 1;
-    },
-    refresh: () => {
-      refreshed += 1;
-      return Promise.resolve();
-    },
-    render: (view) => views.push(view),
-    ...overrides,
-  };
-  return {
-    cancels: () => cancels,
-    closed: () => closed,
-    created,
-    deps,
-    hdAdds: () => hdAdds,
-    imports: () => imports,
-    multisigs: () => multisigs,
-    refreshed: () => refreshed,
-    views,
-  };
-};
-
-const kinds = (views: readonly (LedgerOnboardView | null)[]): readonly (string | null)[] =>
-  views.map((view) => (view === null ? null : view.kind));
-
-const pickerIndexes = (view: LedgerOnboardView | null | undefined): readonly number[] => {
-  if (view?.kind !== "picker") {
-    throw new Error("expected a picker view");
-  }
-  return view.candidates.map((candidate) => candidate.account.derivation.accountIndex);
-};
+import {
+  candidateAccount,
+  enumerateClient,
+  idOf,
+  kinds,
+  onboardHarness,
+  pickerIndexes,
+  tick,
+} from "../../../support/ledger-onboard-harness";
 
 describe("Ledger onboard controller", () => {
   test("start shows connect; connect enumerates, derives, and describes", async () => {
@@ -155,9 +33,50 @@ describe("Ledger onboard controller", () => {
     expect(kinds(h.views)).toEqual(["connect", "reading", "picker", "picker"]);
     const final = h.views.at(-1);
     if (final?.kind === "picker") {
-      expect(final.candidates[0]?.deployed).toBe(true);
-      expect(final.candidates[0]?.balance).toBe("1 STRK");
+      expect(final.candidates[0]?.deployed).toBe(false);
+      expect(final.candidates[0]?.balance).toBe("0 STRK");
+      // Both contract families derive from the same device keys.
+      expect(pickerIndexes(final, "openzeppelin")).toEqual([0, 1]);
+      expect(pickerIndexes(final, "argent")).toEqual([0, 1]);
     }
+  });
+
+  test("active accounts are selected automatically once described", async () => {
+    const h = onboardHarness({
+      describe: (account) =>
+        Promise.resolve(
+          account.derivation.accountIndex === 0
+            ? { balance: "1.5 STRK", deployed: true }
+            : { balance: "0 STRK", deployed: false },
+        ),
+    });
+    const controller = createLedgerOnboardController(h.deps);
+    controller.connect();
+    await tick();
+    const final = h.views.at(-1);
+    expect(final?.kind === "picker" && [...final.selected].sort()).toEqual(
+      [idOf(0), idOf(0, "argent")].sort(),
+    );
+  });
+
+  test("an inactive Ready candidate cannot be selected", async () => {
+    const h = onboardHarness();
+    const controller = createLedgerOnboardController(h.deps);
+    controller.connect();
+    await tick();
+    controller.toggle(idOf(0, "argent"));
+    const final = h.views.at(-1);
+    // Importing an idle Ready account would deploy a brand-new Ready account.
+    expect(final?.kind === "picker" && final.selected).toEqual([]);
+    // An active Ready candidate stays importable.
+    const active = onboardHarness({
+      describe: () => Promise.resolve({ balance: "2 STRK", deployed: true }),
+    });
+    const activeController = createLedgerOnboardController(active.deps);
+    activeController.connect();
+    await tick();
+    const view = active.views.at(-1);
+    expect(view?.kind === "picker" && view.selected.includes(idOf(1, "argent"))).toBe(true);
   });
 
   test("a describe failure degrades that candidate to unavailable, not a block", async () => {
@@ -265,8 +184,8 @@ describe("Ledger onboard controller", () => {
     const controller = createLedgerOnboardController(h.deps);
     controller.connect();
     await tick();
-    controller.toggle(0);
-    controller.toggle(1);
+    controller.toggle(idOf(0));
+    controller.toggle(idOf(1));
     controller.addSelected();
     await tick();
     expect(h.created).toEqual([0, 1]);
@@ -279,8 +198,8 @@ describe("Ledger onboard controller", () => {
     const controller = createLedgerOnboardController(h.deps);
     controller.connect();
     await tick();
-    controller.toggle(0); // duplicate — ignored
-    controller.toggle(1);
+    controller.toggle(idOf(0)); // duplicate — ignored
+    controller.toggle(idOf(1));
     controller.addSelected();
     await tick();
     expect(h.created).toEqual([1]);
@@ -302,8 +221,8 @@ describe("Ledger onboard controller", () => {
     const controller = createLedgerOnboardController(h.deps);
     controller.connect();
     await tick();
-    controller.toggle(1);
-    controller.toggle(1);
+    controller.toggle(idOf(1));
+    controller.toggle(idOf(1));
     const final = h.views.at(-1);
     expect(final?.kind === "picker" && final.selected).toEqual([]);
   });
@@ -313,7 +232,7 @@ describe("Ledger onboard controller", () => {
     const controller = createLedgerOnboardController(h.deps);
     controller.connect();
     await tick();
-    controller.toggle(1);
+    controller.toggle(idOf(1));
     controller.addSelected();
     await tick();
     const final = h.views.at(-1);
@@ -337,8 +256,8 @@ describe("Ledger onboard controller", () => {
     const controller = createLedgerOnboardController(h.deps);
     controller.connect();
     await tick();
-    controller.toggle(0);
-    controller.toggle(1);
+    controller.toggle(idOf(0));
+    controller.toggle(idOf(1));
     controller.addSelected();
     await tick();
 
@@ -347,7 +266,7 @@ describe("Ledger onboard controller", () => {
     expect(final?.kind).toBe("picker");
     if (final?.kind === "picker") {
       expect(final.message).toBe("temporary write failure");
-      expect(final.selected).toEqual([1]);
+      expect(final.selected).toEqual([idOf(1)]);
       expect(final.candidates[0]?.duplicate).toBe(true);
       expect(final.candidates[1]?.duplicate).toBe(false);
     }
@@ -407,72 +326,5 @@ describe("Ledger onboard controller", () => {
     expect(h.views.at(-1)?.kind).toBe("error");
     // The transport is released even on the failure path (fail closed).
     expect(h.closed()).toBe(1);
-  });
-});
-
-describe("add-account chooser routing", () => {
-  test("showChooser renders the chooser and a Ledger choice opens connect", () => {
-    const h = onboardHarness();
-    const controller = createLedgerOnboardController(h.deps);
-    controller.showChooser();
-    expect(h.views.at(-1)).toEqual({ kind: "chooser", selected: null });
-    controller.choose("ledger");
-    expect(h.views.at(-1)?.kind).toBe("connect");
-  });
-
-  test("selection requires Continue and routes Multisig without mutating the wallet", () => {
-    const h = onboardHarness();
-    const controller = createLedgerOnboardController(h.deps);
-    controller.showChooser();
-    controller.select("multisig");
-    expect(h.views.at(-1)).toEqual({ kind: "chooser", selected: "multisig" });
-    expect(h.multisigs()).toBe(0);
-    controller.continueChoice();
-    expect(h.views.at(-1)).toBeNull();
-    expect(h.multisigs()).toBe(1);
-    expect(h.hdAdds()).toBe(0);
-  });
-
-  test("choose('import') opens the import chooser; import-key routes to the form", () => {
-    const h = onboardHarness();
-    const controller = createLedgerOnboardController(h.deps);
-    controller.showChooser();
-    controller.choose("import");
-    expect(h.views.at(-1)).toEqual({ kind: "import-chooser", selected: null });
-    controller.select("import-key");
-    expect(h.views.at(-1)).toEqual({ kind: "import-chooser", selected: "import-key" });
-    controller.continueChoice();
-    expect(h.views.at(-1)).toBeNull();
-    expect(h.imports()).toBe(1);
-  });
-
-  test("choose('import-ledger') starts the connect flow like a new Ledger account", () => {
-    const h = onboardHarness();
-    const controller = createLedgerOnboardController(h.deps);
-    controller.showChooser();
-    controller.choose("import");
-    controller.choose("import-ledger");
-    expect(h.views.at(-1)?.kind).toBe("connect");
-  });
-
-  test("a regular-account choice derives an HD account, dismisses, and refreshes", async () => {
-    const h = onboardHarness();
-    const controller = createLedgerOnboardController(h.deps);
-    controller.showChooser();
-    controller.choose("regular");
-    await tick();
-    expect(h.hdAdds()).toBe(1);
-    expect(h.views.at(-1)).toBeNull();
-    expect(h.refreshed()).toBe(1);
-  });
-
-  test("a regular-account choice surfaces the wallet error when derivation fails", async () => {
-    const h = onboardHarness({ addHd: () => Promise.reject(new Error("wallet locked")) });
-    const controller = createLedgerOnboardController(h.deps);
-    controller.showChooser();
-    controller.choose("regular");
-    await tick();
-    const final = h.views.at(-1);
-    expect(final?.kind === "error" && final.message).toBe("wallet locked");
   });
 });

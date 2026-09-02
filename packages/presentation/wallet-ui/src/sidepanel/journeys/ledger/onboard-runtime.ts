@@ -70,7 +70,7 @@ export type LedgerOnboardRuntimeDeps = {
  */
 export type LedgerOnboardRuntime = {
   readonly bindTriggers: (app: Element | null) => void;
-  readonly start: (accountContractType?: AccountContractType) => void;
+  readonly start: () => void;
   readonly startAddAccount: () => void;
 };
 
@@ -97,9 +97,33 @@ export const createLedgerOnboardRuntime = (
   const bindSelection = (): void => {
     for (const input of mount.querySelectorAll<HTMLInputElement>("[data-ledger-toggle]")) {
       input.addEventListener("change", () => {
-        const index = Number(input.dataset["ledgerToggle"]);
-        if (Number.isSafeInteger(index)) {
-          controller.toggle(index);
+        const accountId = input.dataset["ledgerToggle"];
+        if (accountId) {
+          controller.toggle(accountId);
+        }
+      });
+    }
+  };
+
+  // Account-group disclosures are re-rendered wholesale on every picker paint,
+  // so their open state lives here: the user's explicit choice wins, and a
+  // group opens itself the first time detected activity appears in it.
+  const openGroups = new Set<string>();
+  const autoOpened = new Set<string>();
+  const bindGroups = (): void => {
+    for (const group of mount.querySelectorAll<HTMLDetailsElement>("[data-account-group]")) {
+      const key = group.dataset["accountGroup"] ?? "";
+      const detected = group.querySelector("summary .hint") !== null;
+      if (detected && !autoOpened.has(key)) {
+        autoOpened.add(key);
+        openGroups.add(key);
+      }
+      group.open = openGroups.has(key);
+      group.addEventListener("toggle", () => {
+        if (group.open) {
+          openGroups.add(key);
+        } else {
+          openGroups.delete(key);
         }
       });
     }
@@ -182,6 +206,7 @@ export const createLedgerOnboardRuntime = (
     renderFragment(mount, bodyFor(view));
     mount.hidden = false;
     bindControls();
+    bindGroups();
   };
 
   controller = createLedgerOnboardController({
@@ -207,8 +232,8 @@ export const createLedgerOnboardRuntime = (
         ?.querySelector<HTMLButtonElement>("[data-connect-ledger]")
         ?.addEventListener("click", () => controller.start());
     },
-    start(accountContractType) {
-      controller.start(accountContractType);
+    start() {
+      controller.start();
     },
     startAddAccount() {
       controller.showChooser();

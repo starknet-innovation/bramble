@@ -17,8 +17,13 @@ import { emptyState, pill } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import { icon } from "../../shared/icons";
-import { accountLabel } from "../../shared/parts";
-import type { LedgerCandidate, LedgerOnboardAddKind } from "./onboard-session";
+import { accountLabel, accountsDetectedText } from "../../shared/parts";
+import type { LedgerOnboardAddKind } from "./onboard-session";
+import {
+  type LedgerCandidate,
+  ledgerCandidateActive,
+  ledgerCandidateSelectable,
+} from "./onboard-types";
 import type { LedgerDeviceChoice } from "./sign-session";
 
 // The dismiss control rendered in every onboarding state so the full-screen
@@ -224,9 +229,11 @@ const candidateMeta = (candidate: LedgerCandidate): string => {
 
 // A duplicate row is non-selectable: it shows the "Already in this wallet" badge
 // instead of a checkbox, so an account already in the vault can never be picked.
-// Every other row is a labelled checkbox keyed on its account index.
-const candidateRow = (candidate: LedgerCandidate, selected: readonly number[]): string => {
-  const index = candidate.account.derivation.accountIndex;
+// An inactive Ready row keeps its checkbox but disabled: importing it would
+// deploy a brand-new Ready account, which this wallet does not do. Every other
+// row is a labelled checkbox keyed on its account id.
+const candidateRow = (candidate: LedgerCandidate, selected: readonly string[]): string => {
+  const id = candidate.account.id;
   if (candidate.duplicate) {
     return `
   <li class="allowance-row is-duplicate">
@@ -234,14 +241,39 @@ const candidateRow = (candidate: LedgerCandidate, selected: readonly number[]): 
     ${pill("Already in this wallet")}
   </li>`;
   }
-  const checked = selected.includes(index) ? " checked" : "";
+  const disabled = ledgerCandidateSelectable(candidate) ? "" : " disabled";
+  const checked = selected.includes(id) ? " checked" : "";
   return `
   <li class="allowance-row">
     <label class="select-row">
-      <input class="select-check" type="checkbox" data-ledger-toggle="${escapeHtml(String(index))}"${checked} />
+      <input class="select-check" type="checkbox" data-ledger-toggle="${escapeHtml(id)}"${checked}${disabled} />
       <span class="allowance-copy">${candidateMeta(candidate)}</span>
     </label>
   </li>`;
+};
+
+// One contract-family group: a native disclosure whose summary carries the
+// family name and a light detected-count. The runtime preserves each group's
+// open/closed state across repaints and opens a group when activity appears.
+const candidateGroup = (
+  contractType: "argent" | "openzeppelin",
+  candidates: readonly LedgerCandidate[],
+  selected: readonly string[],
+): string => {
+  const rows = candidates.filter(
+    (candidate) => candidate.account.accountContractType === contractType,
+  );
+  const detected = rows.filter(ledgerCandidateActive).length;
+  const label = contractType === "argent" ? "Ready accounts" : "Bramble accounts";
+  const body =
+    rows.length === 0
+      ? emptyState("No accounts read from the device yet.")
+      : `<ul class="allowance-list">${rows.map((candidate) => candidateRow(candidate, selected)).join("")}</ul>`;
+  return `
+  <details class="disclosure account-group" data-account-group="${contractType}">
+    <summary>${label}${detected === 0 ? "" : `<span class="hint">${accountsDetectedText(detected)}</span>`}</summary>
+    <div class="disclosure-body">${body}</div>
+  </details>`;
 };
 
 /**
@@ -255,20 +287,17 @@ const candidateRow = (candidate: LedgerCandidate, selected: readonly number[]): 
  */
 export const ledgerAccountPicker = (
   candidates: readonly LedgerCandidate[],
-  selected: readonly number[] = [],
+  selected: readonly string[] = [],
   message?: string,
 ): string => {
-  const list =
-    candidates.length === 0
-      ? emptyState("No accounts read from the device yet.")
-      : `<ul class="allowance-list">${candidates.map((candidate) => candidateRow(candidate, selected)).join("")}</ul>`;
+  const list = `${candidateGroup("openzeppelin", candidates, selected)}${candidateGroup("argent", candidates, selected)}`;
   const count = selected.length;
   const addLabel = count > 0 ? `Add selected (${count})` : "Add selected";
   return `
   <div class="onboard-picker">
     <div class="gate-head">
       <h1>Select accounts</h1>
-      <p class="lede">Pick the accounts to add. Each address is read straight from your device.</p>
+      <p class="lede">Pick the accounts to add. Each address is read straight from your device, and accounts with on-chain activity are selected automatically.</p>
     </div>
     ${message ? `<p class="review-flag" role="alert">${escapeHtml(message)}</p>` : ""}
     ${list}

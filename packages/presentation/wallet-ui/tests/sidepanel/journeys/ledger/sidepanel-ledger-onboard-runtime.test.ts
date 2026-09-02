@@ -46,20 +46,31 @@ const enumerateClient: LedgerDeviceClient = {
   signHash: () => Promise.reject(new Error("unused")),
 };
 
-const candidate = (index: number): LedgerAccountRef => ({
-  accountContractType: "openzeppelin",
-  address: `0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  derivation: {
-    accountIndex: index,
-    eip2645application: "LedgerW",
-    kind: "ledger",
-    path: ledgerAccountPath(index),
-  },
-  id: `SN_MAIN:0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
-  networkId: "SN_MAIN",
-  publicKeyX: `0x${index + 1}`,
-});
+const candidate = (
+  index: number,
+  accountContractType: "argent" | "openzeppelin" = "openzeppelin",
+): LedgerAccountRef => {
+  const address = `0x${accountContractType === "argent" ? "e" : ""}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`;
+  return {
+    ...(accountContractType === "argent"
+      ? ({ accountContractType, deploymentSalt: "0x1" } as const)
+      : ({ accountContractType } as const)),
+    address,
+    classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    derivation: {
+      accountIndex: index,
+      eip2645application: "LedgerW",
+      kind: "ledger",
+      path: ledgerAccountPath(index),
+    },
+    id: `SN_MAIN:${address}`,
+    networkId: "SN_MAIN",
+    publicKeyX: `0x${index + 1}`,
+  };
+};
+
+const idOf = (index: number, accountContractType: "argent" | "openzeppelin" = "openzeppelin") =>
+  candidate(index, accountContractType).id;
 
 const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
   document.body.replaceChildren();
@@ -109,8 +120,8 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
       return Promise.resolve();
     },
     wallet: {
-      deriveLedgerAccounts: (_networkId, entries) =>
-        Promise.resolve(entries.map((entry) => candidate(entry.accountIndex))),
+      deriveLedgerAccounts: (_networkId, entries, accountContractType) =>
+        Promise.resolve(entries.map((entry) => candidate(entry.accountIndex, accountContractType))),
     },
     ...overrides,
   });
@@ -163,9 +174,9 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
     // One page (5) of selectable candidates rendered.
-    expect(toggleCount(h.mount)).toBe(5);
+    expect(toggleCount(h.mount)).toBe(10);
 
-    check(h.mount, '[data-ledger-toggle="1"]');
+    check(h.mount, `[data-ledger-toggle="${idOf(1)}"]`);
     click(h.mount, "[data-ledger-add-selected]");
     await tick();
     expect(h.added).toEqual([["SN_MAIN", 1, candidate(1).publicKeyX]]);
@@ -190,16 +201,16 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    expect(toggleCount(h.mount)).toBe(5);
-    expect(h.mount.querySelector('[data-ledger-toggle="4"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-ledger-toggle="5"]')).toBeNull();
+    expect(toggleCount(h.mount)).toBe(10);
+    expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(4)}"]`)).not.toBeNull();
+    expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(5)}"]`)).toBeNull();
 
     click(h.mount, "[data-ledger-load-more]");
     await tick();
     // Page 2 (indexes 5-9) is appended to the existing page (indexes 0-4).
-    expect(toggleCount(h.mount)).toBe(10);
+    expect(toggleCount(h.mount)).toBe(20);
     for (let index = 5; index <= 9; index += 1) {
-      expect(h.mount.querySelector(`[data-ledger-toggle="${index}"]`)).not.toBeNull();
+      expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(index)}"]`)).not.toBeNull();
     }
     // The first page used the gesture-gated picker; "Show more" reconnected the
     // already-granted device silently rather than prompting again.
@@ -234,7 +245,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, '[data-ledger-device="second"]');
     await tick();
     expect(openedId).toBe("second");
-    expect(toggleCount(h.mount)).toBe(5);
+    expect(toggleCount(h.mount)).toBe(10);
   });
 
   test("Add selected adds exactly the checked accounts, in order", async () => {
@@ -243,8 +254,8 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
 
-    check(h.mount, '[data-ledger-toggle="2"]');
-    check(h.mount, '[data-ledger-toggle="0"]');
+    check(h.mount, `[data-ledger-toggle="${idOf(2)}"]`);
+    check(h.mount, `[data-ledger-toggle="${idOf(0)}"]`);
     click(h.mount, "[data-ledger-add-selected]");
     await tick();
     expect(h.added).toEqual([
@@ -278,7 +289,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    expect(toggleCount(h.mount)).toBe(5);
+    expect(toggleCount(h.mount)).toBe(10);
     expect(h.mount.querySelector("[data-ledger-onboard-cancel]")).not.toBeNull();
 
     click(h.mount, "[data-ledger-onboard-cancel]");

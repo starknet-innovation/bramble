@@ -17,9 +17,14 @@ import {
   ledgerReadingPrompt,
 } from "../../../../src/sidepanel/journeys/ledger/onboard-views";
 
-const candidateAccount = (index: number): LedgerAccountRef => ({
-  accountContractType: "openzeppelin",
-  address: `0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
+const candidateAccount = (
+  index: number,
+  accountContractType: "argent" | "openzeppelin" = "openzeppelin",
+): LedgerAccountRef => ({
+  ...(accountContractType === "argent"
+    ? ({ accountContractType, deploymentSalt: "0x1" } as const)
+    : ({ accountContractType } as const)),
+  address: `0x${accountContractType === "argent" ? "e" : ""}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
   derivation: {
     accountIndex: index,
@@ -27,7 +32,7 @@ const candidateAccount = (index: number): LedgerAccountRef => ({
     kind: "ledger",
     path: ledgerAccountPath(index),
   },
-  id: `SN_MAIN:0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
+  id: `SN_MAIN:0x${accountContractType === "argent" ? "e" : ""}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
   networkId: "SN_MAIN",
   publicKeyX: `0x${index + 1}`,
 });
@@ -99,15 +104,31 @@ describe("onboarding views", () => {
     expect(ledgerAccountPicker([])).toContain('class="onboard-picker"');
   });
 
-  test("the picker shows address, deployed status, balance, and a selectable row", () => {
+  test("the picker groups candidates by contract family with detected counts", () => {
     const candidates: LedgerCandidate[] = [
       { account: candidateAccount(0), balance: "1.5 STRK", deployed: true, duplicate: false },
+      {
+        account: candidateAccount(0, "argent"),
+        balance: "0 STRK",
+        deployed: false,
+        duplicate: false,
+      },
     ];
-    const html = ledgerAccountPicker(candidates, [0]);
+    const html = ledgerAccountPicker(candidates, [candidateAccount(0).id]);
+    expect(html).toContain('data-account-group="openzeppelin"');
+    expect(html).toContain('data-account-group="argent"');
+    expect(html).toContain("Bramble accounts");
+    expect(html).toContain("Ready accounts");
+    // Only the active Bramble candidate counts as detected.
+    expect(html).toContain("1 account detected");
     expect(html).toContain("Account 0");
     expect(html).toContain("Deployed");
     expect(html).toContain("1.5 STRK");
-    expect(html).toContain('data-ledger-toggle="0"');
+    expect(html).toContain(`data-ledger-toggle="${candidateAccount(0).id}"`);
+    // The idle Ready candidate is listed but not selectable.
+    expect(html).toMatch(
+      new RegExp(`data-ledger-toggle="${candidateAccount(0, "argent").id}"[^>]*disabled`),
+    );
     expect(html).toContain("Add selected (1)");
     expect(html).toContain("data-ledger-load-more");
     expect(html).toContain("data-ledger-add-selected");

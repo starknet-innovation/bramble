@@ -8,7 +8,7 @@ import { isRecoveryAccountIndex, RECOVERY_SCAN_LIMITS } from "@bramble/wallet-mo
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { accountLabel } from "../../shared/parts";
+import { accountLabel, accountsDetectedText } from "../../shared/parts";
 
 type RecoveryAccountUiDeps = {
   readonly form: HTMLFormElement;
@@ -50,7 +50,8 @@ const selectable = (candidate: RecoveryAccountCandidate): boolean =>
 
 /** Binds and runs the recovery account picker without retaining the phrase. */
 export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAccountUi => {
-  const list = deps.form.querySelector<HTMLUListElement>("#recovery-account-list");
+  const groupFor = (contractType: "argent" | "openzeppelin"): HTMLDetailsElement | null =>
+    deps.form.querySelector<HTMLDetailsElement>(`[data-recovery-group="${contractType}"]`);
   const status = deps.form.querySelector<HTMLElement>("#recovery-scan-status");
   const result = deps.form.querySelector<HTMLElement>("#recovery-accounts-result");
   const retry = deps.form.querySelector<HTMLButtonElement>("#recovery-scan-retry");
@@ -72,43 +73,64 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     if (restore) restore.disabled = selected.size === 0 || !acknowledgement?.checked;
   };
 
+  const candidateRow = (candidate: RecoveryAccountCandidate): HTMLLIElement => {
+    const key = selectionKey(selectionFor(candidate));
+    const row = deps.form.ownerDocument.createElement("li");
+    row.className = "allowance-row";
+    const label = deps.form.ownerDocument.createElement("label");
+    label.className = "select-row";
+    const checkbox = deps.form.ownerDocument.createElement("input");
+    checkbox.className = "select-check";
+    checkbox.type = "checkbox";
+    checkbox.disabled = !selectable(candidate);
+    checkbox.checked = selected.has(key);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) selected.add(key);
+      else selected.delete(key);
+      refreshGate();
+    });
+    const copy = deps.form.ownerDocument.createElement("span");
+    copy.className = "allowance-copy";
+    const title = deps.form.ownerDocument.createElement("strong");
+    title.textContent = `Account ${candidate.account.derivation.accountIndex}`;
+    const address = deps.form.ownerDocument.createElement("code");
+    address.textContent = accountLabel(candidate.account.address);
+    address.title = candidate.account.address;
+    const hint = deps.form.ownerDocument.createElement("span");
+    hint.className = "hint";
+    hint.textContent = candidateState(candidate);
+    copy.append(title, address, hint);
+    label.append(checkbox, copy);
+    row.append(label);
+    return row;
+  };
+
+  // Rebuilds only each group's inner list and detected-count, leaving the
+  // <details> shells (and the user's open/closed choices) untouched. A group
+  // opens itself the first time detected activity appears in it.
+  const autoOpened = new Set<string>();
   const renderCandidates = (): void => {
-    list?.replaceChildren();
-    for (const candidate of [...candidates].sort(
-      (left, right) =>
-        left.account.derivation.accountIndex - right.account.derivation.accountIndex ||
-        right.account.accountContractType.localeCompare(left.account.accountContractType),
-    )) {
-      const selection = selectionFor(candidate);
-      const key = selectionKey(selection);
-      const row = deps.form.ownerDocument.createElement("li");
-      row.className = "allowance-row";
-      const label = deps.form.ownerDocument.createElement("label");
-      label.className = "select-row";
-      const checkbox = deps.form.ownerDocument.createElement("input");
-      checkbox.className = "select-check";
-      checkbox.type = "checkbox";
-      checkbox.disabled = !selectable(candidate);
-      checkbox.checked = selected.has(key);
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) selected.add(key);
-        else selected.delete(key);
-        refreshGate();
-      });
-      const copy = deps.form.ownerDocument.createElement("span");
-      copy.className = "allowance-copy";
-      const title = deps.form.ownerDocument.createElement("strong");
-      title.textContent = `${candidate.account.accountContractType === "argent" ? "Ready" : "Bramble"} account ${selection.accountIndex}`;
-      const address = deps.form.ownerDocument.createElement("code");
-      address.textContent = accountLabel(candidate.account.address);
-      address.title = candidate.account.address;
-      const hint = deps.form.ownerDocument.createElement("span");
-      hint.className = "hint";
-      hint.textContent = candidateState(candidate);
-      copy.append(title, address, hint);
-      label.append(checkbox, copy);
-      row.append(label);
-      list?.append(row);
+    for (const contractType of ["openzeppelin", "argent"] as const) {
+      const group = groupFor(contractType);
+      const listElement = group?.querySelector("ul");
+      if (!group || !listElement) continue;
+      const rows = [...candidates]
+        .filter((candidate) => candidate.account.accountContractType === contractType)
+        .sort(
+          (left, right) =>
+            left.account.derivation.accountIndex - right.account.derivation.accountIndex,
+        );
+      listElement.replaceChildren(...rows.map(candidateRow));
+      const detected = rows.filter((candidate) => candidate.deployed || candidate.funded).length;
+      const detectedSlot = group.querySelector<HTMLElement>("[data-detected]");
+      if (detectedSlot) {
+        detectedSlot.className = "hint";
+        detectedSlot.textContent = accountsDetectedText(detected);
+      }
+      if (detected > 0 && !autoOpened.has(contractType)) {
+        autoOpened.add(contractType);
+        group.open = true;
+      }
     }
     refreshGate();
   };
@@ -152,7 +174,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       if (generation !== activeGeneration) return;
       const message = errorMessage(error, "Account search paused. Check the network and retry.");
       if (status) status.textContent = message;
-      showToast(message, "error", list);
+      showToast(message, "error", deps.form);
     } finally {
       scanning = false;
       buttonBusy(activeButton, false);

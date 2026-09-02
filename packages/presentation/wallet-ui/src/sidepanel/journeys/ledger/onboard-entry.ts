@@ -32,11 +32,7 @@ import type { LedgerConnector } from "./sign-session";
 export type LedgerOnboardEntry = {
   readonly bindTriggers: (app: Element | null) => void;
   readonly startAddAccount: () => void;
-  readonly startLedgerSetup: (
-    networkId: string,
-    vaultPassphrase: string,
-    accountContractType: AccountContractType,
-  ) => void;
+  readonly startLedgerSetup: (networkId: string, vaultPassphrase: string) => void;
 };
 
 /**
@@ -61,7 +57,6 @@ export const createLedgerOnboardEntry = (deps: {
 }): LedgerOnboardEntry => {
   const { addHd, cache, connector, mount, openImport, openMultisig, refresh, wallet } = deps;
   let ledgerSetup: {
-    readonly accountContractType: AccountContractType;
     readonly networkId: string;
     readonly vaultPassphrase: string;
   } | null = null;
@@ -76,7 +71,7 @@ export const createLedgerOnboardEntry = (deps: {
         account.derivation.accountIndex,
         account.publicKeyX,
         setup.vaultPassphrase,
-        setup.accountContractType,
+        account.accountContractType,
       );
       ledgerSetup = null;
       return;
@@ -112,9 +107,9 @@ export const createLedgerOnboardEntry = (deps: {
   return {
     bindTriggers: (app) => runtime.bindTriggers(app),
     startAddAccount: () => runtime.startAddAccount(),
-    startLedgerSetup: (networkId, vaultPassphrase, accountContractType) => {
-      ledgerSetup = { accountContractType, networkId, vaultPassphrase };
-      runtime.start(accountContractType);
+    startLedgerSetup: (networkId, vaultPassphrase) => {
+      ledgerSetup = { networkId, vaultPassphrase };
+      runtime.start();
     },
   };
 };
