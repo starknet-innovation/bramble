@@ -26,7 +26,12 @@ displays what it signs. Its only powers are censorship and metadata.
 Implementation order:
 
 1. **Manual copy/paste.** A base64url string out, a base64url string back. Keep it permanently: it
-   is the only transport that runs in CI with no phone, no relay, and no Bluetooth.
+   is the only transport that runs in CI with no phone, no relay, and no Bluetooth. **Built.**
+   Pairing is base64url JSON in both directions; signing is asymmetric — a base64url JSON envelope
+   out, a bare `0x` hex signature back — because the reply needs no correlation id when the panel is
+   showing exactly one request and owns the cancel. The phone's key selection matches on the
+   enrolled public key the envelope names, and `networkId` in the envelope is what lets it refuse a
+   chain its key was not registered against.
 2. **Relay.** Needs no tab, no device chooser, no user gesture, and no permission — it runs
    straight from the side panel, which nothing else on this list can claim.
 3. **BLE.** `packages/platform/ledger-browser` already owns a Web Bluetooth transport. Deferred
@@ -61,10 +66,18 @@ keeps the pairing QR at a fixed ~100 bytes regardless of transaction size.
 
 ## Part 3 — Mobile app
 
-**Now the critical path.** As of 2026-08-31 the wallet side is done — enrollment, the sign queue, the
-takeover, the verify gate, address derivation, the 1830-felt calldata, fee estimation without a
-biometric prompt, and deployment — all exercised end to end with `py/account_tool.py` standing in for
-the phone. Nothing in the extension is waiting on mobile code. This is where the work moves next.
+**Built, on both platforms, as of 2026-09-02.**
+[`keep-starknet-strange/pq-signer`](https://github.com/keep-starknet-strange/pq-signer): Kotlin
+Multiplatform with Compose Multiplatform, one shared implementation of the wire formats, key
+selection and UI, and `expect`/`actual` only where the hardware differs.
+
+Kotlin Multiplatform was not a preference. `SecureEnclave.MLDSA65` is CryptoKit, which is
+Swift-only, so the iOS key path cannot be shared with anything — and once that is true, the choice is
+between sharing the *rest* or writing it twice. What is per-platform is exactly the hardware seam:
+key generation, the authentication prompt, and the keystore/keychain metadata beside each key.
+
+The whole ceremony runs by clipboard: pair, deploy, send, sign. `py/account_tool.py` remains the
+fixture path, and is still how the wallet is tested with no device attached.
 
 ### The contract the phone has to meet
 
@@ -86,31 +99,46 @@ return 3309 bytes.
 The wallet verifies every response against the enrolled public key before broadcast, so a wrong key,
 a wrong hash, or a non-empty context surfaces as a refusal rather than a failed transaction.
 
+### The mobile crypto surface
+
+The phone does not use `packages/kms-c`. It has its own C ABI —
+**`crates/ffi-mobile`** in krusty-kms, library `kms_mobile`, five functions over public material
+only: an ABI version, an error reader, the ML-DSA key commitment, the account address, and a
+signature verifier. A separate crate rather than a widened `crates/ffi` because that one is
+`cdylib`-only (iOS needs a `staticlib`) and because a signer that never handles a private key should
+not link an ABI that can derive one.
+
+It packages itself: `./crates/ffi-mobile/build-mobile.sh` produces an XCFramework with device and
+simulator slices, and the Android library in `jniLibs` layout. The app's Gradle build invokes that
+script and knows no cargo target triple. Kotlin reaches it through cinterop on iOS and JNA on
+Android — chosen over a JNI shim because the surface is small enough to transcribe and it needs no
+CMake or NDK build step.
+
 ### The one upstream dependency
 
-Transaction-hash functions are exposed through krusty-kms's **WASM** surface but not its **C ABI**:
-`packages/kms-c/include/kms.h` offers `kms_pedersen_hash` and `kms_poseidon_hash_many` and nothing
-else relevant. Until `compute_invoke_v3_hash` and friends are added there, the phone can only
-blind-sign — it can display a hash it was handed but cannot prove that hash belongs to the
+**Transaction-hash functions.** `kms_mobile.h` derives an address and verifies a signature; it
+cannot compute an invoke-v3 hash. Until `compute_invoke_v3_hash` and friends are added, the phone
+can only blind-sign — it can display a hash it was handed but cannot prove that hash belongs to the
 transaction shown, which is the entire point of a trusted display.
 
-**This is the mobile track's first task.** Adding to `kms.h` trips krusty-kms's
-`ffi-kms.h.snapshot` guardrail and needs a dated note in its `docs/design/` format; the ML-DSA
-module that landed on 2026-08-31 is a worked example of both.
+**This is the mobile track's next task.** It trips krusty-kms's `ffi-kms_mobile.h.snapshot`
+guardrail and needs a dated note in its `docs/design/` format; `2026-09-01-mobile-c-abi.md` is the
+worked example of both, and its *Distribution* section is where the packaging decision is recorded.
 
-What this app adds is the part a fixture cannot: a key that is non-exportable because the hardware
-says so, and signing gated on a biometric because the platform enforces it. Those are claims about
-devices, not about the wallet — which is why they are validated now that the extension works, rather
-than before.
+Scope, as built:
 
-Scope:
-
-- Key generation via `SecureEnclave.MLDSA65` with `init(accessControl:)` and
-  `.biometryCurrentSet`, or Android `KeyPairGenerator` with `setUserAuthenticationRequired(true)`
-  and `setInvalidatedByBiometricEnrollment(true)`.
-- A local key list with stable identifiers. No HD enumeration exists.
-- Receive envelope, recompute the transaction hash through the krusty-kms FFI, display,
-  authenticate, sign, return.
+- Key generation via `SecureEnclave.MLDSA65(accessControl:)` with `[.privateKeyUsage,
+  .userPresence]`, or Android `KeyPairGenerator` with `setUserAuthenticationRequired(true)` and
+  `setUserAuthenticationParameters(0, AUTH_BIOMETRIC_STRONG | AUTH_DEVICE_CREDENTIAL)`. Every
+  signature demands a fresh authentication, satisfied by biometry **or** the device passcode.
+  `.biometryCurrentSet` and `setInvalidatedByBiometricEnrollment` were considered and **rejected**:
+  they destroy the key when the enrolled biometric set changes, and with no recovery path a user
+  adding a second fingerprint would lose the account.
+- A local key list with stable identifiers, creation and last-used times, and the network the key
+  was registered against. No HD enumeration exists.
+- Receive the envelope, select the key by its enrolled public key, display the account and the hash,
+  authenticate, sign, return. Recomputing the hash arrives with the dependency above.
+- Deleting a key, behind a confirmation that says plainly that the account becomes unspendable.
 - The app must be open and foregrounded to receive a request. Waking it would require push
   notifications, which would reintroduce a central server.
 
@@ -126,7 +154,21 @@ Scope:
 >   timeout the extension's queue uses must be one agreed number, or one side gives up while the other
 >   waits.
 
-**Open before implementation:** which platform ships first, and which hardware actually supports
-enclave-backed ML-DSA. Apple's documentation gives an OS floor of 26.0+ but secondary sources
-hedge with "supported hardware," and `SecureEnclave.isAvailable` is a runtime check for the
-enclave generally, not for ML-DSA. A one-day probe on real devices answers it.
+### Answered by hardware · both platforms work, and the floor is the OS
+
+Measured on a **Pixel 8 Pro (Android 17, API 37)** and an **iPhone SE 3rd generation, A15 (iOS
+26.6)** — deliberately the oldest supported iPhone, because the question was whether ML-DSA needs
+newer silicon. It does not: the floor is the OS version, not the chip.
+
+| | |
+| --- | --- |
+| Android | every Keystore configuration reported `SECURITY_LEVEL_TRUSTED_ENVIRONMENT` with `privateKey.encoded == null`. **StrongBox cannot hold an ML-DSA key** — `setIsStrongBoxBacked(true)` fails keygen with `ProviderException`, so TEE is Android's ceiling for this algorithm |
+| iOS | every Secure Enclave configuration produced a 1952-byte public key. `.privateKeyUsage` is mandatory and omitting it *denies* rather than gates: `[.userPresence]` alone reports "Operation is not allowed" |
+| Both | ungated keys signed 3309 bytes that verified; every gated key refused to sign without authentication |
+| Emulators | neither can gate a key. The iOS Simulator makes a genuine enclave key but any biometry-constrained access control fails with LocalAuthentication `-1020`, regardless of enrolment — so a Simulator build drops the gate and labels such keys |
+
+One trap worth carrying across: **`KeyGenParameterSpec` drops inconsistent options silently, and
+always in the permissive direction.** `setUserAuthenticationParameters` without
+`setUserAuthenticationRequired(true)` discards the entire parameter set, leaving a key that signs
+with no prompt while the source reads as protected. The app reads `KeyInfo` back and destroys a key
+the platform did not configure as asked.

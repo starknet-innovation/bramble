@@ -44,13 +44,19 @@ then it is developed locally against a working tree rather than a pinned commit.
 | --- | --- | --- | --- |
 | **M0** | Plumbing spike. Mobile app plus copy/paste transport driving the *existing* `signStarkHash` against an ordinary OZ account on Sepolia. | No | The round trip, the sign queue, the approval UI. Zero refactor anywhere. Delete afterwards. |
 | **M1** | Real ML-DSA, blind, **no phone**. Fixture keys, real 1952/3309-byte payloads, clipboard transport, JSON envelope, stub devnet account. | **No** | Every size-driven refactor in Part 1, against real numbers. |
+| **M1.5** | The real phone, still blind. Hardware keys on both platforms, clipboard transport, the full ceremony with no fixture. | Yes — key commitment, address, verify in a mobile C ABI | That the security story holds on real devices. **Closed.** |
 | **M2** | Phone recomputes the transaction hash. | Yes — tx-hash in the C ABI | The trusted display. **This is where the work is now.** |
 | **M3** | Hardening for review: CBOR codec in Rust, relay transport, `check:krusty` reconciled against a pushed commit. | Yes | PR readiness. |
 
-**M0 was skipped and M1 is closed.** M1 turned out to need no phone at all, which made the throwaway
+**M0 was skipped; M1 and M1.5 are closed.** M1 turned out to need no phone at all, which made the throwaway
 rehearsal in M0 worthless. The crypto that M3 was going to carry — key expansion, commitment,
 verifier, hints — was pulled forward and landed in krusty-kms on 2026-08-31, so M2 is the only
-milestone with an open upstream dependency, and it is a mobile one.
+milestone with an open upstream dependency, and it is a mobile one. M1.5 was not in the original
+plan: it exists because a real phone turned out to be buildable against a blind-signing contract,
+which decoupled "does the hardware do what we claim" from "can the phone prove what it signs".
+
+M3's `check:krusty` item is also closed — the pin now points at a commit on the public krusty
+branch, so `bun run vendor:krusty` works on any machine.
 
 M1 is the milestone that matters. It exercises the widened signature type, the account contract
 family, the vault migration, the queue, and the message-shape validators — the entire risky half of
@@ -79,12 +85,43 @@ sake — without it a reinstall is indistinguishable from losing the phone — s
 also the fixture path. That is the same reason the clipboard transport is kept permanently rather
 than deleted after M1.
 
-**What the phone is still needed for** is validating the claims a fixture cannot: that the enclave
-key is genuinely non-exportable, that the biometric gate is platform-enforced, and which hardware
-supports enclave-backed ML-DSA at all. None of that is wallet code, and all of it can follow a
-working extension.
+**What the phone was still needed for** was validating the claims a fixture cannot: that the enclave
+key is genuinely non-exportable, that the gate is platform-enforced, and which hardware supports
+enclave-backed ML-DSA at all. All three are now measured on real devices — see
+[Parts 2 and 3](transport-and-mobile/). None of it was wallet code, which is why it followed a
+working extension rather than blocking one.
 
-### Where this stands · 2026-08-31
+### Where this stands · 2026-09-02
+
+**The phone exists, and the whole ceremony runs on real hardware.** The signer lives in
+[`keep-starknet-strange/pq-signer`](https://github.com/keep-starknet-strange/pq-signer) — Kotlin
+Multiplatform, one shared implementation of the wire formats and key selection, with
+`SecureEnclave.MLDSA65` on iOS and Android Keystore `ML-DSA` behind `expect`/`actual`. Pair, deploy,
+send, sign, all by clipboard, with the extension verifying every signature before broadcast.
+
+Four repositories are now involved. `.claude/skills/pq-wallet-ceremony/` in the pq-signer repo is
+the shareable setup and troubleshooting guide for running it end to end.
+
+What closed since 2026-08-31:
+
+| | |
+| --- | --- |
+| The mobile app | built for both platforms, on device. Hardware ML-DSA keys, per-use authentication, key deletion behind a confirmation |
+| Hardware claims | measured on a Pixel 8 Pro (Android 17) and an iPhone SE 3 (iOS 26.6): non-exportable, platform-gated, `TRUSTED_ENVIRONMENT` on Android and Secure Enclave on iOS |
+| Key protection | settled and implemented: authenticate per signature, satisfied by biometry **or** the device passcode. Binding to the enrolled biometric set was rejected — with no recovery path, adding a fingerprint would strand the account |
+| The class hash | **no longer pasted.** Pinned in the wallet and independently in the phone, which is what makes a derivation mismatch surface as two different addresses instead of one wrong one |
+| Mobile crypto surface | a second, narrow C ABI — `crates/ffi-mobile` in krusty-kms, five functions over public material only, packaging its own XCFramework and jniLibs |
+| The krusty pin | a pushed commit on a public branch, so `bun run vendor:krusty` no longer needs a local checkout |
+| Chain binding | the sign envelope carries `networkId`, so the phone refuses a chain its key was not registered against |
+| The public send | the ERC-20 transfer path now forwards the ML-DSA calldata builders — it was the one submit path that did not, and it failed *after* the user approved a fee |
+
+What the sign handoff looks like now: the panel leads with the **request** to copy and demotes the
+hash to a value you compare by eye, because the phone rejects a bare hash and a copy control beside
+one was an invitation to paste the wrong thing. The round trip is asymmetric — an envelope goes out,
+a bare `0x` signature comes back — because the panel is showing exactly one request and owns the
+cancel.
+
+### Where this stood · 2026-08-31
 
 Built, tested, and exercised end to end against a locally declared build of the real account
 contract — no stub, and no phone.
@@ -102,17 +139,20 @@ contract — no stub, and no phone.
 
 What is **not** done, in the order it blocks things:
 
-1. **Transaction-hash functions in the C ABI** (`packages/kms-c/include/kms.h`). Until this exists the
-   phone can only blind-sign, so its approval screen cannot prove the hash belongs to the transaction
-   shown. **This is the mobile track's first task**, and nothing in the wallet waits on it.
-2. **The mobile app.** Nothing of it exists yet.
-3. **The enrollment challenge lives in service-worker memory**, so it dies while the user is on their
-   phone. It belongs in `chrome.storage.session`. Small, and it shapes how long a phone-side flow may
-   take.
-4. **The pinned krusty revision is a local commit.** `bun run vendor:krusty` therefore fails on any
-   other machine and in CI until the krusty branch is pushed and the pin re-pointed.
-5. **The account class has no reviewed release**, so enrollment still asks for a class hash and the
-   contract stays off Sepolia and mainnet.
+1. **Transaction-hash functions in the mobile C ABI** (`crates/ffi-mobile/include/kms_mobile.h`).
+   Until they exist the phone can only blind-sign, so its approval screen cannot prove the hash
+   belongs to the transaction shown. **This is the mobile track's next task**, and nothing in the
+   wallet waits on it.
+2. **The enrollment challenge lives in service-worker memory**, so it can die while the user is on
+   their phone. It belongs in `chrome.storage.session`. Small, and it shapes how long a phone-side
+   flow may take.
+3. **The account class has no reviewed release**, so the contract stays off Sepolia and mainnet. The
+   class hash is pinned either way — a release changes who has reviewed it, not who types it.
+4. **The envelope codec is still hand-written on both sides.** JSON, in TypeScript and in Kotlin.
+   Moving it to Rust deletes one of those two and the `alwaysUseByteString` trap with it, and is the
+   point at which UniFFI or Gobley is worth re-evaluating.
+5. **Android's FFI parity vector is not pinned.** iOS has one; Android's home is an instrumented
+   test, because the KMP library plugin cannot package the `.so` into a library test APK.
 
 > **Handing over to the mobile track**
 >
@@ -158,19 +198,30 @@ The one flow that crosses every part. Specified once here so no part describes o
 9. Phone signs — the second biometric prompt of onboarding.
 10. Extension verifies, broadcasts, and marks the account deployed.
 
-**All ten steps run today**, with `account_tool.py` standing in for the phone at steps 3, 4 and 9.
-The deploy transaction is validated by the account's own key, so **the device signs twice during
-onboarding**: once for the proof of possession and once for the deployment.
+**All ten steps run today on a real phone.** `py/account_tool.py` remains the fixture path and the
+oracle — it is how the wallet is tested with no device attached — but steps 3, 4 and 9 are now done
+by hardware. The deploy transaction is validated by the account's own key, so **the device
+authenticates twice during onboarding**: once for the proof of possession and once for the
+deployment.
 
-> **One value is still pasted, and it is temporary**
+> **Nothing about the account is pasted any more**
 >
-> The **class hash**, because the contract has no reviewed release to pin. When it has one, that
-> becomes a constant beside the OpenZeppelin and Argent pins and the field disappears.
+> Three fields have disappeared from enrollment, in this order. The `key_hash` from `deploy-data`
+> went first: the wallet derives the commitment itself, and it is deliberately *not* stored on the
+> record either, because a stored copy would be a second source of truth. The record's `publicKeyX`
+> *is* that commitment, and the vault refuses any record where it disagrees with the stored key.
 >
-> A second field used to be pasted — the `key_hash` from `deploy-data` — and it is gone, because the
-> wallet derives the commitment itself. It is deliberately *not* stored on the account record either:
-> a stored copy would be a second source of truth. The record's `publicKeyX` *is* that commitment,
-> and the vault refuses any record where it disagrees with the stored public key.
+> The **class hash** went next — pinned as `ML_DSA_ACCOUNT_CLASS_HASH` beside the OpenZeppelin and
+> Argent constants, ahead of a reviewed release, because a class hash a user types is a class hash a
+> user can get wrong, and getting it wrong derives an address nobody can spend from. The phone pins
+> the same value independently, so the two deriving differently shows up as two different addresses
+> on two screens rather than as silent agreement on the wrong one.
+>
+> The **public key and the signature** went last: the app's reply carries the device name, the key
+> and the proof of possession as one value, so the form asks for one paste rather than four.
+>
+> What is still pasted is the *transport* — a base64url string in each direction — and that is the
+> transport, not a parameter.
 
 Steps 5 and 8 are the two most commonly omitted. The deploy transaction is validated by the
 account's own key, so the phone signs twice during onboarding.

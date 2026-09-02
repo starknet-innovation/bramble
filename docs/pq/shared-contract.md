@@ -254,8 +254,9 @@ krusty-kms is vendored into this repository at a pinned commit
 | Change | Where | Status | Why |
 | --- | --- | --- | --- |
 | ML-DSA key expansion, commitment, verify, SZ hints, estimation dummy | `crates/crypto/src/ml_dsa/` + `crates/wasm/src/ml_dsa.rs` | **landed** | Replaced `ml-dsa-core.ts` / `ml-dsa-math.ts`, both now deleted |
-| Transaction-hash functions | `packages/kms-c/include/kms.h` | **outstanding — the mobile blocker** | The phone cannot recompute a hash; until then it blind-signs whatever it is handed |
-| Envelope types + CBOR codec | new module, WASM and C ABI | outstanding | One serializer shared by both consumers |
+| Mobile C ABI: commitment, address, verify | `crates/ffi-mobile/` (new crate) | **landed** | The phone's own surface: public material only, `staticlib` for iOS, packages its own XCFramework and jniLibs |
+| Transaction-hash functions | `crates/ffi-mobile/include/kms_mobile.h` | **outstanding — the mobile blocker** | The phone cannot recompute a hash; until then it blind-signs whatever it is handed |
+| Envelope types + CBOR codec | new module, WASM and C ABI | outstanding | One serializer shared by both consumers, retiring two hand-written JSON codecs |
 
 ### What landed
 
@@ -412,7 +413,9 @@ vectors still reproduce (a reference mnemonic, address, public key, signature an
 
 Earlier revisions of this document proposed an `MC_KRUSTY_LOCAL=1` escape that skipped the three
 provenance gates and kept the vectors. **It was never built, and it turned out not to be needed.**
-Pinning to a local commit satisfies all four gates honestly:
+Pinning to a commit satisfies all four gates honestly. **Since 2026-09-02 the pin is a pushed
+commit on the public krusty branch**, so `bun run vendor:krusty` fetches it from GitHub with no
+local checkout and works in CI. The recipe below is for iterating on krusty *before* pushing.
 
 ```bash
 # 1. commit in your krusty-kms working tree; any branch is fine
@@ -456,11 +459,11 @@ forgetting.
 
 ### The mobile side has none of this
 
-`libkms` builds straight from the same local checkout with `cargo build`; there is no vendoring,
-no pin, and no digest. `packages/kms-c/include/kms.h` is checked in, so adding functions there is
-picked up by the Swift and Kotlin wrappers immediately. krusty-kms's own
-`ffi-kms.h.snapshot` guardrail will complain, but that is that repo's CI and does not block local
-work.
+No vendoring, no pin, and no digest. The phone consumes artefacts:
+`crates/ffi-mobile/build-mobile.sh` writes an XCFramework and a `jniLibs` tree, and the app's Gradle
+build invokes that script when the Rust changed — so a krusty edit reaches the phone by rebuilding
+the app, and no part of that build knows a cargo triple. Adding functions trips krusty-kms's
+`ffi-kms_mobile.h.snapshot` guardrail and wants a dated design note — that repo's CI, not this one.
 
 ### Reconciling at PR time
 

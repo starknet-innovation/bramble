@@ -304,11 +304,14 @@ screen at once, in one `handoff` phase, with `submitting` and `error` around it.
 the Ledger's nine, because there is no device discovery, no transport to open, and no app version to
 check.
 
-Two details are load-bearing rather than cosmetic. The hash renders at full padded width in *every*
-phase: the phone blind-signs at this milestone, so this screen is the only place a user can see what
-a signature commits to. And a paste that is not a well-formed ML-DSA-65 signature is refused in the
-controller, before the round trip — otherwise it reaches the verify gate and comes back as
-*"verification failed"*, which is what a wrong device looks like.
+Three details are load-bearing rather than cosmetic. The hash renders at full padded width in
+*every* phase: the phone blind-signs at this milestone, so this screen is the only place a user can
+see what a signature commits to. A paste that is not a well-formed ML-DSA-65 signature is refused in
+the controller, before the round trip — otherwise it reaches the verify gate and comes back as
+*"verification failed"*, which is what a wrong device looks like. And the screen is ordered by what
+the user has to **do**: the request to copy leads, in its own block, and the hash below it carries no
+copy control at all. It had one once, next to a value the app rejects — a copy button beside the
+wrong thing is not a convenience, it is a trap.
 
 The `mobile-pq-sign` ui-lab scenario renders all three states against a fixture carrying a real
 1952-byte key and a real envelope. That is deliberate: a stubbed short key makes the copy affordance
@@ -320,9 +323,12 @@ of possession → derive the address from the key commitment → fund → deploy
 the commitment is computed from the public key through krusty-kms, and a deploy-then-transfer cycle
 has been driven end to end against a locally declared build of the account contract.
 
-The enrollment form asks for four things: a device label, the 1952-byte public key, the class hash,
-and the signed challenge. It used to ask for a fifth — the `key_hash` — which is gone, because the
-wallet now derives that commitment itself. That field's removal is the visible half of the port.
+The enrollment form now asks for **one** value: the app's reply, which carries the device name, the
+1952-byte public key and the signature over the challenge together. It once asked for five. The
+`key_hash` went when the wallet started deriving the commitment itself; the class hash went when it
+was pinned as `ML_DSA_ACCOUNT_CLASS_HASH`; the rest collapsed into the reply because a device that
+can produce three values can produce them in one string. Each removal deletes a way to get an
+unspendable address by typing.
 
 One rough edge remains, and it is not about crypto: **the enrollment challenge lives in
 service-worker memory.** Chrome MV3 terminates the worker after roughly 30 seconds idle, and the user
