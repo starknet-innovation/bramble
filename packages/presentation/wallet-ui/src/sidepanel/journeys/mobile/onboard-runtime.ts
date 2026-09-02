@@ -7,7 +7,7 @@
  * The rendered markup comes from the escaped, logic-free
  * {@link mobilePqEnrollScreen} template, inserted through the same parsed-fragment
  * sink the rest of the panel uses. No secret material crosses: an enrollment
- * carries a public key, a class hash, and a public signature.
+ * carries a public key and a public signature.
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -61,12 +61,7 @@ export const createMobilePqOnboardRuntime = (
       .querySelector<HTMLButtonElement>("[data-mobile-pq-enroll-submit]")
       ?.addEventListener("click", (event) => {
         event.preventDefault();
-        void controller.submit({
-          classHash: fieldValue("[data-mobile-pq-class-hash]"),
-          deviceId: fieldValue("[data-mobile-pq-device]"),
-          publicKey: fieldValue("[data-mobile-pq-public-key]"),
-          signature: fieldValue("[data-mobile-pq-pop]"),
-        });
+        void controller.submit(fieldValue("[data-mobile-pq-response]"));
       });
     mount
       .querySelector<HTMLButtonElement>("[data-mobile-pq-enroll-cancel]")
@@ -92,6 +87,7 @@ export const createMobilePqOnboardRuntime = (
     enroll: async (draft) => {
       await wallet.addMobilePqAccount({ ...draft, networkId: networkId() });
     },
+    networkId,
     onEnrolled: refresh,
     render: renderOverlay,
   });

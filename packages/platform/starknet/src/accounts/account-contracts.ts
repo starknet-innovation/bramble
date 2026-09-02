@@ -69,12 +69,12 @@ export const estimateMode = (family: AccountContractFamily): EstimateMode => EST
 // Whether this family pins the class hash deployed at its address, so a submit
 // can refuse a contract it did not expect. A full record for the same reason as
 // the one above: leniency has to be granted deliberately. OpenZeppelin's class is
-// resolved per network and the ML-DSA account contract has no pinned release yet,
-// so for both, existence at the address is the whole check.
+// resolved per network, so for it alone existence at the address is the whole
+// check.
 const PINS_DEPLOYED_CLASS: Record<AccountContractFamily, boolean> = {
   argent: true,
   "argent-multisig": true,
-  "ml-dsa": false,
+  "ml-dsa": true,
   openzeppelin: false,
 };
 

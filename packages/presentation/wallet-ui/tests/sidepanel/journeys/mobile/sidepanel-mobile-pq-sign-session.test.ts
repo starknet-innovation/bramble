@@ -27,6 +27,7 @@ const request: MobilePqSignRequestSummary = {
   deviceId: "phone-1",
   id: "mobile-pq-sign-1",
   messageHash: "0x1e240",
+  networkId: "SN_MAIN",
   publicKey: device.publicKey,
 };
 

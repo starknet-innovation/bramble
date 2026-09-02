@@ -20,6 +20,7 @@ const request: MobilePqSignRequestSummary = {
   deviceId: "phone-1",
   id: "mobile-pq-sign-7",
   messageHash: "0x1e240",
+  networkId: "SN_MAIN",
   publicKey: device.publicKey,
 };
 
@@ -42,6 +43,7 @@ describe("encodeMobilePqSignEnvelope", () => {
       correlationId: request.id,
       deviceId: request.deviceId,
       messageHash: request.messageHash,
+      networkId: "SN_MAIN",
       publicKey: request.publicKey,
       version: MOBILE_PQ_ENVELOPE_VERSION,
     });

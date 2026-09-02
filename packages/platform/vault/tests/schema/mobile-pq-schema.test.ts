@@ -21,6 +21,7 @@ import {
   VAULT_MIGRATION_STORE_KEY,
   VAULT_STORE_KEY,
 } from "@mc-wallet/vault/store-migration";
+import { ML_DSA_ACCOUNT_CLASS_HASH } from "@mc-wallet/wallet-model/accounts";
 import { canonicalFelt, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import { ML_DSA_65_PUBLIC_KEY_BYTES } from "@mc-wallet/wallet-model/signing";
 
@@ -173,26 +174,28 @@ describe("paired-phone address derivation", () => {
     });
   };
 
-  test("derives from the class hash and the expanded public key", async () => {
-    const { address, classHash } = await derive({
-      classHash: "0xabc",
-      publicKey: mobileAccount.publicKey,
-    });
-    expect(classHash).toBe("0xabc");
+  test("derives from the pinned class and the expanded public key", async () => {
+    const { address, classHash } = await derive({ publicKey: mobileAccount.publicKey });
+    expect(classHash).toBe(ML_DSA_ACCOUNT_CLASS_HASH);
     expect(canonicalFelt(address)).toBe(address);
     expect(isNonZeroStarkFieldElement(address)).toBe(true);
-    expect((await derive({ classHash: "0xabc", publicKey: mobileAccount.publicKey })).address).toBe(
-      address,
-    );
-    // The class hash and the key are the whole preimage: the commitment the
-    // constructor takes is derived from the key rather than supplied beside it,
-    // so there is no third input that could disagree with either.
+    expect((await derive({ publicKey: mobileAccount.publicKey })).address).toBe(address);
+    // The class is pinned, so the key is the only remaining input: the
+    // commitment the constructor takes is derived from it rather than supplied
+    // beside it, and there is no third value that could disagree with either.
+    expect((await derive({ publicKey: `0x${"cd".repeat(1952)}` })).address).not.toBe(address);
+  });
+
+  test("an explicit class hash is accepted only when it is the pinned one", async () => {
+    // Mirrors Argent: a caller may state the class, but stating a different one
+    // is a mistake worth failing on rather than silently honouring.
     expect(
-      (await derive({ classHash: "0xabc", publicKey: `0x${"cd".repeat(1952)}` })).address,
-    ).not.toBe(address);
-    expect(
-      (await derive({ classHash: "0xdef", publicKey: mobileAccount.publicKey })).address,
-    ).not.toBe(address);
+      (await derive({ classHash: ML_DSA_ACCOUNT_CLASS_HASH, publicKey: mobileAccount.publicKey }))
+        .classHash,
+    ).toBe(ML_DSA_ACCOUNT_CLASS_HASH);
+    await expect(
+      derive({ classHash: "0xabc", publicKey: mobileAccount.publicKey }),
+    ).rejects.toThrow("Invalid ML-DSA account class hash");
   });
 
   test("refuses a record whose identity felt is not the commitment to its key", async () => {
@@ -203,7 +206,6 @@ describe("paired-phone address derivation", () => {
     await expect(
       deriveAccountContractAddress(kms, {
         accountContractType: "ml-dsa",
-        classHash: "0xabc",
         networkId: "SN_MAIN",
         publicKey: mobileAccount.publicKey,
         publicKeyX: "0x456",
@@ -211,12 +213,7 @@ describe("paired-phone address derivation", () => {
     ).rejects.toThrow("ML-DSA account key does not match its stored identity");
   });
 
-  test("an explicit class hash and public key are both required", async () => {
-    await expect(derive({ publicKey: mobileAccount.publicKey })).rejects.toThrow(
-      "ML-DSA account class hash is required",
-    );
-    await expect(derive({ classHash: "0xabc" })).rejects.toThrow(
-      "ML-DSA account public key is required",
-    );
+  test("the public key is still required, since nothing can stand in for it", async () => {
+    await expect(derive({})).rejects.toThrow("ML-DSA account public key is required");
   });
 });

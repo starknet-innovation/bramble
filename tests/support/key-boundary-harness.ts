@@ -258,6 +258,7 @@ export const makeKeyBoundaryHarness = async (
           accountId: account.id,
           deviceId: "key-boundary-phone",
           messageHash: "0x9",
+          networkId: "SN_MAIN",
           publicKey: KEY_BOUNDARY_ML_DSA_PUBLIC_KEY,
         }),
       );

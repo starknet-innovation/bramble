@@ -15,15 +15,13 @@
  */
 
 import type { MobilePqSignRequestSummary } from "../../../popup/responses/responses";
+import { toBase64Url } from "./wire-encoding";
 
 /**
  * Envelope version. The phone refuses an envelope it does not recognise rather
  * than guessing at fields, so this must move whenever the shape below changes.
  */
 export const MOBILE_PQ_ENVELOPE_VERSION = 1;
-
-const base64url = (value: string): string =>
-  btoa(value).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 
 /**
  * Encodes one parked request as the base64url string the user carries to the
@@ -33,12 +31,16 @@ const base64url = (value: string): string =>
  * anything is broadcast.
  */
 export const encodeMobilePqSignEnvelope = (request: MobilePqSignRequestSummary): string =>
-  base64url(
+  toBase64Url(
     JSON.stringify({
       accountId: request.accountId,
       correlationId: request.id,
       deviceId: request.deviceId,
       messageHash: request.messageHash,
+      // The phone selects its key by `publicKey` and refuses a chain its key was
+      // not registered against by `networkId`; both are public, and both are
+      // checked again on the way back in.
+      networkId: request.networkId,
       publicKey: request.publicKey,
       version: MOBILE_PQ_ENVELOPE_VERSION,
     }),

@@ -14,7 +14,6 @@
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import {
-  isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
@@ -33,7 +32,6 @@ const MAX_DEVICE_ID_LENGTH = 64;
  */
 export type AddMobilePqAccountRequest = {
   readonly challenge: string;
-  readonly classHash: string;
   readonly deviceId: string;
   readonly networkId: StarknetNetworkId;
   readonly publicKey: string;
@@ -51,7 +49,6 @@ export const readAddMobilePqAccountInput = (message: unknown): AddMobilePqAccoun
     message["type"] !== "wallet.addMobilePqAccount" ||
     !hasOnlyKnownKeys(message, [
       "challenge",
-      "classHash",
       "deviceId",
       "networkId",
       "publicKey",
@@ -61,12 +58,10 @@ export const readAddMobilePqAccountInput = (message: unknown): AddMobilePqAccoun
   ) {
     return null;
   }
-  const { challenge, classHash, deviceId, networkId, publicKey, signature } = message;
+  const { challenge, deviceId, networkId, publicKey, signature } = message;
   if (
     typeof challenge !== "string" ||
     !isStarkFieldElement(challenge) ||
-    typeof classHash !== "string" ||
-    !isNonZeroStarkFieldElement(classHash) ||
     typeof deviceId !== "string" ||
     deviceId.length === 0 ||
     deviceId.length > MAX_DEVICE_ID_LENGTH ||
@@ -76,7 +71,7 @@ export const readAddMobilePqAccountInput = (message: unknown): AddMobilePqAccoun
   ) {
     return null;
   }
-  return { challenge, classHash, deviceId, networkId, publicKey, signature };
+  return { challenge, deviceId, networkId, publicKey, signature };
 };
 
 /**

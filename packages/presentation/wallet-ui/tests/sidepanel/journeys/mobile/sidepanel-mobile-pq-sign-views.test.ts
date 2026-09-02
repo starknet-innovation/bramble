@@ -22,6 +22,7 @@ const request: MobilePqSignRequestSummary = {
   deviceId: "phone-1",
   id: "mobile-pq-sign-1",
   messageHash: "0xabc",
+  networkId: "SN_MAIN",
   publicKey: device.publicKey,
 };
 
@@ -64,7 +65,37 @@ describe("mobilePqSignScreen", () => {
       // Grouped for comparison, so assert on the digits with the grouping spans
       // stripped rather than on the raw run.
       expect(html.replaceAll("<span>", "").replaceAll("</span>", "")).toContain(padded);
-      expect(html).toContain(`data-copy="${padded}"`);
+      // Shown for comparison, deliberately NOT copyable. The app cannot read a
+      // bare hash, so offering to copy one only invites pasting the wrong thing;
+      // the signing request above it is what the app reads.
+      expect(html).not.toContain(`data-copy="${padded}"`);
+    }
+  });
+
+  test("the signing request is the only thing offered for copying", () => {
+    const html = render({ kind: "handoff" });
+    expect(html).toContain("Copy signing request");
+    expect(html).not.toContain("Copy transaction hash");
+  });
+
+  test("the request to copy comes before the hash to compare", () => {
+    const html = render({ kind: "handoff" });
+    // Layout, but a safety one: the value with the action must be reached first,
+    // or a user working top-down copies the hash the app cannot read.
+    expect(html.indexOf("Request for your phone")).toBeGreaterThan(-1);
+    expect(html.indexOf("Request for your phone")).toBeLessThan(
+      html.indexOf("Hash your phone will sign"),
+    );
+  });
+
+  test("only the handoff offers the request; the hash stays in every phase", () => {
+    for (const phase of [
+      { kind: "submitting" } as const,
+      { kind: "error", message: "no" } as const,
+    ]) {
+      const html = render(phase);
+      expect(html).not.toContain("Copy signing request");
+      expect(html).toContain("Hash your phone will sign");
     }
   });
 

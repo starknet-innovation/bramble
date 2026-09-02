@@ -14,9 +14,11 @@
  * the full transaction instead requires the transaction-hash functions in the
  * krusty-kms C ABI, and the trusted display arrives with them.
  */
+
 import { WalletError } from "@mc-wallet/core/errors";
 import type { AccountHashSigner } from "@mc-wallet/starknet/provider";
 import type { MobilePqAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import {
   createDeviceSignQueue,
   type DeviceSignQueue,
@@ -34,6 +36,7 @@ export type MobilePqSignRequest = {
   readonly accountId: string;
   readonly deviceId: string;
   readonly messageHash: string;
+  readonly networkId: StarknetNetworkId;
   readonly publicKey: string;
 };
 
@@ -109,6 +112,7 @@ export const mobilePqHashSigner =
       accountId: account.id,
       deviceId: account.derivation.deviceId,
       messageHash,
+      networkId: account.networkId,
       publicKey: account.publicKey,
     });
     if (!(await verify(account.publicKey, messageHash, signature))) {

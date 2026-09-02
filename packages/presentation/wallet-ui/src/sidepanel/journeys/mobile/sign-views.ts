@@ -5,6 +5,10 @@
  * the request to the phone, bring the response back — are both on screen at
  * once rather than sequenced into phases they would have to click through.
  *
+ * Ordered by what the user does, top to bottom: copy the request, compare the
+ * hash, paste the response. The request leads because it is the only value the
+ * app can read; the hash is bigger on screen but carries no action.
+ *
  * All dynamic text is escaped; ./sign-session.ts owns state and bindings.
  *
  * Every phase renders the hash the phone is being asked to sign, at the padded
@@ -48,6 +52,29 @@ const signerLine = (request: MobilePqSignRequestSummary): string =>
   </div>`;
 
 /**
+ * The one value the phone can actually read, given its own area at the top of the
+ * card.
+ *
+ * It leads because it is the only thing on this screen with an action attached:
+ * the hash below it is for comparing by eye, and a user who copies that instead
+ * gets a value the app rejects. Ordering the screen by what the user must *do*
+ * puts the request first and demotes the hash to what it is — a check.
+ */
+const requestBlock = (view: MobilePqSignView): string =>
+  `<section class="ledger-hash-check">
+    <div class="ledger-hash-head">
+      <p class="context-label">Request for your phone</p>
+      ${iconButton({
+        attributes: { "data-copy": view.envelope },
+        icon: "copy",
+        label: "Copy signing request",
+        variant: "ghost",
+      })}
+    </div>
+    <p class="ledger-hash-help">Copy this into the app on your phone. It carries the account, the network and the hash together — the app needs all of it, and refuses a bare hash.</p>
+  </section>`;
+
+/**
  * The hash the phone is asked to blind-sign, at the full padded width. The phone
  * cannot show the user what it means, so this is the only screen that can.
  */
@@ -57,17 +84,11 @@ const phoneHashCheck = (request: MobilePqSignRequestSummary): string => {
   return `<section class="ledger-hash-check">
     <div class="ledger-hash-head">
       <p class="context-label">Hash your phone will sign</p>
-      ${iconButton({
-        attributes: { "data-copy": hash },
-        icon: "copy",
-        label: "Copy transaction hash",
-        variant: "ghost",
-      })}
     </div>
     <p class="ledger-hash-value"><code>${escapeHtml("0x")}${hashGroups(digits)
       .map((group) => `<span>${escapeHtml(group)}</span>`)
       .join("")}</code></p>
-    <p class="ledger-hash-help">Approve only if this matches the hash the app shows you.</p>
+    <p class="ledger-hash-help">Compare this with the hash the app shows, and approve only if they match. This value is for comparing, not for copying — the request above is what the app reads.</p>
   </section>`;
 };
 
@@ -79,29 +100,16 @@ const cancelButton = (): string =>
     variant: "ghost",
   });
 
-const handoffBody = (view: MobilePqSignView): string => `
-  <ol class="mobile-pq-steps">
-    <li>
-      <p>Copy this request and open it in the app on your phone.</p>
-      ${iconButton({
-        attributes: { "data-copy": view.envelope },
-        icon: "copy",
-        label: "Copy signing request",
-        variant: "ghost",
-      })}
-    </li>
-    <li>
-      <p>Approve with your fingerprint or face, then paste the response back here.</p>
-      ${textareaField({
-        attributes: { "data-mobile-pq-response": true },
-        label: "Signed response",
-        name: "mobilePqResponse",
-        placeholder: "Paste the response from the app",
-        rows: 3,
-        spellcheck: false,
-      })}
-    </li>
-  </ol>
+const handoffBody = (): string => `
+  <p>Approve on the phone, then paste what it hands back.</p>
+  ${textareaField({
+    attributes: { "data-mobile-pq-response": true },
+    label: "Signed response",
+    name: "mobilePqResponse",
+    placeholder: "Paste the response from the app",
+    rows: 3,
+    spellcheck: false,
+  })}
   <div class="ledger-phase-actions">
     ${button({
       attributes: { "data-mobile-pq-submit": true },
@@ -127,7 +135,7 @@ const phaseBody = (view: MobilePqSignView): string => {
         ${cancelButton()}
       </div>`;
   }
-  return handoffBody(view);
+  return handoffBody();
 };
 
 const phaseTitle: Readonly<Record<MobilePqSignView["phase"]["kind"], string>> = {
@@ -173,6 +181,7 @@ export const mobilePqSignScreen = (view: MobilePqSignView, status: WalletStatus)
         <h2>${escapeHtml(phaseTitle[view.phase.kind])}</h2>
         ${signerLine(view.request)}
       </div>
+      ${view.phase.kind === "handoff" ? requestBlock(view) : ""}
       ${phoneHashCheck(view.request)}
       <div class="ledger-phase-body">${phaseBody(view)}</div>
       <p class="ledger-liveness" role="status">

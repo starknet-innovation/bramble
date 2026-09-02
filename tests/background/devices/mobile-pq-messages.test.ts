@@ -24,6 +24,7 @@ const request: MobilePqSignRequest = {
   accountId: "SN_MAIN:0xabc",
   deviceId: "phone-1",
   messageHash: "0x1e240",
+  networkId: "SN_MAIN",
   publicKey: device.publicKey,
 };
 

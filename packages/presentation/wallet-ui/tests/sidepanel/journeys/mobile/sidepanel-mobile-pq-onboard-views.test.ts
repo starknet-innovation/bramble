@@ -18,7 +18,7 @@ import { SIDEPANEL_STYLES } from "../../../../src/sidepanel/styles/index";
 const CHALLENGE = "0x02f4c1a83b7e6d095c2a1f8b4e7d3c60a9f5e2b8d1c4a7f03e6b9d2c5a8f1e40";
 const status = { network: "SN_DEVNET" } as never;
 const screen = (phase: MobilePqEnrollView["phase"]): string =>
-  mobilePqEnrollScreen({ challenge: CHALLENGE, phase }, status);
+  mobilePqEnrollScreen({ offer: "b2ZmZXI", challenge: CHALLENGE, phase }, status);
 
 // Every class the templates put on a paragraph has to be one the stylesheet
 // paints, or the paragraph is invisible in the only place it matters.
@@ -53,13 +53,15 @@ describe("post-quantum enrollment screen", () => {
     expect(html).toContain(CHALLENGE);
   });
 
-  test("asks for exactly the four fields the wallet cannot derive", () => {
+  test("asks for one paste and nothing the wallet can derive or pin", () => {
     const html = screen({ kind: "collect" });
-    for (const field of ["device", "public-key", "class-hash", "pop"]) {
-      expect(html).toContain(`data-mobile-pq-${field}`);
+    expect(html).toContain("data-mobile-pq-response");
+    // Everything that used to be a field: the name, the key and the signature
+    // all arrive inside the reply; the class hash is pinned like Argent's; and
+    // the key commitment is derived from the public key. Asking for any of them
+    // would be asking the user to restate something already known.
+    for (const gone of ["device", "public-key", "class-hash", "pop", "key-commitment"]) {
+      expect(html).not.toContain(`data-mobile-pq-${gone}`);
     }
-    // The key commitment is derived from the public key, so asking for it would
-    // be asking the user to restate something the wallet already knows.
-    expect(html).not.toContain("key-commitment");
   });
 });

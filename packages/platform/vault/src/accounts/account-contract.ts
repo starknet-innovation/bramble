@@ -8,7 +8,7 @@ import {
   mlDsaAccountAddress,
 } from "@mc-wallet/starknet/account-contracts";
 import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { isAccountContractType, ML_DSA_ACCOUNT_CLASS_HASH } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -98,14 +98,10 @@ export const resolveAccountClassHash = async (
     return ARGENT_ACCOUNT_CONTRACT.classHash;
   }
   if (input.accountContractType === "ml-dsa") {
-    // No pinned class yet: the account contract is owned by a separate track and
-    // the proof of concept runs a devnet-only stub. An explicit class hash is
-    // required rather than silently inheriting OpenZeppelin's.
-    if (input.classHash === undefined) {
-      // TODO: Blocked
-      throw new WalletError("ML-DSA account class hash is required");
+    if (input.classHash !== undefined && !sameFelt(input.classHash, ML_DSA_ACCOUNT_CLASS_HASH)) {
+      throw new WalletError("Invalid ML-DSA account class hash");
     }
-    return input.classHash;
+    return ML_DSA_ACCOUNT_CLASS_HASH;
   }
   return input.classHash ?? getOzAccountClassHash(kms, networkId);
 };

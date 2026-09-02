@@ -31,7 +31,6 @@ export const MOBILE_PQ_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     },
     message: {
       challenge: "0x1",
-      classHash: "0x2",
       deviceId: "key-boundary-phone",
       networkId: "SN_MAIN",
       publicKey: KEY_BOUNDARY_ML_DSA_PUBLIC_KEY,

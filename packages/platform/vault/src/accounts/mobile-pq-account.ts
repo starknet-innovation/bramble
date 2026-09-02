@@ -28,7 +28,6 @@ import { deriveAccountContractAddress } from "./account-contract";
  * another family's class would derive an address nobody holds the key for.
  */
 export type MobilePqAccountInput = {
-  readonly classHash: string;
   readonly deviceId: string;
   readonly networkId?: StarknetNetworkId;
   readonly publicKey: string;
@@ -68,7 +67,6 @@ export const deriveMobilePqAccount = async (
   }
   const { address, classHash } = await deriveAccountContractAddress(kms, {
     accountContractType: "ml-dsa",
-    classHash: input.classHash,
     networkId,
     publicKey: input.publicKey,
     publicKeyX,

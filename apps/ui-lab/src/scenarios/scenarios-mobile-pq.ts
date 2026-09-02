@@ -10,6 +10,7 @@
  * question this design has to answer — whether a human will carry a string this
  * size between two devices for every transaction.
  */
+
 import type { MobilePqEnrollView, MobilePqSignView } from "@mc-wallet/wallet-ui/lab";
 import {
   addAccountChooser,
@@ -21,13 +22,14 @@ import {
 import { mobilePqAccount, statusFor } from "../fixtures/fixtures";
 import type { ScenarioCheckpoint, WalletScenario } from "../runtime/types";
 
-const mobilePqRequest = {
+const mobilePqRequest: MobilePqSignView["request"] = {
   accountId: mobilePqAccount.id,
   deviceId: mobilePqAccount.derivation.deviceId,
   id: "mobile-pq-sign-fixture",
   // Full-width: the takeover renders this at the padded 64 digits the phone
   // signs, so a short stub would misrepresent the block's real density.
   messageHash: "0x7d1f4b2c9e8a06d35f1c2b8e4a97d05c3e6f1a2b8c4d9e0f3a5b7c1d2e4f6a8",
+  networkId: "SN_SEPOLIA",
   publicKey: mobilePqAccount.publicKey,
 };
 
@@ -89,6 +91,12 @@ export const mobilePqScenario: WalletScenario = {
 // field. Rendered at full width because that is the string a user copies by hand.
 const ENROLL_CHALLENGE = "0x02f4c1a83b7e6d095c2a1f8b4e7d3c60a9f5e2b8d1c4a7f03e6b9d2c5a8f1e40";
 
+// The offer is what the user copies; the challenge stays on screen so they can
+// see what the phone claims to have signed. A literal here rather than a call to
+// the encoder: a scenario should show one fixed frame, not recompute it.
+const ENROLL_OFFER =
+  "eyJjaGFsbGVuZ2UiOiIweDAyZjRjMWE4M2I3ZTZkMDk1YzJhMWY4YjRlN2QzYzYwYTlmNWUyYjhkMWM0YTdmMDNlNmI5ZDJjNWE4ZjFlNDAiLCJuZXR3b3JrSWQiOiJTTl9TRVBPTElBIiwidmVyc2lvbiI6MX0";
+
 const enrollCheckpoint = (
   id: string,
   phase: MobilePqEnrollView["phase"],
@@ -96,7 +104,8 @@ const enrollCheckpoint = (
   narrative: string,
   state: ScenarioCheckpoint["state"],
 ): ScenarioCheckpoint => ({
-  content: () => mobilePqEnrollScreen({ challenge: ENROLL_CHALLENGE, phase }, statusFor()),
+  content: () =>
+    mobilePqEnrollScreen({ challenge: ENROLL_CHALLENGE, offer: ENROLL_OFFER, phase }, statusFor()),
   id,
   label,
   narrative,

@@ -5,9 +5,14 @@
  * reach the transport flow. No secret material crosses: a phone reply carries a
  * queue id, a hash, a device id, and a public ML-DSA-65 key.
  */
+
 import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
-import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import {
+  isStarkFieldElement,
+  isStarknetNetworkId,
+  type StarknetNetworkId,
+} from "@mc-wallet/wallet-model/networks";
 import { isMlDsa65PublicKey } from "@mc-wallet/wallet-model/signing";
 
 /**
@@ -23,6 +28,7 @@ export type MobilePqSignRequestSummary = {
   readonly deviceId: string;
   readonly id: string;
   readonly messageHash: string;
+  readonly networkId: StarknetNetworkId;
   readonly publicKey: string;
 };
 
@@ -60,7 +66,14 @@ export const isMobilePqEnrollChallengeResponse = (
 
 const isMobilePqSignRequestSummary = (value: unknown): value is MobilePqSignRequestSummary =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountId", "deviceId", "id", "messageHash", "publicKey"]) &&
+  hasOnlyKnownKeys(value, [
+    "accountId",
+    "deviceId",
+    "id",
+    "messageHash",
+    "networkId",
+    "publicKey",
+  ]) &&
   typeof value["id"] === "string" &&
   value["id"].length > 0 &&
   typeof value["deviceId"] === "string" &&
@@ -68,6 +81,7 @@ const isMobilePqSignRequestSummary = (value: unknown): value is MobilePqSignRequ
   isAccountId(value["accountId"]) &&
   typeof value["messageHash"] === "string" &&
   isStarkFieldElement(value["messageHash"]) &&
+  isStarknetNetworkId(value["networkId"]) &&
   isMlDsa65PublicKey(value["publicKey"]);
 
 /**

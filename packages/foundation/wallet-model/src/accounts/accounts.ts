@@ -37,6 +37,7 @@ export {
   ARGENT_ACCOUNT_CLASS_HASH,
   isAccountContractType,
   isStarkCurveContractType,
+  ML_DSA_ACCOUNT_CLASS_HASH,
   OPENZEPPELIN_ACCOUNT_CLASS_HASH,
   type StarkCurveContractType,
 } from "./contract-metadata";

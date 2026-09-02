@@ -91,7 +91,6 @@ const handleAddMobilePqAccount: MobilePqOpsHandler = async (deps, message) => {
       input.networkId,
       (vaultPassphrase) =>
         store({
-          classHash: input.classHash,
           deviceId: input.deviceId,
           networkId: input.networkId,
           publicKey: input.publicKey,

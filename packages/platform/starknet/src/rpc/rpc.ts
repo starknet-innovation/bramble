@@ -12,6 +12,7 @@ import {
   type AccountHashSigner,
   isTransactionNotFoundError,
   isTransportRpcError,
+  type MlDsaCalldata,
   withRpcFallback,
 } from "./provider";
 import { decodeUint256Response } from "./rpc-assets";
@@ -111,6 +112,13 @@ export type TransferInput = {
   readonly amount: string;
   /** Live authorization checked immediately before each on-chain mutation. */
   readonly isAuthorized?: () => boolean;
+  /**
+   * ML-DSA calldata builders; see {@link InvokeInput.mlDsa}, which this is
+   * forwarded to verbatim. Present here only because this wrapper stands between
+   * the composition root and that submit: omitting it made a paired-phone send
+   * abort at the signer, after the user had already consented to the fee.
+   */
+  readonly mlDsa?: MlDsaCalldata;
   readonly recipient: string;
   /** Separately reviewed ceiling for an automatic account deployment. */
   readonly reviewedDeploymentFee?: FeeEstimate;
@@ -384,6 +392,7 @@ export const submitErc20Transfer = async (
     account,
     amount,
     isAuthorized,
+    mlDsa,
     recipient,
     reviewedDeploymentFee,
     reviewedFee,
@@ -401,6 +410,7 @@ export const submitErc20Transfer = async (
       account,
       calls: [call],
       ...(isAuthorized === undefined ? {} : { isAuthorized }),
+      ...(mlDsa === undefined ? {} : { mlDsa }),
       ...(reviewedDeploymentFee === undefined ? {} : { reviewedDeploymentFee }),
       ...(reviewedFee === undefined ? {} : { reviewedFee }),
       rpcUrls,

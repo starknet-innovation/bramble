@@ -23,17 +23,97 @@
  * possession is refused by the background, and neither stores anything.
  */
 
-import { isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import { isMlDsa65PublicKey, isMlDsa65Signature } from "@mc-wallet/wallet-model/signing";
+import { fromBase64Url, toBase64Url } from "./wire-encoding";
 
 /**
  * What the user types or pastes into the enrollment form.
  */
 export type MobilePqEnrollDraft = {
-  readonly classHash: string;
   readonly deviceId: string;
   readonly publicKey: string;
   readonly signature: string;
+};
+
+/*
+ * ---------------------------------------------------------------------------
+ * The pairing wire shapes
+ * ---------------------------------------------------------------------------
+ *
+ * Kept in this module rather than their own: this controller is the only
+ * consumer, and it already owns the view model the offer is rendered from.
+ */
+/**
+ * Pairing envelope version. The phone refuses a version it does not recognise
+ * rather than guessing at fields, so this moves whenever a shape below changes.
+ */
+export const MOBILE_PQ_PAIRING_VERSION = 1;
+
+/**
+ * Encodes the offer the device reads.
+ *
+ * `challenge` is passed through verbatim, never re-spelled. The background
+ * compares the returned challenge to the outstanding one as a string, and it is
+ * also the value the device pads back to 32 big-endian bytes to sign — so a
+ * shorter spelling of the same felt is both a failed comparison and a different
+ * signed message.
+ */
+export const encodeMobilePqPairingOffer = (input: {
+  readonly challenge: string;
+  readonly networkId: string;
+}): string =>
+  toBase64Url(
+    JSON.stringify({
+      challenge: input.challenge,
+      networkId: input.networkId,
+      version: MOBILE_PQ_PAIRING_VERSION,
+    }),
+  );
+
+/**
+ * What the phone sends back: the name it gave the key, the public key, and the
+ * signature over the challenge.
+ */
+export type MobilePqPairingResult = {
+  readonly deviceId: string;
+  readonly publicKey: string;
+  readonly signature: string;
+};
+
+/**
+ * Decodes a pasted pairing response, or null when it is not one.
+ *
+ * Shape only: the lengths of the key and the signature, and the signature
+ * itself, are checked by the enrollment controller and the background. This
+ * refuses anything that is not the right *kind* of value so the caller can say
+ * "that is not a response from the app" rather than "invalid public key".
+ */
+export const decodeMobilePqPairingResult = (pasted: string): MobilePqPairingResult | null => {
+  const json = fromBase64Url(pasted);
+  if (json === null) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json) as unknown;
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
+  const record = parsed as Record<string, unknown>;
+  const { deviceId, publicKey, signature, version } = record;
+  if (
+    version !== MOBILE_PQ_PAIRING_VERSION ||
+    typeof deviceId !== "string" ||
+    deviceId.trim().length === 0 ||
+    typeof publicKey !== "string" ||
+    typeof signature !== "string"
+  ) {
+    return null;
+  }
+  return { deviceId: deviceId.trim(), publicKey, signature };
 };
 
 /**
@@ -54,6 +134,11 @@ type MobilePqEnrollPhase =
  */
 export type MobilePqEnrollView = {
   readonly challenge: string;
+  /**
+   * The whole offer as one base64url string. What the user copies: the challenge
+   * alone would leave the phone guessing which network it is pairing for.
+   */
+  readonly offer: string;
   readonly phase: MobilePqEnrollPhase;
 };
 
@@ -67,6 +152,7 @@ export type MobilePqEnrollView = {
 export type MobilePqEnrollControllerDeps = {
   readonly challenge: () => Promise<string>;
   readonly enroll: (draft: MobilePqEnrollDraft & { readonly challenge: string }) => Promise<void>;
+  readonly networkId: () => string;
   readonly onEnrolled?: () => Promise<void>;
   readonly render: (view: MobilePqEnrollView | null) => void;
 };
@@ -77,7 +163,7 @@ export type MobilePqEnrollControllerDeps = {
 export type MobilePqEnrollController = {
   readonly cancel: () => void;
   readonly open: () => Promise<void>;
-  readonly submit: (draft: MobilePqEnrollDraft) => Promise<void>;
+  readonly submit: (pasted: string) => Promise<void>;
 };
 
 /**
@@ -93,17 +179,6 @@ export const MOBILE_PQ_POP_INVALID =
   "That is not a signature from the app. Sign the challenge above and paste the whole response.";
 
 /**
- * Copy shown when the pasted class hash is not a usable felt.
- */
-export const MOBILE_PQ_CLASS_INVALID =
-  "That is not a class hash. Declare the account class for this key, then paste its hash.";
-
-/**
- * Copy shown when no device label was given.
- */
-export const MOBILE_PQ_DEVICE_INVALID = "Give this device a name so you can recognise it later.";
-
-/**
  * Appended to whatever the background refused with.
  *
  * The challenge is consumed before the proof of possession is checked, so by the
@@ -115,15 +190,19 @@ export const MOBILE_PQ_DEVICE_INVALID = "Give this device a name so you can reco
 export const MOBILE_PQ_CHALLENGE_SPENT =
   "That challenge is now used up. Cancel and reopen to get a fresh one, then sign that.";
 
+/**
+ * Copy shown when the pasted text is not a response from the app at all — the
+ * wrong thing copied, or a truncated paste.
+ */
+export const MOBILE_PQ_PAIRING_PASTE_INVALID =
+  "That is not a response from the app. Pair on your phone, then paste the whole reply.";
+
+// The device name is not checked here: it comes from inside the reply, so an
+// empty one means a malformed reply rather than a field the user left blank, and
+// the decoder refuses it before this runs.
 const draftError = (draft: MobilePqEnrollDraft): string | null => {
-  if (draft.deviceId.length === 0) {
-    return MOBILE_PQ_DEVICE_INVALID;
-  }
   if (!isMlDsa65PublicKey(draft.publicKey)) {
     return MOBILE_PQ_KEY_INVALID;
-  }
-  if (!isNonZeroStarkFieldElement(draft.classHash)) {
-    return MOBILE_PQ_CLASS_INVALID;
   }
   return isMlDsa65Signature(draft.signature) ? null : MOBILE_PQ_POP_INVALID;
 };
@@ -134,12 +213,20 @@ const draftError = (draft: MobilePqEnrollDraft): string | null => {
 export const createMobilePqEnrollController = (
   deps: MobilePqEnrollControllerDeps,
 ): MobilePqEnrollController => {
-  const { challenge: fetchChallenge, enroll, onEnrolled, render } = deps;
+  const { challenge: fetchChallenge, enroll, networkId, onEnrolled, render } = deps;
   let challenge: string | null = null;
   let phase: MobilePqEnrollPhase = { kind: "loading" };
 
   const paint = (): void => {
-    render(challenge === null ? null : { challenge, phase });
+    render(
+      challenge === null
+        ? null
+        : {
+            challenge,
+            offer: encodeMobilePqPairingOffer({ challenge, networkId: networkId() }),
+            phase,
+          },
+    );
   };
 
   const fail = (message: string): void => {
@@ -169,9 +256,17 @@ export const createMobilePqEnrollController = (
       phase = { kind: "collect" };
       paint();
     },
-    async submit(draft) {
+    async submit(pasted) {
       const active = challenge;
       if (active === null || phase.kind === "enrolling") {
+        return;
+      }
+      // Structure first, then the field-level checks. "That is not a response
+      // from the app" is a different problem from "that key is the wrong
+      // length", and conflating them sends the user looking in the wrong place.
+      const draft = decodeMobilePqPairingResult(pasted);
+      if (draft === null) {
+        fail(MOBILE_PQ_PAIRING_PASTE_INVALID);
         return;
       }
       const invalid = draftError(draft);

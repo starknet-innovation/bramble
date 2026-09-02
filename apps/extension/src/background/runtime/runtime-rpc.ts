@@ -319,7 +319,7 @@ export const createDefaultRuntimeRpc = ({
   nftIndexer: createHttpNftIndexer(nftIndexerHttp),
   submitAccountDeployment: (input) => submitAccountDeployment(mlDsa ? { ...input, mlDsa } : input),
   submitDeclareTransaction,
-  submitErc20Transfer,
+  submitErc20Transfer: (input) => submitErc20Transfer(mlDsa ? { ...input, mlDsa } : input),
   submitInvokeTransaction: (input) => submitInvokeTransaction(mlDsa ? { ...input, mlDsa } : input),
   verifyAccountClassHash,
 });

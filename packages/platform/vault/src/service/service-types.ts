@@ -154,7 +154,6 @@ export type ImportRawKeyAccountInput = {
  * may fall back to. The constructor argument is derived from `publicKey`.
  */
 export type AddMobilePqAccountInput = {
-  readonly classHash: string;
   readonly deviceId: string;
   readonly networkId: StarknetNetworkId;
   readonly publicKey: string;

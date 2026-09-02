@@ -48,6 +48,7 @@ describe("mobilePqHashSigner", () => {
       accountId: account.id,
       deviceId: "phone-1",
       messageHash: HASH,
+      networkId: account.networkId,
       publicKey: account.publicKey,
     });
     expect(signature.kind).toBe("ml-dsa-65");

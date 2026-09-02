@@ -55,6 +55,20 @@ export const ARGENT_ACCOUNT_CLASS_HASH =
   "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f";
 
 /**
+ * Pinned `MlDsaHashKeyAccount` class, compiled from `account_hashkey/` in the
+ * ml-dsa-cairo repository.
+ *
+ * Pinned rather than pasted, for the same reason as the two above: a class hash
+ * the user types is a class hash the user can get wrong, and getting it wrong
+ * derives an address nobody can spend from. The mobile signer pins the same
+ * value independently and derives the address from it, so the two deriving
+ * differently shows up as two different addresses on two screens rather than
+ * silently agreeing on the wrong one.
+ */
+export const ML_DSA_ACCOUNT_CLASS_HASH =
+  "0x430e051d9ed7ca553ed4b8dc7e8cfc16400d13fc9b0d4279206687c2059356f";
+
+/**
  * Validates the closed set of supported single-signer account contracts.
  */
 export const isAccountContractType = (value: unknown): value is AccountContractType =>

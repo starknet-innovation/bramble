@@ -26,7 +26,6 @@ import type { MobilePqSignOutcome } from "./sign-session";
  */
 type MobilePqEnrollment = {
   readonly challenge: string;
-  readonly classHash: string;
   readonly deviceId: string;
   readonly networkId: string;
   readonly publicKey: string;

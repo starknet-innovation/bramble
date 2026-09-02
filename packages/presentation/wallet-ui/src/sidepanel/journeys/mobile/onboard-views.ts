@@ -11,60 +11,38 @@
 import { escapeHtml } from "@mc-wallet/core/html";
 import { pill } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { textareaField, textField } from "@mc-wallet/ui-kit/fields";
+import { textareaField } from "@mc-wallet/ui-kit/fields";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import type { MobilePqEnrollView } from "./onboard-session";
 
-const challengeBlock = (challenge: string): string => `
+const challengeBlock = (challenge: string, offer: string): string => `
   <section class="ledger-hash-check">
     <div class="ledger-hash-head">
       <p class="context-label">Challenge to sign</p>
       ${iconButton({
-        attributes: { "data-copy": challenge },
+        attributes: { "data-copy": offer },
         icon: "copy",
-        label: "Copy challenge",
+        label: "Copy pairing offer",
         variant: "ghost",
       })}
     </div>
     <p class="ledger-hash-value"><code>${escapeHtml(challenge)}</code></p>
-    <p class="ledger-hash-help">Sign exactly this value on your device, then paste the response below. It is single-use.</p>
+    <p class="ledger-hash-help">Copy the pairing offer into the app — the app shows this same challenge back. Name the account there, then paste its reply below. Single-use.</p>
   </section>`;
 
 // Static: every field is asked for on every enrollment, so the form has no
 // state of its own — the phase around it does.
 const enrollForm = `
   <form class="section" data-mobile-pq-enroll>
-    ${textField({
-      attributes: { "data-mobile-pq-device": true },
-      label: "Device name",
-      name: "deviceId",
-      placeholder: "Pixel 9 Pro",
-    })}
     ${textareaField({
-      attributes: { "data-mobile-pq-public-key": true },
-      hint: "The 1952-byte ML-DSA-65 public key the device reported.",
-      label: "Device public key",
-      name: "publicKey",
-      placeholder: "0x…",
-      rows: 3,
-      spellcheck: false,
-    })}
-    ${textField({
-      attributes: { "data-mobile-pq-class-hash": true },
-      hint: "The declared `MlDsaHashKeyAccount` class on this network.",
-      label: "Account class hash",
-      name: "classHash",
-      placeholder: "0x…",
-    })}
-    ${textareaField({
-      attributes: { "data-mobile-pq-pop": true },
-      hint: "The device's signature over the challenge above.",
-      label: "Signed challenge",
-      name: "signature",
-      placeholder: "0x…",
-      rows: 3,
+      attributes: { "data-mobile-pq-response": true },
+      hint: "One value: the app's reply carries the name, the public key and the signature.",
+      label: "Reply from the app",
+      name: "response",
+      placeholder: "Paste the app's reply",
+      rows: 4,
       spellcheck: false,
     })}
     <div class="ledger-phase-actions">
@@ -140,7 +118,7 @@ export const mobilePqEnrollScreen = (view: MobilePqEnrollView, status: WalletSta
         <p class="context-label">Proof of possession</p>
         <h2>${escapeHtml(phaseTitle[view.phase.kind])}</h2>
       </div>
-      ${challengeBlock(view.challenge)}
+      ${challengeBlock(view.challenge, view.offer)}
       <div class="ledger-phase-body">${phaseBody(view)}</div>
       <p class="ledger-liveness" role="status">
         <span class="ledger-liveness-mark">${livenessMark(view)}</span>
