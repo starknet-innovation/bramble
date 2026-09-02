@@ -7,11 +7,12 @@
 import { describe, expect, test } from "bun:test";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
-import { STARKSCAN_URL } from "../../../../src/sidepanel/shell/starkscan-link";
+import { homeScreen } from "../../../../src/sidepanel/journeys/portfolio/home-view";
 import { walletHeader } from "../../../../src/sidepanel/shell/wallet-shell";
 
 const status: WalletStatus = {
@@ -46,16 +47,18 @@ describe("sidepanel home", () => {
     expect(drawer).toContain("data-drawer-close");
   });
 
-  test("header keeps ghost shortcuts for sites, Starkscan, and lock", () => {
+  test("header opens the account it is showing on the explorer", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
     const header = html.slice(html.indexOf("wallet-header"), html.indexOf("hero"));
 
     expect(header).toContain('data-view="connected-sites"');
     expect(header).toContain('id="starkscan-button"');
     expect(header).toContain('class="icon-button ghost"');
-    expect(header).toContain(`href="${STARKSCAN_URL}"`);
+    // The account's own page, not the explorer front page: Home no longer carries
+    // an explorer tile, so this is the only account-level explorer route left.
+    expect(header).toContain(`href="https://starkscan.co/contract/${account.address}"`);
     expect(header).toContain('target="_blank" rel="noopener noreferrer"');
-    expect(header).toContain('aria-label="Open Starkscan"');
+    expect(header).toContain('aria-label="View this account on the block explorer"');
     expect(header).toContain('id="lock-button"');
   });
 
@@ -75,17 +78,17 @@ describe("sidepanel home", () => {
     expect(network).not.toContain("Argent Multisig");
   });
 
-  test("quick actions expose Send, Swap, Receive, and the account explorer", () => {
+  test("quick actions expose Send, Swap, Receive, and Shield", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).toMatch(/class="action-tile" data-view="send"/);
     expect(html).toMatch(/class="action-tile" data-view="swap"/);
     expect(html).toMatch(/class="action-tile" data-view="receive"/);
-    // Explorer is the one outbound tile: the active account on Starkscan, opened
-    // in an isolated tab.
-    expect(html).toContain(`href="https://starkscan.co/contract/${account.address}"`);
-    expect(html).toContain(">Explorer<");
-    expect(html).toContain('aria-label="Open this account on the block explorer"');
+    // Shield holds the fourth slot the explorer tile used to. This fixture tracks
+    // no tokens, so it renders in its disabled state; the shield tile suite below
+    // covers what each privacy state renders.
+    expect(html).toContain(">Shield<");
+    expect(html).not.toContain(">Explorer<");
     expect(html).not.toContain('aria-label="Open Bramble Terminal portfolio"');
     expect(html).not.toMatch(/class="action-tile" data-view="nfts"/);
 
@@ -341,29 +344,63 @@ describe("sidepanel home", () => {
   });
 });
 
-describe("explorer tile availability", () => {
-  test("is disabled rather than hidden when there is nothing to open", () => {
-    // No account yet: the row keeps its shape instead of reflowing.
-    const noAccounts = dashboard(
-      "home",
-      { ...status, accounts: [], activeAccountId: null },
-      [],
-      preferences,
-      { balances: [] },
-    );
-    expect(noAccounts).toContain('aria-label="Explorer unavailable on this network"');
-    expect(noAccounts).not.toContain("starkscan.co/contract");
+describe("shield tile", () => {
+  const homeArgs = (
+    privacy: Parameters<typeof homeScreen>[10],
+    prefs: WalletPreferences | null = defaultWalletPreferences(),
+  ): string =>
+    homeScreen(status, account, { balances: [] }, 0, null, prefs, {}, {}, "usd", [], privacy);
 
-    // Devnet has no public explorer, so an account there gets the same disabled
-    // tile rather than a link that cannot resolve.
-    const devnet = dashboard(
-      "home",
-      { ...status, network: "Local Devnet", networkId: "SN_DEVNET" },
-      [],
-      preferences,
-      { balances: [] },
-    );
-    expect(devnet).toContain('aria-label="Explorer unavailable on this network"');
-    expect(devnet).not.toContain("starkscan.co/contract");
+  const disclosure = (
+    registration: "pending" | "registered" | "unregistered",
+  ): Parameters<typeof homeScreen>[10] => ({
+    error: null,
+    loading: false,
+    value: {
+      accountId: account.id,
+      balances: [],
+      networkId: status.networkId,
+      poolFeeFri: "0x1",
+      registration,
+      relayConfigured: true,
+    },
+  });
+
+  test("opens the shield send flow once the pool registration is live", () => {
+    const html = homeArgs(disclosure("registered"));
+
+    // The same attribute the token-detail Shield uses, so the one existing
+    // binding drives both and they cannot drift into different flows.
+    expect(html).toMatch(/class="action-tile" data-send-shield="SN_MAIN:STRK:[^"]+"/);
+    expect(html).toContain('aria-label="Shield public value into your private balance"');
+    expect(html).toContain(">Shield<");
+  });
+
+  test("routes to activation instead of a dead control before registering", () => {
+    for (const registration of ["unregistered", "pending"] as const) {
+      const html = homeArgs(disclosure(registration));
+
+      expect(html).toMatch(/class="action-tile" data-privacy-open="SN_MAIN:STRK:[^"]+"/);
+      expect(html).toContain('aria-label="Activate private balances"');
+      expect(html).not.toContain("data-send-shield");
+    }
+  });
+
+  test("is disabled rather than hidden when no token is tracked", () => {
+    // Keeps the row at four tiles instead of reflowing, the same reason the
+    // explorer tile it replaced was disabled rather than dropped.
+    const html = homeArgs(disclosure("registered"), preferences);
+
+    expect(html).toContain('aria-label="Shield unavailable until a token is tracked"');
+    expect(html).toMatch(/class="action-tile" type="button" disabled/);
+    expect(html).not.toContain("data-send-shield");
+    expect(html).not.toContain("data-privacy-open");
+  });
+
+  test("no longer offers an explorer tile, which the header now owns", () => {
+    const html = homeArgs(disclosure("registered"));
+
+    expect(html).not.toContain(">Explorer<");
+    expect(html).not.toContain("starkscan.co/contract");
   });
 });
