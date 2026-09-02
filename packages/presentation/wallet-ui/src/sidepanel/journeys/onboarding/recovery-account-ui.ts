@@ -37,7 +37,16 @@ const candidateState = (candidate: RecoveryAccountCandidate): string =>
     ? "Deployed on Starknet"
     : candidate.funded
       ? "Funded and ready to deploy"
-      : "No on-chain activity found";
+      : candidate.account.accountContractType === "argent"
+        ? "No on-chain activity found — Bramble only imports existing Ready accounts"
+        : "No on-chain activity found";
+
+// Bramble creates only Bramble accounts: a Ready candidate with no on-chain
+// history would be a brand-new Ready deployment, so it is listed but not
+// selectable. Deployed or funded (counterfactual) Ready accounts stay
+// importable.
+const selectable = (candidate: RecoveryAccountCandidate): boolean =>
+  candidate.account.accountContractType !== "argent" || candidate.deployed || candidate.funded;
 
 /** Binds and runs the recovery account picker without retaining the phrase. */
 export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAccountUi => {
@@ -79,6 +88,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       const checkbox = deps.form.ownerDocument.createElement("input");
       checkbox.className = "select-check";
       checkbox.type = "checkbox";
+      checkbox.disabled = !selectable(candidate);
       checkbox.checked = selected.has(key);
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) selected.add(key);
