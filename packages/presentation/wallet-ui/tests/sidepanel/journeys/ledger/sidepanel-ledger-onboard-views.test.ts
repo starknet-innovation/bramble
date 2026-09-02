@@ -106,12 +106,19 @@ describe("onboarding views", () => {
 
   test("the picker groups candidates by contract family with detected counts", () => {
     const candidates: LedgerCandidate[] = [
-      { account: candidateAccount(0), balance: "1.5 STRK", deployed: true, duplicate: false },
+      {
+        account: candidateAccount(0),
+        balance: "1.5 STRK",
+        deployed: true,
+        duplicate: false,
+        funded: true,
+      },
       {
         account: candidateAccount(0, "argent"),
         balance: "0 STRK",
         deployed: false,
         duplicate: false,
+        funded: false,
       },
     ];
     const html = ledgerAccountPicker(candidates, [candidateAccount(0).id]);
@@ -136,7 +143,15 @@ describe("onboarding views", () => {
 
   test('"Add selected" is disabled until at least one index is picked', () => {
     const html = ledgerAccountPicker(
-      [{ account: candidateAccount(0), balance: null, deployed: null, duplicate: false }],
+      [
+        {
+          account: candidateAccount(0),
+          balance: null,
+          deployed: null,
+          duplicate: false,
+          funded: null,
+        },
+      ],
       [],
     );
     expect(html).toContain("data-ledger-add-selected");
@@ -145,7 +160,13 @@ describe("onboarding views", () => {
 
   test("an undeployed candidate reflects needs-funding, distinct from an error", () => {
     const html = ledgerAccountPicker([
-      { account: candidateAccount(1), balance: null, deployed: false, duplicate: false },
+      {
+        account: candidateAccount(1),
+        balance: null,
+        deployed: false,
+        duplicate: false,
+        funded: false,
+      },
     ]);
     expect(html).toContain("needs funding");
     expect(html).toContain("balance unavailable");
@@ -153,12 +174,24 @@ describe("onboarding views", () => {
 
   test("a checking candidate and a duplicate render distinctly", () => {
     const checking = ledgerAccountPicker([
-      { account: candidateAccount(2), balance: null, deployed: null, duplicate: false },
+      {
+        account: candidateAccount(2),
+        balance: null,
+        deployed: null,
+        duplicate: false,
+        funded: null,
+      },
     ]);
     expect(checking).toContain("Checking…");
 
     const duplicate = ledgerAccountPicker([
-      { account: candidateAccount(3), balance: "0 STRK", deployed: true, duplicate: true },
+      {
+        account: candidateAccount(3),
+        balance: "0 STRK",
+        deployed: true,
+        duplicate: true,
+        funded: false,
+      },
     ]);
     expect(duplicate).toContain("Already in this wallet");
     expect(duplicate).not.toContain("data-ledger-toggle");

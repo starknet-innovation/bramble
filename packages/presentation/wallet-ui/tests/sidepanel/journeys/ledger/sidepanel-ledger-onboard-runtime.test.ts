@@ -102,7 +102,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
       added.push([account.networkId, account.derivation.accountIndex, account.publicKeyX]);
       return Promise.resolve();
     },
-    describe: () => Promise.resolve({ balance: null, deployed: null }),
+    describe: () => Promise.resolve({ balance: null, deployed: null, funded: null }),
     existingIds: () => new Set<string>(),
     mount,
     networkId: () => "SN_MAIN",

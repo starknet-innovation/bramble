@@ -46,8 +46,8 @@ describe("Ledger onboard controller", () => {
       describe: (account) =>
         Promise.resolve(
           account.derivation.accountIndex === 0
-            ? { balance: "1.5 STRK", deployed: true }
-            : { balance: "0 STRK", deployed: false },
+            ? { balance: "1.5 STRK", deployed: true, funded: true }
+            : { balance: "0 STRK", deployed: false, funded: false },
         ),
     });
     const controller = createLedgerOnboardController(h.deps);
@@ -70,7 +70,7 @@ describe("Ledger onboard controller", () => {
     expect(final?.kind === "picker" && final.selected).toEqual([]);
     // An active Ready candidate stays importable.
     const active = onboardHarness({
-      describe: () => Promise.resolve({ balance: "2 STRK", deployed: true }),
+      describe: () => Promise.resolve({ balance: "2 STRK", deployed: true, funded: true }),
     });
     const activeController = createLedgerOnboardController(active.deps);
     activeController.connect();

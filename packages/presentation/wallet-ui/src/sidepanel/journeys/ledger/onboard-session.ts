@@ -85,7 +85,7 @@ export const enumerateLedgerPubKeys = async (
   return entries;
 };
 
-const EMPTY_STATE: LedgerCandidateState = { balance: null, deployed: null };
+const EMPTY_STATE: LedgerCandidateState = { balance: null, deployed: null, funded: null };
 
 /**
  * Creates the Ledger onboarding controller. `showChooser` opens the add-account
@@ -132,12 +132,14 @@ export const createLedgerOnboardController = (
     balance: null,
     deployed: null,
     duplicate: createdIds.has(account.id) || deps.existingIds().has(account.id),
+    funded: null,
   });
 
   const withState = (account: LedgerAccountRef, state: LedgerCandidateState): LedgerCandidate => ({
     ...toCandidate(account),
     balance: state.balance,
     deployed: state.deployed,
+    funded: state.funded,
   });
 
   const renderPicker = (message?: string): void => {

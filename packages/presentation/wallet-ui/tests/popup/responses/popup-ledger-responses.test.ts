@@ -78,22 +78,51 @@ describe("isOkResponse", () => {
 
 describe("isLedgerAccountStatusResponse", () => {
   test("accepts a resolved or degraded on-chain status", () => {
-    expect(isLedgerAccountStatusResponse({ balance: "1.5 STRK", deployed: true, ok: true })).toBe(
-      true,
-    );
-    expect(isLedgerAccountStatusResponse({ balance: null, deployed: null, ok: true })).toBe(true);
-    expect(isLedgerAccountStatusResponse({ balance: "0 STRK", deployed: false, ok: true })).toBe(
-      true,
-    );
+    expect(
+      isLedgerAccountStatusResponse({
+        balance: "1.5 STRK",
+        deployed: true,
+        funded: true,
+        ok: true,
+      }),
+    ).toBe(true);
+    expect(
+      isLedgerAccountStatusResponse({ balance: null, deployed: null, funded: null, ok: true }),
+    ).toBe(true);
+    expect(
+      isLedgerAccountStatusResponse({
+        balance: "0 STRK",
+        deployed: false,
+        funded: false,
+        ok: true,
+      }),
+    ).toBe(true);
+    // A reply missing the funded field is not this wallet's shape.
+    expect(isLedgerAccountStatusResponse({ balance: null, deployed: null, ok: true })).toBe(false);
   });
 
   test("rejects a wrong-typed field, extra key, or non-ok shape", () => {
-    expect(isLedgerAccountStatusResponse({ balance: 1.5, deployed: true, ok: true })).toBe(false);
-    expect(isLedgerAccountStatusResponse({ balance: null, deployed: "yes", ok: true })).toBe(false);
     expect(
-      isLedgerAccountStatusResponse({ balance: null, deployed: null, extra: 1, ok: true }),
+      isLedgerAccountStatusResponse({ balance: 1.5, deployed: true, funded: true, ok: true }),
     ).toBe(false);
-    expect(isLedgerAccountStatusResponse({ balance: null, deployed: null, ok: false })).toBe(false);
+    expect(
+      isLedgerAccountStatusResponse({ balance: null, deployed: "yes", funded: null, ok: true }),
+    ).toBe(false);
+    expect(
+      isLedgerAccountStatusResponse({ balance: null, deployed: null, funded: "yes", ok: true }),
+    ).toBe(false);
+    expect(
+      isLedgerAccountStatusResponse({
+        balance: null,
+        deployed: null,
+        extra: 1,
+        funded: null,
+        ok: true,
+      }),
+    ).toBe(false);
+    expect(
+      isLedgerAccountStatusResponse({ balance: null, deployed: null, funded: null, ok: false }),
+    ).toBe(false);
     expect(isLedgerAccountStatusResponse(null)).toBe(false);
   });
 });

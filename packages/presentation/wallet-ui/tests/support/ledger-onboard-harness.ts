@@ -107,7 +107,7 @@ export const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> =
       ),
     // Inactive by default ("0" balance, undeployed) so nothing is auto-selected
     // and each test's selection stays deliberate; auto-selection has its own test.
-    describe: () => Promise.resolve({ balance: "0 STRK", deployed: false }),
+    describe: () => Promise.resolve({ balance: "0 STRK", deployed: false, funded: false }),
     enumerate: (_client, startIndex) =>
       Promise.resolve([0, 1].map((offset) => candidateAccount(startIndex + offset))).then(
         (accounts) =>

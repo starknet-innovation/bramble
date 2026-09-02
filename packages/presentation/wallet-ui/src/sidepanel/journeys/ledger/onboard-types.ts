@@ -26,6 +26,7 @@ export type LedgerCandidate = {
   readonly balance: string | null;
   readonly deployed: boolean | null;
   readonly duplicate: boolean;
+  readonly funded: boolean | null;
 };
 
 /**
@@ -64,6 +65,7 @@ export type LedgerOnboardView =
 export type LedgerCandidateState = {
   readonly balance: string | null;
   readonly deployed: boolean | null;
+  readonly funded: boolean | null;
 };
 
 /**
@@ -113,12 +115,12 @@ export type LedgerOnboardController = {
 
 /**
  * Whether a candidate shows on-chain activity: deployed, or holding a non-zero
- * STRK balance (a funded counterfactual address). `null` state — still loading
- * or degraded RPC — counts as inactive until proven otherwise.
+ * balance in any known token (a funded counterfactual address) — the same
+ * definition the recovery scan uses. `null` state — still loading or degraded
+ * RPC — counts as inactive until proven otherwise.
  */
 export const ledgerCandidateActive = (candidate: LedgerCandidate): boolean =>
-  candidate.deployed === true ||
-  (candidate.balance !== null && Number.parseFloat(candidate.balance) > 0);
+  candidate.deployed === true || candidate.funded === true;
 
 /**
  * Whether a candidate may be selected. Duplicates never are, and a Ready

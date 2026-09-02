@@ -428,6 +428,7 @@ type LedgerSignPendingResponse = {
 type LedgerAccountStatusResponse = {
   readonly balance: string | null;
   readonly deployed: boolean | null;
+  readonly funded: boolean | null;
   readonly ok: true;
 };
 

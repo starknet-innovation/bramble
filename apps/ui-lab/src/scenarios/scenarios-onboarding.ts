@@ -359,7 +359,8 @@ const ledgerCandidate = (
     id: `SN_MAIN:${address}`,
     publicKeyX: `0x${index + 80}`,
   };
-  return { account, balance, deployed, duplicate };
+  const funded = balance !== null && Number.parseFloat(balance) > 0;
+  return { account, balance, deployed, duplicate, funded };
 };
 
 export const ledgerOnboardingScenario: WalletScenario = {
