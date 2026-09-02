@@ -51,6 +51,31 @@ export const createAccountRuntimeClient = (
     if (isMatchingAccountResponse(response, networkId, accountContractType)) return;
     throw responseError(response, "wallet unavailable");
   },
+  /**
+   * First-run only: creates a phrase-less vault around one raw private key and
+   * unlocks it. The key travels solely in this privileged extension-page
+   * request; the background fails closed over an existing vault.
+   */
+  async createKeyVault(
+    networkId: string,
+    privateKey: string,
+    vaultPassphrase: string,
+    accountContractType: AccountContractType,
+    deploymentSalt?: string,
+  ): Promise<string> {
+    const response = await sendMessage({
+      accountContractType,
+      ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
+      networkId,
+      privateKey,
+      type: "wallet.createKeyVault",
+      vaultPassphrase,
+    });
+    if (isMatchingAccountResponse(response, networkId, accountContractType)) {
+      return response.account.id;
+    }
+    throw responseError(response, "create key vault failed");
+  },
   async importAccount(
     networkId: string,
     privateKey: string,

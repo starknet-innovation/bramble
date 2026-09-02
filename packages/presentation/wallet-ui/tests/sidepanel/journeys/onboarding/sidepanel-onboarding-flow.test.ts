@@ -199,7 +199,7 @@ describe("staged onboarding", () => {
     expect(activeStep(flow.app)).toBe("password");
     setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
     setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
-    click(flow.app, "#choose-account-contract-button");
+    click(flow.app, "#password-continue-button");
     expect(activeStep(flow.app)).toBe("recovery-accounts");
     await tick();
 
@@ -242,7 +242,7 @@ describe("staged onboarding", () => {
     await tick();
     setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
     setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
-    click(flow.app, "#choose-account-contract-button");
+    click(flow.app, "#password-continue-button");
     expect(calls).toBe(1);
 
     click(flow.app, '[data-onboarding-step="recovery-accounts"] [data-onboarding-back]');
@@ -253,15 +253,13 @@ describe("staged onboarding", () => {
     expect(calls).toBe(1);
   });
 
-  test("discards a delayed preview after the account contract changes", async () => {
-    let release: ((value: AccountRef) => void) | undefined;
+  test("discards a delayed preview invalidated by going back", async () => {
+    const releases: ((value: AccountRef) => void)[] = [];
     const flow = mount({
-      previewAccount: (_mnemonic, _networkId, accountContractType) =>
-        accountContractType === "openzeppelin"
-          ? new Promise((resolve) => {
-              release = resolve;
-            })
-          : Promise.resolve(accountFor(accountContractType)),
+      previewAccount: () =>
+        new Promise<AccountRef>((resolve) => {
+          releases.push(resolve);
+        }),
     });
     click(flow.app, "#create-new-button");
     await tick();
@@ -273,20 +271,27 @@ describe("staged onboarding", () => {
     click(flow.app, "#verify-continue");
     setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
     setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
-    click(flow.app, "#choose-account-contract-button");
-    click(flow.app, "#review-account-button");
-    click(flow.app, '[data-account-contract="argent"]');
-    release?.(accountFor("openzeppelin"));
-    await tick();
+    click(flow.app, "#password-continue-button");
+    expect(releases.length).toBe(1);
 
-    expect(activeStep(flow.app)).toBe("account-contract");
+    // Going back invalidates the pending review; its late arrival must not
+    // advance the flow or enable creation.
+    click(flow.app, '[data-onboarding-step="password"] [data-onboarding-back]');
+    releases[0]?.(accountFor("openzeppelin"));
+    await tick();
+    expect(activeStep(flow.app)).not.toBe("accounts");
     expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
-    click(flow.app, "#review-account-button");
+
+    // A fresh review still lands.
+    setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#password-continue-button");
+    releases[1]?.(accountFor("openzeppelin"));
     await tick();
     expect(activeStep(flow.app)).toBe("accounts");
     expect(flow.previews).toEqual([
       [MNEMONIC, "SN_MAIN", "openzeppelin"],
-      [MNEMONIC, "SN_MAIN", "argent"],
+      [MNEMONIC, "SN_MAIN", "openzeppelin"],
     ]);
   });
 
@@ -487,12 +492,8 @@ describe("staged onboarding", () => {
     const flow = mount();
     click(flow.app, "#add-existing-button");
     click(flow.app, "#ledger-method-button");
-    expect(activeStep(flow.app)).toBe("ledger-contract");
-    click(flow.app, "#ledger-contract-continue");
     expect(activeStep(flow.app)).toBe("ledger");
     click(flow.app, '[data-onboarding-step="ledger"] [data-onboarding-back]');
-    expect(activeStep(flow.app)).toBe("ledger-contract");
-    click(flow.app, '[data-onboarding-step="ledger-contract"] [data-onboarding-back]');
     expect(activeStep(flow.app)).toBe("method");
   });
 });

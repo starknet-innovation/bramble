@@ -1,10 +1,9 @@
 /**
- * Coverage for Ledger onboarding: the silent PAGINATED multi-index enumeration
- * (version gate + serial getPubKey per page) against an injected fake device
- * client and the controller: connect reads the first page, "Show more" appends
- * the next, toggling selects indexes, "Add selected" adds exactly those, and
- * the chooser routes HD/import/ledger. Pure template coverage lives in
- * `sidepanel-ledger-onboard-views.test.ts`.
+ * Coverage for the Ledger onboarding controller: connect reads the first
+ * page, "Show more" appends the next, toggling selects indexes, "Add
+ * selected" adds exactly those, and the chooser routes regular/import/ledger.
+ * Enumeration itself is covered in `sidepanel-ledger-enumerate.test.ts`; pure
+ * template coverage lives in `sidepanel-ledger-onboard-views.test.ts`.
  */
 import { describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
@@ -13,7 +12,6 @@ import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import {
   createLedgerOnboardController,
-  enumerateLedgerPubKeys,
   type LedgerOnboardControllerDeps,
   type LedgerOnboardView,
 } from "../../../../src/sidepanel/journeys/ledger/onboard-session";
@@ -41,37 +39,6 @@ const enumerateClient = (appMajor: number): LedgerDeviceClient => ({
     });
   },
   signHash: () => Promise.reject(new Error("unused")),
-});
-
-describe("enumerateLedgerPubKeys", () => {
-  test("reads a page of indices silently after the version gate", async () => {
-    const entries = await enumerateLedgerPubKeys(enumerateClient(2), 0, 3);
-    expect(entries.map((entry) => entry.accountIndex)).toEqual([0, 1, 2]);
-    // Each pubkey X is a non-zero felt derived from the device bytes.
-    expect(entries.every((entry) => entry.publicKeyX.startsWith("0x"))).toBe(true);
-  });
-
-  test("a later page reads the next slice of indices (5-9)", async () => {
-    const entries = await enumerateLedgerPubKeys(enumerateClient(2), 5, 5);
-    expect(entries.map((entry) => entry.accountIndex)).toEqual([5, 6, 7, 8, 9]);
-  });
-
-  test("rejects a below-minimum app before reading any key", async () => {
-    let reads = 0;
-    const client: LedgerDeviceClient = {
-      getOsVersion: () => Promise.resolve({ targetId: 0x33000004, version: "2.7.1" }),
-      getAppVersion: () => Promise.resolve(version(1)),
-      getPubKey: () => {
-        reads += 1;
-        return Promise.reject(new Error("unused"));
-      },
-      signHash: () => Promise.reject(new Error("unused")),
-    };
-    await expect(enumerateLedgerPubKeys(client, 0, 3)).rejects.toMatchObject({
-      code: "app-below-minimum",
-    });
-    expect(reads).toBe(0);
-  });
 });
 
 const candidateAccount = (index: number): LedgerAccountRef => ({
@@ -449,7 +416,7 @@ describe("add-account chooser routing", () => {
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
     expect(h.views.at(-1)).toEqual({ kind: "chooser", selected: null });
-    controller.choose("ledger-openzeppelin");
+    controller.choose("ledger");
     expect(h.views.at(-1)?.kind).toBe("connect");
   });
 
@@ -466,31 +433,44 @@ describe("add-account chooser routing", () => {
     expect(h.hdAdds()).toBe(0);
   });
 
-  test("choose('import') dismisses the overlay and routes to the import form", () => {
+  test("choose('import') opens the import chooser; import-key routes to the form", () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
     controller.choose("import");
+    expect(h.views.at(-1)).toEqual({ kind: "import-chooser", selected: null });
+    controller.select("import-key");
+    expect(h.views.at(-1)).toEqual({ kind: "import-chooser", selected: "import-key" });
+    controller.continueChoice();
     expect(h.views.at(-1)).toBeNull();
     expect(h.imports()).toBe(1);
   });
 
-  test("an OpenZeppelin choice derives an HD account, dismisses, and refreshes", async () => {
+  test("choose('import-ledger') starts the connect flow like a new Ledger account", () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
-    controller.choose("openzeppelin");
+    controller.choose("import");
+    controller.choose("import-ledger");
+    expect(h.views.at(-1)?.kind).toBe("connect");
+  });
+
+  test("a regular-account choice derives an HD account, dismisses, and refreshes", async () => {
+    const h = onboardHarness();
+    const controller = createLedgerOnboardController(h.deps);
+    controller.showChooser();
+    controller.choose("regular");
     await tick();
     expect(h.hdAdds()).toBe(1);
     expect(h.views.at(-1)).toBeNull();
     expect(h.refreshed()).toBe(1);
   });
 
-  test("an OpenZeppelin choice surfaces the wallet error when derivation fails", async () => {
+  test("a regular-account choice surfaces the wallet error when derivation fails", async () => {
     const h = onboardHarness({ addHd: () => Promise.reject(new Error("wallet locked")) });
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
-    controller.choose("openzeppelin");
+    controller.choose("regular");
     await tick();
     const final = h.views.at(-1);
     expect(final?.kind === "error" && final.message).toBe("wallet locked");

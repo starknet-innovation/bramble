@@ -9,6 +9,7 @@ import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { LedgerCandidate } from "../../../../src/sidepanel/journeys/ledger/onboard-session";
 import {
   addAccountChooser,
+  importAccountChooser,
   ledgerAccountPicker,
   ledgerConnectPrompt,
   ledgerDevicePicker,
@@ -32,26 +33,40 @@ const candidateAccount = (index: number): LedgerAccountRef => ({
 });
 
 describe("onboarding views", () => {
-  test("the chooser offers both account contracts for software and Ledger signers", () => {
+  test("the chooser offers exactly the four account routes", () => {
     const html = addAccountChooser();
-    expect(html).toContain('data-add-kind="argent"');
-    expect(html).toContain('data-add-kind="openzeppelin"');
-    expect(html).toContain('data-add-kind="import"');
-    expect(html).toContain('data-add-kind="ledger-argent"');
-    expect(html).toContain('data-add-kind="ledger-openzeppelin"');
+    expect(html).toContain('data-add-kind="regular"');
+    expect(html).toContain('data-add-kind="ledger"');
     expect(html).toContain('data-add-kind="multisig"');
-    expect(html).toContain("Ready Account");
-    expect(html).toContain("Bramble Account");
-    expect(html).toContain("Ready Ledger Account");
-    expect(html).toContain("Bramble Ledger Account");
-    expect(html).toContain("Import from private key");
-    expect(html).toContain("Ready Multisig");
-    expect(html.indexOf('data-add-kind="openzeppelin"')).toBeLessThan(
-      html.indexOf('data-add-kind="argent"'),
+    expect(html).toContain('data-add-kind="import"');
+    expect(html).toContain("Regular account");
+    expect(html).toContain("Ledger account");
+    expect(html).toContain("Multisig account");
+    expect(html).toContain("Import an existing account");
+    // Contract choice is gone: every creation route is the Bramble account.
+    expect(html).not.toContain("argent");
+    expect(html).not.toContain("openzeppelin");
+    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(4);
+    expect(html.indexOf('data-add-kind="regular"')).toBeLessThan(
+      html.indexOf('data-add-kind="import"'),
     );
-    expect(html).toContain("Recommended · Create the next account");
     expect(html).toMatch(/data-add-continue[^>]*disabled/);
-    expect(addAccountChooser("argent")).toMatch(/data-add-kind="argent"[^>]*aria-pressed="true"/);
+    expect(addAccountChooser("ledger")).toMatch(/data-add-kind="ledger"[^>]*aria-pressed="true"/);
+  });
+
+  test("the import chooser mirrors onboarding without the recovery-phrase route", () => {
+    const html = importAccountChooser();
+    expect(html).toContain('data-add-kind="import-ledger"');
+    expect(html).toContain('data-add-kind="import-key"');
+    expect(html).toContain("Ledger hardware wallet");
+    expect(html).toContain("Private key");
+    // One phrase per vault: no in-wallet recovery-phrase import.
+    expect(html).not.toContain("Recovery phrase");
+    expect(html).toContain("data-add-back");
+    expect(html).toMatch(/data-add-continue[^>]*disabled/);
+    expect(importAccountChooser("import-key")).toMatch(
+      /data-add-kind="import-key"[^>]*aria-pressed="true"/,
+    );
   });
 
   test("connect, reading, and error device states render their controls", () => {

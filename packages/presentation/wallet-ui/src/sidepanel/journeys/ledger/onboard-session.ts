@@ -21,7 +21,6 @@ import {
 import { asLedgerRejection, LedgerRejection, ledgerMessage } from "@bramble/ledger-protocol/errors";
 import {
   closeLedgerSessionQuietly,
-  type LedgerConnector,
   type LedgerDeviceChoice,
   type LedgerDeviceSession,
 } from "@bramble/ledger-protocol/session";
@@ -31,6 +30,23 @@ import type {
   LedgerPubKeyEntry,
 } from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@bramble/wallet-model/ledger-path";
+import type {
+  LedgerCandidate,
+  LedgerCandidateState,
+  LedgerOnboardAddKind,
+  LedgerOnboardController,
+  LedgerOnboardControllerDeps,
+} from "./onboard-types";
+
+/** Re-exports the controller's documented type surface from its size-budget split. */
+export type {
+  LedgerCandidate,
+  LedgerCandidateState,
+  LedgerOnboardAddKind,
+  LedgerOnboardController,
+  LedgerOnboardControllerDeps,
+  LedgerOnboardView,
+} from "./onboard-types";
 
 /**
  * Number of account indices read per enumeration page (a page is `start` …
@@ -67,101 +83,6 @@ export const enumerateLedgerPubKeys = async (
   return entries;
 };
 
-/**
- * One enumerated candidate for the picker: the derived keyless account plus its
- * best-effort on-chain state. `deployed`/`balance` are `null` while still
- * loading or when the RPC degraded; `duplicate` marks an account already in the
- * vault so it cannot be added twice.
- */
-export type LedgerCandidate = {
-  readonly account: LedgerAccountRef;
-  readonly balance: string | null;
-  readonly deployed: boolean | null;
-  readonly duplicate: boolean;
-};
-
-/**
- * Account-contract-aware routes dispatched by the add-account chooser.
- */
-export type LedgerOnboardAddKind =
-  | "argent"
-  | "import"
-  | "ledger-argent"
-  | "ledger-openzeppelin"
-  | "multisig"
-  | "openzeppelin";
-
-/**
- * The onboarding device-prompt view the binder renders: the add-account
- * chooser, the connect gesture, the silent read, the multi-select account
- * picker (with the currently-selected indices), or a typed error.
- */
-export type LedgerOnboardView =
-  | { readonly kind: "chooser"; readonly selected: LedgerOnboardAddKind | null }
-  | { readonly kind: "connect" }
-  | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
-  | { readonly kind: "reading" }
-  | {
-      readonly kind: "picker";
-      readonly candidates: readonly LedgerCandidate[];
-      readonly message?: string;
-      readonly selected: readonly number[];
-    }
-  | { readonly kind: "error"; readonly message: string };
-
-/**
- * Best-effort on-chain state; `null` degrades to unavailable without blocking.
- */
-export type LedgerCandidateState = {
-  readonly balance: string | null;
-  readonly deployed: boolean | null;
-};
-
-/**
- * Injected collaborators keep chooser, enumeration, contract-aware derivation,
- * creation, refresh, and cancellation testable without hardware or a live
- * background.
- */
-export type LedgerOnboardControllerDeps = {
-  readonly addHd: (accountContractType: AccountContractType) => Promise<void>;
-  readonly connector: LedgerConnector;
-  readonly create: (account: LedgerAccountRef) => Promise<void>;
-  readonly derive: (
-    entries: readonly LedgerPubKeyEntry[],
-    accountContractType: AccountContractType,
-  ) => Promise<readonly LedgerAccountRef[]>;
-  readonly describe: (account: LedgerAccountRef) => Promise<LedgerCandidateState>;
-  readonly enumerate: (
-    client: LedgerDeviceClient,
-    startIndex: number,
-    readiness: LedgerDeviceSession["readiness"],
-  ) => Promise<readonly LedgerPubKeyEntry[]>;
-  readonly existingIds: () => ReadonlySet<string>;
-  readonly onCancel: () => void;
-  readonly openImport: () => void;
-  readonly openMultisig: () => void;
-  readonly refresh: () => Promise<void>;
-  readonly render: (view: LedgerOnboardView | null) => void;
-};
-
-/**
- * Drives the Ledger onboarding subflow. Returned by
- * {@link createLedgerOnboardController}.
- */
-export type LedgerOnboardController = {
-  readonly addSelected: () => void;
-  readonly cancel: () => void;
-  readonly choose: (kind: LedgerOnboardAddKind) => void;
-  readonly chooseDevice: (deviceId: string) => void;
-  readonly connect: () => void;
-  readonly continueChoice: () => void;
-  readonly loadMore: () => void;
-  readonly select: (kind: LedgerOnboardAddKind) => void;
-  readonly showChooser: () => void;
-  readonly start: (accountContractType?: AccountContractType) => void;
-  readonly toggle: (accountIndex: number) => void;
-};
-
 const EMPTY_STATE: LedgerCandidateState = { balance: null, deployed: null };
 
 /**
@@ -187,6 +108,7 @@ export const createLedgerOnboardController = (
   let devices: readonly LedgerDeviceChoice[] = [];
   let selectedDeviceId: string | null = null;
   let selectedAddKind: LedgerOnboardAddKind | null = null;
+  let chooserStage: "add" | "import" = "add";
   const selected = new Set<number>();
   let nextIndex = 0;
   let busy = false;
@@ -199,6 +121,7 @@ export const createLedgerOnboardController = (
     devices = [];
     selectedDeviceId = null;
     selectedAddKind = null;
+    chooserStage = "add";
     selected.clear();
     nextIndex = 0;
   };
@@ -438,13 +361,18 @@ export const createLedgerOnboardController = (
   };
 
   const choose = (kind: LedgerOnboardAddKind): void => {
-    if (kind === "ledger-argent" || kind === "ledger-openzeppelin") {
-      accountContractType = kind === "ledger-argent" ? "argent" : "openzeppelin";
+    if (kind === "ledger" || kind === "import-ledger") {
+      // Every account contract this wallet creates is the Bramble account.
+      accountContractType = "openzeppelin";
       resetState();
       deps.render({ kind: "connect" });
-    } else if (kind === "argent" || kind === "openzeppelin") {
-      void runChooseHd(kind);
+    } else if (kind === "regular") {
+      void runChooseHd("openzeppelin");
     } else if (kind === "import") {
+      selectedAddKind = null;
+      chooserStage = "import";
+      deps.render({ kind: "import-chooser", selected: null });
+    } else if (kind === "import-key") {
       deps.render(null);
       deps.openImport();
     } else {
@@ -477,7 +405,10 @@ export const createLedgerOnboardController = (
     },
     select(kind) {
       selectedAddKind = kind;
-      deps.render({ kind: "chooser", selected: kind });
+      deps.render({
+        kind: chooserStage === "import" ? "import-chooser" : "chooser",
+        selected: kind,
+      });
     },
     showChooser() {
       resetState();

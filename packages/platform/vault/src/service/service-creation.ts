@@ -1,0 +1,240 @@
+/**
+ * Vault- and account-creation writes, split from service.ts on the size
+ * budget. Background-only like its owner: every method validates through the
+ * caller-supplied snapshot reader (which enforces the passphrase), derives via
+ * Krusty KMS, and fails closed — first-run creators refuse to write over an
+ * existing vault, and duplicate account ids are rejected before any write.
+ */
+
+import { WalletError } from "@bramble/core/errors";
+import {
+  deriveAccount,
+  deriveImportedAccount,
+  deriveLedgerAccount,
+  deriveLedgerAccountRefs,
+  nextAccountIndex,
+} from "../accounts/accounts";
+import type { EncryptedStore } from "../encrypted-store";
+import type { KmsPort } from "../kms-port";
+import { CURRENT_SCHEMA_VERSION, isVaultV7, type Vault } from "../schema/schema";
+import type { WalletVaultService } from "./service-types";
+
+/**
+ * Validates and persists a vault snapshot. Refuses to write anything that is
+ * not a well-formed current-schema vault, so a buggy caller can never persist
+ * a partial or downgraded shape.
+ */
+export const writeVault = async (
+  encryptedStore: EncryptedStore,
+  vault: Vault,
+  vaultPassphrase: string,
+): Promise<void> => {
+  if (!isVaultV7(vault)) {
+    throw new WalletError("Invalid vault");
+  }
+  await encryptedStore.write(vault, vaultPassphrase);
+};
+
+type VaultCreationDeps = {
+  readonly encryptedStore: EncryptedStore;
+  readonly kms: KmsPort;
+  readonly readVaultSnapshot: (vaultPassphrase: string) => Promise<Vault>;
+};
+
+type VaultCreationMethods = Pick<
+  WalletVaultService,
+  | "addDerivedAccount"
+  | "addLedgerAccount"
+  | "createAccount"
+  | "createKeyVault"
+  | "createLedgerVault"
+  | "deriveLedgerAccounts"
+  | "importRawKeyAccount"
+>;
+
+/**
+ * The service methods that create vaults or add accounts. Split from the main
+ * factory purely by size budget; trust boundaries and failure behavior are
+ * unchanged and documented on {@link WalletVaultService}.
+ */
+export const vaultCreationMethods = ({
+  encryptedStore,
+  kms,
+  readVaultSnapshot,
+}: VaultCreationDeps): VaultCreationMethods => ({
+  async addDerivedAccount(input) {
+    const vault = await readVaultSnapshot(input.vaultPassphrase);
+    if (!vault.mnemonic) {
+      throw new WalletError("No recovery phrase stored for this wallet");
+    }
+    const { account, privateKey } = await deriveAccount(kms, {
+      accountContractType: input.accountContractType,
+      accountIndex: nextAccountIndex(vault.accounts, input.networkId),
+      mnemonic: vault.mnemonic,
+      networkId: input.networkId,
+    });
+    if (vault.accounts.some((stored) => stored.id === account.id)) {
+      throw new WalletError("Account already exists");
+    }
+
+    await writeVault(
+      encryptedStore,
+      {
+        ...vault,
+        accounts: [...vault.accounts, account],
+        activeAccountId: account.id,
+        signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
+      },
+      input.vaultPassphrase,
+    );
+
+    return account;
+  },
+  async createAccount(input) {
+    const vault = await readVaultSnapshot(input.vaultPassphrase);
+    // Never displace the one recovery phrase the user backed up.
+    const displacesStoredSeed =
+      vault.mnemonic === null ? vault.accounts.length > 0 : vault.mnemonic !== input.mnemonic;
+    if (displacesStoredSeed) {
+      throw new WalletError("Wallet already exists");
+    }
+    const { account, privateKey } = await deriveAccount(kms, input);
+
+    if (vault.accounts.some((stored) => stored.id === account.id)) {
+      throw new WalletError("Account already exists");
+    }
+
+    await writeVault(
+      encryptedStore,
+      {
+        ...vault,
+        accounts: [...vault.accounts, account],
+        activeAccountId: vault.activeAccountId ?? account.id,
+        mnemonic: vault.mnemonic ?? input.mnemonic,
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
+      },
+      input.vaultPassphrase,
+    );
+
+    return account;
+  },
+  async importRawKeyAccount(input) {
+    const vault = await readVaultSnapshot(input.vaultPassphrase);
+    const { account, privateKey } = await deriveImportedAccount(kms, {
+      accountContractType: input.accountContractType,
+      ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+      networkId: input.networkId,
+      privateKey: input.privateKey,
+    });
+    if (vault.accounts.some((stored) => stored.id === account.id)) {
+      throw new WalletError("Account already exists");
+    }
+
+    await writeVault(
+      encryptedStore,
+      {
+        ...vault,
+        accounts: [...vault.accounts, account],
+        activeAccountId: account.id,
+        signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
+      },
+      input.vaultPassphrase,
+    );
+
+    return account;
+  },
+  async addLedgerAccount(input) {
+    const vault = await readVaultSnapshot(input.vaultPassphrase);
+    const account = await deriveLedgerAccount(kms, {
+      accountContractType: input.accountContractType,
+      accountIndex: input.accountIndex,
+      ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+      networkId: input.networkId,
+      publicKeyX: input.publicKeyX,
+      ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
+    });
+    if (vault.accounts.some((stored) => stored.id === account.id)) {
+      throw new WalletError("Account already exists");
+    }
+
+    // Ledger accounts have no matching signing-key entry.
+    await writeVault(
+      encryptedStore,
+      { ...vault, accounts: [...vault.accounts, account], activeAccountId: account.id },
+      input.vaultPassphrase,
+    );
+
+    return account;
+  },
+  async createKeyVault(input) {
+    const vault = await readVaultSnapshot(input.vaultPassphrase);
+    // A phrase-less imported-key vault can only be created over a fresh store.
+    if (vault.accounts.length > 0 || vault.mnemonic !== null) {
+      throw new WalletError("Wallet already exists");
+    }
+    const { account, privateKey } = await deriveImportedAccount(kms, {
+      accountContractType: input.accountContractType,
+      ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+      networkId: input.networkId,
+      privateKey: input.privateKey,
+    });
+
+    // No recovery phrase exists to retain: the vault stays mnemonic-less.
+    await writeVault(
+      encryptedStore,
+      {
+        accounts: [account],
+        accountSecrets: [],
+        activeAccountId: account.id,
+        mnemonic: null,
+        originGrants: [],
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        signingKeys: [{ accountId: account.id, privateKey }],
+      },
+      input.vaultPassphrase,
+    );
+
+    return account;
+  },
+  async createLedgerVault(input) {
+    const vault = await readVaultSnapshot(input.vaultPassphrase);
+    // A mnemonic-less Ledger vault can only be created over a fresh store.
+    if (vault.accounts.length > 0 || vault.mnemonic !== null) {
+      throw new WalletError("Wallet already exists");
+    }
+    const account = await deriveLedgerAccount(kms, {
+      accountContractType: input.accountContractType,
+      accountIndex: input.accountIndex,
+      ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+      networkId: input.networkId,
+      publicKeyX: input.publicKeyX,
+      ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
+    });
+
+    // Ledger stays keyless: no mnemonic and no signing-key entry.
+    await writeVault(
+      encryptedStore,
+      {
+        accounts: [account],
+        accountSecrets: [],
+        activeAccountId: account.id,
+        mnemonic: null,
+        originGrants: [],
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        signingKeys: [],
+      },
+      input.vaultPassphrase,
+    );
+
+    return account;
+  },
+  deriveLedgerAccounts(input) {
+    return deriveLedgerAccountRefs(kms, {
+      accountContractType: input.accountContractType,
+      ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+      entries: input.entries,
+      networkId: input.networkId,
+    });
+  },
+});

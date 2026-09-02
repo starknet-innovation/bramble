@@ -69,6 +69,7 @@ const SECRET_MATERIAL_FILES = new Set([
   // Privileged first-run boundary: the phrase is validated through Krusty and
   // only the boolean verdict returns; the phrase is never logged or persisted.
   "apps/extension/src/background/onboarding/onboarding-ops.ts",
+  "apps/extension/src/background/routing/account-creation-handlers.ts",
   // Keeps the unlocked vault credential inside the privileged worker while
   // coordinating fail-closed network/vault commits; never persists or emits it.
   "apps/extension/src/background/runtime/active-network-mutation.ts",
@@ -136,6 +137,7 @@ const SECRET_MATERIAL_FILES = new Set([
   // English BIP39 word list embeds the token `seed`; assist-only, never crypto.
   "packages/presentation/wallet-ui/src/recovery/bip39-english.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/import-key-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
   // Recovery discovery keeps the phrase and vault credential only in the
@@ -207,6 +209,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
   "packages/platform/vault/src/accounts/network-account.ts",
   "packages/platform/vault/src/service/reveal.ts",
+  "packages/platform/vault/src/service/service-creation.ts",
   // Atomic recovery re-derives selected accounts and writes their protected
   // keys directly into the encrypted vault; no secret is returned or logged.
   "packages/platform/vault/src/service/recovery.ts",

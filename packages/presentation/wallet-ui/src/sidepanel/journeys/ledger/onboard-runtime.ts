@@ -23,6 +23,7 @@ import {
 } from "./onboard-session";
 import {
   addAccountChooser,
+  importAccountChooser,
   ledgerAccountPicker,
   ledgerConnectPrompt,
   ledgerDevicePicker,
@@ -74,12 +75,12 @@ export type LedgerOnboardRuntime = {
 };
 
 const isAddKind = (value: string | undefined): value is LedgerOnboardAddKind =>
-  value === "argent" ||
   value === "import" ||
-  value === "ledger-argent" ||
-  value === "ledger-openzeppelin" ||
+  value === "import-key" ||
+  value === "import-ledger" ||
+  value === "ledger" ||
   value === "multisig" ||
-  value === "openzeppelin";
+  value === "regular";
 
 /**
  * Creates the DOM-bound Ledger onboarding runtime. The controller persists
@@ -116,6 +117,9 @@ export const createLedgerOnboardRuntime = (
     mount
       .querySelector<HTMLButtonElement>("[data-add-continue]")
       ?.addEventListener("click", () => controller.continueChoice());
+    mount
+      .querySelector<HTMLButtonElement>("[data-add-back]")
+      ?.addEventListener("click", () => controller.showChooser());
   };
 
   const bindDevices = (): void => {
@@ -150,6 +154,9 @@ export const createLedgerOnboardRuntime = (
   const bodyFor = (view: LedgerOnboardView): string => {
     if (view.kind === "chooser") {
       return addAccountChooser(view.selected);
+    }
+    if (view.kind === "import-chooser") {
+      return importAccountChooser(view.selected);
     }
     if (view.kind === "connect") {
       return ledgerConnectPrompt();

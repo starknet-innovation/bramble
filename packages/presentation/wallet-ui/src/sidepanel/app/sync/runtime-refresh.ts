@@ -11,6 +11,7 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.approveOrigin",
   "wallet.createAccount",
   "wallet.createGroup",
+  "wallet.createKeyVault",
   "wallet.createLedgerVault",
   "wallet.denyOrigin",
   "wallet.deployAccount",

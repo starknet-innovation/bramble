@@ -72,14 +72,59 @@ export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null):
       })}
     </header>
     <div class="add-account-chooser" role="group" aria-label="Add an account">
-      ${option("openzeppelin", "wallet", "Bramble Account", "Recommended · Create the next account from this wallet’s recovery phrase.")}
-      ${option("argent", "wallet", "Ready Account", "Create the next account with the Ready account model.")}
-      ${option("ledger-openzeppelin", "shield", "Bramble Ledger Account", "Recommended · Use a Ledger with the Bramble account model.")}
-      ${option("ledger-argent", "shield", "Ready Ledger Account", "Use a Ledger with the Ready account model.")}
-      ${option("import", "link", "Import from private key", "Add an existing Starknet account from its raw key.")}
-      ${option("multisig", "users", "Ready Multisig", "Create or add a Ready account controlled by multiple signers.")}
+      ${option("regular", "wallet", "Regular account", "Create the next account from this wallet’s recovery phrase.")}
+      ${option("ledger", "shield", "Ledger account", "Create an account controlled by your Ledger device.")}
+      ${option("multisig", "users", "Multisig account", "Create or add a shared account controlled by multiple signers.")}
+      ${option("import", "link", "Import an existing account", "Bring an account you already have into Bramble.")}
     </div>
     <div class="onboard-actions">
+      ${button({
+        attributes: { "data-add-continue": true },
+        disabled: selected === null,
+        label: "Continue",
+      })}
+    </div>
+  </div>`;
+};
+
+/**
+ * The in-wallet mirror of onboarding's "Add an existing wallet" screen. A
+ * wallet holds exactly one recovery phrase, so unlike first-run onboarding the
+ * recovery-phrase route is absent: only Ledger and private-key imports appear.
+ */
+export const importAccountChooser = (selected: LedgerOnboardAddKind | null = null): string => {
+  const option = (
+    kind: LedgerOnboardAddKind,
+    iconName: "link" | "shield" | "users" | "wallet",
+    label: string,
+    supportingText: string,
+  ): string => `
+    <button class="add-account-option" data-add-kind="${kind}" type="button" aria-pressed="${selected === kind}">
+      <span class="add-account-option-icon">${icon(iconName)}</span>
+      <span class="add-account-option-copy"><strong>${label}</strong><span>${supportingText}</span></span>
+      <span class="add-account-option-check">${icon("check")}</span>
+    </button>`;
+  return `
+  <div class="onboard-hero add-account-hero">
+    <header class="add-account-header">
+      <h1>Add an existing account</h1>
+      ${iconButton({
+        attributes: { "data-ledger-onboard-cancel": true },
+        icon: "x",
+        label: "Close Add account",
+        variant: "ghost",
+      })}
+    </header>
+    <div class="add-account-chooser" role="group" aria-label="Add an existing account">
+      ${option("import-ledger", "shield", "Ledger hardware wallet", "Connect a Ledger and choose accounts without exposing keys.")}
+      ${option("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
+    </div>
+    <div class="onboard-actions">
+      ${button({
+        attributes: { "data-add-back": true },
+        label: "Back",
+        variant: "ghost",
+      })}
       ${button({
         attributes: { "data-add-continue": true },
         disabled: selected === null,

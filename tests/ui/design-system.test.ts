@@ -150,13 +150,14 @@ describe("design system", () => {
         label: "Create a new wallet",
       }),
     );
-    expect(markup).toContain('role="group" aria-label="Account contract"');
-    expect(markup).toContain('data-account-contract="argent"');
-    expect(markup).toContain('data-account-contract="openzeppelin"');
-    expect(markup).toMatch(/data-account-contract="openzeppelin"[^>]*aria-pressed="true"/);
-    expect(markup).toContain("The Bramble account is the recommended default");
+    // Creation flows pin the Bramble account: no contract chooser remains.
+    expect(markup).not.toContain('aria-label="Account contract"');
+    expect(markup).not.toContain("data-account-contract=");
+    expect(markup).toContain('name="accountContractType" type="hidden" value="openzeppelin"');
+    // The private-key import keeps the contract choice for existing accounts.
+    expect(markup).toContain('id="key-method-button"');
     expect(markup).toContain("Ready Account");
-    expect(markup).toContain("Bramble Account");
+    expect(markup).toContain("Bramble Account — Recommended");
     expect(markup).toContain("Starknet Mainnet");
   });
 });

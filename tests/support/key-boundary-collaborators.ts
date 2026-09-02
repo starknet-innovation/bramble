@@ -98,6 +98,9 @@ export const walletStub = {
   async createAccount() {
     return account;
   },
+  async createKeyVault() {
+    return account;
+  },
   async createLedgerVault(): Promise<LedgerAccountRef> {
     return ledgerAccount;
   },

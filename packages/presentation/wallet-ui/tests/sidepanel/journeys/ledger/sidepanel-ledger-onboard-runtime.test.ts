@@ -291,30 +291,38 @@ describe("Ledger onboarding runtime (DOM)", () => {
     const h = mountRuntime();
     h.runtime.startAddAccount();
     expect(h.mount.hidden).toBe(false);
-    expect(h.mount.querySelector('[data-add-kind="argent"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="openzeppelin"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="ledger-argent"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="ledger-openzeppelin"]')).not.toBeNull();
-
+    expect(h.mount.querySelector('[data-add-kind="regular"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
     expect(h.mount.querySelector('[data-add-kind="multisig"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
+    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(4);
 
     // Selection stays reversible until Continue confirms the route.
-    click(h.mount, '[data-add-kind="ledger-argent"]');
+    click(h.mount, '[data-add-kind="ledger"]');
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).toBeNull();
     click(h.mount, "[data-add-continue]");
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
-    // "Import a private key" dismisses the overlay and routes to the import form.
+    // "Import an existing account" opens the two-route import chooser; the
+    // private-key route dismisses the overlay into the import form, and Back
+    // returns to the four-tile chooser.
     h.runtime.startAddAccount();
     click(h.mount, '[data-add-kind="import"]');
+    click(h.mount, "[data-add-continue]");
+    expect(h.mount.querySelector('[data-add-kind="import-ledger"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="import-key"]')).not.toBeNull();
+    click(h.mount, "[data-add-back]");
+    expect(h.mount.querySelector('[data-add-kind="regular"]')).not.toBeNull();
+    click(h.mount, '[data-add-kind="import"]');
+    click(h.mount, "[data-add-continue]");
+    click(h.mount, '[data-add-kind="import-key"]');
     click(h.mount, "[data-add-continue]");
     expect(h.mount.hidden).toBe(true);
     expect(h.imports()).toBe(1);
 
-    // "New account" derives an HD account, then dismisses on success.
+    // "Regular account" derives an HD account, then dismisses on success.
     h.runtime.startAddAccount();
-    click(h.mount, '[data-add-kind="argent"]');
+    click(h.mount, '[data-add-kind="regular"]');
     click(h.mount, "[data-add-continue]");
     await tick();
     expect(h.hdAdds()).toBe(1);

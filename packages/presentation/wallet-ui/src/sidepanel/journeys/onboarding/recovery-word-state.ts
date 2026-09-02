@@ -48,3 +48,25 @@ export const fillRecoveryWords = (
   }
   return count;
 };
+
+/**
+ * Masks or reveals the generated recovery grid: masked words are hidden from
+ * the accessibility tree and untabbable so a shoulder-surfed or screen-read
+ * phrase requires the deliberate reveal action.
+ */
+export const setGeneratedPhraseMasked = (
+  grid: HTMLElement | null,
+  inputs: readonly HTMLInputElement[],
+  masked: boolean,
+): void => {
+  grid?.classList.toggle("is-masked", masked);
+  grid?.toggleAttribute("inert", masked);
+  if (masked) {
+    grid?.setAttribute("aria-hidden", "true");
+  } else {
+    grid?.removeAttribute("aria-hidden");
+  }
+  for (const input of inputs) {
+    input.tabIndex = masked ? -1 : 0;
+  }
+};
