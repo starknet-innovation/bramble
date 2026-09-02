@@ -30,9 +30,9 @@ export const ONBOARDING_STYLES = `
   }
   .onboarding-wizard {
     align-items: stretch;
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.xl};
-    box-shadow: var(--mc-elev-md);
+    box-shadow: var(--bramble-elev-md);
     display: block;
     flex: none;
     gap: 0;
@@ -96,9 +96,9 @@ export const ONBOARDING_STYLES = `
   .onboarding-step-head .lede { line-height: 1.55; max-width: 42ch; text-wrap: balance; }
   .onboarding-step-icon {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: inline-flex;
     height: 54px;
     justify-content: center;
@@ -134,9 +134,9 @@ export const ONBOARDING_STYLES = `
   }
   .onboarding-gate .onboarding-launch {
     align-items: center;
-    background: var(--mc-text);
+    background: var(--bramble-text);
     border-radius: ${RADIUS.md};
-    color: var(--mc-bg);
+    color: var(--bramble-bg);
     display: inline-flex;
     font-size: ${TYPE.body.size};
     font-weight: ${WEIGHT.semibold};
@@ -147,9 +147,9 @@ export const ONBOARDING_STYLES = `
   }
 
   .onboarding-option, .onboarding-account {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: grid;
     gap: ${SPACE.md};
     justify-content: initial;
@@ -171,13 +171,13 @@ export const ONBOARDING_STYLES = `
     width: 40px;
   }
   .onboarding-option-icon, .onboarding-account-avatar {
-    background: var(--mc-panel);
-    color: var(--mc-text);
+    background: var(--bramble-panel);
+    color: var(--bramble-text);
   }
   .onboarding-option-icon .icon { height: 18px; width: 18px; }
   .onboarding-option > .icon {
     align-self: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     height: 18px;
     transition: transform ${MOTION.liftMs}ms var(--ease-out);
     width: 18px;
@@ -193,7 +193,7 @@ export const ONBOARDING_STYLES = `
     font-weight: ${WEIGHT.semibold};
   }
   .onboarding-option-copy span, .onboarding-account-copy span {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
   }
@@ -206,8 +206,8 @@ export const ONBOARDING_STYLES = `
     font-weight: ${WEIGHT.bold};
   }
   .onboarding-account-check {
-    background: var(--mc-text);
-    color: var(--mc-bg);
+    background: var(--bramble-text);
+    color: var(--bramble-bg);
     transform: scale(1);
     transition:
       opacity ${MOTION.liftMs}ms var(--ease-out),
@@ -219,8 +219,8 @@ export const ONBOARDING_STYLES = `
     transform: scale(0.92);
   }
   .onboarding-account[aria-pressed="true"] {
-    background: var(--mc-soft-press);
-    box-shadow: var(--mc-elev-sm);
+    background: var(--bramble-soft-press);
+    box-shadow: var(--bramble-elev-sm);
   }
 
   .recovery-grid {
@@ -237,7 +237,7 @@ export const ONBOARDING_STYLES = `
   .recovery-word-cell:has(> input[hidden]) { display: none; }
   /* user-select: the position is a marker, not phrase text to copy. */
   .recovery-word-cell > span:first-child {
-    font-family: var(--mc-font-mono);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.micro.size};
     font-variant-numeric: tabular-nums;
     min-width: 2ch;
@@ -247,20 +247,20 @@ export const ONBOARDING_STYLES = `
   /* Trades side padding for glyphs so an 8-character word still fits at 320px. */
   .recovery-word {
     flex: 1;
-    font-family: var(--mc-font-mono);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.caption.size};
     min-width: 0;
     padding: 0 ${SPACE.xs};
     text-align: center;
   }
   .recovery-word.is-invalid {
-    background: color-mix(in srgb, var(--mc-danger) 12%, transparent);
-    color: var(--mc-danger);
+    background: color-mix(in srgb, var(--bramble-danger) 12%, transparent);
+    color: var(--bramble-danger);
   }
   .recovery-suggestions {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-elev-md);
+    box-shadow: var(--bramble-elev-md);
     display: grid;
     gap: 2px;
     padding: ${SPACE.xs};
@@ -270,8 +270,8 @@ export const ONBOARDING_STYLES = `
   .recovery-suggestion {
     background: transparent;
     border-radius: ${RADIUS.sm};
-    color: var(--mc-text);
-    font-family: var(--mc-font-mono);
+    color: var(--bramble-text);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.caption.size};
     justify-content: flex-start;
     min-height: 32px;
@@ -280,7 +280,7 @@ export const ONBOARDING_STYLES = `
   }
   .recovery-suggestion:hover,
   .recovery-suggestion:focus-visible {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
   }
   .recovery-grid.is-masked .recovery-word {
     filter: blur(6px);
@@ -292,26 +292,26 @@ export const ONBOARDING_STYLES = `
   .recovery-grid.is-masked .recovery-word-cell { pointer-events: none; }
   .onboarding-inline-action {
     background: transparent;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     justify-self: center;
     min-height: 36px;
     padding: 0 ${SPACE.md};
   }
   .password-requirement {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: grid;
     font-size: ${TYPE.caption.size};
     gap: 7px;
   }
   .password-requirement-bar {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
     height: 4px;
     overflow: hidden;
   }
   .password-requirement-bar > span {
-    background: var(--mc-muted);
+    background: var(--bramble-muted);
     display: block;
     height: 100%;
     transform: scaleX(0.32);
@@ -320,18 +320,18 @@ export const ONBOARDING_STYLES = `
       background ${MOTION.enterMs}ms var(--ease-out),
       transform ${MOTION.enterMs}ms var(--ease-out);
   }
-  .password-requirement.is-ready { color: var(--mc-positive); }
+  .password-requirement.is-ready { color: var(--bramble-positive); }
   .password-requirement.is-ready .password-requirement-bar > span {
-    background: var(--mc-positive);
+    background: var(--bramble-positive);
     transform: scaleX(1);
   }
 
   .onboarding-complete {
     align-content: center;
     align-items: center;
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.xl};
-    box-shadow: var(--mc-elev-md);
+    box-shadow: var(--bramble-elev-md);
     display: flex;
     flex: none;
     justify-content: center;
@@ -344,8 +344,8 @@ export const ONBOARDING_STYLES = `
   .onboarding-complete .gate-brand { margin: 0; }
   .onboarding-complete .gate-head { max-width: 38ch; }
   .onboarding-complete-mark {
-    background: var(--mc-positive);
-    color: var(--mc-accent-text);
+    background: var(--bramble-positive);
+    color: var(--bramble-accent-text);
   }
   .onboarding-complete-details {
     display: grid;
@@ -354,9 +354,9 @@ export const ONBOARDING_STYLES = `
   }
   .onboarding-complete-detail {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.md};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     font-size: ${TYPE.caption.size};
     gap: ${SPACE.sm};
@@ -364,7 +364,7 @@ export const ONBOARDING_STYLES = `
     padding: 0 ${SPACE.md};
     text-align: left;
   }
-  .onboarding-complete-detail .icon { color: var(--mc-text); height: 16px; width: 16px; }
+  .onboarding-complete-detail .icon { color: var(--bramble-text); height: 16px; width: 16px; }
   .onboarding-complete-actions {
     display: grid;
     gap: ${SPACE.sm};
@@ -416,17 +416,17 @@ export const ONBOARDING_STYLES = `
     button.onboarding-option:not(:disabled):hover,
     button.onboarding-account:not(:disabled):hover,
     button.onboarding-contract:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
     button.onboarding-option:not(:disabled):hover .onboarding-option-copy span,
     button.onboarding-option:not(:disabled):hover > .icon {
-      color: var(--mc-muted);
+      color: var(--bramble-muted);
     }
     button.onboarding-option:not(:disabled):hover > .icon { transform: translateX(3px); }
     button.onboarding-inline-action:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
   }
   @media (max-height: 760px) {

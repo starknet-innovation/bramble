@@ -52,7 +52,7 @@ describe("ledgerSignScreen", () => {
     expect(html).not.toContain("data-ledger-connect");
     expect(html).toContain('aria-current="step"');
     expect(html).toContain('data-liquid-dots="ledger"');
-    expect(html).toContain('id="mc-liquid-dots-ledger"');
+    expect(html).toContain('id="bramble-liquid-dots-ledger"');
   });
 
   test("error phase renders the escaped catalog message with retry and cancel", () => {

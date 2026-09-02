@@ -38,7 +38,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-flow form { gap: ${SPACE.md}; }
   .send-stage { align-content: start; }
   .send-stage-kicker {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.semibold};
     margin: 0;
@@ -47,7 +47,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-origin-context { display: grid; gap: ${SPACE.sm}; }
   .send-origin-account {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.lg};
     display: flex;
     min-height: ${SIZE.control};
@@ -56,7 +56,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-asset-copy span,
   .send-recipient-copy code,
   .send-asset-value span {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
   }
   .send-origin-context strong { font-size: ${TYPE.body.size}; }
@@ -79,20 +79,20 @@ export const SEND_COMPOSE_STYLES = `
   .send-search { gap: ${SPACE.sm}; }
   .send-section-title,
   .send-search > span:first-child:not(.sr-only) {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font-size: ${TYPE.title.size};
     margin: 0;
   }
   .send-search-control {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.lg};
     display: flex;
     gap: ${SPACE.sm};
     min-height: ${SIZE.control};
     padding-left: ${SPACE.md};
   }
-  .send-search-control > .icon { color: var(--mc-muted); flex: none; }
+  .send-search-control > .icon { color: var(--bramble-muted); flex: none; }
   .send-search-control input {
     background: transparent;
     border-radius: 0 ${RADIUS.lg} ${RADIUS.lg} 0;
@@ -100,24 +100,24 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-search-control input:focus-visible { outline: 0; }
   .send-search-control:has(input:focus-visible) {
-    box-shadow: inset 0 0 0 2px var(--mc-focus-ring);
+    box-shadow: inset 0 0 0 2px var(--bramble-focus-ring);
   }
   .send-recipient-tabs {
-    border-bottom: 1px solid var(--mc-hairline);
+    border-bottom: 1px solid var(--bramble-hairline);
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
   .send-recipient-tabs button {
     background: transparent;
     border-radius: 0;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     min-height: ${CONTROL.hit};
     padding: 0 ${SPACE.sm};
     position: relative;
   }
-  .send-recipient-tabs button[aria-selected="true"] { color: var(--mc-text); }
+  .send-recipient-tabs button[aria-selected="true"] { color: var(--bramble-text); }
   .send-recipient-tabs button[aria-selected="true"]::after {
-    background: var(--mc-text);
+    background: var(--bramble-text);
     border-radius: ${RADIUS.full};
     bottom: -1px;
     content: "";
@@ -128,28 +128,28 @@ export const SEND_COMPOSE_STYLES = `
   @media (hover: hover) and (pointer: fine) {
     .send-recipient-tabs button:not(:disabled):hover {
       background: transparent;
-      color: var(--mc-text);
+      color: var(--bramble-text);
     }
   }
   .send-recipient-tabs button:not(:disabled):active {
     background: transparent;
-    color: var(--mc-text);
+    color: var(--bramble-text);
   }
   .send-recipient-list, .send-asset-list { display: grid; gap: ${SPACE.sm}; }
   .send-list-heading {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     font-size: ${TYPE.label.size};
     gap: ${SPACE.sm};
     justify-content: space-between;
   }
   .send-list-heading > .icon { height: ${CONTROL.icon}; width: ${CONTROL.icon}; }
-  .send-list-heading > strong:first-of-type { color: var(--mc-text); margin-right: auto; }
+  .send-list-heading > strong:first-of-type { color: var(--bramble-text); margin-right: auto; }
   .send-recipient-row, .send-asset-row {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: grid;
     min-height: ${SIZE.tile};
     padding: ${SPACE.md};
@@ -158,14 +158,14 @@ export const SEND_COMPOSE_STYLES = `
   @media (hover: hover) and (pointer: fine) {
     .send-recipient-row:not(:disabled):hover,
     .send-asset-row:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
   }
   .send-recipient-row:not(:disabled):active,
   .send-asset-row:not(:disabled):active {
-    background: var(--mc-soft-press);
-    color: var(--mc-text);
+    background: var(--bramble-soft-press);
+    color: var(--bramble-text);
   }
   .send-recipient-row:focus-visible,
   .send-asset-row:focus-visible {
@@ -175,7 +175,7 @@ export const SEND_COMPOSE_STYLES = `
     align-items: center;
     grid-template-columns: ${SIZE.mark} minmax(0, 1fr) auto;
   }
-  .send-recipient-row > .icon { color: var(--mc-muted); height: 16px; width: 16px; }
+  .send-recipient-row > .icon { color: var(--bramble-muted); height: 16px; width: 16px; }
   .send-recipient-avatar {
     border-radius: ${RADIUS.full};
     height: ${SIZE.mark};
@@ -191,7 +191,7 @@ export const SEND_COMPOSE_STYLES = `
     text-wrap: nowrap;
   }
   .send-recipient-copy small {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};
     overflow: hidden;
     text-overflow: ellipsis;
@@ -199,7 +199,7 @@ export const SEND_COMPOSE_STYLES = `
   }
   #send-recipient-continue { width: 100%; }
   .send-amount-card {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.xl};
     display: grid;
     gap: ${SPACE.md};
@@ -209,24 +209,24 @@ export const SEND_COMPOSE_STYLES = `
       box-shadow ${MOTION.pressMs}ms ${MOTION.ease};
   }
   .send-amount-card:has(.send-amount-field input:focus-visible) {
-    box-shadow: inset 0 0 0 2px var(--mc-focus-ring);
+    box-shadow: inset 0 0 0 2px var(--bramble-focus-ring);
   }
   .send-token-trigger {
-    background: var(--mc-elevated);
-    color: var(--mc-text);
+    background: var(--bramble-elevated);
+    color: var(--bramble-text);
     justify-self: start;
     min-height: ${CONTROL.hit};
     padding: 0 ${SPACE.md};
   }
   @media (hover: hover) and (pointer: fine) {
     .send-token-trigger:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
   }
   .send-token-trigger:not(:disabled):active {
-    background: var(--mc-soft-press);
-    color: var(--mc-text);
+    background: var(--bramble-soft-press);
+    color: var(--bramble-text);
   }
   .send-token-trigger > span:first-child,
   .send-token-trigger > span:first-child > svg,
@@ -255,13 +255,13 @@ export const SEND_COMPOSE_STYLES = `
     outline: 0;
   }
   .send-amount-prefix {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.display.size};
     font-weight: ${WEIGHT.semibold};
   }
   .send-amount-meta {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     font-size: ${TYPE.caption.size};
     gap: ${SPACE.sm};
@@ -270,34 +270,34 @@ export const SEND_COMPOSE_STYLES = `
   .send-amount-shortcuts { align-items: center; display: flex; gap: ${SPACE.xs}; }
   .send-amount-shortcuts button {
     background: transparent;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     min-height: ${CONTROL.hitSmall};
     padding: 0 ${SPACE.sm};
   }
   .send-amount-shortcuts #send-unit-toggle {
-    background: var(--mc-elevated);
-    color: var(--mc-text);
+    background: var(--bramble-elevated);
+    color: var(--bramble-text);
   }
   @media (hover: hover) and (pointer: fine) {
     .send-amount-shortcuts button:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
   }
   .send-amount-shortcuts button:not(:disabled):active {
-    background: var(--mc-soft-press);
-    color: var(--mc-text);
+    background: var(--bramble-soft-press);
+    color: var(--bramble-text);
   }
   .send-amount-shortcuts .icon { height: 14px; width: 14px; }
   .send-fiat-estimate {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     margin: -${SPACE.sm} 0 0;
     text-align: right;
   }
   .send-context-receipt {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     margin: 0;
@@ -314,14 +314,14 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-context-receipt > div + div::before,
   .send-review-facts > div + div::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
     position: absolute;
   }
   .send-context-receipt dt,
-  .send-review-facts dt { color: var(--mc-muted); font-size: ${TYPE.label.size}; }
+  .send-review-facts dt { color: var(--bramble-muted); font-size: ${TYPE.label.size}; }
   /* An account row in the receipt: identity on the left, and for the two
      accounts, the balance that account's value moves through on the right. */
   .send-context-receipt dd:has(.send-route-toggle) {
@@ -341,11 +341,11 @@ export const SEND_COMPOSE_STYLES = `
     min-width: 0;
   }
   .send-context-receipt code,
-  .send-review-facts code { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
+  .send-review-facts code { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
   #send-review-button { margin-top: auto; width: 100%; }
 
   .send-asset-stage { gap: ${SPACE.lg}; }
-  .send-asset-search .send-search-control { background: var(--mc-panel); }
+  .send-asset-search .send-search-control { background: var(--bramble-panel); }
   .send-asset-row {
     align-items: center;
     grid-template-columns: ${SIZE.mark} minmax(0, 1fr) auto;
@@ -364,17 +364,17 @@ export const SEND_COMPOSE_STYLES = `
     text-wrap: nowrap;
   }
   .send-asset-spam {
-    color: var(--mc-danger);
+    color: var(--bramble-danger);
     font-style: normal;
     font-weight: ${WEIGHT.semibold};
   }
   .send-asset-value { display: grid; gap: 2px; justify-items: end; }
   .send-asset-value strong { font-variant-numeric: tabular-nums; }
-  .send-asset-change[data-direction="down"] { color: var(--mc-danger); }
-  .send-asset-change[data-direction="up"] { color: var(--mc-positive); }
+  .send-asset-change[data-direction="down"] { color: var(--bramble-danger); }
+  .send-asset-change[data-direction="up"] { color: var(--bramble-positive); }
 
   .send-review-summary {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.xl};
     display: grid;
     padding: ${SPACE.lg};
@@ -395,10 +395,10 @@ export const SEND_COMPOSE_STYLES = `
     font-size: ${TYPE.display.size};
     font-variant-numeric: tabular-nums;
   }
-  .send-review-hero small { color: var(--mc-muted); }
-  .send-review-facts { border-top: 1px solid var(--mc-hairline); margin: 0; }
+  .send-review-hero small { color: var(--bramble-muted); }
+  .send-review-facts { border-top: 1px solid var(--bramble-hairline); margin: 0; }
   .send-review-fee {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     gap: ${SPACE.sm};
@@ -406,7 +406,7 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-review-fee:empty { display: none; }
   .send-review-disclosure {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     overflow: hidden;
   }
@@ -423,21 +423,21 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-review-disclosure summary::-webkit-details-marker { display: none; }
   .send-review-disclosure summary .icon {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     transition: transform ${MOTION.tabMs}ms ${EASE.out};
   }
   .send-review-disclosure[open] summary .icon { transform: rotate(180deg); }
   .send-review-disclosure-body {
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
     display: grid;
     gap: ${SPACE.md};
     padding: ${SPACE.md};
   }
-  .send-review-note { color: var(--mc-muted); font-size: ${TYPE.caption.size}; margin: 0; }
+  .send-review-note { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; }
 
   .send-task-list { box-shadow: ${SHADOW.xs}; }
   .send-task-list li { min-height: ${CONTROL.hit}; }
-  .send-liveness { color: var(--mc-muted); margin: -${SPACE.sm} 0 0; }
+  .send-liveness { color: var(--bramble-muted); margin: -${SPACE.sm} 0 0; }
 
   .send-outcome {
     align-content: center;
@@ -457,8 +457,8 @@ export const SEND_COMPOSE_STYLES = `
     stroke-width: 3.2;
     width: 100%;
   }
-  .send-success .send-outcome-mark { color: var(--mc-positive); }
-  .send-failure .send-outcome-mark { color: var(--mc-danger); }
+  .send-success .send-outcome-mark { color: var(--bramble-positive); }
+  .send-failure .send-outcome-mark { color: var(--bramble-danger); }
   .send-failure-ring {
     animation: send-draw 420ms ${EASE.out} forwards;
     stroke-dasharray: 158;
@@ -478,7 +478,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-outcome-copy h2 { font-size: ${TYPE.headline.size}; }
   .send-outcome-copy p { margin: 0; }
   .send-outcome-copy code {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};
     max-width: 30ch;
     overflow: hidden;
@@ -486,7 +486,7 @@ export const SEND_COMPOSE_STYLES = `
     text-wrap: nowrap;
   }
   .send-outcome-kicker {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.semibold};
   }

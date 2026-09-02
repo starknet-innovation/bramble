@@ -24,10 +24,10 @@ export const PROGRESS_STYLES = `
     position: relative;
     width: ${SIZE.brand};
   }
-  .liquid-dots[data-liquid-dots="approval"] { filter: url("#mc-liquid-dots-approval"); }
-  .liquid-dots[data-liquid-dots="ledger"] { filter: url("#mc-liquid-dots-ledger"); }
-  .liquid-dots[data-liquid-dots="privacy"] { filter: url("#mc-liquid-dots-privacy"); }
-  .liquid-dots[data-liquid-dots="send"] { filter: url("#mc-liquid-dots-send"); }
+  .liquid-dots[data-liquid-dots="approval"] { filter: url("#bramble-liquid-dots-approval"); }
+  .liquid-dots[data-liquid-dots="ledger"] { filter: url("#bramble-liquid-dots-ledger"); }
+  .liquid-dots[data-liquid-dots="privacy"] { filter: url("#bramble-liquid-dots-privacy"); }
+  .liquid-dots[data-liquid-dots="send"] { filter: url("#bramble-liquid-dots-send"); }
   .liquid-dots-compact {
     --liquid-dot-size: ${SPACE.sm};
     --liquid-dot-travel: ${SPACE.sm};

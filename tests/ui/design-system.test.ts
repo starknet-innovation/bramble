@@ -55,16 +55,16 @@ describe("design system", () => {
       color.toLowerCase(),
     );
     const expectedColors = [
-      "--mc-accent",
-      "--mc-accent-text",
-      "--mc-bg",
-      "--mc-border",
-      "--mc-danger",
-      "--mc-elevated",
-      "--mc-muted",
-      "--mc-panel",
-      "--mc-sunken",
-      "--mc-text",
+      "--bramble-accent",
+      "--bramble-accent-text",
+      "--bramble-bg",
+      "--bramble-border",
+      "--bramble-danger",
+      "--bramble-elevated",
+      "--bramble-muted",
+      "--bramble-panel",
+      "--bramble-sunken",
+      "--bramble-text",
     ].map((name) => darkSkin.tokens[name as keyof typeof darkSkin.tokens]);
     expect(new Set(emittedColors)).toEqual(new Set(expectedColors));
   });

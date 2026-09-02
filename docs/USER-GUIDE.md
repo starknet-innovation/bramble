@@ -98,10 +98,9 @@ closed.
 
 ### Swap
 
-Choose **Swap** on Home, select the tokens, and enter what you want to sell. MC
-Wallet asks AVNU for a route, shows the estimated result and fee, and warns when
-the quoted value loss is unusually high. Before confirmation, the wallet builds
-and freezes the exact Starknet calls. Review **what will happen**, the
+Choose **Swap** on Home, select the tokens, and enter what you want to sell. Bramble asks AVNU for a
+route, shows the estimated result and fee, and warns when the quoted value loss is unusually high.
+Before confirmation, the wallet builds and freezes the exact Starknet calls. Review **what will happen**, the
 wallet-enforced minimum received, the maximum network fee, and any risk warning.
 Raw calls and the review digest remain available under **Technical details**.
 The route cannot change after this review.
@@ -144,10 +143,10 @@ out.
 
 ### NFT gallery (collectibles)
 
-Add an ERC-721 or ERC-1155 collectible by contract address and token ID. MC
-Wallet proves that the active account owns it on-chain before saving it, then
-reads the name, image, description, and attributes from the token's `token_uri`
-/ `uri`. Automatic discovery is also ownership-checked before an item appears.
+Add an ERC-721 or ERC-1155 collectible by contract address and token ID. Bramble proves that the
+active account owns it on-chain before saving it, then reads the name, image, description, and
+attributes from the token's `token_uri` / `uri`. Automatic discovery is also ownership-checked before
+an item appears.
 
 ### Multisig
 
@@ -173,9 +172,9 @@ Relay access is one-shot and user initiated; manual copy-and-paste remains avail
 
 ### Allowance manager
 
-The allowance manager lists **ERC-20 token approvals** submitted through MC
-Wallet — from a dApp, a swap, a privacy-pool deposit, or a multisig you sign for
-— plus live approvals it can discover on-chain, and lets you **revoke** one by
+The allowance manager lists **ERC-20 token approvals** submitted through Bramble — from a dApp, a
+swap, a privacy-pool deposit, or a multisig you sign for — plus live approvals it can discover
+on-chain, and lets you **revoke** one by
 setting that spender's allowance to zero. For every approval it tracks, the
 wallet re-reads the live on-chain amount, so a listed figure reflects the chain
 rather than only what this wallet saw. An allowance a multisig granted is shown

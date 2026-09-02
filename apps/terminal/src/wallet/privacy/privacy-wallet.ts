@@ -200,7 +200,7 @@ export const requestPrivateBalances = async (
 
 /**
  * Requests Bramble's approval-gated one-time pool registration. This is an
- * MC-namespaced capability because the standard STRK20 API defines the
+ * Bramble-namespaced capability because the standard STRK20 API defines the
  * NOT_REGISTERED error but no registration method.
  */
 export const requestPrivateRegistration = async (

@@ -9,8 +9,8 @@ export const MULTISIG_PARTICIPANT_STYLES = `
   .multisig-signer-set > [data-open-participant-picker] {
     background: transparent;
     border-radius: 0;
-    border-top: 1px solid var(--mc-hairline);
-    color: var(--mc-text);
+    border-top: 1px solid var(--bramble-hairline);
+    color: var(--bramble-text);
     justify-content: flex-start;
     min-height: ${SIZE.control};
     width: 100%;
@@ -32,7 +32,7 @@ export const MULTISIG_PARTICIPANT_STYLES = `
     grid-template-columns: auto minmax(0, 1fr);
   }
   .multisig-participant-head h2 { font-size: ${TYPE.display.size}; margin: 0 0 ${SPACE.xs}; }
-  .multisig-participant-head p { color: var(--mc-muted); margin: 0; }
+  .multisig-participant-head p { color: var(--bramble-muted); margin: 0; }
   .multisig-participant-external { display: grid; gap: ${SPACE.md}; min-width: 0; }
   .multisig-participant-external h3 { font-size: ${TYPE.body.size}; margin: 0; }
   .multisig-participant-known .disclosure-body { display: grid; gap: ${SPACE.sm}; }
@@ -46,9 +46,9 @@ export const MULTISIG_PARTICIPANT_STYLES = `
   .multisig-participant-methods { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .multisig-participant-methods button {
     align-content: center;
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: grid;
     gap: ${SPACE.xs};
     justify-items: center;
@@ -59,13 +59,13 @@ export const MULTISIG_PARTICIPANT_STYLES = `
   }
   .multisig-participant-methods button > span {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     height: ${CONTROL.icon};
   }
   .multisig-participant-methods button strong { font-size: ${TYPE.label.size}; text-wrap: nowrap; }
   .multisig-participant-methods button small {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};
     max-width: 100%;
     overflow: hidden;
@@ -73,9 +73,9 @@ export const MULTISIG_PARTICIPANT_STYLES = `
     text-wrap: nowrap;
   }
   .multisig-participant-methods button[aria-pressed="true"] {
-    background: var(--mc-soft-press);
+    background: var(--bramble-soft-press);
   }
-  .multisig-participant-methods button[aria-pressed="true"] > span { color: var(--mc-text); }
+  .multisig-participant-methods button[aria-pressed="true"] > span { color: var(--bramble-text); }
   @media (max-width: 390px) {
     .multisig-participant-methods button { padding-inline: ${SPACE.xs}; }
   }

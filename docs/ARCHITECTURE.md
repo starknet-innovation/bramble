@@ -125,10 +125,10 @@ a networked host and expect the same result.
 ## Ledger Hardware Accounts
 
 Ledger accounts can use either supported single-signer account class, but the vault stores only
-public account metadata: the contract type, account address, public-key x-coordinate, account index, and canonical
-EIP-2645 path `m/2645'/1195502025'/734980059'/0'/<index>'/0`. No Ledger mnemonic or signing key enters MC
-Wallet. A Ledger-only vault therefore has `mnemonic: null` and no `signingKeys` entry for its
-accounts; a mixed vault may contain both software and Ledger account records.
+public account metadata: the contract type, account address, public-key x-coordinate, account index,
+and canonical EIP-2645 path `m/2645'/1195502025'/734980059'/0'/<index>'/0`. No Ledger mnemonic or
+signing key enters Bramble. A Ledger-only vault therefore has `mnemonic: null` and no `signingKeys`
+entry for its accounts; a mixed vault may contain both software and Ledger account records.
 
 The hardware signing path is split across two mutually checking contexts:
 

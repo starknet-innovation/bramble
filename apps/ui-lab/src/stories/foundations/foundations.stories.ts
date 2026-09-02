@@ -22,21 +22,25 @@ export default meta;
 const skinForTheme = (theme: CatalogArgs["theme"]): Skin =>
   theme === "light" ? defaultSkin : darkSkin;
 
-const semanticColorTokens = new Set(["--mc-danger", "--mc-positive", "--mc-warning"]);
+const semanticColorTokens = new Set([
+  "--bramble-danger",
+  "--bramble-positive",
+  "--bramble-warning",
+]);
 const identityColorTokens = new Set([
-  "--mc-account-avatar-0",
-  "--mc-account-avatar-1",
-  "--mc-account-avatar-2",
-  "--mc-account-avatar-3",
-  "--mc-account-avatar-ink",
-  "--mc-account-avatar-paper",
+  "--bramble-account-avatar-0",
+  "--bramble-account-avatar-1",
+  "--bramble-account-avatar-2",
+  "--bramble-account-avatar-3",
+  "--bramble-account-avatar-ink",
+  "--bramble-account-avatar-paper",
 ]);
 
 const colorSwatches = (entries: readonly (readonly [string, string])[]): string =>
   entries
     .map(([name, value]) =>
       catalogSample(
-        name.replace("--mc-", ""),
+        name.replace("--bramble-", ""),
         `<div class="catalog-swatch" style="--swatch:${escapeHtml(value)}"></div>
          <div class="catalog-token-copy"><code>${escapeHtml(name)}</code><span>${escapeHtml(value)}</span></div>`,
       ),

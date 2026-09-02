@@ -1,7 +1,6 @@
 # Bramble Trade Terminal
 
-A standalone Starknet trade terminal (Vite + React SPA). It connects to the MC
-Wallet browser extension at runtime as a dApp and reads live market data from
+A standalone Starknet trade terminal (Vite + React SPA). It connects to the Bramble browser extension at runtime as a dApp and reads live market data from
 several public APIs.
 
 ## Scripts
@@ -33,7 +32,7 @@ requests aggregate private balances from Bramble, and supports shield,
 withdraw, private transfer, and AVNU private swap flows. Notes, viewing keys,
 signing material, and proof generation remain inside the wallet.
 
-Activation uses the MC-namespaced `mc_strk20Register` capability because the
+Activation uses the Bramble-namespaced `mc_strk20Register` capability because the
 standard Wallet API defines `NOT_REGISTERED` but no registration RPC. Bramble
 holds that request for an explicit review and binds it to the origin, account,
 network, configured pool, tracked token, and payload digest before submitting

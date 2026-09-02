@@ -36,7 +36,7 @@ export const ONBOARDING_WELCOME_STYLES = `
   }
   .orbit-ring {
     border-radius: ${RADIUS.full};
-    box-shadow: 0 0 0 1px var(--mc-hairline-strong);
+    box-shadow: 0 0 0 1px var(--bramble-hairline-strong);
     left: 50%;
     position: absolute;
     top: 50%;
@@ -108,9 +108,9 @@ export const ONBOARDING_WELCOME_STYLES = `
   .orbit-node-surface {
     align-items: center;
     animation: onboarding-counter-orbit var(--orbit-duration) linear var(--orbit-delay) infinite;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
-    box-shadow: var(--mc-elev-xs);
+    box-shadow: var(--bramble-elev-xs);
     display: flex;
     height: 42px;
     justify-content: center;
@@ -128,7 +128,7 @@ export const ONBOARDING_WELCOME_STYLES = `
   .orbit-pulse {
     animation: onboarding-concentric-pulse ${MOTION.onboardingPulseMs}ms var(--ease-out) infinite;
     border-radius: ${RADIUS.full};
-    box-shadow: 0 0 0 1px var(--mc-hairline-strong);
+    box-shadow: 0 0 0 1px var(--bramble-hairline-strong);
     height: 104px;
     left: 50%;
     opacity: 0;
@@ -141,10 +141,10 @@ export const ONBOARDING_WELCOME_STYLES = `
   .orbit-pulse-c { animation-delay: ${MOTION.pulseStaggerMs * 2}ms; }
   .orbit-core {
     align-items: center;
-    background: var(--mc-text);
+    background: var(--bramble-text);
     border-radius: ${RADIUS.xl};
-    box-shadow: var(--mc-elev-md);
-    color: var(--mc-bg);
+    box-shadow: var(--bramble-elev-md);
+    color: var(--bramble-bg);
     display: flex;
     flex-direction: column;
     height: 104px;
@@ -160,7 +160,7 @@ export const ONBOARDING_WELCOME_STYLES = `
   .onboarding-welcome-actions { display: grid; gap: ${SPACE.sm}; width: 100%; }
   .onboarding-launch {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     font-size: ${TYPE.caption.size};
     justify-content: center;
@@ -169,7 +169,7 @@ export const ONBOARDING_WELCOME_STYLES = `
   }
   .onboarding-local-note {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     font-size: ${TYPE.caption.size};
     gap: 6px;
@@ -198,7 +198,7 @@ export const ONBOARDING_WELCOME_STYLES = `
     74%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.7); }
   }
   @media (hover: hover) and (pointer: fine) {
-    .onboarding-launch:hover { color: var(--mc-text); }
+    .onboarding-launch:hover { color: var(--bramble-text); }
   }
   @media (max-width: 400px) {
     .orbit-field {

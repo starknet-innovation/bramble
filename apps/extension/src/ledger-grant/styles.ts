@@ -22,22 +22,22 @@ import {
 export const LEDGER_GRANT_STYLES = `
   :root {
     color-scheme: dark;
-    --mc-accent-soft: color-mix(in srgb, var(--mc-accent) 13%, var(--mc-panel));
-    --mc-positive-soft: color-mix(in srgb, var(--mc-positive) 13%, var(--mc-panel));
-    --mc-danger-soft: color-mix(in srgb, var(--mc-danger) 12%, var(--mc-panel));
-    --mc-hover: color-mix(in srgb, var(--mc-text) 7%, var(--mc-elevated));
-    --mc-press: color-mix(in srgb, var(--mc-text) 14%, var(--mc-accent));
-    --mc-hairline: color-mix(in srgb, var(--mc-text) 12%, transparent);
-    --mc-font-ui: ${FONT.ui};
-    --mc-font-mono: ${FONT.mono};
+    --bramble-accent-soft: color-mix(in srgb, var(--bramble-accent) 13%, var(--bramble-panel));
+    --bramble-positive-soft: color-mix(in srgb, var(--bramble-positive) 13%, var(--bramble-panel));
+    --bramble-danger-soft: color-mix(in srgb, var(--bramble-danger) 12%, var(--bramble-panel));
+    --bramble-hover: color-mix(in srgb, var(--bramble-text) 7%, var(--bramble-elevated));
+    --bramble-press: color-mix(in srgb, var(--bramble-text) 14%, var(--bramble-accent));
+    --bramble-hairline: color-mix(in srgb, var(--bramble-text) 12%, transparent);
+    --bramble-font-ui: ${FONT.ui};
+    --bramble-font-mono: ${FONT.mono};
   }
 
   * { box-sizing: border-box; }
   html, body, #app { min-height: 100%; }
   body {
-    background: var(--mc-bg);
-    color: var(--mc-text);
-    font-family: var(--mc-font-ui);
+    background: var(--bramble-bg);
+    color: var(--bramble-text);
+    font-family: var(--bramble-font-ui);
     font-size: ${TYPE.body.size};
     line-height: ${TYPE.body.line};
     margin: 0;
@@ -69,9 +69,9 @@ export const LEDGER_GRANT_STYLES = `
   }
   .grant-brand-mark {
     align-items: center;
-    background: var(--mc-accent);
+    background: var(--bramble-accent);
     border-radius: ${RADIUS.sm};
-    color: var(--mc-accent-text);
+    color: var(--bramble-accent-text);
     display: inline-flex;
     font-size: ${TYPE.micro.size};
     font-weight: ${WEIGHT.heavy};
@@ -87,14 +87,14 @@ export const LEDGER_GRANT_STYLES = `
   }
   .grant-once {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.medium};
     gap: 7px;
   }
   .grant-once-dot {
-    background: var(--mc-positive);
+    background: var(--bramble-positive);
     border-radius: ${RADIUS.full};
     height: 7px;
     width: 7px;
@@ -115,7 +115,7 @@ export const LEDGER_GRANT_STYLES = `
     position: relative;
   }
   .ledger-cable {
-    background: var(--mc-border);
+    background: var(--bramble-border);
     border-radius: ${RADIUS.full};
     height: 6px;
     left: 0;
@@ -123,7 +123,7 @@ export const LEDGER_GRANT_STYLES = `
     width: 27px;
   }
   .ledger-cable::before {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: 3px;
     content: "";
     height: 14px;
@@ -133,8 +133,8 @@ export const LEDGER_GRANT_STYLES = `
     width: 13px;
   }
   .ledger-body {
-    background: var(--mc-elevated);
-    border: 1px solid var(--mc-hairline);
+    background: var(--bramble-elevated);
+    border: 1px solid var(--bramble-hairline);
     border-radius: ${RADIUS.md};
     box-shadow: ${SHADOW.sm};
     display: grid;
@@ -145,11 +145,11 @@ export const LEDGER_GRANT_STYLES = `
   }
   .ledger-screen {
     align-content: center;
-    background: var(--mc-sunken);
+    background: var(--bramble-sunken);
     border-radius: 7px;
-    color: var(--mc-positive);
+    color: var(--bramble-positive);
     display: grid;
-    font-family: var(--mc-font-mono);
+    font-family: var(--bramble-font-mono);
     font-size: 8px;
     height: 42px;
     justify-items: center;
@@ -158,7 +158,7 @@ export const LEDGER_GRANT_STYLES = `
     text-transform: uppercase;
   }
   .ledger-screen strong {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font-size: 9px;
     font-weight: ${WEIGHT.bold};
   }
@@ -168,7 +168,7 @@ export const LEDGER_GRANT_STYLES = `
     justify-content: center;
   }
   .ledger-controls span {
-    background: var(--mc-muted);
+    background: var(--bramble-muted);
     border-radius: ${RADIUS.full};
     height: 7px;
     opacity: 0.65;
@@ -188,12 +188,12 @@ export const LEDGER_GRANT_STYLES = `
     text-wrap: balance;
   }
   .grant-copy p {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     max-width: 42ch;
   }
 
   .grant-methods {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     box-shadow: ${SHADOW.xs};
     display: grid;
@@ -208,10 +208,10 @@ export const LEDGER_GRANT_STYLES = `
   .grant-method {
     appearance: none;
     -webkit-appearance: none;
-    background: var(--mc-sunken);
+    background: var(--bramble-sunken);
     border: 1px solid transparent;
     border-radius: ${RADIUS.md};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     cursor: pointer;
     display: grid;
     gap: 3px;
@@ -224,32 +224,32 @@ export const LEDGER_GRANT_STYLES = `
     font-weight: ${WEIGHT.bold};
   }
   .grant-method span {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};
     line-height: 1.35;
   }
   .grant-method[data-active="true"] {
-    background: var(--mc-accent-soft);
-    border-color: var(--mc-accent);
+    background: var(--bramble-accent-soft);
+    border-color: var(--bramble-accent);
   }
-  .grant-method[data-active="true"] strong { color: var(--mc-accent); }
+  .grant-method[data-active="true"] strong { color: var(--bramble-accent); }
   .grant-method:focus-visible {
-    outline: 2px solid var(--mc-accent);
+    outline: 2px solid var(--bramble-accent);
     outline-offset: 2px;
   }
   @media (hover: hover) and (pointer: fine) {
-    .grant-method:not([data-active="true"]):hover { background: var(--mc-hover); }
+    .grant-method:not([data-active="true"]):hover { background: var(--bramble-hover); }
   }
 
   .grant-readiness {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     box-shadow: ${SHADOW.xs};
     display: grid;
     overflow: hidden;
   }
   .grant-readiness-head {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.semibold};
     letter-spacing: ${TRACKING.caption};
@@ -268,7 +268,7 @@ export const LEDGER_GRANT_STYLES = `
     position: relative;
   }
   .grant-step + .grant-step::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto 40px;
@@ -276,11 +276,11 @@ export const LEDGER_GRANT_STYLES = `
   }
   .grant-step-index {
     align-items: center;
-    background: var(--mc-sunken);
+    background: var(--bramble-sunken);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
-    font-family: var(--mc-font-mono);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.micro.size};
     font-weight: ${WEIGHT.bold};
     height: 24px;
@@ -293,9 +293,9 @@ export const LEDGER_GRANT_STYLES = `
   }
 
   .grant-status {
-    background: var(--mc-accent-soft);
+    background: var(--bramble-accent-soft);
     border-radius: ${RADIUS.md};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: grid;
     font-size: ${TYPE.caption.size};
     gap: 3px;
@@ -304,23 +304,23 @@ export const LEDGER_GRANT_STYLES = `
   }
   .grant-status[hidden] { display: none; }
   .grant-status strong {
-    color: var(--mc-accent);
+    color: var(--bramble-accent);
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.bold};
   }
-  .grant-status p { color: var(--mc-muted); }
+  .grant-status p { color: var(--bramble-muted); }
   .grant-diagnostic {
-    color: var(--mc-muted);
-    font-family: var(--mc-font-mono);
+    color: var(--bramble-muted);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.micro.size};
     letter-spacing: ${TRACKING.caption};
     margin-top: 3px;
   }
   .grant-diagnostic[hidden] { display: none; }
-  .grant-status[data-tone="danger"] { background: var(--mc-danger-soft); }
-  .grant-status[data-tone="danger"] strong { color: var(--mc-danger); }
-  .grant-status[data-tone="success"] { background: var(--mc-positive-soft); }
-  .grant-status[data-tone="success"] strong { color: var(--mc-positive); }
+  .grant-status[data-tone="danger"] { background: var(--bramble-danger-soft); }
+  .grant-status[data-tone="danger"] strong { color: var(--bramble-danger); }
+  .grant-status[data-tone="success"] { background: var(--bramble-positive-soft); }
+  .grant-status[data-tone="success"] strong { color: var(--bramble-positive); }
 
   .grant-actions {
     display: grid;
@@ -331,10 +331,10 @@ export const LEDGER_GRANT_STYLES = `
     align-items: center;
     appearance: none;
     -webkit-appearance: none;
-    background: var(--mc-accent);
+    background: var(--bramble-accent);
     border: 0;
     border-radius: ${RADIUS.full};
-    color: var(--mc-accent-text);
+    color: var(--bramble-accent-text);
     cursor: pointer;
     display: inline-flex;
     font-weight: ${WEIGHT.semibold};
@@ -347,7 +347,7 @@ export const LEDGER_GRANT_STYLES = `
       transform ${MOTION.liftMs}ms ${EASE.out};
   }
   .grant-button:not(:disabled):active {
-    background: var(--mc-press);
+    background: var(--bramble-press);
     transform: scale(0.98);
   }
   .grant-button:disabled {
@@ -360,20 +360,20 @@ export const LEDGER_GRANT_STYLES = `
     background: transparent;
     border: 0;
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     cursor: pointer;
     min-height: 46px;
     padding: 0 ${SPACE.lg};
   }
-  .grant-cancel:active { background: var(--mc-hover); color: var(--mc-text); }
+  .grant-cancel:active { background: var(--bramble-hover); color: var(--bramble-text); }
   @media (hover: hover) and (pointer: fine) {
     .grant-button:not(:disabled):hover {
-      background: color-mix(in srgb, var(--mc-text) 10%, var(--mc-accent));
+      background: color-mix(in srgb, var(--bramble-text) 10%, var(--bramble-accent));
     }
-    .grant-cancel:hover { background: var(--mc-hover); color: var(--mc-text); }
+    .grant-cancel:hover { background: var(--bramble-hover); color: var(--bramble-text); }
   }
   .grant-button:focus-visible, .grant-cancel:focus-visible {
-    outline: 2px solid var(--mc-accent);
+    outline: 2px solid var(--bramble-accent);
     outline-offset: 2px;
   }
   .grant-spinner {
@@ -388,7 +388,7 @@ export const LEDGER_GRANT_STYLES = `
   .grant-button[data-busy="true"] .grant-spinner { display: inline-block; }
 
   .grant-footnote {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
     margin-top: auto;

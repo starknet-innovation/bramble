@@ -92,7 +92,7 @@ const isStarknetWindowObject = (value: unknown): value is StarknetWindowObject =
 /**
  * Scans `window` for every injected Starknet provider (`starknet`,
  * `starknet_bramble`, `starknet_argentX`, `starknet_braavos`, ...). Used as a
- * development fallback so the terminal works against any wallet, not only MC.
+ * development fallback so the terminal works against any wallet, not only Bramble.
  */
 const scanInjectedStarknetWallets = (): readonly StarknetWindowObject[] => {
   if (typeof window === "undefined") {
@@ -130,10 +130,10 @@ export const waitForInjectedBramble = async (
   return new Promise<StarknetWindowObject | null>((resolve) => {
     const deadline = Date.now() + timeoutMs;
     const interval = window.setInterval(() => {
-      const mc = readInjectedBramble();
-      if (mc !== null) {
+      const bramble = readInjectedBramble();
+      if (bramble !== null) {
         window.clearInterval(interval);
-        resolve(mc);
+        resolve(bramble);
         return;
       }
       if (Date.now() >= deadline) {

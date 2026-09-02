@@ -1,5 +1,5 @@
 /**
- * Adapter from the pinned official Starknet privacy SDK browser bundle to MC
+ * Adapter from the pinned official Starknet privacy SDK browser bundle to Bramble
  * Wallet's narrow STRK20 middleware contract.
  */
 

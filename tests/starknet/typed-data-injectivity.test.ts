@@ -61,13 +61,13 @@ const rawHash = (payload: unknown): string =>
 const envelope = (graph: Graph, message: unknown, revision: Revision): unknown =>
   revision === "1"
     ? {
-        domain: { name: "MC Test", revision: "1" },
+        domain: { name: "Bramble Test", revision: "1" },
         message,
         primaryType: graph.primaryType,
         types: { ...graph.types, StarknetDomain: REV1_DOMAIN_TYPE },
       }
     : {
-        domain: { name: "MC Test" },
+        domain: { name: "Bramble Test" },
         message,
         primaryType: graph.primaryType,
         types: { ...graph.types, StarkNetDomain: REV0_DOMAIN_TYPE },

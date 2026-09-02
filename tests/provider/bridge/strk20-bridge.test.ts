@@ -30,7 +30,7 @@ const callAndProof = {
 };
 
 describe("strk20 bridge params", () => {
-  test("maps the MC registration capability without accepting parameters", () => {
+  test("maps the legacy registration capability without accepting parameters", () => {
     expect(toRuntimeMessage(request("mc_strk20Register"), origin)).toEqual({
       origin,
       type: "wallet.strk20Register",

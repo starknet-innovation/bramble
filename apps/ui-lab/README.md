@@ -16,7 +16,7 @@ Requirements:
 From a fresh clone:
 
 ```bash
-cd /path/to/mc-wallet
+cd /path/to/bramble
 bun install --frozen-lockfile
 cd apps/ui-lab
 bun run storybook

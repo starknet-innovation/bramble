@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "mc-wallet",
+      "name": "bramble",
       "dependencies": {
         "@bramble/core": "workspace:*",
         "@bramble/kms-krusty": "workspace:*",

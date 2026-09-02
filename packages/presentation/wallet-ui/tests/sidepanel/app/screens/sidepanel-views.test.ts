@@ -233,7 +233,7 @@ describe("sidepanel views", () => {
     expect(html).toContain("Review send");
     expect(html).toContain('class="liquid-dots"');
     expect(html).toContain('data-liquid-dots="send"');
-    expect(html).toContain('id="mc-liquid-dots-send"');
+    expect(html).toContain('id="bramble-liquid-dots-send"');
     expect(html).not.toContain("send-spin");
   });
 
@@ -343,8 +343,8 @@ describe("sidepanel views", () => {
     expect(html).toContain('class="avatar-character"');
     expect(html).toContain('class="avatar-eyes"');
     expect(html).toContain('class="avatar-mouth"');
-    expect(html).toMatch(/fill="var\(--mc-account-avatar-\d\)"/);
-    expect(html).toMatch(/var\(--mc-account-avatar-(?:ink|paper)\)/);
+    expect(html).toMatch(/fill="var\(--bramble-account-avatar-\d\)"/);
+    expect(html).toMatch(/var\(--bramble-account-avatar-(?:ink|paper)\)/);
     expect(html).not.toContain('class="avatar-frame"');
     expect(html).not.toContain("linearGradient");
     expect(html).not.toContain("<defs>");

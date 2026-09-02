@@ -171,7 +171,10 @@ const prepareNft =
                 ? [{ code: "address-poisoning", message: "Recipient resembles a recent address." }]
                 : [],
               requiresDeployment: false,
-              summaries: ["Transfer MC Test Collection #342", `Recipient ${RECIPIENT_ADDRESS}`],
+              summaries: [
+                "Transfer Bramble Test Collection #342",
+                `Recipient ${RECIPIENT_ADDRESS}`,
+              ],
             },
           };
         }

@@ -45,7 +45,7 @@ const legacy = (
   message: unknown,
   primaryType = "Message",
 ): unknown => ({
-  domain: { chainId: "SN_MAIN", name: "MC Test", version: "1" },
+  domain: { chainId: "SN_MAIN", name: "Bramble Test", version: "1" },
   message,
   primaryType,
   types: { StarkNetDomain: LEGACY_DOMAIN_TYPE, ...types },
@@ -57,8 +57,8 @@ describe("SNIP-12 revision identification", () => {
   const envelope = (types: Record<string, unknown>, revision?: unknown): unknown => ({
     domain:
       revision === undefined
-        ? { chainId: "SN_MAIN", name: "MC Test", version: "1" }
-        : { chainId: "SN_MAIN", name: "MC Test", revision, version: "1" },
+        ? { chainId: "SN_MAIN", name: "Bramble Test", version: "1" }
+        : { chainId: "SN_MAIN", name: "Bramble Test", revision, version: "1" },
     message,
     primaryType: "Message",
     types: { ...messageType, ...types },
@@ -210,7 +210,7 @@ describe("SNIP-12 revision 0 vocabulary", () => {
     // the library preset while `encodeValue` took the declaration.
     expect(
       isTypedDataShape({
-        domain: { chainId: "SN_MAIN", name: "MC Test", revision: "1", version: "1" },
+        domain: { chainId: "SN_MAIN", name: "Bramble Test", revision: "1", version: "1" },
         message: { amount: { high: "0x0", low: "0x64" } },
         primaryType: "Message",
         types: {
@@ -233,7 +233,10 @@ describe("SNIP-12 revision 0 vocabulary", () => {
     };
     // `chainId` and `version` reach no hash once the domain type drops them.
     expect(rawHash(trimmed)).toBe(
-      rawHash({ ...trimmed, domain: { chainId: "SN_SEPOLIA", name: "MC Test", version: "9" } }),
+      rawHash({
+        ...trimmed,
+        domain: { chainId: "SN_SEPOLIA", name: "Bramble Test", version: "9" },
+      }),
     );
     expect(isTypedDataShape(trimmed)).toBe(false);
   });

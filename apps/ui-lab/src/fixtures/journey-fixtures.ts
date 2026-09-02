@@ -99,7 +99,7 @@ export const journeyChanges: Readonly<Record<string, number>> = {
 };
 
 export const connectedSites: readonly ConnectedSite[] = [
-  { accountCount: 2, origin: "https://terminal.mcwallet.dev" },
+  { accountCount: 2, origin: "https://terminal.bramble.test" },
   { accountCount: 1, origin: "https://app.vesu.xyz" },
 ];
 
@@ -193,7 +193,7 @@ export const approvalFixtures: Readonly<Record<string, PendingApproval>> = {
     id: approvalId("142"),
     insights: ["This origin resembles a frequently used wallet site."],
     kind: "connect",
-    origin: "https://mcwa11et.example",
+    origin: "https://bramb1e.example",
   },
   connect: {
     id: approvalId("143"),
@@ -216,15 +216,15 @@ export const approvalFixtures: Readonly<Record<string, PendingApproval>> = {
     },
     id: approvalId("144"),
     kind: "declare",
-    origin: "https://terminal.mcwallet.dev",
+    origin: "https://terminal.bramble.test",
   },
   sign: {
     context: approvalContext,
     id: approvalId("145"),
     kind: "sign-typed-data",
-    origin: "https://terminal.mcwallet.dev",
+    origin: "https://terminal.bramble.test",
     typedData: {
-      domain: { chainId: "SN_MAIN", name: "MC Terminal", revision: "1" },
+      domain: { chainId: "SN_MAIN", name: "Bramble Terminal", revision: "1" },
       message: { action: "Follow market", market: "ETH-USD" },
       primaryType: "Intent",
       types: {

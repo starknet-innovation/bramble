@@ -34,7 +34,7 @@ const ACCOUNT = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abc
 const rawHash = (payload: unknown): string =>
   snip12.getMessageHash(payload as Parameters<typeof snip12.getMessageHash>[0], ACCOUNT);
 
-const DOMAIN = { chainId: "SN_MAIN", name: "MC Test", revision: "1", version: "1" };
+const DOMAIN = { chainId: "SN_MAIN", name: "Bramble Test", revision: "1", version: "1" };
 const DOMAIN_TYPE = [
   { name: "name", type: "shortstring" },
   { name: "version", type: "shortstring" },

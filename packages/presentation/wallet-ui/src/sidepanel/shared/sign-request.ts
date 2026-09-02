@@ -29,7 +29,7 @@ import { SIGN_ROW_LIMIT, signRawText, signValueText } from "./sign-request-text"
  */
 export const SIGN_REQUEST_STYLES = `
   .sign-block {
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.md};
     display: grid;
     gap: 6px;
@@ -41,20 +41,20 @@ export const SIGN_REQUEST_STYLES = `
     overflow: auto;
     padding: ${SPACE.sm} ${SPACE.md};
   }
-  .sign-unsigned { background: var(--mc-danger-soft); }
-  .sign-more { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-style: italic; }
+  .sign-unsigned { background: var(--bramble-danger-soft); }
+  .sign-more { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; font-style: italic; }
   .sign-row { align-items: baseline; display: flex; gap: ${SPACE.md}; justify-content: space-between; }
-  .sign-key { color: var(--mc-muted); flex: none; font-size: ${TYPE.caption.size}; }
+  .sign-key { color: var(--bramble-muted); flex: none; font-size: ${TYPE.caption.size}; }
   .sign-val {
-    font-family: var(--mc-font-mono);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.caption.size};
     overflow-wrap: anywhere;
     text-align: right;
   }
-  .sign-raw { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .sign-raw { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
   .sign-raw summary { cursor: pointer; }
   .sign-raw pre {
-    background: var(--mc-bg);
+    background: var(--bramble-bg);
     border-radius: ${RADIUS.sm};
     font-size: ${TYPE.mono.size};
     margin: ${SPACE.xs} 0 0;

@@ -10,12 +10,12 @@ const managerChromeStyles = document.createElement("style");
 managerChromeStyles.textContent = `
   button[data-testid="context-menu"],
   button[data-testid="tree-change-status-button"] {
-    color: ${tokens["--mc-muted"]} !important;
+    color: ${tokens["--bramble-muted"]} !important;
   }
 
   input[type="checkbox"],
   input[type="radio"] {
-    accent-color: ${tokens["--mc-accent"]};
+    accent-color: ${tokens["--bramble-accent"]};
   }
 `;
 document.head.append(managerChromeStyles);
@@ -24,30 +24,30 @@ addons.setConfig({
   theme: create({
     base: "dark",
     brandTitle: "Bramble UI Lab",
-    colorPrimary: tokens["--mc-accent"],
-    colorSecondary: tokens["--mc-muted"],
-    appBg: tokens["--mc-bg"],
-    appContentBg: tokens["--mc-panel"],
-    appHoverBg: tokens["--mc-elevated"],
-    appPreviewBg: tokens["--mc-bg"],
-    appBorderColor: tokens["--mc-border"],
+    colorPrimary: tokens["--bramble-accent"],
+    colorSecondary: tokens["--bramble-muted"],
+    appBg: tokens["--bramble-bg"],
+    appContentBg: tokens["--bramble-panel"],
+    appHoverBg: tokens["--bramble-elevated"],
+    appPreviewBg: tokens["--bramble-bg"],
+    appBorderColor: tokens["--bramble-border"],
     appBorderRadius: 8,
     fontBase: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
     fontCode: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    textColor: tokens["--mc-text"],
-    textInverseColor: tokens["--mc-accent-text"],
-    textMutedColor: tokens["--mc-muted"],
-    barTextColor: tokens["--mc-muted"],
-    barHoverColor: tokens["--mc-text"],
-    barSelectedColor: tokens["--mc-accent"],
-    barBg: tokens["--mc-panel"],
-    buttonBg: tokens["--mc-elevated"],
-    buttonBorder: tokens["--mc-border"],
-    booleanBg: tokens["--mc-elevated"],
-    booleanSelectedBg: tokens["--mc-accent"],
-    inputBg: tokens["--mc-elevated"],
-    inputBorder: tokens["--mc-border"],
-    inputTextColor: tokens["--mc-text"],
+    textColor: tokens["--bramble-text"],
+    textInverseColor: tokens["--bramble-accent-text"],
+    textMutedColor: tokens["--bramble-muted"],
+    barTextColor: tokens["--bramble-muted"],
+    barHoverColor: tokens["--bramble-text"],
+    barSelectedColor: tokens["--bramble-accent"],
+    barBg: tokens["--bramble-panel"],
+    buttonBg: tokens["--bramble-elevated"],
+    buttonBorder: tokens["--bramble-border"],
+    booleanBg: tokens["--bramble-elevated"],
+    booleanSelectedBg: tokens["--bramble-accent"],
+    inputBg: tokens["--bramble-elevated"],
+    inputBorder: tokens["--bramble-border"],
+    inputTextColor: tokens["--bramble-text"],
     inputBorderRadius: 8,
   }),
 });

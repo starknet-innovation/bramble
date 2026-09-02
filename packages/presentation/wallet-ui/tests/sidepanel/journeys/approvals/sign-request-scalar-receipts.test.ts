@@ -59,13 +59,13 @@ const REV0_DOMAIN = [{ name: "name", type: "felt" }];
 const envelope = (revision: Revision, type: string, value: unknown): unknown =>
   revision === "1"
     ? {
-        domain: { name: "MC Test", revision: "1" },
+        domain: { name: "Bramble Test", revision: "1" },
         message: { v: value },
         primaryType: "Msg",
         types: { Msg: [{ name: "v", type }], StarknetDomain: REV1_DOMAIN },
       }
     : {
-        domain: { name: "MC Test" },
+        domain: { name: "Bramble Test" },
         message: { v: value },
         primaryType: "Msg",
         types: { Msg: [{ name: "v", type }], StarkNetDomain: REV0_DOMAIN },

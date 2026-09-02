@@ -170,7 +170,7 @@ export const discoveredNft: DiscoveredNft = {
     { traitType: "Edition", value: "Genesis" },
     { traitType: "Role", value: "Tester" },
   ],
-  collection: "MC Test Collection",
+  collection: "Bramble Test Collection",
   contract: NFT_CONTRACT,
   description: "A deterministic collectible used only inside the Bramble UI Lab.",
   id: nftId,
@@ -190,7 +190,7 @@ export const invokeApproval: PendingApproval = {
   flags: [],
   id: "00000000-0000-4000-8000-000000000134",
   kind: "invoke",
-  origin: "https://terminal.mcwallet.dev",
+  origin: "https://terminal.bramble.test",
   reviewAssets: [
     { address: USDC_ADDRESS, symbol: "USDC" },
     { address: STRK_TOKEN_ADDRESS, symbol: "STRK" },

@@ -13,7 +13,7 @@ import {
 } from "@bramble/wallet-protocol/strk20";
 
 /**
- * Parses the MC-only one-time registration capability. Rejects parameters and
+ * Parses the legacy one-time registration capability. Rejects parameters and
  * malformed origins before the request reaches the approval queue.
  */
 export const readStrk20RegisterMessage = (message: unknown): { readonly origin: string } | null => {

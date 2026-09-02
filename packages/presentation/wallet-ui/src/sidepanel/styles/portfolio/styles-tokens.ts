@@ -24,11 +24,11 @@ const springMomentum = resolveSpring("momentum");
  */
 export const TOKEN_STYLES = `
   :root {
-    --mc-elev-xs: ${SHADOW.xs};
-    --mc-elev-sm: ${SHADOW.sm};
-    --mc-elev-md: ${SHADOW.md};
-    --mc-elev-lg: ${SHADOW.lg};
-    --mc-elev-up: ${SHADOW.up};
+    --bramble-elev-xs: ${SHADOW.xs};
+    --bramble-elev-sm: ${SHADOW.sm};
+    --bramble-elev-md: ${SHADOW.md};
+    --bramble-elev-lg: ${SHADOW.lg};
+    --bramble-elev-up: ${SHADOW.up};
     --ease-standard: ${EASE.standard};
     --ease-out: ${EASE.out};
     --ease-in-out: ${EASE.inOut};
@@ -44,7 +44,7 @@ export const TOKEN_STYLES = `
     /* Hairline ink for DIVIDERS between rows (and the dock's top rule). Rings
        around surfaces are gone from the language: structure comes from grouped
        fills, inset dividers, and gentle shadows — never a border per box. */
-    --mc-hairline: color-mix(in srgb, var(--mc-text) 12%, transparent);
-    --mc-hairline-strong: color-mix(in srgb, var(--mc-text) 18%, transparent);
+    --bramble-hairline: color-mix(in srgb, var(--bramble-text) 12%, transparent);
+    --bramble-hairline-strong: color-mix(in srgb, var(--bramble-text) 18%, transparent);
   }
 `;

@@ -34,13 +34,13 @@ const rawHash = (payload: unknown): string =>
 const envelope = (graph: Graph, message: unknown, revision: Revision): unknown =>
   revision === "1"
     ? {
-        domain: { name: "MC Test", revision: "1" },
+        domain: { name: "Bramble Test", revision: "1" },
         message,
         primaryType: graph.primaryType,
         types: { ...graph.types, StarknetDomain: REV1_DOMAIN_TYPE },
       }
     : {
-        domain: { name: "MC Test" },
+        domain: { name: "Bramble Test" },
         message,
         primaryType: graph.primaryType,
         types: { ...graph.types, StarkNetDomain: REV0_DOMAIN_TYPE },
@@ -246,7 +246,7 @@ describe("an enum variant list is disjoint from an ordinary struct", () => {
     // Nor as the primary type, nor as the domain struct.
     expect(
       isTypedDataShape({
-        domain: { name: "MC Test", revision: "1" },
+        domain: { name: "Bramble Test", revision: "1" },
         message: { V1: ["0x5"] },
         primaryType: "Variants",
         types: {
@@ -258,7 +258,7 @@ describe("an enum variant list is disjoint from an ordinary struct", () => {
     ).toBe(false);
     expect(
       isTypedDataShape({
-        domain: { name: "MC Test", revision: "1" },
+        domain: { name: "Bramble Test", revision: "1" },
         message: {},
         primaryType: "Msg",
         types: {

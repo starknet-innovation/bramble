@@ -86,7 +86,7 @@ describe("sidepanel home", () => {
     expect(html).toContain(`href="https://starkscan.co/contract/${account.address}"`);
     expect(html).toContain(">Explorer<");
     expect(html).toContain('aria-label="Open this account on the block explorer"');
-    expect(html).not.toContain('aria-label="Open MC Terminal portfolio"');
+    expect(html).not.toContain('aria-label="Open Bramble Terminal portfolio"');
     expect(html).not.toMatch(/class="action-tile" data-view="nfts"/);
 
     const noAccounts = dashboard(
@@ -105,7 +105,7 @@ describe("sidepanel home", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).not.toContain("terminal-cta");
-    expect(html).not.toContain("Join MC Terminal");
+    expect(html).not.toContain("Join Bramble Terminal");
     expect(html).not.toContain("Your homebase for all Starknet activity");
     expect(html).toContain('id="starkscan-button"');
   });

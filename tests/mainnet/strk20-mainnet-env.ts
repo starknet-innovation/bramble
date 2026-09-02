@@ -50,9 +50,9 @@ const httpsServiceUrl = (value: string | undefined, name: string): string => {
 };
 
 const dedicatedRpcUrl = (value: string | undefined): string => {
-  const rpcUrl = httpsServiceUrl(value, "MC_STRK20_E2E_RPC_URL");
+  const rpcUrl = httpsServiceUrl(value, "BRAMBLE_STRK20_E2E_RPC_URL");
   if (SHARED_MAINNET_RPC_HOSTS.has(new URL(rpcUrl).hostname)) {
-    throw new Error("MC_STRK20_E2E_RPC_URL must be a dedicated test RPC endpoint");
+    throw new Error("BRAMBLE_STRK20_E2E_RPC_URL must be a dedicated test RPC endpoint");
   }
   return rpcUrl;
 };
@@ -67,47 +67,52 @@ export const readStrk20MainnetEnvironment = (
   if (env["CI"]) {
     throw new Error("The STRK20 live-mainnet suite is local-only");
   }
-  if (env["MC_STRK20_E2E_MAINNET_ACK"] !== MAINNET_ACK) {
-    throw new Error(`Set MC_STRK20_E2E_MAINNET_ACK=${MAINNET_ACK} to permit mainnet writes`);
+  if (env["BRAMBLE_STRK20_E2E_MAINNET_ACK"] !== MAINNET_ACK) {
+    throw new Error(`Set BRAMBLE_STRK20_E2E_MAINNET_ACK=${MAINNET_ACK} to permit mainnet writes`);
   }
-  if (env["MC_STRK20_E2E_PUBLIC_CALLER_ACK"] !== PUBLIC_CALLER_ACK) {
+  if (env["BRAMBLE_STRK20_E2E_PUBLIC_CALLER_ACK"] !== PUBLIC_CALLER_ACK) {
     throw new Error(
-      `Set MC_STRK20_E2E_PUBLIC_CALLER_ACK=${PUBLIC_CALLER_ACK} to permit public-caller submission`,
+      `Set BRAMBLE_STRK20_E2E_PUBLIC_CALLER_ACK=${PUBLIC_CALLER_ACK} to permit public-caller submission`,
     );
   }
-  const accountAddress = normalizeFeltInput(env["MC_STRK20_E2E_ACCOUNT_ADDRESS"] ?? "");
+  const accountAddress = normalizeFeltInput(env["BRAMBLE_STRK20_E2E_ACCOUNT_ADDRESS"] ?? "");
   if (!isNonZeroStarkFieldElement(accountAddress)) {
-    throw new Error("MC_STRK20_E2E_ACCOUNT_ADDRESS must be a Starknet address");
+    throw new Error("BRAMBLE_STRK20_E2E_ACCOUNT_ADDRESS must be a Starknet address");
   }
-  const privateKey = normalizeFeltInput(env["MC_STRK20_E2E_PRIVATE_KEY"] ?? "");
+  const privateKey = normalizeFeltInput(env["BRAMBLE_STRK20_E2E_PRIVATE_KEY"] ?? "");
   if (!isStarkPrivateKey(privateKey)) {
-    throw new Error("MC_STRK20_E2E_PRIVATE_KEY must be a valid Stark signing key");
+    throw new Error("BRAMBLE_STRK20_E2E_PRIVATE_KEY must be a valid Stark signing key");
   }
   const discoveryUrl = httpsServiceUrl(
-    env["MC_STRK20_E2E_DISCOVERY_URL"],
-    "MC_STRK20_E2E_DISCOVERY_URL",
+    env["BRAMBLE_STRK20_E2E_DISCOVERY_URL"],
+    "BRAMBLE_STRK20_E2E_DISCOVERY_URL",
   );
-  const proverUrl = httpsServiceUrl(env["MC_STRK20_E2E_PROVER_URL"], "MC_STRK20_E2E_PROVER_URL");
-  const rpcUrl = dedicatedRpcUrl(env["MC_STRK20_E2E_RPC_URL"]);
-  const resumeValue = env["MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK"];
+  const proverUrl = httpsServiceUrl(
+    env["BRAMBLE_STRK20_E2E_PROVER_URL"],
+    "BRAMBLE_STRK20_E2E_PROVER_URL",
+  );
+  const rpcUrl = dedicatedRpcUrl(env["BRAMBLE_STRK20_E2E_RPC_URL"]);
+  const resumeValue = env["BRAMBLE_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK"];
   if (resumeValue !== undefined && resumeValue !== RESUME_AFTER_DEPOSIT_ACK) {
     throw new Error(
-      `Set MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK=${RESUME_AFTER_DEPOSIT_ACK} to resume after a confirmed deposit`,
+      `Set BRAMBLE_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK=${RESUME_AFTER_DEPOSIT_ACK} to resume after a confirmed deposit`,
     );
   }
-  const depositAmount = env["MC_STRK20_E2E_DEPOSIT_STRK"] ?? "";
+  const depositAmount = env["BRAMBLE_STRK20_E2E_DEPOSIT_STRK"] ?? "";
   let depositAmountRaw: bigint;
   try {
     depositAmountRaw = parseTokenAmount(depositAmount, STRK_DECIMALS);
   } catch {
-    throw new Error("MC_STRK20_E2E_DEPOSIT_STRK must be a positive decimal STRK amount");
+    throw new Error("BRAMBLE_STRK20_E2E_DEPOSIT_STRK must be a positive decimal STRK amount");
   }
   if (depositAmountRaw > MAX_DEPOSIT_RAW) {
-    throw new Error("MC_STRK20_E2E_DEPOSIT_STRK exceeds the hard 1 STRK safety cap");
+    throw new Error("BRAMBLE_STRK20_E2E_DEPOSIT_STRK exceeds the hard 1 STRK safety cap");
   }
   const actionAmountRaw = depositAmountRaw / 10n;
   if (actionAmountRaw === 0n) {
-    throw new Error("MC_STRK20_E2E_DEPOSIT_STRK is too small for transfer and withdrawal checks");
+    throw new Error(
+      "BRAMBLE_STRK20_E2E_DEPOSIT_STRK is too small for transfer and withdrawal checks",
+    );
   }
   return {
     accountAddress,

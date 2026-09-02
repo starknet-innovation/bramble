@@ -22,7 +22,7 @@ const extendedWsTarget = `wss://${new URL(EXTENDED_API_BASE).host}`;
 const extendedRestPrefix = "/proxy/extended";
 const avnuMarketsPrefix = "/proxy/avnu-markets";
 const starkscanPrefix = "/proxy/starkscan";
-const extendedUserAgent = "MC-Wallet-Terminal/0.1";
+const extendedUserAgent = "Bramble-Terminal/0.1";
 
 // Forward market-data GETs with a clean server-side header set. Extended needs
 // the proxy for CORS; AVNU uses it so missing candle history can become a clean

@@ -100,17 +100,17 @@ describe("strk20 action schemas", () => {
         readStrk20Action({
           calls: [call],
           collect_policy,
-          dapp_name: "MC Terminal",
+          dapp_name: "Bramble Terminal",
           nonce: "0x1",
           type: "subaccount_invoke",
         }),
-      ).toMatchObject({ collect_policy, dapp_name: "MC Terminal", type: "subaccount_invoke" });
+      ).toMatchObject({ collect_policy, dapp_name: "Bramble Terminal", type: "subaccount_invoke" });
     }
     expect(
       readStrk20Action({
         calls: [],
         collect_policy: { type: "all" },
-        dapp_name: "MC Terminal",
+        dapp_name: "Bramble Terminal",
         nonce: "0x1",
         type: "subaccount_invoke",
       }),
@@ -119,7 +119,7 @@ describe("strk20 action schemas", () => {
       readStrk20Action({
         calls: [call],
         collect_policy: { amount: "not-a-felt", type: "exact" },
-        dapp_name: "MC Terminal",
+        dapp_name: "Bramble Terminal",
         nonce: "0x1",
         type: "subaccount_invoke",
       }),
@@ -128,7 +128,7 @@ describe("strk20 action schemas", () => {
       readStrk20Action({
         calls: Array.from({ length: 17 }, () => call),
         collect_policy: { type: "all" },
-        dapp_name: "MC Terminal",
+        dapp_name: "Bramble Terminal",
         nonce: "0x1",
         type: "subaccount_invoke",
       }),

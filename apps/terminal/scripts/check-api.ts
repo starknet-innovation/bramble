@@ -64,7 +64,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const SAMPLE_MARKET = "BTC-USD";
 const SAMPLE_STARKSCAN_ADDRESS =
   "0x6c16710431efd3962d3c6f55faf00d8c855188029acb42781b9ac77c438ade5";
-const EXTENDED_USER_AGENT = "MC-Wallet-Terminal/0.1";
+const EXTENDED_USER_AGENT = "Bramble-Terminal/0.1";
 
 type Outcome = {
   readonly name: string;

@@ -93,7 +93,7 @@ const download = async (
         accept: "image/webp,image/png,image/jpeg",
         "accept-encoding": "identity",
         referer: "https://app.avnu.fi/",
-        "user-agent": "Mozilla/5.0 MC-Wallet-Token-Asset-Sync",
+        "user-agent": "Mozilla/5.0 Bramble-Token-Asset-Sync",
       },
       redirect: "follow",
       signal: AbortSignal.timeout(12_000),

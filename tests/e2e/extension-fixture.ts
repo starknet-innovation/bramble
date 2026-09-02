@@ -22,9 +22,9 @@ export type LoadedExtension = {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const distPath = resolve(repoRoot, "dist");
 
-// MC_E2E_LIVE_NETWORK is set by playwright.mainnet.config.ts and rejected by
+// BRAMBLE_E2E_LIVE_NETWORK is set by playwright.mainnet.config.ts and rejected by
 // tests/e2e/global-setup.ts.
-const liveNetworkAllowed = (): boolean => process.env["MC_E2E_LIVE_NETWORK"] === "1";
+const liveNetworkAllowed = (): boolean => process.env["BRAMBLE_E2E_LIVE_NETWORK"] === "1";
 
 // Resolver-level, not context.route, whose handler attaches after the worker may
 // already have fetched; Chromium maps IP literals and honours ambient proxies.

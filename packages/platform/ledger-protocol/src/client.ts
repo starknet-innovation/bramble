@@ -92,7 +92,7 @@ export type LedgerFirmwareVersion = {
  * not block the user. This gate is not a signing trust decision: the background
  * still verifies every returned signature.
  */
-export const MC_LEDGER_STARKNET_APP_MIN: LedgerAppVersion = { major: 2, minor: 4, patch: 0 };
+export const BRAMBLE_LEDGER_STARKNET_APP_MIN: LedgerAppVersion = { major: 2, minor: 4, patch: 0 };
 
 /**
  * Oldest Ledger OS release with an official Starknet 2.4.0 build, by model.
@@ -100,7 +100,7 @@ export const MC_LEDGER_STARKNET_APP_MIN: LedgerAppVersion = { major: 2, minor: 4
  * not a "latest firmware" policy. Unknown models fail closed rather than
  * receiving a firmware rule intended for a different secure element.
  */
-export const MC_LEDGER_OS_MIN: Readonly<Record<LedgerDeviceModel, LedgerAppVersion>> = {
+export const BRAMBLE_LEDGER_OS_MIN: Readonly<Record<LedgerDeviceModel, LedgerAppVersion>> = {
   flex: { major: 1, minor: 5, patch: 1 },
   "nano-gen5": { major: 1, minor: 0, patch: 5 },
   "nano-s-plus": { major: 1, minor: 5, patch: 1 },
@@ -281,7 +281,7 @@ const ledgerModelFromTargetId = (targetId: unknown): LedgerDeviceModel | null =>
 
 /**
  * Reads and validates the device OS version. Only models in
- * {@link MC_LEDGER_OS_MIN} are accepted; Ledger's official target-id masks
+ * {@link BRAMBLE_LEDGER_OS_MIN} are accepted; Ledger's official target-id masks
  * admit hardware revisions within those models, while unknown and legacy
  * models fail closed rather than borrowing another model's release line.
  */
@@ -309,7 +309,7 @@ export const assertLedgerFirmwareReady = async (
   client: LedgerDeviceClient,
 ): Promise<LedgerFirmwareVersion> => {
   const firmware = await ledgerFirmwareVersion(client);
-  if (!meetsMinimum(firmware.version, MC_LEDGER_OS_MIN[firmware.model])) {
+  if (!meetsMinimum(firmware.version, BRAMBLE_LEDGER_OS_MIN[firmware.model])) {
     throw new LedgerRejection("firmware-below-minimum");
   }
   return firmware;
@@ -333,13 +333,13 @@ export const ledgerAppVersion = async (client: LedgerDeviceClient): Promise<Ledg
 
 /**
  * Reads the app version and rejects with `app-below-minimum` when the device is
- * below {@link MC_LEDGER_STARKNET_APP_MIN}. Returns the version on success.
+ * below {@link BRAMBLE_LEDGER_STARKNET_APP_MIN}. Returns the version on success.
  */
 export const assertLedgerAppReady = async (
   client: LedgerDeviceClient,
 ): Promise<LedgerAppVersion> => {
   const version = await ledgerAppVersion(client);
-  if (!meetsMinimum(version, MC_LEDGER_STARKNET_APP_MIN)) {
+  if (!meetsMinimum(version, BRAMBLE_LEDGER_STARKNET_APP_MIN)) {
     throw new LedgerRejection("app-below-minimum");
   }
   return version;

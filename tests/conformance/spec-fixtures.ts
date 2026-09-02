@@ -81,7 +81,7 @@ export const ACCOUNT: AccountRef = {
  * `tests/starknet/typed-data-revisions.test.ts` pins the other revision.
  */
 export const TYPED_DATA: Json = {
-  domain: { chainId: "SN_SEPOLIA", name: "MC Test", revision: "1", version: "1" },
+  domain: { chainId: "SN_SEPOLIA", name: "Bramble Test", revision: "1", version: "1" },
   message: { content: "hello" },
   primaryType: "Message",
   types: {

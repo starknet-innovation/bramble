@@ -63,7 +63,7 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   {
     message: {
-      dappName: "mc-terminal",
+      dappName: "bramble-terminal",
       origin,
       type: "wallet.strk20SubaccountCommitment",
     },

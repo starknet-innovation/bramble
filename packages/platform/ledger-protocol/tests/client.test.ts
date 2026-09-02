@@ -10,13 +10,13 @@ import {
   assertLedgerAppReady,
   assertLedgerDeviceReady,
   assertLedgerFirmwareReady,
+  BRAMBLE_LEDGER_OS_MIN,
+  BRAMBLE_LEDGER_STARKNET_APP_MIN,
   type LedgerDeviceClient,
   ledgerAppVersion,
   ledgerFirmwareVersion,
   ledgerPublicKeyX,
   ledgerSignHashOnDevice,
-  MC_LEDGER_OS_MIN,
-  MC_LEDGER_STARKNET_APP_MIN,
 } from "@bramble/ledger-protocol/client";
 import { LedgerRejection } from "@bramble/ledger-protocol/errors";
 
@@ -62,8 +62,8 @@ describe("ledgerAppVersion / assertLedgerAppReady", () => {
       async getAppVersion() {
         return {
           ...OK,
-          major: MC_LEDGER_STARKNET_APP_MIN.major,
-          minor: MC_LEDGER_STARKNET_APP_MIN.minor - 1,
+          major: BRAMBLE_LEDGER_STARKNET_APP_MIN.major,
+          minor: BRAMBLE_LEDGER_STARKNET_APP_MIN.minor - 1,
           patch: 9,
         };
       },
@@ -121,11 +121,11 @@ describe("ledgerFirmwareVersion / assertLedgerFirmwareReady", () => {
   test("reads a known device OS and passes at the model's compatibility floor", async () => {
     expect(await ledgerFirmwareVersion(fakeClient())).toEqual({
       model: "nano-x",
-      version: MC_LEDGER_OS_MIN["nano-x"],
+      version: BRAMBLE_LEDGER_OS_MIN["nano-x"],
     });
     await expect(assertLedgerFirmwareReady(fakeClient())).resolves.toEqual({
       model: "nano-x",
-      version: MC_LEDGER_OS_MIN["nano-x"],
+      version: BRAMBLE_LEDGER_OS_MIN["nano-x"],
     });
   });
 
@@ -149,7 +149,7 @@ describe("ledgerFirmwareVersion / assertLedgerFirmwareReady", () => {
       { model: "nano-gen5", targetId: 0x33400099 },
     ] as const;
     for (const { model, targetId } of cases) {
-      const minimum = MC_LEDGER_OS_MIN[model];
+      const minimum = BRAMBLE_LEDGER_OS_MIN[model];
       const client = fakeClient({
         async getOsVersion() {
           return {

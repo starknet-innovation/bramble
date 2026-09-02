@@ -53,27 +53,38 @@ const mixSrgb = (a: Rgb, percent: number, b: Rgb): Rgb => {
 const token = (skin: Skin, name: SkinToken): Rgb => hexToRgb(skin.tokens[name]);
 
 const INKS: readonly SkinToken[] = [
-  "--mc-text",
-  "--mc-muted",
-  "--mc-accent",
-  "--mc-positive",
-  "--mc-danger",
-  "--mc-warning",
+  "--bramble-text",
+  "--bramble-muted",
+  "--bramble-accent",
+  "--bramble-positive",
+  "--bramble-danger",
+  "--bramble-warning",
 ];
-const GROUNDS: readonly SkinToken[] = ["--mc-bg", "--mc-panel", "--mc-elevated", "--mc-sunken"];
+const GROUNDS: readonly SkinToken[] = [
+  "--bramble-bg",
+  "--bramble-panel",
+  "--bramble-elevated",
+  "--bramble-sunken",
+];
 const ACHROMATIC_TOKENS: readonly SkinToken[] = [
-  "--mc-accent",
-  "--mc-accent-text",
-  "--mc-bg",
-  "--mc-border",
-  "--mc-elevated",
-  "--mc-muted",
-  "--mc-panel",
-  "--mc-sunken",
-  "--mc-text",
+  "--bramble-accent",
+  "--bramble-accent-text",
+  "--bramble-bg",
+  "--bramble-border",
+  "--bramble-elevated",
+  "--bramble-muted",
+  "--bramble-panel",
+  "--bramble-sunken",
+  "--bramble-text",
 ];
-const LIGHT_AVATAR_TONES: readonly SkinToken[] = ["--mc-account-avatar-0", "--mc-account-avatar-3"];
-const DARK_AVATAR_TONES: readonly SkinToken[] = ["--mc-account-avatar-1", "--mc-account-avatar-2"];
+const LIGHT_AVATAR_TONES: readonly SkinToken[] = [
+  "--bramble-account-avatar-0",
+  "--bramble-account-avatar-3",
+];
+const DARK_AVATAR_TONES: readonly SkinToken[] = [
+  "--bramble-account-avatar-1",
+  "--bramble-account-avatar-2",
+];
 
 describe.each([
   ["midnight", darkSkin],
@@ -92,35 +103,39 @@ describe.each([
   });
 
   test("the CTA label meets AA on the accent fill", () => {
-    const ratio = contrast(token(skin, "--mc-accent-text"), token(skin, "--mc-accent"));
+    const ratio = contrast(token(skin, "--bramble-accent-text"), token(skin, "--bramble-accent"));
     expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
   });
 
   test("the badge ink (page ground) meets AA on the danger fill", () => {
-    const ratio = contrast(token(skin, "--mc-bg"), token(skin, "--mc-danger"));
+    const ratio = contrast(token(skin, "--bramble-bg"), token(skin, "--bramble-danger"));
     expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
   });
 
   test("account character features keep non-text contrast against every identity tone", () => {
     for (const ground of LIGHT_AVATAR_TONES) {
       expect(
-        contrast(token(skin, "--mc-account-avatar-paper"), token(skin, ground)),
+        contrast(token(skin, "--bramble-account-avatar-paper"), token(skin, ground)),
       ).toBeGreaterThanOrEqual(3);
     }
     for (const ground of DARK_AVATAR_TONES) {
       expect(
-        contrast(token(skin, "--mc-account-avatar-ink"), token(skin, ground)),
+        contrast(token(skin, "--bramble-account-avatar-ink"), token(skin, ground)),
       ).toBeGreaterThanOrEqual(3);
     }
   });
 
   test("accent and danger inks meet AA on their derived soft fills", () => {
-    // Percentages must match the --mc-accent-soft / --mc-danger-soft
+    // Percentages must match the --bramble-accent-soft / --bramble-danger-soft
     // definitions in styles-base.ts.
-    const accentSoft = mixSrgb(token(skin, "--mc-accent"), 13, token(skin, "--mc-panel"));
-    const dangerSoft = mixSrgb(token(skin, "--mc-danger"), 12, token(skin, "--mc-panel"));
-    expect(contrast(token(skin, "--mc-accent"), accentSoft)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
-    expect(contrast(token(skin, "--mc-danger"), dangerSoft)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    const accentSoft = mixSrgb(token(skin, "--bramble-accent"), 13, token(skin, "--bramble-panel"));
+    const dangerSoft = mixSrgb(token(skin, "--bramble-danger"), 12, token(skin, "--bramble-panel"));
+    expect(contrast(token(skin, "--bramble-accent"), accentSoft)).toBeGreaterThanOrEqual(
+      AA_NORMAL_TEXT,
+    );
+    expect(contrast(token(skin, "--bramble-danger"), dangerSoft)).toBeGreaterThanOrEqual(
+      AA_NORMAL_TEXT,
+    );
   });
 
   test("interaction and structural roles are strictly achromatic", () => {
@@ -132,17 +147,17 @@ describe.each([
   });
 
   test("green, orange, and red remain reserved semantic signals", () => {
-    const [positiveRed, positiveGreen, positiveBlue] = token(skin, "--mc-positive");
-    const [dangerRed, dangerGreen, dangerBlue] = token(skin, "--mc-danger");
-    const [warningRed, warningGreen, warningBlue] = token(skin, "--mc-warning");
+    const [positiveRed, positiveGreen, positiveBlue] = token(skin, "--bramble-positive");
+    const [dangerRed, dangerGreen, dangerBlue] = token(skin, "--bramble-danger");
+    const [warningRed, warningGreen, warningBlue] = token(skin, "--bramble-warning");
     expect(positiveGreen).toBeGreaterThan(positiveRed);
     expect(positiveGreen).toBeGreaterThan(positiveBlue);
     expect(dangerRed).toBeGreaterThan(dangerGreen);
     expect(dangerRed).toBeGreaterThan(dangerBlue);
     expect(warningRed).toBeGreaterThan(warningGreen);
     expect(warningGreen).toBeGreaterThan(warningBlue);
-    expect(skin.tokens["--mc-accent"]).not.toBe(skin.tokens["--mc-positive"]);
-    expect(skin.tokens["--mc-accent"]).not.toBe(skin.tokens["--mc-danger"]);
-    expect(skin.tokens["--mc-accent"]).not.toBe(skin.tokens["--mc-warning"]);
+    expect(skin.tokens["--bramble-accent"]).not.toBe(skin.tokens["--bramble-positive"]);
+    expect(skin.tokens["--bramble-accent"]).not.toBe(skin.tokens["--bramble-danger"]);
+    expect(skin.tokens["--bramble-accent"]).not.toBe(skin.tokens["--bramble-warning"]);
   });
 });

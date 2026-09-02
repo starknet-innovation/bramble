@@ -32,7 +32,7 @@ const account: AccountRef = {
 // MCW-V09-101 forgery is closed by the name grammar rather than by a revision
 // ban — and is exercised in `typed-data-revisions.test.ts`.
 const typedData = {
-  domain: { chainId: "SN_MAIN", name: "MC Test", revision: "1", version: "1" },
+  domain: { chainId: "SN_MAIN", name: "Bramble Test", revision: "1", version: "1" },
   message: { content: "hello" },
   primaryType: "Message",
   types: {

@@ -78,7 +78,7 @@ describe("accountAvatar", () => {
       expect(avatar).toContain('class="avatar-head"');
       expect(avatar).toContain('class="avatar-eyes"');
       expect(avatar).toContain('class="avatar-mouth"');
-      expect(avatar).toMatch(/fill="var\(--mc-account-avatar-\d\)"/);
+      expect(avatar).toMatch(/fill="var\(--bramble-account-avatar-\d\)"/);
       expect(avatar).not.toContain('class="avatar-frame"');
     }
   });

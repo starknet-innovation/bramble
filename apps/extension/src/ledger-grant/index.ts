@@ -128,7 +128,7 @@ const retryTransportLabel = (transport: LedgerTransportKind): string =>
       : "Try HID cable";
 
 const diagnosticId = (transport: LedgerTransportKind, stage: string): string =>
-  `MC-LDG-${transport.toUpperCase()}-${stage}`;
+  `BRAMBLE-LDG-${transport.toUpperCase()}-${stage}`;
 
 const render = (): void => {
   const app = document.querySelector<HTMLElement>("#app");
@@ -390,7 +390,7 @@ const render = (): void => {
           ? "Bluetooth is unavailable in this browser. Connect with USB instead."
           : "Use the latest Chrome, Brave, or Edge on desktop, then try again.",
         "danger",
-        "Support code · MC-LDG-BROWSER",
+        "Support code · BRAMBLE-LDG-BROWSER",
       );
       resetButton(selectedMethod === "ble" ? "Pair with Bluetooth" : "Connect with USB");
       return;
@@ -484,7 +484,7 @@ const render = (): void => {
       "Open Ledger from Bramble",
       "This hardware tab needs a fresh secure session from the wallet.",
       "danger",
-      "Support code · MC-LDG-SESSION",
+      "Support code · BRAMBLE-LDG-SESSION",
     );
   }
 
