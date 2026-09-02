@@ -192,12 +192,15 @@ Recovery boundaries are deliberately explicit:
 4. Exercise `readMigratedVault` staging, verification, restart recovery, and idempotence tests.
 5. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-The vault schema is currently at **v4**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"`
+The vault schema is currently at **v8**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"`
 derivation whose path, index, and `LedgerW` marker must agree and which has no `signingKeys` entry.
-v4 adds encrypted `accountSecrets`; public `AccountRef` records cannot contain optional secrets.
-Ledger STRK20 viewing keys retain exact account, chain, pool, and scheme provenance. Vaults migrated
-from v1 carry `mnemonic: null`; they cannot add software accounts or reveal a phrase until re-created,
-but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → v2 → v3 → v4`).
+v4 adds encrypted `accountSecrets`, which public `AccountRef` records may never contain, retaining
+exact account, chain, pool, and scheme provenance. v5 canonicalizes every account identity and
+dependent reference; v6 records account-contract semantics explicitly; v7 retains the exact Argent
+deployment salt. v8 admits a `"mobile-pq"` derivation — a paired phone whose ML-DSA key lives in
+device hardware — which likewise has no `signingKeys` entry and may hold no account secret. Vaults
+migrated from v1 carry `mnemonic: null`; they cannot add software accounts or reveal a phrase until
+re-created, but may add a keyless account. Every migration is adjacent (`v0 → v1 → … → v8`).
 
 Chrome preserves `storage.local` across an update but clears `storage.session`. `runtime.onInstalled`
 therefore cannot migrate an encrypted vault: it has no passphrase. The first authenticated read runs

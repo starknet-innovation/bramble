@@ -30,6 +30,9 @@ boundaries, release controls, and security posture.
 - [Observed UX validation](ux-validation/) defines the external task protocol and release evidence.
 - [STRK20 privacy integration](strk20-privacy/) documents the pinned SDK, service contract,
   privileged data flow, failure boundaries, and deployment inputs.
+- [Post-quantum mobile signer](pq-mobile-signer/) is the design for a Starknet account whose
+  ML-DSA-65 signing key lives in a phone's secure enclave: milestones, shared wire contract,
+  wallet refactor, and transport.
 - [Security audit](security-audit/) tracks the directory-by-directory review of the current
   released baseline.
 - [Source package audit](security-audit/src-package-audit/) preserves the completed review of the
