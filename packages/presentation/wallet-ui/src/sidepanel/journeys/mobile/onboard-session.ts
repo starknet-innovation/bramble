@@ -125,6 +125,12 @@ export const decodeMobilePqPairingResult = (pasted: string): MobilePqPairingResu
 type MobilePqEnrollPhase =
   | { readonly kind: "loading" }
   | { readonly kind: "collect" }
+  // Distinct from `enrolling` on purpose: one is waiting on a phone across a
+  // radio, the other is the background checking a proof it already has. Sharing
+  // a phase made a stalled Bluetooth reply render as "verifying the signature
+  // against the key you pasted", which named the wrong stage and a transport the
+  // user had not used.
+  | { readonly kind: "reaching" }
   | { readonly kind: "enrolling" }
   | { readonly kind: "error"; readonly message: string };
 
@@ -133,6 +139,12 @@ type MobilePqEnrollPhase =
  * `null` means the journey is closed.
  */
 export type MobilePqEnrollView = {
+  /**
+   * Whether Bluetooth is reachable at all, which decides whether the screen
+   * offers a choice. When it is not, the copy-and-paste path is simply the
+   * screen rather than a fallback the user has to find.
+   */
+  readonly bluetoothAvailable: boolean;
   readonly challenge: string;
   /**
    * The whole offer as one base64url string. What the user copies: the challenge
@@ -140,7 +152,18 @@ export type MobilePqEnrollView = {
    */
   readonly offer: string;
   readonly phase: MobilePqEnrollPhase;
+  /**
+   * The transport the user is on. Only in `clipboard` is the offer shown as
+   * something to copy: an offer on screen beside a Bluetooth button invites
+   * pasting it somewhere for no reason, and it is single-use.
+   */
+  readonly transport: MobilePqEnrollTransport;
 };
+
+/**
+ * How the user is moving the offer and its reply.
+ */
+export type MobilePqEnrollTransport = "bluetooth" | "clipboard";
 
 /**
  * Collaborators the controller drives, all injected so the flow runs with no
@@ -150,6 +173,12 @@ export type MobilePqEnrollView = {
  * or `null` when the journey closes.
  */
 export type MobilePqEnrollControllerDeps = {
+  /**
+   * Carries the pairing offer to a phone over Bluetooth and resolves with its
+   * reply. Absent when this build cannot reach a phone that way, and the journey
+   * then offers only the paste path.
+   */
+  readonly bluetooth?: (offer: string) => Promise<string>;
   readonly challenge: () => Promise<string>;
   readonly enroll: (draft: MobilePqEnrollDraft & { readonly challenge: string }) => Promise<void>;
   readonly networkId: () => string;
@@ -163,7 +192,11 @@ export type MobilePqEnrollControllerDeps = {
 export type MobilePqEnrollController = {
   readonly cancel: () => void;
   readonly open: () => Promise<void>;
+  /** Sends the offer over Bluetooth and enrolls whatever comes back. */
+  readonly sendOverBluetooth: () => Promise<void>;
   readonly submit: (pasted: string) => Promise<void>;
+  /** Switches transport without touching the outstanding challenge. */
+  readonly useTransport: (transport: MobilePqEnrollTransport) => void;
 };
 
 /**
@@ -216,15 +249,20 @@ export const createMobilePqEnrollController = (
   const { challenge: fetchChallenge, enroll, networkId, onEnrolled, render } = deps;
   let challenge: string | null = null;
   let phase: MobilePqEnrollPhase = { kind: "loading" };
+  // Bluetooth by default where it exists, because it is the path that does not
+  // ask the user to carry a 14 KB string by hand.
+  let transport: MobilePqEnrollTransport = deps.bluetooth ? "bluetooth" : "clipboard";
 
   const paint = (): void => {
     render(
       challenge === null
         ? null
         : {
+            bluetoothAvailable: deps.bluetooth !== undefined,
             challenge,
             offer: encodeMobilePqPairingOffer({ challenge, networkId: networkId() }),
             phase,
+            transport,
           },
     );
   };
@@ -232,6 +270,42 @@ export const createMobilePqEnrollController = (
   const fail = (message: string): void => {
     phase = { kind: "error", message };
     paint();
+  };
+
+  // One enrollment path for both transports: the shape checks, the enrolling
+  // phase and what to do when the background refuses are identical, and the only
+  // difference is how the reply arrived.
+  const useReply = async (active: string, reply: string): Promise<void> => {
+    // Structure first, then the field-level checks. "That is not a response from
+    // the app" is a different problem from "that key is the wrong length", and
+    // conflating them sends the user looking in the wrong place.
+    const draft = decodeMobilePqPairingResult(reply);
+    if (draft === null) {
+      fail(MOBILE_PQ_PAIRING_PASTE_INVALID);
+      return;
+    }
+    const invalid = draftError(draft);
+    if (invalid !== null) {
+      fail(invalid);
+      return;
+    }
+    phase = { kind: "enrolling" };
+    paint();
+    try {
+      await enroll({ ...draft, challenge: active });
+    } catch (error) {
+      // The background refused it: a failed proof of possession, a consumed
+      // challenge, or a duplicate account. Nothing was stored. Reaching the
+      // background at all spends the challenge, so the reason is reported with
+      // the remedy rather than on its own.
+      const reason = error instanceof Error ? error.message : String(error);
+      fail(`${reason}. ${MOBILE_PQ_CHALLENGE_SPENT}`);
+      return;
+    }
+    challenge = null;
+    phase = { kind: "loading" };
+    paint();
+    await onEnrolled?.();
   };
 
   return {
@@ -256,41 +330,40 @@ export const createMobilePqEnrollController = (
       phase = { kind: "collect" };
       paint();
     },
+    async sendOverBluetooth() {
+      const active = challenge;
+      const send = deps.bluetooth;
+      if (active === null || send === undefined || phase.kind === "enrolling") {
+        return;
+      }
+      phase = { kind: "reaching" };
+      paint();
+      let reply: string;
+      try {
+        reply = await send(
+          encodeMobilePqPairingOffer({ challenge: active, networkId: networkId() }),
+        );
+      } catch (error) {
+        // A dismissed chooser, a phone that refused, a dropped link. The
+        // challenge is still outstanding and the paste path still works for it,
+        // so the journey stays open with the reason on screen.
+        fail(error instanceof Error ? error.message : String(error));
+        return;
+      }
+      await useReply(active, reply);
+    },
+    useTransport(next) {
+      // The challenge is untouched: it is single-use and still outstanding, so
+      // switching transport must not spend it or ask the wallet for another.
+      transport = next;
+      paint();
+    },
     async submit(pasted) {
       const active = challenge;
       if (active === null || phase.kind === "enrolling") {
         return;
       }
-      // Structure first, then the field-level checks. "That is not a response
-      // from the app" is a different problem from "that key is the wrong
-      // length", and conflating them sends the user looking in the wrong place.
-      const draft = decodeMobilePqPairingResult(pasted);
-      if (draft === null) {
-        fail(MOBILE_PQ_PAIRING_PASTE_INVALID);
-        return;
-      }
-      const invalid = draftError(draft);
-      if (invalid !== null) {
-        fail(invalid);
-        return;
-      }
-      phase = { kind: "enrolling" };
-      paint();
-      try {
-        await enroll({ ...draft, challenge: active });
-      } catch (error) {
-        // The background refused it: a failed proof of possession, a consumed
-        // challenge, or a duplicate account. Nothing was stored. Reaching the
-        // background at all spends the challenge, so the reason is reported with
-        // the remedy rather than on its own.
-        const reason = error instanceof Error ? error.message : String(error);
-        fail(`${reason}. ${MOBILE_PQ_CHALLENGE_SPENT}`);
-        return;
-      }
-      challenge = null;
-      phase = { kind: "loading" };
-      paint();
-      await onEnrolled?.();
+      await useReply(active, pasted);
     },
   };
 };

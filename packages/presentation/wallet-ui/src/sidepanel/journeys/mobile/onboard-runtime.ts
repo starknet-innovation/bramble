@@ -26,6 +26,11 @@ import { mobilePqEnrollScreen } from "./onboard-views";
  * account once it exists.
  */
 export type MobilePqOnboardRuntimeDeps = {
+  /**
+   * Carries the pairing offer to a phone over Bluetooth. Absent when this build
+   * has no way to reach one, and the journey then offers only the paste path.
+   */
+  readonly bluetooth?: (offer: string) => Promise<string>;
   readonly mount: HTMLElement;
   readonly networkId: () => string;
   readonly refresh: () => Promise<void>;
@@ -63,6 +68,27 @@ export const createMobilePqOnboardRuntime = (
         event.preventDefault();
         void controller.submit(fieldValue("[data-mobile-pq-response]"));
       });
+    // `preventDefault` on every one of these: the enrollment controls live
+    // inside a `<form>`, so a button without it submits the form instead of
+    // running its handler.
+    mount
+      .querySelector<HTMLButtonElement>("[data-mobile-pq-enroll-bluetooth]")
+      ?.addEventListener("click", (event) => {
+        event.preventDefault();
+        void controller.sendOverBluetooth();
+      });
+    mount
+      .querySelector<HTMLButtonElement>("[data-mobile-pq-enroll-use-clipboard]")
+      ?.addEventListener("click", (event) => {
+        event.preventDefault();
+        controller.useTransport("clipboard");
+      });
+    mount
+      .querySelector<HTMLButtonElement>("[data-mobile-pq-enroll-use-bluetooth]")
+      ?.addEventListener("click", (event) => {
+        event.preventDefault();
+        controller.useTransport("bluetooth");
+      });
     mount
       .querySelector<HTMLButtonElement>("[data-mobile-pq-enroll-cancel]")
       ?.addEventListener("click", (event) => {
@@ -83,6 +109,7 @@ export const createMobilePqOnboardRuntime = (
   };
 
   controller = createMobilePqEnrollController({
+    ...(deps.bluetooth === undefined ? {} : { bluetooth: deps.bluetooth }),
     challenge: () => wallet.loadMobilePqEnrollChallenge(),
     enroll: async (draft) => {
       await wallet.addMobilePqAccount({ ...draft, networkId: networkId() });

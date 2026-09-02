@@ -27,9 +27,15 @@ export const STRUCTURED_SOURCE_ROOTS: Readonly<Record<string, readonly string[]>
 export const EXTENSION_SURFACE_EDGES: Readonly<Record<string, readonly string[]>> = {
   content: ["@mc-wallet/wallet-protocol"],
   "ledger-grant": ["@mc-wallet/ledger-browser", "@mc-wallet/ledger-protocol", "@mc-wallet/ui-kit"],
+  // Constrained rather than left unlisted: the device tab may reach the
+  // transport and the skin tokens, and nothing else. It must never gain a wallet
+  // or vault edge — it is a page that talks to a radio.
+  "pq-grant": ["@mc-wallet/pq-transport", "@mc-wallet/ui-kit"],
   provider: ["@mc-wallet/wallet-protocol"],
   sandbox: [],
-  sidepanel: ["@mc-wallet/ledger-browser", "@mc-wallet/wallet-ui"],
+  // `pq-transport` is here for the composition root only: it opens the device
+  // tab, which needs `chrome.tabs`, and mints the broker session capability.
+  sidepanel: ["@mc-wallet/ledger-browser", "@mc-wallet/pq-transport", "@mc-wallet/wallet-ui"],
 };
 
 /**

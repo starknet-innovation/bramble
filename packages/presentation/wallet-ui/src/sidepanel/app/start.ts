@@ -38,7 +38,7 @@ import {
   bindPickers,
   deploymentPollScope,
 } from "../shell/shell-bindings";
-import { createDeviceOverlays } from "./devices/device-overlays";
+import { createDeviceOverlays, type MobilePqBluetooth } from "./devices/device-overlays";
 import type { NavDirection } from "./navigation/nav-direction";
 import { popView, pushView, type ViewHistory } from "./navigation/nav-history";
 import {
@@ -65,6 +65,7 @@ import { createMutationRuntime } from "./sync/runtime-refresh";
 export const startWalletUi = async (
   ledgerConnector: LedgerConnector,
   extensionApi?: WalletUiBrowser,
+  mobilePqBluetooth?: MobilePqBluetooth,
 ): Promise<void> => {
   const app = document.querySelector("#app");
   const fullPageOnboarding = document.body.classList.contains("onboarding-surface");
@@ -99,6 +100,7 @@ export const startWalletUi = async (
   const cache: RenderData = emptyRenderCache();
   let privacy: ReturnType<typeof createPrivacyController>;
   const { ledgerSign, mobilePqOnboard, mobilePqSign } = createDeviceOverlays({
+    ...(mobilePqBluetooth === undefined ? {} : { mobilePqBluetooth }),
     ledgerConnector,
     networkId: () => lastNetworkId,
     onLedgerSignatureReported: transfer.markTransferLedgerAuthorized,

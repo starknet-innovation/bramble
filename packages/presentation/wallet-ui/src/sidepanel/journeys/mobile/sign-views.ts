@@ -57,8 +57,11 @@ const signerLine = (request: MobilePqSignRequestSummary): string =>
  *
  * It leads because it is the only thing on this screen with an action attached:
  * the hash below it is for comparing by eye, and a user who copies that instead
- * gets a value the app rejects. Ordering the screen by what the user must *do*
- * puts the request first and demotes the hash to what it is — a check.
+ * gets a value the app rejects.
+ *
+ * The hash now leads, because on the Bluetooth path there is nothing for the
+ * user to carry and comparing the hash is their entire job. The request appears
+ * only on the copy-and-paste path, where it is the thing being carried.
  */
 const requestBlock = (view: MobilePqSignView): string =>
   `<section class="ledger-hash-check">
@@ -88,7 +91,7 @@ const phoneHashCheck = (request: MobilePqSignRequestSummary): string => {
     <p class="ledger-hash-value"><code>${escapeHtml("0x")}${hashGroups(digits)
       .map((group) => `<span>${escapeHtml(group)}</span>`)
       .join("")}</code></p>
-    <p class="ledger-hash-help">Compare this with the hash the app shows, and approve only if they match. This value is for comparing, not for copying — the request above is what the app reads.</p>
+    <p class="ledger-hash-help">Your phone shows this same hash. Compare the two and approve on the phone only if they match. Nothing is submitted until the wallet has verified what comes back.</p>
   </section>`;
 };
 
@@ -100,8 +103,27 @@ const cancelButton = (): string =>
     variant: "ghost",
   });
 
-const handoffBody = (): string => `
-  <p>Approve on the phone, then paste what it hands back.</p>
+const bluetoothBody = (): string => `
+  <div class="ledger-phase-actions">
+    ${button({
+      attributes: { "data-mobile-pq-bluetooth": true },
+      icon: "shield",
+      label: "Sign with the PQ Signer app",
+    })}
+    ${cancelButton()}
+  </div>
+  ${button({
+    attributes: { "data-mobile-pq-use-clipboard": true },
+    label: "Or sign by copy and paste",
+    size: "small",
+    variant: "ghost",
+  })}`;
+
+// The envelope is copyable ONLY here. On the Bluetooth path the wallet carries
+// it, and putting kilobytes of base64url on screen next to a button that needs
+// none of it is noise in front of the one thing that matters: the hash.
+const clipboardBody = (view: MobilePqSignView): string => `
+  ${requestBlock(view)}
   ${textareaField({
     attributes: { "data-mobile-pq-response": true },
     label: "Signed response",
@@ -117,10 +139,28 @@ const handoffBody = (): string => `
       label: "Use this signature",
     })}
     ${cancelButton()}
-  </div>`;
+  </div>
+  ${
+    view.bluetoothAvailable
+      ? button({
+          attributes: { "data-mobile-pq-use-bluetooth": true },
+          label: "Sign over Bluetooth instead",
+          size: "small",
+          variant: "ghost",
+        })
+      : ""
+  }`;
+
+const handoffBody = (view: MobilePqSignView): string =>
+  view.transport === "bluetooth" ? bluetoothBody() : clipboardBody(view);
 
 const phaseBody = (view: MobilePqSignView): string => {
   const phase = view.phase;
+  if (phase.kind === "reaching") {
+    // No controls while a round trip is in flight. A second send would ask the
+    // phone to approve the same hash twice.
+    return "<p>Your phone has the request. Compare the hash above with the one it shows, approve it there, and the signature comes back over Bluetooth.</p>";
+  }
   if (phase.kind === "submitting") {
     return "<p>Signature received. MC Wallet is verifying it against this account's enrolled key before it can be used.</p>";
   }
@@ -135,18 +175,20 @@ const phaseBody = (view: MobilePqSignView): string => {
         ${cancelButton()}
       </div>`;
   }
-  return handoffBody();
+  return handoffBody(view);
 };
 
 const phaseTitle: Readonly<Record<MobilePqSignView["phase"]["kind"], string>> = {
   error: "That response could not be used",
   handoff: "Approve on your phone",
+  reaching: "Waiting for your phone",
   submitting: "Verifying the signature",
 };
 
 const phaseLiveness: Readonly<Record<MobilePqSignView["phase"]["kind"], string>> = {
   error: "The transaction has not been signed or broadcast.",
-  handoff: "The transaction is safely paused until you paste a response.",
+  handoff: "The transaction is safely paused until you approve it on your phone.",
+  reaching: "Compare the hash on your phone, then approve it there…",
   submitting: "Checking the signature against the enrolled key…",
 };
 
@@ -181,7 +223,6 @@ export const mobilePqSignScreen = (view: MobilePqSignView, status: WalletStatus)
         <h2>${escapeHtml(phaseTitle[view.phase.kind])}</h2>
         ${signerLine(view.request)}
       </div>
-      ${view.phase.kind === "handoff" ? requestBlock(view) : ""}
       ${phoneHashCheck(view.request)}
       <div class="ledger-phase-body">${phaseBody(view)}</div>
       <p class="ledger-liveness" role="status">

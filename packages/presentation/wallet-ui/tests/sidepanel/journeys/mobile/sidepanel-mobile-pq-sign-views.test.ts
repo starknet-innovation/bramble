@@ -38,10 +38,55 @@ const status: WalletStatus = {
   ready: true,
 };
 
-const render = (phase: MobilePqSignView["phase"]): string =>
-  mobilePqSignScreen({ envelope: encodeMobilePqSignEnvelope(request), phase, request }, status);
+const render = (
+  phase: MobilePqSignView["phase"],
+  transport: MobilePqSignView["transport"] = "clipboard",
+  bluetoothAvailable = false,
+): string =>
+  mobilePqSignScreen(
+    {
+      bluetoothAvailable,
+      envelope: encodeMobilePqSignEnvelope(request),
+      phase,
+      request,
+      transport,
+    },
+    status,
+  );
 
 describe("mobilePqSignScreen", () => {
+  test("the Bluetooth path shows the hash and no request to copy", () => {
+    const html = render({ kind: "handoff" }, "bluetooth", true);
+
+    expect(html).toContain("data-mobile-pq-bluetooth");
+    expect(html).toContain("Hash your phone will sign");
+    // The envelope is the wallet's to carry here. Putting kilobytes of
+    // base64url on screen beside a button that needs none of it buries the
+    // hash, which is the only thing the user has to check.
+    expect(html).not.toContain(`data-copy="${encodeMobilePqSignEnvelope(request)}"`);
+    expect(html).not.toContain("data-mobile-pq-response");
+    expect(html).toContain("data-mobile-pq-use-clipboard");
+  });
+
+  test("the copy-and-paste path shows the request and a way back", () => {
+    const html = render({ kind: "handoff" }, "clipboard", true);
+
+    expect(html).toContain(`data-copy="${encodeMobilePqSignEnvelope(request)}"`);
+    expect(html).toContain("data-mobile-pq-response");
+    expect(html).toContain("data-mobile-pq-submit");
+    expect(html).toContain("data-mobile-pq-use-bluetooth");
+    // The hash comparison is on every path: it is what the phone cannot show.
+    expect(html).toContain("Hash your phone will sign");
+  });
+
+  test("with no Bluetooth there is no choice to offer", () => {
+    const html = render({ kind: "handoff" }, "clipboard", false);
+
+    expect(html).toContain("data-mobile-pq-response");
+    expect(html).not.toContain("data-mobile-pq-use-bluetooth");
+    expect(html).not.toContain("data-mobile-pq-use-clipboard");
+  });
+
   test("the handoff offers both halves of the round trip at once", () => {
     const html = render({ kind: "handoff" });
     expect(html).toContain("Approve on your phone");
@@ -78,13 +123,17 @@ describe("mobilePqSignScreen", () => {
     expect(html).not.toContain("Copy transaction hash");
   });
 
-  test("the request to copy comes before the hash to compare", () => {
-    const html = render({ kind: "handoff" });
-    // Layout, but a safety one: the value with the action must be reached first,
-    // or a user working top-down copies the hash the app cannot read.
-    expect(html.indexOf("Request for your phone")).toBeGreaterThan(-1);
-    expect(html.indexOf("Request for your phone")).toBeLessThan(
-      html.indexOf("Hash your phone will sign"),
+  test("the hash to compare comes before the request to copy", () => {
+    const html = render({ kind: "handoff" }, "clipboard", true);
+    // Inverted deliberately when Bluetooth landed. The old order put the
+    // copyable request first, to stop a user working top-down from copying the
+    // hash instead — a hazard that no longer exists, because the hash block has
+    // no copy control at all (pinned by the test above). What is left is that
+    // comparing the hash is the user's job on EVERY path, while the request is
+    // only ever on screen when they are carrying it by hand.
+    expect(html.indexOf("Hash your phone will sign")).toBeGreaterThan(-1);
+    expect(html.indexOf("Hash your phone will sign")).toBeLessThan(
+      html.indexOf("Request for your phone"),
     );
   });
 

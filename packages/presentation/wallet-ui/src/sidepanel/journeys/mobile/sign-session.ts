@@ -48,6 +48,12 @@ export type MobilePqSignOutcome =
  */
 type MobilePqSignPhase =
   | { readonly kind: "handoff" }
+  // Distinct from `submitting` on purpose: one is waiting on a phone across a
+  // radio, the other is the background checking a signature it already holds.
+  // Sharing a phase made a stalled Bluetooth reply render as "signature
+  // received, verifying it", which was untrue in the way most likely to make a
+  // user give up on a transaction that was still live.
+  | { readonly kind: "reaching" }
   | { readonly kind: "submitting" }
   | { readonly kind: "error"; readonly message: string };
 
@@ -56,10 +62,26 @@ type MobilePqSignPhase =
  * string to hand the phone. `null` (passed to the renderer) means no prompt.
  */
 export type MobilePqSignView = {
+  /**
+   * Whether Bluetooth is reachable at all, which decides whether the screen
+   * offers a choice. When it is not, copy-and-paste is simply the screen.
+   */
+  readonly bluetoothAvailable: boolean;
   readonly envelope: string;
   readonly phase: MobilePqSignPhase;
   readonly request: MobilePqSignRequestSummary;
+  /**
+   * The transport the user is on. Only in `clipboard` is the envelope shown as
+   * something to copy; on the Bluetooth path the wallet carries it and the
+   * screen's job is the hash comparison.
+   */
+  readonly transport: MobilePqSignTransport;
 };
+
+/**
+ * How the user is moving the request and its reply.
+ */
+export type MobilePqSignTransport = "bluetooth" | "clipboard";
 
 /**
  * Collaborators the controller drives, all injected so the flow runs with no
@@ -68,6 +90,13 @@ export type MobilePqSignView = {
  * dismisses.
  */
 export type MobilePqSignControllerDeps = {
+  /**
+   * Carries one envelope to the phone over Bluetooth and resolves with what it
+   * sends back. Absent when this build cannot reach a phone that way, and the
+   * prompt then offers only the paste path — which stays regardless, because it
+   * is the transport that needs no hardware and runs in CI.
+   */
+  readonly bluetooth?: (envelope: string) => Promise<string>;
   readonly render: (view: MobilePqSignView | null) => void;
   readonly report: (outcome: MobilePqSignOutcome) => Promise<void>;
 };
@@ -82,7 +111,11 @@ export type MobilePqSignController = {
   readonly cancel: () => Promise<void>;
   readonly present: (request: MobilePqSignRequestSummary) => void;
   readonly retry: () => void;
+  /** Sends the envelope over Bluetooth and uses whatever comes back. */
+  readonly sendOverBluetooth: () => Promise<void>;
   readonly submit: (pasted: string) => Promise<void>;
+  /** Switches transport without disturbing the parked request. */
+  readonly useTransport: (transport: MobilePqSignTransport) => void;
 };
 
 /**
@@ -100,6 +133,16 @@ export const MOBILE_PQ_PASTE_INVALID =
 export const MOBILE_PQ_CANCELLED = "mobile-sign-cancelled";
 
 /**
+ * Copy shown when the phone answers over Bluetooth with something that is not a
+ * signature. The most likely cause is a refusal: the reply format is bare hex
+ * with no field for "the user declined", so a refusal arrives as a value that
+ * fails this check. Said plainly rather than as a transport error, because the
+ * user knows which of the two they did.
+ */
+export const MOBILE_PQ_BLUETOOTH_REFUSED =
+  "The phone did not return a signature. If you rejected the request, nothing was submitted.";
+
+/**
  * Creates the paired-phone signing controller.
  */
 export const createMobilePqSignController = (
@@ -108,12 +151,21 @@ export const createMobilePqSignController = (
   const { render, report } = deps;
   let active: MobilePqSignRequestSummary | null = null;
   let phase: MobilePqSignPhase = { kind: "handoff" };
+  // Bluetooth by default where it exists: it is the path that does not ask the
+  // user to carry kilobytes of base64url between two screens.
+  let transport: MobilePqSignTransport = deps.bluetooth ? "bluetooth" : "clipboard";
 
   const paint = (): void => {
     render(
       active === null
         ? null
-        : { envelope: encodeMobilePqSignEnvelope(active), phase, request: active },
+        : {
+            bluetoothAvailable: deps.bluetooth !== undefined,
+            envelope: encodeMobilePqSignEnvelope(active),
+            phase,
+            request: active,
+            transport,
+          },
     );
   };
 
@@ -121,6 +173,35 @@ export const createMobilePqSignController = (
     active = null;
     phase = { kind: "handoff" };
     paint();
+  };
+
+  // One reporting path for both transports: the shape check, the submitting
+  // phase, and what to do when the background refuses are identical, and the
+  // only difference is the copy for a value that is not a signature.
+  const useSignature = async (
+    request: MobilePqSignRequestSummary,
+    signature: string,
+    invalidMessage: string,
+  ): Promise<void> => {
+    if (!isMlDsa65Signature(signature)) {
+      phase = { kind: "error", message: invalidMessage };
+      paint();
+      return;
+    }
+    phase = { kind: "submitting" };
+    paint();
+    try {
+      await report({ id: request.id, signature });
+    } catch (error) {
+      // The background refused it — a stale id, a lock during the round trip, or
+      // a signature that did not verify against the enrolled key. Keep the
+      // prompt up with the reason rather than dismissing: nothing was submitted,
+      // and the user can retry from the same parked request.
+      phase = { kind: "error", message: error instanceof Error ? error.message : String(error) };
+      paint();
+      return;
+    }
+    dismiss();
   };
 
   return {
@@ -151,31 +232,40 @@ export const createMobilePqSignController = (
       phase = { kind: "handoff" };
       paint();
     },
-    async submit(pasted) {
-      const request = active;
-      if (!request || phase.kind === "submitting") {
-        return;
-      }
-      const signature = pasted.trim();
-      if (!isMlDsa65Signature(signature)) {
-        phase = { kind: "error", message: MOBILE_PQ_PASTE_INVALID };
-        paint();
-        return;
-      }
-      phase = { kind: "submitting" };
+    useTransport(next) {
+      // The parked request is untouched: the queue still holds it, and switching
+      // how it travels must not reject it or ask for a new one.
+      transport = next;
+      phase = { kind: "handoff" };
       paint();
+    },
+    async sendOverBluetooth() {
+      const request = active;
+      const send = deps.bluetooth;
+      if (!request || !send || phase.kind === "submitting" || phase.kind === "reaching") {
+        return;
+      }
+      phase = { kind: "reaching" };
+      paint();
+      let reply: string;
       try {
-        await report({ id: request.id, signature });
+        reply = await send(encodeMobilePqSignEnvelope(request));
       } catch (error) {
-        // The background refused it — a stale id, a lock during the round trip,
-        // or a signature that did not verify against the enrolled key. Keep the
-        // prompt up with the reason rather than dismissing: nothing was
-        // submitted, and the user can retry from the same parked request.
+        // A chooser the user dismissed, a phone that never answered, a dropped
+        // link. All of them leave the request parked and the prompt up, so the
+        // paste path is still available for the same signature.
         phase = { kind: "error", message: error instanceof Error ? error.message : String(error) };
         paint();
         return;
       }
-      dismiss();
+      await useSignature(request, reply.trim(), MOBILE_PQ_BLUETOOTH_REFUSED);
+    },
+    async submit(pasted) {
+      const request = active;
+      if (!request || phase.kind === "submitting" || phase.kind === "reaching") {
+        return;
+      }
+      await useSignature(request, pasted.trim(), MOBILE_PQ_PASTE_INVALID);
     },
   };
 };

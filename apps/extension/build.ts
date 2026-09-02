@@ -129,6 +129,16 @@ requireBuild(
 
 requireBuild(
   await Bun.build({
+    entrypoints: [join(extensionRoot, "src/pq-grant/index.ts")],
+    format: "esm",
+    minify: true,
+    outdir: join(outdir, "pq-grant"),
+    target: "browser",
+  }),
+);
+
+requireBuild(
+  await Bun.build({
     entrypoints: [join(extensionRoot, "src/content/index.ts")],
     format: "iife",
     minify: true,
@@ -184,6 +194,7 @@ await cp(join(publicRoot, "onboarding.html"), join(outdir, "onboarding.html"));
 await cp(join(publicRoot, "popup.html"), join(outdir, "popup.html"));
 await cp(join(publicRoot, "sidepanel.html"), join(outdir, "sidepanel.html"));
 await cp(join(publicRoot, "ledger-grant.html"), join(outdir, "ledger-grant.html"));
+await cp(join(publicRoot, "pq-grant.html"), join(outdir, "pq-grant.html"));
 await cp(join(publicRoot, "icons"), join(outdir, "icons"), { recursive: true });
 await mkdir(join(outdir, "sandbox"), { recursive: true });
 await cp(join(publicRoot, "sandbox/render.html"), join(outdir, "sandbox/render.html"));

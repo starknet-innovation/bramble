@@ -29,9 +29,26 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import { overlayMount } from "../../shared/dom";
 
 /**
+ * The paired-phone Bluetooth transport, as the panel uses it: one call per
+ * operation, each returning the string the phone sent back. Rejections arrive as
+ * ordinary `Error`s carrying user-facing copy, because translating a transport
+ * code is the composition root's job — this package never learns its vocabulary.
+ */
+export type MobilePqBluetooth = {
+  readonly pair: (offer: string) => Promise<string>;
+  readonly sign: (envelope: string) => Promise<string>;
+};
+
+/**
  * Collaborators the overlays need from the panel shell.
  */
 export type DeviceOverlayDeps = {
+  /**
+   * Carries one paired-phone envelope over Bluetooth. Injected from the
+   * extension root, because opening the device tab needs `chrome.tabs` and the
+   * presentation package must not reach for it itself.
+   */
+  readonly mobilePqBluetooth?: MobilePqBluetooth;
   readonly ledgerConnector: LedgerConnector;
   /** Marks a wallet transfer authorized once a Ledger reports its signature. */
   readonly onLedgerSignatureReported: () => void;
@@ -65,6 +82,10 @@ export const createDeviceOverlays = (deps: DeviceOverlayDeps): DeviceOverlays =>
     wallet: deps.wallet,
   }),
   mobilePqOnboard: createMobilePqOnboardRuntime({
+    // Enrollment sends a pairing offer, so it takes `pair`. Getting these two
+    // the wrong way round tags the frame wrongly and the phone rejects it with a
+    // message about the OTHER message type, which is a confusing way to find out.
+    ...(deps.mobilePqBluetooth === undefined ? {} : { bluetooth: deps.mobilePqBluetooth.pair }),
     mount: overlayMount("ledger-onboard-overlay"),
     networkId: deps.networkId,
     refresh: deps.refresh,
@@ -72,6 +93,7 @@ export const createDeviceOverlays = (deps: DeviceOverlayDeps): DeviceOverlays =>
     wallet: deps.wallet,
   }),
   mobilePqSign: createMobilePqSignRuntime({
+    ...(deps.mobilePqBluetooth === undefined ? {} : { bluetooth: deps.mobilePqBluetooth.sign }),
     mount: overlayMount("ledger-sign-overlay"),
     status: deps.status,
     wallet: deps.wallet,

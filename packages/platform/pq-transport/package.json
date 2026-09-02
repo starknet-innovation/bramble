@@ -1,0 +1,23 @@
+{
+  "name": "@mc-wallet/pq-transport",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./broker-server": "./src/broker-server.ts",
+    "./errors": "./src/errors.ts",
+    "./framing": "./src/framing.ts",
+    "./gatt": "./src/gatt.ts",
+    "./grant-window": "./src/grant-window.ts",
+    "./protocol": "./src/protocol.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*"
+  }
+}

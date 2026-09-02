@@ -39,6 +39,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@mc-wallet/multisig",
     "@mc-wallet/permissions",
     "@mc-wallet/portfolio",
+    "@mc-wallet/pq-transport",
     "@mc-wallet/privacy",
     "@mc-wallet/settings",
     "@mc-wallet/starknet",
@@ -70,6 +71,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@mc-wallet/wallet-model",
   ],
   "@mc-wallet/permissions": ["@mc-wallet/core", "@mc-wallet/store"],
+  "@mc-wallet/pq-transport": ["@mc-wallet/core", "@mc-wallet/wallet-model"],
   "@mc-wallet/privacy": [
     "@mc-wallet/core",
     "@mc-wallet/starknet",

@@ -15,6 +15,8 @@ export const EXPECTED_RUNTIME_FILES = [
   "manifest.json",
   "onboarding.html",
   "popup.html",
+  "pq-grant.html",
+  "pq-grant/index.js",
   "provider/inpage.js",
   "sandbox/render.html",
   "sandbox/render.js",

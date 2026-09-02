@@ -17,6 +17,7 @@
     "@mc-wallet/multisig": "workspace:*",
     "@mc-wallet/permissions": "workspace:*",
     "@mc-wallet/portfolio": "workspace:*",
+    "@mc-wallet/pq-transport": "workspace:*",
     "@mc-wallet/privacy": "workspace:*",
     "@mc-wallet/settings": "workspace:*",
     "@mc-wallet/starknet": "workspace:*",

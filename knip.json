@@ -10,6 +10,7 @@
         "src/background/index.ts",
         "src/content/index.ts",
         "src/ledger-grant/index.ts",
+        "src/pq-grant/index.ts",
         "src/provider/inpage.ts",
         "src/sandbox/render.ts",
         "src/sidepanel/index.ts"

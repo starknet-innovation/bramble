@@ -175,6 +175,8 @@ What is **not** done, in the order it blocks things:
   else depends on it.
 - [Part 1 — Wallet](wallet/) is the account model, signature types, vault migration, signer seam,
   sign queue, fee estimation, message shapes, and UI. Buildable at M1 with no upstream change.
+- [Bluetooth transport](ble-transport/) is the second transport, built on the wallet's existing
+  Ledger tab-and-broker pattern in PQ-owned files.
 - [Parts 2 and 3 — Transport and mobile app](transport-and-mobile/) is the transport contract,
   measured payload sizes, and the phone-side implementation.
 

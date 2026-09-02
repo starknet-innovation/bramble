@@ -29,6 +29,11 @@ import { mobilePqSignScreen } from "./sign-views";
  * client for the queue round-trip.
  */
 export type MobilePqSignRuntimeDeps = {
+  /**
+   * Carries one envelope to a phone over Bluetooth. Absent when this build has
+   * no way to reach one, and the prompt then offers only the paste path.
+   */
+  readonly bluetooth?: (envelope: string) => Promise<string>;
   readonly mount: HTMLElement;
   readonly onSignatureReported?: () => void;
   readonly status: () => WalletStatus;
@@ -68,6 +73,15 @@ export const createMobilePqSignRuntime = (deps: MobilePqSignRuntimeDeps): Mobile
       .querySelector<HTMLButtonElement>("[data-mobile-pq-retry]")
       ?.addEventListener("click", () => controller.retry());
     mount
+      .querySelector<HTMLButtonElement>("[data-mobile-pq-bluetooth]")
+      ?.addEventListener("click", () => void controller.sendOverBluetooth());
+    mount
+      .querySelector<HTMLButtonElement>("[data-mobile-pq-use-clipboard]")
+      ?.addEventListener("click", () => controller.useTransport("clipboard"));
+    mount
+      .querySelector<HTMLButtonElement>("[data-mobile-pq-use-bluetooth]")
+      ?.addEventListener("click", () => controller.useTransport("bluetooth"));
+    mount
       .querySelector<HTMLButtonElement>("[data-mobile-pq-cancel]")
       ?.addEventListener("click", () => void controller.cancel());
   };
@@ -84,6 +98,7 @@ export const createMobilePqSignRuntime = (deps: MobilePqSignRuntimeDeps): Mobile
   };
 
   controller = createMobilePqSignController({
+    ...(deps.bluetooth === undefined ? {} : { bluetooth: deps.bluetooth }),
     render: renderOverlay,
     report: async (outcome) => {
       await wallet.completeMobilePqSign(outcome);

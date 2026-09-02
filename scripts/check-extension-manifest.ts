@@ -40,6 +40,10 @@ export const PACKAGED_PAGES: readonly PackagedPage[] = [
   // Opened in a tab by packages/platform/ledger-browser/src/grant-window.ts to
   // collect the WebHID/WebUSB device grant a side panel cannot request.
   { module: "./ledger-grant/index.js", path: "ledger-grant.html" },
+  // Opened in a tab by packages/platform/pq-transport/src/grant-window.ts to
+  // collect the Web Bluetooth device grant a side panel cannot request: measured,
+  // the chooser there rejects instantly with no window shown.
+  { module: "./pq-grant/index.js", path: "pq-grant.html" },
   // The collectible renderer, declared by the manifest as its only sandbox page.
   { module: "./render.js", path: "sandbox/render.html" },
 ];
