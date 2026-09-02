@@ -98,11 +98,14 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);
 
-  const starkscanLink = sidepanel.getByRole("link", { name: "Open Starkscan" });
-  await expect(starkscanLink).toBeVisible();
-  await expect(starkscanLink).toHaveAttribute("href", "https://starkscan.co/");
-  await expect(starkscanLink).toHaveAttribute("target", "_blank");
-  await expect(starkscanLink).toHaveAttribute("rel", "noopener noreferrer");
+  // The header explorer link opens this account's page, not the explorer front page.
+  const explorerLink = sidepanel.getByRole("link", {
+    name: "View this account on the block explorer",
+  });
+  await expect(explorerLink).toBeVisible();
+  await expect(explorerLink).toHaveAttribute("href", /^https:\/\/starkscan\.co\/contract\/0x/);
+  await expect(explorerLink).toHaveAttribute("target", "_blank");
+  await expect(explorerLink).toHaveAttribute("rel", "noopener noreferrer");
 
   await sidepanel.getByRole("button", { name: "Lock wallet" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Welcome back" })).toBeVisible();
