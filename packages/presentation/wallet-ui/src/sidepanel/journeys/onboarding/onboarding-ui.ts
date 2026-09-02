@@ -428,7 +428,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         }
         if (previewLabel) {
           previewLabel.textContent =
-            contractType === "argent" ? "Primary Argent account" : "Primary OpenZeppelin account";
+            contractType === "argent" ? "Primary Ready account" : "Primary Bramble account";
         }
         if (passphraseResult) {
           passphraseResult.textContent = "";

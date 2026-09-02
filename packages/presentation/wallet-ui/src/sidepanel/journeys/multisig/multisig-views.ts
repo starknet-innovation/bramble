@@ -73,7 +73,7 @@ const authorityMessage = (view: ArgentMultisigView): string | null =>
     "network-unavailable": "Signer authority could not be refreshed. Check the network and retry.",
     undeployed: null,
     "unsupported-class":
-      "This address is not the pinned Argent Multisig 0.2 account. It is available to inspect only.",
+      "This address is not the pinned Ready Multisig 0.2 account. It is available to inspect only.",
     "unsupported-signers": `This account includes ${view.unsupportedSigners.length === 1 ? "a signer type" : "signer types"} this wallet cannot sign with. It remains available to watch and receive.`,
   })[view.authorityStatus];
 
@@ -111,11 +111,11 @@ export const multisigsFlow = (
       "multisigs",
       `${
         loadError
-          ? '<div class="review-panel" role="alert"><p class="review-flag">The background could not refresh the Argent multisig registry. Retry before signing.</p></div>'
+          ? '<div class="review-panel" role="alert"><p class="review-flag">The background could not refresh the Ready multisig registry. Retry before signing.</p></div>'
           : ""
       }
       <section class="section">
-        <div class="menu-list" role="group" aria-label="Argent multisig actions">
+        <div class="menu-list" role="group" aria-label="Ready multisig actions">
           ${walletMenuRow("multisig-watch", "Add shared account", "plus")}
           ${walletMenuRow("multisig-deploy", "Create a multisig", "users")}
         </div>
@@ -435,10 +435,10 @@ export const multisigDetailFlow = (
 ): string => {
   if (!view) {
     return (
-      (screen === "multisig-home" ? "" : flowHeader("Argent multisig", status)) +
+      (screen === "multisig-home" ? "" : flowHeader("Ready multisig", status)) +
       (screen === "multisig-home" ? dockScreen : flowScreen)(
         screen,
-        emptyState("This Argent multisig is no longer watched."),
+        emptyState("This Ready multisig is no longer watched."),
       )
     );
   }

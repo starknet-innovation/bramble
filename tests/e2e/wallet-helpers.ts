@@ -63,7 +63,7 @@ const protectAndSelectAccount = async (
   await expect(
     sidepanel.getByRole("heading", { name: "Choose your account contract" }),
   ).toBeVisible();
-  await sidepanel.getByRole("button", { name: "Review OpenZeppelin account" }).click();
+  await sidepanel.getByRole("button", { name: "Review Bramble account" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Review your account" })).toBeVisible();
   await sidepanel.locator("#account-preview").click();
   await acknowledgeMainnetIfPresent(sidepanel);

@@ -154,9 +154,9 @@ describe("design system", () => {
     expect(markup).toContain('data-account-contract="argent"');
     expect(markup).toContain('data-account-contract="openzeppelin"');
     expect(markup).toMatch(/data-account-contract="openzeppelin"[^>]*aria-pressed="true"/);
-    expect(markup).toContain("OpenZeppelin is the recommended default");
-    expect(markup).toContain("Argent Account");
-    expect(markup).toContain("OpenZeppelin Account");
+    expect(markup).toContain("The Bramble account is the recommended default");
+    expect(markup).toContain("Ready Account");
+    expect(markup).toContain("Bramble Account");
     expect(markup).toContain("Starknet Mainnet");
   });
 });

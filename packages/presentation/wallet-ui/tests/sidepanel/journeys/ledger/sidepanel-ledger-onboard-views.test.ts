@@ -40,12 +40,12 @@ describe("onboarding views", () => {
     expect(html).toContain('data-add-kind="ledger-argent"');
     expect(html).toContain('data-add-kind="ledger-openzeppelin"');
     expect(html).toContain('data-add-kind="multisig"');
-    expect(html).toContain("Argent Account");
-    expect(html).toContain("OpenZeppelin Account");
-    expect(html).toContain("Argent Ledger Account");
-    expect(html).toContain("OpenZeppelin Ledger Account");
+    expect(html).toContain("Ready Account");
+    expect(html).toContain("Bramble Account");
+    expect(html).toContain("Ready Ledger Account");
+    expect(html).toContain("Bramble Ledger Account");
     expect(html).toContain("Import from private key");
-    expect(html).toContain("Argent Multisig");
+    expect(html).toContain("Ready Multisig");
     expect(html.indexOf('data-add-kind="openzeppelin"')).toBeLessThan(
       html.indexOf('data-add-kind="argent"'),
     );

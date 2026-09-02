@@ -226,7 +226,7 @@ export const multisigProposeFlow = (
   if (!view) {
     return (
       flowHeader("New transaction", status) +
-      flowScreen("multisig-propose", emptyState("This Argent multisig is no longer watched."))
+      flowScreen("multisig-propose", emptyState("This Ready multisig is no longer watched."))
     );
   }
   if (!view.config || view.authorityStatus !== "available") {
@@ -234,7 +234,7 @@ export const multisigProposeFlow = (
       view.authorityStatus === "unsupported-signers"
         ? "This account uses signer types this wallet cannot sign with. It remains available to watch and receive."
         : view.authorityStatus === "unsupported-class"
-          ? "This address is not the pinned Argent Multisig 0.2 account."
+          ? "This address is not the pinned Ready Multisig 0.2 account."
           : view.authorityStatus === "invalid-config"
             ? "The account returned an invalid signer configuration."
             : view.authorityStatus === "undeployed"

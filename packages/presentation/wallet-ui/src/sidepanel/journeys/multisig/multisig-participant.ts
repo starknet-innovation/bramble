@@ -77,7 +77,7 @@ export const multisigParticipantScreen = (
       </div>
       <div data-participant-field="address">
         <label><span>Participant account address</span>${inputControl({ ariaLabel: "Participant account address", attributes: { "data-participant-address-input": true }, autocapitalize: "none", className: "mono", placeholder: "0x…", spellcheck: false })}</label>
-        <p class="hint">For deployed OpenZeppelin or Argent accounts.</p>
+        <p class="hint">For deployed Bramble or Ready accounts.</p>
       </div>
       <div data-participant-field="public-key" hidden>
         <label><span>Participant public key</span>${inputControl({ ariaLabel: "Participant public key", attributes: { "data-participant-key-input": true }, autocapitalize: "none", className: "mono", placeholder: "0x…", spellcheck: false })}</label>
@@ -247,7 +247,7 @@ export const bindMultisigParticipantPicker = (
       );
       finish({
         address: signer.address,
-        label: signer.accountContractType === "argent" ? "Argent account" : "OpenZeppelin account",
+        label: signer.accountContractType === "argent" ? "Ready account" : "Bramble account",
         publicKeyX: signer.publicKeyX,
         source: "Account address",
       });

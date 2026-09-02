@@ -26,7 +26,7 @@ export const multisigAccountOptions = (
         <span class="option-copy">
           <strong>${escapeHtml(multisigDisplayName(view.record))}</strong>
           <code>${escapeHtml(accountLabel(view.record.address))}</code>
-          <span class="option-sub">Argent Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}${view.authorityStatus === "unsupported-signers" ? " · watch only" : ""}` : view.authorityStatus === "undeployed" ? "not deployed" : "authority unavailable"}</span>
+          <span class="option-sub">Ready Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}${view.authorityStatus === "unsupported-signers" ? " · watch only" : ""}` : view.authorityStatus === "undeployed" ? "not deployed" : "authority unavailable"}</span>
         </span>
         ${view.record.id === selectedMultisigId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>`,

@@ -35,7 +35,7 @@ export const bindAccountContractChoices = ({
       softwareInput.value = contractType;
       selectChoice(form, "[data-account-contract]", button);
       review?.lastChild?.replaceWith(
-        contractType === "argent" ? "Review Argent account" : "Review OpenZeppelin account",
+        contractType === "argent" ? "Review Ready account" : "Review Bramble account",
       );
       onSoftwareChange();
     });
@@ -52,7 +52,7 @@ export const bindAccountContractChoices = ({
       ledgerInput.value = contractType;
       selectChoice(app, "[data-ledger-account-contract]", button);
       ledgerContinue?.lastChild?.replaceWith(
-        contractType === "argent" ? "Continue with Argent" : "Continue with OpenZeppelin",
+        contractType === "argent" ? "Continue with Ready account" : "Continue with Bramble account",
       );
     });
   });

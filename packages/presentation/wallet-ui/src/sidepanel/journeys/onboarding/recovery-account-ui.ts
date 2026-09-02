@@ -88,7 +88,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       const copy = deps.form.ownerDocument.createElement("span");
       copy.className = "allowance-copy";
       const title = deps.form.ownerDocument.createElement("strong");
-      title.textContent = `${candidate.account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"} account ${selection.accountIndex}`;
+      title.textContent = `${candidate.account.accountContractType === "argent" ? "Ready" : "Bramble"} account ${selection.accountIndex}`;
       const address = deps.form.ownerDocument.createElement("code");
       address.textContent = accountLabel(candidate.account.address);
       address.title = candidate.account.address;

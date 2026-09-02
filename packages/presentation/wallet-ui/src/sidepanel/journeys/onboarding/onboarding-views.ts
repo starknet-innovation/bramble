@@ -55,15 +55,15 @@ const accountContractChoices = (kind: "ledger" | "software"): string => {
   return `<div class="onboarding-contract-options" role="group" aria-label="Account contract">
     <button class="onboarding-contract" ${attribute}="openzeppelin" type="button" aria-pressed="true">
       <span class="onboarding-contract-copy">
-        <span class="onboarding-contract-title"><strong>OpenZeppelin Account</strong><span>Recommended</span></span>
-        <span>${kind === "ledger" ? "Ledger keeps the signer key; OpenZeppelin defines the on-chain account." : "The recommended account model for new Bramble accounts."}</span>
+        <span class="onboarding-contract-title"><strong>Bramble Account</strong><span>Recommended</span></span>
+        <span>${kind === "ledger" ? "Ledger keeps the signer key; the Bramble account model defines the on-chain account." : "The recommended account model for new Bramble accounts."}</span>
       </span>
       <span class="onboarding-contract-check">${icon("check")}</span>
     </button>
     <button class="onboarding-contract" ${attribute}="argent" type="button" aria-pressed="false">
       <span class="onboarding-contract-copy">
-        <span class="onboarding-contract-title"><strong>Argent Account</strong><span>Supported</span></span>
-        <span>${kind === "ledger" ? "Use the same Ledger signer with the Argent account model." : "Choose the Argent account model when you prefer it."}</span>
+        <span class="onboarding-contract-title"><strong>Ready Account</strong><span>Supported</span></span>
+        <span>${kind === "ledger" ? "Use the same Ledger signer with the Ready account model." : "Choose the Ready account model when you prefer it."}</span>
       </span>
       <span class="onboarding-contract-check">${icon("check")}</span>
     </button>
@@ -304,12 +304,12 @@ const accountContractStep = (): string => `
     <div class="onboarding-fields">
       <input name="accountContractType" type="hidden" value="openzeppelin" />
       ${accountContractChoices("software")}
-      <p class="hint">Bramble supports both account models. OpenZeppelin is the recommended default.</p>
+      <p class="hint">Bramble supports both account models. The Bramble account is the recommended default.</p>
     </div>
     <div class="onboarding-step-cta">
       ${button({
         attributes: { id: "review-account-button" },
-        label: "Review OpenZeppelin account",
+        label: "Review Bramble account",
       })}
     </div>
   </section>`;
@@ -317,7 +317,7 @@ const accountContractStep = (): string => `
 const recoveryAccountsStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
     ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for both OpenZeppelin and Argent accounts. Accounts with on-chain activity are selected automatically.")}
+    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for both Bramble and Ready accounts. Accounts with on-chain activity are selected automatically.")}
     <div class="onboarding-fields">
       <div class="section-head">
         <p id="recovery-scan-status" class="hint" role="status">Ready to search.</p>
@@ -360,7 +360,7 @@ const accountStep = (): string => `
       >
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
-          <strong data-preview-label>Primary OpenZeppelin account</strong>
+          <strong data-preview-label>Primary Bramble account</strong>
           <span data-preview-address>Deriving account…</span>
         </span>
         <span class="onboarding-account-check">${icon("check")}</span>
@@ -388,12 +388,12 @@ const ledgerContractStep = (): string => `
     ${stepHead("shield", "Choose the Ledger account contract", "Your signing key stays on Ledger in either case. This choice only changes the account contract deployed on Starknet.")}
     <div class="onboarding-fields">
       ${accountContractChoices("ledger")}
-      <p class="hint">Bramble supports both account models. OpenZeppelin is the recommended default.</p>
+      <p class="hint">Bramble supports both account models. The Bramble account is the recommended default.</p>
     </div>
     <div class="onboarding-step-cta">
       ${button({
         attributes: { id: "ledger-contract-continue" },
-        label: "Continue with OpenZeppelin",
+        label: "Continue with Bramble account",
       })}
     </div>
   </section>`;

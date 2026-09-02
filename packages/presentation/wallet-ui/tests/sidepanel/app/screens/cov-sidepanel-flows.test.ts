@@ -38,7 +38,7 @@ describe("accountFlow account-type block", () => {
 
     // The identifiers render as a receipt: a "Type" row carries the label.
     expect(html).toContain("<dt>Type</dt>");
-    expect(html).toContain("OpenZeppelin (AccountUpgradeable)");
+    expect(html).toContain("Bramble Account (OpenZeppelin AccountUpgradeable)");
   });
 
   test("omits the account type for an unrecognised class hash", () => {
@@ -130,7 +130,7 @@ describe("sendFlow list callbacks", () => {
     const html = sendFlow(status, account, preferences, [], {}, {}, "usd", sharedAccounts);
     expect(html).toContain('data-send-recipient="0x999"');
     expect(html).toContain("Operations");
-    expect(html).toContain("Argent Multisig account");
+    expect(html).toContain("Ready Multisig account");
     expect(html).not.toContain('data-send-recipient="0x888"');
   });
 });

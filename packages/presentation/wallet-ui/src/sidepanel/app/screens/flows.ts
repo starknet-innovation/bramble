@@ -169,8 +169,8 @@ export const importKeyFlow = (status: WalletStatus): string =>
           label: "Account contract",
           name: "accountContractType",
           options: [
-            { label: "OpenZeppelin Account — Recommended", value: "openzeppelin" },
-            { label: "Argent Account", value: "argent" },
+            { label: "Bramble Account — Recommended", value: "openzeppelin" },
+            { label: "Ready Account", value: "argent" },
           ],
           selected: "openzeppelin",
         })}
@@ -185,8 +185,8 @@ export const importKeyFlow = (status: WalletStatus): string =>
         })}
         ${textField({
           autocomplete: "off",
-          hint: "Argent only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for Bramble's public-key salt.",
-          label: "Argent deployment salt (optional)",
+          hint: "Ready accounts only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for Bramble's public-key salt.",
+          label: "Ready deployment salt (optional)",
           name: "deploymentSalt",
           placeholder: "0x…",
           spellcheck: false,
