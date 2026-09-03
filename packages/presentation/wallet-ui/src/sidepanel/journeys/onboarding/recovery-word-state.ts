@@ -70,3 +70,49 @@ export const setGeneratedPhraseMasked = (
     input.tabIndex = masked ? -1 : 0;
   }
 };
+
+/**
+ * Shared word-entry wiring for a recovery grid: pasting a complete 12/24-word
+ * phrase into any cell distributes it across the grid (via `fillWords`, which
+ * also adjusts the active word count), space advances to the next cell,
+ * backspace on an empty cell steps back, and every change reports through
+ * `onChange` after an optional `onBeforeChange` (used to invalidate in-flight
+ * validation). Used by first-run recovery and the in-wallet phrase import so
+ * the two grids behave identically.
+ */
+export const bindRecoveryWordEntry = (deps: {
+  readonly fillWords: (words: readonly string[]) => void;
+  readonly inputs: readonly HTMLInputElement[];
+  readonly onBeforeChange?: () => void;
+  readonly onChange: () => void;
+}): void => {
+  const { fillWords, inputs, onBeforeChange, onChange } = deps;
+  for (const [index, input] of inputs.entries()) {
+    input.addEventListener("input", () => {
+      onBeforeChange?.();
+      const pastedWords = input.value.trim().split(/\s+/).filter(Boolean);
+      if (pastedWords.length === 12 || pastedWords.length === 24) {
+        fillWords(pastedWords);
+      }
+      onChange();
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === " " && input.value.trim().length > 0) {
+        event.preventDefault();
+        inputs[index + 1]?.focus();
+      } else if (event.key === "Backspace" && input.value.length === 0) {
+        inputs[index - 1]?.focus();
+      }
+    });
+    input.addEventListener("paste", (event) => {
+      onBeforeChange?.();
+      const words = event.clipboardData?.getData("text").trim().split(/\s+/).filter(Boolean) ?? [];
+      if (words.length !== 12 && words.length !== 24) {
+        return;
+      }
+      event.preventDefault();
+      fillWords(words);
+      onChange();
+    });
+  }
+};

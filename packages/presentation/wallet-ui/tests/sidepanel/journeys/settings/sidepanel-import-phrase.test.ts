@@ -128,6 +128,37 @@ describe("import-phrase flow", () => {
     document.body.replaceChildren();
   });
 
+  test("pasting a whole phrase into one cell distributes it across the grid", () => {
+    const flow = mount();
+    // Simulate the browser paste outcome the input listener sees: the full
+    // phrase landing in the first cell as one value.
+    setWord(flow.app, 0, MNEMONIC);
+
+    const words = MNEMONIC.split(" ");
+    for (const [index, word] of words.entries()) {
+      expect(
+        flow.app.querySelector<HTMLInputElement>(`input[name="import-word-${index}"]`)?.value,
+      ).toBe(word);
+    }
+    // A distributed complete phrase arms the search button.
+    expect(flow.app.querySelector<HTMLButtonElement>("#import-phrase-search")?.disabled).toBe(
+      false,
+    );
+  });
+
+  test("a pasted 24-word phrase widens the grid and flips the toggle label", () => {
+    const flow = mount();
+    const long = `${MNEMONIC} ${MNEMONIC}`;
+    setWord(flow.app, 0, long);
+    const cells = Array.from(
+      flow.app.querySelectorAll<HTMLInputElement>('input[data-recovery-kind="import"]'),
+    );
+    expect(cells[23]?.value).toBe("yellow");
+    expect(flow.app.querySelector("#phrase-length-toggle")?.textContent).toContain(
+      "Use a 12-word phrase",
+    );
+  });
+
   test("gates the search on a complete phrase and validates through Krusty", async () => {
     const flow = mount({ validate: false });
     const search = flow.app.querySelector<HTMLButtonElement>("#import-phrase-search");

@@ -9,7 +9,12 @@
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { bindRecoveryAccountUi } from "../onboarding/recovery-account-ui";
 import { bindRecoveryWordAssist } from "../onboarding/recovery-word-assist";
-import { recoveryWordsFrom, setRecoveryWordCount } from "../onboarding/recovery-word-state";
+import {
+  bindRecoveryWordEntry,
+  fillRecoveryWords,
+  recoveryWordsFrom,
+  setRecoveryWordCount,
+} from "../onboarding/recovery-word-state";
 import type { SettingsUiDeps } from "./settings-ui";
 
 /**
@@ -52,15 +57,23 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
           : "";
     }
   };
-  for (const input of inputs) {
-    input.addEventListener("input", refreshWords);
-  }
+  const syncToggleLabel = (): void => {
+    lengthToggle?.lastChild?.replaceWith(
+      wordCount === 12 ? "Use a 24-word phrase" : "Use a 12-word phrase",
+    );
+  };
+  bindRecoveryWordEntry({
+    fillWords: (words) => {
+      wordCount = fillRecoveryWords(form, inputs, words, "import");
+      syncToggleLabel();
+    },
+    inputs,
+    onChange: refreshWords,
+  });
   lengthToggle?.addEventListener("click", () => {
     wordCount = wordCount === 12 ? 24 : 12;
     setRecoveryWordCount(form, inputs, wordCount, "import");
-    lengthToggle.lastChild?.replaceWith(
-      wordCount === 12 ? "Use a 24-word phrase" : "Use a 12-word phrase",
-    );
+    syncToggleLabel();
     refreshWords();
   });
 
