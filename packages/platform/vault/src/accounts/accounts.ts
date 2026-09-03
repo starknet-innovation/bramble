@@ -51,6 +51,8 @@ export type AccountDerivationInput = {
   readonly mnemonic: string;
   readonly mnemonicPassphrase?: string;
   readonly networkId?: StarknetNetworkId;
+  /** Imported-seed handle stamped into the derivation; absent = founding phrase. */
+  readonly seedId?: string;
 };
 
 /**
@@ -165,6 +167,7 @@ export const deriveAccount = async (
         accountIndex,
         addressIndex,
         kind: "starknet-bip44",
+        ...(input.seedId === undefined ? {} : { seedId: input.seedId }),
       },
       id: `${networkId}:${address}`,
       networkId,
@@ -327,16 +330,21 @@ export const sameWalletKey = (left: AccountRef, right: AccountRef): boolean => {
 };
 
 /**
- * Lowest unused HD account index on a network. Imported accounts hold no HD
- * position, so they never occupy an index here.
+ * Lowest unused HD account index on a network for one seed (the founding
+ * phrase when `seedId` is absent). Imported raw-key accounts hold no HD
+ * position, and another seed's accounts occupy their own index space, so
+ * neither shifts the result.
  */
 export const nextAccountIndex = (
   accounts: readonly AccountRef[],
   networkId: StarknetNetworkId,
+  seedId?: string,
 ): number => {
   const used = new Set(
     accounts.flatMap((account) =>
-      account.networkId === networkId && account.derivation.kind === "starknet-bip44"
+      account.networkId === networkId &&
+      account.derivation.kind === "starknet-bip44" &&
+      account.derivation.seedId === seedId
         ? [account.derivation.accountIndex]
         : [],
     ),

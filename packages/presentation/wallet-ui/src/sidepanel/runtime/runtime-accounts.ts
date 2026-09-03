@@ -121,6 +121,27 @@ export const createAccountRuntimeClient = (
     }
     throw responseError(response, "account preview unavailable");
   },
+  /**
+   * Imports selected accounts from another recovery phrase into the unlocked
+   * wallet. The phrase travels only in this privileged extension-page request;
+   * the background takes the vault passphrase from the live session.
+   */
+  async importSeedAccounts(
+    mnemonic: string,
+    networkId: string,
+    selections: readonly RecoveryAccountSelection[],
+  ): Promise<readonly AccountRef[]> {
+    const response = await sendMessage({
+      mnemonic,
+      networkId,
+      selections,
+      type: "wallet.importSeedAccounts",
+    });
+    if (isRecoveredAccountsResponse(response)) {
+      return response.accounts;
+    }
+    throw responseError(response, "seed import failed");
+  },
   async recoverAccounts(
     mnemonic: string,
     networkId: string,

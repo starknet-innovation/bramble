@@ -31,7 +31,7 @@ import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
-import { recoverVaultAccounts } from "./recovery";
+import { importSeedVaultAccounts, recoverVaultAccounts } from "./recovery";
 import { vaultCreationMethods, writeVault } from "./service-creation";
 import type { WalletVaultService } from "./service-types";
 
@@ -51,6 +51,7 @@ export type {
   OpenNostrApplicationDataBatchInput,
   OpenNostrApplicationDataInput,
   OriginGrantInput,
+  RecoverVaultAccountsInput,
   RevealedSecrets,
   RevokeOriginInput,
   SetActiveAccountInput,
@@ -236,6 +237,8 @@ export const createWalletVaultService = ({
       );
     },
     readVault,
+    importSeedAccounts: (input) =>
+      serialized(() => importSeedVaultAccounts(encryptedStore, kms, readVaultSnapshot, input)),
     recoverAccounts: (input) =>
       serialized(() => recoverVaultAccounts(encryptedStore, kms, readVaultSnapshot, input)),
     async revokeOrigin(input) {

@@ -87,6 +87,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
   let cancels = 0;
   let hdAdds = 0;
   let imports = 0;
+  let seedImports = 0;
   let multisigs = 0;
   const connector: LedgerConnector = {
     openConnected: () => Promise.resolve(null),
@@ -112,6 +113,9 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     openImport: () => {
       imports += 1;
     },
+    openImportSeed: () => {
+      seedImports += 1;
+    },
     openMultisig: () => {
       multisigs += 1;
     },
@@ -132,6 +136,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     cancels: () => cancels,
     hdAdds: () => hdAdds,
     imports: () => imports,
+    seedImports: () => seedImports,
     multisigs: () => multisigs,
     mount,
     refreshed: () => refreshed,
@@ -314,12 +319,22 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, "[data-add-continue]");
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
-    // "Import an existing account" dismisses the overlay into the key-import form.
+    // "Import an existing account" opens the phrase/key chooser; the phrase
+    // route dismisses into the seed-import flow, Back returns to the four tiles.
     h.runtime.startAddAccount();
     click(h.mount, '[data-add-kind="import"]');
     click(h.mount, "[data-add-continue]");
+    expect(h.mount.querySelector('[data-add-kind="import-phrase"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="import-key"]')).not.toBeNull();
+    click(h.mount, "[data-add-back]");
+    expect(h.mount.querySelector('[data-add-kind="regular"]')).not.toBeNull();
+    click(h.mount, '[data-add-kind="import"]');
+    click(h.mount, "[data-add-continue]");
+    click(h.mount, '[data-add-kind="import-phrase"]');
+    click(h.mount, "[data-add-continue]");
     expect(h.mount.hidden).toBe(true);
-    expect(h.imports()).toBe(1);
+    expect(h.seedImports()).toBe(1);
+    expect(h.imports()).toBe(0);
 
     // "Regular account" derives an HD account, then dismisses on success.
     h.runtime.startAddAccount();

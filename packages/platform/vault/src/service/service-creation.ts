@@ -16,7 +16,7 @@ import {
 } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV7, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV8, type Vault } from "../schema/schema";
 import type { WalletVaultService } from "./service-types";
 
 /**
@@ -29,7 +29,7 @@ export const writeVault = async (
   vault: Vault,
   vaultPassphrase: string,
 ): Promise<void> => {
-  if (!isVaultV7(vault)) {
+  if (!isVaultV8(vault)) {
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase);
@@ -187,6 +187,7 @@ export const vaultCreationMethods = ({
         accounts: [account],
         accountSecrets: [],
         activeAccountId: account.id,
+        importedSeeds: [],
         mnemonic: null,
         originGrants: [],
         schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -219,6 +220,7 @@ export const vaultCreationMethods = ({
         accounts: [account],
         accountSecrets: [],
         activeAccountId: account.id,
+        importedSeeds: [],
         mnemonic: null,
         originGrants: [],
         schemaVersion: CURRENT_SCHEMA_VERSION,

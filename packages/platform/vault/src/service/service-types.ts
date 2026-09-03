@@ -286,6 +286,14 @@ export type WalletVaultService = {
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
   /** Restores a confirmed bounded set in one encrypted-vault commit. */
+  /**
+   * Imports selected accounts from another recovery phrase into the unlocked
+   * vault, retaining the phrase as an imported seed. Fails closed on invalid
+   * phrases, duplicate selections, or accounts already present.
+   */
+  readonly importSeedAccounts: (
+    input: RecoverVaultAccountsInput,
+  ) => Promise<readonly DerivedAccountRef[]>;
   readonly recoverAccounts: (
     input: RecoverVaultAccountsInput,
   ) => Promise<readonly DerivedAccountRef[]>;

@@ -161,6 +161,34 @@ export const readDiscoverRecoveryAccountsInput = (
   };
 };
 
+/**
+ * Parses the in-wallet imported-seed account selection. Unlike first-run
+ * recovery the unlock passphrase comes from the live session, so the message
+ * carries only the phrase, target network, and selections.
+ */
+export const readImportSeedAccountsInput = (
+  message: unknown,
+): Omit<RecoverVaultAccountsInput, "vaultPassphrase"> | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["mnemonic", "networkId", "selections", "type"]) ||
+    message["type"] !== "wallet.importSeedAccounts" ||
+    !isMnemonicText(message["mnemonic"]) ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    !Array.isArray(message["selections"]) ||
+    message["selections"].length === 0 ||
+    message["selections"].length > RECOVERY_SCAN_LIMITS.maxSelections ||
+    !message["selections"].every(isRecoveryAccountSelection)
+  ) {
+    return null;
+  }
+  return {
+    mnemonic: message["mnemonic"],
+    networkId: message["networkId"],
+    selections: message["selections"],
+  };
+};
+
 /** Parses the final confirmed account set for one atomic vault restoration. */
 export const readRecoverAccountsInput = (message: unknown): RecoverVaultAccountsInput | null => {
   if (

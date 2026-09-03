@@ -18,6 +18,7 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.deployArgentMultisig",
   "wallet.detectTokens",
   "wallet.importAccount",
+  "wallet.importSeedAccounts",
   "wallet.importPreferences",
   "wallet.lock",
   "wallet.removeAddress",

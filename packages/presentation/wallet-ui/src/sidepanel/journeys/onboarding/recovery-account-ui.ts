@@ -11,10 +11,18 @@ import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { accountLabel, accountsDetectedText } from "../../shared/parts";
 
 type RecoveryAccountUiDeps = {
+  /** Accounts already in the vault; scan candidates matching them are shown but locked. */
+  readonly existingIds?: () => ReadonlySet<string>;
   readonly form: HTMLFormElement;
   readonly mnemonic: () => string;
   readonly networkId: () => string;
   readonly render: (status: WalletStatus) => Promise<void>;
+  /** Overrides first-run `recoverAccounts` — the in-wallet seed import commits here. */
+  readonly restore?: (
+    mnemonic: string,
+    networkId: string,
+    selections: readonly RecoveryAccountSelection[],
+  ) => Promise<unknown>;
   readonly vaultPassphrase: () => string;
   readonly wallet: SidepanelWallet;
 };
@@ -32,14 +40,16 @@ const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelec
   accountIndex: candidate.account.derivation.accountIndex,
 });
 
-const candidateState = (candidate: RecoveryAccountCandidate): string =>
-  candidate.deployed
-    ? "Deployed on Starknet"
-    : candidate.funded
-      ? "Funded and ready to deploy"
-      : candidate.account.accountContractType === "argent"
-        ? "No on-chain activity found — Bramble only imports existing Ready accounts"
-        : "No on-chain activity found";
+const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string =>
+  duplicate
+    ? "Already in this wallet"
+    : candidate.deployed
+      ? "Deployed on Starknet"
+      : candidate.funded
+        ? "Funded and ready to deploy"
+        : candidate.account.accountContractType === "argent"
+          ? "No on-chain activity found — Bramble only imports existing Ready accounts"
+          : "No on-chain activity found";
 
 // Bramble creates only Bramble accounts: a Ready candidate with no on-chain
 // history would be a brand-new Ready deployment, so it is listed but not
@@ -75,6 +85,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
 
   const candidateRow = (candidate: RecoveryAccountCandidate): HTMLLIElement => {
     const key = selectionKey(selectionFor(candidate));
+    const duplicate = deps.existingIds?.().has(candidate.account.id) ?? false;
     const row = deps.form.ownerDocument.createElement("li");
     row.className = "allowance-row";
     const label = deps.form.ownerDocument.createElement("label");
@@ -82,8 +93,8 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     const checkbox = deps.form.ownerDocument.createElement("input");
     checkbox.className = "select-check";
     checkbox.type = "checkbox";
-    checkbox.disabled = !selectable(candidate);
-    checkbox.checked = selected.has(key);
+    checkbox.disabled = duplicate || !selectable(candidate);
+    checkbox.checked = !duplicate && selected.has(key);
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) selected.add(key);
       else selected.delete(key);
@@ -98,7 +109,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     address.title = candidate.account.address;
     const hint = deps.form.ownerDocument.createElement("span");
     hint.className = "hint";
-    hint.textContent = candidateState(candidate);
+    hint.textContent = candidateState(candidate, duplicate);
     copy.append(title, address, hint);
     label.append(checkbox, copy);
     row.append(label);
@@ -138,7 +149,10 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const apply = (next: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>): void => {
     for (const candidate of next.candidates) {
       const key = selectionKey(selectionFor(candidate));
-      if (!seen.has(key) && (candidate.deployed || candidate.funded)) selected.add(key);
+      const duplicate = deps.existingIds?.().has(candidate.account.id) ?? false;
+      if (!seen.has(key) && !duplicate && (candidate.deployed || candidate.funded)) {
+        selected.add(key);
+      }
       seen.add(key);
     }
     candidates = next.candidates;
@@ -211,11 +225,14 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     if (selections.length === 0 || !acknowledgement?.checked) return;
     buttonBusy(restore, true);
     if (result) result.textContent = "Restoring the selected accounts into your encrypted vault…";
-    void deps.wallet
-      .recoverAccounts(deps.mnemonic(), deps.networkId(), deps.vaultPassphrase(), selections)
-      .then(async (accounts) => {
+    const commit =
+      deps.restore ??
+      ((mnemonic: string, networkId: string, picks: readonly RecoveryAccountSelection[]) =>
+        deps.wallet.recoverAccounts(mnemonic, networkId, deps.vaultPassphrase(), picks));
+    void commit(deps.mnemonic(), deps.networkId(), selections)
+      .then(async () => {
         showToast(
-          `${accounts.length} account${accounts.length === 1 ? "" : "s"} restored`,
+          `${selections.length} account${selections.length === 1 ? "" : "s"} restored`,
           "success",
           restore,
         );

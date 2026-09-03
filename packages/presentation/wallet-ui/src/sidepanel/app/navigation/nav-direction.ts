@@ -17,6 +17,7 @@ export type NavDirection = "forward" | "back" | "swap";
 const DETAIL_VIEWS: readonly WalletView[] = [
   "advanced-network",
   "import-key",
+  "import-phrase",
   "backup-export",
   "backup-restore",
   "token-detail",

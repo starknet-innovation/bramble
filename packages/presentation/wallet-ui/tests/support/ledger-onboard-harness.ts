@@ -77,6 +77,7 @@ export const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> =
   let cancels = 0;
   let hdAdds = 0;
   let imports = 0;
+  let seedImports = 0;
   let multisigs = 0;
   // request() hands back an OWNED session; its close bumps a counter so tests
   // assert the enumeration transport is released on every outcome.
@@ -123,6 +124,9 @@ export const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> =
     openImport: () => {
       imports += 1;
     },
+    openImportSeed: () => {
+      seedImports += 1;
+    },
     openMultisig: () => {
       multisigs += 1;
     },
@@ -140,6 +144,7 @@ export const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> =
     deps,
     hdAdds: () => hdAdds,
     imports: () => imports,
+    seedImports: () => seedImports,
     multisigs: () => multisigs,
     refreshed: () => refreshed,
     views,

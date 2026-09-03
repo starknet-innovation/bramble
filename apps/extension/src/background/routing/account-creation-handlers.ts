@@ -6,7 +6,10 @@
  * the wallet surface is unavailable.
  */
 import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
-import { readCreateAccountInput } from "../accounts/account-creation-inputs";
+import {
+  readCreateAccountInput,
+  readImportSeedAccountsInput,
+} from "../accounts/account-creation-inputs";
 import { readCreateKeyVaultInput, readImportAccountInput } from "../accounts/import-inputs";
 import {
   runUnlockedNetworkMutation,
@@ -94,6 +97,29 @@ const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) =>
   });
 };
 
+const handleImportSeedAccounts: RouterHandler = async (ctx, messageType, message) => {
+  if (messageType !== "wallet.importSeedAccounts") {
+    return null;
+  }
+  const input = readImportSeedAccountsInput(message);
+  if (!input) {
+    return { error: "invalid import seed accounts request" };
+  }
+  const importSeedAccounts = ctx.wallet.importSeedAccounts;
+  if (!importSeedAccounts) {
+    return { error: "wallet unavailable" };
+  }
+  return ctx.activeStateCoordinator.run(async () => {
+    const accounts = await runUnlockedNetworkMutation(
+      ctx.session,
+      ctx.preferencesStore,
+      input.networkId,
+      (vaultPassphrase) => importSeedAccounts({ ...input, vaultPassphrase }),
+    );
+    return accounts ? { accounts, ok: true } : { error: "wallet locked" };
+  });
+};
+
 const handleImportAccount: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.importAccount") {
     return null;
@@ -126,4 +152,5 @@ export const handleAccountCreationOps: RouterHandler = async (ctx, messageType, 
   (await handleCreateAccount(ctx, messageType, message, sender)) ??
   (await handleAddAccount(ctx, messageType, message, sender)) ??
   (await handleCreateKeyVault(ctx, messageType, message, sender)) ??
+  (await handleImportSeedAccounts(ctx, messageType, message, sender)) ??
   handleImportAccount(ctx, messageType, message, sender);

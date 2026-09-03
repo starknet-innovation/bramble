@@ -18,6 +18,7 @@ import {
   isVaultV5,
   isVaultV6,
   isVaultV7,
+  isVaultV8,
   type Vault,
   type VaultV4,
   type VaultV5,
@@ -136,6 +137,19 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     },
     toVersion: 7,
   },
+  {
+    fromVersion: 7,
+    // Multi-seed support: the vault gains an (initially empty) imported-seeds
+    // collection; every existing HD account keeps deriving from the founding
+    // phrase, so no account record changes.
+    migrate(value) {
+      if (!isVaultV7(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, importedSeeds: [], schemaVersion: 8 };
+    },
+    toVersion: 8,
+  },
 ];
 
 const requiredAccountId = (value: string): string => {
@@ -219,7 +233,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV7(value)) {
+  if (isVaultV8(value)) {
     return value;
   }
 
@@ -237,7 +251,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV7(migrated)) {
+  if (!isVaultV8(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

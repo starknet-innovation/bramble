@@ -80,9 +80,57 @@ export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null):
       ${option("regular", "wallet", "Regular account", "Create the next account from this wallet’s recovery phrase.")}
       ${option("ledger", "shield", "Ledger account", "Connect a Ledger and pick its accounts, new or existing.")}
       ${option("multisig", "users", "Multisig account", "Create or add a shared account controlled by multiple signers.")}
-      ${option("import", "link", "Import an existing account", "Add an account you already own from its private key.")}
+      ${option("import", "link", "Import an existing account", "Bring accounts you already own: a recovery phrase or a private key.")}
     </div>
     <div class="onboard-actions">
+      ${button({
+        attributes: { "data-add-continue": true },
+        disabled: selected === null,
+        label: "Continue",
+      })}
+    </div>
+  </div>`;
+};
+
+/**
+ * The in-wallet second stage of "Import an existing account": a recovery
+ * phrase (retained for later re-derivation, with its own scan) or a single raw
+ * private key. Ledger import lives on the top-level Ledger route, whose picker
+ * already finds existing device accounts.
+ */
+export const importAccountChooser = (selected: LedgerOnboardAddKind | null = null): string => {
+  const option = (
+    kind: LedgerOnboardAddKind,
+    iconName: "book" | "link",
+    label: string,
+    supportingText: string,
+  ): string => `
+    <button class="add-account-option" data-add-kind="${kind}" type="button" aria-pressed="${selected === kind}">
+      <span class="add-account-option-icon">${icon(iconName)}</span>
+      <span class="add-account-option-copy"><strong>${label}</strong><span>${supportingText}</span></span>
+      <span class="add-account-option-check">${icon("check")}</span>
+    </button>`;
+  return `
+  <div class="onboard-hero add-account-hero">
+    <header class="add-account-header">
+      <h1>Import an existing account</h1>
+      ${iconButton({
+        attributes: { "data-ledger-onboard-cancel": true },
+        icon: "x",
+        label: "Close Add account",
+        variant: "ghost",
+      })}
+    </header>
+    <div class="add-account-chooser" role="group" aria-label="Import an existing account">
+      ${option("import-phrase", "book", "Recovery phrase", "Import accounts from another wallet's 12 or 24 words.")}
+      ${option("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
+    </div>
+    <div class="onboard-actions">
+      ${button({
+        attributes: { "data-add-back": true },
+        label: "Back",
+        variant: "ghost",
+      })}
       ${button({
         attributes: { "data-add-continue": true },
         disabled: selected === null,

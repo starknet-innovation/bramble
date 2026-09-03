@@ -65,7 +65,7 @@ const option = (
  * `[hidden] { display: none !important }` outranks any cell rule, so it could
  * never be shown again. `:has(> input[hidden])` follows the input instead.
  */
-const recoveryWordInputs = (kind: "generated" | "import"): string =>
+export const recoveryWordInputs = (kind: "generated" | "import"): string =>
   Array.from(
     { length: 24 },
     (_, index) =>
@@ -339,11 +339,13 @@ const importKeyStep = (): string => `
     </div>
   </section>`;
 
-const recoveryAccountsStep = (): string => `
-  <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
-    ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for both Bramble and Ready accounts. Accounts with on-chain activity are selected automatically.")}
-    <div class="onboarding-fields">
+/**
+ * The grouped account-scan controls shared by first-run recovery and the
+ * in-wallet "Import a recovery phrase" flow, so both surfaces render the same
+ * detection, selection, and acknowledgement semantics for one binder
+ * (`bindRecoveryAccountUi`).
+ */
+export const recoveryScanFields = (restoreLabel: string): string => `
       <div class="section-head">
         <p id="recovery-scan-status" class="hint" role="status">Ready to search.</p>
         ${iconButton({ attributes: { id: "recovery-scan-retry" }, icon: "refresh", label: "Retry account search" })}
@@ -370,9 +372,16 @@ const recoveryAccountsStep = (): string => `
       ${mainnetAcknowledgement(
         "recoveryMainnetAck",
         "recovery-mainnet-ack",
-        "I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet.",
+        `I checked these account types and indices and want to ${restoreLabel} on Starknet Mainnet.`,
       )}
-      <p id="recovery-accounts-result" role="status"></p>
+      <p id="recovery-accounts-result" role="status"></p>`;
+
+const recoveryAccountsStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
+    ${flowBack("Back to passphrase")}
+    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for both Bramble and Ready accounts. Accounts with on-chain activity are selected automatically.")}
+    <div class="onboarding-fields">
+${recoveryScanFields("restore the selected accounts")}
     </div>
     <div class="onboarding-step-cta">
       ${button({

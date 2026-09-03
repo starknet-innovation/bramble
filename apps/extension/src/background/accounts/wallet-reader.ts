@@ -83,6 +83,10 @@ export type WalletStatusReader = {
    * provides it.
    */
   readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
+  /** Imports selected accounts from another phrase; optional only for partial test stubs. */
+  readonly importSeedAccounts?: (
+    input: RecoverVaultAccountsInput,
+  ) => Promise<readonly AccountRef[]>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
   /** Atomically restores a confirmed set of phrase-derived accounts. */
@@ -169,6 +173,9 @@ export const createWalletReader = (
     },
     async importRawKeyAccount(input) {
       return (await required()).importRawKeyAccount(input);
+    },
+    async importSeedAccounts(input) {
+      return (await required()).importSeedAccounts(input);
     },
     async previewAccount(input) {
       return (await required()).previewAccount(input);

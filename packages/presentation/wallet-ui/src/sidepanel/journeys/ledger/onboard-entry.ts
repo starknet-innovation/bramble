@@ -51,11 +51,22 @@ export const createLedgerOnboardEntry = (deps: {
   readonly connector: LedgerConnector;
   readonly mount: HTMLElement;
   readonly openImport: () => void;
+  readonly openImportSeed: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: SidepanelWallet;
 }): LedgerOnboardEntry => {
-  const { addHd, cache, connector, mount, openImport, openMultisig, refresh, wallet } = deps;
+  const {
+    addHd,
+    cache,
+    connector,
+    mount,
+    openImport,
+    openImportSeed,
+    openMultisig,
+    refresh,
+    wallet,
+  } = deps;
   let ledgerSetup: {
     readonly networkId: string;
     readonly vaultPassphrase: string;
@@ -99,6 +110,7 @@ export const createLedgerOnboardEntry = (deps: {
       ledgerSetup = null;
     },
     openImport,
+    openImportSeed,
     openMultisig,
     refresh,
     wallet,

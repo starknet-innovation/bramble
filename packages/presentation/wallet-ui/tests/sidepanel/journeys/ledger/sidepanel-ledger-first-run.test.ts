@@ -234,6 +234,7 @@ const entryHarness = () => {
     connector,
     mount,
     openImport: () => undefined,
+    openImportSeed: () => undefined,
     openMultisig: () => {
       multisigs += 1;
     },

@@ -32,7 +32,13 @@ export type LedgerCandidate = {
 /**
  * Account-contract-aware routes dispatched by the add-account chooser.
  */
-export type LedgerOnboardAddKind = "import" | "ledger" | "multisig" | "regular";
+export type LedgerOnboardAddKind =
+  | "import"
+  | "import-key"
+  | "import-phrase"
+  | "ledger"
+  | "multisig"
+  | "regular";
 
 /**
  * The onboarding device-prompt view the binder renders: the add-account
@@ -41,6 +47,7 @@ export type LedgerOnboardAddKind = "import" | "ledger" | "multisig" | "regular";
  */
 export type LedgerOnboardView =
   | { readonly kind: "chooser"; readonly selected: LedgerOnboardAddKind | null }
+  | { readonly kind: "import-chooser"; readonly selected: LedgerOnboardAddKind | null }
   | { readonly kind: "connect" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
   | { readonly kind: "reading" }
@@ -83,6 +90,7 @@ export type LedgerOnboardControllerDeps = {
   readonly existingIds: () => ReadonlySet<string>;
   readonly onCancel: () => void;
   readonly openImport: () => void;
+  readonly openImportSeed: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly render: (view: LedgerOnboardView | null) => void;

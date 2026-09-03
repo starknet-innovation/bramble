@@ -37,4 +37,13 @@ export const RECOVERY_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     },
     sender: extensionSender,
   },
+  {
+    message: {
+      mnemonic: SECRET_MNEMONIC,
+      networkId: "SN_MAIN",
+      selections: [{ accountContractType: "openzeppelin", accountIndex: 0 }],
+      type: "wallet.importSeedAccounts",
+    },
+    sender: extensionSender,
+  },
 ];

@@ -32,9 +32,10 @@ const vaultWith = (
   accounts: [first, second, third],
   accountSecrets: [],
   activeAccountId,
+  importedSeeds: [],
   mnemonic: null,
   originGrants: accountIds === null ? [] : [{ accountIds, origin: ORIGIN }],
-  schemaVersion: 7,
+  schemaVersion: 8,
   signingKeys: [],
 });
 
