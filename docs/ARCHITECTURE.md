@@ -469,9 +469,9 @@ directly and adopted when it is at least the tracked figure. Collection approval
 reviewed as their own kinds: an ERC721 `approve` carries a token id, so a "revoke" would approve
 item 0. The store `mc-wallet:allowances` sits outside the vault.
 
-## NFT gallery
+## NFT gallery (parked: tab, menu entry, and indexer setting hidden; home loads no NFT data)
 
-Home → NFTs merges auto-discovered collectibles with watched `nfts` preferences (contract, token
+The gallery merges auto-discovered collectibles with watched `nfts` preferences (contract, token
 id, network, optional label, spam flag).
 Indexer claims are re-proved on-chain against the active account before display; explicitly
 watched NFTs also resolve ERC-721/1155 metadata without auto-fetching attacker-controlled airdrop
@@ -479,11 +479,12 @@ URLs. The detail screen shows the resolved artwork and attributes, then sends th
 review → confirm flow. Review re-proves ownership, detects ERC-721 versus ERC-1155, decodes the
 exact call, screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
-On unlock and resync, watched NFTs hydrate through an ownership-proven metadata lane without
-waiting for the optional indexer.
-Concurrent refreshes for the same account share the in-flight request, while
-account switches remain isolated; the first visible watched images are fetched
-eagerly so the hidden Collectibles panel is warm when opened.
+While the journey is parked no view hydrates NFT data: the wallet runs neither the watched-NFT
+metadata lane nor indexer discovery, and a previously saved `nftIndexerUrl` stays in preferences
+unused and unsettable. Restoring the gallery restores those lanes and the indexer setting with it.
+Ownership proofs stay untrusted-first whenever it does: concurrent refreshes for the same account
+share the in-flight request, account switches remain isolated, and the first visible watched
+images are fetched eagerly so the gallery is warm when opened.
 
 ## Reproducible Builds
 Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen lockfile,

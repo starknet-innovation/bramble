@@ -1,6 +1,5 @@
 import {
   approvalCard,
-  collectibleCard,
   nftGalleryCard,
   reviewPanel,
   visibleNftItems,
@@ -47,12 +46,11 @@ export const CollectibleCards: CatalogStory = {
   render: (args) =>
     catalogFrame(
       "Collectible cards",
-      "Compact portfolio and gallery cards share the resolved NFT model while preserving image privacy and provenance.",
+      "Gallery cards render the resolved NFT model while preserving image privacy and provenance.",
       catalogGroup(
-        "Portfolio and gallery",
-        "Both specimens are the exact production renderers.",
+        "Gallery",
+        "The specimen is the exact production renderer.",
         `<div class="catalog-grid wide">
-          ${catalogSample("Portfolio card", `<ul class="collectible-grid catalog-nft-limit">${collectibleCard(collectible, true)}</ul>`)}
           ${catalogSample("Gallery card", `<ul class="nft-grid catalog-nft-limit">${nftGalleryCard(collectible, true)}</ul>`)}
         </div>`,
       ),

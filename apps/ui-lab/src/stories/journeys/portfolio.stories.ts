@@ -20,11 +20,6 @@ export const QuickActions = checkpointStory(
   "portfolio",
   "quick-actions",
 );
-export const Collectibles = checkpointStory(
-  "Portfolio tab · collectibles",
-  "portfolio",
-  "collectibles",
-);
 export const AccountDrawer = checkpointStory("Account drawer", "portfolio", "account-drawer");
 export const Undeployed = checkpointStory("Counterfactual account", "portfolio", "undeployed");
 export const DeployAccount = checkpointStory(

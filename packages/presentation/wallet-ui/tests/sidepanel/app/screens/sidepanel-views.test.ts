@@ -35,7 +35,6 @@ describe("sidepanel views", () => {
 
     expect(WALLET_VIEWS).toContain("receive");
     expect(html).toContain('class="wallet-dock"');
-    expect(html).toContain('role="tablist"');
     expect(dock).toContain('data-view="home"');
     expect(dock).toContain('data-view="activity"');
     expect(dock).toContain('data-view="settings"');
@@ -305,7 +304,7 @@ describe("sidepanel views", () => {
     // in-panel retry button wired to reload balances.
     expect(visibleHomeBalances({ error: "fetch failed" }, preferences)).toEqual([]);
 
-    const html = homeTabs({ error: "fetch failed" }, preferences, {}, {}, "usd", status);
+    const html = homeTabs({ error: "fetch failed" }, preferences, {}, {}, "usd");
     expect(html).toContain("panel-error");
     expect(html).toContain("data-reload-balances");
     expect(html).toContain("Try again");

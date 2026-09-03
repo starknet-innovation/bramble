@@ -10,12 +10,9 @@ import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/pre
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
 import { explorerAccountUrl } from "@mc-wallet/wallet-model/networks";
-import type { DiscoveredNft } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
-import { icon } from "../../shared/icons";
 import { actionTile, explorerTile } from "../../shell/wallet-shell";
-import { nftImageMarkup, visibleNftItems } from "../collectibles/nft-views";
 import { visibleHomeBalances } from "../portfolio/home-tabs";
 import { balanceRow } from "../portfolio/token-row";
 import { type CompactIntentList, compactIntentListView } from "./multisig-intent-list";
@@ -27,7 +24,6 @@ export type MultisigPortfolioData = {
   readonly balances: BalanceState;
   readonly changes: Readonly<Record<string, number>>;
   readonly currency: DisplayCurrency;
-  readonly nfts: readonly DiscoveredNft[] | null;
   readonly prices: Readonly<Record<string, number>>;
 };
 
@@ -39,7 +35,6 @@ export const EMPTY_MULTISIG_PORTFOLIO: MultisigPortfolioData = {
   balances: { error: "Shared balances are loading." },
   changes: {},
   currency: "usd",
-  nfts: null,
   prices: {},
 };
 
@@ -88,41 +83,10 @@ const tokenPanel = (preferences: WalletPreferences | null, data: MultisigPortfol
         .join("")}</ul>`;
 };
 
-const collectiblesPanel = (
-  record: ArgentMultisigRecord,
-  preferences: WalletPreferences | null,
-  data: MultisigPortfolioData,
-): string => {
-  if (data.nfts === null) {
-    return emptyState("Shared collectibles are loading.");
-  }
-  const nfts = visibleNftItems(
-    preferences?.nfts ?? [],
-    data.nfts,
-    record.networkId,
-    record.address,
-  );
-  if (nfts.length === 0) {
-    return emptyState("No collectibles found for this shared account.");
-  }
-  return `<ul class="collectible-grid">${nfts
-    .map(
-      (nft, index) => `<li>
-        <article class="collectible-card shared-collectible-card">
-          <span class="collectible-art">${nftImageMarkup(nft, nft.watched, index < 4)}${icon("image")}</span>
-          <span class="collectible-copy">
-            <strong>${escapeHtml(nft.title)}</strong>
-            <code>#${escapeHtml(nft.tokenId)}</code>
-          </span>
-        </article>
-      </li>`,
-    )
-    .join("")}</ul>`;
-};
-
 /**
  * Renders the familiar wallet-home hierarchy for one multisig: portfolio,
- * multisig-specific primary actions, then Tokens, Collectibles, and intents.
+ * multisig-specific primary actions, then Tokens and intents. The Collectibles
+ * tab is parked until the NFT journey is ready.
  * Intent rows cross this boundary as structured data and are escaped by the
  * wallet's intent renderer here.
  */
@@ -169,16 +133,14 @@ export const multisigPortfolio = (input: {
                   : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>
-  <section class="home-tabs multisig-portfolio-tabs" data-active-tab="assets" aria-label="Shared account">
+  <section class="home-tabs multisig-portfolio-tabs" aria-label="Shared account">
     <div class="tab-bar">
       <div class="tab-set" role="tablist" aria-label="Shared account sections">
         <button class="home-tab" id="multisig-tab-assets" data-ms-home-tab="assets" type="button" role="tab" aria-controls="multisig-panel-assets" aria-selected="true" tabindex="0">Tokens</button>
-        <button class="home-tab" id="multisig-tab-collectibles" data-ms-home-tab="collectibles" type="button" role="tab" aria-controls="multisig-panel-collectibles" aria-selected="false" tabindex="-1">Collectibles</button>
         <button class="home-tab" id="multisig-tab-intents" data-ms-home-tab="intents" type="button" role="tab" aria-controls="multisig-panel-intents" aria-selected="false" aria-label="Signing intents, ${openCountText} open" tabindex="-1">Intents${openCount > 0 ? `<span class="home-tab-count">${openCountText}</span>` : ""}</button>
       </div>
     </div>
     <div id="multisig-panel-assets" data-ms-home-panel="assets" role="tabpanel" aria-labelledby="multisig-tab-assets" tabindex="0">${tokenPanel(input.preferences, input.data)}</div>
-    <div id="multisig-panel-collectibles" data-ms-home-panel="collectibles" role="tabpanel" aria-labelledby="multisig-tab-collectibles" tabindex="0" hidden>${collectiblesPanel(input.record, input.preferences, input.data)}</div>
     <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>
       <div class="multisig-intent-sync">
         <div><strong>Co-signer updates</strong><span>Check securely for intents and signatures shared by known contacts.</span></div>

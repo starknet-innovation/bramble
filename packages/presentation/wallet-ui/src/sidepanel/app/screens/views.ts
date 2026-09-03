@@ -7,7 +7,7 @@
  * Every other view renders as a dedicated flow screen from ./flows.ts with its
  * own back navigation, so each journey has a distinct place to complete its
  * goal. Home follows a compact portfolio structure: hero balance, primary
- * actions, a trusted Terminal handoff, then the Tokens/Collectibles section.
+ * actions, a trusted Terminal handoff, then the Tokens section.
  */
 
 import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
@@ -288,8 +288,6 @@ export const dashboard = (
   multisigsError = false,
   multisigBalances: BalanceState = { error: "multisig balances unavailable" },
   multisigBalanceId: string | null = null,
-  multisigNfts: readonly DiscoveredNft[] = [],
-  multisigNftId: string | null = null,
   privacy: PrivacyDisclosureState = {
     error: null,
     loading: false,
@@ -316,8 +314,6 @@ export const dashboard = (
       balances: selectedPortfolioBalances,
       changes,
       currency,
-      nfts:
-        selectedMultisigId !== null && multisigNftId === selectedMultisigId ? multisigNfts : null,
       prices,
     },
     multisigIntents,
@@ -433,7 +429,6 @@ export const dashboard = (
               prices,
               changes,
               currency,
-              discoveredNfts,
               privacy,
             );
   return `

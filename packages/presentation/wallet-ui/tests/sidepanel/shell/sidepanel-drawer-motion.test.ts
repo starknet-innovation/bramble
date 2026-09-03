@@ -34,7 +34,6 @@ const setup = () => {
       app,
       drawerGroupFilter: () => null,
       drawerOpen: () => open,
-      homeTab: () => "tokens",
       networkId: () => "SN_MAIN",
       render: async () => {
         paint();
@@ -43,7 +42,6 @@ const setup = () => {
       setDrawerOpen: (next) => {
         open = next;
       },
-      setHomeTab: () => undefined,
       wallet: {} as HomeUiDeps["wallet"],
     });
   };

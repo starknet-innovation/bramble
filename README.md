@@ -19,7 +19,7 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 - **Onboarding & recovery** — a dedicated full-page first-install flow for creating, importing, or connecting a Ledger; seed-phrase backup includes on-screen verification, while Ledger accounts stay keyless.
 - **dApp connect** — injects `window.starknet_mcWallet` (get-starknet compatible), with per-origin grants so connected sites never see each other.
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
-- **NFT gallery** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`.
+- **NFT gallery (parked)** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`. The Collectibles tab, gallery entry points, and NFT indexer setting are hidden in the current release while the journey is finished.
 - **Multisig** — create or import true Argent M-of-N account contracts, collect exact-hash signatures from local owners, and submit from the shared account.
 - **STRK20 privacy** — explicitly activate private balances, shield tracked ERC-20 assets through a
   reviewed public deposit, read private note totals on demand, submit private action batches, and

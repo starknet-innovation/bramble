@@ -144,6 +144,12 @@ out.
 
 ### NFT gallery (collectibles)
 
+> **Currently hidden.** The Collectibles tab, gallery, and NFT indexer setting
+> are not shown in this release while the feature is being finished, and the
+> wallet fetches no collectible data. An indexer URL saved in an earlier release
+> stays stored but unused. The description below covers the
+> parked journey.
+
 Add an ERC-721 or ERC-1155 collectible by contract address and token ID. MC
 Wallet proves that the active account owns it on-chain before saving it, then
 reads the name, image, description, and attributes from the token's `token_uri`

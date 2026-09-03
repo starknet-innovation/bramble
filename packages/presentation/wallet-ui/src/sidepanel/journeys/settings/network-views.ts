@@ -44,9 +44,6 @@ const strk20ConfigFor = (
     ? (preferences.strk20Networks?.[status.networkId] ?? null)
     : null;
 
-const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
-  preferences?.nftIndexerUrl ?? "";
-
 const explorerApiUrlFor = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   preferences && isStarknetNetworkId(status.networkId)
     ? (preferences.explorerApiUrls?.[status.networkId] ?? "")
@@ -159,8 +156,8 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
 
 /**
  * Renders the security-sensitive custom service endpoint editor: expert RPC,
- * prover, NFT-indexer, and explorer-fallback settings, away from the primary
- * network picker. Read-only — every field submits a privileged message and the
+ * prover, and explorer-fallback settings, away from the primary network picker.
+ * The NFT-indexer field is withheld while the collectibles journey is parked. Read-only — every field submits a privileged message and the
  * rendered state always comes from the preferences the background returned.
  */
 export const advancedNetworkFlow = (
@@ -241,31 +238,6 @@ export const advancedNetworkFlow = (
               variant: "secondary",
             })}
             <p id="nostr-relay-result" role="status"></p>
-          </form>`,
-        )}
-        ${endpointDisclosure(
-          "nft-indexer",
-          "NFT indexer",
-          nftIndexerUrlFor(preferences) ? "Configured" : "Off",
-          `<form id="nft-indexer-form">
-            ${textField({
-              autocomplete: "off",
-              className: "mono",
-              hint: "Where the wallet lists NFTs an account owns. Ownership is re-checked on-chain. Leave empty to only show manually watched NFTs.",
-              label: "NFT discovery endpoint",
-              name: "indexerUrl",
-              placeholder: "https://…",
-              spellcheck: false,
-              type: "url",
-              value: nftIndexerUrlFor(preferences),
-            })}
-            ${button({
-              icon: "check",
-              label: "Save indexer",
-              type: "submit",
-              variant: "secondary",
-            })}
-            <p id="nft-indexer-result" role="status"></p>
           </form>`,
         )}
         ${endpointDisclosure(

@@ -11,7 +11,6 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { prefersReducedMotion, projectMomentum } from "../../shared/motion";
-import { type HomeTab, isHomeTab } from "./home-tabs";
 
 /**
  * State accessors and services the home bindings close over. State lives in
@@ -23,8 +22,6 @@ export type HomeUiDeps = {
   readonly setDrawerOpen: (open: boolean) => void;
   readonly drawerGroupFilter: () => string | null;
   readonly setDrawerGroupFilter: (filter: string | null) => void;
-  readonly homeTab: () => HomeTab;
-  readonly setHomeTab: (tab: HomeTab) => void;
   readonly networkId: () => string;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly selectPortfolio?: (multisigId: string | null) => void;
@@ -173,8 +170,7 @@ const bindDrawer = (deps: HomeUiDeps): void => {
   // Every shell repaint recreates the drawer node, so re-applying a persisted
   // open state must be silent: we skip `is-opening` and, since the fresh node's
   // baseline is the closed transform, suppress the panel transition for one
-  // frame so it snaps open in place (mirroring bindTabs' moveIndicator) rather
-  // than sliding again.
+  // frame so it snaps open in place rather than sliding again.
   const applyOpen = (open: boolean, animateEnter: boolean): void => {
     root.setAttribute("data-open", String(open));
     trigger.setAttribute("aria-expanded", String(open));
@@ -381,45 +377,11 @@ const bindPortfolioMenu = (deps: HomeUiDeps): void => {
   }
 };
 
-const bindTabs = (deps: HomeUiDeps): void => {
-  const tabsRoot = deps.app?.querySelector<HTMLElement>(".home-tabs");
-  if (!tabsRoot) {
-    return;
-  }
-
-  const applyTab = (tab: HomeTab): void => {
-    tabsRoot.setAttribute("data-active-tab", tab);
-    tabsRoot.querySelectorAll<HTMLButtonElement>("[data-home-tab]").forEach((button) => {
-      button.setAttribute("aria-selected", String(button.dataset["homeTab"] === tab));
-    });
-    tabsRoot.querySelectorAll<HTMLElement>("[data-tab-panel]").forEach((panel) => {
-      const target = panel;
-      const on = target.dataset["tabPanel"] === tab;
-      target.hidden = !on;
-    });
-  };
-
-  // Restore the remembered tab before first paint.
-  applyTab(deps.homeTab());
-
-  tabsRoot.querySelectorAll<HTMLButtonElement>("[data-home-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const tab = button.dataset["homeTab"];
-      if (!isHomeTab(tab) || tab === deps.homeTab()) {
-        return;
-      }
-      deps.setHomeTab(tab);
-      applyTab(tab);
-    });
-  });
-};
-
 /**
- * Binds the account drawer and portfolio tabs on the home screen. Safe to call
+ * Binds the account drawer and portfolio menu on the home screen. Safe to call
  * on every render; screens without these regions are skipped.
  */
 export const bindHomeUi = (deps: HomeUiDeps): void => {
   bindDrawer(deps);
-  bindTabs(deps);
   bindPortfolioMenu(deps);
 };

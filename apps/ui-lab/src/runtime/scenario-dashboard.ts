@@ -37,7 +37,6 @@ export type DashboardOptions = {
   readonly historyUnavailable?: boolean;
   readonly multisigClassDeclared?: boolean | "error" | null;
   readonly multisigIntents?: readonly ArgentMultisigSigningIntent[];
-  readonly multisigNfts?: readonly DiscoveredNft[];
   readonly multisigs?: readonly ArgentMultisigView[];
   readonly multisigsError?: boolean;
   readonly openAssignId?: string | null;
@@ -110,8 +109,6 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     options.snoozed ?? [],
     options.multisigsError ?? false,
     options.balanceState ?? { balances },
-    options.selectedMultisigId ?? null,
-    options.multisigNfts ?? [],
     options.selectedMultisigId ?? null,
     privacy,
     options.privacyJourney ?? { stage: "idle" },

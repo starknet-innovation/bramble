@@ -122,7 +122,9 @@ describe("cluster views", () => {
 
   test("home and settings expose their task destinations", () => {
     const home = dashboard("home", status, [], preferences, { balances: [] });
-    expect(home).toContain('data-view="nfts"');
+    expect(home).toContain('data-view="tokens"');
+    // The Collectibles journey is parked: home must not link into the gallery.
+    expect(home).not.toContain('data-view="nfts"');
     const settings = dashboard("settings", status, [], preferences, { balances: [] });
     expect(settings).toContain('data-view="allowances"');
     expect(settings).toContain('data-view="reveal"');

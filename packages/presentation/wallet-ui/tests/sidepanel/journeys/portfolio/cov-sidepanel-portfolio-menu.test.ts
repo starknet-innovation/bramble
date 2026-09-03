@@ -3,6 +3,8 @@
  * light-dismiss behavior under happy-dom.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { preferences } from "@mc-wallet/testkit/sidepanel";
+import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
 import { bindHomeUi, type HomeUiDeps } from "../../../../src/sidepanel/journeys/portfolio/home-ui";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
@@ -12,36 +14,23 @@ afterAll(unregisterDom);
 const mount = (): HTMLElement => {
   document.body.replaceChildren();
   const app = document.createElement("div");
-  app.innerHTML = `
-    <button id="outside" type="button">Outside</button>
-    <section class="home-tabs" data-active-tab="tokens">
-      <button data-home-tab="tokens" aria-selected="true" type="button">Tokens</button>
-      <div class="portfolio-actions">
-        <button
-          id="portfolio-menu-trigger"
-          aria-controls="portfolio-menu"
-          aria-expanded="false"
-          aria-haspopup="menu"
-          type="button"
-        >Actions</button>
-        <div id="portfolio-menu" role="menu" hidden>
-          <button role="menuitem" type="button">Manage tokens</button>
-          <button role="menuitem" type="button">Manage collectibles</button>
-        </div>
-      </div>
-    </section>
-  `;
+  // Production markup, so menu changes in home-tabs.ts are covered automatically.
+  app.innerHTML = `<button id="outside" type="button">Outside</button>${homeTabs(
+    { balances: [] },
+    preferences,
+    {},
+    {},
+    "usd",
+  )}`;
   document.body.append(app);
   bindHomeUi({
     app,
     drawerGroupFilter: () => null,
     drawerOpen: () => false,
-    homeTab: () => "tokens",
     networkId: () => "SN_MAIN",
     render: async () => undefined,
     setDrawerGroupFilter: () => undefined,
     setDrawerOpen: () => undefined,
-    setHomeTab: () => undefined,
     wallet: {} as HomeUiDeps["wallet"],
   });
   return app;

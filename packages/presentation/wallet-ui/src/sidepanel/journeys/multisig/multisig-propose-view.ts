@@ -249,7 +249,6 @@ export const multisigProposeFlow = (
     balances: { error: "Shared balances are loading." },
     changes: {},
     currency: preferences?.displayCurrency ?? "usd",
-    nfts: null,
     prices: {},
   };
   return (

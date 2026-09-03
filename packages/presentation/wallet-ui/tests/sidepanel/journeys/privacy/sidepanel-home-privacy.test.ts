@@ -100,8 +100,6 @@ const privateDashboard = (privacy: PrivacyDisclosureState): string =>
     false,
     { balances: [] },
     null,
-    [],
-    null,
     privacy,
   );
 
@@ -172,7 +170,7 @@ describe("unified portfolio scope", () => {
   });
 
   test("an unregistered account greys the private line into the activation entry", () => {
-    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status, [], {
+    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", {
       error: null,
       loading: false,
       value: {
@@ -194,7 +192,7 @@ describe("unified portfolio scope", () => {
   });
 
   test("a pending registration reports itself instead of offering to register again", () => {
-    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status, [], {
+    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", {
       error: null,
       loading: false,
       value: {
@@ -254,8 +252,6 @@ describe("unified portfolio scope", () => {
       { [token.address]: 2_000 },
       {},
       "usd",
-      status,
-      [],
       privateState(),
     );
 

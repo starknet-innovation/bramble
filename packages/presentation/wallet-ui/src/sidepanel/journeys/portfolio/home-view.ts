@@ -1,6 +1,6 @@
 /**
  * Home portfolio composition: public/private totals, primary actions, and the
- * token/collectible tabs. Kept separate from the screen router so adding a
+ * token list. Kept separate from the screen router so adding a
  * portfolio state cannot push routing back over the repository size limit.
  */
 
@@ -8,7 +8,7 @@ import { escapeHtml } from "@mc-wallet/core/html";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { explorerAccountUrl, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { DiscoveredNft, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
+import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -47,7 +47,6 @@ export const homeScreen = (
   prices: Readonly<Record<string, number>>,
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
-  discoveredNfts: readonly DiscoveredNft[],
   privacy: PrivacyDisclosureState,
 ): string => {
   const unified = unifiedHomeBalances(balances, privacy, preferences);
@@ -86,6 +85,6 @@ export const homeScreen = (
         ${explorerTile(account ? explorerAccountUrl(status.networkId, account.address) : null)}
       </div>
     </section>
-    ${homeTabs(balances, preferences, prices, changes, currency, status, discoveredNfts, privacy)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, privacy)}`,
   );
 };

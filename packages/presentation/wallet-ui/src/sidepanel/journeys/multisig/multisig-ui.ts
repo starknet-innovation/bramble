@@ -333,7 +333,7 @@ const bindImport = (deps: MultisigUiDeps): void => {
   });
 };
 
-type MultisigHomeTab = "assets" | "collectibles" | "intents";
+type MultisigHomeTab = "assets" | "intents";
 const bindTabs = (deps: MultisigUiDeps): void => {
   const tabs = Array.from(
     deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]") ?? [],
@@ -352,7 +352,7 @@ const bindTabs = (deps: MultisigUiDeps): void => {
   for (const [index, button] of tabs.entries()) {
     button.addEventListener("click", () => {
       const value = button.dataset["msHomeTab"];
-      if (value === "assets" || value === "collectibles" || value === "intents") apply(value);
+      if (value === "assets" || value === "intents") apply(value);
     });
     button.addEventListener("keydown", (event) => {
       let next = index;
@@ -363,7 +363,7 @@ const bindTabs = (deps: MultisigUiDeps): void => {
       else return;
       const nextTab = tabs[next];
       const value = nextTab?.dataset["msHomeTab"];
-      if (!nextTab || (value !== "assets" && value !== "collectibles" && value !== "intents")) {
+      if (!nextTab || (value !== "assets" && value !== "intents")) {
         return;
       }
       event.preventDefault();

@@ -1,6 +1,6 @@
 /**
  * Home-experience and motion layer of the side panel stylesheet: the account
- * drawer, the tabbed portfolio section, collectible cards, and every keyframe
+ * drawer, the portfolio section, and every keyframe
  * the panel uses (screen entrances, staggered rows, refresh spin, copy
  * confirmation). Composed last in ./styles.ts so its reduced-motion block wins
  * over every earlier animation and transition.
@@ -127,9 +127,10 @@ export const HOME_STYLES = `
   .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(4) { animation-delay: 90ms; }
   .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(5) { animation-delay: 120ms; }
 
-  /* Portfolio navigation: two large text destinations and one overflow menu.
+  /* Portfolio navigation: large text destinations and one overflow menu.
      Active state is carried by high-contrast type alone — no underline, pill,
-     or duplicated Activity destination. */
+     or duplicated Activity destination. Only multisig renders tab buttons; the
+     home section is a plain h2 styled by the base heading rule. */
   .home-tabs { display: grid; gap: ${SPACE.sm}; }
   .tab-bar { align-items: center; display: flex; gap: ${SPACE.md}; min-height: 44px; }
   .tab-set {
@@ -198,7 +199,6 @@ export const HOME_STYLES = `
     button.portfolio-menu-item:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
     button.portfolio-menu-item:not(:disabled):hover .icon { color: var(--mc-text); }
   }
-  .tab-panel { display: grid; gap: ${SPACE.sm}; }
   .panel-error { display: grid; gap: ${SPACE.sm}; justify-items: center; text-align: center; }
   .panel-error .empty { margin: 0; }
   .panel-error button { gap: 4px; }
@@ -212,65 +212,6 @@ export const HOME_STYLES = `
   }
   button.tab-more .icon { height: 14px; width: 14px; }
 
-  /* Collectible tiles: a minimally framed art square over a tight name/token-id
-     caption. The box chrome (elevated fill + edge wrapping the whole card) is
-     gone — the art tile carries the only hairline framing, and the grid rhythm
-     aligns the tiles. Tapping a tile opens its detail; hover tints the name and
-     lifts the art with a soft shadow (no box behind the caption). */
-  .collectible-grid { display: grid; gap: ${SPACE.md}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  /* Positioned so the shared .nft-play-tile / .nft-animation--tile overlay covers
-     the art square; the play affordance is revealed on hover/focus. */
-  .collectible-tile { position: relative; }
-  .collectible-tile:hover .nft-play-tile,
-  .collectible-tile:focus-within .nft-play-tile { opacity: 1; pointer-events: auto; }
-  button.collectible-card {
-    align-content: start;
-    background: transparent;
-    border-radius: ${RADIUS.md};
-    color: var(--mc-text);
-    display: grid;
-    gap: ${SPACE.sm};
-    /* Definite single 1fr column so the art's width:100% resolves to the full
-       card width (not the caption's content width, which base button's
-       justify-content:center would otherwise collapse it to). */
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: stretch;
-    min-height: 0;
-    padding: 0;
-    text-align: left;
-    transition: transform ${MOTION.liftMs}ms var(--ease-out);
-    width: 100%;
-  }
-  button.collectible-card:not(:disabled):hover { background: transparent; }
-  button.collectible-card:not(:disabled):active { background: transparent; transform: scale(0.97); }
-
-  /* Hover feedback is gated to fine pointers so a tap on touch never leaves an
-     element floating (touch fires a phantom :hover). Pointer devices tint the
-     caption and raise the art tile with a soft shadow; the press scale is
-     universal. */
-  @media (hover: hover) and (pointer: fine) {
-    button.collectible-card:not(:disabled):hover strong { color: var(--mc-accent); }
-    button.collectible-card:not(:disabled):hover .collectible-art {
-      box-shadow: var(--mc-shadow-sm);
-    }
-  }
-  .collectible-art {
-    align-items: center;
-    aspect-ratio: 1 / 1;
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
-    color: var(--mc-muted);
-    display: inline-flex;
-    justify-content: center;
-    overflow: hidden;
-    position: relative;
-    transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease};
-    width: 100%;
-  }
-  .collectible-art .icon { height: 28px; width: 28px; }
-  .collectible-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; width: 100%; }
-  .collectible-copy strong { font-size: ${TYPE.label.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  .collectible-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
 
   /* Copy confirmation: the glyph flips to a success-green check, then back */
   button.copy-confirm { color: var(--mc-positive); }
@@ -335,14 +276,12 @@ export const HOME_STYLES = `
       transform: none;
       transition: opacity ${MOTION.pressMs}ms ${MOTION.ease};
     }
-    button.collectible-card:not(:disabled):hover,
     .account-trigger[aria-expanded="true"] .account-name .icon { transform: none; }
     .swap-success-ring, .swap-success-check { animation: none; stroke-dashoffset: 0; }
     .swap-success h2, .swap-success .swap-success-summary, .swap-success .hint { animation: none; }
     button:not(:disabled):active,
     button.icon-button:not(:disabled):active,
     button.action-tile:not(:disabled):active,
-    button.collectible-card:not(:disabled):active,
     button.nav-item:not(:disabled):active,
     button.home-tab:not(:disabled):active,
     button.drawer-account:not(:disabled):active,

@@ -16,7 +16,6 @@ import {
 } from "../journeys/onboarding/onboarding-surface";
 import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
 import { bindUnlock } from "../journeys/onboarding/unlock-ui";
-import type { HomeTab } from "../journeys/portfolio/home-tabs";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";
 import type { SendIntent } from "../journeys/send/send-model";
@@ -86,7 +85,6 @@ export const startWalletUi = async (
   let viewHistory: ViewHistory = [];
   let forcedDirection: NavDirection | null = null;
   let selectedTokenId: string | null = null;
-  let homeTab: HomeTab = "tokens";
   let drawerOpen = false;
   let drawerGroupFilter: string | null = null;
   let openAssignId: string | null = null;
@@ -165,7 +163,6 @@ export const startWalletUi = async (
       app,
       drawerGroupFilter: () => drawerGroupFilter,
       drawerOpen: () => drawerOpen,
-      homeTab: () => homeTab,
       networkId: () => lastNetworkId,
       render,
       selectPortfolio: (id: string | null) => {
@@ -180,9 +177,6 @@ export const startWalletUi = async (
       },
       setDrawerOpen: (open) => {
         drawerOpen = open;
-      },
-      setHomeTab: (tab) => {
-        homeTab = tab;
       },
       startAddAccount: ledgerOnboard.startAddAccount,
       wallet,
@@ -376,7 +370,6 @@ export const startWalletUi = async (
                 expandedGroupId,
                 cache.priceStale,
                 cache.priceAsOf,
-                cache.discoveredNfts,
                 openAssignId,
                 classHashVerification,
                 cache.historyUnavailable,
@@ -384,8 +377,6 @@ export const startWalletUi = async (
                 cache.multisigsError,
                 cache.multisigBalances,
                 cache.multisigBalanceId,
-                cache.multisigNfts,
-                cache.multisigNftId,
                 privacy.disclosure(),
                 privacy.journey(),
                 sendIntent,
