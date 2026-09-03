@@ -117,9 +117,9 @@ const render = (): void => {
 
   const readiness = element("ol", "pq-steps");
   readiness.append(
-    step("1", "Open the PQ Signer app and keep it on screen"),
-    step("2", "Go to Bluetooth and tap Start advertising"),
-    step("3", "Choose your phone in Chrome's list, then click Connect"),
+    step("1", "Open PQ Signer on your phone and keep it on screen"),
+    step("2", "Choose your phone in Chrome's list, then click Connect"),
+    step("3", "Approve the request when the phone shows it"),
   );
 
   const status = element("div", "pq-status");
@@ -137,14 +137,7 @@ const render = (): void => {
   button.append(buttonLabel);
   const cancel = textElement("button", "pq-cancel", "Cancel");
   cancel.type = "button";
-  // TEMPORARY round-trip probe. Nothing calls requestPqDeviceSession yet, so
-  // there is no panel to exchange frames with, and this is the only way to
-  // exercise the framing against a real MTU. Delete this button, its listener,
-  // and PROBE_PAYLOAD once the panel is wired.
-  const probe = textElement("button", "pq-cancel", "Send a test frame");
-  probe.type = "button";
-  probe.hidden = true;
-  actions.append(button, cancel, probe);
+  actions.append(button, cancel);
 
   const setStatus = (title: string, message: string, tone: "info" | "danger" | "success"): void => {
     status.hidden = false;
@@ -195,7 +188,7 @@ const render = (): void => {
     buttonLabel.textContent = "Waiting for Chrome...";
     setStatus(
       "Choose your phone in Chrome",
-      "Pick the phone running PQ Signer, then click Connect. If the list is empty, tap Start advertising in the app.",
+      "Pick the phone running PQ Signer, then click Connect. If the list is empty, bring the app back to the front — it advertises only while on screen.",
       "info",
     );
 
@@ -219,7 +212,6 @@ const render = (): void => {
         );
         buttonLabel.textContent = "Connected";
         cancel.textContent = "Disconnect";
-        probe.hidden = false;
       })
       .catch((error: unknown) => {
         const rejection = asPqRejection(error);
@@ -229,39 +221,7 @@ const render = (): void => {
       });
   };
 
-  // Sized like a real signing envelope, so the write chunking, the phone's
-  // MTU-sized notifications and the reassembly on both sides are all exercised
-  // rather than a short frame that fits in one packet either way.
-  const PROBE_PAYLOAD = `pq-probe-${"a".repeat(5500)}`;
-
   button.addEventListener("click", connect);
-  probe.addEventListener("click", () => {
-    const open = connection;
-    if (!open) {
-      return;
-    }
-    probe.disabled = true;
-    setStatus("Testing", `Sending ${PROBE_PAYLOAD.length} characters to the phone.`, "info");
-    const started = performance.now();
-    void open
-      .exchange("sign", PROBE_PAYLOAD)
-      .then(({ payload: reply }) => {
-        const ms = Math.round(performance.now() - started);
-        setStatus(
-          reply === PROBE_PAYLOAD ? "Round trip OK" : "Round trip CORRUPTED",
-          reply === PROBE_PAYLOAD
-            ? `${reply.length} characters returned unchanged in ${ms}ms.`
-            : `Sent ${PROBE_PAYLOAD.length} characters, got ${reply.length} back.`,
-          reply === PROBE_PAYLOAD ? "success" : "danger",
-        );
-      })
-      .catch((error: unknown) => {
-        setStatus("Round trip failed", pqMessage(asPqRejection(error).code), "danger");
-      })
-      .finally(() => {
-        probe.disabled = false;
-      });
-  });
   cancel.addEventListener("click", () => {
     void release();
   });
