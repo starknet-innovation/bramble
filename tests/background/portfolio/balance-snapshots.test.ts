@@ -9,10 +9,25 @@ import {
   cachedBalances,
   createBalanceSnapshotStore,
 } from "../../../apps/extension/src/background/portfolio/balance-snapshots";
+import type { WalletStatus } from "../../../packages/presentation/wallet-ui/src/popup/responses/responses";
+import { emptyRenderCache } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/rendering/render-cache";
+import { createDeploymentCache } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/sync/deployment-cache";
+import { hydrateView } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/sync/hydrate";
 
 const token = defaultWalletPreferences().tokens[0];
 if (!token) throw new Error("token fixture unavailable");
 const balances = [{ ...token, balance: "42", formatted: "42" }];
+const status: WalletStatus = {
+  accountCount: 1,
+  accounts: [],
+  activeAccountId: "SN_MAIN:0x1",
+  hasVault: true,
+  locked: false,
+  network: "Starknet Mainnet",
+  networkId: "SN_MAIN",
+  networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
+  ready: true,
+};
 
 describe("balance snapshots", () => {
   test("survives recreation and never crosses account scope", async () => {
@@ -123,5 +138,98 @@ describe("balance snapshots", () => {
 
     await cachedBalances(snapshots, { ...input, force: true, now: 60_002 }, load);
     expect(rpcReads).toBe(6);
+  });
+
+  test("keeps repeated Home hydration below ten Starknet RPC reads", async () => {
+    const tokens = defaultWalletPreferences().tokens.filter(
+      (candidate) => candidate.networkId === "SN_MAIN",
+    );
+    const snapshots = createBalanceSnapshotStore(createMemoryStore());
+    let now = 1;
+    let rpcReads = 0;
+    let historyScans = 0;
+    const wallet = {
+      async discoverNfts() {
+        return [];
+      },
+      async loadActivity(_accountId?: string, _cached?: boolean, refreshHistory = false) {
+        if (refreshHistory) historyScans += 1;
+        return { entries: [], historyUnavailable: false };
+      },
+      async loadBalances(cachedOnly = false, force = false) {
+        const snapshot = await cachedBalances(
+          snapshots,
+          {
+            accountId: status.activeAccountId ?? "",
+            cachedOnly,
+            force,
+            networkId: status.networkId,
+            now,
+          },
+          () =>
+            getTokenBalances(
+              { accountAddress: "0x1", rpcUrls: ["https://rpc.example"], tokens },
+              () =>
+                ({
+                  callContract: async () => {
+                    rpcReads += 1;
+                    return ["0x1", "0x0"];
+                  },
+                }) as unknown as RpcProvider,
+            ),
+        );
+        return snapshot
+          ? {
+              accountId: status.activeAccountId ?? "",
+              asOf: snapshot.fetchedAt,
+              balances: snapshot.balances,
+              networkId: status.networkId,
+              stale: snapshot.stale,
+            }
+          : { error: "balance snapshot unavailable" };
+      },
+      async loadDeploymentStatus() {
+        rpcReads += 1;
+        return { accountId: status.activeAccountId ?? "", deployed: false };
+      },
+      async loadPrices() {
+        return { asOf: null, changes: {}, prices: {}, stale: false };
+      },
+      async loadWatchedNfts() {
+        return [];
+      },
+    };
+    const deployment = createDeploymentCache(wallet as never, () => now);
+    const cache = emptyRenderCache();
+    const run = (refreshReason?: "action" | "ambient" | "event") =>
+      hydrateView({
+        activeView: "home",
+        cache,
+        deployment,
+        multisig: {
+          async loadMultisigs() {
+            return { intents: [], multisigs: [] };
+          },
+        },
+        paint: () => undefined,
+        ...(refreshReason ? { refreshReason } : {}),
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet,
+      } as never);
+
+    await run();
+    expect(rpcReads).toBe(3);
+    await run("event");
+    expect(rpcReads).toBe(3);
+    await run("action");
+    expect(rpcReads).toBe(6);
+    await run("ambient");
+    expect(rpcReads).toBe(6);
+    now = 60_002;
+    await run("ambient");
+    expect(rpcReads).toBe(9);
+    expect(historyScans).toBe(0);
   });
 });

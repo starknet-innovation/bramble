@@ -145,7 +145,7 @@ describe("refresh scheduler", () => {
     expect(reasons).toEqual(["action", "action", "ambient"]);
   });
 
-  test("refreshes focus and local changes once without confirmation timers", async () => {
+  test("refreshes local changes once without confirmation timers", async () => {
     let refreshes = 0;
     const test = harness(async (reason) => {
       refreshes += 1;
@@ -186,7 +186,7 @@ describe("refresh scheduler", () => {
     expect(test.timers.size).toBe(0);
   });
 
-  test("keeps the visible idle and post-action request budgets bounded", async () => {
+  test("keeps visible idle and post-action refresh schedules bounded", async () => {
     const reasons: string[] = [];
     const test = harness(async (reason) => {
       reasons.push(reason);

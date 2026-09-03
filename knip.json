@@ -26,6 +26,9 @@
       "entry": [".storybook/*.ts", "src/**/*.stories.ts"],
       "project": [".storybook/*.ts", "src/**/*.ts"]
     },
+    "apps/website": {
+      "project": ["src/**/*.{ts,tsx,css}"]
+    },
     "packages/platform/ledger-browser": {
       "ignoreDependencies": ["buffer"]
     }
