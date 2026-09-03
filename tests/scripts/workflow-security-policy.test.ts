@@ -282,15 +282,15 @@ describe("workflow security policy", () => {
     },
     // The deploy credential's in-tree half. The enforcing control against a
     // foreign ref is the environment's deployment-branch policy, which lives in
-    // repository settings; these three keep the workflow from quietly losing
-    // the parts of the boundary a diff can show.
+    // repository settings; these keep the workflow from quietly losing the parts
+    // of the boundary a diff can show.
     {
-      name: "rejects a website deploy whose manual-dispatch ref guard is gone",
+      name: "rejects a website deploy whose push filter names more than one branch",
       workflow: "website-deploy.yml",
-      search: '[ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/',
-      replacement: 'if false; then : "',
+      search: 'branches: ["',
+      replacement: 'branches: ["main", "',
       failure:
-        ".github/workflows/website-deploy.yml must reject manual runs outside the trusted release branch",
+        ".github/workflows/website-deploy.yml must trigger on exactly one literal release branch",
     },
     {
       name: "rejects a website deploy that leaks its token outside the deploy step",
@@ -318,4 +318,43 @@ describe("workflow security policy", () => {
       expect(workflowSecurityPolicyFailures(changed)).toContain(item.failure);
     });
   }
+
+  // The website deploy states its production branch once, in its `push` filter,
+  // and the policy derives the dispatch guard from it. These two read the branch
+  // out of the workflow rather than naming it, so promoting a release branch
+  // does not require editing this suite — only the workflow.
+  const activeBranch = async (): Promise<string> => {
+    const source = (await readWorkflowSources())["website-deploy.yml"] ?? "";
+    const branch = source.match(/\n {4}branches: \["([^"]+)"\]/)?.[1];
+    expect(branch).toBeString();
+    return branch ?? "";
+  };
+
+  test("rejects a website deploy whose manual-dispatch ref guard is gone", async () => {
+    const sources = await readWorkflowSources();
+    const branch = await activeBranch();
+    const changed = mutate(
+      sources,
+      "website-deploy.yml",
+      '[ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/',
+      'if false; then : "',
+    );
+    expect(workflowSecurityPolicyFailures(changed)).toContain(
+      `.github/workflows/website-deploy.yml must reject manual runs outside ${branch}, the branch its push filter names`,
+    );
+  });
+
+  test("rejects a website deploy whose ref guard drifts from its push filter", async () => {
+    const sources = await readWorkflowSources();
+    const branch = await activeBranch();
+    const changed = mutate(
+      sources,
+      "website-deploy.yml",
+      `!= "refs/heads/${branch}"`,
+      '!= "refs/heads/some-other-branch"',
+    );
+    expect(workflowSecurityPolicyFailures(changed)).toContain(
+      `.github/workflows/website-deploy.yml must reject manual runs outside ${branch}, the branch its push filter names`,
+    );
+  });
 });

@@ -133,9 +133,10 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
 // policy, which GitHub applies before the job starts and no revision can edit.
 // What is pinned here is the half that lives in the tree: the credential stays
 // an environment secret scoped to one step, and the ref guard cannot be dropped
-// from the trusted branch without failing this gate. The guard is matched by
-// shape rather than by branch name so promoting the release branch does not
-// require editing this policy.
+// from the trusted branch without failing this gate. The guard's branch is
+// derived from the workflow's own `push` filter rather than named here, so the
+// two statements of "which branch is production" cannot drift and promoting a
+// release branch needs no edit to this policy.
 const cloudflareDeployFailures = (name: string, source: string): string[] => {
   if (!source.includes("CLOUDFLARE_API_TOKEN")) {
     return [];
@@ -148,12 +149,17 @@ const cloudflareDeployFailures = (name: string, source: string): string[] => {
     "    environment:\n      name: bramble-production",
     `${path} must deploy through the reviewed production environment`,
   );
-  requireText(
-    failures,
-    source,
-    '[ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/',
-    `${path} must reject manual runs outside the trusted release branch`,
-  );
+  const branch = source.match(/\n {4}branches: \["([^"]+)"\]/)?.[1];
+  if (branch === undefined) {
+    failures.push(`${path} must trigger on exactly one literal release branch`);
+  } else {
+    requireText(
+      failures,
+      source,
+      `[ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/${branch}" ]`,
+      `${path} must reject manual runs outside ${branch}, the branch its push filter names`,
+    );
+  }
   if (source.split("secrets.CLOUDFLARE_API_TOKEN").length - 1 !== 1) {
     failures.push(
       `${path} must reference the Cloudflare token only in its scoped step environment`,
