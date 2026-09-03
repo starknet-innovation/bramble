@@ -13,6 +13,7 @@
  * previous hand-maintained list had already fallen three workflows behind.
  */
 import { dynamicExecutionFailures } from "./vendor-pin-policy";
+import { websiteDeployFailures } from "./website-deploy-policy";
 import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
 import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
 
@@ -123,47 +124,6 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
   );
   if (source.split("CHROMATIC_PROJECT_TOKEN").length - 1 !== 3) {
     failures.push(`${path} must reference the Chromatic token only in its scoped step environment`);
-  }
-  return failures;
-};
-
-// Selected by content: any workflow holding the Cloudflare deploy credential.
-// A `workflow_dispatch` may name any ref and executes that ref's revision of the
-// workflow, so the enforcing control is the deployment environment's branch
-// policy, which GitHub applies before the job starts and no revision can edit.
-// What is pinned here is the half that lives in the tree: the credential stays
-// an environment secret scoped to one step, and the ref guard cannot be dropped
-// from the trusted branch without failing this gate. The guard's branch is
-// derived from the workflow's own `push` filter rather than named here, so the
-// two statements of "which branch is production" cannot drift and promoting a
-// release branch needs no edit to this policy.
-const cloudflareDeployFailures = (name: string, source: string): string[] => {
-  if (!source.includes("CLOUDFLARE_API_TOKEN")) {
-    return [];
-  }
-  const failures: string[] = [];
-  const path = workflowPath(name);
-  requireText(
-    failures,
-    source,
-    "    environment:\n      name: bramble-production",
-    `${path} must deploy through the reviewed production environment`,
-  );
-  const branch = source.match(/\n {4}branches: \["([^"]+)"\]/)?.[1];
-  if (branch === undefined) {
-    failures.push(`${path} must trigger on exactly one literal release branch`);
-  } else {
-    requireText(
-      failures,
-      source,
-      `[ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/${branch}" ]`,
-      `${path} must reject manual runs outside ${branch}, the branch its push filter names`,
-    );
-  }
-  if (source.split("secrets.CLOUDFLARE_API_TOKEN").length - 1 !== 1) {
-    failures.push(
-      `${path} must reference the Cloudflare token only in its scoped step environment`,
-    );
   }
   return failures;
 };
@@ -475,7 +435,7 @@ export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string
     const named = NAMED_POLICIES[name];
     failures.push(...baselineFailures(name, source, named !== undefined));
     failures.push(...scopedServiceSecretFailures(name, source));
-    failures.push(...cloudflareDeployFailures(name, source));
+    failures.push(...websiteDeployFailures(name, source));
     failures.push(...vendoringFailures(name, source));
     failures.push(...(named?.(source) ?? []));
   }

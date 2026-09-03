@@ -299,7 +299,7 @@ describe("workflow security policy", () => {
       replacement: `      - run: echo ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
       - name: Deployment summary`,
       failure:
-        ".github/workflows/website-deploy.yml must reference the Cloudflare token only in its scoped step environment",
+        ".github/workflows/website-deploy.yml must reference the Cloudflare token exactly once",
     },
     {
       name: "rejects a website deploy that drops the production environment",
@@ -341,6 +341,33 @@ describe("workflow security policy", () => {
     );
     expect(workflowSecurityPolicyFailures(changed)).toContain(
       `.github/workflows/website-deploy.yml must reject manual runs outside ${branch}, the branch its push filter names`,
+    );
+  });
+
+  // Counting references is not enough on its own: hoisting the expression to
+  // job-level `env` keeps the count at one while handing the credential to
+  // checkout, toolchain setup, and the website build.
+  test("rejects a website deploy that hoists its token to job-level env", async () => {
+    const sources = await readWorkflowSources();
+    const hoisted = mutate(
+      mutate(
+        sources,
+        "website-deploy.yml",
+        `        env:
+          CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
+`,
+        "        env:\n",
+      ),
+      "website-deploy.yml",
+      "    steps:\n",
+      `    env:
+      CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+`,
+    );
+    expect(hoisted["website-deploy.yml"]?.split("secrets.CLOUDFLARE_API_TOKEN").length).toBe(2);
+    expect(workflowSecurityPolicyFailures(hoisted)).toContain(
+      ".github/workflows/website-deploy.yml must bind the Cloudflare token in the deploy step's own env, never job-level env",
     );
   });
 
