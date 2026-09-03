@@ -97,7 +97,27 @@ jobs:
               }
             }
 
-            // 2. Linked-issue guard (BLOCKING on release/** bases). Every PR into
+            // 2. Integrated-release guard (BLOCKING, FAIL-CLOSED). A release
+            // branch becomes immutable after main contains its tip. Check the
+            // base via GitHub's compare API rather than checkout ancestry so
+            // GitHub-side merges cannot bypass the local hooks.
+            if (/^release\/v\d+\.\d+(?:\.\d+)?$/.test(base)) {
+              try {
+                const { data: comparison } = await github.rest.repos.compareCommits({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  base: "main",
+                  head: base,
+                });
+                if (comparison.ahead_by === 0) {
+                  fail(`Integrated-release guard: base \`${base}\` is already integrated into \`main\` and is immutable. Retarget this PR to the next patch release branch.`);
+                }
+              } catch (error) {
+                fail(`Integrated-release guard: could not verify whether \`${base}\` is integrated into \`main\` (${error.status || error.message}). Refusing to merge until GitHub can establish branch ancestry.`);
+              }
+            }
+
+            // 3. Linked-issue guard (BLOCKING on release/** bases). Every PR into
             //    a release branch must reference its roadmap issue.
             if (/^release\//.test(base)) {
               const closeMatch = text.match(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/i);
@@ -128,7 +148,7 @@ jobs:
               }
             }
 
-            // 3. Branch-name guard (ADVISORY). Skipped for automation branches.
+            // 4. Branch-name guard (ADVISORY). Skipped for automation branches.
             if (!isAutomationBranch) {
               const ok =
                 /^(feature|fix|chore)\/\d+-.+/.test(head) ||

@@ -396,6 +396,9 @@ owner.
 - **Dismiss stale approvals on push**, require approval of the latest push, and
   configure no ruleset bypass actor.
 - **Block force-pushes and deletions** by non-maintainers.
+- Once a release branch is integrated into `main`, it is **immutable**. The
+  `pr-guards` check rejects attempts to reopen it; create the next patch release
+  branch for follow-up work instead.
 
 ### Repository settings
 
