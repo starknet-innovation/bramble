@@ -88,7 +88,7 @@ const bluetoothBody = (): string => `
     ${button({
       attributes: { "data-mobile-pq-bluetooth": true },
       icon: "shield",
-      label: "Sign with the PQ Signer app",
+      label: "Sign with the Signer 3000 app",
     })}
     ${cancelButton()}
   </div>

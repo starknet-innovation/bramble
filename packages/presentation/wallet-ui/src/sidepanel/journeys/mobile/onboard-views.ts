@@ -46,7 +46,7 @@ const enrollBluetoothBody = (): string => `
     ${button({
       attributes: { "data-mobile-pq-enroll-bluetooth": true },
       icon: "shield",
-      label: "Pair with the PQ Signer app",
+      label: "Pair with the Signer 3000 app",
     })}
     ${cancelButton()}
   </div>

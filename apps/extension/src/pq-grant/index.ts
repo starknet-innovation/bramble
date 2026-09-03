@@ -117,7 +117,7 @@ const render = (): void => {
 
   const readiness = element("ol", "pq-steps");
   readiness.append(
-    step("1", "Open PQ Signer on your phone and keep it on screen"),
+    step("1", "Open Signer 3000 on your phone and keep it on screen"),
     step("2", "Choose your phone in Chrome's list, then click Connect"),
     step("3", "Approve the request when the phone shows it"),
   );
@@ -188,7 +188,7 @@ const render = (): void => {
     buttonLabel.textContent = "Waiting for Chrome...";
     setStatus(
       "Choose your phone in Chrome",
-      "Pick the phone running PQ Signer, then click Connect. If the list is empty, bring the app back to the front — it advertises only while on screen.",
+      "Pick the phone running Signer 3000, then click Connect. If the list is empty, bring the app back to the front — it advertises only while on screen.",
       "info",
     );
 
