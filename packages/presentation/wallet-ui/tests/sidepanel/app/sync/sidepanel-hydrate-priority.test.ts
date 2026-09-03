@@ -106,6 +106,39 @@ describe("home hydration priority", () => {
     expect(cache.deployment).toBe(true);
   });
 
+  test("does not request NFT data for Home while the gallery is parked", async () => {
+    const reads: string[] = [];
+    await hydrateView({
+      activeView: "home",
+      cache: emptyRenderCache(),
+      deployment: { load: async () => true },
+      multisig: emptyMultisigClient,
+      paint: () => undefined,
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        discoverNfts: async () => {
+          reads.push("discover");
+          return [];
+        },
+        loadActivity: async () => ({ entries: [], historyUnavailable: false }),
+        loadBalances: async () => ({
+          accountId: "SN_MAIN:0x1",
+          balances: [],
+          networkId: "SN_MAIN",
+        }),
+        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+        loadWatchedNfts: async () => {
+          reads.push("watched");
+          return [];
+        },
+      },
+    } as never);
+
+    expect(reads).toEqual([]);
+  });
+
   test("drops stale hydration results and paints", async () => {
     const balances = deferred<Awaited<ReturnType<SidepanelWallet["loadBalances"]>>>();
     const cache = emptyRenderCache();
