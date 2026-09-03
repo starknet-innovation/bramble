@@ -54,8 +54,9 @@ describe("onboarding views", () => {
     expect(html.indexOf('data-add-kind="regular"')).toBeLessThan(
       html.indexOf('data-add-kind="import"'),
     );
-    expect(html).toMatch(/data-add-continue[^>]*disabled/);
-    expect(addAccountChooser("ledger")).toMatch(/data-add-kind="ledger"[^>]*aria-pressed="true"/);
+    // Tiles route on their own click: no confirm step and no selection state.
+    expect(html).not.toContain("data-add-continue");
+    expect(html).not.toContain("aria-pressed");
   });
 
   test("connect, reading, and error device states render their controls", () => {
@@ -83,6 +84,9 @@ describe("onboarding views", () => {
       ledgerOnboardError("nope"),
     ]) {
       expect(html).toContain('class="onboard-hero');
+    }
+    // The single-click chooser carries no action row; the device states do.
+    for (const html of [ledgerConnectPrompt(), ledgerReadingPrompt(), ledgerOnboardError("n")]) {
       expect(html).toContain("onboard-actions");
     }
     expect(ledgerAccountPicker([])).toContain('class="onboard-picker"');

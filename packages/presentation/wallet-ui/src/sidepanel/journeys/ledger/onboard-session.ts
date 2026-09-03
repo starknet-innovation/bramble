@@ -108,8 +108,7 @@ export const createLedgerOnboardController = (
   const createdIds = new Set<string>();
   let devices: readonly LedgerDeviceChoice[] = [];
   let selectedDeviceId: string | null = null;
-  let selectedAddKind: LedgerOnboardAddKind | null = null;
-  let chooserStage: "add" | "import" = "add";
+
   const selected = new Set<string>();
   let nextIndex = 0;
   let busy = false;
@@ -121,8 +120,6 @@ export const createLedgerOnboardController = (
     createdIds.clear();
     devices = [];
     selectedDeviceId = null;
-    selectedAddKind = null;
-    chooserStage = "add";
     selected.clear();
     nextIndex = 0;
   };
@@ -381,9 +378,7 @@ export const createLedgerOnboardController = (
     } else if (kind === "regular") {
       void runChooseHd("openzeppelin");
     } else if (kind === "import") {
-      selectedAddKind = null;
-      chooserStage = "import";
-      deps.render({ kind: "import-chooser", selected: null });
+      deps.render({ kind: "import-chooser" });
     } else if (kind === "import-phrase") {
       deps.render(null);
       deps.openImportSeed();
@@ -410,24 +405,12 @@ export const createLedgerOnboardController = (
     connect() {
       startConnect();
     },
-    continueChoice() {
-      if (selectedAddKind) {
-        choose(selectedAddKind);
-      }
-    },
     loadMore() {
       void loadPage(obtainMore, nextIndex, false);
     },
-    select(kind) {
-      selectedAddKind = kind;
-      deps.render({
-        kind: chooserStage === "import" ? "import-chooser" : "chooser",
-        selected: kind,
-      });
-    },
     showChooser() {
       resetState();
-      deps.render({ kind: "chooser", selected: null });
+      deps.render({ kind: "chooser" });
     },
     start() {
       resetState();

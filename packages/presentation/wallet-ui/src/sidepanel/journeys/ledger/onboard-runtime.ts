@@ -135,13 +135,10 @@ export const createLedgerOnboardRuntime = (
       button.addEventListener("click", () => {
         const kind = button.dataset["addKind"];
         if (isAddKind(kind)) {
-          controller.select(kind);
+          controller.choose(kind);
         }
       });
     }
-    mount
-      .querySelector<HTMLButtonElement>("[data-add-continue]")
-      ?.addEventListener("click", () => controller.continueChoice());
     mount
       .querySelector<HTMLButtonElement>("[data-add-back]")
       ?.addEventListener("click", () => controller.showChooser());
@@ -178,10 +175,10 @@ export const createLedgerOnboardRuntime = (
 
   const bodyFor = (view: LedgerOnboardView): string => {
     if (view.kind === "chooser") {
-      return addAccountChooser(view.selected);
+      return addAccountChooser();
     }
     if (view.kind === "import-chooser") {
-      return importAccountChooser(view.selected);
+      return importAccountChooser();
     }
     if (view.kind === "connect") {
       return ledgerConnectPrompt();

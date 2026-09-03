@@ -280,9 +280,8 @@ describe("createLedgerOnboardEntry", () => {
     const h = entryHarness();
     h.entry.startAddAccount();
 
-    click(h.mount, '[data-add-kind="multisig"]');
     expect(h.multisigs()).toBe(0);
-    click(h.mount, "[data-add-continue]");
+    click(h.mount, '[data-add-kind="multisig"]');
 
     expect(h.mount.hidden).toBe(true);
     expect(h.multisigs()).toBe(1);

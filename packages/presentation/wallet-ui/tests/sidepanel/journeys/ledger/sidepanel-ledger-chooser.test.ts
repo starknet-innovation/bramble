@@ -12,19 +12,17 @@ describe("add-account chooser routing", () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
-    expect(h.views.at(-1)).toEqual({ kind: "chooser", selected: null });
+    expect(h.views.at(-1)).toEqual({ kind: "chooser" });
     controller.choose("ledger");
     expect(h.views.at(-1)?.kind).toBe("connect");
   });
 
-  test("selection requires Continue and routes Multisig without mutating the wallet", () => {
+  test("one click routes Multisig without mutating the wallet", () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
-    controller.select("multisig");
-    expect(h.views.at(-1)).toEqual({ kind: "chooser", selected: "multisig" });
     expect(h.multisigs()).toBe(0);
-    controller.continueChoice();
+    controller.choose("multisig");
     expect(h.views.at(-1)).toBeNull();
     expect(h.multisigs()).toBe(1);
     expect(h.hdAdds()).toBe(0);
@@ -34,22 +32,17 @@ describe("add-account chooser routing", () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
-    controller.select("import");
-    expect(h.views.at(-1)).toEqual({ kind: "chooser", selected: "import" });
-    controller.continueChoice();
-    expect(h.views.at(-1)).toEqual({ kind: "import-chooser", selected: null });
+    controller.choose("import");
+    expect(h.views.at(-1)).toEqual({ kind: "import-chooser" });
 
-    controller.select("import-key");
-    expect(h.views.at(-1)).toEqual({ kind: "import-chooser", selected: "import-key" });
-    controller.continueChoice();
+    controller.choose("import-key");
     expect(h.views.at(-1)).toBeNull();
     expect(h.imports()).toBe(1);
     expect(h.seedImports()).toBe(0);
 
     controller.showChooser();
     controller.choose("import");
-    controller.select("import-phrase");
-    controller.continueChoice();
+    controller.choose("import-phrase");
     expect(h.views.at(-1)).toBeNull();
     expect(h.seedImports()).toBe(1);
   });

@@ -146,6 +146,14 @@ export const settingsScenario: WalletScenario = {
       state: { vault: "encrypted", view: "import-key" },
     },
     {
+      content: () => walletDashboard({ preferences: journeyPreferences, view: "import-phrase" }),
+      id: "import-phrase",
+      label: "Import a recovery phrase",
+      narrative:
+        "Another wallet's phrase enters the shared word grid, scans with the grouped picker, and imports into the unlocked vault.",
+      state: { vault: "encrypted", view: "import-phrase" },
+    },
+    {
       content: () =>
         walletDashboard({
           classHashVerification: {
@@ -260,6 +268,7 @@ export const settingsScenario: WalletScenario = {
     "advanced-network",
     "account",
     "import-key",
+    "import-phrase",
     "backup",
     "backup-export",
     "backup-restore",

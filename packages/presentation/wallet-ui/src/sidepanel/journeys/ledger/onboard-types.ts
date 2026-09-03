@@ -46,8 +46,8 @@ export type LedgerOnboardAddKind =
  * picker (with the currently-selected indices), or a typed error.
  */
 export type LedgerOnboardView =
-  | { readonly kind: "chooser"; readonly selected: LedgerOnboardAddKind | null }
-  | { readonly kind: "import-chooser"; readonly selected: LedgerOnboardAddKind | null }
+  | { readonly kind: "chooser" }
+  | { readonly kind: "import-chooser" }
   | { readonly kind: "connect" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
   | { readonly kind: "reading" }
@@ -106,9 +106,7 @@ export type LedgerOnboardController = {
   readonly choose: (kind: LedgerOnboardAddKind) => void;
   readonly chooseDevice: (deviceId: string) => void;
   readonly connect: () => void;
-  readonly continueChoice: () => void;
   readonly loadMore: () => void;
-  readonly select: (kind: LedgerOnboardAddKind) => void;
   readonly showChooser: () => void;
   readonly start: () => void;
   readonly toggle: (accountId: string) => void;

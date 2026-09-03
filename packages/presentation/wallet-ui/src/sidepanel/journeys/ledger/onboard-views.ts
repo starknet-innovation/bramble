@@ -48,23 +48,25 @@ const onboardHero = (chip: string, head: string, actions: string): string => `
     <div class="onboard-actions">${actions}</div>
   </div>`;
 
-/**
- * The shared add-account chooser used by both the account drawer and Manage
- * accounts. Selection and confirmation are separate so a user can compare all
- * four signer models before committing to one route.
- */
-export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null): string => {
-  const option = (
-    kind: LedgerOnboardAddKind,
-    iconName: "link" | "shield" | "users" | "wallet",
-    label: string,
-    supportingText: string,
-  ): string => `
-    <button class="add-account-option" data-add-kind="${kind}" type="button" aria-pressed="${selected === kind}">
+// One chooser tile: a single click routes immediately — no separate
+// select-then-confirm step. The chevron marks each tile as a direct action.
+const chooserOption = (
+  kind: LedgerOnboardAddKind,
+  iconName: "book" | "link" | "shield" | "users" | "wallet",
+  label: string,
+  supportingText: string,
+): string => `
+    <button class="add-account-option" data-add-kind="${kind}" type="button">
       <span class="add-account-option-icon">${icon(iconName)}</span>
       <span class="add-account-option-copy"><strong>${label}</strong><span>${supportingText}</span></span>
-      <span class="add-account-option-check">${icon("check")}</span>
+      <span class="add-account-option-check">${icon("chevronRight")}</span>
     </button>`;
+
+/**
+ * The shared add-account chooser used by both the account drawer and Manage
+ * accounts. Each tile routes on its own click.
+ */
+export const addAccountChooser = (): string => {
   return `
   <div class="onboard-hero add-account-hero">
     <header class="add-account-header">
@@ -77,17 +79,10 @@ export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null):
       })}
     </header>
     <div class="add-account-chooser" role="group" aria-label="Add an account">
-      ${option("regular", "wallet", "Regular account", "Create the next account from this wallet’s recovery phrase.")}
-      ${option("ledger", "shield", "Ledger account", "Connect a Ledger and pick its accounts, new or existing.")}
-      ${option("multisig", "users", "Multisig account", "Create or add a shared account controlled by multiple signers.")}
-      ${option("import", "link", "Import an existing account", "Bring accounts you already own: a recovery phrase or a private key.")}
-    </div>
-    <div class="onboard-actions">
-      ${button({
-        attributes: { "data-add-continue": true },
-        disabled: selected === null,
-        label: "Continue",
-      })}
+      ${chooserOption("regular", "wallet", "Regular account", "Create the next account from this wallet’s recovery phrase.")}
+      ${chooserOption("ledger", "shield", "Ledger account", "Connect a Ledger and pick its accounts, new or existing.")}
+      ${chooserOption("multisig", "users", "Multisig account", "Create or add a shared account controlled by multiple signers.")}
+      ${chooserOption("import", "link", "Import an existing account", "Bring accounts you already own: a recovery phrase or a private key.")}
     </div>
   </div>`;
 };
@@ -98,18 +93,7 @@ export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null):
  * private key. Ledger import lives on the top-level Ledger route, whose picker
  * already finds existing device accounts.
  */
-export const importAccountChooser = (selected: LedgerOnboardAddKind | null = null): string => {
-  const option = (
-    kind: LedgerOnboardAddKind,
-    iconName: "book" | "link",
-    label: string,
-    supportingText: string,
-  ): string => `
-    <button class="add-account-option" data-add-kind="${kind}" type="button" aria-pressed="${selected === kind}">
-      <span class="add-account-option-icon">${icon(iconName)}</span>
-      <span class="add-account-option-copy"><strong>${label}</strong><span>${supportingText}</span></span>
-      <span class="add-account-option-check">${icon("check")}</span>
-    </button>`;
+export const importAccountChooser = (): string => {
   return `
   <div class="onboard-hero add-account-hero">
     <header class="add-account-header">
@@ -122,19 +106,14 @@ export const importAccountChooser = (selected: LedgerOnboardAddKind | null = nul
       })}
     </header>
     <div class="add-account-chooser" role="group" aria-label="Import an existing account">
-      ${option("import-phrase", "book", "Recovery phrase", "Import accounts from another wallet's 12 or 24 words.")}
-      ${option("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
+      ${chooserOption("import-phrase", "book", "Recovery phrase", "Import accounts from another wallet's 12 or 24 words.")}
+      ${chooserOption("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
     </div>
     <div class="onboard-actions">
       ${button({
         attributes: { "data-add-back": true },
         label: "Back",
         variant: "ghost",
-      })}
-      ${button({
-        attributes: { "data-add-continue": true },
-        disabled: selected === null,
-        label: "Continue",
       })}
     </div>
   </div>`;
