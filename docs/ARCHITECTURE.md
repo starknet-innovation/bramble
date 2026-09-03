@@ -479,9 +479,9 @@ URLs. The detail screen shows the resolved artwork and attributes, then sends th
 review → confirm flow. Review re-proves ownership, detects ERC-721 versus ERC-1155, decodes the
 exact call, screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
-While the journey is parked no view hydrates NFT data: the wallet runs neither the watched-NFT
-metadata lane nor indexer discovery, and a previously saved `nftIndexerUrl` stays in preferences
-unused and unsettable. Restoring the gallery restores those lanes and the indexer setting with it.
+While parked, no view hydrates NFT data: neither watched-NFT metadata nor indexer discovery runs,
+and a saved `nftIndexerUrl` is unused and unsettable. Restore the entry points, `bindNfts`, indexer
+setter, and gallery-only hydration together; then remove the parked-view guard/test and cover no-unprompted egress on restored routes.
 Ownership proofs stay untrusted-first whenever it does: concurrent refreshes for the same account
 share the in-flight request, account switches remain isolated, and the first visible watched
 images are fetched eagerly so the gallery is warm when opened.
