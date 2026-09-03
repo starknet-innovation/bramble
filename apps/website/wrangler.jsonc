@@ -1,0 +1,28 @@
+// Cloudflare Worker that serves the built Bramble website (bramble.money).
+//
+// This is an assets-only Worker: there is no `main` script, so every request is
+// answered from `dist/` by Cloudflare's static-asset routing and nothing runs
+// server-side. `.github/workflows/website-deploy.yml` builds `dist/` and runs
+// `wrangler deploy` against this file; the deploy only reaches the live site
+// because `name` matches the existing Worker. Deploying under any other name
+// creates a second Worker and silently leaves bramble.money stale.
+{
+  "name": "bramble",
+  "compatibility_date": "2026-08-25",
+  // The public site is bramble.money only. Disabling the workers.dev hostname
+  // and preview URLs keeps a wallet site from being reachable on a second,
+  // unbranded origin that phishing pages could imitate or link to.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "bramble.money", "custom_domain": true }],
+  "assets": {
+    "directory": "./dist",
+    // Vite emits real entry documents at /, /docs/, /support/, and /privacy/;
+    // `auto-trailing-slash` serves each `index.html` at its directory path and
+    // redirects the slash-less form. Anything else is a genuine 404 — there is
+    // deliberately no single-page-application fallback, because it would answer
+    // every mistyped URL on a wallet domain with the home page.
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  }
+}

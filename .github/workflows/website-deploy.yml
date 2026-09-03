@@ -1,0 +1,79 @@
+# Deploys the Bramble public website (apps/website) to the Cloudflare Worker
+# `bramble`, which serves bramble.money.
+#
+# Why GitHub Actions and not Cloudflare Workers Builds: Workers Builds reads the
+# repository-root `.tool-versions` (scarb, starknet-foundry), cannot provision
+# the Cairo toolchain, and fails before the build starts; no dashboard setting
+# changes where it looks. The site is a plain Vite build, so this workflow runs
+# it with the workspace's pinned Bun and pushes the output with the wrangler
+# pinned in `apps/website/package.json` and `bun.lock`.
+#
+# Trust boundaries:
+#   - Runs only on pushes to the active release branch and on manual dispatch,
+#     never on pull requests, so the deploy token is never exposed to a PR
+#     revision. PR feedback for the website comes from ci.yml (`check:workspaces`).
+#   - `CLOUDFLARE_API_TOKEN` is an Account → Workers Scripts → Edit token scoped
+#     to this account and nothing broader. The account id is not a secret.
+#   - The build is gated on the website's own `check` script (types, lint, unit
+#     tests, production build) before anything is uploaded.
+#   - `VITE_CHROME_STORE_URL` is intentionally not wired through repository
+#     variables: Vite inlines it into the artifact, so its value belongs in a
+#     reviewed commit, not in a dashboard field.
+name: website-deploy
+
+on:
+  push:
+    branches: ["release/v0.10"]
+    paths:
+      - "apps/website/**"
+      - "bun.lock"
+      - "package.json"
+      - ".github/workflows/website-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time, and never cancel a running upload: a cancelled wrangler
+# deploy can leave a half-published asset manifest.
+concurrency:
+  group: website-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Forks carry the workflow file but must not try (and fail) to deploy.
+    if: github.repository == 'starknet-innovation/mc-wallet'
+    runs-on: ubuntu-latest
+    environment:
+      name: bramble-production
+      url: https://bramble.money
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+      # `check` runs the website's typecheck, lint, unit tests, and production
+      # build, so a green step here is also the `dist/` that gets deployed.
+      - name: Check and build website
+        run: bun run --filter @mc-wallet/website check
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 56512fcc98061964018962fbd3c8439c
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not configured for the bramble-production environment; refusing to deploy."
+            exit 1
+          fi
+          bun run --filter @mc-wallet/website deploy
+      - name: Deployment summary
+        if: success()
+        run: |
+          {
+            echo "### website-deploy: PASS"
+            echo ""
+            echo "Deployed \`apps/website\` from \`${GITHUB_SHA}\` (\`${GITHUB_REF_NAME}\`) to the \`bramble\` Worker at https://bramble.money."
+          } >> "$GITHUB_STEP_SUMMARY"
