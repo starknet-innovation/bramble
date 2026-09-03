@@ -30,6 +30,7 @@ import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
 import { bindCopyButtons, showToast } from "../shared/dom";
+import { isParkedCollectibleView } from "../shared/parts";
 import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
 import { applyEntryTheme, bindEntryNavigation } from "../shell/entry-ui";
 import {
@@ -73,7 +74,7 @@ export const startWalletUi = async (
   const multisig = createMultisigClient(mutationRuntime);
   const swapClient = createSwapClient(mutationRuntime);
   let activeView: WalletView = "home";
-  let selectedNftId: string | null = null;
+  const selectedNftId: string | null = null;
   let selectedMultisigId: string | null = null;
   let selectedMultisigIntentId: string | null = null;
   let lastAccountId: string | null = null;
@@ -243,10 +244,6 @@ export const startWalletUi = async (
     });
     bindClusterScreens({
       app,
-      openNft: (id) => {
-        selectedNftId = id;
-        navigate("nft-detail");
-      },
       openToken: (tokenId) => {
         selectedTokenId = tokenId;
         navigate("token-detail");
@@ -370,6 +367,7 @@ export const startWalletUi = async (
                 expandedGroupId,
                 cache.priceStale,
                 cache.priceAsOf,
+                [],
                 openAssignId,
                 classHashVerification,
                 cache.historyUnavailable,
@@ -463,6 +461,9 @@ export const startWalletUi = async (
     });
   };
   const navigate = (view: WalletView): void => {
+    if (isParkedCollectibleView(view)) {
+      return;
+    }
     if (view !== activeView) {
       viewHistory = pushView(viewHistory, activeView);
     }

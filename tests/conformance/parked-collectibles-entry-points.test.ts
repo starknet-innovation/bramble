@@ -21,7 +21,7 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { WALLET_VIEWS } from "@mc-wallet/wallet-ui/lab";
+import { isParkedCollectibleView, PARKED_COLLECTIBLE_VIEWS } from "@mc-wallet/wallet-ui/lab";
 
 const WALLET_UI_SRC = join(import.meta.dir, "../../packages/presentation/wallet-ui/src");
 
@@ -36,18 +36,23 @@ const sourceFiles = (root: string): readonly string[] =>
       : [],
   );
 
-const collectibleViews = WALLET_VIEWS.filter((view) => view.startsWith("nft"));
+const entryPointHits = (source: string, view: (typeof PARKED_COLLECTIBLE_VIEWS)[number]): boolean =>
+  new RegExp(
+    `(?:data-view\\s*=\\s*["']${view}["']|["']data-view["']\\s*:\\s*["']${view}["']|walletMenuRow\\(\\s*["']${view}["']|navigate\\(\\s*["']${view}["'])`,
+  ).test(source);
 
 describe("parked collectibles entry points", () => {
   test("the view list still names the parked gallery screens", () => {
     // If this changes, the patterns below are checking for the wrong views.
-    expect([...collectibleViews]).toEqual([
+    expect([...PARKED_COLLECTIBLE_VIEWS]).toEqual([
       "nfts",
       "nft-watch",
       "nft-hidden",
       "nft-detail",
       "nft-send",
     ]);
+    expect(PARKED_COLLECTIBLE_VIEWS.every(isParkedCollectibleView)).toBe(true);
+    expect(isParkedCollectibleView("home")).toBe(false);
   });
 
   test("no production wallet-ui module renders a route into the gallery", () => {
@@ -61,11 +66,7 @@ describe("parked collectibles entry points", () => {
       }
       const source = readFileSync(join(WALLET_UI_SRC, file), "utf8");
       const hits = [
-        ...collectibleViews.flatMap((view) =>
-          source.includes(`data-view="${view}"`) || source.includes(`"data-view": "${view}"`)
-            ? [`data-view="${view}"`]
-            : [],
-        ),
+        ...PARKED_COLLECTIBLE_VIEWS.flatMap((view) => (entryPointHits(source, view) ? [view] : [])),
         ...(source.includes("data-nft-open") ? ["data-nft-open"] : []),
       ];
       return hits.length > 0 ? [`${file}: ${hits.join(", ")}`] : [];
