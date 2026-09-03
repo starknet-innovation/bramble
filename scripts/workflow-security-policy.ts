@@ -12,9 +12,9 @@
  * checked without anyone remembering to list it — which is the whole point: the
  * previous hand-maintained list had already fallen three workflows behind.
  */
-import { escapeRegExp } from "./regexp";
 import { dynamicExecutionFailures } from "./vendor-pin-policy";
-import { readWorkflowSources, WORKFLOW_DIR, type WorkflowSources } from "./workflow-inventory";
+import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
+import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
 
 const NODE_SETUP_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
 const GITHUB_EXPRESSION = "$" + "{{";
@@ -31,39 +31,6 @@ const VENDOR_STEPS = [
   { command: "bun run vendor:argent", failure: "must verify the pinned Argent account contracts" },
   { command: "bun run vendor:privacy", failure: "must vendor the pinned privacy SDK" },
 ] as const;
-
-const workflowPath = (name: string): string => `${WORKFLOW_DIR}/${name}`;
-
-const jobBody = (workflow: string, job: string): string => {
-  const bounded = `${workflow}\n  __workflow_policy_end__:\n`;
-  const escaped = escapeRegExp(job);
-  return (
-    bounded.match(new RegExp(`^  ${escaped}:\\n[\\s\\S]*?(?=^  [a-zA-Z0-9_-]+:\\n)`, "m"))?.[0] ??
-    ""
-  );
-};
-
-const requireText = (
-  failures: string[],
-  source: string,
-  expected: string,
-  failure: string,
-): void => {
-  if (!source.includes(expected)) {
-    failures.push(failure);
-  }
-};
-
-const forbidText = (
-  failures: string[],
-  source: string,
-  forbidden: string,
-  failure: string,
-): void => {
-  if (source.includes(forbidden)) {
-    failures.push(failure);
-  }
-};
 
 // Applies to any workflow that vendors a pinned source, selected by content.
 // The privacy SDK build depends on the exact Node runtime, so the pin travels
@@ -156,6 +123,41 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
   );
   if (source.split("CHROMATIC_PROJECT_TOKEN").length - 1 !== 3) {
     failures.push(`${path} must reference the Chromatic token only in its scoped step environment`);
+  }
+  return failures;
+};
+
+// Selected by content: any workflow holding the Cloudflare deploy credential.
+// A `workflow_dispatch` may name any ref and executes that ref's revision of the
+// workflow, so the enforcing control is the deployment environment's branch
+// policy, which GitHub applies before the job starts and no revision can edit.
+// What is pinned here is the half that lives in the tree: the credential stays
+// an environment secret scoped to one step, and the ref guard cannot be dropped
+// from the trusted branch without failing this gate. The guard is matched by
+// shape rather than by branch name so promoting the release branch does not
+// require editing this policy.
+const cloudflareDeployFailures = (name: string, source: string): string[] => {
+  if (!source.includes("CLOUDFLARE_API_TOKEN")) {
+    return [];
+  }
+  const failures: string[] = [];
+  const path = workflowPath(name);
+  requireText(
+    failures,
+    source,
+    "    environment:\n      name: bramble-production",
+    `${path} must deploy through the reviewed production environment`,
+  );
+  requireText(
+    failures,
+    source,
+    '[ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/',
+    `${path} must reject manual runs outside the trusted release branch`,
+  );
+  if (source.split("secrets.CLOUDFLARE_API_TOKEN").length - 1 !== 1) {
+    failures.push(
+      `${path} must reference the Cloudflare token only in its scoped step environment`,
+    );
   }
   return failures;
 };
@@ -467,6 +469,7 @@ export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string
     const named = NAMED_POLICIES[name];
     failures.push(...baselineFailures(name, source, named !== undefined));
     failures.push(...scopedServiceSecretFailures(name, source));
+    failures.push(...cloudflareDeployFailures(name, source));
     failures.push(...vendoringFailures(name, source));
     failures.push(...(named?.(source) ?? []));
   }

@@ -12,8 +12,20 @@
 #   - Runs only on pushes to the active release branch and on manual dispatch,
 #     never on pull requests, so the deploy token is never exposed to a PR
 #     revision. PR feedback for the website comes from ci.yml (`check:workspaces`).
+#   - `workflow_dispatch` does NOT inherit the `push.branches` filter: a dispatch
+#     may name any ref, and the workflow revision that runs is the one on that
+#     ref. What actually stops a foreign ref reaching the credential is the
+#     `bramble-production` environment's deployment-branch policy, which GitHub
+#     enforces server-side before the job starts and which no workflow revision
+#     can edit. The ref guard below cannot be that control — a dispatcher who
+#     chooses the ref also owns this file on it — so it exists to fail an
+#     accidental dispatch loudly and to keep the intended ref reviewable in-tree.
+#     `scripts/workflow-security-policy.ts` pins both, so neither can be dropped
+#     from the trusted branch without failing a gate.
 #   - `CLOUDFLARE_API_TOKEN` is an Account → Workers Scripts → Edit token scoped
-#     to this account and nothing broader. The account id is not a secret.
+#     to this account and nothing broader, held as an environment secret so it is
+#     unavailable to any job that does not clear the environment's policy. The
+#     account id is not a secret.
 #   - The build is gated on the website's own `check` script (types, lint, unit
 #     tests, production build) before anything is uploaded.
 #   - `VITE_CHROME_STORE_URL` is intentionally not wired through repository
@@ -49,6 +61,20 @@ jobs:
       name: bramble-production
       url: https://bramble.money
     steps:
+      # Accident guard, not the trust boundary (see the header). The environment
+      # policy already refuses a foreign ref; this turns a mistaken dispatch of
+      # some other branch into a clear early failure instead of a build that
+      # only dies later at the environment gate.
+      - name: Reject manual runs outside the active release branch
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TRIGGER_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/release/v0.10" ]; then
+            echo "::error::Manual website deploys must use the workflow from refs/heads/release/v0.10 (got $TRIGGER_REF)."
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:

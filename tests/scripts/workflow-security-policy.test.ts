@@ -280,6 +280,35 @@ describe("workflow security policy", () => {
       replacement: "pull_request:\n    branches: [main]",
       failure: "release integration must run only on pushes to release branches",
     },
+    // The deploy credential's in-tree half. The enforcing control against a
+    // foreign ref is the environment's deployment-branch policy, which lives in
+    // repository settings; these three keep the workflow from quietly losing
+    // the parts of the boundary a diff can show.
+    {
+      name: "rejects a website deploy whose manual-dispatch ref guard is gone",
+      workflow: "website-deploy.yml",
+      search: '[ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/',
+      replacement: 'if false; then : "',
+      failure:
+        ".github/workflows/website-deploy.yml must reject manual runs outside the trusted release branch",
+    },
+    {
+      name: "rejects a website deploy that leaks its token outside the deploy step",
+      workflow: "website-deploy.yml",
+      search: "      - name: Deployment summary",
+      replacement: `      - run: echo ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Deployment summary`,
+      failure:
+        ".github/workflows/website-deploy.yml must reference the Cloudflare token only in its scoped step environment",
+    },
+    {
+      name: "rejects a website deploy that drops the production environment",
+      workflow: "website-deploy.yml",
+      search: "    environment:\n      name: bramble-production",
+      replacement: "    # environment removed",
+      failure:
+        ".github/workflows/website-deploy.yml must deploy through the reviewed production environment",
+    },
   ] as const;
 
   for (const item of cases) {
