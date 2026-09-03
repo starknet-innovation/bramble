@@ -144,6 +144,9 @@ export const startWalletUi = async (
       deploymentScope: () => deploymentPollScope(cache.status, () => cache.status),
       render,
       setActiveView: (view: WalletView) => {
+        if (isParkedCollectibleView(view)) {
+          return;
+        }
         activeView = view;
         if (view === "home") selectedMultisigId = null;
       },
@@ -477,7 +480,7 @@ export const startWalletUi = async (
     const popped = popView(viewHistory);
     viewHistory = popped.history;
     forcedDirection = "back";
-    activeView = popped.view;
+    activeView = isParkedCollectibleView(popped.view) ? "home" : popped.view;
     if (activeView !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
