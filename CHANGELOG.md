@@ -11,6 +11,8 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-03
+
 ## [0.9.2] - 2026-08-14
 
 Official Argent account contracts, true M-of-N multisig, safer account recovery,
