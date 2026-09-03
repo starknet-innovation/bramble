@@ -32,13 +32,7 @@ export type LedgerCandidate = {
 /**
  * Account-contract-aware routes dispatched by the add-account chooser.
  */
-export type LedgerOnboardAddKind =
-  | "import"
-  | "import-key"
-  | "import-ledger"
-  | "ledger"
-  | "multisig"
-  | "regular";
+export type LedgerOnboardAddKind = "import" | "ledger" | "multisig" | "regular";
 
 /**
  * The onboarding device-prompt view the binder renders: the add-account
@@ -47,7 +41,6 @@ export type LedgerOnboardAddKind =
  */
 export type LedgerOnboardView =
   | { readonly kind: "chooser"; readonly selected: LedgerOnboardAddKind | null }
-  | { readonly kind: "import-chooser"; readonly selected: LedgerOnboardAddKind | null }
   | { readonly kind: "connect" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
   | { readonly kind: "reading" }

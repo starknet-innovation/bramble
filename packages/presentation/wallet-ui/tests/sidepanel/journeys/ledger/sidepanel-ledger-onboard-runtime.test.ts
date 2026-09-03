@@ -314,19 +314,9 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, "[data-add-continue]");
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
-    // "Import an existing account" opens the two-route import chooser; the
-    // private-key route dismisses the overlay into the import form, and Back
-    // returns to the four-tile chooser.
+    // "Import an existing account" dismisses the overlay into the key-import form.
     h.runtime.startAddAccount();
     click(h.mount, '[data-add-kind="import"]');
-    click(h.mount, "[data-add-continue]");
-    expect(h.mount.querySelector('[data-add-kind="import-ledger"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="import-key"]')).not.toBeNull();
-    click(h.mount, "[data-add-back]");
-    expect(h.mount.querySelector('[data-add-kind="regular"]')).not.toBeNull();
-    click(h.mount, '[data-add-kind="import"]');
-    click(h.mount, "[data-add-continue]");
-    click(h.mount, '[data-add-kind="import-key"]');
     click(h.mount, "[data-add-continue]");
     expect(h.mount.hidden).toBe(true);
     expect(h.imports()).toBe(1);

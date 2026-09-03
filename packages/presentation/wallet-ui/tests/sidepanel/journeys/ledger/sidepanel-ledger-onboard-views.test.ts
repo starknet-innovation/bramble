@@ -9,7 +9,6 @@ import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { LedgerCandidate } from "../../../../src/sidepanel/journeys/ledger/onboard-session";
 import {
   addAccountChooser,
-  importAccountChooser,
   ledgerAccountPicker,
   ledgerConnectPrompt,
   ledgerDevicePicker,
@@ -57,21 +56,6 @@ describe("onboarding views", () => {
     );
     expect(html).toMatch(/data-add-continue[^>]*disabled/);
     expect(addAccountChooser("ledger")).toMatch(/data-add-kind="ledger"[^>]*aria-pressed="true"/);
-  });
-
-  test("the import chooser mirrors onboarding without the recovery-phrase route", () => {
-    const html = importAccountChooser();
-    expect(html).toContain('data-add-kind="import-ledger"');
-    expect(html).toContain('data-add-kind="import-key"');
-    expect(html).toContain("Ledger hardware wallet");
-    expect(html).toContain("Private key");
-    // One phrase per vault: no in-wallet recovery-phrase import.
-    expect(html).not.toContain("Recovery phrase");
-    expect(html).toContain("data-add-back");
-    expect(html).toMatch(/data-add-continue[^>]*disabled/);
-    expect(importAccountChooser("import-key")).toMatch(
-      /data-add-kind="import-key"[^>]*aria-pressed="true"/,
-    );
   });
 
   test("connect, reading, and error device states render their controls", () => {

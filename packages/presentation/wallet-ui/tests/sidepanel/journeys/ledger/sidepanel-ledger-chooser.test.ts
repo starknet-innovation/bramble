@@ -30,26 +30,16 @@ describe("add-account chooser routing", () => {
     expect(h.hdAdds()).toBe(0);
   });
 
-  test("choose('import') opens the import chooser; import-key routes to the form", () => {
+  test("choose('import') dismisses the overlay and routes to the key-import form", () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
-    controller.choose("import");
-    expect(h.views.at(-1)).toEqual({ kind: "import-chooser", selected: null });
-    controller.select("import-key");
-    expect(h.views.at(-1)).toEqual({ kind: "import-chooser", selected: "import-key" });
+    controller.select("import");
+    expect(h.views.at(-1)).toEqual({ kind: "chooser", selected: "import" });
+    expect(h.imports()).toBe(0);
     controller.continueChoice();
     expect(h.views.at(-1)).toBeNull();
     expect(h.imports()).toBe(1);
-  });
-
-  test("choose('import-ledger') starts the connect flow like a new Ledger account", () => {
-    const h = onboardHarness();
-    const controller = createLedgerOnboardController(h.deps);
-    controller.showChooser();
-    controller.choose("import");
-    controller.choose("import-ledger");
-    expect(h.views.at(-1)?.kind).toBe("connect");
   });
 
   test("a regular-account choice derives an HD account, dismisses, and refreshes", async () => {
