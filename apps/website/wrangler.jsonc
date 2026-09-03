@@ -8,7 +8,9 @@
 // creates a second Worker and silently leaves bramble.money stale.
 {
   "name": "bramble",
-  "compatibility_date": "2026-08-25",
+  // Matches the date already set on the live Worker, so deploying this config
+  // does not move a runtime setting for no reason.
+  "compatibility_date": "2026-09-01",
   // The public site is bramble.money only. Disabling the workers.dev hostname
   // and preview URLs keeps a wallet site from being reachable on a second,
   // unbranded origin that phishing pages could imitate or link to.
