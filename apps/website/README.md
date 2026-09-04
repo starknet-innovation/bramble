@@ -20,12 +20,13 @@ directory (assets-only, no server-side code, `workers.dev` and preview URLs disa
 touches `apps/website/`, and on manual dispatch. Pull requests never deploy; they are checked by
 `check:workspaces` in the main CI workflow.
 
-**The public hostname is being changed.** `bramble.money` has been retired and the Worker currently
-serves an unbranded holding page there, so `routes` in `wrangler.jsonc` is deliberately empty — a
-Worker with no trigger is deployable but unreachable. Declaring nothing also stops a deploy from
-re-attaching the old hostname. When the replacement hostname is live, add it as a custom-domain
-route. A Workers custom domain requires the zone to be on Cloudflare DNS, so the domain's
-nameservers must point at Cloudflare even if it is registered elsewhere.
+The public hostname is `bramble.fi`. `bramble.money` was retired and is deliberately not declared
+in `wrangler.jsonc`, which is what stops a deploy re-attaching it.
+
+`bramble.fi` is registered through AWS Route 53, but a Workers custom domain requires the zone to be
+served by **Cloudflare DNS**. The domain's nameservers therefore point at Cloudflare, not Route 53,
+which stays the registrar only. A deploy fails at the domain-attach step while the zone is served
+anywhere else, so the DNS move has to land before the first deploy on a new hostname.
 
 The workflow needs one secret, `CLOUDFLARE_API_TOKEN`, in the `bramble-production` GitHub
 environment: a Cloudflare token with Account → Workers Scripts → Edit only. The account id is

@@ -16,13 +16,13 @@
   // second, unbranded origin that phishing pages could imitate or link to.
   "workers_dev": false,
   "preview_urls": false,
-  // No route is declared while the public hostname is being changed. A Worker
-  // with no trigger is deployable but unreachable, which is the intended state:
-  // bramble.money is being retired and its replacement is not yet wired up.
-  // Declaring nothing here also stops any deploy from re-attaching the old
-  // hostname, the way it would if the domain were only detached in the
-  // dashboard.
-  "routes": [],
+  // The public hostname. A Workers custom domain requires the zone to be served
+  // by Cloudflare DNS, so bramble.fi's nameservers must point at Cloudflare even
+  // though it is registered through Route 53 — a deploy fails at the attach step
+  // while the zone is anywhere else. bramble.money is deliberately absent: it
+  // was retired, and declaring only the current hostname is what stops a deploy
+  // re-attaching the old one.
+  "routes": [{ "pattern": "bramble.fi", "custom_domain": true }],
   "assets": {
     "directory": "./dist",
     // Vite emits real entry documents at /, /docs/, /support/, and /privacy/;
