@@ -228,6 +228,63 @@ test("surfaces an invoke as a transaction approval and rejects on deny", async (
   }
 });
 
+test("surfaces a SNIP wire-format multicall as a transaction approval", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await createWalletFromGeneratedPhrase(sidepanel);
+
+  const dappServer = await startTestDapp();
+  try {
+    const dapp = await extension.context.newPage();
+    await dapp.goto(dappServer.url);
+    await dapp.getByTestId("connect").click();
+    await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
+
+    // Real dapps speak the SNIP wallet API: snake_case call fields and decimal
+    // calldata, here an approve on a TRACKED token (mainnet STRK) plus a swap
+    // call, so the allowance-review enrichment path is exercised too. The test
+    // dapp's own button sends the legacy camelCase shape, which once left this
+    // wire format entirely uncovered.
+    await dapp.evaluate(() => {
+      const provider = (
+        globalThis as unknown as {
+          starknet_bramble: { request: (args: unknown) => Promise<unknown> };
+        }
+      ).starknet_bramble;
+      void provider
+        .request({
+          params: {
+            calls: [
+              {
+                calldata: [
+                  "0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f",
+                  "500000000000000000",
+                  "0",
+                ],
+                contract_address:
+                  "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+                entry_point: "approve",
+              },
+              {
+                calldata: ["2"],
+                contract_address:
+                  "0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f",
+                entry_point: "multi_route_swap",
+              },
+            ],
+          },
+          type: "wallet_addInvokeTransaction",
+        })
+        .catch(() => undefined);
+    });
+
+    // With the panel open and unlocked, the review takeover appears on its own.
+    await expect(sidepanel.getByText("Review request")).toBeVisible({ timeout: 10_000 });
+    await expect(sidepanel.getByText("Transaction request").first()).toBeVisible();
+  } finally {
+    await dappServer.close();
+  }
+});
+
 test("detects the injected provider after a page reload", async ({ extension }) => {
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);
