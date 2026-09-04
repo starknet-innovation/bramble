@@ -1,0 +1,18 @@
+#!/bin/sh
+#
+# Release-branch immutability guard (issue #302).
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Refuses a commit made on a `release/v*` branch whose tip `main` already
+# contains — such a commit is orphaned from the development line. It fails
+# CLOSED: if ancestry cannot be determined (no `origin/main`, no `bun`), the
+# commit is refused with the remediation printed by the guard.
+#
+# Bypass a single commit with:
+#   git commit --no-verify
+
+set -e
+
+exec bun run scripts/release-branch-guard.ts commit
