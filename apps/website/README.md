@@ -45,6 +45,20 @@ changing. They are listed so a failure points somewhere rather than nowhere.
   site two canonical origins, which splits search indexing and widens the set of addresses a
   lookalike domain can imitate. The redirect is an edge rule so no server-side code is added — this
   Worker stays assets-only, with nothing executing on a wallet domain.
+- **Security headers ship from `public/_headers`**, which Cloudflare Workers parses out of the
+  deployed asset directory. `Strict-Transport-Security` and `X-Content-Type-Options` are the
+  exception: those are set at the Cloudflare edge under SSL/TLS, so the file deliberately omits them
+  rather than emitting each header from two sources. `src/lib/security-headers.test.ts` guards the
+  file, because a plain text file with a typo in a directive name loses protection without failing
+  anything.
+- **The Content-Security-Policy is split in two.** The enforcing header carries only
+  `frame-ancestors` and `base-uri`, which cannot break a site with no frames and no `<base>`
+  element — and `frame-ancestors` is ignored in a report-only policy, so clickjacking protection
+  only exists if it is enforced. The full policy ships **report-only** because a wrong `script-src`
+  blanks a single-page app rather than degrading it. It was verified against the deployed site with
+  a browser on all four pages — scripts, styles, both fonts, all eight images and the support form
+  produced no violations — so promoting it is a matter of moving the directives into the enforcing
+  header once someone decides to.
 - **Mail is denied, not merely absent.** A null `MX` (`.` at priority 0), `v=spf1 -all`, and a DMARC
   `p=reject` record are published even though the domain sends and receives no mail. Those records
   stop forged mail claiming to come from the wallet's domain, which is a phishing route that exists
