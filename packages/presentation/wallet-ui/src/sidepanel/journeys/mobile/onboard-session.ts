@@ -23,17 +23,15 @@
  * possession is refused by the background, and neither stores anything.
  */
 
-import { isMlDsa65PublicKey, isMlDsa65Signature } from "@mc-wallet/wallet-model/signing";
-import { fromBase64Url, toBase64Url } from "./wire-encoding";
-
-/**
- * What the user types or pastes into the enrollment form.
- */
-export type MobilePqEnrollDraft = {
-  readonly deviceId: string;
-  readonly publicKey: string;
-  readonly signature: string;
-};
+import {
+  decodeMobilePqPairingResult,
+  MOBILE_PQ_PAIRING_VERSION,
+  type MobilePqEnrollDraft,
+  mobilePqDraftError,
+} from "./pairing-reply";
+import type { MobilePqRestoreDeviceCalls, MobilePqRestoreEntry } from "./restore-session";
+import { runMobilePqRestore } from "./restore-session";
+import { toBase64Url } from "./wire-encoding";
 
 /*
  * ---------------------------------------------------------------------------
@@ -43,12 +41,6 @@ export type MobilePqEnrollDraft = {
  * Kept in this module rather than their own: this controller is the only
  * consumer, and it already owns the view model the offer is rendered from.
  */
-/**
- * Pairing envelope version. The phone refuses a version it does not recognise
- * rather than guessing at fields, so this moves whenever a shape below changes.
- */
-export const MOBILE_PQ_PAIRING_VERSION = 1;
-
 /**
  * Encodes the offer the device reads.
  *
@@ -71,52 +63,6 @@ export const encodeMobilePqPairingOffer = (input: {
   );
 
 /**
- * What the phone sends back: the name it gave the key, the public key, and the
- * signature over the challenge.
- */
-export type MobilePqPairingResult = {
-  readonly deviceId: string;
-  readonly publicKey: string;
-  readonly signature: string;
-};
-
-/**
- * Decodes a pasted pairing response, or null when it is not one.
- *
- * Shape only: the lengths of the key and the signature, and the signature
- * itself, are checked by the enrollment controller and the background. This
- * refuses anything that is not the right *kind* of value so the caller can say
- * "that is not a response from the app" rather than "invalid public key".
- */
-export const decodeMobilePqPairingResult = (pasted: string): MobilePqPairingResult | null => {
-  const json = fromBase64Url(pasted);
-  if (json === null) {
-    return null;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json) as unknown;
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null) {
-    return null;
-  }
-  const record = parsed as Record<string, unknown>;
-  const { deviceId, publicKey, signature, version } = record;
-  if (
-    version !== MOBILE_PQ_PAIRING_VERSION ||
-    typeof deviceId !== "string" ||
-    deviceId.trim().length === 0 ||
-    typeof publicKey !== "string" ||
-    typeof signature !== "string"
-  ) {
-    return null;
-  }
-  return { deviceId: deviceId.trim(), publicKey, signature };
-};
-
-/**
  * The phase the panel renders. `collect` is the working state — the challenge is
  * on screen to copy and every field is open, because with a clipboard the user
  * moves between this screen and their device freely rather than in steps the
@@ -132,6 +78,11 @@ type MobilePqEnrollPhase =
   // user had not used.
   | { readonly kind: "reaching" }
   | { readonly kind: "enrolling" }
+  // Restore is its own phase rather than a reuse of `reaching` or `enrolling`,
+  // because it is neither: it is a run over several accounts, each with its own
+  // approval on the phone, and the screen has to say which one. There is no
+  // finished phase — a finished run closes the panel and leaves a toast.
+  | { readonly kind: "restoring" }
   | { readonly kind: "error"; readonly message: string };
 
 /**
@@ -152,6 +103,18 @@ export type MobilePqEnrollView = {
    */
   readonly offer: string;
   readonly phase: MobilePqEnrollPhase;
+  /**
+   * The restore in flight, or the one that just finished. Absent until the user
+   * starts one — the enrollment screen is the entry point for both, and a
+   * progress list on a screen nobody asked to restore from would be noise.
+   */
+  readonly restore?: readonly MobilePqRestoreEntry[];
+  /**
+   * Whether a restore can be offered at all. It needs the Bluetooth driver, so
+   * a build that cannot reach a phone that way does not show the control rather
+   * than showing one that fails when pressed.
+   */
+  readonly restoreAvailable: boolean;
   /**
    * The transport the user is on. Only in `clipboard` is the offer shown as
    * something to copy: an offer on screen beside a Bluetooth button invites
@@ -179,10 +142,25 @@ export type MobilePqEnrollControllerDeps = {
    * then offers only the paste path.
    */
   readonly bluetooth?: (offer: string) => Promise<string>;
+  /**
+   * Runs a whole restore over one connection. Absent when this build cannot
+   * reach a phone over Bluetooth, and the screen then offers no restore at all:
+   * a restore is many round trips, and carrying each of them by clipboard is
+   * several 14 KB pastes per account.
+   */
+  readonly bluetoothRestore?: <T>(
+    drive: (device: MobilePqRestoreDeviceCalls) => Promise<T>,
+  ) => Promise<T>;
   readonly challenge: () => Promise<string>;
   readonly enroll: (draft: MobilePqEnrollDraft & { readonly challenge: string }) => Promise<void>;
   readonly networkId: () => string;
   readonly onEnrolled?: () => Promise<void>;
+  /**
+   * Reports a finished restore once the panel has closed. The panel is gone by
+   * then, so this is the only thing left that can tell the user which accounts
+   * were skipped and why.
+   */
+  readonly onRestoreFinished?: (entries: readonly MobilePqRestoreEntry[]) => void;
   readonly render: (view: MobilePqEnrollView | null) => void;
 };
 
@@ -192,24 +170,14 @@ export type MobilePqEnrollControllerDeps = {
 export type MobilePqEnrollController = {
   readonly cancel: () => void;
   readonly open: () => Promise<void>;
+  /** Asks the phone which accounts to restore, then restores each in turn. */
+  readonly restoreAccounts: () => Promise<void>;
   /** Sends the offer over Bluetooth and enrolls whatever comes back. */
   readonly sendOverBluetooth: () => Promise<void>;
   readonly submit: (pasted: string) => Promise<void>;
   /** Switches transport without touching the outstanding challenge. */
   readonly useTransport: (transport: MobilePqEnrollTransport) => void;
 };
-
-/**
- * Copy shown when a pasted public key is not a well-formed ML-DSA-65 key.
- */
-export const MOBILE_PQ_KEY_INVALID =
-  "That is not an ML-DSA-65 public key. Paste the whole 1952-byte value the app reported.";
-
-/**
- * Copy shown when a pasted proof-of-possession response is malformed.
- */
-export const MOBILE_PQ_POP_INVALID =
-  "That is not a signature from the app. Sign the challenge above and paste the whole response.";
 
 /**
  * Appended to whatever the background refused with.
@@ -230,16 +198,6 @@ export const MOBILE_PQ_CHALLENGE_SPENT =
 export const MOBILE_PQ_PAIRING_PASTE_INVALID =
   "That is not a response from the app. Pair on your phone, then paste the whole reply.";
 
-// The device name is not checked here: it comes from inside the reply, so an
-// empty one means a malformed reply rather than a field the user left blank, and
-// the decoder refuses it before this runs.
-const draftError = (draft: MobilePqEnrollDraft): string | null => {
-  if (!isMlDsa65PublicKey(draft.publicKey)) {
-    return MOBILE_PQ_KEY_INVALID;
-  }
-  return isMlDsa65Signature(draft.signature) ? null : MOBILE_PQ_POP_INVALID;
-};
-
 /**
  * Creates the enrollment controller.
  */
@@ -249,6 +207,7 @@ export const createMobilePqEnrollController = (
   const { challenge: fetchChallenge, enroll, networkId, onEnrolled, render } = deps;
   let challenge: string | null = null;
   let phase: MobilePqEnrollPhase = { kind: "loading" };
+  let restore: readonly MobilePqRestoreEntry[] | null = null;
   // Bluetooth by default where it exists, because it is the path that does not
   // ask the user to carry a 14 KB string by hand.
   let transport: MobilePqEnrollTransport = deps.bluetooth ? "bluetooth" : "clipboard";
@@ -262,6 +221,8 @@ export const createMobilePqEnrollController = (
             challenge,
             offer: encodeMobilePqPairingOffer({ challenge, networkId: networkId() }),
             phase,
+            ...(restore === null ? {} : { restore }),
+            restoreAvailable: deps.bluetoothRestore !== undefined,
             transport,
           },
     );
@@ -284,7 +245,7 @@ export const createMobilePqEnrollController = (
       fail(MOBILE_PQ_PAIRING_PASTE_INVALID);
       return;
     }
-    const invalid = draftError(draft);
+    const invalid = mobilePqDraftError(draft);
     if (invalid !== null) {
       fail(invalid);
       return;
@@ -312,10 +273,12 @@ export const createMobilePqEnrollController = (
     cancel() {
       challenge = null;
       phase = { kind: "loading" };
+      restore = null;
       paint();
     },
     async open() {
       phase = { kind: "loading" };
+      restore = null;
       challenge = "0x0";
       paint();
       try {
@@ -329,6 +292,53 @@ export const createMobilePqEnrollController = (
       }
       phase = { kind: "collect" };
       paint();
+    },
+    async restoreAccounts() {
+      const drive = deps.bluetoothRestore;
+      if (drive === undefined || challenge === null || phase.kind === "restoring") {
+        return;
+      }
+      restore = [];
+      phase = { kind: "restoring" };
+      paint();
+      let finished: readonly MobilePqRestoreEntry[];
+      try {
+        finished = await drive((device) =>
+          runMobilePqRestore({
+            challenge: fetchChallenge,
+            device,
+            enroll,
+            networkId: networkId(),
+            onProgress: (entries) => {
+              restore = entries;
+              paint();
+            },
+          }),
+        );
+      } catch (error) {
+        // Only the picker answer can fail the whole run; a single account is
+        // reported against itself and never reaches here.
+        restore = null;
+        fail(error instanceof Error ? error.message : String(error));
+        return;
+      }
+      // Reported from what the run returned, not from the progress the paints
+      // were driven by: the two agree today, and a report that depends on the
+      // last paint having happened is a report that goes stale the moment one
+      // does not.
+      //
+      // Closing is what ends a finished run. The accounts are in the wallet
+      // behind this panel, and the run also spent the challenge this screen was
+      // holding — every account issues its own, and issuing replaces whatever
+      // was outstanding — so a panel left open would be showing a form that
+      // could only answer "enrollment challenge expired". Reopening issues a
+      // fresh one.
+      challenge = null;
+      restore = null;
+      phase = { kind: "loading" };
+      paint();
+      deps.onRestoreFinished?.(finished);
+      await onEnrolled?.();
     },
     async sendOverBluetooth() {
       const active = challenge;

@@ -21,6 +21,7 @@ import { icon } from "../../shared/icons";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { feltCheckBlock } from "./felt-check";
 import type { MobilePqEnrollView } from "./onboard-session";
+import { type MobilePqRestoreEntry, mobilePqRestoreSummary } from "./restore-session";
 
 // Rendered exactly as the signing takeover renders a transaction hash, through
 // the same block: the phone pads the challenge to 32 big-endian bytes and shows
@@ -41,7 +42,18 @@ const cancelButton = (): string =>
     variant: "ghost",
   });
 
-const enrollBluetoothBody = (): string => `
+// Restore is offered only on the Bluetooth body, and only because it can only
+// work there: it is one round trip per account, and carrying each of those by
+// hand is several 14 KB pastes per account.
+const restoreButton = (): string =>
+  button({
+    attributes: { "data-mobile-pq-enroll-restore": true },
+    label: "Restore accounts",
+    size: "small",
+    variant: "ghost",
+  });
+
+const enrollBluetoothBody = (view: MobilePqEnrollView): string => `
   <div class="ledger-phase-actions">
     ${button({
       attributes: { "data-mobile-pq-enroll-bluetooth": true },
@@ -55,7 +67,8 @@ const enrollBluetoothBody = (): string => `
     label: "Or pair by copy and paste",
     size: "small",
     variant: "ghost",
-  })}`;
+  })}
+  ${view.restoreAvailable ? restoreButton() : ""}`;
 
 // The offer is copyable ONLY here. It is 14 KB of base64url and single-use, so
 // putting it on screen when the user is not carrying it by hand is an invitation
@@ -104,7 +117,39 @@ const enrollClipboardBody = (view: MobilePqEnrollView): string => `
   </form>`;
 
 const enrollBody = (view: MobilePqEnrollView): string =>
-  view.transport === "bluetooth" ? enrollBluetoothBody() : enrollClipboardBody(view);
+  view.transport === "bluetooth" ? enrollBluetoothBody(view) : enrollClipboardBody(view);
+
+// One row per picked account, with what became of it. The name is the phone's
+// own, which is also the name the account ends up with in this wallet, so the
+// list the user approved on the phone reads the same here.
+// Spelled out per outcome rather than defaulted, because the interesting case is
+// the one a default gets wrong: a skipped account with no reason to give would
+// otherwise read as one still being waited on.
+const restoreNote = (entry: MobilePqRestoreEntry): string => {
+  if (entry.outcome === undefined) {
+    return "waiting for your phone";
+  }
+  if (entry.outcome === "present") {
+    return "already in this wallet";
+  }
+  return entry.reason ?? (entry.outcome === "restored" ? "restored" : "skipped");
+};
+
+const restoreRow = (entry: MobilePqRestoreEntry): string => {
+  const mark =
+    entry.outcome === "restored" || entry.outcome === "present" ? icon("lock") : icon("alert");
+  const note = restoreNote(entry);
+  return `<li data-outcome="${escapeHtml(entry.outcome ?? "pending")}">
+    ${entry.outcome === undefined ? "" : mark}
+    <span>${escapeHtml(entry.deviceId)}</span>
+    <span class="ledger-hash-help">${escapeHtml(note)}</span>
+  </li>`;
+};
+
+const restoreList = (entries: readonly MobilePqRestoreEntry[]): string =>
+  entries.length === 0
+    ? "<p>Pick the accounts to restore on your phone.</p>"
+    : `<ul class="section" data-mobile-pq-restore-list>${entries.map(restoreRow).join("")}</ul>`;
 
 const phaseBody = (view: MobilePqEnrollView): string => {
   const phase = view.phase;
@@ -119,6 +164,15 @@ const phaseBody = (view: MobilePqEnrollView): string => {
   if (phase.kind === "enrolling") {
     return "<p>Checking that the device can sign for this key, then deriving the account address.</p>";
   }
+  if (phase.kind === "restoring") {
+    // Said plainly, because it is the part that looks broken otherwise: the keys
+    // are gated per use and cannot be re-policied, so every account really does
+    // need its own approval.
+    const entries = view.restore ?? [];
+    return `<p>Approve each account on your phone. Every one needs its own biometric check — that is how the keys were made and it cannot be changed for keys that already exist.</p>
+      ${entries.length === 0 ? "" : `<p>${escapeHtml(mobilePqRestoreSummary(entries))}</p>`}
+      ${restoreList(entries)}`;
+  }
   if (phase.kind === "error") {
     return `<p class="review-flag" role="alert">${icon("alert")}${escapeHtml(phase.message)}</p>
       ${enrollBody(view)}`;
@@ -132,6 +186,7 @@ const phaseTitle: Readonly<Record<MobilePqEnrollView["phase"]["kind"], string>> 
   error: "That device could not be added",
   loading: "Preparing a challenge",
   reaching: "Waiting for your phone",
+  restoring: "Restoring your accounts",
 };
 
 const phaseLiveness: Readonly<Record<MobilePqEnrollView["phase"]["kind"], string>> = {
@@ -140,6 +195,7 @@ const phaseLiveness: Readonly<Record<MobilePqEnrollView["phase"]["kind"], string
   error: "No account was created.",
   loading: "Asking the wallet for a single-use challenge…",
   reaching: "Name the account on your phone and approve it there…",
+  restoring: "Approve each account on your phone…",
 };
 
 const livenessMark = (view: MobilePqEnrollView): string => {

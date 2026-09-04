@@ -130,6 +130,10 @@ describe("which operation each overlay is given", () => {
           called.push("pair");
           return "refused";
         },
+        restore: async (drive) => {
+          called.push("restore");
+          return drive({ restore: async () => "refused", restoreKey: async () => "refused" });
+        },
         sign: async () => {
           called.push("sign");
           return "refused";

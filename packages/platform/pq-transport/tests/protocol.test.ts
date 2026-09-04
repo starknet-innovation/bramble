@@ -88,6 +88,30 @@ describe("broker commands", () => {
       true,
     );
     expect(isPqBrokerCommand({ kind: "close" })).toBe(true);
+    expect(isPqBrokerCommand({ id: 3, kind: "command", method: "restore", offer: OFFER })).toBe(
+      true,
+    );
+    expect(isPqBrokerCommand({ id: 4, kind: "command", method: "restore-key", offer: OFFER })).toBe(
+      true,
+    );
+  });
+
+  test("a restore command carries an offer and nothing else", () => {
+    // Key-allowlisted per method like the others, so a field that would change
+    // which account is asked about cannot ride along unvalidated.
+    expect(isPqBrokerCommand({ id: 3, kind: "command", method: "restore" })).toBe(false);
+    expect(
+      isPqBrokerCommand({
+        deviceId: "Pixel",
+        id: 3,
+        kind: "command",
+        method: "restore-key",
+        offer: OFFER,
+      }),
+    ).toBe(false);
+    expect(isPqBrokerCommand({ envelope: OFFER, id: 3, kind: "command", method: "restore" })).toBe(
+      false,
+    );
   });
 
   test("refuses an unknown field rather than letting it ride along", () => {

@@ -10,13 +10,17 @@ import { mlDsa65Fixture } from "@mc-wallet/testkit/ml-dsa-fixtures";
 import {
   createMobilePqEnrollController,
   MOBILE_PQ_CHALLENGE_SPENT,
-  MOBILE_PQ_KEY_INVALID,
   MOBILE_PQ_PAIRING_PASTE_INVALID,
+  type MobilePqEnrollControllerDeps,
+  type MobilePqEnrollView,
+} from "../../../../src/sidepanel/journeys/mobile/onboard-session";
+import {
+  MOBILE_PQ_KEY_INVALID,
   MOBILE_PQ_PAIRING_VERSION,
   MOBILE_PQ_POP_INVALID,
   type MobilePqEnrollDraft,
-  type MobilePqEnrollView,
-} from "../../../../src/sidepanel/journeys/mobile/onboard-session";
+} from "../../../../src/sidepanel/journeys/mobile/pairing-reply";
+import type { MobilePqRestoreEntry } from "../../../../src/sidepanel/journeys/mobile/restore-session";
 import {
   fromBase64Url,
   toBase64Url,
@@ -39,13 +43,21 @@ const reply = (patch: Partial<MobilePqEnrollDraft> = {}): string =>
   toBase64Url(JSON.stringify({ ...draft, ...patch, version: MOBILE_PQ_PAIRING_VERSION }));
 
 const harness = (overrides?: {
+  readonly bluetoothRestore?: MobilePqEnrollControllerDeps["bluetoothRestore"];
   readonly challenge?: () => Promise<string>;
   readonly enroll?: (input: unknown) => Promise<void>;
+  readonly onRestoreFinished?: MobilePqEnrollControllerDeps["onRestoreFinished"];
 }) => {
   const views: (MobilePqEnrollView | null)[] = [];
   const enrolled: unknown[] = [];
   let refreshed = 0;
   const controller = createMobilePqEnrollController({
+    ...(overrides?.bluetoothRestore === undefined
+      ? {}
+      : { bluetoothRestore: overrides.bluetoothRestore }),
+    ...(overrides?.onRestoreFinished === undefined
+      ? {}
+      : { onRestoreFinished: overrides.onRestoreFinished }),
     challenge: overrides?.challenge ?? (async () => CHALLENGE),
     networkId: () => "SN_SEPOLIA",
     enroll:
@@ -192,5 +204,145 @@ describe("createMobilePqEnrollController", () => {
     controller.cancel();
     expect(latest(views)).toBe(null);
     expect(enrolled).toEqual([]);
+  });
+});
+
+/**
+ * The restore side of the same controller. It shares the screen with enrollment,
+ * so what matters here is that a restore leaves that screen usable: it spends
+ * challenges the create path was holding, and issuing one replaces whatever was
+ * outstanding.
+ */
+describe("createMobilePqEnrollController restore", () => {
+  const list = toBase64Url(JSON.stringify({ deviceIds: ["Pixel 9 Pro"], version: 1 }));
+
+  const driver =
+    (calls: string[], answers: { readonly list?: string; readonly key?: string } = {}) =>
+    async <T>(
+      drive: (device: {
+        readonly restore: (offer: string) => Promise<string>;
+        readonly restoreKey: (offer: string) => Promise<string>;
+      }) => Promise<T>,
+    ): Promise<T> => {
+      calls.push("open");
+      try {
+        return await drive({
+          restore: async () => answers.list ?? list,
+          restoreKey: async (offer) => {
+            const challenge = (JSON.parse(fromBase64Url(offer) ?? "{}") as Record<string, string>)[
+              "challenge"
+            ] as string;
+            return answers.key ?? reply({ signature: device.sign(challenge) });
+          },
+        });
+      } finally {
+        calls.push("close");
+      }
+    };
+
+  test("a build with no Bluetooth driver offers no restore and does nothing", async () => {
+    const { controller, enrolled, views } = harness();
+    await controller.open();
+    expect(latest(views)?.restoreAvailable).toBe(false);
+    await controller.restoreAccounts();
+    expect(enrolled).toEqual([]);
+    expect(latest(views)?.phase.kind).toBe("collect");
+  });
+
+  test("restores each picked account and closes the panel when it is done", async () => {
+    const calls: string[] = [];
+    const { controller, enrolled, views } = harness({ bluetoothRestore: driver(calls) });
+    await controller.open();
+    expect(latest(views)?.restoreAvailable).toBe(true);
+
+    await controller.restoreAccounts();
+
+    expect(enrolled).toHaveLength(1);
+    // The accounts are in the wallet behind this panel, so a finished run hands
+    // the user back to it rather than leaving a screen to dismiss.
+    expect(latest(views)).toBe(null);
+    // One session for the whole run, opened and closed exactly once: the device
+    // chooser must not run per account.
+    expect(calls).toEqual(["open", "close"]);
+  });
+
+  test("the finished run is reported once the panel has gone", async () => {
+    // The only thing left that can say which accounts were skipped and why.
+    const runs: (readonly MobilePqRestoreEntry[])[] = [];
+    const { controller, views } = harness({
+      bluetoothRestore: driver([]),
+      onRestoreFinished: (entries) => {
+        // Reported after the panel closed, never before: a report the panel
+        // could still overwrite would be a report of a run still going.
+        expect(latest(views)).toBe(null);
+        runs.push(entries);
+      },
+    });
+    await controller.open();
+    await controller.restoreAccounts();
+
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.map((entry) => entry.outcome)).toEqual(["restored"]);
+  });
+
+  test("the shell is refreshed after a restore, so the accounts appear", async () => {
+    const { controller, refreshed } = harness({ bluetoothRestore: driver([]) });
+    await controller.open();
+    await controller.restoreAccounts();
+    expect(refreshed()).toBe(1);
+  });
+
+  test("a run that restored nothing still closes and still reports", async () => {
+    const runs: (readonly MobilePqRestoreEntry[])[] = [];
+    const { controller, enrolled, views } = harness({
+      bluetoothRestore: driver([], { key: "not-a-reply" }),
+      onRestoreFinished: (entries) => runs.push(entries),
+    });
+    await controller.open();
+    await controller.restoreAccounts();
+
+    expect(enrolled).toEqual([]);
+    expect(latest(views)).toBe(null);
+    expect(runs[0]?.map((entry) => entry.outcome)).toEqual(["skipped"]);
+  });
+
+  test("an unreadable picker answer fails the run and keeps the screen open", async () => {
+    const { controller, enrolled, views } = harness({
+      bluetoothRestore: driver([], { list: "not-a-list" }),
+    });
+    await controller.open();
+    await controller.restoreAccounts();
+
+    const view = latest(views);
+    expect(view?.phase.kind).toBe("error");
+    // No half-finished run left on screen to read.
+    expect(view?.restore).toBeUndefined();
+    expect(enrolled).toEqual([]);
+  });
+
+  test("reopening after a restore gives a clean screen and a fresh challenge", async () => {
+    const issued: string[] = [];
+    const { controller, views } = harness({
+      bluetoothRestore: driver([]),
+      challenge: async () => {
+        const next = `0x${String(issued.length + 1).padStart(2, "0")}`;
+        issued.push(next);
+        return next;
+      },
+    });
+    await controller.open();
+    await controller.restoreAccounts();
+    expect(latest(views)).toBe(null);
+
+    // The run spent the challenge the screen was holding, and every account
+    // issued its own. Reopening is what gets another, which is why the panel
+    // closing is what ends the run rather than a phase that stays up over a
+    // form that could only answer "expired".
+    await controller.open();
+    const view = latest(views);
+    expect(view?.restore).toBeUndefined();
+    expect(view?.phase.kind).toBe("collect");
+    expect(view?.challenge).toBe(issued.at(-1) as string);
+    expect(view?.challenge).not.toBe(issued[0] as string);
   });
 });

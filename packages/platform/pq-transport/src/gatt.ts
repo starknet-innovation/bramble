@@ -105,7 +105,10 @@ export type PqReply = {
  */
 export type PqConnection = {
   readonly close: () => void;
-  readonly exchange: (tag: "pair" | "sign", payload: string) => Promise<PqReply>;
+  readonly exchange: (
+    tag: "pair" | "sign" | "restore" | "restore-key",
+    payload: string,
+  ) => Promise<PqReply>;
 };
 
 const writeChunk = async (
@@ -232,5 +235,8 @@ const unwrap = (expected: PqFrameTag, reply: PqReply): string => {
  */
 export const pqDeviceFrom = (connection: PqConnection): PqDevice => ({
   pair: async (offer) => unwrap("paired", await connection.exchange("pair", offer)),
+  restore: async (offer) => unwrap("restored", await connection.exchange("restore", offer)),
+  restoreKey: async (offer) =>
+    unwrap("restored-key", await connection.exchange("restore-key", offer)),
   sign: async (envelope) => unwrap("signed", await connection.exchange("sign", envelope)),
 });

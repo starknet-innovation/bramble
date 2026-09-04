@@ -22,6 +22,12 @@ type ExtensionGlobal = typeof globalThis & {
   readonly chrome?: Parameters<typeof startWalletUi>[1];
 };
 
+// Read off the port rather than imported: `@mc-wallet/wallet-ui` exports only
+// `./start`, and taking the shape from the parameter it is passed as means the
+// implementation below is checked against the declaration the panel actually
+// uses instead of a second copy that could drift from it.
+type MobilePqBluetoothPort = NonNullable<Parameters<typeof startWalletUi>[2]>;
+
 // Must be the same bound the background sign queue uses (MOBILE_PQ_SIGN_TIMEOUT
 // in background/routing/message-context.ts). A transport that gives up while the
 // queue still waits leaves the request parked with the user told it timed out;
@@ -45,9 +51,7 @@ const MOBILE_PQ_COMMAND_TIMEOUT = {
 // CODE there, so without this the user would read "rejected-on-device". The
 // panel stays ignorant of the transport's vocabulary, which is the point of the
 // seam.
-const overBluetooth = async (
-  use: (session: PqDeviceSession) => Promise<string>,
-): Promise<string> => {
+const withPqSession = async <T>(use: (session: PqDeviceSession) => Promise<T>): Promise<T> => {
   const browser = pqExtensionBrowser();
   if (!browser) {
     throw new Error(pqMessage("bluetooth-unavailable"));
@@ -62,15 +66,48 @@ const overBluetooth = async (
   });
   try {
     return await use(session);
-  } catch (error) {
-    throw new Error(pqMessage(asPqRejection(error).code));
   } finally {
     await session.close();
   }
 };
 
+const overBluetooth = (use: (session: PqDeviceSession) => Promise<string>): Promise<string> =>
+  withPqSession(async (session) => {
+    try {
+      return await use(session);
+    } catch (error) {
+      throw new Error(pqMessage(asPqRejection(error).code));
+    }
+  });
+
+/** Translates one device call, leaving the caller free to carry on after it. */
+const translated =
+  (call: (offer: string) => Promise<string>) =>
+  async (offer: string): Promise<string> => {
+    try {
+      return await call(offer);
+    } catch (error) {
+      throw new Error(pqMessage(asPqRejection(error).code));
+    }
+  };
+
+// Restore holds ONE session open across every account, which is why it takes a
+// driver rather than a payload: the chooser runs once, and the panel then asks
+// the phone for the accounts the user picked one at a time over that same
+// connection. Translation is per call rather than around the whole drive,
+// because a refusal is reported beside the account it belongs to and must not
+// end the run — the remaining accounts still restore.
+const overBluetoothRestore: MobilePqBluetoothPort["restore"] = (drive) =>
+  withPqSession((session) =>
+    drive({
+      restore: translated(session.restore),
+      restoreKey: translated(session.restoreKey),
+    }),
+  );
+
 const mobilePqBluetooth = {
   pair: (offer: string) => overBluetooth((session) => session.pair(offer)),
+  restore: overBluetoothRestore,
   sign: (envelope: string) => overBluetooth((session) => session.sign(envelope)),
 };
 

@@ -105,6 +105,8 @@ export type PqSessionRuntime = {
 export type PqDeviceSession = {
   readonly close: () => Promise<void>;
   readonly pair: (offer: string) => Promise<string>;
+  readonly restore: (offer: string) => Promise<string>;
+  readonly restoreKey: (offer: string) => Promise<string>;
   readonly sign: (envelope: string) => Promise<string>;
 };
 
@@ -117,6 +119,8 @@ type ExtensionGlobal = typeof globalThis & {
 // that accepts neither method's fields.
 type PqBrokerCall =
   | { readonly kind: "command"; readonly method: "pair"; readonly offer: string }
+  | { readonly kind: "command"; readonly method: "restore"; readonly offer: string }
+  | { readonly kind: "command"; readonly method: "restore-key"; readonly offer: string }
   | { readonly envelope: string; readonly kind: "command"; readonly method: "sign" };
 
 type PendingCommand = {
@@ -161,7 +165,7 @@ export const PQ_READY_TIMEOUT: PqTimeout = { ms: 120_000, schedule };
 
 /**
  * Opens the device tab and resolves once its broker reports ready. The returned
- * session proxies `pair` and `sign` to that tab and owns its lifecycle. Closing
+ * session proxies each device operation to that tab and owns its lifecycle. Closing
  * the tab early rejects with `picker-cancelled` before ready and
  * `panel-context-lost` after, and every wait is bounded, so a lost chooser or a
  * dead context cannot wedge signing.
@@ -330,6 +334,9 @@ export const requestPqDeviceSession = async (
       await browser.tabs.remove(tabId as number).catch(() => undefined);
     },
     pair: (offer) => expect({ kind: "command", method: "pair", offer }, isPqTransportPayload),
+    restore: (offer) => expect({ kind: "command", method: "restore", offer }, isPqTransportPayload),
+    restoreKey: (offer) =>
+      expect({ kind: "command", method: "restore-key", offer }, isPqTransportPayload),
     sign: (envelope) => expect({ envelope, kind: "command", method: "sign" }, isPqSignedReply),
   };
 };

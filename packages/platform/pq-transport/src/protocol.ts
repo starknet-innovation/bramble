@@ -95,8 +95,11 @@ export const isPqTransportPayload = (value: unknown): value is string =>
 export const isPqSignedReply = (value: unknown): value is string => isMlDsa65Signature(value);
 
 /**
- * Device operation requested by the panel and served by the retained tab. Two
- * methods, because the phone does two things: enroll once, then sign.
+ * Device operation requested by the panel and served by the retained tab.
+ *
+ * Four methods: enroll a new key, sign, and the two halves of a restore — ask
+ * which existing accounts the user picked, then ask one of them to prove itself.
+ * The restore pair is two commands because it is two frames; see `./framing`.
  */
 export type PqBrokerCommand =
   | {
@@ -110,6 +113,18 @@ export type PqBrokerCommand =
       readonly id: number;
       readonly kind: "command";
       readonly method: "sign";
+    }
+  | {
+      readonly id: number;
+      readonly kind: "command";
+      readonly method: "restore";
+      readonly offer: string;
+    }
+  | {
+      readonly id: number;
+      readonly kind: "command";
+      readonly method: "restore-key";
+      readonly offer: string;
     }
   | { readonly kind: "close" };
 
@@ -152,7 +167,11 @@ export const isPqBrokerCommand = (value: unknown): value is PqBrokerCommand => {
   if (value["kind"] !== "command" || !isRequestId(value["id"])) {
     return false;
   }
-  if (value["method"] === "pair") {
+  if (
+    value["method"] === "pair" ||
+    value["method"] === "restore" ||
+    value["method"] === "restore-key"
+  ) {
     return (
       hasOnlyKnownKeys(value, ["id", "kind", "method", "offer"]) &&
       isPqTransportPayload(value["offer"])

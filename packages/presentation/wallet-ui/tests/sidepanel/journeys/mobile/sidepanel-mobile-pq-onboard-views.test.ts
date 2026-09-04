@@ -26,9 +26,17 @@ const screen = (
   phase: MobilePqEnrollView["phase"],
   transport: MobilePqEnrollView["transport"] = "clipboard",
   bluetoothAvailable = false,
+  restoreAvailable = false,
 ): string =>
   mobilePqEnrollScreen(
-    { bluetoothAvailable, challenge: CHALLENGE, offer: "b2ZmZXI", phase, transport },
+    {
+      bluetoothAvailable,
+      challenge: CHALLENGE,
+      offer: "b2ZmZXI",
+      phase,
+      restoreAvailable,
+      transport,
+    },
     status,
   );
 
@@ -62,6 +70,7 @@ describe("post-quantum enrollment screen", () => {
           challenge: "0x2f",
           offer: "b2ZmZXI",
           phase: { kind: "collect" },
+          restoreAvailable: false,
           transport: "clipboard",
         },
         status,
@@ -143,5 +152,93 @@ describe("post-quantum enrollment screen", () => {
     for (const gone of ["device", "public-key", "class-hash", "pop", "key-commitment"]) {
       expect(html).not.toContain(`data-mobile-pq-${gone}`);
     }
+  });
+});
+
+/**
+ * The restore screen. Its one job beyond listing accounts is telling the user
+ * why they are about to be asked for several biometric approvals — without that
+ * the second prompt looks like the first one failed.
+ */
+describe("post-quantum restore screen", () => {
+  const withRestore = (
+    phase: MobilePqEnrollView["phase"],
+    restore: MobilePqEnrollView["restore"],
+  ): string =>
+    mobilePqEnrollScreen(
+      {
+        bluetoothAvailable: true,
+        challenge: CHALLENGE,
+        offer: "b2ZmZXI",
+        phase,
+        ...(restore === undefined ? {} : { restore }),
+        restoreAvailable: true,
+        transport: "bluetooth",
+      },
+      status,
+    );
+
+  test("the restore control shows only where it can work", () => {
+    // It needs the Bluetooth driver: a restore is one round trip per account,
+    // and the clipboard path cannot carry that.
+    expect(screen({ kind: "collect" }, "bluetooth", true, true)).toContain(
+      "data-mobile-pq-enroll-restore",
+    );
+    expect(screen({ kind: "collect" }, "bluetooth", true, false)).not.toContain(
+      "data-mobile-pq-enroll-restore",
+    );
+    expect(screen({ kind: "collect" }, "clipboard", true, true)).not.toContain(
+      "data-mobile-pq-enroll-restore",
+    );
+  });
+
+  test("an account already in the wallet is not reported as a failure", () => {
+    const html = withRestore({ kind: "restoring" }, [
+      { deviceId: "Pixel 9 Pro", outcome: "present" },
+    ]);
+    expect(html).toContain("already in this wallet");
+  });
+
+  test("a skipped account with no reason still reads as skipped", () => {
+    // The case a default gets wrong: it must not read as one still pending.
+    const html = withRestore({ kind: "restoring" }, [{ deviceId: "a", outcome: "skipped" }]);
+    expect(html).toContain("skipped");
+    expect(html).not.toContain("waiting for your phone");
+  });
+
+  test("the running tally and each account's reason are both on screen", () => {
+    const html = withRestore({ kind: "restoring" }, [
+      { deviceId: "a", outcome: "restored" },
+      { deviceId: "b", outcome: "skipped", reason: "Your phone declined the request." },
+      { deviceId: "c" },
+    ]);
+    expect(html).toContain("Restored 1 of 3, 1 skipped.");
+    expect(html).toContain("Your phone declined the request.");
+  });
+
+  test("says every account needs its own approval, and names each one", () => {
+    const html = withRestore({ kind: "restoring" }, [
+      { deviceId: "Pixel 9 Pro", outcome: "restored" },
+      { deviceId: "Spare phone" },
+    ]);
+    expect(html).toContain("its own biometric check");
+    expect(html).toContain("Pixel 9 Pro");
+    expect(html).toContain("Spare phone");
+    // The one still to come is not claimed as finished.
+    expect(html).toContain('data-outcome="pending"');
+  });
+
+  test("a device name is escaped, never rendered as markup", () => {
+    const html = withRestore({ kind: "restoring" }, [
+      { deviceId: "<img src=x onerror=alert(1)>", outcome: "skipped" },
+    ]);
+    expect(html).not.toContain("<img src=x");
+    expect(html).toContain("&lt;img src=x");
+  });
+
+  test("before the phone answers, the picker is what the screen asks for", () => {
+    expect(withRestore({ kind: "restoring" }, [])).toContain(
+      "Pick the accounts to restore on your phone.",
+    );
   });
 });

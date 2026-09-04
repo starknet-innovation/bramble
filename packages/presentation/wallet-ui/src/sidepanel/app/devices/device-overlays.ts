@@ -21,6 +21,7 @@ import {
   createMobilePqOnboardRuntime,
   type MobilePqOnboardRuntime,
 } from "../../journeys/mobile/onboard-runtime";
+import type { MobilePqRestoreDeviceCalls } from "../../journeys/mobile/restore-session";
 import {
   createMobilePqSignRuntime,
   type MobilePqSignRuntime,
@@ -36,6 +37,16 @@ import { overlayMount } from "../../shared/dom";
  */
 export type MobilePqBluetooth = {
   readonly pair: (offer: string) => Promise<string>;
+  /**
+   * Runs a whole restore over **one** connection.
+   *
+   * A driver rather than a payload, because a restore is many exchanges: the
+   * phone is asked which accounts the user picked, then each of those accounts
+   * is asked to prove itself, and all of it has to happen on the connection the
+   * chooser already granted. One call per account would run Chrome's device
+   * chooser once per account.
+   */
+  readonly restore: <T>(drive: (device: MobilePqRestoreDeviceCalls) => Promise<T>) => Promise<T>;
   readonly sign: (envelope: string) => Promise<string>;
 };
 
@@ -85,7 +96,12 @@ export const createDeviceOverlays = (deps: DeviceOverlayDeps): DeviceOverlays =>
     // Enrollment sends a pairing offer, so it takes `pair`. Getting these two
     // the wrong way round tags the frame wrongly and the phone rejects it with a
     // message about the OTHER message type, which is a confusing way to find out.
-    ...(deps.mobilePqBluetooth === undefined ? {} : { bluetooth: deps.mobilePqBluetooth.pair }),
+    ...(deps.mobilePqBluetooth === undefined
+      ? {}
+      : {
+          bluetooth: deps.mobilePqBluetooth.pair,
+          bluetoothRestore: deps.mobilePqBluetooth.restore,
+        }),
     mount: overlayMount("ledger-onboard-overlay"),
     networkId: deps.networkId,
     refresh: deps.refresh,

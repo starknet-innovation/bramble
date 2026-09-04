@@ -73,14 +73,32 @@ export const PQ_FRAME_HEADER_BYTES = 5;
  * with `paired` is a broken phone, and naming the directions apart makes that a
  * refusal at the boundary rather than something a caller has to check for.
  */
-export type PqFrameTag = "pair" | "sign" | "paired" | "signed" | "refused";
+export type PqFrameTag =
+  | "pair"
+  | "sign"
+  | "restore"
+  | "restore-key"
+  | "paired"
+  | "signed"
+  | "restored"
+  | "restored-key"
+  | "refused";
 
 // Distinct high bit for replies, so a frame read in the wrong direction cannot
 // be mistaken for a valid one. `refused` is a reply only.
+//
+// Restore is two tags rather than one because it is two exchanges: `restore`
+// asks which accounts the user picked, then one `restore-key` per account asks
+// that account to prove itself. Splitting them is forced by size — one
+// account's reply is 86% of PQ_MAX_PAYLOAD_BYTES, so two do not fit in a frame.
 const TAG_BYTES: Readonly<Record<PqFrameTag, number>> = {
   pair: 0x01,
   paired: 0x81,
   refused: 0xff,
+  restore: 0x03,
+  "restore-key": 0x04,
+  restored: 0x83,
+  "restored-key": 0x84,
   sign: 0x02,
   signed: 0x82,
 };

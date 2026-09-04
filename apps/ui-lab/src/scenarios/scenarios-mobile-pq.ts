@@ -116,7 +116,37 @@ const enrollCheckpoint = (
         challenge: ENROLL_CHALLENGE,
         offer: ENROLL_OFFER,
         phase,
+        restoreAvailable: false,
         transport: "clipboard",
+      },
+      statusFor(),
+    ),
+  id,
+  label,
+  narrative,
+  state: { ...state, fixture: true, secretsRead: false },
+});
+
+// Restore only exists over Bluetooth, so its checkpoints are the one place this
+// scenario shows the Bluetooth body.
+const restoreCheckpoint = (
+  id: string,
+  phase: MobilePqEnrollView["phase"],
+  restore: MobilePqEnrollView["restore"],
+  label: string,
+  narrative: string,
+  state: ScenarioCheckpoint["state"],
+): ScenarioCheckpoint => ({
+  content: () =>
+    mobilePqEnrollScreen(
+      {
+        bluetoothAvailable: true,
+        challenge: ENROLL_CHALLENGE,
+        offer: ENROLL_OFFER,
+        phase,
+        ...(restore === undefined ? {} : { restore }),
+        restoreAvailable: true,
+        transport: "bluetooth",
       },
       statusFor(),
     ),
@@ -175,9 +205,37 @@ export const mobilePqOnboardingScenario: WalletScenario = {
       "A well-formed key whose signature does not verify. The background stored nothing, and because the challenge is single-use recovery is a fresh one rather than a retry of this form.",
       { accountCreated: false, challenge: "spent", refusedBy: "background" },
     ),
+    restoreCheckpoint(
+      "restore-offer",
+      { kind: "collect" },
+      undefined,
+      "Restore an existing device",
+      "A wallet that lost its storage has not lost the accounts: the key is the account, and the phone still holds it. Restore sits under pairing rather than beside it because it is the rarer intent, and pairing a phone that already has keys would mint new ones at new addresses.",
+      { challenge: "issued", route: "restore" },
+    ),
+    restoreCheckpoint(
+      "restoring",
+      { kind: "restoring" },
+      [{ deviceId: "Pixel 9 Pro", outcome: "restored" }, { deviceId: "Spare phone" }],
+      "One approval per account",
+      "Each account carries its own proof over its own challenge, so each needs its own biometric approval on the phone. The count is on screen because the second prompt otherwise reads as the first one having failed — the keys are gated per use, fixed when they were generated, and that cannot be relaxed for keys that already exist.",
+      { challenge: "issued", verifying: true },
+    ),
+    restoreCheckpoint(
+      "restore-partial",
+      { kind: "restoring" },
+      [
+        { deviceId: "Pixel 9 Pro", outcome: "restored" },
+        { deviceId: "Spare phone", outcome: "skipped", reason: "Your phone declined the request." },
+        { deviceId: "Old phone", outcome: "present" },
+      ],
+      "A partial restore is still a restore",
+      "One declined approval costs one account. Asking per account is what buys that: everything already verified is already stored, so the run reports what it got rather than rolling back what it did. An account this wallet already holds is reported as such rather than as a failure. There is no finished screen after this one — the panel closes and leaves a toast, because the accounts are in the wallet behind it and a summary nobody can act on is a screen to dismiss.",
+      { accountCreated: true, challenge: "spent" },
+    ),
   ],
   description:
-    "Post-quantum device enrollment: chooser entry, challenge issuance, the proof-of-possession form, and both refusal paths.",
+    "Post-quantum device enrollment: chooser entry, challenge issuance, the proof-of-possession form, both refusal paths, and restoring accounts the phone still holds keys for.",
   id: "mobile-pq-onboarding",
   surface: "sidepanel",
   title: "Post-quantum device onboarding",

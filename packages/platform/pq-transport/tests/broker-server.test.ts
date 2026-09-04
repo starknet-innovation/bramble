@@ -14,6 +14,7 @@ import { PqRejection } from "@mc-wallet/pq-transport/errors";
 
 const OFFER = "eyJjaGFsbGVuZ2UiOiIweDEifQ";
 const PAIRING_REPLY = "eyJkZXZpY2VJZCI6IlBpeGVsIn0";
+const RESTORE_LIST_REPLY = "eyJkZXZpY2VJZHMiOlsiUGl4ZWwiXSwidmVyc2lvbiI6MX0";
 const SIGNED_REPLY = `0x${"ab".repeat(3309)}`;
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -48,6 +49,8 @@ const createFakeChannel = (): {
 
 const stubDevice = (overrides: Partial<PqDevice> = {}): PqDevice => ({
   pair: async () => PAIRING_REPLY,
+  restore: async () => RESTORE_LIST_REPLY,
+  restoreKey: async () => PAIRING_REPLY,
   sign: async () => SIGNED_REPLY,
   ...overrides,
 });
@@ -83,6 +86,48 @@ describe("pq broker server", () => {
     await tick();
     expect(fake.posts[2]).toEqual({ id: 2, kind: "response", ok: true, value: SIGNED_REPLY });
   });
+
+  test("each restore command reaches its own device operation", async () => {
+    const fake = createFakeChannel();
+    const called: string[] = [];
+    servePqBroker(
+      fake.channel,
+      stubDevice({
+        restore: async () => {
+          called.push("restore");
+          return RESTORE_LIST_REPLY;
+        },
+        restoreKey: async () => {
+          called.push("restoreKey");
+          return PAIRING_REPLY;
+        },
+      }),
+      () => undefined,
+    );
+
+    fake.emit({ id: 1, kind: "command", method: "restore", offer: OFFER });
+    await tick();
+    fake.emit({ id: 2, kind: "command", method: "restore-key", offer: OFFER });
+    await tick();
+
+    // Both served over the same channel, one after the other: a restore holds
+    // one connection open across every account.
+    expect(called).toEqual(["restore", "restoreKey"]);
+    expect(fake.posts[1]).toEqual({
+      id: 1,
+      kind: "response",
+      ok: true,
+      value: RESTORE_LIST_REPLY,
+    });
+    expect(fake.posts[2]).toEqual({ id: 2, kind: "response", ok: true, value: PAIRING_REPLY });
+  });
+
+  // No sibling test asserting a restore reply is rejected for being a bare
+  // signature: it cannot be, and that is by design rather than an oversight.
+  // Lowercase `0x` hex is itself valid base64url, which is the whole reason
+  // frames carry a tag — so a restore reply is bounded and grammar-checked here,
+  // and rejected as the wrong *content* by the panel's decoder. See
+  // `sidepanel-mobile-pq-restore-session.test.ts`.
 
   test("refuses a reply of the wrong shape for the command it answers", async () => {
     const fake = createFakeChannel();

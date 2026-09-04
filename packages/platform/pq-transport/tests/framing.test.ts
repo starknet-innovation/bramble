@@ -127,6 +127,27 @@ describe("pq framing", () => {
     });
   });
 
+  test("the restore tags round-trip in both directions", () => {
+    for (const tag of ["restore", "restore-key", "restored", "restored-key"] as const) {
+      expect(pushAll(chunkForWrite(framePayload(tag, "eyJhIjoxfQ")))).toEqual({
+        kind: "complete",
+        payload: "eyJhIjoxfQ",
+        tag,
+      });
+    }
+  });
+
+  test("one restored account fits a frame, which is why they go one at a time", () => {
+    // pq-signer's own `pairing-reply.txt` fixture measures 14,126 bytes, and a
+    // restored account's reply is that same shape. Two of them do not fit, and
+    // that is what forced the restore into two exchanges instead of one.
+    const ONE_ACCOUNT = 14_126;
+    expect(framePayload("restored-key", "x".repeat(ONE_ACCOUNT))).toHaveLength(
+      PQ_FRAME_HEADER_BYTES + ONE_ACCOUNT,
+    );
+    expect(() => framePayload("restored-key", "x".repeat(ONE_ACCOUNT * 2))).toThrow(RangeError);
+  });
+
   test("an unknown tag is invalid rather than passed on", () => {
     expect(pushAll([framedWith(3, new TextEncoder().encode("abc"), 0x7f)])).toEqual({
       kind: "invalid",

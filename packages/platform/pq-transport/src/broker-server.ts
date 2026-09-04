@@ -30,6 +30,8 @@ import {
  */
 export type PqDevice = {
   readonly pair: (offer: string) => Promise<string>;
+  readonly restore: (offer: string) => Promise<string>;
+  readonly restoreKey: (offer: string) => Promise<string>;
   readonly sign: (envelope: string) => Promise<string>;
 };
 
@@ -51,14 +53,28 @@ export type PqBrokerChannel = {
 
 type DeviceCommand = Exclude<PqBrokerCommand, { readonly kind: "close" }>;
 
-const runCommand = (device: PqDevice, command: DeviceCommand): Promise<string> =>
-  command.method === "pair" ? device.pair(command.offer) : device.sign(command.envelope);
+const runCommand = (device: PqDevice, command: DeviceCommand): Promise<string> => {
+  switch (command.method) {
+    case "pair":
+      return device.pair(command.offer);
+    case "restore":
+      return device.restore(command.offer);
+    case "restore-key":
+      return device.restoreKey(command.offer);
+    default:
+      return device.sign(command.envelope);
+  }
+};
 
 // Which shape the phone's reply must have depends on the command it answers, and
 // never on the string itself: lowercase hex is valid base64url, so sniffing
 // would accept a signing reply as a pairing reply. See `./protocol`.
+//
+// Only `sign` answers in hex. Both restore replies are base64url JSON, as a
+// pairing reply is — the per-account one is byte for byte a pairing reply, which
+// is what lets the panel decode it with the decoder it already has.
 const isExpectedReply = (command: DeviceCommand, reply: unknown): boolean =>
-  command.method === "pair" ? isPqTransportPayload(reply) : isPqSignedReply(reply);
+  command.method === "sign" ? isPqSignedReply(reply) : isPqTransportPayload(reply);
 
 const rejectionCode = (error: unknown): PqRejectionCode =>
   error instanceof PqRejection ? error.code : "unexpected-device-error";

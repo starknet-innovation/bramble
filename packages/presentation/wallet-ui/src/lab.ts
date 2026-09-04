@@ -18,6 +18,7 @@ export * from "./sidepanel/journeys/ledger/sign-session";
 export * from "./sidepanel/journeys/ledger/sign-views";
 export * from "./sidepanel/journeys/mobile/onboard-session";
 export * from "./sidepanel/journeys/mobile/onboard-views";
+export * from "./sidepanel/journeys/mobile/pairing-reply";
 export * from "./sidepanel/journeys/mobile/sign-envelope";
 export * from "./sidepanel/journeys/mobile/sign-session";
 export * from "./sidepanel/journeys/mobile/sign-views";

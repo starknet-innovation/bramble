@@ -11,13 +11,15 @@
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { bindCopyButtons, renderFragment } from "../../shared/dom";
+import { bindCopyButtons, renderFragment, showToast } from "../../shared/dom";
 import {
   createMobilePqEnrollController,
   type MobilePqEnrollController,
+  type MobilePqEnrollControllerDeps,
   type MobilePqEnrollView,
 } from "./onboard-session";
 import { mobilePqEnrollScreen } from "./onboard-views";
+import { mobilePqRestoreDetail, mobilePqRestoreSummary } from "./restore-session";
 
 /**
  * Collaborators the binder needs: the overlay `mount` it owns, a `status`
@@ -31,6 +33,11 @@ export type MobilePqOnboardRuntimeDeps = {
    * has no way to reach one, and the journey then offers only the paste path.
    */
   readonly bluetooth?: (offer: string) => Promise<string>;
+  /**
+   * Runs a whole restore over one connection. Absent when this build has no way
+   * to reach a phone over Bluetooth, and the journey then offers no restore.
+   */
+  readonly bluetoothRestore?: MobilePqEnrollControllerDeps["bluetoothRestore"];
   readonly mount: HTMLElement;
   readonly networkId: () => string;
   readonly refresh: () => Promise<void>;
@@ -81,6 +88,12 @@ export const createMobilePqOnboardRuntime = (
         void controller.sendOverBluetooth();
       });
     mount
+      .querySelector<HTMLButtonElement>("[data-mobile-pq-enroll-restore]")
+      ?.addEventListener("click", (event) => {
+        event.preventDefault();
+        void controller.restoreAccounts();
+      });
+    mount
       .querySelector<HTMLButtonElement>("[data-mobile-pq-enroll-use-clipboard]")
       ?.addEventListener("click", (event) => {
         event.preventDefault();
@@ -113,7 +126,21 @@ export const createMobilePqOnboardRuntime = (
 
   controller = createMobilePqEnrollController({
     ...(deps.bluetooth === undefined ? {} : { bluetooth: deps.bluetooth }),
+    ...(deps.bluetoothRestore === undefined ? {} : { bluetoothRestore: deps.bluetoothRestore }),
     challenge: () => wallet.loadMobilePqEnrollChallenge(),
+    // The panel is already closed by the time this runs, so the toast is what
+    // carries the outcome. `details` keeps every account's reason behind the
+    // copy control — a skipped account would otherwise be visible only as one
+    // that is not there.
+    onRestoreFinished: (entries) => {
+      const skipped = entries.some((entry) => entry.outcome === "skipped");
+      showToast(
+        mobilePqRestoreSummary(entries),
+        skipped ? "error" : "success",
+        mount,
+        mobilePqRestoreDetail(entries),
+      );
+    },
     enroll: async (draft) => {
       const accountId = await wallet.addMobilePqAccount({ ...draft, networkId: networkId() });
       // The name the user typed on their phone becomes the account's name here,

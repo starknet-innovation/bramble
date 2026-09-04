@@ -129,6 +129,8 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/onboard-runtime.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/onboard-session.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/onboard-views.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/pairing-reply.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/restore-session.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/runtime-client.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/sign-envelope.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/mobile/sign-runtime.ts",
