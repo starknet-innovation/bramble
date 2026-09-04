@@ -17,13 +17,26 @@
 
 set -e
 
-# Release-branch immutability guard (issue #302). Runs FIRST and reads the
+# Release-branch immutability guard (issue #302). Runs FIRST and consumes the
 # pushed refs from stdin: it refuses a push that advances a `release/v*` branch
 # whose REMOTE tip is already integrated into `main`, so the guard still fires
 # when the accidental commit was made before the hooks were enabled. Fails
-# closed when ancestry or the fetch cannot be resolved.
-echo "pre-push: release-branch guard"
-bun run scripts/release-branch-guard.ts push
+# closed when integration or the fetch cannot be resolved. The `release/v`
+# match below is only a cheap filter (the guard owns the real grammar) so an
+# ordinary push never depends on `bun`.
+pushed_refs="$(cat)"
+if command -v bun >/dev/null 2>&1; then
+  echo "pre-push: release-branch guard"
+  printf '%s\n' "$pushed_refs" | bun run scripts/release-branch-guard.ts push
+else
+  case "$pushed_refs" in
+    *refs/heads/release/v*)
+      echo "pre-push: bun is required to check whether the pushed release branch is already integrated into main." >&2
+      echo "pre-push: refusing the push; install bun (https://bun.sh) to verify it." >&2
+      exit 1
+      ;;
+  esac
+fi
 
 if [ ! -x node_modules/.bin/biome ]; then
   echo "pre-push: node_modules not found; run 'bun install' to enable local checks. Skipping."

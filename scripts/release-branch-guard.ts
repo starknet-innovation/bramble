@@ -44,7 +44,7 @@ export const evaluateReleaseBranchGuard = (input: GuardInput): GuardVerdict => {
   if (input.integrated === null) {
     return {
       ok: false,
-      reason: `release-branch guard: could not determine whether ${input.branch} is already integrated into main. Run \`git fetch origin main ${input.branch}\` and retry; refusing to ${input.action} until ancestry is known.`,
+      reason: `release-branch guard: could not determine whether ${input.branch} is already integrated into main. Run \`git fetch origin main ${input.branch}\` and retry; refusing to ${input.action} until integration is known.`,
     };
   }
   if (input.integrated) {

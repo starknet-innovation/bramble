@@ -5,14 +5,26 @@
 # Enable once per clone:
 #   git config core.hooksPath .githooks
 #
-# Refuses a commit made on a `release/v*` branch whose tip `main` already
-# contains — such a commit is orphaned from the development line. It fails
-# CLOSED: if ancestry cannot be determined (no `origin/main`, no `bun`), the
-# commit is refused with the remediation printed by the guard.
+# Refuses a commit made on a `release/v*` branch that `main` has already
+# integrated — such a commit is orphaned from the development line. The real
+# decision lives in `scripts/release-branch-guard.ts`; the prefix test below is
+# only a cheap filter so an ordinary commit never depends on `bun`.
 #
 # Bypass a single commit with:
 #   git commit --no-verify
 
 set -e
+
+branch="$(git symbolic-ref --short --quiet HEAD || true)"
+case "$branch" in
+  release/v*) ;;
+  *) exit 0 ;;
+esac
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "pre-commit: bun is required to check whether $branch is already integrated into main." >&2
+  echo "pre-commit: refusing the commit; install bun (https://bun.sh) to verify it." >&2
+  exit 1
+fi
 
 exec bun run scripts/release-branch-guard.ts commit
