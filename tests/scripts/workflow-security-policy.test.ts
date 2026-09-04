@@ -280,6 +280,35 @@ describe("workflow security policy", () => {
       replacement: "pull_request:\n    branches: [main]",
       failure: "release integration must run only on pushes to release branches",
     },
+    // The deploy credential's in-tree half. The enforcing control against a
+    // foreign ref is the environment's deployment-branch policy, which lives in
+    // repository settings; these keep the workflow from quietly losing the parts
+    // of the boundary a diff can show.
+    {
+      name: "rejects a website deploy whose push filter names more than one branch",
+      workflow: "website-deploy.yml",
+      search: 'branches: ["',
+      replacement: 'branches: ["main", "',
+      failure:
+        ".github/workflows/website-deploy.yml must trigger on exactly one literal release branch",
+    },
+    {
+      name: "rejects a website deploy that leaks its token outside the deploy step",
+      workflow: "website-deploy.yml",
+      search: "      - name: Deployment summary",
+      replacement: `      - run: echo ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Deployment summary`,
+      failure:
+        ".github/workflows/website-deploy.yml must reference the Cloudflare token exactly once",
+    },
+    {
+      name: "rejects a website deploy that drops the production environment",
+      workflow: "website-deploy.yml",
+      search: "    environment:\n      name: bramble-production",
+      replacement: "    # environment removed",
+      failure:
+        ".github/workflows/website-deploy.yml must deploy through the reviewed production environment",
+    },
   ] as const;
 
   for (const item of cases) {
@@ -289,4 +318,70 @@ describe("workflow security policy", () => {
       expect(workflowSecurityPolicyFailures(changed)).toContain(item.failure);
     });
   }
+
+  // The website deploy states its production branch once, in its `push` filter,
+  // and the policy derives the dispatch guard from it. These two read the branch
+  // out of the workflow rather than naming it, so promoting a release branch
+  // does not require editing this suite — only the workflow.
+  const activeBranch = async (): Promise<string> => {
+    const source = (await readWorkflowSources())["website-deploy.yml"] ?? "";
+    const branch = source.match(/\n {4}branches: \["([^"]+)"\]/)?.[1];
+    expect(branch).toBeString();
+    return branch ?? "";
+  };
+
+  test("rejects a website deploy whose manual-dispatch ref guard is gone", async () => {
+    const sources = await readWorkflowSources();
+    const branch = await activeBranch();
+    const changed = mutate(
+      sources,
+      "website-deploy.yml",
+      '[ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/',
+      'if false; then : "',
+    );
+    expect(workflowSecurityPolicyFailures(changed)).toContain(
+      `.github/workflows/website-deploy.yml must reject manual runs outside ${branch}, the branch its push filter names`,
+    );
+  });
+
+  // Counting references is not enough on its own: hoisting the expression to
+  // job-level `env` keeps the count at one while handing the credential to
+  // checkout, toolchain setup, and the website build.
+  test("rejects a website deploy that hoists its token to job-level env", async () => {
+    const sources = await readWorkflowSources();
+    const hoisted = mutate(
+      mutate(
+        sources,
+        "website-deploy.yml",
+        `        env:
+          CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
+`,
+        "        env:\n",
+      ),
+      "website-deploy.yml",
+      "    steps:\n",
+      `    env:
+      CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+`,
+    );
+    expect(hoisted["website-deploy.yml"]?.split("secrets.CLOUDFLARE_API_TOKEN").length).toBe(2);
+    expect(workflowSecurityPolicyFailures(hoisted)).toContain(
+      ".github/workflows/website-deploy.yml must bind the Cloudflare token in the deploy step's own env, never job-level env",
+    );
+  });
+
+  test("rejects a website deploy whose ref guard drifts from its push filter", async () => {
+    const sources = await readWorkflowSources();
+    const branch = await activeBranch();
+    const changed = mutate(
+      sources,
+      "website-deploy.yml",
+      `!= "refs/heads/${branch}"`,
+      '!= "refs/heads/some-other-branch"',
+    );
+    expect(workflowSecurityPolicyFailures(changed)).toContain(
+      `.github/workflows/website-deploy.yml must reject manual runs outside ${branch}, the branch its push filter names`,
+    );
+  });
 });
