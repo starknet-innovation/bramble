@@ -9,27 +9,31 @@
 #   Cloudflare edge (SSL/TLS -> Edge Certificates). Setting them here as well
 #   would emit them from two sources of truth; the edge is the one in use.
 #
-# The Content-Security-Policy is split in two on purpose. The enforcing policy
-# carries only directives that cannot break this site: it has no frames and no
-# <base> element, so denying both costs nothing. The full policy ships
-# report-only because a wrong script-src or style-src does not degrade a
-# single-page app, it blanks it — so the violations get read from a browser
-# console on every page before the policy is promoted to enforcing.
+# The Content-Security-Policy is enforcing. It shipped report-only first and was
+# promoted only after its violations were read from a browser console on every
+# page, because a wrong script-src or style-src does not degrade a single-page
+# app, it blanks it. What was observed before promoting: React mounted, one
+# stylesheet applied, both fonts loaded, eight images with none broken, the
+# support form present, and no violations on /, /docs/, /support/ or /privacy/.
 #
-# The report-only policy was derived from the built output, not assumed:
-# scripts, styles, fonts and images are all same-origin under /assets or /, the
-# external hosts in the bundle (Chrome Web Store, GitHub, Starkscan) are link
-# targets rather than fetches, and `data:` is allowed for images only because
-# Vite inlines assets below its size threshold.
+# The policy was derived from the built output, not assumed: scripts, styles,
+# fonts and images are all same-origin under /assets or /, the external hosts in
+# the bundle (Chrome Web Store, GitHub, Starkscan) are link targets rather than
+# fetches and so need no fetch-directive allowance, and `data:` is allowed for
+# images only because Vite inlines assets below its size threshold.
 #
-# form-action is in the report-only policy only. The support page has a real
-# <form>, and although its onSubmit calls preventDefault() and navigates
-# instead, enforcing form-action before observing it risks breaking the
-# no-JavaScript submit path.
+# form-action is 'self' rather than 'none'. The support page has a real <form>
+# with no action attribute: its onSubmit calls preventDefault() and navigates,
+# but without JavaScript the form would submit to the current document, and
+# 'none' would block that path.
+#
+# Anything added to this site that loads from a new origin — an analytics
+# script, an embedded video, a webfont from a CDN — will now be BLOCKED rather
+# than reported. Add the origin to the matching directive in the same change,
+# and re-verify in a browser.
 
 /*
-  Content-Security-Policy: frame-ancestors 'none'; base-uri 'none'
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; worker-src 'none'; manifest-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; worker-src 'none'; manifest-src 'none'
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Cross-Origin-Opener-Policy: same-origin

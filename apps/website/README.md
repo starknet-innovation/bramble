@@ -51,14 +51,28 @@ changing. They are listed so a failure points somewhere rather than nowhere.
   rather than emitting each header from two sources. `src/lib/security-headers.test.ts` guards the
   file, because a plain text file with a typo in a directive name loses protection without failing
   anything.
-- **The Content-Security-Policy is split in two.** The enforcing header carries only
-  `frame-ancestors` and `base-uri`, which cannot break a site with no frames and no `<base>`
-  element — and `frame-ancestors` is ignored in a report-only policy, so clickjacking protection
-  only exists if it is enforced. The full policy ships **report-only** because a wrong `script-src`
-  blanks a single-page app rather than degrading it. It was verified against the deployed site with
-  a browser on all four pages — scripts, styles, both fonts, all eight images and the support form
-  produced no violations — so promoting it is a matter of moving the directives into the enforcing
-  header once someone decides to.
+- **The Content-Security-Policy is enforcing**, and same-origin throughout: `default-src`,
+  `script-src`, `style-src`, `font-src` and `connect-src` are all `'self'`, `img-src` adds `data:`
+  because Vite inlines assets below its size threshold, and `object-src`, `worker-src`,
+  `manifest-src`, `frame-ancestors` and `base-uri` are `'none'`. There is no report-only header;
+  carrying both would emit the same policy twice and make it ambiguous which one an edit changes.
+
+  It shipped report-only first and was promoted only after its violations were read from a browser
+  console on `/`, `/docs/`, `/support/` and `/privacy/`. **Anything added that loads from a new
+  origin — an analytics script, an embedded video, a CDN webfont — is now blocked rather than
+  reported.** Add the origin to the matching directive in the same change, and re-verify in a
+  browser.
+
+  `form-action` is `'self'` rather than `'none'`: the support page's form has no `action`
+  attribute, so without JavaScript it submits to the current document, and `'none'` would block
+  that path.
+
+  One diagnostic worth knowing before reading a failure into it. Seven of the eight images measure
+  as broken when the page is loaded in a browser that never renders it, because all but the first
+  are `loading="lazy"` and the intersection observer never fires. That is not a CSP block: a
+  blocked image reports `complete: true` with `naturalWidth: 0` **and** logs a violation, whereas a
+  lazy image that never started reports `complete: false` and logs nothing. Do not loosen
+  `img-src` on the strength of that measurement.
 - **Mail is denied, not merely absent.** A null `MX` (`.` at priority 0), `v=spf1 -all`, and a DMARC
   `p=reject` record are published even though the domain sends and receives no mail. Those records
   stop forged mail claiming to come from the wallet's domain, which is a phishing route that exists
