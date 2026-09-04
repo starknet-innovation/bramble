@@ -44,23 +44,32 @@ describe("deployed security headers", () => {
     expect(headerValue("X-Frame-Options")).toBe("DENY");
   });
 
-  test("keeps the full policy report-only until it is promoted deliberately", () => {
-    const reportOnly = headerValue("Content-Security-Policy-Report-Only");
+  test("enforces the full same-origin policy", () => {
+    const policy = headerValue("Content-Security-Policy");
     for (const directive of [
       "default-src 'self'",
       "script-src 'self'",
       "style-src 'self'",
+      "img-src 'self' data:",
       "font-src 'self'",
       "connect-src 'self'",
       "object-src 'none'",
     ]) {
-      expect(reportOnly).toContain(directive);
+      expect(policy).toContain(directive);
     }
-    // Promoting the policy means moving these into the enforcing header. Until
-    // then the enforcing header must not carry a fetch directive, because one
-    // wrong source blanks a single-page app rather than degrading it.
-    expect(headerValue("Content-Security-Policy")).not.toContain("script-src");
-    expect(headerValue("Content-Security-Policy")).not.toContain("default-src");
+  });
+
+  test("permits the no-JavaScript form submit path", () => {
+    // The support page's form has no action attribute, so without JavaScript it
+    // submits to the current document. 'none' would block that; 'self' allows
+    // it while still refusing a cross-origin post.
+    expect(headerValue("Content-Security-Policy")).toContain("form-action 'self'");
+  });
+
+  test("carries no report-only header once the policy is enforcing", () => {
+    // Keeping both would emit the same policy twice and make it ambiguous which
+    // one a future edit is actually changing.
+    expect(DIRECTIVE_LINES).not.toContain("Content-Security-Policy-Report-Only");
   });
 
   test("denies the browser features the site never uses", () => {
