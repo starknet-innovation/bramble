@@ -1,22 +1,28 @@
-// Cloudflare Worker that serves the built Bramble website (bramble.money).
+// Cloudflare Worker that serves the built Bramble website.
 //
 // This is an assets-only Worker: there is no `main` script, so every request is
 // answered from `dist/` by Cloudflare's static-asset routing and nothing runs
 // server-side. `.github/workflows/website-deploy.yml` builds `dist/` and runs
 // `wrangler deploy` against this file; the deploy only reaches the live site
 // because `name` matches the existing Worker. Deploying under any other name
-// creates a second Worker and silently leaves bramble.money stale.
+// creates a second Worker and silently leaves the live hostname stale.
 {
   "name": "bramble",
   // Matches the date already set on the live Worker, so deploying this config
   // does not move a runtime setting for no reason.
   "compatibility_date": "2026-09-01",
-  // The public site is bramble.money only. Disabling the workers.dev hostname
-  // and preview URLs keeps a wallet site from being reachable on a second,
-  // unbranded origin that phishing pages could imitate or link to.
+  // The site is reachable on its own hostname only. Disabling the workers.dev
+  // hostname and preview URLs keeps a wallet site from being reachable on a
+  // second, unbranded origin that phishing pages could imitate or link to.
   "workers_dev": false,
   "preview_urls": false,
-  "routes": [{ "pattern": "bramble.money", "custom_domain": true }],
+  // No route is declared while the public hostname is being changed. A Worker
+  // with no trigger is deployable but unreachable, which is the intended state:
+  // bramble.money is being retired and its replacement is not yet wired up.
+  // Declaring nothing here also stops any deploy from re-attaching the old
+  // hostname, the way it would if the domain were only detached in the
+  // dashboard.
+  "routes": [],
   "assets": {
     "directory": "./dist",
     // Vite emits real entry documents at /, /docs/, /support/, and /privacy/;

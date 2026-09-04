@@ -1,5 +1,5 @@
 # Deploys the Bramble public website (apps/website) to the Cloudflare Worker
-# `bramble`, which serves bramble.money.
+# `bramble`, which serves the site's public hostname.
 #
 # Why GitHub Actions and not Cloudflare Workers Builds: Workers Builds reads the
 # repository-root `.tool-versions` (scarb, starknet-foundry), cannot provision
@@ -38,7 +38,7 @@ name: website-deploy
 
 on:
   push:
-    branches: ["release/v0.10"]
+    branches: ["release/v0.10.1"]
     paths:
       - "apps/website/**"
       - "bun.lock"
@@ -60,9 +60,10 @@ jobs:
     # Forks carry the workflow file but must not try (and fail) to deploy.
     if: github.repository == 'starknet-innovation/mc-wallet'
     runs-on: ubuntu-latest
+    # No `url:` while the public hostname is being changed. A deployment link
+    # to a retired domain is worse than no link.
     environment:
       name: bramble-production
-      url: https://bramble.money
     steps:
       # Accident guard, not the trust boundary (see the header). The environment
       # policy already refuses a foreign ref; this turns a mistaken dispatch of
@@ -74,8 +75,8 @@ jobs:
           TRIGGER_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/release/v0.10" ]; then
-            echo "::error::Manual website deploys must use the workflow from refs/heads/release/v0.10 (got $TRIGGER_REF)."
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/release/v0.10.1" ]; then
+            echo "::error::Manual website deploys must use the workflow from refs/heads/release/v0.10.1 (got $TRIGGER_REF)."
             exit 1
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -104,7 +105,7 @@ jobs:
           {
             echo "### website-deploy: PASS"
             echo ""
-            echo "Deployed \`apps/website\` from \`${GITHUB_SHA}\` (\`${GITHUB_REF_NAME}\`) to the \`bramble\` Worker at https://bramble.money."
+            echo "Deployed \`apps/website\` from \`${GITHUB_SHA}\` (\`${GITHUB_REF_NAME}\`) to the \`bramble\` Worker."
             echo ""
             echo "\`VITE_CHROME_STORE_URL\` is not set, so every download link points at the"
             echo "Chrome Web Store root rather than a listing. That is deliberate — no Bramble"

@@ -14,11 +14,18 @@ an item identifier.
 
 ## Deployment
 
-The site is served from the Cloudflare Worker `bramble` at <https://bramble.money>, configured by
-`wrangler.jsonc` in this directory (assets-only, no server-side code, `workers.dev` and preview
-URLs disabled). `.github/workflows/website-deploy.yml` deploys it on every push to the active
-release branch that touches `apps/website/`, and on manual dispatch. Pull requests never deploy;
-they are checked by `check:workspaces` in the main CI workflow.
+The site is served from the Cloudflare Worker `bramble`, configured by `wrangler.jsonc` in this
+directory (assets-only, no server-side code, `workers.dev` and preview URLs disabled).
+`.github/workflows/website-deploy.yml` deploys it on every push to the active release branch that
+touches `apps/website/`, and on manual dispatch. Pull requests never deploy; they are checked by
+`check:workspaces` in the main CI workflow.
+
+**The public hostname is being changed.** `bramble.money` has been retired and the Worker currently
+serves an unbranded holding page there, so `routes` in `wrangler.jsonc` is deliberately empty — a
+Worker with no trigger is deployable but unreachable. Declaring nothing also stops a deploy from
+re-attaching the old hostname. When the replacement hostname is live, add it as a custom-domain
+route. A Workers custom domain requires the zone to be on Cloudflare DNS, so the domain's
+nameservers must point at Cloudflare even if it is registered elsewhere.
 
 The workflow needs one secret, `CLOUDFLARE_API_TOKEN`, in the `bramble-production` GitHub
 environment: a Cloudflare token with Account → Workers Scripts → Edit only. The account id is
