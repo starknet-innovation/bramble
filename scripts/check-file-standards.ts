@@ -89,6 +89,7 @@ const SECRET_MATERIAL_FILES = new Set([
   // import path; it holds no secret material and touches no key operations.
   "apps/extension/src/background/routing/message-context.ts",
   "apps/extension/src/background/routing/messages.ts",
+  "apps/extension/src/background/provider/provider-grant.ts",
   "apps/extension/src/background/provider/provider-ops.ts",
   "apps/extension/src/background/settings/origins-ops.ts",
   "apps/extension/src/background/privacy/strk20-account-context.ts",
