@@ -293,19 +293,10 @@ describe("workflow security policy", () => {
         ".github/workflows/website-deploy.yml must trigger on exactly one literal release branch",
     },
     {
-      name: "rejects a website deploy that leaks its token outside the deploy step",
-      workflow: "website-deploy.yml",
-      search: "      - name: Deployment summary",
-      replacement: `      - run: echo ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
-      - name: Deployment summary`,
-      failure:
-        ".github/workflows/website-deploy.yml must reference the Cloudflare token exactly once, in any accepted spelling",
-    },
-    {
       name: "rejects a website deploy that drops the production environment",
       workflow: "website-deploy.yml",
-      search: "    environment:\n      name: bramble-production",
-      replacement: "    # environment removed",
+      search: "    environment:\n      name: bramble-production\n      url: https://bramble.fi\n",
+      replacement: "",
       failure:
         ".github/workflows/website-deploy.yml must deploy through the reviewed production environment",
     },
@@ -344,57 +335,44 @@ describe("workflow security policy", () => {
     );
   });
 
-  // Counting references is not enough on its own: hoisting the expression to
-  // job-level `env` keeps the count at one while handing the credential to
-  // checkout, toolchain setup, and the website build.
-  test("rejects a website deploy that hoists its token to job-level env", async () => {
-    const sources = await readWorkflowSources();
-    const hoisted = mutate(
-      mutate(
+  // The credential rules are positional, not textual. Every one of these four
+  // reached the text-matching version that preceded it, each in a different
+  // notation. They collapse into one assertion because the parser reports where
+  // a value sits, and where a value sits is not a matter of spelling.
+  const HOISTS = [
+    { name: "dot syntax", body: "secrets.CLOUDFLARE_API_TOKEN" },
+    { name: "bracket syntax", body: `secrets["CLOUDFLARE_API_TOKEN"]` },
+    { name: "lower case", body: "secrets.cloudflare_api_token" },
+    { name: "mixed case in brackets", body: `secrets['Cloudflare_Api_Token']` },
+    // Context names are case-insensitive in GitHub expressions too, not just
+    // secret names — so the context keyword itself needs covering.
+    { name: "capitalised context keyword", body: "Secrets.CLOUDFLARE_API_TOKEN" },
+  ] as const;
+
+  for (const item of HOISTS) {
+    test(`rejects hoisting the token to job-level env in ${item.name}`, async () => {
+      const sources = await readWorkflowSources();
+      const changed = mutate(
         sources,
         "website-deploy.yml",
-        `        env:
-          CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
-`,
-        "        env:\n",
-      ),
-      "website-deploy.yml",
-      "    steps:\n",
-      `    env:
-      CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
+        "    steps:\n",
+        `    env:
+      LEAKED: ${GITHUB_EXPRESSION} ${item.body} }}
     steps:
 `,
-    );
-    expect(hoisted["website-deploy.yml"]?.split("secrets.CLOUDFLARE_API_TOKEN").length).toBe(2);
-    expect(workflowSecurityPolicyFailures(hoisted)).toContain(
-      ".github/workflows/website-deploy.yml must bind the Cloudflare token in the deploy step's own env, never job-level env",
-    );
-  });
+      );
+      const failures = workflowSecurityPolicyFailures(changed);
+      expect(
+        failures.some(
+          (failure) =>
+            failure.includes("must bind the Cloudflare token only at") &&
+            failure.includes("not at jobs.deploy.env.LEAKED"),
+        ),
+      ).toBe(true);
+    });
+  }
 
-  // The count is the rule that stops the credential reaching steps that should
-  // never see it, so it has to read every notation GitHub accepts. Matching one
-  // literal spelling is a gate with a documented bypass.
-  test("rejects a second token reference written in bracket syntax", async () => {
-    const sources = await readWorkflowSources();
-    const hoisted = mutate(
-      sources,
-      "website-deploy.yml",
-      "    steps:\n",
-      `    env:
-      CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets['CLOUDFLARE_API_TOKEN'] }}
-    steps:
-`,
-    );
-    // The dot-syntax count is still one, which is exactly why the old rule passed.
-    expect(hoisted["website-deploy.yml"]?.split("secrets.CLOUDFLARE_API_TOKEN").length).toBe(2);
-    expect(workflowSecurityPolicyFailures(hoisted)).toContain(
-      ".github/workflows/website-deploy.yml must reference the Cloudflare token exactly once, in any accepted spelling",
-    );
-  });
-
-  // A dump never spells the secret's name, so a rule that selects on the name
-  // first would return an empty list and never examine the workflow at all.
-  test("rejects a context dump in a workflow that never names the credential", async () => {
+  test("rejects a secrets-context dump in a workflow that never names the credential", async () => {
     const sources = await readWorkflowSources();
     const added = {
       ...sources,
@@ -409,8 +387,6 @@ describe("workflow security policy", () => {
         "jobs:",
         "  run:",
         "    runs-on: ubuntu-latest",
-        "    environment:",
-        "      name: bramble-production",
         "    env:",
         `      ALL: ${GITHUB_EXPRESSION} toJSON(secrets) }}`,
         "    steps:",
@@ -418,44 +394,64 @@ describe("workflow security policy", () => {
         "",
       ].join("\n"),
     };
+    // The point of this case: selecting on the credential's name would return an
+    // empty list here and never examine the workflow.
     expect(added["leaky.yml"]).not.toContain("CLOUDFLARE_API_TOKEN");
     expect(workflowSecurityPolicyFailures(added)).toContain(
-      ".github/workflows/leaky.yml must not serialise the whole secrets context",
+      ".github/workflows/leaky.yml must not serialise the whole secrets context (at jobs.run.env.ALL)",
     );
   });
 
-  // GitHub secret names are not case-sensitive, so a lowercase second reference
-  // is the same secret and must count toward the total.
-  test("rejects a second token reference written in lower case", async () => {
+  test("rejects the token being read inside a run script", async () => {
     const sources = await readWorkflowSources();
-    const hoisted = mutate(
+    const leaked = mutate(
       sources,
       "website-deploy.yml",
-      "    steps:\n",
-      `    env:
-      CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.cloudflare_api_token }}
-    steps:
-`,
+      "      - name: Deployment summary",
+      `      - run: echo ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }} > /tmp/x
+      - name: Deployment summary`,
     );
-    expect(workflowSecurityPolicyFailures(hoisted)).toContain(
-      ".github/workflows/website-deploy.yml must reference the Cloudflare token exactly once, in any accepted spelling",
+    expect(
+      workflowSecurityPolicyFailures(leaked).some((failure) =>
+        failure.includes("not at jobs.deploy.steps[6].run"),
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects removing the token binding altogether", async () => {
+    const sources = await readWorkflowSources();
+    const changed = mutate(
+      sources,
+      "website-deploy.yml",
+      `          CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}\n`,
+      "",
+    );
+    expect(workflowSecurityPolicyFailures(changed)).toContain(
+      ".github/workflows/website-deploy.yml must bind the Cloudflare token at jobs.deploy.steps[5].env.CLOUDFLARE_API_TOKEN",
     );
   });
 
-  test("rejects serialising the whole secrets context", async () => {
+  test("fails closed when a workflow cannot be parsed", async () => {
     const sources = await readWorkflowSources();
-    const dumped = mutate(
+    const broken = {
+      ...sources,
+      "website-deploy.yml": `${sources["website-deploy.yml"]}\n  bad: [\n`,
+    };
+    expect(workflowSecurityPolicyFailures(broken)).toContain(
+      ".github/workflows/website-deploy.yml must be parseable YAML so its trust boundaries can be checked",
+    );
+  });
+
+  test("does not treat the word secrets in prose as a reference", async () => {
+    const sources = await readWorkflowSources();
+    const changed = mutate(
       sources,
       "website-deploy.yml",
-      "    steps:\n",
-      `    env:
-      ALL_SECRETS: ${GITHUB_EXPRESSION} toJSON(secrets) }}
-    steps:
-`,
+      "      - name: Deployment summary",
+      `      - run: echo "no secrets are printed here"
+      - name: Deployment summary`,
     );
-    expect(workflowSecurityPolicyFailures(dumped)).toContain(
-      ".github/workflows/website-deploy.yml must not serialise the whole secrets context",
-    );
+    expect(workflowSecurityPolicyFailures(changed)).toEqual([]);
   });
 
   test("rejects a website deploy whose ref guard drifts from its push filter", async () => {

@@ -3,88 +3,167 @@
  *
  * It is the only workflow holding a production deploy credential, so its rules
  * live here rather than inside the general workflow policy, which was at its
- * size limit. The rule selects itself from workflow content, so a second
- * workflow that ever references the same credential is checked too.
+ * size limit.
+ *
+ * The credential rules are **structural**: the workflow is parsed and every
+ * expression touching the `secrets` context is located by its path in the
+ * document. Four bypasses reached the earlier text-matching version — hoisting
+ * the reference to job-level `env`, writing it as `secrets['NAME']`, writing the
+ * name in lower case, and `toJSON(secrets)` in a workflow that never named the
+ * credential at all. Every one was the same error: matching a notation instead
+ * of a position, in a syntax that admits many notations. Parsing removes
+ * notation from the question. Where a value sits is not a matter of spelling.
+ *
+ * It fails closed. A workflow that cannot be parsed is reported rather than
+ * skipped, because a gate that cannot read a file must never conclude it is
+ * safe.
  */
-import { requireText, workflowPath } from "./workflow-policy-text";
+import { forbidText, requireText, workflowPath } from "./workflow-policy-text";
 
-const GITHUB_EXPRESSION = "$" + "{{";
+const PRODUCTION_ENVIRONMENT = "bramble-production";
+const DEPLOY_STEP_NAME = "Deploy to Cloudflare Workers";
+const TOKEN_NAME = "CLOUDFLARE_API_TOKEN";
 
-// GitHub Actions treats `secrets.NAME` and `secrets['NAME']` as the same
-// access, with arbitrary whitespace and either quote style. Counting one
-// spelling is what let the previous version of this rule pass while a second
-// reference in bracket form hoisted the credential to job-level `env` — the
-// exact exposure the count exists to catch, in a different notation.
-// The `i` flag is load-bearing: GitHub secret names are not case-sensitive, so
-// `secrets.cloudflare_api_token` is the same secret. A case-sensitive count
-// misses a lowercase second reference and reads as one.
-const SECRET_REFERENCE =
-  /secrets\s*(?:\.\s*CLOUDFLARE_API_TOKEN\b|\[\s*(['"])CLOUDFLARE_API_TOKEN\1\s*\])/gi;
+// A GitHub Actions expression. Only its body is examined, so prose in a `run:`
+// script that happens to contain the word "secrets" is not a reference.
+const EXPRESSION = /\$\{\{([\s\S]*?)\}\}/g;
+// Secret names are not case-sensitive, and neither are expression function
+// names, so every test below is case-insensitive by construction.
+const USES_SECRETS = /\bsecrets\b/i;
+const NAMES_THE_TOKEN = new RegExp(TOKEN_NAME, "i");
+const DUMPS_THE_CONTEXT = /\btoJSON\s*\(\s*secrets\s*\)/i;
 
-// `toJSON(secrets)` serialises every secret in the context into one expression,
-// so it exposes the token while naming nothing a per-secret count could match.
-const SECRETS_CONTEXT_DUMP = /toJSON\s*\(\s*secrets\s*\)/i;
+/** One expression that touches the secrets context, and where it sits. */
+type SecretUse = {
+  readonly path: string;
+  readonly namesToken: boolean;
+  readonly dumpsContext: boolean;
+};
 
-// Anchoring the secret to the deploy step's own `env` is the point: a count of
-// references alone would accept the expression being hoisted to job-level
-// `env`, where checkout, toolchain setup, and the website build would all run
-// with the credential in their environment.
-const SCOPED_SECRET_STEP = `      - name: Deploy to Cloudflare Workers
-        env:
-          CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}`;
+const collectSecretUses = (node: unknown, path: string, found: SecretUse[]): void => {
+  if (typeof node === "string") {
+    for (const match of node.matchAll(EXPRESSION)) {
+      const body = match[1] ?? "";
+      if (!USES_SECRETS.test(body)) {
+        continue;
+      }
+      found.push({
+        path,
+        namesToken: NAMES_THE_TOKEN.test(body),
+        dumpsContext: DUMPS_THE_CONTEXT.test(body),
+      });
+    }
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const [index, item] of node.entries()) {
+      collectSecretUses(item, `${path}[${index}]`, found);
+    }
+    return;
+  }
+  if (typeof node === "object" && node !== null) {
+    for (const [key, value] of Object.entries(node)) {
+      collectSecretUses(value, path === "" ? key : `${path}.${key}`, found);
+    }
+  }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The document path at which this workflow may bind the Cloudflare token: the
+ * `env` of the deploy step itself. Returns `null` when that step is absent,
+ * which is itself a failure — the binding cannot be checked against a step that
+ * does not exist.
+ */
+const allowedTokenPath = (document: unknown): string | null => {
+  const jobs = isRecord(document) && isRecord(document["jobs"]) ? document["jobs"] : null;
+  if (!jobs) {
+    return null;
+  }
+  for (const [jobName, job] of Object.entries(jobs)) {
+    const steps = isRecord(job) && Array.isArray(job["steps"]) ? job["steps"] : null;
+    if (!steps) {
+      continue;
+    }
+    for (const [index, step] of steps.entries()) {
+      if (isRecord(step) && step["name"] === DEPLOY_STEP_NAME) {
+        return `jobs.${jobName}.steps[${index}].env.${TOKEN_NAME}`;
+      }
+    }
+  }
+  return null;
+};
 
 /**
  * Every website-deploy policy violation in one workflow source, keyed by the
  * workflow's file name. Safe to run over the whole inventory: a workflow that
  * neither names the Cloudflare credential nor serialises the secrets context
- * yields an empty list. The context-dump rule deliberately applies to every
- * workflow, because a dump exposes this credential without ever naming it.
+ * yields an empty list.
  *
- * A `workflow_dispatch` may name any ref and executes that ref's revision of
- * the workflow, so the enforcing control against a foreign ref is the
- * deployment environment's branch policy, which GitHub applies before the job
- * starts and no workflow revision can edit. What is pinned here is the half
- * that lives in the tree: the credential reaches exactly one step, and the
- * dispatch guard names the same branch the workflow's own `push` filter does,
- * so the two statements of "which branch is production" cannot drift.
- *
- * The reference count matches every notation GitHub accepts, not one literal.
- * A rule that reads `secrets.NAME` alone is bypassed by `secrets['NAME']`, and
- * both are bypassed by `toJSON(secrets)`. A gate with a known bypass is worse
- * than no gate, because it implies a guarantee it does not provide.
+ * The context-dump rule deliberately applies to every workflow, because a dump
+ * exposes this credential without naming it — selecting on the name first would
+ * return an empty list and leave such a workflow unexamined.
  */
 export const websiteDeployFailures = (name: string, source: string): readonly string[] => {
   const failures: string[] = [];
   const path = workflowPath(name);
-  // Checked before the selector below, and for every workflow rather than only
-  // those naming this credential. A workflow that dumps the context never
-  // spells the secret's name, so selecting on the name first would return an
-  // empty list and hand any new job the production token unexamined.
-  if (SECRETS_CONTEXT_DUMP.test(source)) {
-    failures.push(`${path} must not serialise the whole secrets context`);
-  }
-  if (!source.includes("CLOUDFLARE_API_TOKEN")) {
+
+  let document: unknown;
+  try {
+    document = Bun.YAML.parse(source);
+  } catch {
+    failures.push(`${path} must be parseable YAML so its trust boundaries can be checked`);
     return failures;
   }
+
+  const uses: SecretUse[] = [];
+  collectSecretUses(document, "", uses);
+
+  for (const use of uses) {
+    if (use.dumpsContext) {
+      failures.push(`${path} must not serialise the whole secrets context (at ${use.path})`);
+    }
+  }
+
+  const tokenUses = uses.filter((use) => use.namesToken);
+  if (tokenUses.length === 0 && !NAMES_THE_TOKEN.test(source)) {
+    return failures;
+  }
+
+  const expected = allowedTokenPath(document);
+  if (expected === null) {
+    failures.push(`${path} must keep a step named "${DEPLOY_STEP_NAME}" to bind the token in`);
+    return failures;
+  }
+  for (const use of tokenUses) {
+    if (use.path !== expected) {
+      failures.push(
+        `${path} must bind the Cloudflare token only at ${expected}, not at ${use.path}`,
+      );
+    }
+  }
+  if (!tokenUses.some((use) => use.path === expected)) {
+    failures.push(`${path} must bind the Cloudflare token at ${expected}`);
+  }
+
   requireText(
     failures,
     source,
-    "    environment:\n      name: bramble-production",
+    `    environment:\n      name: ${PRODUCTION_ENVIRONMENT}`,
     `${path} must deploy through the reviewed production environment`,
   );
-  requireText(
+  forbidText(
     failures,
     source,
-    SCOPED_SECRET_STEP,
-    `${path} must bind the Cloudflare token in the deploy step's own env, never job-level env`,
+    "\n  pull_request",
+    `${path} must never run on a pull-request revision`,
   );
-  // Match on every spelling of the reference rather than on one literal, so a
-  // second reference cannot hide behind a notation the rule does not read.
-  if ((source.match(SECRET_REFERENCE) ?? []).length !== 1) {
-    failures.push(
-      `${path} must reference the Cloudflare token exactly once, in any accepted spelling`,
-    );
-  }
+
+  // The dispatch guard is a shell condition, so it is matched as text — but the
+  // branch it names is derived from the workflow's own `push` filter, so the two
+  // statements of "which branch is production" cannot drift.
   const branch = source.match(/\n {4}branches: \["([^"]+)"\]/)?.[1];
   if (branch === undefined) {
     failures.push(`${path} must trigger on exactly one literal release branch`);
