@@ -15,12 +15,15 @@ const GITHUB_EXPRESSION = "$" + "{{";
 // spelling is what let the previous version of this rule pass while a second
 // reference in bracket form hoisted the credential to job-level `env` — the
 // exact exposure the count exists to catch, in a different notation.
+// The `i` flag is load-bearing: GitHub secret names are not case-sensitive, so
+// `secrets.cloudflare_api_token` is the same secret. A case-sensitive count
+// misses a lowercase second reference and reads as one.
 const SECRET_REFERENCE =
-  /secrets\s*(?:\.\s*CLOUDFLARE_API_TOKEN\b|\[\s*(['"])CLOUDFLARE_API_TOKEN\1\s*\])/g;
+  /secrets\s*(?:\.\s*CLOUDFLARE_API_TOKEN\b|\[\s*(['"])CLOUDFLARE_API_TOKEN\1\s*\])/gi;
 
 // `toJSON(secrets)` serialises every secret in the context into one expression,
 // so it exposes the token while naming nothing a per-secret count could match.
-const SECRETS_CONTEXT_DUMP = /toJSON\s*\(\s*secrets\s*\)/;
+const SECRETS_CONTEXT_DUMP = /toJSON\s*\(\s*secrets\s*\)/i;
 
 // Anchoring the secret to the deploy step's own `env` is the point: a count of
 // references alone would accept the expression being hoisted to job-level
@@ -32,9 +35,10 @@ const SCOPED_SECRET_STEP = `      - name: Deploy to Cloudflare Workers
 
 /**
  * Every website-deploy policy violation in one workflow source, keyed by the
- * workflow's file name. Returns an empty list for any workflow that does not
- * reference the Cloudflare credential, so it is safe to run over the whole
- * inventory.
+ * workflow's file name. Safe to run over the whole inventory: a workflow that
+ * neither names the Cloudflare credential nor serialises the secrets context
+ * yields an empty list. The context-dump rule deliberately applies to every
+ * workflow, because a dump exposes this credential without ever naming it.
  *
  * A `workflow_dispatch` may name any ref and executes that ref's revision of
  * the workflow, so the enforcing control against a foreign ref is the
@@ -50,11 +54,18 @@ const SCOPED_SECRET_STEP = `      - name: Deploy to Cloudflare Workers
  * than no gate, because it implies a guarantee it does not provide.
  */
 export const websiteDeployFailures = (name: string, source: string): readonly string[] => {
-  if (!source.includes("CLOUDFLARE_API_TOKEN")) {
-    return [];
-  }
   const failures: string[] = [];
   const path = workflowPath(name);
+  // Checked before the selector below, and for every workflow rather than only
+  // those naming this credential. A workflow that dumps the context never
+  // spells the secret's name, so selecting on the name first would return an
+  // empty list and hand any new job the production token unexamined.
+  if (SECRETS_CONTEXT_DUMP.test(source)) {
+    failures.push(`${path} must not serialise the whole secrets context`);
+  }
+  if (!source.includes("CLOUDFLARE_API_TOKEN")) {
+    return failures;
+  }
   requireText(
     failures,
     source,
@@ -73,9 +84,6 @@ export const websiteDeployFailures = (name: string, source: string): readonly st
     failures.push(
       `${path} must reference the Cloudflare token exactly once, in any accepted spelling`,
     );
-  }
-  if (SECRETS_CONTEXT_DUMP.test(source)) {
-    failures.push(`${path} must not serialise the whole secrets context`);
   }
   const branch = source.match(/\n {4}branches: \["([^"]+)"\]/)?.[1];
   if (branch === undefined) {

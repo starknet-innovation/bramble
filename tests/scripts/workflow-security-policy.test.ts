@@ -392,6 +392,56 @@ describe("workflow security policy", () => {
     );
   });
 
+  // A dump never spells the secret's name, so a rule that selects on the name
+  // first would return an empty list and never examine the workflow at all.
+  test("rejects a context dump in a workflow that never names the credential", async () => {
+    const sources = await readWorkflowSources();
+    const added = {
+      ...sources,
+      "leaky.yml": [
+        "name: Leaky",
+        "on:",
+        "  push:",
+        "",
+        "permissions:",
+        "  contents: read",
+        "",
+        "jobs:",
+        "  run:",
+        "    runs-on: ubuntu-latest",
+        "    environment:",
+        "      name: bramble-production",
+        "    env:",
+        `      ALL: ${GITHUB_EXPRESSION} toJSON(secrets) }}`,
+        "    steps:",
+        "      - run: echo hi",
+        "",
+      ].join("\n"),
+    };
+    expect(added["leaky.yml"]).not.toContain("CLOUDFLARE_API_TOKEN");
+    expect(workflowSecurityPolicyFailures(added)).toContain(
+      ".github/workflows/leaky.yml must not serialise the whole secrets context",
+    );
+  });
+
+  // GitHub secret names are not case-sensitive, so a lowercase second reference
+  // is the same secret and must count toward the total.
+  test("rejects a second token reference written in lower case", async () => {
+    const sources = await readWorkflowSources();
+    const hoisted = mutate(
+      sources,
+      "website-deploy.yml",
+      "    steps:\n",
+      `    env:
+      CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.cloudflare_api_token }}
+    steps:
+`,
+    );
+    expect(workflowSecurityPolicyFailures(hoisted)).toContain(
+      ".github/workflows/website-deploy.yml must reference the Cloudflare token exactly once, in any accepted spelling",
+    );
+  });
+
   test("rejects serialising the whole secrets context", async () => {
     const sources = await readWorkflowSources();
     const dumped = mutate(
