@@ -91,8 +91,9 @@ changing. They are listed so a failure points somewhere rather than nowhere.
   whether or not a mailbox does.
 
 The workflow needs one secret, `CLOUDFLARE_API_TOKEN`, in the `bramble-production` GitHub
-environment: a Cloudflare token with Account → Workers Scripts → Edit only. The account id is
-public and lives in the workflow file.
+environment. It needs **two** policies — `Account → Workers Scripts → Edit` and
+`Zone → Workers Routes → Edit` — for the reason described above; a token with only the first
+deploys the assets and then fails. The account id is public and lives in the workflow file.
 
 To deploy by hand from an authenticated shell, run the same commands the workflow does:
 
