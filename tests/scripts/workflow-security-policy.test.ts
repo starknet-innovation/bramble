@@ -299,7 +299,7 @@ describe("workflow security policy", () => {
       replacement: `      - run: echo ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}
       - name: Deployment summary`,
       failure:
-        ".github/workflows/website-deploy.yml must reference the Cloudflare token exactly once",
+        ".github/workflows/website-deploy.yml must reference the Cloudflare token exactly once, in any accepted spelling",
     },
     {
       name: "rejects a website deploy that drops the production environment",
@@ -368,6 +368,43 @@ describe("workflow security policy", () => {
     expect(hoisted["website-deploy.yml"]?.split("secrets.CLOUDFLARE_API_TOKEN").length).toBe(2);
     expect(workflowSecurityPolicyFailures(hoisted)).toContain(
       ".github/workflows/website-deploy.yml must bind the Cloudflare token in the deploy step's own env, never job-level env",
+    );
+  });
+
+  // The count is the rule that stops the credential reaching steps that should
+  // never see it, so it has to read every notation GitHub accepts. Matching one
+  // literal spelling is a gate with a documented bypass.
+  test("rejects a second token reference written in bracket syntax", async () => {
+    const sources = await readWorkflowSources();
+    const hoisted = mutate(
+      sources,
+      "website-deploy.yml",
+      "    steps:\n",
+      `    env:
+      CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets['CLOUDFLARE_API_TOKEN'] }}
+    steps:
+`,
+    );
+    // The dot-syntax count is still one, which is exactly why the old rule passed.
+    expect(hoisted["website-deploy.yml"]?.split("secrets.CLOUDFLARE_API_TOKEN").length).toBe(2);
+    expect(workflowSecurityPolicyFailures(hoisted)).toContain(
+      ".github/workflows/website-deploy.yml must reference the Cloudflare token exactly once, in any accepted spelling",
+    );
+  });
+
+  test("rejects serialising the whole secrets context", async () => {
+    const sources = await readWorkflowSources();
+    const dumped = mutate(
+      sources,
+      "website-deploy.yml",
+      "    steps:\n",
+      `    env:
+      ALL_SECRETS: ${GITHUB_EXPRESSION} toJSON(secrets) }}
+    steps:
+`,
+    );
+    expect(workflowSecurityPolicyFailures(dumped)).toContain(
+      ".github/workflows/website-deploy.yml must not serialise the whole secrets context",
     );
   });
 

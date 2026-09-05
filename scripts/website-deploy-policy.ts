@@ -10,6 +10,18 @@ import { requireText, workflowPath } from "./workflow-policy-text";
 
 const GITHUB_EXPRESSION = "$" + "{{";
 
+// GitHub Actions treats `secrets.NAME` and `secrets['NAME']` as the same
+// access, with arbitrary whitespace and either quote style. Counting one
+// spelling is what let the previous version of this rule pass while a second
+// reference in bracket form hoisted the credential to job-level `env` — the
+// exact exposure the count exists to catch, in a different notation.
+const SECRET_REFERENCE =
+  /secrets\s*(?:\.\s*CLOUDFLARE_API_TOKEN\b|\[\s*(['"])CLOUDFLARE_API_TOKEN\1\s*\])/g;
+
+// `toJSON(secrets)` serialises every secret in the context into one expression,
+// so it exposes the token while naming nothing a per-secret count could match.
+const SECRETS_CONTEXT_DUMP = /toJSON\s*\(\s*secrets\s*\)/;
+
 // Anchoring the secret to the deploy step's own `env` is the point: a count of
 // references alone would accept the expression being hoisted to job-level
 // `env`, where checkout, toolchain setup, and the website build would all run
@@ -31,6 +43,11 @@ const SCOPED_SECRET_STEP = `      - name: Deploy to Cloudflare Workers
  * that lives in the tree: the credential reaches exactly one step, and the
  * dispatch guard names the same branch the workflow's own `push` filter does,
  * so the two statements of "which branch is production" cannot drift.
+ *
+ * The reference count matches every notation GitHub accepts, not one literal.
+ * A rule that reads `secrets.NAME` alone is bypassed by `secrets['NAME']`, and
+ * both are bypassed by `toJSON(secrets)`. A gate with a known bypass is worse
+ * than no gate, because it implies a guarantee it does not provide.
  */
 export const websiteDeployFailures = (name: string, source: string): readonly string[] => {
   if (!source.includes("CLOUDFLARE_API_TOKEN")) {
@@ -50,8 +67,15 @@ export const websiteDeployFailures = (name: string, source: string): readonly st
     SCOPED_SECRET_STEP,
     `${path} must bind the Cloudflare token in the deploy step's own env, never job-level env`,
   );
-  if (source.split("secrets.CLOUDFLARE_API_TOKEN").length - 1 !== 1) {
-    failures.push(`${path} must reference the Cloudflare token exactly once`);
+  // Match on every spelling of the reference rather than on one literal, so a
+  // second reference cannot hide behind a notation the rule does not read.
+  if ((source.match(SECRET_REFERENCE) ?? []).length !== 1) {
+    failures.push(
+      `${path} must reference the Cloudflare token exactly once, in any accepted spelling`,
+    );
+  }
+  if (SECRETS_CONTEXT_DUMP.test(source)) {
+    failures.push(`${path} must not serialise the whole secrets context`);
   }
   const branch = source.match(/\n {4}branches: \["([^"]+)"\]/)?.[1];
   if (branch === undefined) {
