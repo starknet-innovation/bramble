@@ -50,9 +50,10 @@ const vault = {
   accounts: [account],
   accountSecrets: [strk20ViewingKeyRecord],
   activeAccountId: account.id,
+  importedSeeds: [],
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 7,
+  schemaVersion: 8,
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
 
@@ -98,6 +99,9 @@ export const walletStub = {
   async createAccount() {
     return account;
   },
+  async createKeyVault() {
+    return account;
+  },
   async createLedgerVault(): Promise<LedgerAccountRef> {
     return ledgerAccount;
   },
@@ -115,6 +119,9 @@ export const walletStub = {
   },
   async importRawKeyAccount() {
     return account;
+  },
+  async importSeedAccounts() {
+    return [account];
   },
   async previewAccount() {
     return account;

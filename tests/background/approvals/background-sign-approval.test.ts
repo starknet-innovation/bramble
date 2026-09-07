@@ -33,9 +33,10 @@ const vault = {
   accounts: [account],
   accountSecrets: [],
   activeAccountId: account.id,
+  importedSeeds: [],
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 7,
+  schemaVersion: 8,
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 

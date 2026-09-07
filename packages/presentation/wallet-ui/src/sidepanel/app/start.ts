@@ -123,10 +123,9 @@ export const startWalletUi = async (
     connector: ledgerConnector,
     mount: ledgerOnboardMount,
     openImport: () => navigate("import-key"),
+    openImportSeed: () => navigate("import-phrase"),
     openMultisig: () => navigate("multisig-add"),
-    refresh: async () => {
-      await render(await wallet.loadStatus());
-    },
+    refresh: async () => render(await wallet.loadStatus()),
     wallet,
   });
   const bindAll = (): void => {
@@ -208,6 +207,7 @@ export const startWalletUi = async (
     bindSettingsSurface({
       activeAccountId: () => lastAccountId,
       app,
+      existingAccountIds: () => new Set(cache.status.accounts.map((account) => account.id)),
       expandedGroup: () => expandedGroupId,
       networkId: () => lastNetworkId,
       openAssign: () => openAssignId,

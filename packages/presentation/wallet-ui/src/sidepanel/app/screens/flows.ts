@@ -13,6 +13,7 @@ import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { ConnectedSite, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { multisigAccountOptions } from "../../journeys/multisig/multisig-account-options";
+import { recoveryScanFields, recoveryWordInputs } from "../../journeys/onboarding/onboarding-views";
 import { allowancesFlow } from "../../journeys/portfolio/allowance-views";
 import type { PrivacyDisclosureState } from "../../journeys/privacy/privacy-model";
 import {
@@ -154,6 +155,39 @@ const deployAccountFlow = (
   );
 
 /**
+ * Renders the in-wallet recovery-phrase import: enter another wallet's phrase,
+ * scan its indices with the shared grouped picker, and import the selected
+ * accounts into the unlocked vault. The phrase lives only in its form fields
+ * until the single privileged import request.
+ */
+export const importPhraseFlow = (status: WalletStatus): string =>
+  flowHeader("Import a recovery phrase", status, `Add existing accounts on ${status.network}`) +
+  flowScreen(
+    "import-phrase",
+    `<section class="section">
+      <p class="review-flag" role="note">Anyone with this phrase controls its accounts. Type it only on a device you trust.</p>
+      <form id="import-phrase-form" class="stack" novalidate>
+        <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
+        <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
+        <p id="recovery-result" role="status"></p>
+        ${button({
+          attributes: { id: "import-phrase-search" },
+          disabled: true,
+          label: "Find its accounts",
+        })}
+        <div id="import-phrase-scan" hidden>
+${recoveryScanFields("import the selected accounts")}
+          ${button({
+            attributes: { id: "recover-accounts-button" },
+            disabled: true,
+            label: "Import selected accounts",
+          })}
+        </div>
+      </form>
+    </section>`,
+  );
+
+/**
  * Renders raw-key import as a dedicated security-sensitive task reached from
  * the Add account chooser.
  */
@@ -169,8 +203,8 @@ export const importKeyFlow = (status: WalletStatus): string =>
           label: "Account contract",
           name: "accountContractType",
           options: [
-            { label: "OpenZeppelin Account — Recommended", value: "openzeppelin" },
-            { label: "Argent Account", value: "argent" },
+            { label: "Bramble Account — Recommended", value: "openzeppelin" },
+            { label: "Ready Account", value: "argent" },
           ],
           selected: "openzeppelin",
         })}
@@ -185,8 +219,8 @@ export const importKeyFlow = (status: WalletStatus): string =>
         })}
         ${textField({
           autocomplete: "off",
-          hint: "Argent only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for Bramble's public-key salt.",
-          label: "Argent deployment salt (optional)",
+          hint: "Ready accounts only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for Bramble's public-key salt.",
+          label: "Ready deployment salt (optional)",
           name: "deploymentSalt",
           placeholder: "0x…",
           spellcheck: false,
@@ -412,6 +446,8 @@ export const simpleFlowScreen = (
       );
     case "import-key":
       return importKeyFlow(ctx.status);
+    case "import-phrase":
+      return importPhraseFlow(ctx.status);
     case "address-book":
       return addressBookFlow(ctx.status, ctx.preferences);
     case "connected-sites":

@@ -26,6 +26,7 @@ import {
 type LedgerAccountStatus = {
   readonly balance: string | null;
   readonly deployed: boolean | null;
+  readonly funded: boolean | null;
 };
 
 /**
@@ -140,8 +141,8 @@ export const createLedgerRuntimeClient = (
     // Fail soft: an unrecognised reply degrades to "checking/unavailable" so the
     // picker never blocks or shows a fabricated deployed status or balance.
     return isLedgerAccountStatusResponse(response)
-      ? { balance: response.balance, deployed: response.deployed }
-      : { balance: null, deployed: null };
+      ? { balance: response.balance, deployed: response.deployed, funded: response.funded }
+      : { balance: null, deployed: null, funded: null };
   },
   async loadLedgerSignPending() {
     const response = await sendMessage({ type: "wallet.ledgerSignPending" });

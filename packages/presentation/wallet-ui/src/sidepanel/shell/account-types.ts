@@ -20,9 +20,9 @@ import { canonicalFelt } from "@bramble/wallet-model/networks";
  */
 const buildRegistry = (): ReadonlyMap<string, string> => {
   const entries: readonly (readonly [string, string])[] = [
-    [OPENZEPPELIN_ACCOUNT_CLASS_HASH, "OpenZeppelin (AccountUpgradeable)"],
-    [ARGENT_ACCOUNT_CONTRACT.classHash, "Argent Account"],
-    [ARGENT_MULTISIG_CONTRACT.classHash, "Argent Multisig"],
+    [OPENZEPPELIN_ACCOUNT_CLASS_HASH, "Bramble Account (OpenZeppelin AccountUpgradeable)"],
+    [ARGENT_ACCOUNT_CONTRACT.classHash, "Ready Account (Argent)"],
+    [ARGENT_MULTISIG_CONTRACT.classHash, "Ready Multisig (Argent)"],
   ];
   const registry = new Map<string, string>();
   for (const [hash, label] of entries) {

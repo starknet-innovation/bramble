@@ -205,7 +205,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {
-        return { entries: [], historyUnavailable: false };
+        return { entries: [], historyUnavailable: true };
       }
       return {
         entries: response.activity,

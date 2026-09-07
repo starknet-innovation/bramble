@@ -10,6 +10,7 @@
 import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
 import type { Vault } from "@bramble/vault/schema";
 import type {
+  CreateKeyVaultInput,
   CreateVaultAccountInput,
   OriginGrantInput,
   SignHashInput,
@@ -91,6 +92,7 @@ export type WalletStubOptions = {
   readonly accounts?: readonly AccountRef[];
   readonly activeAccountId?: () => string;
   readonly captureCreate?: (input: CreateVaultAccountInput) => void;
+  readonly captureCreateKeyVault?: (input: CreateKeyVaultInput) => void;
   readonly captureGrant?: (input: OriginGrantInput) => void;
   readonly captureSign?: (input: SignHashInput) => void;
 };
@@ -104,14 +106,19 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     accounts,
     accountSecrets: [],
     activeAccountId: options.activeAccountId?.() ?? account.id,
+    importedSeeds: [],
     mnemonic: null,
     originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
-    schemaVersion: 7,
+    schemaVersion: 8,
     signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
   });
   return {
     async createAccount(input: CreateVaultAccountInput) {
       options.captureCreate?.(input);
+      return account;
+    },
+    async createKeyVault(input: CreateKeyVaultInput) {
+      options.captureCreateKeyVault?.(input);
       return account;
     },
     async addDerivedAccount() {

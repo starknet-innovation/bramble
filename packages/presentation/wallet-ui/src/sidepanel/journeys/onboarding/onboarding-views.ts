@@ -5,7 +5,13 @@
  */
 
 import { button, iconButton } from "@bramble/ui-kit/controls";
-import { checkboxField, inputControl, textField } from "@bramble/ui-kit/fields";
+import {
+  checkboxField,
+  inputControl,
+  selectField,
+  textareaField,
+  textField,
+} from "@bramble/ui-kit/fields";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { BRAMBLE_MARK } from "../../shared/brand-mark";
@@ -37,7 +43,7 @@ const mainnetAcknowledgement = (name: string, id: string, text: string): string 
 
 const option = (
   id: string,
-  iconName: "book" | "shield",
+  iconName: "book" | "link" | "shield",
   title: string,
   description: string,
 ): string => `
@@ -50,26 +56,6 @@ const option = (
     ${icon("chevronRight")}
   </button>`;
 
-const accountContractChoices = (kind: "ledger" | "software"): string => {
-  const attribute = kind === "ledger" ? "data-ledger-account-contract" : "data-account-contract";
-  return `<div class="onboarding-contract-options" role="group" aria-label="Account contract">
-    <button class="onboarding-contract" ${attribute}="openzeppelin" type="button" aria-pressed="true">
-      <span class="onboarding-contract-copy">
-        <span class="onboarding-contract-title"><strong>OpenZeppelin Account</strong><span>Recommended</span></span>
-        <span>${kind === "ledger" ? "Ledger keeps the signer key; OpenZeppelin defines the on-chain account." : "The recommended account model for new Bramble accounts."}</span>
-      </span>
-      <span class="onboarding-contract-check">${icon("check")}</span>
-    </button>
-    <button class="onboarding-contract" ${attribute}="argent" type="button" aria-pressed="false">
-      <span class="onboarding-contract-copy">
-        <span class="onboarding-contract-title"><strong>Argent Account</strong><span>Supported</span></span>
-        <span>${kind === "ledger" ? "Use the same Ledger signer with the Argent account model." : "Choose the Argent account model when you prefer it."}</span>
-      </span>
-      <span class="onboarding-contract-check">${icon("check")}</span>
-    </button>
-  </div>`;
-};
-
 /**
  * Renders both recovery grids. Each cell states its 1-based position as content,
  * not a placeholder, so it survives the cell holding a word; the span is
@@ -79,7 +65,7 @@ const accountContractChoices = (kind: "ledger" | "software"): string => {
  * `[hidden] { display: none !important }` outranks any cell rule, so it could
  * never be shown again. `:has(> input[hidden])` follows the input instead.
  */
-const recoveryWordInputs = (kind: "generated" | "import"): string =>
+export const recoveryWordInputs = (kind: "generated" | "import"): string =>
   Array.from(
     { length: 24 },
     (_, index) =>
@@ -213,6 +199,12 @@ const methodStep = (): string => `
         "Ledger hardware wallet",
         "Connect a Ledger and choose accounts without exposing keys.",
       )}
+      ${option(
+        "key-method-button",
+        "link",
+        "Private key",
+        "Import a single account from its raw Starknet key.",
+      )}
     </div>
   </section>`;
 
@@ -285,45 +277,91 @@ const passwordStep = (): string => `
     ${flowBack("Back")}
     ${stepHead("lock", "Create your vault passphrase", "You will use this to unlock Bramble on this device.")}
     <div class="onboarding-fields">
+      <input name="accountContractType" type="hidden" value="openzeppelin" />
       ${passwordFields()}
       <p id="passphrase-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
       ${button({
-        attributes: { id: "choose-account-contract-button" },
+        attributes: { id: "password-continue-button" },
         disabled: true,
-        label: "Choose account contract",
+        label: "Continue",
       })}
     </div>
   </section>`;
 
-const accountContractStep = (): string => `
-  <section class="onboarding-step" data-onboarding-step="account-contract" hidden>
-    ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Choose your account contract", "This determines the account deployed on Starknet. Your recovery phrase and local vault protection stay the same.")}
+const importKeyStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="import-key" hidden>
+    ${flowBack("Back to wallet methods")}
+    ${stepHead("wallet", "Import from a private key", "Add one existing account from its raw Starknet key. The key is validated and stored only inside the encrypted vault.")}
     <div class="onboarding-fields">
-      <input name="accountContractType" type="hidden" value="openzeppelin" />
-      ${accountContractChoices("software")}
-      <p class="hint">Bramble supports both account models. OpenZeppelin is the recommended default.</p>
+      <p class="review-flag" role="note">Anyone with this key controls the account. Paste it only on a device you trust.</p>
+      ${selectField({
+        hint: "Choose the contract that already owns this key. A different choice derives a different address.",
+        label: "Account contract",
+        name: "importKeyContractType",
+        options: [
+          { label: "Bramble Account — Recommended", value: "openzeppelin" },
+          { label: "Ready Account", value: "argent" },
+        ],
+        selected: "openzeppelin",
+      })}
+      ${textareaField({
+        autocomplete: "off",
+        hint: "The key never leaves this device unencrypted.",
+        label: "Raw Starknet private key",
+        name: "importKeyRaw",
+        placeholder: "0x…",
+        required: true,
+        spellcheck: false,
+      })}
+      ${textField({
+        autocomplete: "off",
+        hint: "Ready accounts only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for Bramble's public-key salt.",
+        label: "Ready deployment salt (optional)",
+        name: "importKeySalt",
+        placeholder: "0x…",
+        spellcheck: false,
+      })}
+      ${mainnetAcknowledgement(
+        "importKeyMainnetAck",
+        "import-key-mainnet-ack",
+        "I understand this wallet can hold real funds on Starknet Mainnet.",
+      )}
+      <p id="import-key-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
       ${button({
-        attributes: { id: "review-account-button" },
-        label: "Review OpenZeppelin account",
+        attributes: { id: "import-key-continue" },
+        disabled: true,
+        label: "Continue",
       })}
     </div>
   </section>`;
 
-const recoveryAccountsStep = (): string => `
-  <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
-    ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for both OpenZeppelin and Argent accounts. Accounts with on-chain activity are selected automatically.")}
-    <div class="onboarding-fields">
+/**
+ * The grouped account-scan controls shared by first-run recovery and the
+ * in-wallet "Import a recovery phrase" flow, so both surfaces render the same
+ * detection, selection, and acknowledgement semantics for one binder
+ * (`bindRecoveryAccountUi`).
+ */
+export const recoveryScanFields = (restoreLabel: string): string => `
       <div class="section-head">
         <p id="recovery-scan-status" class="hint" role="status">Ready to search.</p>
         ${iconButton({ attributes: { id: "recovery-scan-retry" }, icon: "refresh", label: "Retry account search" })}
       </div>
-      <ul class="allowance-list" id="recovery-account-list" aria-label="Recovered accounts"></ul>
+      <details class="disclosure account-group" data-recovery-group="openzeppelin">
+        <summary>Bramble accounts<span data-detected></span></summary>
+        <div class="disclosure-body">
+          <ul class="allowance-list" aria-label="Recovered Bramble accounts"></ul>
+        </div>
+      </details>
+      <details class="disclosure account-group" data-recovery-group="argent">
+        <summary>Ready accounts<span data-detected></span></summary>
+        <div class="disclosure-body">
+          <ul class="allowance-list" aria-label="Recovered Ready accounts"></ul>
+        </div>
+      </details>
       <details class="disclosure">
         <summary>Advanced manual index</summary>
         <div class="disclosure-body onboarding-fields">
@@ -334,9 +372,16 @@ const recoveryAccountsStep = (): string => `
       ${mainnetAcknowledgement(
         "recoveryMainnetAck",
         "recovery-mainnet-ack",
-        "I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet.",
+        `I checked these account types and indices and want to ${restoreLabel} on Starknet Mainnet.`,
       )}
-      <p id="recovery-accounts-result" role="status"></p>
+      <p id="recovery-accounts-result" role="status"></p>`;
+
+const recoveryAccountsStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
+    ${flowBack("Back to passphrase")}
+    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for both Bramble and Ready accounts. Accounts with on-chain activity are selected automatically.")}
+    <div class="onboarding-fields">
+${recoveryScanFields("restore the selected accounts")}
     </div>
     <div class="onboarding-step-cta">
       ${button({
@@ -349,7 +394,7 @@ const recoveryAccountsStep = (): string => `
 
 const accountStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="accounts" hidden>
-    ${flowBack("Back to account contract")}
+    ${flowBack("Back to passphrase")}
     ${stepHead("wallet", "Review your account", "Confirm the derived public address, then add it to this wallet.")}
     <div class="onboarding-fields">
       <button
@@ -360,7 +405,7 @@ const accountStep = (): string => `
       >
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
-          <strong data-preview-label>Primary OpenZeppelin account</strong>
+          <strong data-preview-label>Primary Bramble account</strong>
           <span data-preview-address>Deriving account…</span>
         </span>
         <span class="onboarding-account-check">${icon("check")}</span>
@@ -382,28 +427,11 @@ const accountStep = (): string => `
     </div>
   </section>`;
 
-const ledgerContractStep = (): string => `
-  <section class="onboarding-step" data-onboarding-step="ledger-contract" hidden>
-    ${flowBack("Back to wallet methods")}
-    ${stepHead("shield", "Choose the Ledger account contract", "Your signing key stays on Ledger in either case. This choice only changes the account contract deployed on Starknet.")}
-    <div class="onboarding-fields">
-      ${accountContractChoices("ledger")}
-      <p class="hint">Bramble supports both account models. OpenZeppelin is the recommended default.</p>
-    </div>
-    <div class="onboarding-step-cta">
-      ${button({
-        attributes: { id: "ledger-contract-continue" },
-        label: "Continue with OpenZeppelin",
-      })}
-    </div>
-  </section>`;
-
 const ledgerStep = (status: WalletStatus): string => `
   <section class="onboarding-step" data-onboarding-step="ledger" hidden>
-    ${flowBack("Back to account contract")}
+    ${flowBack("Back to wallet methods")}
     ${stepHead("lock", "Protect the Ledger registry", "Create the local vault passphrase used to unlock account labels and settings on this device.")}
     <form id="ledger-setup-form" class="onboarding-fields">
-      <input name="ledgerAccountContractType" type="hidden" value="openzeppelin" />
       ${passwordFields("ledger")}
       <p id="ledger-passphrase-result" role="status"></p>
       ${mainnetAcknowledgement(
@@ -440,11 +468,10 @@ export const onboardingWizard = (status: WalletStatus): string => `
       ${recoveryStep()}
       ${generatedStep()}
       ${verifyStep()}
+      ${importKeyStep()}
       ${passwordStep()}
       ${recoveryAccountsStep()}
-      ${accountContractStep()}
       ${accountStep()}
     </form>
-    ${ledgerContractStep()}
     ${ledgerStep(status)}
   </main>`;

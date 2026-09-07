@@ -166,6 +166,14 @@ export type AddLedgerAccountInput = {
 export type CreateLedgerVaultInput = AddLedgerAccountInput;
 
 /**
+ * First-run input for creating a vault from one raw Starknet private key. The
+ * vault retains no recovery phrase (`mnemonic` stays null); the key is
+ * validated and stored only inside the encrypted vault. Creating over an
+ * existing vault fails closed with `WalletError("Wallet already exists")`.
+ */
+export type CreateKeyVaultInput = ImportRawKeyAccountInput;
+
+/**
  * Background-only input for retaining a Ledger-derived STRK20 viewing key.
  * The future hardware ceremony must produce the key inside trusted extension
  * code; no provider or UI message accepts this secret-bearing shape.
@@ -215,6 +223,7 @@ export type WalletVaultService = {
   readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<DerivedAccountRef>;
   readonly addLedgerAccount: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<DerivedAccountRef>;
+  readonly createKeyVault: (input: CreateKeyVaultInput) => Promise<ImportedAccountRef>;
   readonly createLedgerVault: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
   readonly deriveLedgerAccounts: (
     input: DeriveLedgerAccountsInput,
@@ -277,6 +286,14 @@ export type WalletVaultService = {
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
   /** Restores a confirmed bounded set in one encrypted-vault commit. */
+  /**
+   * Imports selected accounts from another recovery phrase into the unlocked
+   * vault, retaining the phrase as an imported seed. Fails closed on invalid
+   * phrases, duplicate selections, or accounts already present.
+   */
+  readonly importSeedAccounts: (
+    input: RecoverVaultAccountsInput,
+  ) => Promise<readonly DerivedAccountRef[]>;
   readonly recoverAccounts: (
     input: RecoverVaultAccountsInput,
   ) => Promise<readonly DerivedAccountRef[]>;

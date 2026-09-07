@@ -14,6 +14,8 @@ import { bindGroupControls } from "./group-ui";
 export type SettingsUiDeps = {
   readonly activeAccountId: () => string | null;
   readonly app: Element | null;
+  /** Ids of accounts already in the vault; phrase-import scan rows matching them lock. */
+  readonly existingAccountIds?: () => ReadonlySet<string>;
   readonly expandedGroup: () => string | null;
   readonly networkId: () => string;
   readonly openAssign: () => string | null;

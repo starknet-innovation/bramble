@@ -4,7 +4,7 @@ import { walletErrorMessage } from "@bramble/core/errors";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import { mapStrk20StageError } from "@bramble/privacy/official-sdk-errors";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
-import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
@@ -15,7 +15,6 @@ import {
   verificationContext,
   verifyCalls,
 } from "@bramble/transactions/verify";
-import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -28,6 +27,11 @@ import {
   FAILED_INVOKE_FEE,
   PENDING_INVOKE_FEE,
 } from "../approvals/invoke-fee-review";
+import { type ResolvedOriginAccount, resolveOriginAccount } from "./provider-grant";
+
+/** Re-exports the grant-resolution surface from its size-budget split. */
+export type { ResolvedOriginAccount } from "./provider-grant";
+
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
@@ -99,64 +103,6 @@ export type InvokeExecuteDeps = {
   readonly wallet: WalletStatusReader;
 };
 
-/**
- * The active-network account resolved for an origin's live connection grant,
- * together with the passphrase and preferences read while resolving it.
- */
-export type ResolvedOriginAccount = {
-  readonly account: AccountRef;
-  readonly passphrase: string;
-  readonly preferences: WalletPreferences;
-};
-
-/**
- * Dependencies needed to resolve an origin's active-network account. Both the
- * dapp handlers and the held-approval executor satisfy this shape.
- */
-type GrantResolverDeps = {
-  readonly preferencesStore: WalletPreferencesStore;
-  readonly session: PassiveUnlockSession;
-  readonly wallet: WalletStatusReader;
-};
-
-// Resolves the account an origin's grant currently maps to on the active
-// network, or an error response the caller returns directly. A locked wallet or
-// a revoked grant fails safely. Single source for the dapp handlers and the
-// held-invoke executor so the fail-closed ordering never drifts between them.
-// Peek, never renew: an origin that keeps calling must not be able to hold the
-// wallet unlocked past its inactivity limit.
-const resolveOriginAccount = async (
-  deps: GrantResolverDeps,
-  origin: string,
-  expected?: ApprovalContext,
-): Promise<ResolvedOriginAccount | { readonly error: string }> => {
-  const passphrase = deps.session.peekPassphrase();
-  if (!passphrase) {
-    return { error: "wallet locked" };
-  }
-  const preferences = await deps.preferencesStore.read();
-  if (expected && preferences.activeNetworkId !== expected.networkId) {
-    return { error: "approval context changed" };
-  }
-  const granted = await deps.wallet.getGrantedAccounts(origin, passphrase);
-  const account = expected
-    ? granted.find(
-        (stored) =>
-          stored.id === expected.accountId &&
-          stored.networkId === expected.networkId &&
-          stored.networkId === preferences.activeNetworkId,
-      )
-    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
-  return { account, passphrase, preferences };
-};
-
-// Builds the fee-review target from a resolved grant. The signer is constructed
-// here, where the vault credential already lives, so the estimator never
-// receives one — and it is passed as a thunk so that construction happens inside
-// the estimator's own failure handling rather than at the call site.
 const feeReviewTarget = (
   deps: Pick<ProviderOpsDeps, "ledgerSignQueue" | "session" | "wallet">,
   resolved: ResolvedOriginAccount,

@@ -42,14 +42,17 @@ export const ARGENT_ACCOUNT_CLASS_HASH =
 export const isAccountContractType = (value: unknown): value is AccountContractType =>
   value === "argent" || value === "openzeppelin";
 
-/**
- * BIP-44 provenance for an account derived from the recovery phrase.
- */
+/** BIP-44 provenance; `seedId` names the imported phrase, absent = founding. */
 export type Bip44Derivation = {
   readonly accountIndex: number;
   readonly addressIndex: number;
   readonly kind: "starknet-bip44";
+  readonly seedId?: string;
 };
+
+/** Imported-phrase handle grammar: sequential vault-allocated, bounded. */
+export const isImportedSeedId = (value: unknown): value is string =>
+  typeof value === "string" && /^phrase-[1-9][0-9]{0,3}$/.test(value);
 
 /**
  * Provenance for an account imported from a raw Starknet signing key.
@@ -160,10 +163,11 @@ const isNonZeroFelt = (value: unknown): value is string =>
 
 const isBip44Derivation = (value: unknown): value is Bip44Derivation =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountIndex", "addressIndex", "kind"]) &&
+  hasOnlyKnownKeys(value, ["accountIndex", "addressIndex", "kind", "seedId"]) &&
   value["kind"] === "starknet-bip44" &&
   isSafeIndex(value["accountIndex"]) &&
-  isSafeIndex(value["addressIndex"]);
+  isSafeIndex(value["addressIndex"]) &&
+  (value["seedId"] === undefined || isImportedSeedId(value["seedId"]));
 
 const isImportedKeyDerivation = (value: unknown): value is ImportedKeyDerivation =>
   isRecord(value) && hasOnlyKnownKeys(value, ["kind"]) && value["kind"] === "imported-raw-key";

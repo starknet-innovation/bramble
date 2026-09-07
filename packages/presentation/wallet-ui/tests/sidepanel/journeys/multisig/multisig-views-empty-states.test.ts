@@ -25,7 +25,7 @@ const status: WalletStatus = {
 describe("multisig empty states", () => {
   test("detail screen renders the unwatched empty state for a missing record", () => {
     const html = multisigDetailFlow(status, null, null, []);
-    expect(html).toContain("This Argent multisig is no longer watched.");
+    expect(html).toContain("This Ready multisig is no longer watched.");
     expect(html).toContain('id="wallet-screen-multisig-detail"');
     // The frozen-intent import section is not rendered without a record.
     expect(html).not.toContain('id="multisig-track-form"');
@@ -33,7 +33,7 @@ describe("multisig empty states", () => {
 
   test("propose screen renders the unwatched empty state for a missing record", () => {
     const html = multisigProposeFlow(status, null);
-    expect(html).toContain("This Argent multisig is no longer watched.");
+    expect(html).toContain("This Ready multisig is no longer watched.");
     expect(html).toContain('id="wallet-screen-multisig-propose"');
     expect(html).not.toContain('id="multisig-propose-form"');
   });

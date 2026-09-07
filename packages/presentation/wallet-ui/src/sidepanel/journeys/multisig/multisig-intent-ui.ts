@@ -59,7 +59,7 @@ const run = (
       }
     },
     (error: unknown) => {
-      const details = errorMessage(error, "Argent multisig request failed");
+      const details = errorMessage(error, "Ready multisig request failed");
       const message = isArgentMultisigFeeExpiredMessage(details)
         ? ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE
         : details;

@@ -4,6 +4,7 @@
 
 import {
   isTrustedPageMessage,
+  misaddressedProviderResponse,
   providerResponse,
   readProviderRequest,
   toProviderPayload,
@@ -62,6 +63,14 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 
   const request = readProviderRequest(event.data);
   if (!request) {
+    // A message addressed to this bridge with a well-formed request id but an
+    // invalid body gets a deterministic rejection instead of a silent drop, so
+    // the page's pending promise cannot hang forever. Anything not addressed
+    // to the bridge stays unanswered — foreign window traffic gets nothing.
+    const misaddressed = misaddressedProviderResponse(event.data);
+    if (misaddressed) {
+      window.postMessage(misaddressed, pageOrigin);
+    }
     return;
   }
 

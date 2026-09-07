@@ -96,7 +96,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       invalidateRefreshes();
       const response = await sendMessage({ ...input, type: "wallet.addMultisig" });
       if (!isArgentMultisigResponse(response)) {
-        throw responseError(response, "add Argent multisig failed");
+        throw responseError(response, "add Ready multisig failed");
       }
       return response.multisig;
     },
@@ -104,20 +104,20 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       invalidateRefreshes();
       const response = await sendMessage({ review, type: "wallet.deployArgentMultisig" });
       if (!isArgentMultisigDeployResponse(response)) {
-        throw responseError(response, "deploy Argent multisig failed");
+        throw responseError(response, "deploy Ready multisig failed");
       }
       return response;
     },
     async importIntent(intentPackage: ArgentMultisigIntentPackage) {
       return intentResult(
         { package: intentPackage, type: "wallet.importArgentMultisigIntent" },
-        "import Argent multisig intent failed",
+        "import Ready multisig intent failed",
       );
     },
     async importSignature(intentId: string, signature: StarkSignature) {
       return intentResult(
         { intentId, signature, type: "wallet.importArgentMultisigSignature" },
-        "import Argent multisig signature failed",
+        "import Ready multisig signature failed",
       );
     },
     async loadBalances(
@@ -173,7 +173,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
     async prepareIntent(multisigId: string, calls: readonly ArgentMultisigCall[]) {
       return intentResult(
         { calls, multisigId, type: "wallet.prepareArgentMultisigIntent" },
-        "prepare Argent multisig intent failed",
+        "prepare Ready multisig intent failed",
       );
     },
     async resolveSigner(address: string, networkId: string): Promise<MultisigSignerAccount> {
@@ -220,14 +220,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         type: "wallet.removeMultisig",
       });
       if (!isOkResponse(response)) {
-        throw responseError(response, "remove Argent multisig failed");
+        throw responseError(response, "remove Ready multisig failed");
       }
     },
     async removeIntent(intentId: string): Promise<void> {
       invalidateRefreshes();
       const response = await sendMessage({ intentId, type: "wallet.removeArgentMultisigIntent" });
       if (!isOkResponse(response)) {
-        throw responseError(response, "remove Argent multisig intent failed");
+        throw responseError(response, "remove Ready multisig intent failed");
       }
     },
     async reviewDeployment(
@@ -239,14 +239,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         type: "wallet.reviewArgentMultisigDeployment",
       });
       if (!isArgentMultisigDeploymentReviewResponse(response)) {
-        throw responseError(response, "review Argent multisig deployment failed");
+        throw responseError(response, "review Ready multisig deployment failed");
       }
       return response.deploymentReview;
     },
     async signIntent(intentId: string, signerAccountId: string) {
       return intentResult(
         { intentId, signerAccountId, type: "wallet.signArgentMultisigIntent" },
-        "sign Argent multisig intent failed",
+        "sign Ready multisig intent failed",
       );
     },
     async shareIntent(
@@ -280,7 +280,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
     async submitIntent(intentId: string) {
       return intentResult(
         { intentId, type: "wallet.submitArgentMultisigIntent" },
-        "submit Argent multisig intent failed",
+        "submit Ready multisig intent failed",
       );
     },
   };

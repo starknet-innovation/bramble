@@ -18,6 +18,7 @@ import type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
   ConnectedSite,
+  CreateKeyVaultInput,
   CreateLedgerVaultInput,
   CreateVaultAccountInput,
   DeriveLedgerAccountsInput,
@@ -46,6 +47,8 @@ export type WalletStatusReader = {
   /** Stores a keyless Ledger account; optional only for partial test stubs. */
   readonly addLedgerAccount?: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
+  /** Creates a phrase-less vault from one raw key; fails closed over an existing vault. */
+  readonly createKeyVault?: (input: CreateKeyVaultInput) => Promise<AccountRef>;
   /** Creates a mnemonic-less Ledger vault; fails closed over an existing vault. */
   readonly createLedgerVault?: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
   /** Derives Ledger picker candidates; optional only for partial test stubs. */
@@ -80,6 +83,10 @@ export type WalletStatusReader = {
    * provides it.
    */
   readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
+  /** Imports selected accounts from another phrase; optional only for partial test stubs. */
+  readonly importSeedAccounts?: (
+    input: RecoverVaultAccountsInput,
+  ) => Promise<readonly AccountRef[]>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
   /** Atomically restores a confirmed set of phrase-derived accounts. */
@@ -131,6 +138,9 @@ export const createWalletReader = (
     async createAccount(input) {
       return (await required()).createAccount(input);
     },
+    async createKeyVault(input) {
+      return (await required()).createKeyVault(input);
+    },
     async createLedgerVault(input) {
       return (await required()).createLedgerVault(input);
     },
@@ -163,6 +173,9 @@ export const createWalletReader = (
     },
     async importRawKeyAccount(input) {
       return (await required()).importRawKeyAccount(input);
+    },
+    async importSeedAccounts(input) {
+      return (await required()).importSeedAccounts(input);
     },
     async previewAccount(input) {
       return (await required()).previewAccount(input);

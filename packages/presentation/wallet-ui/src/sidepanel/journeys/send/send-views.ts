@@ -108,7 +108,7 @@ const multisigRecipientRow = (record: ArgentMultisigRecord): string => {
     <span class="send-recipient-copy">
       <strong>${escapeHtml(name)}</strong>
       <code>${escapeHtml(accountLabel(record.address))}</code>
-      <small>Argent Multisig account</small>
+      <small>Ready Multisig account</small>
     </span>
     ${icon("chevronRight")}
   </button>`;

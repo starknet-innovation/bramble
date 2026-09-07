@@ -17,8 +17,13 @@ import { emptyState, pill } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import { icon } from "../../shared/icons";
-import { accountLabel } from "../../shared/parts";
-import type { LedgerCandidate, LedgerOnboardAddKind } from "./onboard-session";
+import { accountLabel, accountsDetectedText } from "../../shared/parts";
+import type { LedgerOnboardAddKind } from "./onboard-session";
+import {
+  type LedgerCandidate,
+  ledgerCandidateActive,
+  ledgerCandidateSelectable,
+} from "./onboard-types";
 import type { LedgerDeviceChoice } from "./sign-session";
 
 // The dismiss control rendered in every onboarding state so the full-screen
@@ -43,23 +48,25 @@ const onboardHero = (chip: string, head: string, actions: string): string => `
     <div class="onboard-actions">${actions}</div>
   </div>`;
 
-/**
- * The shared add-account chooser used by both the account drawer and Manage
- * accounts. Selection and confirmation are separate so a user can compare all
- * four signer models before committing to one route.
- */
-export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null): string => {
-  const option = (
-    kind: LedgerOnboardAddKind,
-    iconName: "link" | "shield" | "users" | "wallet",
-    label: string,
-    supportingText: string,
-  ): string => `
-    <button class="add-account-option" data-add-kind="${kind}" type="button" aria-pressed="${selected === kind}">
+// One chooser tile: a single click routes immediately — no separate
+// select-then-confirm step. The chevron marks each tile as a direct action.
+const chooserOption = (
+  kind: LedgerOnboardAddKind,
+  iconName: "book" | "link" | "shield" | "users" | "wallet",
+  label: string,
+  supportingText: string,
+): string => `
+    <button class="add-account-option" data-add-kind="${kind}" type="button">
       <span class="add-account-option-icon">${icon(iconName)}</span>
       <span class="add-account-option-copy"><strong>${label}</strong><span>${supportingText}</span></span>
-      <span class="add-account-option-check">${icon("check")}</span>
+      <span class="add-account-option-check">${icon("chevronRight")}</span>
     </button>`;
+
+/**
+ * The shared add-account chooser used by both the account drawer and Manage
+ * accounts. Each tile routes on its own click.
+ */
+export const addAccountChooser = (): string => {
   return `
   <div class="onboard-hero add-account-hero">
     <header class="add-account-header">
@@ -72,18 +79,41 @@ export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null):
       })}
     </header>
     <div class="add-account-chooser" role="group" aria-label="Add an account">
-      ${option("openzeppelin", "wallet", "OpenZeppelin Account", "Recommended · Create the next account from this wallet’s recovery phrase.")}
-      ${option("argent", "wallet", "Argent Account", "Create the next account with the Argent account model.")}
-      ${option("ledger-openzeppelin", "shield", "OpenZeppelin Ledger Account", "Recommended · Use a Ledger with the OpenZeppelin account model.")}
-      ${option("ledger-argent", "shield", "Argent Ledger Account", "Use a Ledger with the Argent account model.")}
-      ${option("import", "link", "Import from private key", "Add an existing Starknet account from its raw key.")}
-      ${option("multisig", "users", "Argent Multisig", "Create or add an Argent account controlled by multiple signers.")}
+      ${chooserOption("regular", "wallet", "Regular account", "Create the next account from this wallet’s recovery phrase.")}
+      ${chooserOption("ledger", "shield", "Ledger account", "Connect a Ledger and pick its accounts, new or existing.")}
+      ${chooserOption("multisig", "users", "Multisig account", "Create or add a shared account controlled by multiple signers.")}
+      ${chooserOption("import", "link", "Import an existing account", "Bring accounts you already own: a recovery phrase or a private key.")}
+    </div>
+  </div>`;
+};
+
+/**
+ * The in-wallet second stage of "Import an existing account": a recovery
+ * phrase (retained for later re-derivation, with its own scan) or a single raw
+ * private key. Ledger import lives on the top-level Ledger route, whose picker
+ * already finds existing device accounts.
+ */
+export const importAccountChooser = (): string => {
+  return `
+  <div class="onboard-hero add-account-hero">
+    <header class="add-account-header">
+      <h1>Import an existing account</h1>
+      ${iconButton({
+        attributes: { "data-ledger-onboard-cancel": true },
+        icon: "x",
+        label: "Close Add account",
+        variant: "ghost",
+      })}
+    </header>
+    <div class="add-account-chooser" role="group" aria-label="Import an existing account">
+      ${chooserOption("import-phrase", "book", "Recovery phrase", "Import accounts from another wallet's 12 or 24 words.")}
+      ${chooserOption("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
     </div>
     <div class="onboard-actions">
       ${button({
-        attributes: { "data-add-continue": true },
-        disabled: selected === null,
-        label: "Continue",
+        attributes: { "data-add-back": true },
+        label: "Back",
+        variant: "ghost",
       })}
     </div>
   </div>`;
@@ -179,9 +209,11 @@ const candidateMeta = (candidate: LedgerCandidate): string => {
 
 // A duplicate row is non-selectable: it shows the "Already in this wallet" badge
 // instead of a checkbox, so an account already in the vault can never be picked.
-// Every other row is a labelled checkbox keyed on its account index.
-const candidateRow = (candidate: LedgerCandidate, selected: readonly number[]): string => {
-  const index = candidate.account.derivation.accountIndex;
+// An inactive Ready row keeps its checkbox but disabled: importing it would
+// deploy a brand-new Ready account, which this wallet does not do. Every other
+// row is a labelled checkbox keyed on its account id.
+const candidateRow = (candidate: LedgerCandidate, selected: readonly string[]): string => {
+  const id = candidate.account.id;
   if (candidate.duplicate) {
     return `
   <li class="allowance-row is-duplicate">
@@ -189,14 +221,39 @@ const candidateRow = (candidate: LedgerCandidate, selected: readonly number[]): 
     ${pill("Already in this wallet")}
   </li>`;
   }
-  const checked = selected.includes(index) ? " checked" : "";
+  const disabled = ledgerCandidateSelectable(candidate) ? "" : " disabled";
+  const checked = selected.includes(id) ? " checked" : "";
   return `
   <li class="allowance-row">
     <label class="select-row">
-      <input class="select-check" type="checkbox" data-ledger-toggle="${escapeHtml(String(index))}"${checked} />
+      <input class="select-check" type="checkbox" data-ledger-toggle="${escapeHtml(id)}"${checked}${disabled} />
       <span class="allowance-copy">${candidateMeta(candidate)}</span>
     </label>
   </li>`;
+};
+
+// One contract-family group: a native disclosure whose summary carries the
+// family name and a light detected-count. The runtime preserves each group's
+// open/closed state across repaints and opens a group when activity appears.
+const candidateGroup = (
+  contractType: "argent" | "openzeppelin",
+  candidates: readonly LedgerCandidate[],
+  selected: readonly string[],
+): string => {
+  const rows = candidates.filter(
+    (candidate) => candidate.account.accountContractType === contractType,
+  );
+  const detected = rows.filter(ledgerCandidateActive).length;
+  const label = contractType === "argent" ? "Ready accounts" : "Bramble accounts";
+  const body =
+    rows.length === 0
+      ? emptyState("No accounts read from the device yet.")
+      : `<ul class="allowance-list">${rows.map((candidate) => candidateRow(candidate, selected)).join("")}</ul>`;
+  return `
+  <details class="disclosure account-group" data-account-group="${contractType}">
+    <summary>${label}${detected === 0 ? "" : `<span class="hint">${accountsDetectedText(detected)}</span>`}</summary>
+    <div class="disclosure-body">${body}</div>
+  </details>`;
 };
 
 /**
@@ -210,20 +267,17 @@ const candidateRow = (candidate: LedgerCandidate, selected: readonly number[]): 
  */
 export const ledgerAccountPicker = (
   candidates: readonly LedgerCandidate[],
-  selected: readonly number[] = [],
+  selected: readonly string[] = [],
   message?: string,
 ): string => {
-  const list =
-    candidates.length === 0
-      ? emptyState("No accounts read from the device yet.")
-      : `<ul class="allowance-list">${candidates.map((candidate) => candidateRow(candidate, selected)).join("")}</ul>`;
+  const list = `${candidateGroup("openzeppelin", candidates, selected)}${candidateGroup("argent", candidates, selected)}`;
   const count = selected.length;
   const addLabel = count > 0 ? `Add selected (${count})` : "Add selected";
   return `
   <div class="onboard-picker">
     <div class="gate-head">
       <h1>Select accounts</h1>
-      <p class="lede">Pick the accounts to add. Each address is read straight from your device.</p>
+      <p class="lede">Pick the accounts to add. Each address is read straight from your device, and accounts with on-chain activity are selected automatically.</p>
     </div>
     ${message ? `<p class="review-flag" role="alert">${escapeHtml(message)}</p>` : ""}
     ${list}

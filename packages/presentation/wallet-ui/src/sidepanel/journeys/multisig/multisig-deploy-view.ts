@@ -68,7 +68,7 @@ const deploymentSignerCopy = (
   preferences: WalletPreferences | null,
 ): string => `<span class="option-name"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>${hardwareBadge(account)}</span>
     <code>${escapeHtml(accountLabel(account.address))}</code>
-    <span class="option-sub">${account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"} · Key matches</span>`;
+    <span class="option-sub">${account.accountContractType === "argent" ? "Ready" : "Bramble"} · Key matches</span>`;
 
 const deploymentSignerIdentity = (
   account: AccountRef,
@@ -99,7 +99,7 @@ const signerKeySources = (
       address: candidate.address,
       label: accountDisplayName(candidate, preferences),
       publicKeyX: candidate.publicKeyX,
-      source: `${candidate.accountContractType === "argent" ? "Argent" : "OpenZeppelin"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""} account`,
+      source: `${candidate.accountContractType === "argent" ? "Ready" : "Bramble"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""} account`,
     })),
     ...(preferences?.addressBook
       .filter((entry) => entry.publicKeyX !== undefined)
@@ -179,7 +179,7 @@ export const multisigDeployFlow = (
       flowScreen(
         "multisig-deploy",
         emptyState(
-          "The pinned Argent Multisig 0.2 class is not declared on this network. Predeclare the audited class before deployment.",
+          "The pinned Ready Multisig 0.2 class is not declared on this network. Predeclare the audited class before deployment.",
         ),
       )
     );
@@ -219,7 +219,7 @@ export const multisigDeployFlow = (
                   label: "Fund from",
                   name: "fundingAccountId",
                   options: accounts.map((candidate) => ({
-                    label: `${accountDisplayName(candidate, preferences)} · ${candidate.accountContractType === "argent" ? "Argent" : "OpenZeppelin"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
+                    label: `${accountDisplayName(candidate, preferences)} · ${candidate.accountContractType === "argent" ? "Ready" : "Bramble"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
                     value: candidate.id,
                   })),
                   selected: account.id,

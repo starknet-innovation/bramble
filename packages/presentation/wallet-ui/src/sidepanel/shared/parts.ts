@@ -30,6 +30,7 @@ export const WALLET_VIEWS = [
   "advanced-network",
   "account",
   "import-key",
+  "import-phrase",
   "address-book",
   "backup",
   "backup-export",
@@ -82,6 +83,7 @@ const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   "deploy-account": "Deploy account",
   home: "Home",
   "import-key": "Private-key import",
+  "import-phrase": "Recovery-phrase import",
   multisigs: "Shared accounts",
   "multisig-add": "Set up multisig",
   "multisig-deploy": "Create multisig",
@@ -135,6 +137,15 @@ export const isWalletView = (value: unknown): value is WalletView =>
  * Truncates a Starknet address for display.
  */
 export const accountLabel = (address: string): string => shortAddress(address);
+
+/**
+ * Light summary text for an account-group disclosure: "N accounts detected"
+ * when the scan found active (deployed or funded) accounts, empty otherwise.
+ * Plain text (callers own the markup) shared by the recovery-phrase and Ledger
+ * import pickers so the two flows describe detection identically.
+ */
+export const accountsDetectedText = (detected: number): string =>
+  detected === 0 ? "" : `${detected} ${detected === 1 ? "account" : "accounts"} detected`;
 
 /**
  * Renders a native, repaint-persistent explanation for protocol concepts. The

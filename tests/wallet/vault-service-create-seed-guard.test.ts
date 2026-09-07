@@ -109,3 +109,18 @@ describe("createAccount seed guard", () => {
     expect(vault.accounts).toEqual([mainnet, sepolia]);
   });
 });
+
+describe("createKeyVault seed guard", () => {
+  test("refuses to write over a seeded wallet before deriving anything", async () => {
+    const service = makeService();
+    await service.createAccount({ accountContractType: "openzeppelin", mnemonic, vaultPassphrase });
+    await expect(
+      service.createKeyVault({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        privateKey: "0xfeedface",
+        vaultPassphrase,
+      }),
+    ).rejects.toThrow("Wallet already exists");
+  });
+});
