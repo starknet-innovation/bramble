@@ -126,8 +126,8 @@ if (
   failures.push("package.json must stay private ESM mc-wallet package metadata");
 }
 
-if (biomeJson["$schema"] !== "https://biomejs.dev/schemas/2.5.8/schema.json") {
-  failures.push("biome.json schema must stay pinned to 2.5.8");
+if (biomeJson["$schema"] !== "https://biomejs.dev/schemas/2.5.11/schema.json") {
+  failures.push("biome.json schema must stay pinned to 2.5.11");
 }
 
 const biomeVcs = isRecord(biomeJson["vcs"]) ? biomeJson["vcs"] : null;
