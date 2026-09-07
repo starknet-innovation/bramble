@@ -25,10 +25,14 @@
 #     guard's branch from the `push` filter below, so the two cannot drift: when
 #     the release branch is promoted, change the filter and the gate demands the
 #     guard follow.
-#   - `CLOUDFLARE_API_TOKEN` is an Account → Workers Scripts → Edit token scoped
-#     to this account and nothing broader, held as an environment secret so it is
-#     unavailable to any job that does not clear the environment's policy. The
-#     account id is not a secret.
+#   - `CLOUDFLARE_API_TOKEN` needs two policies, not one: Account → Workers
+#     Scripts → Edit to upload the assets, and Zone → Workers Routes → Edit
+#     because `wrangler deploy` reconciles routes on every run against a
+#     zone-scoped endpoint, whether or not the route changed. With only the
+#     first, the upload succeeds and the route step then fails — the site
+#     updates while this workflow goes red. It is held as an environment secret,
+#     so it is unavailable to any job that does not clear the environment's
+#     policy. The account id is not a secret.
 #   - The build is gated on the website's own `check` script (types, lint, unit
 #     tests, production build) before anything is uploaded.
 #   - `VITE_CHROME_STORE_URL` is intentionally not wired through repository
