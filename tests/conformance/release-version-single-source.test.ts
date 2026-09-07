@@ -31,8 +31,14 @@ describe("versionFromReleaseBranch", () => {
     expect(versionFromReleaseBranch("release/v1.12")).toBe("1.12.0");
   });
 
-  test("rejects names that are not release/vX.Y", () => {
-    expect(versionFromReleaseBranch("release/v0.5.1")).toBeNull();
+  test("derives X.Y.Z from a release/vX.Y.Z patch branch (issue #302)", () => {
+    expect(versionFromReleaseBranch("release/v0.5.1")).toBe("0.5.1");
+    expect(versionFromReleaseBranch("release/v0.10.12")).toBe("0.10.12");
+  });
+
+  test("rejects names that are not release branches", () => {
+    expect(versionFromReleaseBranch("release/v0.5.1.2")).toBeNull();
+    expect(versionFromReleaseBranch("release/v0.10-save-orphan")).toBeNull();
     expect(versionFromReleaseBranch("feature/59-x")).toBeNull();
     expect(versionFromReleaseBranch("hotfix/panic")).toBeNull();
     expect(versionFromReleaseBranch("main")).toBeNull();
