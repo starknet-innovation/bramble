@@ -22,6 +22,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
      cards (callout, review panel, request/nft cards) carry their own single
      border below. */
   .section { display: grid; gap: ${SPACE.md}; }
+  #deploy-button { width: 100%; }
   /* Callout: a neutral panel card; the accent lives only in the leading icon
      chip, so a waiting request draws the eye without tinting the surface. */
   .callout {

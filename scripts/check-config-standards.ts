@@ -147,6 +147,7 @@ if (
     "!.playwright-cli",
     "!apps/terminal",
     "!apps/ui-lab",
+    "!apps/website",
     "!bun.lock",
     "!dist",
     "!node_modules",
