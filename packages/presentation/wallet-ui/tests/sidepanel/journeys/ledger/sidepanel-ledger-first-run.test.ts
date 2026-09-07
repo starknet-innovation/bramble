@@ -9,9 +9,9 @@
  * The device is an injected fake connector — no WebHID or background.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
 import { bindLedgerFirstRun } from "../../../../src/sidepanel/journeys/ledger/first-run";
@@ -47,11 +47,12 @@ const mountOnboarding = (status: WalletStatus) => {
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
-  const captured: Array<readonly [string, string, AccountContractType]> = [];
+  const captured: Array<readonly [string, string]> = [];
   bindLedgerFirstRun({
     app,
-    startLedgerSetup: (networkId, vaultPassphrase, accountContractType) =>
-      captured.push([networkId, vaultPassphrase, accountContractType]),
+    startLedgerSetup: (networkId, vaultPassphrase) => {
+      captured.push([networkId, vaultPassphrase]);
+    },
   });
   return { app, captured };
 };
@@ -106,7 +107,7 @@ describe("bindLedgerFirstRun", () => {
     expect(button?.disabled).toBe(false);
 
     click(app, "#ledger-setup-button");
-    expect(captured).toEqual([["SN_MAIN", PASSPHRASE, "openzeppelin"]]);
+    expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
   });
 
   test("shows a passphrase hint for a too-short passphrase", () => {
@@ -128,17 +129,7 @@ describe("bindLedgerFirstRun", () => {
     check(app, 'input[name="ledgerMainnetAck"]');
     click(app, "#ledger-setup-button");
     expect(app.querySelector('select[name="ledgerNetworkId"]')).toBeNull();
-    expect(captured).toEqual([["SN_MAIN", PASSPHRASE, "openzeppelin"]]);
-  });
-
-  test("forwards the explicit Argent choice", () => {
-    const { app, captured } = mountOnboarding(mainnetStatus);
-    setValue(app, 'input[name="ledgerAccountContractType"]', "argent");
-    setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
-    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
-    check(app, 'input[name="ledgerMainnetAck"]');
-    click(app, "#ledger-setup-button");
-    expect(captured).toEqual([["SN_MAIN", PASSPHRASE, "argent"]]);
+    expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
   });
 
   test("blocks setup and toasts when the Mainnet ack is missing at click time", () => {
@@ -178,20 +169,28 @@ const enumerateClient: LedgerDeviceClient = {
   signHash: () => Promise.reject(new Error("unused")),
 };
 
-const candidate = (index: number): LedgerAccountRef => ({
-  accountContractType: "openzeppelin",
-  address: `0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  derivation: {
-    accountIndex: index,
-    eip2645application: "LedgerW",
-    kind: "ledger",
-    path: ledgerAccountPath(index),
-  },
-  id: `SN_MAIN:0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
-  networkId: "SN_MAIN",
-  publicKeyX: `0x${index + 1}`,
-});
+const candidate = (
+  index: number,
+  accountContractType: "argent" | "openzeppelin" = "openzeppelin",
+): LedgerAccountRef => {
+  const address = `0x${accountContractType === "argent" ? "e" : ""}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`;
+  return {
+    ...(accountContractType === "argent"
+      ? ({ accountContractType, deploymentSalt: "0x1" } as const)
+      : ({ accountContractType } as const)),
+    address,
+    classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    derivation: {
+      accountIndex: index,
+      eip2645application: "LedgerW",
+      kind: "ledger",
+      path: ledgerAccountPath(index),
+    },
+    id: `SN_MAIN:${address}`,
+    networkId: "SN_MAIN",
+    publicKeyX: `0x${index + 1}`,
+  };
+};
 
 const entryHarness = () => {
   document.body.replaceChildren();
@@ -219,7 +218,11 @@ const entryHarness = () => {
       created.push([networkId, accountIndex, publicKeyX, vaultPassphrase]);
       return Promise.resolve(candidate(accountIndex).id);
     },
-    deriveLedgerAccounts: () => Promise.resolve([candidate(0), candidate(1)]),
+    deriveLedgerAccounts: (
+      _networkId: string,
+      _entries: readonly unknown[],
+      accountContractType: "argent" | "openzeppelin",
+    ) => Promise.resolve([candidate(0, accountContractType), candidate(1, accountContractType)]),
     ledgerAccountStatus: () => Promise.resolve({ balance: null, deployed: null }),
     loadStatus: () => Promise.resolve(mainnetStatus),
   } as unknown as SidepanelWallet;
@@ -231,6 +234,7 @@ const entryHarness = () => {
     connector,
     mount,
     openImport: () => undefined,
+    openImportSeed: () => undefined,
     openMultisig: () => {
       multisigs += 1;
     },
@@ -250,12 +254,12 @@ describe("createLedgerOnboardEntry", () => {
 
   test("first-run setup creates a brand-new Ledger vault with the passphrase", async () => {
     const h = entryHarness();
-    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE, "openzeppelin");
+    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE);
     expect(h.mount.hidden).toBe(false);
 
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    check(h.mount, '[data-ledger-toggle="1"]');
+    check(h.mount, `[data-ledger-toggle="${candidate(1).id}"]`);
     click(h.mount, "[data-ledger-add-selected]");
     await tick();
 
@@ -276,9 +280,8 @@ describe("createLedgerOnboardEntry", () => {
     const h = entryHarness();
     h.entry.startAddAccount();
 
-    click(h.mount, '[data-add-kind="multisig"]');
     expect(h.multisigs()).toBe(0);
-    click(h.mount, "[data-add-continue]");
+    click(h.mount, '[data-add-kind="multisig"]');
 
     expect(h.mount.hidden).toBe(true);
     expect(h.multisigs()).toBe(1);
@@ -296,7 +299,7 @@ describe("createLedgerOnboardEntry", () => {
     click(app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    check(h.mount, '[data-ledger-toggle="0"]');
+    check(h.mount, `[data-ledger-toggle="${candidate(0).id}"]`);
     click(h.mount, "[data-ledger-add-selected]");
     await tick();
 
@@ -306,7 +309,7 @@ describe("createLedgerOnboardEntry", () => {
 
   test("cancelling first-run setup clears the captured passphrase from the stash", async () => {
     const h = entryHarness();
-    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE, "openzeppelin");
+    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE);
     expect(h.mount.hidden).toBe(false);
 
     // Dismiss the overlay from the connect stage via the rendered cancel control.
@@ -326,7 +329,7 @@ describe("createLedgerOnboardEntry", () => {
     click(app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    check(h.mount, '[data-ledger-toggle="0"]');
+    check(h.mount, `[data-ledger-toggle="${candidate(0).id}"]`);
     click(h.mount, "[data-ledger-add-selected]");
     await tick();
 

@@ -5,7 +5,7 @@
  * the error in the status line without exposing anything.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import { account } from "@bramble/testkit/sidepanel";
 import type {
   RevealSecretsResponse,
   WalletStatus,

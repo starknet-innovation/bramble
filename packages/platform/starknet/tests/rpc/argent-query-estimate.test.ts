@@ -1,10 +1,10 @@
 /** Argent fee estimation includes account validation without private signing. */
 
 import { expect, test } from "bun:test";
-import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import { estimateInvokeFee } from "@mc-wallet/starknet/rpc";
-import { submitInvokeTransaction } from "@mc-wallet/starknet/rpc-submit";
-import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { ARGENT_ACCOUNT_CONTRACT } from "@bramble/starknet/account-contracts";
+import { estimateInvokeFee } from "@bramble/starknet/rpc";
+import { submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { logger, type RpcProvider } from "starknet";
 
 logger.setLogLevel("FATAL");

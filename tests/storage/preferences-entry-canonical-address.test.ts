@@ -20,15 +20,15 @@ import {
   createPreferencesStore,
   defaultWalletPreferences,
   PREFERENCES_STORE_KEY,
-} from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { canonicalAddress } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import { canonicalAddress } from "@bramble/wallet-model/networks";
 import {
   isAddressBookEntry,
   isTokenConfig,
   withAddressBookId,
   withTokenId,
-} from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/preferences";
 import {
   isWalletPreferences,
   normalizeStoredPreferences,

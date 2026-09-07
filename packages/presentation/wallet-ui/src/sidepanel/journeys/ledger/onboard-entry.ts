@@ -17,7 +17,7 @@
  * Per-candidate deployed/balance state comes from the background
  * `ledgerAccountStatus` query, degrading gracefully to "unavailable".
  */
-import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import type { RenderData } from "../../app/rendering/render-cache";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { createLedgerOnboardRuntime } from "./onboard-runtime";
@@ -32,11 +32,7 @@ import type { LedgerConnector } from "./sign-session";
 export type LedgerOnboardEntry = {
   readonly bindTriggers: (app: Element | null) => void;
   readonly startAddAccount: () => void;
-  readonly startLedgerSetup: (
-    networkId: string,
-    vaultPassphrase: string,
-    accountContractType: AccountContractType,
-  ) => void;
+  readonly startLedgerSetup: (networkId: string, vaultPassphrase: string) => void;
 };
 
 /**
@@ -55,13 +51,23 @@ export const createLedgerOnboardEntry = (deps: {
   readonly connector: LedgerConnector;
   readonly mount: HTMLElement;
   readonly openImport: () => void;
+  readonly openImportSeed: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: SidepanelWallet;
 }): LedgerOnboardEntry => {
-  const { addHd, cache, connector, mount, openImport, openMultisig, refresh, wallet } = deps;
+  const {
+    addHd,
+    cache,
+    connector,
+    mount,
+    openImport,
+    openImportSeed,
+    openMultisig,
+    refresh,
+    wallet,
+  } = deps;
   let ledgerSetup: {
-    readonly accountContractType: AccountContractType;
     readonly networkId: string;
     readonly vaultPassphrase: string;
   } | null = null;
@@ -76,7 +82,7 @@ export const createLedgerOnboardEntry = (deps: {
         account.derivation.accountIndex,
         account.publicKeyX,
         setup.vaultPassphrase,
-        setup.accountContractType,
+        account.accountContractType,
       );
       ledgerSetup = null;
       return;
@@ -104,6 +110,7 @@ export const createLedgerOnboardEntry = (deps: {
       ledgerSetup = null;
     },
     openImport,
+    openImportSeed,
     openMultisig,
     refresh,
     wallet,
@@ -112,9 +119,9 @@ export const createLedgerOnboardEntry = (deps: {
   return {
     bindTriggers: (app) => runtime.bindTriggers(app),
     startAddAccount: () => runtime.startAddAccount(),
-    startLedgerSetup: (networkId, vaultPassphrase, accountContractType) => {
-      ledgerSetup = { accountContractType, networkId, vaultPassphrase };
-      runtime.start(accountContractType);
+    startLedgerSetup: (networkId, vaultPassphrase) => {
+      ledgerSetup = { networkId, vaultPassphrase };
+      runtime.start();
     },
   };
 };

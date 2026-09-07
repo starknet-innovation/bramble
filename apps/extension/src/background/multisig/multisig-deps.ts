@@ -1,8 +1,8 @@
 /**
  * Neutral dependency seam shared by Argent multisig background modules.
  */
-import type { NostrCoordinationStore } from "@mc-wallet/multisig/coordination";
-import type { MultisigStore } from "@mc-wallet/multisig/repository";
+import type { NostrCoordinationStore } from "@bramble/multisig/coordination";
+import type { MultisigStore } from "@bramble/multisig/repository";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import type { ArgentMultisigDeploymentReviews } from "./multisig-deployment-reviews";
 import type { NostrRelayTransport } from "./nostr-relay";

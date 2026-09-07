@@ -14,9 +14,9 @@
  * trading away either property: each attempt re-reads the head, so an attempt is
  * still internally consistent and still current.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isBlockNotFoundError } from "@mc-wallet/starknet/provider";
-import { canonicalFelt, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { isBlockNotFoundError } from "@bramble/starknet/provider";
+import { canonicalFelt, isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 
 /**

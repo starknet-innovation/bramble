@@ -2,8 +2,8 @@
  * STRK20 response envelopes returned by privileged background handlers.
  */
 
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { Strk20BalanceEntry, Strk20CallAndProof } from "@mc-wallet/wallet-protocol/strk20";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { Strk20BalanceEntry, Strk20CallAndProof } from "@bramble/wallet-protocol/strk20";
 import type { Strk20WalletPreparationReview } from "./strk20-wallet-preparations";
 
 /**

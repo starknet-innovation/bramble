@@ -1,14 +1,14 @@
 /** Canonicalization and validation for frozen Argent multisig V3 invokes. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@bramble/core/json";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   sameFelt,
   UINT128_LIMIT,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type { EDataAvailabilityMode, ResourceBoundsBN } from "starknet";
 import { hash, transaction } from "starknet";
 import { type FeeEstimate, feeBoundsMaxSpend } from "./fee-bounds";

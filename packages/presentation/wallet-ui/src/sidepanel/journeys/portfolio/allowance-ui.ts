@@ -2,7 +2,7 @@
  * Allowance-manager bindings: one-tap revoke that submits `approve(spender, 0)`
  * through the verified send path and refreshes the tracked list.
  */
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";

@@ -3,7 +3,7 @@
  * the current render-cache values to privacy bindings.
  */
 
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import type { SendIntent } from "../send/send-model";

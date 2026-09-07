@@ -11,17 +11,17 @@
  * verified after the user closes the side panel.
  */
 
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
+import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { TransactionStatusReport } from "@bramble/starknet/rpc";
 import {
   type ActivityEntry,
   type ActivityLog,
   type ActivityOutcome,
   type ActivityScope,
   activityForScope,
-} from "@mc-wallet/transactions/activity";
-import { mergeActivity } from "@mc-wallet/transactions/tx-history";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/activity";
+import { mergeActivity } from "@bramble/transactions/tx-history";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import {

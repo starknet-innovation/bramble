@@ -21,7 +21,7 @@ export const artifactPolicyFailures = (
   // Pin grammar comes from ./workflow-inventory so this gate cannot drift from
   // the workflow security policy; 0 (absent) sorts before every found index.
   const uploadActionIndex = pinnedActionLine(ciWorkflow, "actions/upload-artifact@") - 1;
-  const uploadNameIndex = ciLines.indexOf("name: mc-wallet-extension");
+  const uploadNameIndex = ciLines.indexOf("name: bramble-extension");
   const uploadZipIndex = ciLines.indexOf("artifacts/*.zip");
   const uploadChecksumIndex = ciLines.indexOf("artifacts/*.zip.sha256");
   const uploadRequiredIndex = ciLines.indexOf("if-no-files-found: error");
@@ -73,7 +73,7 @@ export const artifactPolicyFailures = (
     failures.push("scripts/package-extension.ts must package only the pinned runtime files");
   }
 
-  const packageZipNamePrefix = packageScript.indexOf("const zipName = `mc-wallet-");
+  const packageZipNamePrefix = packageScript.indexOf("const zipName = `bramble-");
   const packageZipNameVersion = packageScript.indexOf('manifest["version"]', packageZipNamePrefix);
   const packageZipNameSuffix = packageScript.indexOf(".zip`;", packageZipNameVersion);
   const packageZipPath = packageScript.indexOf("const zipPath = resolve(artifactDir, zipName);");

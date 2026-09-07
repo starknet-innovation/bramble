@@ -4,7 +4,7 @@
  * opening one preserves its contract-account identity without changing the
  * vault's active signing account.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import { icon } from "../../shared/icons";
 import { accountAvatar, accountLabel } from "../../shared/parts";
@@ -26,7 +26,7 @@ export const multisigAccountOptions = (
         <span class="option-copy">
           <strong>${escapeHtml(multisigDisplayName(view.record))}</strong>
           <code>${escapeHtml(accountLabel(view.record.address))}</code>
-          <span class="option-sub">Argent Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}${view.authorityStatus === "unsupported-signers" ? " · watch only" : ""}` : view.authorityStatus === "undeployed" ? "not deployed" : "authority unavailable"}</span>
+          <span class="option-sub">Ready Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}${view.authorityStatus === "unsupported-signers" ? " · watch only" : ""}` : view.authorityStatus === "undeployed" ? "not deployed" : "authority unavailable"}</span>
         </span>
         ${view.record.id === selectedMultisigId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>`,

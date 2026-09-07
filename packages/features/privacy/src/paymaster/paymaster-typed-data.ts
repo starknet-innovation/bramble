@@ -5,8 +5,8 @@
  * match.
  */
 
-import { isRecord } from "@mc-wallet/core/json";
-import { isNonZeroStarkFieldElement, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { isRecord } from "@bramble/core/json";
+import { isNonZeroStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
 import {
   type BigNumberish,
   type Call,

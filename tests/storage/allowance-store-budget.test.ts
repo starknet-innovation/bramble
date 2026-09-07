@@ -6,8 +6,8 @@
  * newly granted allowances silently, which is the same harm as evicting them.
  */
 import { describe, expect, test } from "bun:test";
-import { isJson } from "@mc-wallet/core/json";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { isJson } from "@bramble/core/json";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   ALLOWANCE_LIMITS,
   type AllowanceInput,
@@ -15,7 +15,7 @@ import {
   allowanceId,
   createAllowanceStore,
   memoryAllowanceStore,
-} from "@mc-wallet/transactions/allowance-store";
+} from "@bramble/transactions/allowance-store";
 
 // Worst-case field sizes the validators accept: the longest network id, a
 // full-width account address, full-width token and spender felts, and the
@@ -111,7 +111,7 @@ describe("allowance log total bound", () => {
     const oversized = Array.from({ length: ALLOWANCE_LIMITS.entriesTotal + 40 }, (_, index) =>
       asRecord(input(index % 8, index)),
     );
-    await kv.set("mc-wallet:allowances", oversized);
+    await kv.set("bramble:allowances", oversized);
 
     const store = createAllowanceStore({ store: kv });
     await store.record(input(0, 90_001));

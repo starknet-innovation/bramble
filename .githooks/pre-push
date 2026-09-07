@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Offline-fast pre-push hook for MC Wallet.
+# Offline-fast pre-push hook for Bramble.
 #
 # Enable once per clone:
 #   git config core.hooksPath .githooks

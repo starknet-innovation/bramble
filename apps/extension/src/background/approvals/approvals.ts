@@ -6,15 +6,15 @@
  * queued approval is allowed to show its readers.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isUuid } from "@mc-wallet/core/ids";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
-import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-import { systemClock } from "@mc-wallet/transactions/activity";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { ProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
-import type { ProviderDeclare } from "@mc-wallet/wallet-protocol/declare";
-import type { Strk20Action, Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+import { WalletError } from "@bramble/core/errors";
+import { isUuid } from "@bramble/core/ids";
+import { isWalletOrigin } from "@bramble/core/origin";
+import type { Strk20SubmissionPlan } from "@bramble/privacy/service";
+import { systemClock } from "@bramble/transactions/activity";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { ProviderChain } from "@bramble/wallet-protocol/add-chain";
+import type { ProviderDeclare } from "@bramble/wallet-protocol/declare";
+import type { Strk20Action, Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import {
   matchesStrk20DisclosureKind,

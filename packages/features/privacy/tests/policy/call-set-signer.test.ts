@@ -3,7 +3,7 @@
  * A drift here would make every private proof authorization fail on-chain.
  */
 import { describe, expect, test } from "bun:test";
-import { computeStrk20CallSetHash, Strk20CallSetSigner } from "@mc-wallet/privacy/call-set-signer";
+import { computeStrk20CallSetHash, Strk20CallSetSigner } from "@bramble/privacy/call-set-signer";
 import {
   type Call,
   ec,

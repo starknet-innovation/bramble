@@ -2,26 +2,21 @@
  * Strict extension-runtime client for wallet-owned STRK20 journeys.
  */
 
-import { isSha256Digest } from "@mc-wallet/core/ids";
-import {
-  hasOnlyKnownKeys,
-  isDecimalAmountText,
-  isRecord,
-  isStringArray,
-} from "@mc-wallet/core/json";
-import type { PaymasterAuthorizationReview } from "@mc-wallet/privacy/paymaster-typed-data";
-import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
+import { isSha256Digest } from "@bramble/core/ids";
+import { hasOnlyKnownKeys, isDecimalAmountText, isRecord, isStringArray } from "@bramble/core/json";
+import type { PaymasterAuthorizationReview } from "@bramble/privacy/paymaster-typed-data";
+import { canonicalStrk20PoolFee } from "@bramble/privacy/service";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { isTokenId } from "@mc-wallet/wallet-model/preferences";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/wallet-protocol/fee-estimate";
-import { STRK20_LIMITS } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-model/networks";
+import { isTokenId } from "@bramble/wallet-model/preferences";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/wallet-protocol/fee-estimate";
+import { STRK20_LIMITS } from "@bramble/wallet-protocol/strk20";
 import { responseError } from "../../runtime/runtime-errors";
 
 /**

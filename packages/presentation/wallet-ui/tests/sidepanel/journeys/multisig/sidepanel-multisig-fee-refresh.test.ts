@@ -1,8 +1,8 @@
 /** Focused recovery UI for expired Argent multisig fee bounds. */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { argentMultisigTransactionHash } from "@mc-wallet/starknet/multisig-invoke";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { argentMultisigTransactionHash } from "@bramble/starknet/multisig-invoke";
 import {
   bindMultisigs,
   type MultisigUiDeps,

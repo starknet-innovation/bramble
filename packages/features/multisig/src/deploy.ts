@@ -3,17 +3,17 @@
  * account. Deployment itself remains a platform operation because it owns the
  * exact DEPLOY_ACCOUNT hash, fee bounds, signature encoding, and broadcast.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
 import {
   ARGENT_MULTISIG_CONTRACT,
   argentMultisigAddress,
   argentMultisigConstructorCalldata,
   normalizeArgentMultisigConfig,
-} from "@mc-wallet/starknet/account-contracts";
-import type { AccountDeployment } from "@mc-wallet/starknet/deployment";
-import { withRpcFallback } from "@mc-wallet/starknet/provider";
-import { canonicalFelt, isStarkFieldElement, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/starknet/account-contracts";
+import type { AccountDeployment } from "@bramble/starknet/deployment";
+import { withRpcFallback } from "@bramble/starknet/provider";
+import { canonicalFelt, isStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
 import { hash, type RpcProvider } from "starknet";
 
 /**

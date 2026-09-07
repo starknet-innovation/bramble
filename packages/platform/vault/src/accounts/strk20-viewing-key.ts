@@ -2,8 +2,8 @@
  * Vault-only STRK20 viewing-key derivation boundary.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import { isKeylessAccount } from "@bramble/wallet-model/accounts";
 import type { KmsPort } from "../kms-port";
 import type { Vault } from "../schema/schema";
 import { ledgerStrk20ViewingKeyFor } from "./account-secrets";

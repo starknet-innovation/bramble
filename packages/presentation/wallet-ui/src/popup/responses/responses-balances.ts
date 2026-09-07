@@ -17,9 +17,9 @@
  * `shared/json` grammars their writer used.
  */
 
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
-import { isTokenBalance, type TokenBalance } from "@mc-wallet/starknet/rpc";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import { isTokenBalance, type TokenBalance } from "@bramble/starknet/rpc";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 
 /**
  * Shared validated balance row accepted by presentation boundaries.

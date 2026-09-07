@@ -173,7 +173,7 @@ await writeFile(
       ? manifestJson
       : {
           ...manifestJson,
-          name: `${String(manifestJson["name"] ?? "MC Wallet")} · ${devBranch}`.slice(0, 75),
+          name: `${String(manifestJson["name"] ?? "Bramble")} · ${devBranch}`.slice(0, 75),
           version_name: `${manifestVersion ?? ""} · ${devBranch}`.slice(0, 75),
         },
     null,

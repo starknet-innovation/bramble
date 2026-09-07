@@ -1,6 +1,6 @@
 # Development workflow
 
-This is the canonical guide to how work flows through MC Wallet: where you
+This is the canonical guide to how work flows through Bramble: where you
 branch from, where pull requests target, how changes reach a release, and what
 CI runs at each stage. If you read only one document before opening a PR, read
 this one.

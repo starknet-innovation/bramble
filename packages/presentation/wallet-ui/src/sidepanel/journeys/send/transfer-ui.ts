@@ -1,6 +1,6 @@
 /** Persistent recipient, review, authorization, confirmation, and receipt bindings. */
 
-import type { SendRouteResolution } from "@mc-wallet/transactions/send-routes";
+import type { SendRouteResolution } from "@bramble/transactions/send-routes";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { errorMessage, showToast } from "../../shared/dom";

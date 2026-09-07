@@ -2,7 +2,7 @@
  * Approval-surface tests cover proactive wallet opening without request mutation.
  */
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_ORIGIN_GUARD } from "@mc-wallet/permissions/blocklist";
+import { DEFAULT_ORIGIN_GUARD } from "@bramble/permissions/blocklist";
 import {
   type ApprovalSurfaceDeps,
   configureApprovalSurface,

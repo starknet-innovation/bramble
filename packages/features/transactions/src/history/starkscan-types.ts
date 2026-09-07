@@ -1,7 +1,7 @@
 /**
  * Domain types shared by Starkscan clients and indexed wallet adapters.
  */
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 
 /**
  * Starkscan-backed networks. Local devnet deliberately remains RPC-only.

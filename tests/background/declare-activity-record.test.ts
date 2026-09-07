@@ -13,8 +13,8 @@
  * failing log never turns a submitted declare into a reported failure.
  */
 import { describe, expect, test } from "bun:test";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";

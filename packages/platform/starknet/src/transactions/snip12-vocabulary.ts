@@ -16,7 +16,7 @@
  * table between them would either hash something the card never showed or show
  * something the hash never covered.
  */
-import { isRecord } from "@mc-wallet/core/json";
+import { isRecord } from "@bramble/core/json";
 
 /**
  * A SNIP-12 revision this wallet signs. The two revisions hash with different

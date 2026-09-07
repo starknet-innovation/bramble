@@ -19,22 +19,22 @@
  * mutation queue and two concurrent increases lose one of the two grants.
  */
 
-import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@bramble/core/json";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 /**
  * Browser storage key for the allowance log.
  */
-export const ALLOWANCE_STORE_KEY = "mc-wallet:allowances";
+export const ALLOWANCE_STORE_KEY = "bramble:allowances";
 
 /**
  * Retention bounds for the allowance log.

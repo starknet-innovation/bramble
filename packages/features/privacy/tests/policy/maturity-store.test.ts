@@ -4,8 +4,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { createStrk20MaturityStore } from "@mc-wallet/privacy/maturity-store";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createStrk20MaturityStore } from "@bramble/privacy/maturity-store";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const scope = {
   accountId: "SN_SEPOLIA:0xabc",
@@ -38,7 +38,7 @@ describe("STRK20 maturity store", () => {
 
   test("ignores malformed storage rows", async () => {
     const backing = createMemoryStore();
-    await backing.set("mc-wallet:strk20-maturity", [
+    await backing.set("bramble:strk20-maturity", [
       { ...scope, acceptedBlock: -1, transactionHash: "not-a-hash" },
       { ...scope, state: "submitting", transactionHash: "0x456" },
       { ...scope, networkId: "SN_MAIN", state: "submitting" },

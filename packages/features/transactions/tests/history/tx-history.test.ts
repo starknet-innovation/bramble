@@ -5,17 +5,17 @@
  * entry; and merging chain history with the local log de-duplicated by hash.
  */
 import { describe, expect, test } from "bun:test";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import { isActivityEntry } from "@mc-wallet/transactions/activity";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import { isActivityEntry } from "@bramble/transactions/activity";
 import {
   decodeTransferEvent,
   type HistoryEvent,
   mergeActivity,
   onChainActivityEntry,
   TRANSFER_EVENT_KEY,
-} from "@mc-wallet/transactions/tx-history";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/transactions/tx-history";
+import { sameFelt } from "@bramble/wallet-model/networks";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 
 const ACCOUNT = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const OTHER = "0x0777000000000000000000000000000000000000000000000000000000000abc";

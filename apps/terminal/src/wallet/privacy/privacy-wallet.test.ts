@@ -82,7 +82,7 @@ describe("Terminal STRK20 wallet boundary", () => {
     );
   });
 
-  it("uses the MC registration capability and validates its transaction hash", async () => {
+  it("uses the Bramble registration capability and validates its transaction hash", async () => {
     const request = vi.fn(async () => ({ transaction_hash: transactionHash }));
     await expect(requestPrivateRegistration({ request })).resolves.toBe(transactionHash);
     expect(request).toHaveBeenCalledWith({ type: "mc_strk20Register" });

@@ -36,7 +36,7 @@ test("discovers and restores an imported wallet in a fresh profile", async ({ ex
 
   await importWalletFromPhrase(onboarding, IMPORT_MNEMONIC);
   await expect(onboarding.getByRole("heading", { name: "You’re all set" })).toBeVisible();
-  await expect(onboarding.getByRole("button", { name: "Open MC Wallet" })).toBeVisible();
+  await expect(onboarding.getByRole("button", { name: "Open Bramble" })).toBeVisible();
 });
 
 test("loads the built toolbar popup surface", async ({ extension }) => {
@@ -98,11 +98,14 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);
 
-  const starkscanLink = sidepanel.getByRole("link", { name: "Open Starkscan" });
-  await expect(starkscanLink).toBeVisible();
-  await expect(starkscanLink).toHaveAttribute("href", "https://starkscan.co/");
-  await expect(starkscanLink).toHaveAttribute("target", "_blank");
-  await expect(starkscanLink).toHaveAttribute("rel", "noopener noreferrer");
+  // The header explorer link opens this account's page, not the explorer front page.
+  const explorerLink = sidepanel.getByRole("link", {
+    name: "View this account on the block explorer",
+  });
+  await expect(explorerLink).toBeVisible();
+  await expect(explorerLink).toHaveAttribute("href", /^https:\/\/starkscan\.co\/contract\/0x/);
+  await expect(explorerLink).toHaveAttribute("target", "_blank");
+  await expect(explorerLink).toHaveAttribute("rel", "noopener noreferrer");
 
   await sidepanel.getByRole("button", { name: "Lock wallet" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Welcome back" })).toBeVisible();
@@ -111,7 +114,7 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
   try {
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
 
     await dapp.getByTestId("connect").click();
     await expect(dapp.getByTestId("connect-result")).toHaveText("pending");
@@ -225,6 +228,63 @@ test("surfaces an invoke as a transaction approval and rejects on deny", async (
   }
 });
 
+test("surfaces a SNIP wire-format multicall as a transaction approval", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await createWalletFromGeneratedPhrase(sidepanel);
+
+  const dappServer = await startTestDapp();
+  try {
+    const dapp = await extension.context.newPage();
+    await dapp.goto(dappServer.url);
+    await dapp.getByTestId("connect").click();
+    await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
+
+    // Real dapps speak the SNIP wallet API: snake_case call fields and decimal
+    // calldata, here an approve on a TRACKED token (mainnet STRK) plus a swap
+    // call, so the allowance-review enrichment path is exercised too. The test
+    // dapp's own button sends the legacy camelCase shape, which once left this
+    // wire format entirely uncovered.
+    await dapp.evaluate(() => {
+      const provider = (
+        globalThis as unknown as {
+          starknet_bramble: { request: (args: unknown) => Promise<unknown> };
+        }
+      ).starknet_bramble;
+      void provider
+        .request({
+          params: {
+            calls: [
+              {
+                calldata: [
+                  "0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f",
+                  "500000000000000000",
+                  "0",
+                ],
+                contract_address:
+                  "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+                entry_point: "approve",
+              },
+              {
+                calldata: ["2"],
+                contract_address:
+                  "0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f",
+                entry_point: "multi_route_swap",
+              },
+            ],
+          },
+          type: "wallet_addInvokeTransaction",
+        })
+        .catch(() => undefined);
+    });
+
+    // With the panel open and unlocked, the review takeover appears on its own.
+    await expect(sidepanel.getByText("Review request")).toBeVisible({ timeout: 10_000 });
+    await expect(sidepanel.getByText("Transaction request").first()).toBeVisible();
+  } finally {
+    await dappServer.close();
+  }
+});
+
 test("detects the injected provider after a page reload", async ({ extension }) => {
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);
@@ -233,11 +293,11 @@ test("detects the injected provider after a page reload", async ({ extension }) 
   try {
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
 
     await dapp.reload();
     await dapp.getByTestId("detect").click();
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
   } finally {
     await dappServer.close();
   }

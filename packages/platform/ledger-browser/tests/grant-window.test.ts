@@ -12,9 +12,9 @@ import {
   type GrantClientChannel,
   type GrantSessionRuntime,
   requestDeviceGrant,
-} from "@mc-wallet/ledger-browser/grant-window";
-import { ledgerBrokerChannelName } from "@mc-wallet/ledger-protocol/broker";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/ledger-browser/grant-window";
+import { ledgerBrokerChannelName } from "@bramble/ledger-protocol/broker";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 
 const SESSION_ID = "00000000-0000-4000-8000-000000000001";
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -117,7 +117,7 @@ const createRuntime = (
   timers: Array<() => void> = [],
 ): GrantSessionRuntime => ({
   channel: (name) => {
-    expect(name).toBe(`mc-wallet-ledger-v1:${SESSION_ID}`);
+    expect(name).toBe(`bramble-ledger-v1:${SESSION_ID}`);
     return fake.channel;
   },
   sessionId: () => SESSION_ID,

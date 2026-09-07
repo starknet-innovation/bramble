@@ -4,13 +4,13 @@
  * authority, deployment availability, and recovery states must be directly
  * inspectable before the shared-account experience can ship.
  */
-import { isRecord } from "@mc-wallet/core/json";
+import { isRecord } from "@bramble/core/json";
 import {
   type ArgentMultisigView,
   bindMultisigs,
   createMultisigClient,
   createSidepanelRuntime,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 import {
   argentCollectingIntent,
   argentMultisig,

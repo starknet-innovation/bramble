@@ -12,8 +12,8 @@ import {
   isUnlimitedAllowance,
   mergeAllowanceViews,
   parseAllowanceAmount,
-} from "@mc-wallet/transactions/allowance-discovery";
-import type { AllowanceRecord } from "@mc-wallet/transactions/allowance-store";
+} from "@bramble/transactions/allowance-discovery";
+import type { AllowanceRecord } from "@bramble/transactions/allowance-store";
 
 const ACCOUNT = { id: "SN_MAIN:0x1234567890abcdef" };
 const OWNER = "0x1234567890abcdef";

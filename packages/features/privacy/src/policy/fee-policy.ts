@@ -1,7 +1,7 @@
 /** STRK20 pool-fee parsing and bounds shared by preparation and submission. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { UINT128_LIMIT } from "@bramble/wallet-model/networks";
 
 /**
  * Stable refusal for missing or malformed SDK/service routing; callers fail

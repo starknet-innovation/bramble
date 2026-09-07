@@ -1,7 +1,7 @@
 /** Removal and balance operations for one resolved Argent multisig account. */
-import type { TokenBalance } from "@mc-wallet/starknet/rpc";
-import { systemClock } from "@mc-wallet/transactions/activity";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { TokenBalance } from "@bramble/starknet/rpc";
+import { systemClock } from "@bramble/transactions/activity";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import { cachedBalances } from "../portfolio/balance-snapshots";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";

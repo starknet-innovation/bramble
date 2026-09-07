@@ -10,8 +10,8 @@ import {
   type SendRouteInput,
   spendableForRoute,
   type ValueBucket,
-} from "@mc-wallet/transactions/send-routes";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/send-routes";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 
 const SENDER = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const RECIPIENT = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";

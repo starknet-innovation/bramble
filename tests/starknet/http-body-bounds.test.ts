@@ -16,16 +16,16 @@
  * covered in tests/starknet/http-bounded-fetch.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { type BoundedHttpFetch, HTTP_BODY_LIMITS } from "@mc-wallet/core/http-json";
-import { createHttpNftIndexer, type NftIndexerHttp } from "@mc-wallet/portfolio/nft-indexer";
-import { createPriceService, type HttpResponse } from "@mc-wallet/portfolio/prices";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { createSwapService } from "@mc-wallet/transactions/avnu";
+import { type BoundedHttpFetch, HTTP_BODY_LIMITS } from "@bramble/core/http-json";
+import { createHttpNftIndexer, type NftIndexerHttp } from "@bramble/portfolio/nft-indexer";
+import { createPriceService, type HttpResponse } from "@bramble/portfolio/prices";
+import { createMemoryStore } from "@bramble/store/kv";
+import { createSwapService } from "@bramble/transactions/avnu";
 import {
   createStarkscanClient,
   StarkscanError,
   type StarkscanHttp,
-} from "@mc-wallet/transactions/starkscan";
+} from "@bramble/transactions/starkscan";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 const NFT_ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";

@@ -6,12 +6,12 @@
  * starknet-allowance-scan.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { APPROVAL_EVENT_KEY } from "@mc-wallet/transactions/allowance-discovery";
-import type { AllowanceEvent, AllowanceRpc } from "@mc-wallet/transactions/allowance-scan";
+import { APPROVAL_EVENT_KEY } from "@bramble/transactions/allowance-discovery";
+import type { AllowanceEvent, AllowanceRpc } from "@bramble/transactions/allowance-scan";
 import {
   collectExternalAllowances,
   scanExternalAllowances,
-} from "@mc-wallet/transactions/allowance-scan";
+} from "@bramble/transactions/allowance-scan";
 import type { RpcProvider } from "starknet";
 
 const OWNER = "0x1234567890abcdef";

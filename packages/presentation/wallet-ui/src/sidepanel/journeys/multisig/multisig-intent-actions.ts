@@ -1,9 +1,9 @@
 /** State-based action hierarchy for one frozen Argent multisig intent. */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { selectField, textareaField } from "@mc-wallet/ui-kit/fields";
+import { escapeHtml } from "@bramble/core/html";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import { button } from "@bramble/ui-kit/controls";
+import { selectField, textareaField } from "@bramble/ui-kit/fields";
 import { icon } from "../../shared/icons";
 import { accountLabel } from "../../shared/parts";
 
@@ -138,7 +138,7 @@ const collaborationTools = (
           : `<section class="multisig-handoff-section">
               <div class="multisig-handoff-copy">
                 <strong>Share the reviewed transaction</strong>
-                <p>Copies the transaction and every signature collected so far for another MC Wallet signer.</p>
+                <p>Copies the transaction and every signature collected so far for another Bramble signer.</p>
               </div>
               <div class="multisig-collaboration-actions">
                 ${

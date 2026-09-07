@@ -1,5 +1,5 @@
 /** Bounded in-flight request ids for the page-to-content bridge. */
-import { canQueueProviderRequest } from "@mc-wallet/wallet-protocol/bridge";
+import { canQueueProviderRequest } from "@bramble/wallet-protocol/bridge";
 
 /**
  * Content-script request reservation. Acquire returns false at capacity or for

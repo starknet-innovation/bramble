@@ -3,8 +3,8 @@
  * fiat conversion, and account-scoped recipient choices.
  */
 import { describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
 import {
   balanceShortcut,
   fiatInputToken,

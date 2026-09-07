@@ -2,8 +2,8 @@
  * Krusty adapter checks prove WASM outputs are validated at the crypto boundary.
  */
 import { describe, expect, test } from "bun:test";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { STARK_CURVE_ORDER } from "@mc-wallet/wallet-model/networks";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { STARK_CURVE_ORDER } from "@bramble/wallet-model/networks";
 
 const createModule = (signatureR = "0x1") => ({
   deriveNostrPublicKey() {
@@ -31,7 +31,7 @@ const createModule = (signatureR = "0x1") => ({
   openNostrApplicationData() {
     return JSON.stringify({
       content: "payload",
-      identifier: "mc-wallet.multisig",
+      identifier: "bramble.multisig",
       senderPublicKey: "22".repeat(32),
     });
   },
@@ -323,7 +323,7 @@ describe("createKrustyKms", () => {
         calls.push(args);
         return JSON.stringify({
           content: "payload",
-          identifier: "mc-wallet.multisig",
+          identifier: "bramble.multisig",
           senderPublicKey: "22".repeat(32),
         });
       },
@@ -343,7 +343,7 @@ describe("createKrustyKms", () => {
         1,
         2,
         "44".repeat(32),
-        "mc wallet.multisig",
+        "bramble.multisig",
         "payload",
         "phrase",
       ),
@@ -351,13 +351,13 @@ describe("createKrustyKms", () => {
     await expect(kms.openNostrApplicationData(mnemonic, 1, 2, giftWrap, "phrase")).resolves.toEqual(
       {
         content: "payload",
-        identifier: "mc-wallet.multisig",
+        identifier: "bramble.multisig",
         senderPublicKey: "22".repeat(32),
       },
     );
     expect(calls).toEqual([
       [mnemonic, 1, 2, "phrase"],
-      [mnemonic, 1, 2, "phrase", "44".repeat(32), "mc wallet.multisig", "payload"],
+      [mnemonic, 1, 2, "phrase", "44".repeat(32), "bramble.multisig", "payload"],
       [mnemonic, 1, 2, "phrase", giftWrap],
     ]);
   });
@@ -382,7 +382,7 @@ describe("createKrustyKms", () => {
         0,
         0,
         "44".repeat(32),
-        "mc-wallet.multisig",
+        "bramble.multisig",
         "🦊".repeat(20_000),
       ),
     ).rejects.toThrow("Invalid Nostr application-data input");
@@ -397,7 +397,7 @@ describe("createKrustyKms", () => {
       createKrustyKms({
         ...createModule(),
         wrapNostrApplicationData: () => JSON.stringify(wrongKind),
-      }).wrapNostrApplicationData(mnemonic, 0, 0, "44".repeat(32), "mc-wallet.multisig", "payload"),
+      }).wrapNostrApplicationData(mnemonic, 0, 0, "44".repeat(32), "bramble.multisig", "payload"),
     ).rejects.toThrow("Krusty KMS returned an invalid Nostr gift wrap");
   });
 });

@@ -13,16 +13,16 @@ import {
   isArgentMultisigRecord,
   isArgentMultisigSigningIntent,
   MULTISIG_STORE_KEY,
-} from "@mc-wallet/multisig/repository";
+} from "@bramble/multisig/repository";
 import {
   ARGENT_MULTISIG_CONTRACT,
   argentMultisigAddress,
   argentSignerGuid,
-} from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/starknet/account-contracts";
 import {
   argentMultisigTransactionHash,
   prepareArgentMultisigInvokeV3,
-} from "@mc-wallet/starknet/multisig-invoke";
+} from "@bramble/starknet/multisig-invoke";
 import { ec, RpcProvider } from "starknet";
 
 const PRIVATE_A = "0x123";

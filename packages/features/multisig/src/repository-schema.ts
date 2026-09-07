@@ -1,21 +1,21 @@
 /**
  * Pure record shapes and strict browser-storage validators for Argent multisig.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isArgentMultisigCalls, MULTISIG_LIMITS } from "@mc-wallet/multisig/chain";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isArgentMultisigCalls, MULTISIG_LIMITS } from "@bramble/multisig/chain";
 import {
   ARGENT_MULTISIG_CONTRACT,
   argentMultisigAddress,
   argentSignerGuid,
   normalizeArgentMultisigConfig,
-} from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/starknet/account-contracts";
 import {
   isPreparedArgentMultisigInvokeV3,
   type PreparedArgentMultisigInvokeV3,
   samePreparedArgentMultisigInvokeV3,
-} from "@mc-wallet/starknet/multisig-invoke";
-import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/starknet/multisig-invoke";
+import { verifyStarkSignature } from "@bramble/starknet/signature-verify";
+import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -23,8 +23,8 @@ import {
   STARKNET_NETWORKS,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+} from "@bramble/wallet-model/networks";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 
 /**
  * Counterfactual constructor commitment retained for an account created here.

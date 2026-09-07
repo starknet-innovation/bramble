@@ -10,10 +10,10 @@
  *
  * Trust boundary: every argument is untrusted dapp input of any shape. Nothing
  * here throws, and nothing here decides whether a payload may be signed —
- * `isTypedDataShape` in `@mc-wallet/starknet/typed-data` is that gate.
+ * `isTypedDataShape` in `@bramble/starknet/typed-data` is that gate.
  */
-import { isOwnDataProperty, isRecord, JSON_BUDGETS } from "@mc-wallet/core/json";
-import type { Snip12Field, Snip12Revision } from "@mc-wallet/starknet/snip12-vocabulary";
+import { isOwnDataProperty, isRecord, JSON_BUDGETS } from "@bramble/core/json";
+import type { Snip12Field, Snip12Revision } from "@bramble/starknet/snip12-vocabulary";
 import { signNameText } from "./sign-request-text";
 
 /**

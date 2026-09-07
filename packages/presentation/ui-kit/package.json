@@ -1,5 +1,5 @@
 {
-  "name": "@mc-wallet/ui-kit",
+  "name": "@bramble/ui-kit",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -24,7 +24,7 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*"
+    "@bramble/core": "workspace:*",
+    "@bramble/wallet-model": "workspace:*"
   }
 }

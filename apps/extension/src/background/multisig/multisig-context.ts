@@ -1,6 +1,6 @@
 /** Active-network resolution for one watched Argent multisig account. */
-import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { type ActiveAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { MultisigOpsDeps } from "./multisig-deps";
 

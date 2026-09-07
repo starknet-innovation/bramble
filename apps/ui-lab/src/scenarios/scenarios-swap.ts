@@ -1,4 +1,4 @@
-import { bindSwap, createSidepanelRuntime, createSwapClient } from "@mc-wallet/wallet-ui/lab";
+import { bindSwap, createSidepanelRuntime, createSwapClient } from "@bramble/wallet-ui/lab";
 import { statusFor } from "../fixtures/fixtures";
 import {
   ETH_TOKEN,

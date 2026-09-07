@@ -8,7 +8,7 @@
  * the current network. Kept pure and out of the entrypoint so it can be unit
  * tested and reused without reaching for the DOM.
  */
-import type { AccountGroups } from "@mc-wallet/settings/groups";
+import type { AccountGroups } from "@bramble/settings/groups";
 
 /**
  * Sentinel `expandedGroupId` value for the manage-accounts "Create a group"

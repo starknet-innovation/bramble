@@ -14,8 +14,8 @@
  * A new request always re-takes the screen.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { button } from "@mc-wallet/ui-kit/controls";
+import { escapeHtml } from "@bramble/core/html";
+import { button } from "@bramble/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { type WalletView, walletViewLabel } from "../../shared/parts";

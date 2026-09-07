@@ -4,7 +4,7 @@
  * straight to the privileged background import request (which routes it to the
  * encrypted vault) and is never logged, echoed, or stored in preferences.
  */
-import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { isAccountContractType } from "@bramble/wallet-model/accounts";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import type { SettingsUiDeps } from "./settings-ui";
 

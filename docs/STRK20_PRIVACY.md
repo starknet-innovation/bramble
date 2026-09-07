@@ -6,7 +6,7 @@ permalink: /strk20-privacy/
 
 # STRK20 privacy integration
 
-MC Wallet implements the Wallet API `0.10.4-rc.0` STRK20 surface through the official Starknet
+Bramble implements the Wallet API `0.10.4-rc.0` STRK20 surface through the official Starknet
 Privacy SDK browser bundle. It supports shielded balance discovery, action preparation, private
 submission, dapp-scoped sub-account commitments, explicit account registration, and reviewed
 public-to-private token deposits.
@@ -107,7 +107,7 @@ device.
    dapp-scoped sub-account requests. A connected origin sees only its granted active account.
 2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
    and sub-account commitments each create a dedicated approval. Registration uses the explicitly
-   MC-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The
+   Bramble-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The
    queue retains the exact private request and
    exposes display-safe summaries plus the exact action parameters and an account/network/payload
    digest. Invoke calldata, sub-account call targets and entry points, nonce, and collect policy
@@ -155,7 +155,7 @@ approves its exact action list. Private balances and the deterministic, origin-s
 commitment are likewise never disclosed under the general account connection grant alone.
 
 The standard dapp Wallet API still returns `NOT_REGISTERED` when a site requests an operation
-before registration. The Terminal can initiate registration only through the MC-specific
+before registration. The Terminal can initiate registration only through the Bramble-specific
 `mc_strk20Register` capability. It enters the same content-script trust boundary as other dapp
 requests, opens the wallet approval surface immediately, and cannot derive a viewing key or submit
 until the user approves the account/network/pool/token-bound payload.
@@ -236,25 +236,25 @@ the values in the current shell without putting them in a repository file or she
 
 ```bash
 bun run build
-export MC_STRK20_E2E_ACCOUNT_ADDRESS='<dedicated test account address>'
-export MC_STRK20_E2E_DEPOSIT_STRK='0.1'
-export MC_STRK20_E2E_DISCOVERY_URL='<direct discovery service URL>'
-export MC_STRK20_E2E_PROVER_URL='<direct proving service URL>'
-export MC_STRK20_E2E_RPC_URL='<RPC 0.10 endpoint with proof-facts support>'
-export MC_STRK20_E2E_MAINNET_ACK='I_UNDERSTAND_THIS_WRITES_TO_MAINNET'
-export MC_STRK20_E2E_PUBLIC_CALLER_ACK='I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS'
-read -rs 'MC_STRK20_E2E_PRIVATE_KEY?Dedicated test signing key: '
-export MC_STRK20_E2E_PRIVATE_KEY
+export BRAMBLE_STRK20_E2E_ACCOUNT_ADDRESS='<dedicated test account address>'
+export BRAMBLE_STRK20_E2E_DEPOSIT_STRK='0.1'
+export BRAMBLE_STRK20_E2E_DISCOVERY_URL='<direct discovery service URL>'
+export BRAMBLE_STRK20_E2E_PROVER_URL='<direct proving service URL>'
+export BRAMBLE_STRK20_E2E_RPC_URL='<RPC 0.10 endpoint with proof-facts support>'
+export BRAMBLE_STRK20_E2E_MAINNET_ACK='I_UNDERSTAND_THIS_WRITES_TO_MAINNET'
+export BRAMBLE_STRK20_E2E_PUBLIC_CALLER_ACK='I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS'
+read -rs 'BRAMBLE_STRK20_E2E_PRIVATE_KEY?Dedicated test signing key: '
+export BRAMBLE_STRK20_E2E_PRIVATE_KEY
 bun run test:e2e:mainnet
-unset MC_STRK20_E2E_ACCOUNT_ADDRESS MC_STRK20_E2E_PRIVATE_KEY \
-  MC_STRK20_E2E_DEPOSIT_STRK MC_STRK20_E2E_DISCOVERY_URL \
-  MC_STRK20_E2E_PROVER_URL MC_STRK20_E2E_RPC_URL MC_STRK20_E2E_MAINNET_ACK \
-  MC_STRK20_E2E_PUBLIC_CALLER_ACK MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK
+unset BRAMBLE_STRK20_E2E_ACCOUNT_ADDRESS BRAMBLE_STRK20_E2E_PRIVATE_KEY \
+  BRAMBLE_STRK20_E2E_DEPOSIT_STRK BRAMBLE_STRK20_E2E_DISCOVERY_URL \
+  BRAMBLE_STRK20_E2E_PROVER_URL BRAMBLE_STRK20_E2E_RPC_URL BRAMBLE_STRK20_E2E_MAINNET_ACK \
+  BRAMBLE_STRK20_E2E_PUBLIC_CALLER_ACK BRAMBLE_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK
 ```
 
 If a proof-bearing deposit reached the RPC but its response was lost, first
 verify that the private balance increased, then set
-`MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK=I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED`
+`BRAMBLE_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK=I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED`
 to resume at self-transfer without submitting a second deposit. This recovery
 gate is not part of the default full-lifecycle run.
 

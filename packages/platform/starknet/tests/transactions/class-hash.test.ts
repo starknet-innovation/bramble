@@ -6,11 +6,11 @@
  * unexpected RPC error, and boundary validation of the inputs.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   type ClassHashVerification,
   verifyAccountClassHash,
-} from "@mc-wallet/starknet/class-hash-verify";
+} from "@bramble/starknet/class-hash-verify";
 import type { RpcProvider } from "starknet";
 
 const ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";

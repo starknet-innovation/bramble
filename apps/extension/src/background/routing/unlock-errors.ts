@@ -2,7 +2,7 @@
  * Classifies vault-read failures raised while unlocking the wallet.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 
 const ENVELOPE_ERROR_MESSAGE = "Invalid encrypted store envelope";
 

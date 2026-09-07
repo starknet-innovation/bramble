@@ -5,8 +5,8 @@
  * Complements activity-store.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { createActivityLog } from "@mc-wallet/transactions/activity";
+import { createMemoryStore } from "@bramble/store/kv";
+import { createActivityLog } from "@bramble/transactions/activity";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 
@@ -29,7 +29,7 @@ describe("createActivityLog record guard", () => {
     >);
 
     expect(await log.list()).toEqual([]);
-    expect(await store.get("mc-wallet:activity")).toBeUndefined();
+    expect(await store.get("bramble:activity")).toBeUndefined();
   });
 
   test("drops an entry with an unknown transaction kind", async () => {

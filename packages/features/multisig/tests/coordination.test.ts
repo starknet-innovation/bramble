@@ -1,7 +1,7 @@
 /** Nostr relay checkpoints persist only bounded public receipt metadata. */
 import { describe, expect, test } from "bun:test";
-import { createNostrCoordinationStore } from "@mc-wallet/multisig/coordination";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createNostrCoordinationStore } from "@bramble/multisig/coordination";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const ACCOUNT_ID = "SN_MAIN:0x123";
 const RELAY = "wss://relay.team.example";

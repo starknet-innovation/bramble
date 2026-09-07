@@ -41,7 +41,7 @@ export const fakeKms = (validMnemonic = true) => ({
     const event = JSON.parse(eventJson) as { readonly content: string };
     return {
       content: event.content,
-      identifier: "mc-wallet.multisig",
+      identifier: "bramble.multisig",
       senderPublicKey: "22".repeat(32),
     };
   },

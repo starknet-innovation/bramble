@@ -8,16 +8,16 @@ import {
   type ArgentUnsupportedSigner,
   nextArgentMultisigPublicConfig,
   parseArgentMultisigConfigChange,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
   MultisigStore,
-} from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { type StarknetNetworkId, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { type StarknetNetworkId, sameFelt } from "@bramble/wallet-model/networks";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 
 /**

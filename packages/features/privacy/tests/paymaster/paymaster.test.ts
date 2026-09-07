@@ -3,7 +3,7 @@
  * must be the same fee action and typed data later submitted.
  */
 import { describe, expect, test } from "bun:test";
-import { buildStrk20PaymasterPlan } from "@mc-wallet/privacy/paymaster";
+import { buildStrk20PaymasterPlan } from "@bramble/privacy/paymaster";
 import { type Call, OutsideExecutionVersion, outsideExecution } from "starknet";
 import {
   paymasterCall as call,

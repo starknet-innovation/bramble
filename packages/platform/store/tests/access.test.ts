@@ -2,7 +2,7 @@
  * Permission checks prove UI code cannot read privileged vault state directly.
  */
 import { describe, expect, test } from "bun:test";
-import { assertStoreAccess, canAccessStore } from "@mc-wallet/store/access";
+import { assertStoreAccess, canAccessStore } from "@bramble/store/access";
 
 describe("storage permissions", () => {
   test("allows popup preferences and denies popup vault access", () => {

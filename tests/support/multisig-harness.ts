@@ -2,26 +2,26 @@
  * Shared deterministic harness for privileged Argent multisig messages.
  */
 
-import type { ArgentUnsupportedSigner } from "@mc-wallet/multisig/chain";
-import type { NostrCoordinationStore } from "@mc-wallet/multisig/coordination";
-import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
-import type { MultisigSignerAccount } from "@mc-wallet/multisig/signer-account";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { ArgentUnsupportedSigner } from "@bramble/multisig/chain";
+import type { NostrCoordinationStore } from "@bramble/multisig/coordination";
+import { type MultisigStore, memoryMultisigStore } from "@bramble/multisig/repository";
+import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
+import { createPreferencesStore } from "@bramble/settings/preferences";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
   argentAccountAddress,
   argentMultisigAddress,
   argentSignerGuid,
-} from "@mc-wallet/starknet/account-contracts";
-import { prepareArgentMultisigInvokeV3WithProvider } from "@mc-wallet/starknet/multisig-invoke";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { WalletVaultService } from "@mc-wallet/vault/service-types";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/starknet/account-contracts";
+import { prepareArgentMultisigInvokeV3WithProvider } from "@bramble/starknet/multisig-invoke";
+import { createMemoryStore } from "@bramble/store/kv";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import type { NostrApplicationData } from "@bramble/vault/kms-port";
+import type { Vault } from "@bramble/vault/schema";
+import type { WalletVaultService } from "@bramble/vault/service-types";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { ec, RpcProvider } from "starknet";
 import type { NostrRelayTransport } from "../../apps/extension/src/background/multisig/nostr-relay";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";

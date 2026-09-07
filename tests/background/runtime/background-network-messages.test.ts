@@ -2,11 +2,11 @@
  * Background network message checks prove network switches keep account state reactive.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import type { EnsureNetworkAccountInput, WalletStatus } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import type { EnsureNetworkAccountInput, WalletStatus } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import {
@@ -98,9 +98,10 @@ describe("background network messages", () => {
             accounts,
             accountSecrets: [],
             activeAccountId,
+            importedSeeds: [],
             mnemonic: null,
             originGrants: [],
-            schemaVersion: 7 as const,
+            schemaVersion: 8 as const,
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
               privateKey: "0x123456",
@@ -195,9 +196,10 @@ describe("background network messages", () => {
             accounts,
             accountSecrets: [],
             activeAccountId,
+            importedSeeds: [],
             mnemonic: null,
             originGrants: [{ accountIds: grantedAccountIds, origin: "https://example.com" }],
-            schemaVersion: 7 as const,
+            schemaVersion: 8 as const,
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
               privateKey: "0x123456",

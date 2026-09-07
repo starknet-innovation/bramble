@@ -1,5 +1,5 @@
 {
-  "name": "@mc-wallet/vault",
+  "name": "@bramble/vault",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -25,12 +25,12 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/starknet": "workspace:*",
-    "@mc-wallet/store": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*"
+    "@bramble/core": "workspace:*",
+    "@bramble/starknet": "workspace:*",
+    "@bramble/store": "workspace:*",
+    "@bramble/wallet-model": "workspace:*"
   },
   "devDependencies": {
-    "@mc-wallet/testkit": "workspace:*"
+    "@bramble/testkit": "workspace:*"
   }
 }

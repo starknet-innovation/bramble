@@ -1,7 +1,7 @@
 /**
  * Typed surface for the grant-tab-only Ledger transport selector.
  */
-import type { LedgerTransport } from "@mc-wallet/ledger-browser/webhid";
+import type { LedgerTransport } from "@bramble/ledger-browser/webhid";
 
 /**
  * Browser transport choices shown by the hardware tab

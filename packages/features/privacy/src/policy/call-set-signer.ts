@@ -5,7 +5,7 @@
  * boundary.
  */
 
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type {
   BigNumberish,
   Call,

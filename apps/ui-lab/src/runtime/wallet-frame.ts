@@ -1,12 +1,12 @@
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { defaultSkin } from "@mc-wallet/ui-kit/default-skin";
-import { SIDEPANEL_STYLES } from "@mc-wallet/wallet-ui/lab";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { defaultSkin } from "@bramble/ui-kit/default-skin";
+import { SIDEPANEL_STYLES } from "@bramble/wallet-ui/lab";
 import type { LabSurface, LabTheme } from "./types";
 
 const DESIGN_CONTRACT = `
 <!--
 THESIS: A precise review bench makes wallet state, motion, and trust boundaries inspectable.
-OWN-WORLD: MC Wallet Clean Mono; achromatic interaction, honest success and failure colour.
+OWN-WORLD: Bramble Clean Mono; achromatic interaction, honest success and failure colour.
 STORY: Choose a scenario, inspect the wallet, step through its state machine, then leave feedback.
 FIRST VIEWPORT: The wallet frame and current checkpoint lead; controls and evidence sit beside it.
 FORM: A workbench, not a marketing page. Dense enough for review, quiet enough for concentration.

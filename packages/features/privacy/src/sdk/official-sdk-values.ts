@@ -2,16 +2,16 @@
  * Validated value conversions at the official privacy-SDK boundary.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { buildErc20ApproveCall } from "@mc-wallet/starknet/rpc-assets";
+import { WalletError } from "@bramble/core/errors";
+import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   STARK_FIELD_PRIME,
   STRK_TOKEN_ADDRESS,
-} from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action, Strk20BalanceEntry } from "@mc-wallet/wallet-protocol/strk20";
-import { STRK20_LIMITS } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-model/networks";
+import type { Strk20Action, Strk20BalanceEntry } from "@bramble/wallet-protocol/strk20";
+import { STRK20_LIMITS } from "@bramble/wallet-protocol/strk20";
 import type { BigNumberish, Call, RpcProvider } from "starknet";
 import { num } from "starknet";
 import type { Strk20NetworkConfig } from "../config";

@@ -10,7 +10,7 @@ import {
   LEDGER_EIP2645_APPLICATION,
   ledgerAccountIndexOfPath,
   ledgerAccountPath,
-} from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/wallet-model/ledger-path";
 
 const MAX_INDEX = 0x80000000 - 1;
 

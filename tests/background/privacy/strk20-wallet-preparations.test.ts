@@ -3,7 +3,7 @@
  * consumed once before asynchronous submission begins.
  */
 import { describe, expect, test } from "bun:test";
-import type { TokenConfig } from "@mc-wallet/settings/preferences";
+import type { TokenConfig } from "@bramble/settings/preferences";
 import {
   type ApprovalContext,
   createApprovalContext,

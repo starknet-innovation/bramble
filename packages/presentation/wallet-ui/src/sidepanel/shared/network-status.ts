@@ -4,7 +4,7 @@
  * this presentation boundary.
  */
 
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { PrivacyDisclosureState } from "../journeys/privacy/privacy-model";
 import type { BalanceState } from "../runtime/runtime";

@@ -4,21 +4,22 @@
  * switches. Split from messages.ts to keep it within the size budget.
  */
 
-import { walletErrorMessage } from "@mc-wallet/core/errors";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { serializeAccountSignature } from "@mc-wallet/starknet/account-contracts";
-import { typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { walletErrorMessage } from "@bramble/core/errors";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
+import { typedDataHash } from "@bramble/starknet/typed-data";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
+import { promptReconnectForStaleGrant } from "../approvals/reconnect-prompt";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
@@ -178,6 +179,9 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
   const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
+    // Mirror provider-ops: a formerly granted origin gets a reconnect prompt
+    // beside the refusal so its stuck signing spinner explains itself.
+    promptReconnectForStaleGrant(approvals, granted, input.origin);
     return { error: "origin not connected" };
   }
   try {

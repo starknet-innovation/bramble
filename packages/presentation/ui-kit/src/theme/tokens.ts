@@ -172,7 +172,7 @@ export const EASE = {
  * (seconds-to-target, not a fixed duration) and `damping` (damping ratio —
  * 1.0 = critically damped, no overshoot; <1.0 bounces). Reserve bounce
  * (`drawer`/`momentum`) for motion that carried momentum. Convert to a WAAPI
- * `linear()` easing + duration via @mc-wallet/ui-kit/spring.ts.
+ * `linear()` easing + duration via @bramble/ui-kit/spring.ts.
  */
 export const SPRING = {
   default: { damping: 1, response: 0.4 },

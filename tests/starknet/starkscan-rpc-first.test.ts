@@ -6,15 +6,15 @@
  * masks the user's own endpoint failure.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import type { StarkscanClient } from "@mc-wallet/transactions/starkscan";
-import { createStarkscanClient, type StarkscanHttp } from "@mc-wallet/transactions/starkscan";
+import { WalletError } from "@bramble/core/errors";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { StarkscanClient } from "@bramble/transactions/starkscan";
+import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions/starkscan";
 import {
   createRpcFirstBalances,
   createRpcFirstHistory,
-} from "@mc-wallet/transactions/starkscan-wallet";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/transactions/starkscan-wallet";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { RpcProvider } from "starknet";
 
 // These cases cover a user on the built-in RPCs, whose explorer lane is

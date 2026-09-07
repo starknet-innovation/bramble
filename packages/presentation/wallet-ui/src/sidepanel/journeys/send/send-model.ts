@@ -4,17 +4,17 @@
  * signed by the wallet.
  */
 
-import { isSafeDecimals } from "@mc-wallet/core/json";
-import { isLikelySpam } from "@mc-wallet/portfolio/token-registry";
+import { isSafeDecimals } from "@bramble/core/json";
+import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type {
   DisplayCurrency,
   TokenConfig,
   WalletPreferences,
-} from "@mc-wallet/settings/preferences";
-import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
-import type { ValueBucket } from "@mc-wallet/transactions/send-routes";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/settings/preferences";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
+import type { ValueBucket } from "@bramble/transactions/send-routes";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { CURRENCY_SYMBOLS } from "../../shared/fiat";
 import { compareStrkFirst } from "../portfolio/token-flows";

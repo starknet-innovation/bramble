@@ -1,5 +1,5 @@
 {
-  "name": "@mc-wallet/testkit",
+  "name": "@bramble/testkit",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "check:types": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@mc-wallet/settings": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*"
+    "@bramble/settings": "workspace:*",
+    "@bramble/wallet-model": "workspace:*"
   }
 }

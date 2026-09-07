@@ -1,13 +1,13 @@
 /** Linear exact-review binding for stable Argent multisig creation. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import { button as buttonMarkup } from "@mc-wallet/ui-kit/controls";
+import { escapeHtml } from "@bramble/core/html";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
+import { button as buttonMarkup } from "@bramble/ui-kit/controls";
 import {
   explorerTransactionUrl,
   isNonZeroStarkFieldElement,
   normalizeFeltInput,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import { transitionTaskStage } from "../../app/rendering/stage-transition";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -436,7 +436,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
             reviewRoot,
             fundingRequired
               ? deploymentFundingStage(next)
-              : `${reviewOutcome(`Deploy a ${next.threshold}-of-${next.signerPublicKeys.length} Argent multisig.`)}
+              : `${reviewOutcome(`Deploy a ${next.threshold}-of-${next.signerPublicKeys.length} Ready multisig.`)}
             <div class="multisig-deployment-target" aria-label="Predicted multisig address">
               <span>Predicted address</span>
               <code title="${escapeHtml(next.address)}">${escapeHtml(accountLabel(next.address))}</code>
@@ -453,7 +453,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
                 <dl class="request-detail">
                   <div><dt>Address</dt><dd><code>${escapeHtml(next.address)}</code></dd></div>
                   <div><dt>Contract</dt><dd>Argent Multisig ${ARGENT_MULTISIG_CONTRACT.version}</dd></div>
-                  <div><dt>Class hash</dt><dd><code>${escapeHtml(ARGENT_MULTISIG_CONTRACT.classHash)}</code>${copyButton(ARGENT_MULTISIG_CONTRACT.classHash, "Copy Argent Multisig class hash")}</dd></div>
+                  <div><dt>Class hash</dt><dd><code>${escapeHtml(ARGENT_MULTISIG_CONTRACT.classHash)}</code>${copyButton(ARGENT_MULTISIG_CONTRACT.classHash, "Copy Ready Multisig class hash")}</dd></div>
                   <div><dt>Network</dt><dd><code>${escapeHtml(next.networkId)}</code></dd></div>
                   <div><dt>Signers</dt><dd>${next.signerPublicKeys.length}</dd></div>
                   <div><dt>Public keys</dt><dd><code>${escapeHtml(next.signerPublicKeys.join(" "))}</code></dd></div>

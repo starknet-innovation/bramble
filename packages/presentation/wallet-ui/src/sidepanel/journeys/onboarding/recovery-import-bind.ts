@@ -9,6 +9,7 @@
 
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { bindRecoveryWordEntry } from "./recovery-word-state";
 
 type WordAssist = {
   readonly hideSuggestions: () => void;
@@ -71,34 +72,12 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
     buttonBusy(recoveryContinue, false);
   };
 
-  for (const [index, input] of importInputs.entries()) {
-    input.addEventListener("input", () => {
-      invalidateValidation();
-      const pastedWords = input.value.trim().split(/\s+/).filter(Boolean);
-      if (pastedWords.length === 12 || pastedWords.length === 24) {
-        fillWords(importInputs, pastedWords, "import");
-      }
-      refreshRecovery();
-    });
-    input.addEventListener("keydown", (event) => {
-      if (event.key === " " && input.value.trim().length > 0) {
-        event.preventDefault();
-        importInputs[index + 1]?.focus();
-      } else if (event.key === "Backspace" && input.value.length === 0) {
-        importInputs[index - 1]?.focus();
-      }
-    });
-    input.addEventListener("paste", (event) => {
-      invalidateValidation();
-      const words = event.clipboardData?.getData("text").trim().split(/\s+/).filter(Boolean) ?? [];
-      if (words.length !== 12 && words.length !== 24) {
-        return;
-      }
-      event.preventDefault();
-      fillWords(importInputs, words, "import");
-      refreshRecovery();
-    });
-  }
+  bindRecoveryWordEntry({
+    fillWords: (words) => fillWords(importInputs, words, "import"),
+    inputs: importInputs,
+    onBeforeChange: invalidateValidation,
+    onChange: refreshRecovery,
+  });
 
   recoveryContinue?.addEventListener("click", () => {
     const phrase = importedMnemonic();

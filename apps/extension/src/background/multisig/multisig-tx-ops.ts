@@ -5,18 +5,18 @@ import {
   type ArgentMultisigSigningIntent,
   argentMultisigIntentId,
   argentMultisigOperationId,
-} from "@mc-wallet/multisig/repository";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/multisig/repository";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import {
   ArgentMultisigFeeExpiredError,
   preparedArgentMultisigFee,
   samePreparedArgentMultisigInvokeV3,
-} from "@mc-wallet/starknet/multisig-invoke";
-import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
-import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
-import { verificationContext } from "@mc-wallet/transactions/verify";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+} from "@bramble/starknet/multisig-invoke";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { verifyStarkSignature } from "@bramble/starknet/signature-verify";
+import { verificationContext } from "@bramble/transactions/verify";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import { signerForContext } from "../accounts/wallet-ops";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";

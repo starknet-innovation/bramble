@@ -3,7 +3,7 @@
  * ByteArray responses both decode to text.
  */
 import { describe, expect, test } from "bun:test";
-import { decodeErc20String } from "@mc-wallet/starknet/rpc";
+import { decodeErc20String } from "@bramble/starknet/rpc";
 import { shortString } from "starknet";
 
 const felt = (text: string): string => shortString.encodeShortString(text);

@@ -1,14 +1,11 @@
 /**
  * Reviewed DEPLOY_ACCOUNT orchestration for stable Argent Multisig 0.2.
  */
-import {
-  type ArgentMultisigRecord,
-  argentMultisigOperationId,
-} from "@mc-wallet/multisig/repository";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { type ArgentMultisigRecord, argentMultisigOperationId } from "@bramble/multisig/repository";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { signerForContext } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
@@ -55,7 +52,7 @@ const recordForReview = (review: ArgentMultisigDeploymentReview): DeployableArge
 const checkedDeploymentRecord = async (
   review: ArgentMultisigDeploymentReview,
 ): Promise<DeployableArgentRecord | null> => {
-  const { predictArgentMultisigAddress } = await import("@mc-wallet/multisig/deploy");
+  const { predictArgentMultisigAddress } = await import("@bramble/multisig/deploy");
   const address = predictArgentMultisigAddress(review);
   return sameFelt(address, review.address) && address === review.address
     ? recordForReview(review)
@@ -206,7 +203,7 @@ const reviewDeployment = async (
     return { error: "invalid Argent multisig deployment review request" };
   }
   const { expectedAddress, ...setup } = input;
-  const address = (await import("@mc-wallet/multisig/deploy")).predictArgentMultisigAddress(setup);
+  const address = (await import("@bramble/multisig/deploy")).predictArgentMultisigAddress(setup);
   if (expectedAddress !== undefined && !sameFelt(address, expectedAddress)) {
     return {
       error: "Signer set, threshold, and salt do not reproduce the watched multisig address",

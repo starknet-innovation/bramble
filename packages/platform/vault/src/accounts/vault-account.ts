@@ -1,8 +1,8 @@
 /**
  * Shared account lookup for validated decrypted vault snapshots.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { type AccountRef, isAccountId } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import { type AccountRef, isAccountId } from "@bramble/wallet-model/accounts";
 import type { Vault } from "../schema/schema";
 
 /**

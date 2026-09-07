@@ -21,15 +21,11 @@
  * sign. So the comparison here is always against the spend the bounds imply,
  * for the speed those bounds will be built at.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
-import {
-  type FeeEstimate,
-  isFeeEstimate,
-  isFeeUnit,
-} from "@mc-wallet/wallet-protocol/fee-estimate";
+import { WalletError } from "@bramble/core/errors";
+import { isBaseUnitsAmount, isRecord } from "@bramble/core/json";
+import { type FeeEstimate, isFeeEstimate, isFeeUnit } from "@bramble/wallet-protocol/fee-estimate";
 
-export { type FeeEstimate, isFeeEstimate } from "@mc-wallet/wallet-protocol/fee-estimate";
+export { type FeeEstimate, isFeeEstimate } from "@bramble/wallet-protocol/fee-estimate";
 
 /**
  * Reports whether two estimates state the same fee in the same denomination.

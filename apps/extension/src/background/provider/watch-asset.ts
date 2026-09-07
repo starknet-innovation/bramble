@@ -2,15 +2,15 @@
  * Bounded watch-asset admission plus validated token assembly. On-chain
  * metadata is authoritative; dapp-provided options are used only as a fallback.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isSafeDecimals, isTokenSymbol } from "@mc-wallet/core/json";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { WalletError } from "@bramble/core/errors";
+import { isSafeDecimals, isTokenSymbol } from "@bramble/core/json";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   canonicalAddress,
   STARKNET_NETWORKS,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import type { ProviderWatchAsset } from "@mc-wallet/wallet-protocol/watch-asset";
+} from "@bramble/wallet-model/networks";
+import type { ProviderWatchAsset } from "@bramble/wallet-protocol/watch-asset";
 import {
   MAX_PENDING_APPROVALS,
   MAX_PENDING_APPROVALS_PER_ORIGIN,

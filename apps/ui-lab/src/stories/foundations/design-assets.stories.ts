@@ -1,5 +1,5 @@
-import { ICON_NAMES, icon } from "@mc-wallet/ui-kit/icons";
-import { accountAvatar, tokenGlyph } from "@mc-wallet/wallet-ui/lab";
+import { ICON_NAMES, icon } from "@bramble/ui-kit/icons";
+import { accountAvatar, tokenGlyph } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
 import {
   LEDGER_ADDRESS,

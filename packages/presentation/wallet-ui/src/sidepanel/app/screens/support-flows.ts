@@ -3,11 +3,11 @@
  * so each production template module remains small enough to audit directly.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { textareaField, textField } from "@mc-wallet/ui-kit/fields";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { textareaField, textField } from "@bramble/ui-kit/fields";
 import type { ConnectedSite, WalletStatus } from "../../../popup/responses/responses";
 import { accountLabel, copyButton, flowHeader, flowScreen } from "../../shared/parts";
 
@@ -65,7 +65,7 @@ export const addressBookFlow = (
           ${textareaField({
             autocomplete: "off",
             className: "mono",
-            hint: "Paste a shared MC Wallet card to fill the address, signer key, and coordination identity together.",
+            hint: "Paste a shared Bramble card to fill the address, signer key, and coordination identity together.",
             label: "Wallet card (optional)",
             name: "walletCard",
             placeholder: "mcw:contact:1:…",

@@ -5,9 +5,9 @@ import { isMissingAvnuCandleHistory } from "./src/data/avnu/avnu-proxy";
 import { attachExtendedWebSocketBridge } from "./src/data/extended/dev-bridge";
 import { AVNU_API, EXTENDED_API_BASE } from "./src/protocols/constants";
 
-// Standalone SPA build for the MC Wallet Trade Terminal. This app is NOT part
+// Standalone SPA build for the Bramble Trade Terminal. This app is NOT part
 // of the extension bundle — it is served as an ordinary web app and connects to
-// the MC Wallet extension at runtime via the injected window.starknet_mcWallet
+// the Bramble extension at runtime via the injected window.starknet_bramble
 // provider.
 //
 // DEV PROXY (CORS fix)
@@ -22,7 +22,7 @@ const extendedWsTarget = `wss://${new URL(EXTENDED_API_BASE).host}`;
 const extendedRestPrefix = "/proxy/extended";
 const avnuMarketsPrefix = "/proxy/avnu-markets";
 const starkscanPrefix = "/proxy/starkscan";
-const extendedUserAgent = "MC-Wallet-Terminal/0.1";
+const extendedUserAgent = "Bramble-Terminal/0.1";
 
 // Forward market-data GETs with a clean server-side header set. Extended needs
 // the proxy for CORS; AVNU uses it so missing candle history can become a clean

@@ -5,9 +5,9 @@
  * positive/success semantics, orange for degraded data, and red for danger/failure. Quiet-luxury
  * minimalism — flat and legible, not glass.
  *
- * Surfaces step in three quiet tiers over the background: `--mc-sunken` for
- * recessed group containers (tab tracks, permission/sign panels), `--mc-panel`
- * for cards, and `--mc-elevated` for controls and rows. The steps are subtle;
+ * Surfaces step in three quiet tiers over the background: `--bramble-sunken` for
+ * recessed group containers (tab tracks, permission/sign panels), `--bramble-panel`
+ * for cards, and `--bramble-elevated` for controls and rows. The steps are subtle;
  * separation is carried by hairline edges and gentle low shadows, so the whole
  * panel reads as calm layered paper rather than lit material. Every
  * text/ground pairing is guarded by the contrast test suite.
@@ -20,23 +20,23 @@ import type { Skin } from "./skin";
 export const darkSkin: Skin = {
   name: "midnight",
   tokens: {
-    "--mc-accent": "#f5f5f5",
-    "--mc-accent-text": "#171717",
-    "--mc-account-avatar-0": "#6842a8",
-    "--mc-account-avatar-1": "#e27a35",
-    "--mc-account-avatar-2": "#e9b83f",
-    "--mc-account-avatar-3": "#9f356f",
-    "--mc-account-avatar-ink": "#171717",
-    "--mc-account-avatar-paper": "#fafafa",
-    "--mc-bg": "#0a0a0a",
-    "--mc-border": "#2b2b2b",
-    "--mc-danger": "#ff7474",
-    "--mc-elevated": "#242424",
-    "--mc-muted": "#a3a3a3",
-    "--mc-panel": "#151515",
-    "--mc-positive": "#4ade80",
-    "--mc-sunken": "#101010",
-    "--mc-text": "#f5f5f5",
-    "--mc-warning": "#fb923c",
+    "--bramble-accent": "#f5f5f5",
+    "--bramble-accent-text": "#171717",
+    "--bramble-account-avatar-0": "#6842a8",
+    "--bramble-account-avatar-1": "#e27a35",
+    "--bramble-account-avatar-2": "#e9b83f",
+    "--bramble-account-avatar-3": "#9f356f",
+    "--bramble-account-avatar-ink": "#171717",
+    "--bramble-account-avatar-paper": "#fafafa",
+    "--bramble-bg": "#0a0a0a",
+    "--bramble-border": "#2b2b2b",
+    "--bramble-danger": "#ff7474",
+    "--bramble-elevated": "#242424",
+    "--bramble-muted": "#a3a3a3",
+    "--bramble-panel": "#151515",
+    "--bramble-positive": "#4ade80",
+    "--bramble-sunken": "#101010",
+    "--bramble-text": "#f5f5f5",
+    "--bramble-warning": "#fb923c",
   },
 };

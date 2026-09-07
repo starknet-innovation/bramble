@@ -18,7 +18,7 @@ import {
   isNonZeroStarkFieldElement,
   STRK_TOKEN_ADDRESS,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 /**
  * Which balance a send reads from or writes to.

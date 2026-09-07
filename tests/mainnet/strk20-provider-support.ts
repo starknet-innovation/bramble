@@ -58,13 +58,13 @@ export const requestLiveProvider = (page: Page, request: LiveProviderRequest): P
   page.evaluate(async (input) => {
     const wallet = (
       globalThis as typeof globalThis & {
-        readonly starknet_mcWallet?: {
+        readonly starknet_bramble?: {
           readonly request: (value: LiveProviderRequest) => Promise<unknown>;
         };
       }
-    ).starknet_mcWallet;
+    ).starknet_bramble;
     if (!wallet) {
-      throw new Error("MC Wallet provider unavailable");
+      throw new Error("Bramble provider unavailable");
     }
     try {
       return await wallet.request(input);
@@ -85,11 +85,11 @@ export const connectLiveProvider = (page: Page): Promise<readonly string[]> =>
   page.evaluate(async () => {
     const wallet = (
       globalThis as typeof globalThis & {
-        readonly starknet_mcWallet?: { readonly enable: () => Promise<readonly string[]> };
+        readonly starknet_bramble?: { readonly enable: () => Promise<readonly string[]> };
       }
-    ).starknet_mcWallet;
+    ).starknet_bramble;
     if (!wallet) {
-      throw new Error("MC Wallet provider unavailable");
+      throw new Error("Bramble provider unavailable");
     }
     return wallet.enable();
   });

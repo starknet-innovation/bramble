@@ -15,11 +15,11 @@
  * ./group-ui.ts; styles in ./styles-home.ts.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { AccountGroup, AccountGroups } from "@mc-wallet/settings/groups";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { iconButton } from "@mc-wallet/ui-kit/controls";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { escapeHtml } from "@bramble/core/html";
+import type { AccountGroup, AccountGroups } from "@bramble/settings/groups";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { iconButton } from "@bramble/ui-kit/controls";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { NetworkOption } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountAvatar, accountDisplayName, accountLabel } from "../../shared/parts";

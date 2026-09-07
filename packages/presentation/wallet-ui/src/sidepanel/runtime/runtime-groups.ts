@@ -10,7 +10,7 @@
  * see no seam.
  */
 
-import type { AccountGroupIcon } from "@mc-wallet/settings/groups";
+import type { AccountGroupIcon } from "@bramble/settings/groups";
 import { isPreferencesResponse } from "../../popup/responses/responses";
 import { responseError } from "./runtime-errors";
 

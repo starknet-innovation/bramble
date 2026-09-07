@@ -3,9 +3,9 @@
  * kept out of preferences-store.ts so that file stays within the size budget.
  * Follows the built-in network model in wallet-model/networks.
  */
-import { hasOnlyKnownKeys, isNetworkLabel, isRecord } from "@mc-wallet/core/json";
-import { isOptionalServiceUrlList, isServiceUrl } from "@mc-wallet/core/service-url";
-import { isCanonicalChainId } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isNetworkLabel, isRecord } from "@bramble/core/json";
+import { isOptionalServiceUrlList, isServiceUrl } from "@bramble/core/service-url";
+import { isCanonicalChainId } from "@bramble/wallet-model/networks";
 
 /**
  * Checks a user-provided RPC endpoint: https anywhere, http only on loopback.

@@ -9,7 +9,7 @@ import {
   type ActivityEntry,
   activityToCsv,
   memoryActivityLog,
-} from "@mc-wallet/transactions/activity";
+} from "@bramble/transactions/activity";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 

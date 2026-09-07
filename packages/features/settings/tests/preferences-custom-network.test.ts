@@ -3,8 +3,8 @@
  * custom chain, dedupes by normalized chain id, and rejects malformed input.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const chain = {
   chainId: "0x534e5f4b4154414e41",

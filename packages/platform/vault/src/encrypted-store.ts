@@ -1,10 +1,10 @@
 /**
  * Encrypted JSON store using Web Crypto for local-at-rest browser extension data.
  */
-import { invariant, WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isRecord, type Json } from "@mc-wallet/core/json";
-import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@mc-wallet/store/kv";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+import { invariant, WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isRecord, type Json } from "@bramble/core/json";
+import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@bramble/store/kv";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -288,7 +288,7 @@ export const createEncryptedStore = (
   freshnessStore: KeyValueStore = store,
 ): EncryptedStore => {
   assertStorageKey(key);
-  const scope = `mc-wallet:encrypted-store:${key}`;
+  const scope = `bramble:encrypted-store:${key}`;
   const commitKey = (lineage: string): string => `${key}:commit:${lineage}`;
   // This authority is deliberately store-wide, not keyed to the one v2
   // envelope present during migration. Once any v3 commit for this store is

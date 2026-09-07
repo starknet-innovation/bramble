@@ -1,6 +1,6 @@
 /**
  * Pre-sign verification policy: turns the decoded calls from
- * @mc-wallet/transactions/verify-decode into the risk flags the review card
+ * @bramble/transactions/verify-decode into the risk flags the review card
  * shows, and refuses the one flag that is an
  * enforcement point rather than an annotation. Pure and network-free so every
  * rule is unit-testable.
@@ -12,8 +12,8 @@
  * call is reported as opaque rather than as safe.
  */
 
-import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@mc-wallet/transactions/allowance-discovery";
-import { asFelt, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@bramble/transactions/allowance-discovery";
+import { asFelt, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import {
   canonical,

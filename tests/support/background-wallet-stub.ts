@@ -7,15 +7,16 @@
  * notions of what the origin may see.
  */
 
-import { grantedAccountIdsFor } from "@mc-wallet/vault/origin-grants";
-import type { Vault } from "@mc-wallet/vault/schema";
+import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
+import type { Vault } from "@bramble/vault/schema";
 import type {
+  CreateKeyVaultInput,
   CreateVaultAccountInput,
   OriginGrantInput,
   SignHashInput,
   WalletStatus,
-} from "@mc-wallet/vault/service";
-import type { AccountRef, DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/vault/service";
+import type { AccountRef, DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
 /**
@@ -91,6 +92,7 @@ export type WalletStubOptions = {
   readonly accounts?: readonly AccountRef[];
   readonly activeAccountId?: () => string;
   readonly captureCreate?: (input: CreateVaultAccountInput) => void;
+  readonly captureCreateKeyVault?: (input: CreateKeyVaultInput) => void;
   readonly captureGrant?: (input: OriginGrantInput) => void;
   readonly captureSign?: (input: SignHashInput) => void;
 };
@@ -104,14 +106,19 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     accounts,
     accountSecrets: [],
     activeAccountId: options.activeAccountId?.() ?? account.id,
+    importedSeeds: [],
     mnemonic: null,
     originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
-    schemaVersion: 7,
+    schemaVersion: 8,
     signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
   });
   return {
     async createAccount(input: CreateVaultAccountInput) {
       options.captureCreate?.(input);
+      return account;
+    },
+    async createKeyVault(input: CreateKeyVaultInput) {
+      options.captureCreateKeyVault?.(input);
       return account;
     },
     async addDerivedAccount() {
