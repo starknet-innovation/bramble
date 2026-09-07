@@ -280,6 +280,26 @@ describe("workflow security policy", () => {
       replacement: "pull_request:\n    branches: [main]",
       failure: "release integration must run only on pushes to release branches",
     },
+    // The deploy credential's in-tree half. The enforcing control against a
+    // foreign ref is the environment's deployment-branch policy, which lives in
+    // repository settings; these keep the workflow from quietly losing the parts
+    // of the boundary a diff can show.
+    {
+      name: "rejects a website deploy whose push filter names more than one branch",
+      workflow: "website-deploy.yml",
+      search: 'branches: ["',
+      replacement: 'branches: ["main", "',
+      failure:
+        ".github/workflows/website-deploy.yml must trigger on exactly one literal release branch",
+    },
+    {
+      name: "rejects a website deploy that drops the production environment",
+      workflow: "website-deploy.yml",
+      search: "    environment:\n      name: bramble-production\n      url: https://bramble.fi\n",
+      replacement: "",
+      failure:
+        ".github/workflows/website-deploy.yml must deploy through the reviewed production environment",
+    },
   ] as const;
 
   for (const item of cases) {
@@ -289,4 +309,162 @@ describe("workflow security policy", () => {
       expect(workflowSecurityPolicyFailures(changed)).toContain(item.failure);
     });
   }
+
+  // The website deploy states its production branch once, in its `push` filter,
+  // and the policy derives the dispatch guard from it. These two read the branch
+  // out of the workflow rather than naming it, so promoting a release branch
+  // does not require editing this suite — only the workflow.
+  const activeBranch = async (): Promise<string> => {
+    const source = (await readWorkflowSources())["website-deploy.yml"] ?? "";
+    const branch = source.match(/\n {4}branches: \["([^"]+)"\]/)?.[1];
+    expect(branch).toBeString();
+    return branch ?? "";
+  };
+
+  test("rejects a website deploy whose manual-dispatch ref guard is gone", async () => {
+    const sources = await readWorkflowSources();
+    const branch = await activeBranch();
+    const changed = mutate(
+      sources,
+      "website-deploy.yml",
+      '[ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/',
+      'if false; then : "',
+    );
+    expect(workflowSecurityPolicyFailures(changed)).toContain(
+      `.github/workflows/website-deploy.yml must reject manual runs outside ${branch}, the branch its push filter names`,
+    );
+  });
+
+  // The credential rules are positional, not textual. Every one of these four
+  // reached the text-matching version that preceded it, each in a different
+  // notation. They collapse into one assertion because the parser reports where
+  // a value sits, and where a value sits is not a matter of spelling.
+  const HOISTS = [
+    { name: "dot syntax", body: "secrets.CLOUDFLARE_API_TOKEN" },
+    { name: "bracket syntax", body: `secrets["CLOUDFLARE_API_TOKEN"]` },
+    { name: "lower case", body: "secrets.cloudflare_api_token" },
+    { name: "mixed case in brackets", body: `secrets['Cloudflare_Api_Token']` },
+    // Context names are case-insensitive in GitHub expressions too, not just
+    // secret names — so the context keyword itself needs covering.
+    { name: "capitalised context keyword", body: "Secrets.CLOUDFLARE_API_TOKEN" },
+  ] as const;
+
+  for (const item of HOISTS) {
+    test(`rejects hoisting the token to job-level env in ${item.name}`, async () => {
+      const sources = await readWorkflowSources();
+      const changed = mutate(
+        sources,
+        "website-deploy.yml",
+        "    steps:\n",
+        `    env:
+      LEAKED: ${GITHUB_EXPRESSION} ${item.body} }}
+    steps:
+`,
+      );
+      const failures = workflowSecurityPolicyFailures(changed);
+      expect(
+        failures.some(
+          (failure) =>
+            failure.includes("must bind the Cloudflare token only at") &&
+            failure.includes("not at jobs.deploy.env.LEAKED"),
+        ),
+      ).toBe(true);
+    });
+  }
+
+  test("rejects a secrets-context dump in a workflow that never names the credential", async () => {
+    const sources = await readWorkflowSources();
+    const added = {
+      ...sources,
+      "leaky.yml": [
+        "name: Leaky",
+        "on:",
+        "  push:",
+        "",
+        "permissions:",
+        "  contents: read",
+        "",
+        "jobs:",
+        "  run:",
+        "    runs-on: ubuntu-latest",
+        "    env:",
+        `      ALL: ${GITHUB_EXPRESSION} toJSON(secrets) }}`,
+        "    steps:",
+        "      - run: echo hi",
+        "",
+      ].join("\n"),
+    };
+    // The point of this case: selecting on the credential's name would return an
+    // empty list here and never examine the workflow.
+    expect(added["leaky.yml"]).not.toContain("CLOUDFLARE_API_TOKEN");
+    expect(workflowSecurityPolicyFailures(added)).toContain(
+      ".github/workflows/leaky.yml must not serialise the whole secrets context (at jobs.run.env.ALL)",
+    );
+  });
+
+  test("rejects the token being read inside a run script", async () => {
+    const sources = await readWorkflowSources();
+    const leaked = mutate(
+      sources,
+      "website-deploy.yml",
+      "      - name: Deployment summary",
+      `      - run: echo ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }} > /tmp/x
+      - name: Deployment summary`,
+    );
+    expect(
+      workflowSecurityPolicyFailures(leaked).some((failure) =>
+        failure.includes("not at jobs.deploy.steps[6].run"),
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects removing the token binding altogether", async () => {
+    const sources = await readWorkflowSources();
+    const changed = mutate(
+      sources,
+      "website-deploy.yml",
+      `          CLOUDFLARE_API_TOKEN: ${GITHUB_EXPRESSION} secrets.CLOUDFLARE_API_TOKEN }}\n`,
+      "",
+    );
+    expect(workflowSecurityPolicyFailures(changed)).toContain(
+      ".github/workflows/website-deploy.yml must bind the Cloudflare token at jobs.deploy.steps[5].env.CLOUDFLARE_API_TOKEN",
+    );
+  });
+
+  test("fails closed when a workflow cannot be parsed", async () => {
+    const sources = await readWorkflowSources();
+    const broken = {
+      ...sources,
+      "website-deploy.yml": `${sources["website-deploy.yml"]}\n  bad: [\n`,
+    };
+    expect(workflowSecurityPolicyFailures(broken)).toContain(
+      ".github/workflows/website-deploy.yml must be parseable YAML so its trust boundaries can be checked",
+    );
+  });
+
+  test("does not treat the word secrets in prose as a reference", async () => {
+    const sources = await readWorkflowSources();
+    const changed = mutate(
+      sources,
+      "website-deploy.yml",
+      "      - name: Deployment summary",
+      `      - run: echo "no secrets are printed here"
+      - name: Deployment summary`,
+    );
+    expect(workflowSecurityPolicyFailures(changed)).toEqual([]);
+  });
+
+  test("rejects a website deploy whose ref guard drifts from its push filter", async () => {
+    const sources = await readWorkflowSources();
+    const branch = await activeBranch();
+    const changed = mutate(
+      sources,
+      "website-deploy.yml",
+      `!= "refs/heads/${branch}"`,
+      '!= "refs/heads/some-other-branch"',
+    );
+    expect(workflowSecurityPolicyFailures(changed)).toContain(
+      `.github/workflows/website-deploy.yml must reject manual runs outside ${branch}, the branch its push filter names`,
+    );
+  });
 });
