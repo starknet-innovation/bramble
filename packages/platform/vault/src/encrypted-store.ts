@@ -295,6 +295,7 @@ export const createEncryptedStore = (
   // current, every earlier authentic v2 envelope must be rejected.
   const legacyKey = `${key}:legacy`;
   const keyCache = new Map<string, CryptoKey>();
+  let keyCacheGeneration = 0;
 
   const readRawEnvelope = async (): Promise<EncryptedEnvelope | undefined> => {
     const envelope = await store.get(key);
@@ -436,6 +437,7 @@ export const createEncryptedStore = (
   };
 
   const resolveKey: KeyResolver = async (passphrase, salt, iterations) => {
+    const generation = keyCacheGeneration;
     const cacheId = `${await passphraseFingerprint(passphrase)}:${bytesToBase64(salt)}:${iterations}`;
     const cached = keyCache.get(cacheId);
     if (cached) {
@@ -448,12 +450,14 @@ export const createEncryptedStore = (
         keyCache.delete(oldest);
       }
     }
-    keyCache.set(cacheId, derived);
+    // Lock can invalidate this resolution during either fingerprinting or PBKDF2.
+    if (generation === keyCacheGeneration) keyCache.set(cacheId, derived);
     return derived;
   };
 
   return {
     clearKeys() {
+      keyCacheGeneration += 1;
       keyCache.clear();
     },
     async exists() {
