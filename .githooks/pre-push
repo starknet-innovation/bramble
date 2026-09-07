@@ -9,12 +9,34 @@
 #   git push --no-verify
 #
 # This runs only the offline, fast subset of the gates: type check, lint,
-# file/config standards, extension manifest check, and unit tests. It does NOT
+# file/config standards, extension manifest check, and unit tests. The
+# release-branch guard below always runs, node_modules or not. It does NOT
 # run the vendored krusty/multisig checks or the build/e2e suite (those need
 # network, wasm-pack, a Rust toolchain, and scarb). Run `bun run check` and
 # `bun run test:e2e` before merging to cover the full gate set.
 
 set -e
+
+# Release-branch immutability guard (issue #302). Runs FIRST and consumes the
+# pushed refs from stdin: it refuses a push that advances a `release/v*` branch
+# whose REMOTE tip is already integrated into `main`, so the guard still fires
+# when the accidental commit was made before the hooks were enabled. Fails
+# closed when integration or the fetch cannot be resolved. The `release/v`
+# match below is only a cheap filter (the guard owns the real grammar) so an
+# ordinary push never depends on `bun`.
+pushed_refs="$(cat)"
+if command -v bun >/dev/null 2>&1; then
+  echo "pre-push: release-branch guard"
+  printf '%s\n' "$pushed_refs" | bun run scripts/release-branch-guard.ts push
+else
+  case "$pushed_refs" in
+    *refs/heads/release/v*)
+      echo "pre-push: bun is required to check whether the pushed release branch is already integrated into main." >&2
+      echo "pre-push: refusing the push; install bun (https://bun.sh) to verify it." >&2
+      exit 1
+      ;;
+  esac
+fi
 
 if [ ! -x node_modules/.bin/biome ]; then
   echo "pre-push: node_modules not found; run 'bun install' to enable local checks. Skipping."
