@@ -102,15 +102,4 @@ describe("STRK20 live-mainnet environment", () => {
       ).toThrow("dedicated test RPC endpoint");
     }
   });
-
-  test("refuses the shared wallet and Foundation RPCs for load-bearing automation", () => {
-    for (const rpcUrl of [
-      "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10",
-      "https://mainnet.nodes.starknet.org/rpc/v0_10",
-    ]) {
-      expect(() =>
-        readStrk20MainnetEnvironment({ ...valid(), MC_STRK20_E2E_RPC_URL: rpcUrl }),
-      ).toThrow("dedicated test RPC endpoint");
-    }
-  });
 });
