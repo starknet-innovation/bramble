@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./accounts": "./src/accounts/accounts.ts",
+    "./avnu-route": "./src/swap/avnu-route.ts",
     "./custom-network": "./src/networks/custom-network.ts",
     "./ledger-path": "./src/accounts/ledger-path.ts",
     "./networks": "./src/networks/networks.ts",
