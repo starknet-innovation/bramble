@@ -73,14 +73,27 @@ changing. They are listed so a failure points somewhere rather than nowhere.
   blocked image reports `complete: true` with `naturalWidth: 0` **and** logs a violation, whereas a
   lazy image that never started reports `complete: false` and logs nothing. Do not loosen
   `img-src` on the strength of that measurement.
+- **The deploy token needs two policies, not one.** `Account -> Workers Scripts -> Edit` uploads the
+  assets, and `Zone -> Workers Routes -> Edit` is also required because `wrangler deploy` reconciles
+  routes on **every** run against the zone-scoped `/zones/{zone}/workers/routes` endpoint, whether or
+  not the route needs changing. Remove the zone policy and the failure is not clean: the asset
+  upload succeeds first and only the route step fails, so the site updates while the run goes red.
+  A pipeline that half-works is the kind people learn to ignore, so this is worth keeping.
+- **Cloudflare's managed `robots.txt` and Content Signals Policy must stay off.** Both merge
+  generated content into the served file, which produced two conflicting `User-agent: *` groups and
+  meant editing the repository file could not fully control what crawlers saw. They are disabled
+  under Security -> Settings (Bot traffic) and Control AI Crawlers on the zone overview. **If the
+  served `robots.txt` ever stops matching `public/robots.txt`, check those two settings before
+  anything else** — re-enabling either silently overrides the file in this repository.
 - **Mail is denied, not merely absent.** A null `MX` (`.` at priority 0), `v=spf1 -all`, and a DMARC
   `p=reject` record are published even though the domain sends and receives no mail. Those records
   stop forged mail claiming to come from the wallet's domain, which is a phishing route that exists
   whether or not a mailbox does.
 
 The workflow needs one secret, `CLOUDFLARE_API_TOKEN`, in the `bramble-production` GitHub
-environment: a Cloudflare token with Account → Workers Scripts → Edit only. The account id is
-public and lives in the workflow file.
+environment. It needs **two** policies — `Account → Workers Scripts → Edit` and
+`Zone → Workers Routes → Edit` — for the reason described above; a token with only the first
+deploys the assets and then fails. The account id is public and lives in the workflow file.
 
 To deploy by hand from an authenticated shell, run the same commands the workflow does:
 
