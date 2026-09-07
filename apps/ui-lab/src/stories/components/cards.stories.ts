@@ -1,9 +1,4 @@
-import {
-  approvalCard,
-  nftGalleryCard,
-  reviewPanel,
-  visibleNftItems,
-} from "@bramble/wallet-ui/lab";
+import { approvalCard, nftGalleryCard, reviewPanel, visibleNftItems } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
 import { discoveredNft, invokeApproval, preferences, statusFor } from "../../fixtures/fixtures";
 import {
