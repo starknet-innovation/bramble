@@ -5,17 +5,17 @@
  * and contract facts. Pure templates — bindings live in ./tokens-ui.ts.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { isLikelySpam } from "@mc-wallet/portfolio/token-registry";
+import { escapeHtml } from "@bramble/core/html";
+import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type {
   DisplayCurrency,
   TokenConfig,
   WalletPreferences,
-} from "@mc-wallet/settings/preferences";
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/settings/preferences";
+import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { textField } from "@bramble/ui-kit/fields";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";

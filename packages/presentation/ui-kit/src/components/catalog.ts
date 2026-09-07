@@ -1,5 +1,5 @@
 /**
- * Authoritative inventory for the MC Wallet design system. Production classes
+ * Authoritative inventory for the Bramble design system. Production classes
  * and renderers are documented here once; Storybook coverage is checked
  * against these ids so new primitives cannot ship undocumented.
  */

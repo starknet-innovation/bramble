@@ -4,13 +4,13 @@
  * phrase — so an invalid or malformed background reply cannot leak recovery
  * material into the UI.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { type AccountRef, isAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { type AccountRef, isAccountRef } from "@bramble/wallet-model/accounts";
 import {
   isRecoveryAccountCandidate,
   isRecoveryAccountIndex,
   type RecoveryAccountCandidate,
-} from "@mc-wallet/wallet-model/recovery";
+} from "@bramble/wallet-model/recovery";
 
 /**
  * Popup mnemonic-validity response accepted from the background boundary.

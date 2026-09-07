@@ -14,14 +14,14 @@
  * blank the whole feed.
  */
 
-import { isTransportRpcError, withRpcFallback } from "@mc-wallet/starknet/provider";
-import { type ActivityEntry, isActivityEntry } from "@mc-wallet/transactions/activity";
+import { isTransportRpcError, withRpcFallback } from "@bramble/starknet/provider";
+import { type ActivityEntry, isActivityEntry } from "@bramble/transactions/activity";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/networks";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { RpcProvider } from "starknet";
 import {
   type DecodedTransfer,

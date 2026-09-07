@@ -1,5 +1,5 @@
 /** Primary side-panel UI and its scene-preserving paint loop. */
-import type { LedgerConnector } from "@mc-wallet/ledger-protocol/session";
+import type { LedgerConnector } from "@bramble/ledger-protocol/session";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { actionableApprovals } from "../journeys/approvals/approval-screen";
 import { bindLedgerFirstRun } from "../journeys/ledger/first-run";
@@ -122,10 +122,9 @@ export const startWalletUi = async (
     connector: ledgerConnector,
     mount: ledgerOnboardMount,
     openImport: () => navigate("import-key"),
+    openImportSeed: () => navigate("import-phrase"),
     openMultisig: () => navigate("multisig-add"),
-    refresh: async () => {
-      await render(await wallet.loadStatus());
-    },
+    refresh: async () => render(await wallet.loadStatus()),
     wallet,
   });
   const bindAll = (): void => {
@@ -206,6 +205,7 @@ export const startWalletUi = async (
     bindSettingsSurface({
       activeAccountId: () => lastAccountId,
       app,
+      existingAccountIds: () => new Set(cache.status.accounts.map((account) => account.id)),
       expandedGroup: () => expandedGroupId,
       networkId: () => lastNetworkId,
       openAssign: () => openAssignId,

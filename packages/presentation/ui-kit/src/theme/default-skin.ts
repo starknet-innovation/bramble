@@ -6,8 +6,8 @@
  * hue. Green is reserved for positive/success semantics and red for
  * danger/failure; orange is reserved for degraded data. Quiet-luxury minimalism — flat and legible, not glass.
  *
- * Surfaces step in three quiet tiers: `--mc-sunken` for recessed group
- * containers, `--mc-panel` (pure white) for cards, and `--mc-elevated` for
+ * Surfaces step in three quiet tiers: `--bramble-sunken` for recessed group
+ * containers, `--bramble-panel` (pure white) for cards, and `--bramble-elevated` for
  * controls and rows. Separation is carried by hairline edges and gentle low
  * shadows. Every text/ground pairing is guarded by the contrast test suite.
  */
@@ -19,23 +19,23 @@ import type { Skin } from "./skin";
 export const defaultSkin: Skin = {
   name: "daylight",
   tokens: {
-    "--mc-accent": "#171717",
-    "--mc-accent-text": "#fafafa",
-    "--mc-account-avatar-0": "#6842a8",
-    "--mc-account-avatar-1": "#e27a35",
-    "--mc-account-avatar-2": "#e9b83f",
-    "--mc-account-avatar-3": "#9f356f",
-    "--mc-account-avatar-ink": "#171717",
-    "--mc-account-avatar-paper": "#fafafa",
-    "--mc-bg": "#f5f5f5",
-    "--mc-border": "#dedede",
-    "--mc-danger": "#b4232c",
-    "--mc-elevated": "#ececec",
-    "--mc-muted": "#666666",
-    "--mc-panel": "#ffffff",
-    "--mc-positive": "#087a4b",
-    "--mc-sunken": "#f0f0f0",
-    "--mc-text": "#171717",
-    "--mc-warning": "#9a3412",
+    "--bramble-accent": "#171717",
+    "--bramble-accent-text": "#fafafa",
+    "--bramble-account-avatar-0": "#6842a8",
+    "--bramble-account-avatar-1": "#e27a35",
+    "--bramble-account-avatar-2": "#e9b83f",
+    "--bramble-account-avatar-3": "#9f356f",
+    "--bramble-account-avatar-ink": "#171717",
+    "--bramble-account-avatar-paper": "#fafafa",
+    "--bramble-bg": "#f5f5f5",
+    "--bramble-border": "#dedede",
+    "--bramble-danger": "#b4232c",
+    "--bramble-elevated": "#ececec",
+    "--bramble-muted": "#666666",
+    "--bramble-panel": "#ffffff",
+    "--bramble-positive": "#087a4b",
+    "--bramble-sunken": "#f0f0f0",
+    "--bramble-text": "#171717",
+    "--bramble-warning": "#9a3412",
   },
 };

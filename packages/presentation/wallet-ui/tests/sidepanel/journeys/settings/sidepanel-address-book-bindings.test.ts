@@ -3,8 +3,8 @@
  * failure so save normalization, status refresh, and retry state stay visible.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { canonicalAddress } from "@mc-wallet/wallet-model/networks";
-import { walletContactCard } from "@mc-wallet/wallet-model/preferences";
+import { canonicalAddress } from "@bramble/wallet-model/networks";
+import { walletContactCard } from "@bramble/wallet-model/preferences";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { bindAddressBook } from "../../../../src/sidepanel/shell/dashboard-bindings";

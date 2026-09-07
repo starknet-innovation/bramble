@@ -5,7 +5,7 @@
  * message — not a guess, and not a value inverted somewhere in the binding.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { bindEndpointSettings } from "../../../../src/sidepanel/journeys/settings/endpoint-ui";
 import { advancedNetworkFlow } from "../../../../src/sidepanel/journeys/settings/network-views";

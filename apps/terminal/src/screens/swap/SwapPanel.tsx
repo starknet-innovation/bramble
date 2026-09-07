@@ -262,7 +262,7 @@ export const SwapPanel = ({
       return;
     }
     setIsRequesting(true);
-    setExecMessage("Request sent. Review it in MC Wallet.");
+    setExecMessage("Request sent. Review it in Bramble.");
     void (async () => {
       try {
         await requestTransaction({

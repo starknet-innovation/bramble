@@ -4,10 +4,10 @@
  * rejecting any shape that does not exactly match one variant so a malformed
  * payload can never be read as a "verified" result.
  */
-import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
-import { asFelt } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isJson, isRecord } from "@bramble/core/json";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
+import { isAccountId } from "@bramble/wallet-model/accounts";
+import { asFelt } from "@bramble/wallet-model/networks";
 
 /**
  * Popup on-chain class-hash verification accepted from the background boundary.

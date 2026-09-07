@@ -6,8 +6,8 @@
  * the shell re-renders (leaving the screen).
  */
 
-import { button } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
+import { button } from "@bramble/ui-kit/controls";
+import { textField } from "@bramble/ui-kit/fields";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
@@ -55,7 +55,7 @@ export const revealFlow = (status: WalletStatus): string => {
       "reveal",
       `<section class="section reveal-warning" role="note">
       <p class="reveal-danger">${icon("alert")}Anyone who sees these can take your funds.</p>
-      <p class="hint">Reveal only in private. MC Wallet will never ask you for them. They are shown once here and never leave this screen.</p>
+      <p class="hint">Reveal only in private. Bramble will never ask you for them. They are shown once here and never leave this screen.</p>
     </section>
     <section class="section">
       <form id="reveal-form">

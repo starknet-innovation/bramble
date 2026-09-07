@@ -5,11 +5,11 @@
  * on deny. Blocked or unconnected origins never reach the queue.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
+import { WalletError } from "@bramble/core/errors";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { verifyCalls } from "@bramble/transactions/verify";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";

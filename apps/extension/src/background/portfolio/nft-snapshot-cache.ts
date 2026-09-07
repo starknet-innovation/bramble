@@ -1,7 +1,7 @@
 /** Cached-first NFT reads with bounded freshness and retry backoff. */
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import { systemClock } from "@mc-wallet/transactions/activity";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import { systemClock } from "@bramble/transactions/activity";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import type { NftSnapshotLane, NftSnapshotStore } from "./nft-snapshots";
 

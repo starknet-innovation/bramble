@@ -3,7 +3,7 @@
  * toasts and their copy-to-clipboard affordance.
  */
 import { describe, expect, test } from "bun:test";
-import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
+import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 
 import { friendlyError } from "../../../src/sidepanel/runtime/friendly-error";
 

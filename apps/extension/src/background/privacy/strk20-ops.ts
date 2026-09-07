@@ -4,17 +4,17 @@
  * All six are dapp-reachable, so every session read here is a non-renewing peek.
  */
 
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 
 import {
   quoteStrk20Plan,
   summarizeStrk20Action,
   summarizeStrk20Plan,
-} from "@mc-wallet/privacy/service";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/privacy/service";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import { sameFelt } from "@bramble/wallet-model/networks";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";

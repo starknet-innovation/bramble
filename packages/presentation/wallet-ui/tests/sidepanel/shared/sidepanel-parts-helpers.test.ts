@@ -4,7 +4,7 @@
  * whole, fractional, and unparseable inputs.
  */
 import { describe, expect, test } from "bun:test";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   accountAvatar,
   accountDisplayName,
@@ -78,7 +78,7 @@ describe("accountAvatar", () => {
       expect(avatar).toContain('class="avatar-head"');
       expect(avatar).toContain('class="avatar-eyes"');
       expect(avatar).toContain('class="avatar-mouth"');
-      expect(avatar).toMatch(/fill="var\(--mc-account-avatar-\d\)"/);
+      expect(avatar).toMatch(/fill="var\(--bramble-account-avatar-\d\)"/);
       expect(avatar).not.toContain('class="avatar-frame"');
     }
   });

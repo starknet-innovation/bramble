@@ -1,23 +1,23 @@
 /** Pure screens for stable Argent multisig accounts and frozen intents. */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import {
   type ArgentMultisigConfigReview,
   type ArgentMultisigPublicConfig,
   reviewArgentMultisigConfigChange,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { preparedArgentMultisigFee } from "@mc-wallet/starknet/multisig-invoke";
-import { verificationContext, verifyCalls } from "@mc-wallet/transactions/verify";
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { preparedArgentMultisigFee } from "@bramble/starknet/multisig-invoke";
+import { verificationContext, verifyCalls } from "@bramble/transactions/verify";
+import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { menuRow } from "@bramble/ui-kit/navigation";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -73,7 +73,7 @@ const authorityMessage = (view: ArgentMultisigView): string | null =>
     "network-unavailable": "Signer authority could not be refreshed. Check the network and retry.",
     undeployed: null,
     "unsupported-class":
-      "This address is not the pinned Argent Multisig 0.2 account. It is available to inspect only.",
+      "This address is not the pinned Ready Multisig 0.2 account. It is available to inspect only.",
     "unsupported-signers": `This account includes ${view.unsupportedSigners.length === 1 ? "a signer type" : "signer types"} this wallet cannot sign with. It remains available to watch and receive.`,
   })[view.authorityStatus];
 
@@ -111,11 +111,11 @@ export const multisigsFlow = (
       "multisigs",
       `${
         loadError
-          ? '<div class="review-panel" role="alert"><p class="review-flag">The background could not refresh the Argent multisig registry. Retry before signing.</p></div>'
+          ? '<div class="review-panel" role="alert"><p class="review-flag">The background could not refresh the Ready multisig registry. Retry before signing.</p></div>'
           : ""
       }
       <section class="section">
-        <div class="menu-list" role="group" aria-label="Argent multisig actions">
+        <div class="menu-list" role="group" aria-label="Ready multisig actions">
           ${walletMenuRow("multisig-watch", "Add shared account", "plus")}
           ${walletMenuRow("multisig-deploy", "Create a multisig", "users")}
         </div>
@@ -435,10 +435,10 @@ export const multisigDetailFlow = (
 ): string => {
   if (!view) {
     return (
-      (screen === "multisig-home" ? "" : flowHeader("Argent multisig", status)) +
+      (screen === "multisig-home" ? "" : flowHeader("Ready multisig", status)) +
       (screen === "multisig-home" ? dockScreen : flowScreen)(
         screen,
-        emptyState("This Argent multisig is no longer watched."),
+        emptyState("This Ready multisig is no longer watched."),
       )
     );
   }

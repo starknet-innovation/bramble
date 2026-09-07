@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { strk20AccountContext } from "../../../apps/extension/src/background/privacy/strk20-account-context";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { account, createWallet, vaultPassphrase } from "../../support/background-wallet-stub";

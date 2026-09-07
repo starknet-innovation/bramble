@@ -10,9 +10,9 @@
  * can never ride along, and every nested value is copied so a caller mutating
  * what it received cannot reach back into live queue state.
  */
-import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
-import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import type { PendingApproval } from "@mc-wallet/wallet-protocol/extension-responses";
+import type { FeeEstimate } from "@bramble/starknet/rpc";
+import type { FeeAffordability } from "@bramble/transactions/fee-funds";
+import type { PendingApproval } from "@bramble/wallet-protocol/extension-responses";
 import { type ApprovalPayload, cloneApprovalValue } from "./approval-payload";
 
 /**
@@ -23,7 +23,7 @@ export type {
   DeclarationReview,
   PendingApproval,
   WatchAssetToken,
-} from "@mc-wallet/wallet-protocol/extension-responses";
+} from "@bramble/wallet-protocol/extension-responses";
 
 /**
  * Display-only invoke fee state, aligned with Send review classification.

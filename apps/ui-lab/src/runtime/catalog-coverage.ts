@@ -1,4 +1,4 @@
-import type { UiComponentId, UiFoundationId } from "@mc-wallet/ui-kit/catalog";
+import type { UiComponentId, UiFoundationId } from "@bramble/ui-kit/catalog";
 
 /**
  * Storybook coverage registry for design foundations.

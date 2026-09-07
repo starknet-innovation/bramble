@@ -5,13 +5,13 @@
  * repaints.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
-import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { inputControl } from "@mc-wallet/ui-kit/fields";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { escapeHtml } from "@bramble/core/html";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { inputControl } from "@bramble/ui-kit/fields";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -108,7 +108,7 @@ const multisigRecipientRow = (record: ArgentMultisigRecord): string => {
     <span class="send-recipient-copy">
       <strong>${escapeHtml(name)}</strong>
       <code>${escapeHtml(accountLabel(record.address))}</code>
-      <small>Argent Multisig account</small>
+      <small>Ready Multisig account</small>
     </span>
     ${icon("chevronRight")}
   </button>`;

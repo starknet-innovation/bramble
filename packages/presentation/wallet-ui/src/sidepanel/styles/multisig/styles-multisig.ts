@@ -1,5 +1,5 @@
 /** Argent multisig portfolio styles. */
-import { EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Stylesheet fragment for current Argent multisig surfaces.
@@ -47,7 +47,7 @@ export const MULTISIG_STYLES = `
   }
   .multisig-deploy-progress li {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: grid;
     font-size: ${TYPE.micro.size};
     gap: 4px;
@@ -56,7 +56,7 @@ export const MULTISIG_STYLES = `
     text-align: center;
   }
   .multisig-deploy-progress li::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     left: calc(-50% + 12px);
@@ -67,7 +67,7 @@ export const MULTISIG_STYLES = `
   .multisig-deploy-progress li:first-child::before { display: none; }
   .multisig-deploy-progress li > span {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
     display: flex;
     font-variant-numeric: tabular-nums;
@@ -76,14 +76,14 @@ export const MULTISIG_STYLES = `
     position: relative;
     width: 22px;
   }
-  .multisig-deploy-progress li[data-state="active"] { color: var(--mc-text); }
+  .multisig-deploy-progress li[data-state="active"] { color: var(--bramble-text); }
   .multisig-deploy-progress li[data-state="active"] > span {
-    background: var(--mc-accent);
-    color: var(--mc-accent-text);
+    background: var(--bramble-accent);
+    color: var(--bramble-accent-text);
   }
   .multisig-deploy-progress li[data-state="complete"] > span {
-    background: var(--mc-positive-soft);
-    color: var(--mc-positive);
+    background: var(--bramble-positive-soft);
+    color: var(--bramble-positive);
   }
   .multisig-deploy-advanced .disclosure-body { display: grid; gap: ${SPACE.md}; }
   .multisig-deploy-stage-frame {
@@ -121,10 +121,10 @@ export const MULTISIG_STYLES = `
     animation-duration: ${MOTION.enterMs}ms;
     animation-timing-function: ${EASE.out};
   }
-  html[data-multisig-deploy-transition="forward"]::view-transition-old(multisig-deploy-stage) { animation: mc-vt-out-left ${MOTION.pressMs}ms ${EASE.out} both; }
-  html[data-multisig-deploy-transition="forward"]::view-transition-new(multisig-deploy-stage) { animation: mc-vt-in-right ${MOTION.enterMs}ms ${EASE.out} both; }
-  html[data-multisig-deploy-transition="back"]::view-transition-old(multisig-deploy-stage) { animation: mc-vt-out-right ${MOTION.pressMs}ms ${EASE.out} both; }
-  html[data-multisig-deploy-transition="back"]::view-transition-new(multisig-deploy-stage) { animation: mc-vt-in-left ${MOTION.enterMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="forward"]::view-transition-old(multisig-deploy-stage) { animation: bramble-vt-out-left ${MOTION.pressMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="forward"]::view-transition-new(multisig-deploy-stage) { animation: bramble-vt-in-right ${MOTION.enterMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="back"]::view-transition-old(multisig-deploy-stage) { animation: bramble-vt-out-right ${MOTION.pressMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="back"]::view-transition-new(multisig-deploy-stage) { animation: bramble-vt-in-left ${MOTION.enterMs}ms ${EASE.out} both; }
   #multisig-deploy-review > *,
   #multisig-deploy-form button { max-width: 100%; }
   .multisig-deployment-target {
@@ -133,7 +133,7 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.sm};
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
-  .multisig-deployment-target > span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .multisig-deployment-target > span { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
   .multisig-deployment-target code {
     min-width: 0;
     overflow: hidden;
@@ -152,7 +152,7 @@ export const MULTISIG_STYLES = `
   .multisig-funding-head h2 { margin: 2px 0 0; }
   .multisig-funding-token {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
     display: flex;
     font-size: ${TYPE.micro.size};
@@ -178,9 +178,9 @@ export const MULTISIG_STYLES = `
   .multisig-deployment-success { display: grid; gap: ${SPACE.lg}; justify-items: center; text-align: center; }
   .multisig-deployment-success-mark {
     align-items: center;
-    background: var(--mc-positive-soft);
+    background: var(--bramble-positive-soft);
     border-radius: ${RADIUS.full};
-    color: var(--mc-positive);
+    color: var(--bramble-positive);
     display: flex;
     height: 56px;
     justify-content: center;
@@ -190,9 +190,9 @@ export const MULTISIG_STYLES = `
   .multisig-deployment-success-actions { display: grid; gap: ${SPACE.sm}; width: 100%; }
   .multisig-deployment-success-actions > a {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     justify-content: center;
     min-height: ${SIZE.control};
@@ -202,7 +202,7 @@ export const MULTISIG_STYLES = `
     .multisig-deployment-success { gap: ${SPACE.sm}; }
   }
   .multisig-signer-set {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     min-width: 0;
     overflow: hidden;
@@ -225,7 +225,7 @@ export const MULTISIG_STYLES = `
     position: relative;
   }
   .multisig-selected-signer:not([hidden]) ~ .multisig-selected-signer:not([hidden])::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto ${SPACE.lg};
@@ -241,7 +241,7 @@ export const MULTISIG_STYLES = `
   .multisig-signer-set > .multisig-signer-sources {
     background: transparent;
     border-radius: 0;
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
   }
   .multisig-deployment-signer-field { display: grid; gap: 6px; min-width: 0; }
   .multisig-deployment-signer-picker > summary > [data-deployment-signer-current-avatar] { display: inline-flex; flex: none; }
@@ -279,7 +279,7 @@ export const MULTISIG_STYLES = `
   }
   .multisig-authority-summary { display: grid; gap: ${SPACE.lg}; }
   .multisig-signer-roster {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     overflow: hidden;
@@ -294,7 +294,7 @@ export const MULTISIG_STYLES = `
     position: relative;
   }
   .multisig-signer-identity + .multisig-signer-identity::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto ${SPACE.lg};
@@ -325,11 +325,11 @@ export const MULTISIG_STYLES = `
   .multisig-authority-actions,
   .multisig-authority-actions .disclosure-body { display: grid; gap: ${SPACE.md}; }
   .multisig-signer-manage form + form {
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
     padding-top: ${SPACE.md};
   }
   .multisig-signer-recovery-list {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     overflow: hidden;
@@ -346,7 +346,7 @@ export const MULTISIG_STYLES = `
   .multisig-signer-recovery-field + .multisig-signer-recovery-field,
   .multisig-signer-recovery-row + .multisig-signer-recovery-field,
   .multisig-signer-recovery-field + .multisig-signer-recovery-row {
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
   }
   .multisig-signer-recovery-row .option-copy strong,
   .multisig-signer-recovery-row .option-sub {
@@ -355,8 +355,8 @@ export const MULTISIG_STYLES = `
     text-wrap: nowrap;
   }
   .multisig-signer-recovery-field { padding: ${SPACE.md}; }
-  .multisig-signer-match { color: var(--mc-positive); display: inline-flex; }
-  .multisig-config-note { color: var(--mc-muted); font-size: ${TYPE.caption.size}; margin: 0; }
+  .multisig-signer-match { color: var(--bramble-positive); display: inline-flex; }
+  .multisig-config-note { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; }
   .multisig-deployment-success .request-detail dd { align-items: center; display: flex; gap: ${SPACE.xs}; }
   .multisig-authority-actions > .ghost { justify-self: start; }
   .multisig-portfolio-hero { padding-top: ${SPACE.md}; }
@@ -370,7 +370,7 @@ export const MULTISIG_STYLES = `
     min-width: 0;
   }
   .multisig-compose-intro {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     line-height: ${TYPE.body.line};
     margin: 0;
   }
@@ -398,7 +398,7 @@ export const MULTISIG_STYLES = `
     overflow-y: auto;
   }
   .multisig-recipient-picker .send-recipient-row,
-  .multisig-asset-picker .send-asset-row { background: var(--mc-elevated); }
+  .multisig-asset-picker .send-asset-row { background: var(--bramble-elevated); }
   .multisig-asset-picker { min-width: 0; }
   .multisig-asset-picker > summary.send-token-trigger {
     align-items: center;
@@ -411,14 +411,14 @@ export const MULTISIG_STYLES = `
   .multisig-asset-picker > summary.send-token-trigger::-webkit-details-marker { display: none; }
   .multisig-asset-picker[open] > summary .icon { transform: rotate(180deg); }
   .multisig-asset-picker > .disclosure-body {
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
     margin-top: ${SPACE.md};
     padding-top: ${SPACE.md};
   }
   .multisig-compose-form .send-amount-card { min-width: 0; }
   .multisig-compose-form .send-amount-field input { min-width: 0; }
   .multisig-compose-form #multisig-amount-guidance {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     margin: -${SPACE.sm} 0 0;
     text-align: right;
   }
@@ -428,7 +428,7 @@ export const MULTISIG_STYLES = `
   }
   .multisig-advanced-call .multisig-compose-form { padding-top: ${SPACE.xs}; }
   .home-tab-count {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     font-variant-numeric: tabular-nums;
     margin-left: ${SPACE.xs};
@@ -437,9 +437,9 @@ export const MULTISIG_STYLES = `
   .multisig-portfolio-tabs .tab-set { gap: ${SPACE.lg}; }
   .multisig-portfolio-tabs [data-ms-home-panel] { min-width: 0; }
   .multisig-intent-stack { display: grid; gap: ${SPACE.md}; }
-  .multisig-intent-sync { align-items: center; border-bottom: 1px solid var(--mc-hairline); display: flex; gap: ${SPACE.md}; justify-content: space-between; margin-bottom: ${SPACE.md}; padding-bottom: ${SPACE.md}; }
+  .multisig-intent-sync { align-items: center; border-bottom: 1px solid var(--bramble-hairline); display: flex; gap: ${SPACE.md}; justify-content: space-between; margin-bottom: ${SPACE.md}; padding-bottom: ${SPACE.md}; }
   .multisig-intent-sync > div { display: grid; gap: ${SPACE.xs}; min-width: 0; }
-  .multisig-intent-sync span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .multisig-intent-sync span { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
   .multisig-intent-sync button { flex: 0 0 auto; }
   .multisig-intent { align-items: stretch; display: grid; gap: ${SPACE.md}; min-width: 0; overflow: hidden; }
   .multisig-intent .decision-head .pill { margin-left: auto; }
@@ -447,7 +447,7 @@ export const MULTISIG_STYLES = `
   .multisig-intent-action { display: grid; gap: ${SPACE.sm}; }
   .multisig-intent-action > button { width: 100%; }
   .multisig-action-note {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
   }
@@ -455,7 +455,7 @@ export const MULTISIG_STYLES = `
   .multisig-collaboration .disclosure-body { display: grid; gap: ${SPACE.md}; }
   .multisig-handoff-section { display: grid; gap: ${SPACE.sm}; min-width: 0; }
   .multisig-handoff-section + .multisig-handoff-section {
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
     padding-top: ${SPACE.md};
   }
   .multisig-handoff-copy { display: grid; gap: ${SPACE.xs}; }
@@ -483,7 +483,7 @@ export const MULTISIG_STYLES = `
   [data-ms-exact-identity] .receipt-row dd { max-width: 70%; }
   [data-ms-exact-identity] .receipt-row dd code { overflow-wrap: anywhere; text-align: left; word-break: break-word; }
   .drawer-multisig .account-groups-line {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};
   }
   @media (prefers-reduced-motion: reduce) {

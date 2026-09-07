@@ -8,7 +8,7 @@
  * replacements would be five chances to drift apart. Builders take explicit
  * overrides so a test states only the field it is exercising.
  */
-import { UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
+import { UINT128_LIMIT } from "@bramble/wallet-model/networks";
 
 // Split through the one shared `2 ** 128`, never a local `1n << 128n`: a
 // fixture that disagreed with the decoder about where a limb ends would prove
@@ -21,7 +21,7 @@ const uint256 = (value: bigint): readonly string[] => [
 /**
  * One serialized `Route`: sell token, buy token, then a Direct `RouteSwap`
  * (exchange address, percent, and the exchange's opaque parameters). Matches
- * the pinned layout documented in @mc-wallet/transactions/avnu-route.
+ * the pinned layout documented in @bramble/transactions/avnu-route.
  */
 export const avnuDirectRoute = (options: {
   readonly buyToken: string;

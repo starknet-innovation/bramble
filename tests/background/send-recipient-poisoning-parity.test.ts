@@ -31,16 +31,16 @@
  * under it is unit-tested below.
  */
 import { describe, expect, test } from "bun:test";
-import type { Strk20Service, Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-import { createPreferencesStore, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { Strk20Service, Strk20SubmissionPlan } from "@bramble/privacy/service";
+import { createPreferencesStore, type WalletPreferences } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
-import type { Vault } from "@mc-wallet/vault/schema";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/verify";
+import type { Vault } from "@bramble/vault/schema";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";

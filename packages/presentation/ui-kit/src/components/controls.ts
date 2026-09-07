@@ -2,7 +2,7 @@
  * Shared, escaped control renderers. These templates are the authoritative
  * button/link vocabulary for production wallet surfaces and Storybook.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import { type UiAttributes, uiAttributes, uiClassNames } from "./html-attributes";
 import { type IconName, icon } from "./icons";
 

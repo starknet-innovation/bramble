@@ -4,7 +4,7 @@ title: Start here for engineers
 permalink: /engineering/
 ---
 
-# MC Wallet — Start Here for Engineers
+# Bramble — Start Here for Engineers
 
 A reading order and two orientation diagrams for people working on the codebase.
 It threads the existing docs together and makes the enforced import-layering and
@@ -84,7 +84,7 @@ and capability on every extension message.
 ```mermaid
 flowchart LR
     dapp["dApp page<br/>(untrusted)"]
-    inpage["apps/extension/provider<br/>window.starknet_mcWallet"]
+    inpage["apps/extension/provider<br/>window.starknet_bramble"]
     bridge["wallet-protocol/bridge<br/>maps methods to safe messages"]
     content["apps/extension/content<br/>page ↔ background relay"]
     background["apps/extension/background<br/>validate type / origin / capability"]
@@ -108,7 +108,7 @@ flowchart LR
 Key invariants (see `docs/ARCHITECTURE.md` §dApp Provider and `AGENTS.md`):
 
 - The page never talks to the background directly; it sees only
-  `window.starknet_mcWallet`. Provider and content entrypoints remain on the untrusted side.
+  `window.starknet_bramble`. Provider and content entrypoints remain on the untrusted side.
 - The dapp-reachable method set is the enforced-derived `DAPP_MESSAGES` allowlist
   in `apps/extension/src/background/routing/senders.ts`; a new dapp-facing method must be added there
   deliberately.

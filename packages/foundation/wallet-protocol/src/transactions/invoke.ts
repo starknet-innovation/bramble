@@ -1,8 +1,8 @@
 /**
  * Bounded provider invoke-parameter parsing at the page trust boundary.
  */
-import { hasOnlyKnownKeys, isRecord, type Json } from "@mc-wallet/core/json";
-import { canonicalFelt, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isRecord, type Json } from "@bramble/core/json";
+import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 import { isStrk20Proof, type Strk20Proof } from "../privacy/strk20";
 import { INVOKE_LIMITS } from "./invoke-limits";
 

@@ -38,11 +38,17 @@ describe("onboarding gate view", () => {
     expect(html).toContain('data-onboarding-step="recovery"');
     expect(html).toContain('data-onboarding-step="password"');
     expect(html).toContain('data-onboarding-step="recovery-accounts"');
-    expect(html).toContain('data-onboarding-step="account-contract"');
+    expect(html).toContain('data-onboarding-step="import-key"');
     expect(html).toContain('data-onboarding-step="accounts"');
-    expect(html).toMatch(/data-account-contract="openzeppelin"[^>]*aria-pressed="true"/);
-    expect(html).toMatch(/data-account-contract="argent"[^>]*aria-pressed="false"/);
+    // Contract choice is gone from creation: the hidden input pins Bramble.
+    expect(html).not.toContain('data-onboarding-step="account-contract"');
+    expect(html).not.toContain("data-account-contract=");
     expect(html).toContain('name="accountContractType" type="hidden" value="openzeppelin"');
+    // The import-key stage keeps the contract choice (existing Ready accounts).
+    expect(html).toContain('name="importKeyContractType"');
+    expect(html).toContain('name="importKeyRaw"');
+    expect(html).toContain('name="importKeySalt"');
+    expect(html).toContain('id="key-method-button"');
     expect(html).toContain('aria-pressed="false"');
     expect(html.match(/data-recovery-kind="import"/g)?.length).toBe(24);
   });
@@ -78,7 +84,8 @@ describe("onboarding gate view", () => {
     const html = onboarding(status);
 
     expect(html).toContain('data-onboarding-step="ledger"');
-    expect(html).toContain('data-onboarding-step="ledger-contract"');
+    // The Ledger contract step is gone: the hidden input pins Bramble.
+    expect(html).not.toContain('data-onboarding-step="ledger-contract"');
     expect(html).toContain("data-ledger-first-run");
     expect(html).toContain('name="ledgerVaultPassphrase"');
     expect(html).toContain('name="ledgerVaultPassphraseConfirm"');
@@ -96,12 +103,9 @@ describe("onboarding gate view", () => {
     const ackRow = onboarding(sepolia).match(/id="ledger-mainnet-ack"[^>]*/)?.[0] ?? "";
     expect(ackRow).not.toContain("hidden");
     expect(onboarding(sepolia)).toContain('name="accountContractType"');
-    expect(onboarding(sepolia)).toContain('name="ledgerAccountContractType"');
-    expect(onboarding(sepolia)).toContain('data-account-contract="argent"');
-    expect(onboarding(sepolia)).toContain('data-ledger-account-contract="openzeppelin"');
-    expect(onboarding(sepolia)).toContain(
-      'name="ledgerAccountContractType" type="hidden" value="openzeppelin"',
-    );
+    // The Ledger card carries no contract input: the device picker groups both
+    // contract families and creation is pinned to Bramble.
+    expect(onboarding(sepolia)).not.toContain('name="ledgerAccountContractType"');
     expect(onboarding(sepolia)).not.toContain('name="networkId"');
   });
 });

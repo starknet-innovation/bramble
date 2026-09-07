@@ -15,7 +15,7 @@ const unavailableVaultStatus = () => ({
 
 /**
  * Dispatcher whose every wallet operation throws "wallet unavailable"; the
- * extension id is "mc-wallet-test".
+ * extension id is "bramble-test".
  */
 export const handleMessage = createMessageHandler(
   {
@@ -53,5 +53,5 @@ export const handleMessage = createMessageHandler(
       return unavailableVaultStatus();
     },
   },
-  "mc-wallet-test",
+  "bramble-test",
 );

@@ -1,6 +1,6 @@
 /** Best-effort activity journaling after a transaction has been broadcast. */
 
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
+import type { ActivityLog } from "@bramble/transactions/activity";
 
 type SubmittedActivity = Parameters<ActivityLog["record"]>[0];
 

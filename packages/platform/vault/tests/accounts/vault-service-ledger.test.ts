@@ -6,17 +6,17 @@
  * (the fail-closed edge for adding a seed account later).
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { MAX_LEDGER_STRK20_VIEWING_KEYS } from "@mc-wallet/vault/account-secrets";
-import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { isVaultV7 } from "@mc-wallet/vault/schema";
-import { createWalletVaultService } from "@mc-wallet/vault/service";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { createMemoryStore } from "@bramble/store/kv";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { MAX_LEDGER_STRK20_VIEWING_KEYS } from "@bramble/vault/account-secrets";
+import { createEncryptedStore } from "@bramble/vault/encrypted-store";
+import { isVaultV8 } from "@bramble/vault/schema";
+import { createWalletVaultService } from "@bramble/vault/service";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
-const vaultKey = "mc-wallet:vault";
-const migrationKey = "mc-wallet:vault-migration";
+const vaultKey = "bramble:vault";
+const migrationKey = "bramble:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 
 const makeService = (store = createMemoryStore()) => ({
@@ -53,7 +53,7 @@ describe("createLedgerVault", () => {
     expect(vault.signingKeys).toEqual([]);
     expect(vault.accounts).toEqual([account]);
     expect(vault.activeAccountId).toBe(account.id);
-    expect(isVaultV7(vault)).toBe(true);
+    expect(isVaultV8(vault)).toBe(true);
     // The passphrase encrypts the registry; it is never persisted in the clear.
     expect(JSON.stringify(await store.get(vaultKey))).not.toContain(vaultPassphrase);
   });
@@ -374,6 +374,6 @@ describe("ensureNetworkAccount for a keyless Ledger account", () => {
     expect(vault.signingKeys).toEqual([]);
     expect(vault.accounts).toEqual([mainnet, sepolia]);
     expect(vault.activeAccountId).toBe(sepolia.id);
-    expect(isVaultV7(vault)).toBe(true);
+    expect(isVaultV8(vault)).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { badge, callout, emptyState, pill, toast } from "@mc-wallet/ui-kit/content";
+import { badge, callout, emptyState, pill, toast } from "@bramble/ui-kit/content";
 import type { Meta } from "@storybook/html-vite";
 import {
   CATALOG_META,

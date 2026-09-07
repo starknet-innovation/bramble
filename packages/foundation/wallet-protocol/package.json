@@ -1,5 +1,5 @@
 {
-  "name": "@mc-wallet/wallet-protocol",
+  "name": "@bramble/wallet-protocol",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -29,7 +29,7 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*"
+    "@bramble/core": "workspace:*",
+    "@bramble/wallet-model": "workspace:*"
   }
 }

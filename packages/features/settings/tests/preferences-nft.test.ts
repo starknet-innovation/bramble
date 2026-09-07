@@ -7,8 +7,8 @@ import {
   createPreferencesStore,
   defaultWalletPreferences,
   PREFERENCES_STORE_KEY,
-} from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+} from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const CONTRACT = "0x051a2b3c4d";
 

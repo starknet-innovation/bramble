@@ -144,7 +144,7 @@ describe("allowance recording covers every submitting path", () => {
     );
     expect(
       submits(
-        'import { submitStrk20Actions as go } from "@mc-wallet/privacy/service";\nawait go(input);',
+        'import { submitStrk20Actions as go } from "@bramble/privacy/service";\nawait go(input);',
       ),
     ).toBe(true);
     expect(submits("await deps.runtimeRpc.getTokenBalances(input);")).toBe(false);

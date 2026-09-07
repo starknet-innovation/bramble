@@ -2,8 +2,8 @@
  * Proof preparation and bounded service retries for the official privacy SDK.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { Strk20CallAndProof } from "@mc-wallet/wallet-protocol/strk20";
+import { WalletError } from "@bramble/core/errors";
+import type { Strk20CallAndProof } from "@bramble/wallet-protocol/strk20";
 import type { RpcProvider } from "starknet";
 import type { Strk20NetworkConfig } from "../config";
 import type { Strk20MaturityScope } from "../policy/maturity";

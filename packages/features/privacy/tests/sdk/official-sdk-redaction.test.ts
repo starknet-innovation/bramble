@@ -1,8 +1,8 @@
 /** Account-mode submission errors must never disclose a proof-bearing request. */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { memoryStrk20MaturityStore } from "@mc-wallet/privacy/maturity";
-import { createOfficialStrk20Service } from "@mc-wallet/privacy/official-sdk-service";
+import { WalletError } from "@bramble/core/errors";
+import { memoryStrk20MaturityStore } from "@bramble/privacy/maturity";
+import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import {
   STRK20_SDK_ACCOUNT as account,
   officialBuilder as builder,

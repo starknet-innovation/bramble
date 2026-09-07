@@ -11,14 +11,11 @@
  * tests running concurrently.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  ARGENT_ACCOUNT_CONTRACT,
-  argentAccountAddress,
-} from "@mc-wallet/starknet/account-contracts";
-import { estimateDeclareFee, submitDeclareTransaction } from "@mc-wallet/starknet/declare";
-import type { StarknetAccountDescriptor } from "@mc-wallet/starknet/provider";
-import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
-import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet/account-contracts";
+import { estimateDeclareFee, submitDeclareTransaction } from "@bramble/starknet/declare";
+import type { StarknetAccountDescriptor } from "@bramble/starknet/provider";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { type Account, CallData, type CompiledContract, hash, RpcProvider } from "starknet";
 
 const declareCalls: Array<Record<string, unknown>> = [];

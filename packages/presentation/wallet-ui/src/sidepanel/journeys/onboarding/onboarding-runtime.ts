@@ -4,7 +4,7 @@
  * is never echoed in responses except generateMnemonic.
  */
 
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   isCreateAccountResponse,
   isErrorResponse,

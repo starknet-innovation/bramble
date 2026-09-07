@@ -6,14 +6,14 @@
  * user cannot judge, or revoke, what a spender may actually take.
  */
 import { describe, expect, test } from "bun:test";
-import { isUnlimitedAllowance } from "@mc-wallet/transactions/allowance-discovery";
+import { isUnlimitedAllowance } from "@bramble/transactions/allowance-discovery";
 import {
   type AllowanceStore,
   allowanceTarget,
   memoryAllowanceStore,
-} from "@mc-wallet/transactions/allowance-store";
-import type { ApprovedAssets } from "@mc-wallet/transactions/allowances";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/transactions/allowance-store";
+import type { ApprovedAssets } from "@bramble/transactions/allowances";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   allowanceOwner,
   recordApproveAllowances,

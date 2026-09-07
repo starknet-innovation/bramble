@@ -3,7 +3,7 @@
  * badges only for actionable positive counts.
  */
 import { describe, expect, test } from "bun:test";
-import { dockNavigation, optionRow } from "@mc-wallet/ui-kit/navigation";
+import { dockNavigation, optionRow } from "@bramble/ui-kit/navigation";
 
 describe("dockNavigation", () => {
   test("renders persistent labelled tabs and positive count badges", () => {

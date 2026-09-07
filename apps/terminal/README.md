@@ -1,7 +1,6 @@
-# MC Wallet Trade Terminal
+# Bramble Trade Terminal
 
-A standalone Starknet trade terminal (Vite + React SPA). It connects to the MC
-Wallet browser extension at runtime as a dApp and reads live market data from
+A standalone Starknet trade terminal (Vite + React SPA). It connects to the Bramble browser extension at runtime as a dApp and reads live market data from
 several public APIs.
 
 ## Scripts
@@ -29,12 +28,12 @@ privacy pool:
 
 It reads a minimal typed pool view (`version`, fee, fee collector, and proof
 validity), provides the explicit one-time **Activate private balances** flow,
-requests aggregate private balances from MC Wallet, and supports shield,
+requests aggregate private balances from Bramble, and supports shield,
 withdraw, private transfer, and AVNU private swap flows. Notes, viewing keys,
 signing material, and proof generation remain inside the wallet.
 
-Activation uses the MC-namespaced `mc_strk20Register` capability because the
-standard Wallet API defines `NOT_REGISTERED` but no registration RPC. MC Wallet
+Activation uses the Bramble-namespaced `mc_strk20Register` capability because the
+standard Wallet API defines `NOT_REGISTERED` but no registration RPC. Bramble
 holds that request for an explicit review and binds it to the origin, account,
 network, configured pool, tracked token, and payload digest before submitting
 the public one-time transaction.
@@ -46,7 +45,7 @@ AVNU private swap is deliberately split:
    independently validates it.
 2. The Terminal shows sell amount, expected buy amount, slippage, executor,
    pool fee, and action count.
-3. MC Wallet independently validates the actions, checks private balances and
+3. Bramble independently validates the actions, checks private balances and
    privacy-leak warnings, asks for approval, and generates the proof.
 4. The server submits only that pool-bound proof through AVNU's private
    paymaster. It returns a validated transaction hash.
@@ -64,7 +63,7 @@ STRK20_DISCOVERY_UPSTREAM=
 STRK20_PROVER_UPSTREAM=
 STRK20_PAYMASTER_UPSTREAM=https://starknet.paymaster.avnu.fi
 AVNU_PAYMASTER_API_KEY=
-MC_WALLET_EXTENSION_ORIGINS=chrome-extension://<released-extension-id>
+BRAMBLE_EXTENSION_ORIGINS=chrome-extension://<released-extension-id>
 TERMINAL_ALLOWED_ORIGINS=https://mc-wallet-terminal.vercel.app,http://localhost:3000
 ```
 
@@ -72,7 +71,7 @@ Never prefix upstream URLs or the paymaster key with `VITE_`; Vite variables
 are browser-readable. The public gateway URL is visible by design, while the
 upstream discovery/prover URLs stay server-side.
 
-`MC_WALLET_EXTENSION_ORIGINS` accepts only exact Chrome extension origins. This
+`BRAMBLE_EXTENSION_ORIGINS` accepts only exact Chrome extension origins. This
 blocks other browser origins but is not cryptographic build attestation: a
 standalone HTTP client can spoof an Origin header, and no secret can safely be
 embedded in an extension. Production must additionally apply Vercel Firewall
@@ -100,9 +99,9 @@ generic `subaccount_invoke` actions.
 The **NFT Studio** tab is a mint-only surface for the deployed, owner-controlled
 MC Punks ERC-721 collection on Starknet Mainnet:
 
-1. Connect MC Wallet and select Starknet Mainnet.
+1. Connect Bramble and select Starknet Mainnet.
 2. Choose an unclaimed catalog id from `0` through `9999`.
-3. Choose the recipient and review the mint through MC Wallet.
+3. Choose the recipient and review the mint through Bramble.
 
 The UI is pinned to
 `0xda8b762dcb301e6b144e521ede1e2870ce9c723e5b4e6856c870ad341098a9`.
@@ -117,9 +116,9 @@ per-token metadata. It is intentionally non-upgradeable.
 
 ```bash
 cd apps/terminal
-SCARB_CACHE=/tmp/mc-wallet-scarb-cache bun run build:contract
+SCARB_CACHE=/tmp/bramble-scarb-cache bun run build:contract
 cd contracts/punk_collection
-SCARB_CACHE=/tmp/mc-wallet-scarb-cache snforge test
+SCARB_CACHE=/tmp/bramble-scarb-cache snforge test
 ```
 
 `build:contract` uses Scarb 2.18.0, rebuilds both Sierra and CASM, verifies the
@@ -179,7 +178,7 @@ single, consistent lifecycle:
 - terminal-side review with account, network, call count, and action details;
 - spec-shaped `invoke_transaction` payloads with compiled calldata copied into
   plain JSON before it crosses the wallet provider trust boundary;
-- explicit hand-off while MC Wallet is waiting for approval;
+- explicit hand-off while Bramble is waiting for approval;
 - calm rejection copy with a safe retry;
 - validated transaction-hash feedback after submission.
 

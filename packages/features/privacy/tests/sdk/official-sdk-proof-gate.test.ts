@@ -2,8 +2,8 @@
  * Final wallet-policy gate at the official SDK proof boundary.
  */
 import { expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { createOfficialStrk20Service } from "@mc-wallet/privacy/official-sdk-service";
+import { WalletError } from "@bramble/core/errors";
+import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import {
   officialBuilder as builder,
   STRK20_SDK_CONTEXT as context,

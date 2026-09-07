@@ -13,15 +13,15 @@
  * Ledger paths, Stark hashes, public app/key responses, and raw signatures can
  * cross it. Private keys and device identifiers never do.
  */
-import { isRecord } from "@mc-wallet/core/json";
+import { isRecord } from "@bramble/core/json";
 import {
   isLedgerBrokerResponse,
   type LedgerBrokerCommand,
   type LedgerBrokerResponse,
   ledgerBrokerChannelName,
-} from "@mc-wallet/ledger-protocol/broker";
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
-import type { LedgerDeviceSession } from "@mc-wallet/ledger-protocol/session";
+} from "@bramble/ledger-protocol/broker";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import type { LedgerDeviceSession } from "@bramble/ledger-protocol/session";
 
 /**
  * Narrow `chrome.tabs`/`chrome.runtime` surface needed to create, track, and

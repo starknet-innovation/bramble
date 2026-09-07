@@ -1,7 +1,7 @@
 /** Canonical public types for frozen Argent multisig V3 transactions. */
 
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import type { EDataAvailabilityMode } from "starknet";
 import type { ArgentMultisigConfig } from "../accounts/account-contracts";
 

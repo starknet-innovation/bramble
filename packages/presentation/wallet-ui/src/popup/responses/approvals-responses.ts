@@ -3,7 +3,7 @@
  * the background boundary.
  */
 
-import { isSha256Digest, isUuid } from "@mc-wallet/core/ids";
+import { isSha256Digest, isUuid } from "@bramble/core/ids";
 import {
   hasOnlyArrayEntries,
   hasOnlyKnownKeys,
@@ -15,15 +15,15 @@ import {
   isSafeDecimals,
   isTokenSymbol,
   JSON_BUDGETS,
-} from "@mc-wallet/core/json";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
-import { isFeeEstimate as isFee } from "@mc-wallet/starknet/fee-bounds";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/core/json";
+import { isWalletOrigin } from "@bramble/core/origin";
+import { isFeeEstimate as isFee } from "@bramble/starknet/fee-bounds";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
   STARKNET_NETWORKS,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type {
   ApprovalContext,
   ApprovalRiskFlag,
@@ -31,8 +31,8 @@ import type {
   DeclarationReview,
   PendingApproval,
   WatchAssetToken,
-} from "@mc-wallet/wallet-protocol/extension-responses";
-import { readStrk20Action, readStrk20Actions } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-protocol/extension-responses";
+import { readStrk20Action, readStrk20Actions } from "@bramble/wallet-protocol/strk20";
 
 /**
  * Shared approval and connected-site wire shapes after runtime validation.
@@ -42,7 +42,7 @@ export type {
   ConnectedSite,
   PendingApproval,
   WatchAssetToken,
-} from "@mc-wallet/wallet-protocol/extension-responses";
+} from "@bramble/wallet-protocol/extension-responses";
 
 /**
  * Connected-sites response accepted from the background boundary.

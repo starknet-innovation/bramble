@@ -1,14 +1,14 @@
 /** Nostr handoffs bind the authenticated sender to a saved Starknet signer. */
 import { describe, expect, test } from "bun:test";
-import { createNostrCoordinationStore } from "@mc-wallet/multisig/coordination";
+import { createNostrCoordinationStore } from "@bramble/multisig/coordination";
 import {
   type ArgentMultisigSigningIntent,
   createMultisigStore,
-} from "@mc-wallet/multisig/repository";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
-import type { NostrEvent } from "@mc-wallet/wallet-model/nostr";
+} from "@bramble/multisig/repository";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { NostrApplicationData } from "@bramble/vault/kms-port";
+import type { NostrEvent } from "@bramble/wallet-model/nostr";
 import {
   coordinationRelayUrls,
   sharedIntentHasUpdate,
@@ -267,21 +267,21 @@ describe("Argent multisig Nostr coordination", () => {
 
     expect(
       trustedSharedIntent(
-        { content, identifier: "mc-wallet.multisig", senderPublicKey },
+        { content, identifier: "bramble.multisig", senderPublicKey },
         [contact],
         records,
       ),
     ).not.toBeNull();
     expect(
       trustedSharedIntent(
-        { content, identifier: "mc-wallet.multisig", senderPublicKey: "22".repeat(32) },
+        { content, identifier: "bramble.multisig", senderPublicKey: "22".repeat(32) },
         [contact],
         records,
       ),
     ).toBeNull();
     expect(
       trustedSharedIntent(
-        { content, identifier: "mc-wallet.multisig", senderPublicKey },
+        { content, identifier: "bramble.multisig", senderPublicKey },
         [{ ...contact, publicKeyX: "0x123" }],
         records,
       ),

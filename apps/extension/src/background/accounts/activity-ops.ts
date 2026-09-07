@@ -1,6 +1,6 @@
 /** Durable-first account activity loading and background history refresh. */
-import type { MultisigStore } from "@mc-wallet/multisig/repository";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { MultisigStore } from "@bramble/multisig/repository";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   type ActivityEntry,
   type ActivityHistoryState,
@@ -8,9 +8,9 @@ import {
   type ActivityScope,
   activityForScope,
   systemClock,
-} from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { readActivityInput } from "../routing/message-inputs";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";

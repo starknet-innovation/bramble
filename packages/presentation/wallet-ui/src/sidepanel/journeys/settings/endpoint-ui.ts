@@ -4,8 +4,8 @@
  * entrypoint to keep it within the size budget.
  */
 
-import { isServiceUrl } from "@mc-wallet/core/service-url";
-import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
+import { isServiceUrl } from "@bramble/core/service-url";
+import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { HostPermissionApi } from "../../runtime/runtime-global";

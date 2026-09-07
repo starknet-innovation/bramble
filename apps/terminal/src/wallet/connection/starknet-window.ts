@@ -1,8 +1,8 @@
 /**
  * Types + discovery helpers for the injected Starknet wallet provider.
  *
- * The terminal is a dApp: it talks to the MC Wallet browser extension through
- * the wallet's injected `window.starknet_mcWallet` provider (a standard
+ * The terminal is a dApp: it talks to the Bramble browser extension through
+ * the wallet's injected `window.starknet_bramble` provider (a standard
  * Starknet Wallet API object). We prefer that provider specifically, but
  * fall back to any other injected Starknet wallet so the terminal is usable for
  * development against Argent/Braavos too.
@@ -28,18 +28,18 @@ export type StarknetWindowObject = {
 };
 
 /**
- * The window key the MC Wallet extension injects its provider under.
+ * The window key the Bramble extension injects its provider under.
  */
-const MC_WALLET_WINDOW_KEY = "starknet_mcWallet" as const;
+const BRAMBLE_WINDOW_KEY = "starknet_bramble" as const;
 
 /**
- * Substring used to recognise the MC Wallet among discovered providers when the
+ * Substring used to recognise the Bramble among discovered providers when the
  * exact injected key is unavailable.
  */
-const MC_WALLET_NAME_MATCH = /mc\s*wallet/i;
+const BRAMBLE_NAME_MATCH = /bramble/i;
 
 type StarknetWindow = Window & {
-  readonly [MC_WALLET_WINDOW_KEY]?: StarknetWindowObject;
+  readonly [BRAMBLE_WINDOW_KEY]?: StarknetWindowObject;
 };
 
 /**
@@ -52,23 +52,23 @@ const INJECTION_POLL_INTERVAL_MS = 50 as const;
 export const INJECTION_TIMEOUT_MS = 3000 as const;
 
 /**
- * Reads the MC Wallet provider directly off the window, if the extension has
+ * Reads the Bramble provider directly off the window, if the extension has
  * injected it. Returns null in SSR or when the extension is absent.
  */
-const readInjectedMcWallet = (): StarknetWindowObject | null => {
+const readInjectedBramble = (): StarknetWindowObject | null => {
   if (typeof window === "undefined") {
     return null;
   }
-  return (window as StarknetWindow)[MC_WALLET_WINDOW_KEY] ?? null;
+  return (window as StarknetWindow)[BRAMBLE_WINDOW_KEY] ?? null;
 };
 
 /**
- * Picks the MC Wallet from a list of discovered providers, matching first on the
+ * Picks the Bramble from a list of discovered providers, matching first on the
  * canonical id, then on a name substring. Returns null when none match.
  */
-const pickMcWallet = (wallets: readonly StarknetWindowObject[]): StarknetWindowObject | null =>
+const pickBramble = (wallets: readonly StarknetWindowObject[]): StarknetWindowObject | null =>
   wallets.find(
-    (wallet) => wallet.id === "mcWallet" || MC_WALLET_NAME_MATCH.test(wallet.name ?? ""),
+    (wallet) => wallet.id === "bramble" || BRAMBLE_NAME_MATCH.test(wallet.name ?? ""),
   ) ?? null;
 
 /**
@@ -91,8 +91,8 @@ const isStarknetWindowObject = (value: unknown): value is StarknetWindowObject =
 
 /**
  * Scans `window` for every injected Starknet provider (`starknet`,
- * `starknet_mcWallet`, `starknet_argentX`, `starknet_braavos`, ...). Used as a
- * development fallback so the terminal works against any wallet, not only MC.
+ * `starknet_bramble`, `starknet_argentX`, `starknet_braavos`, ...). Used as a
+ * development fallback so the terminal works against any wallet, not only Bramble.
  */
 const scanInjectedStarknetWallets = (): readonly StarknetWindowObject[] => {
   if (typeof window === "undefined") {
@@ -112,15 +112,15 @@ const scanInjectedStarknetWallets = (): readonly StarknetWindowObject[] => {
 };
 
 /**
- * Resolves the injected MC Wallet provider, waiting for the extension to inject
+ * Resolves the injected Bramble provider, waiting for the extension to inject
  * it rather than reading `window` once. Resolves as soon as the provider
  * appears; on timeout, falls back to any injected Starknet provider (dev). This
  * fixes the "clicking Connect does nothing" race where the click beat injection.
  */
-export const waitForInjectedMcWallet = async (
+export const waitForInjectedBramble = async (
   timeoutMs: number = INJECTION_TIMEOUT_MS,
 ): Promise<StarknetWindowObject | null> => {
-  const immediate = readInjectedMcWallet();
+  const immediate = readInjectedBramble();
   if (immediate !== null) {
     return immediate;
   }
@@ -130,16 +130,16 @@ export const waitForInjectedMcWallet = async (
   return new Promise<StarknetWindowObject | null>((resolve) => {
     const deadline = Date.now() + timeoutMs;
     const interval = window.setInterval(() => {
-      const mc = readInjectedMcWallet();
-      if (mc !== null) {
+      const bramble = readInjectedBramble();
+      if (bramble !== null) {
         window.clearInterval(interval);
-        resolve(mc);
+        resolve(bramble);
         return;
       }
       if (Date.now() >= deadline) {
         window.clearInterval(interval);
         const scanned = scanInjectedStarknetWallets();
-        resolve(pickMcWallet(scanned) ?? scanned[0] ?? null);
+        resolve(pickBramble(scanned) ?? scanned[0] ?? null);
       }
     }, INJECTION_POLL_INTERVAL_MS);
   });

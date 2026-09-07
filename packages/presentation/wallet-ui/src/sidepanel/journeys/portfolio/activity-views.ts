@@ -4,11 +4,11 @@
  * deeper so monitoring and approval are never mixed into one long screen.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { iconButton } from "@mc-wallet/ui-kit/controls";
+import { escapeHtml } from "@bramble/core/html";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import { emptyState } from "@bramble/ui-kit/content";
+import { iconButton } from "@bramble/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { approvalCard } from "../approvals/approval-cards";

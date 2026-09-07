@@ -4,14 +4,14 @@
  * preferences store; credentials are deliberately unsupported because an MV3
  * bundle cannot keep a shared API secret.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isServiceUrl } from "@mc-wallet/core/service-url";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isServiceUrl } from "@bramble/core/service-url";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 /**
  * Public same-origin gateway exposed to released wallet builds.

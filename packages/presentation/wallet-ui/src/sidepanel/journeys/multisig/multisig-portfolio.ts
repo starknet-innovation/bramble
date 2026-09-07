@@ -4,12 +4,12 @@
  * signer's cache.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
-import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { explorerAccountUrl } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { explorerAccountUrl } from "@bramble/wallet-model/networks";
 import type { BalanceState } from "../../runtime/runtime";
 import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
 import { actionTile, explorerTile } from "../../shell/wallet-shell";

@@ -9,9 +9,9 @@
 
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { deriveAccount } from "@mc-wallet/vault/accounts";
-import { DEFAULT_NETWORK, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { deriveAccount } from "@bramble/vault/accounts";
+import { DEFAULT_NETWORK, isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 const packageName = "@starknetfoundation/krusty-kms-wasm";
 const packageVersion = "0.10.0";
@@ -93,7 +93,7 @@ const giftWrap = await kms.wrapNostrApplicationData(
   0,
   0,
   nostrPublicKey,
-  "mc-wallet.check",
+  "bramble.check",
   "round-trip",
 );
 const opened = await kms.openNostrApplicationData(mnemonic, 0, 0, giftWrap);
@@ -104,7 +104,7 @@ if (
   !isStarkFieldElement(viewingKey) ||
   BigInt(viewingKey) === 0n ||
   opened.content !== "round-trip" ||
-  opened.identifier !== "mc-wallet.check" ||
+  opened.identifier !== "bramble.check" ||
   opened.senderPublicKey !== nostrPublicKey ||
   ![signature.publicKey, signature.r, signature.s].every(isStarkFieldElement)
 ) {

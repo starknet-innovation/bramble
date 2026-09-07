@@ -1,5 +1,5 @@
 {
-  "name": "@mc-wallet/privacy",
+  "name": "@bramble/privacy",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -28,11 +28,11 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/starknet": "workspace:*",
-    "@mc-wallet/store": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*",
-    "@mc-wallet/wallet-protocol": "workspace:*",
+    "@bramble/core": "workspace:*",
+    "@bramble/starknet": "workspace:*",
+    "@bramble/store": "workspace:*",
+    "@bramble/wallet-model": "workspace:*",
+    "@bramble/wallet-protocol": "workspace:*",
     "starknet": "10.0.2"
   }
 }

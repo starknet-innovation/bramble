@@ -24,9 +24,9 @@ import {
   type BoundedHttpResponse,
   fetchBoundedJson,
   HTTP_BODY_LIMITS,
-} from "@mc-wallet/core/http-json";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
+} from "@bramble/core/http-json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import type { KeyValueStore } from "@bramble/store/kv";
 
 // Clock boundary for this module: the feed's TTL is the only time it reads, and
 // callers may inject their own clock. Kept local so the phishing feed does not
@@ -36,7 +36,7 @@ const systemClock = (): number => Date.now();
 /**
  * Browser-storage key for the cached phishing feed. Plain (non-secret) data.
  */
-export const PHISHING_FEED_STORE_KEY = "mc-wallet:phishing-feed";
+export const PHISHING_FEED_STORE_KEY = "bramble:phishing-feed";
 const PHISHING_CACHE_VERSION = 1;
 
 /**

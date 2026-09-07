@@ -4,7 +4,7 @@
  * numerically-equal hex/decimal spellings still match.
  */
 import { describe, expect, test } from "bun:test";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { sameFelt } from "@bramble/wallet-model/networks";
 
 describe("sameFelt guard branch", () => {
   test("returns false when either side is not a non-empty string", () => {

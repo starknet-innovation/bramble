@@ -3,28 +3,25 @@
  * hashes a transaction: the platform owns those Starknet details. It only
  * validates calls and reads the pinned account's current authority snapshot.
  */
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   ARGENT_MULTISIG_CONTRACT,
   ARGENT_MULTISIG_MAX_SIGNERS,
   argentSignerGuid,
-} from "@mc-wallet/starknet/account-contracts";
-import {
-  type ArgentMultisigCall,
-  isArgentMultisigCalls,
-} from "@mc-wallet/starknet/multisig-invoke";
+} from "@bramble/starknet/account-contracts";
+import { type ArgentMultisigCall, isArgentMultisigCalls } from "@bramble/starknet/multisig-invoke";
 import {
   createRpcProvider,
   isContractNotFoundError,
   timedRpcFetch,
   withRpcFallback,
-} from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/provider";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { hash, type RpcProvider } from "starknet";
 import { withPinnedBlock } from "./chain-pinned-read";
 import { parseArgentMultisigConfigChange } from "./config-change";
@@ -49,14 +46,14 @@ const multisigReadProvider = (nodeUrl: string): RpcProvider =>
 /**
  * Re-export the platform's canonical prepared-call shape.
  */
-export type { ArgentMultisigCall } from "@mc-wallet/starknet/multisig-invoke";
+export type { ArgentMultisigCall } from "@bramble/starknet/multisig-invoke";
 /**
  * Re-export the single-sourced trust-boundary validators for prepared calls.
  */
 export {
   isArgentMultisigCall,
   isArgentMultisigCalls,
-} from "@mc-wallet/starknet/multisig-invoke";
+} from "@bramble/starknet/multisig-invoke";
 
 const FORBIDDEN_SELF_CALL_SELECTORS = new Set(
   ["execute_after_upgrade", "perform_upgrade"].map(hash.getSelectorFromName),

@@ -1,5 +1,5 @@
 {
-  "name": "@mc-wallet/permissions",
+  "name": "@bramble/permissions",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/store": "workspace:*"
+    "@bramble/core": "workspace:*",
+    "@bramble/store": "workspace:*"
   }
 }

@@ -4,8 +4,8 @@
  * still validate unknown runtime messages before trusting them.
  */
 
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { Strk20Action, Strk20WithdrawAction } from "../privacy/strk20";
 import type { FeeEstimate } from "../transactions/fee-estimate";
 
@@ -109,7 +109,7 @@ export type PendingApproval = {
 /**
  * A persisted origin grant summarized for trusted extension surfaces.
  */
-export type { ConnectedSite } from "@mc-wallet/core/origin";
+export type { ConnectedSite } from "@bramble/core/origin";
 
 /**
  * One selectable Starknet network returned in wallet status.

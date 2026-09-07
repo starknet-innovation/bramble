@@ -24,14 +24,14 @@
  *
  * Trust boundary: every argument is untrusted dapp input of any shape. Nothing
  * here throws, nothing decides whether a payload may be signed
- * (`isTypedDataShape` in `@mc-wallet/starknet/typed-data` is that gate), and the
+ * (`isTypedDataShape` in `@bramble/starknet/typed-data` is that gate), and the
  * decoder renders payloads that gate refuses.
  */
-import { hasOnlyArrayEntries, isRecord } from "@mc-wallet/core/json";
-import { snip12MerkleLayout, snip12MerkleRoot } from "@mc-wallet/starknet/snip12-merkle";
-import { snip12Scalar } from "@mc-wallet/starknet/snip12-scalars";
-import { type Snip12Field, snip12Vocabulary } from "@mc-wallet/starknet/snip12-vocabulary";
-import { isTypedDataShape } from "@mc-wallet/starknet/typed-data";
+import { hasOnlyArrayEntries, isRecord } from "@bramble/core/json";
+import { snip12MerkleLayout, snip12MerkleRoot } from "@bramble/starknet/snip12-merkle";
+import { snip12Scalar } from "@bramble/starknet/snip12-scalars";
+import { type Snip12Field, snip12Vocabulary } from "@bramble/starknet/snip12-vocabulary";
+import { isTypedDataShape } from "@bramble/starknet/typed-data";
 import {
   emptySplit,
   isFieldList,

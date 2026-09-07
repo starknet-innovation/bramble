@@ -1,9 +1,5 @@
 /** Shared, bounded WebSocket connections for Nostr relay operations. */
-import {
-  isNostrEvent,
-  MAX_NOSTR_BATCH_ITEMS,
-  type NostrEvent,
-} from "@mc-wallet/wallet-model/nostr";
+import { isNostrEvent, MAX_NOSTR_BATCH_ITEMS, type NostrEvent } from "@bramble/wallet-model/nostr";
 
 const RELAY_TIMEOUT_MS = 8_000;
 const MAX_RELAY_FRAME_BYTES = 140_000;

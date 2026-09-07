@@ -11,8 +11,8 @@
  * and the `SpecMethod` type live in spec-fixtures.ts.
  */
 
-import type { ProviderMethod } from "@mc-wallet/wallet-protocol/bridge";
-import { SUPPORTED_SPECS } from "@mc-wallet/wallet-protocol/versions";
+import type { ProviderMethod } from "@bramble/wallet-protocol/bridge";
+import { SUPPORTED_SPECS } from "@bramble/wallet-protocol/versions";
 import {
   ACCOUNT,
   ADDRESS,
@@ -234,16 +234,16 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
       method: "wallet_addStarknetChain",
       params: {
         chain_id: "0x4d43434841494e",
-        chain_name: "MC Chain",
-        id: "mc-chain",
+        chain_name: "Bramble Chain",
+        id: "bramble-chain",
         rpc_urls: ["https://rpc.example.com"],
       },
     },
     expectedRuntime: {
       chain: {
         chainId: "0x4d43434841494e",
-        chainName: "MC Chain",
-        id: "mc-chain",
+        chainName: "Bramble Chain",
+        id: "bramble-chain",
         rpcUrls: ["https://rpc.example.com"],
       },
       origin: ORIGIN,
@@ -435,10 +435,10 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
     request: {
       id: REQUEST_ID,
       method: "wallet_strk20SubaccountCommitment",
-      params: { dapp_name: "MC Terminal", nonce: "0x1" },
+      params: { dapp_name: "Bramble Terminal", nonce: "0x1" },
     },
     expectedRuntime: {
-      dappName: "MC Terminal",
+      dappName: "Bramble Terminal",
       nonce: "0x1",
       origin: ORIGIN,
       type: "wallet.strk20SubaccountCommitment",

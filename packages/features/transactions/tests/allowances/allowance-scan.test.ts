@@ -4,15 +4,15 @@
  * by owner and zero amounts, and isolating per-token failures.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { APPROVAL_EVENT_KEY } from "@mc-wallet/transactions/allowance-discovery";
+import { WalletError } from "@bramble/core/errors";
+import { APPROVAL_EVENT_KEY } from "@bramble/transactions/allowance-discovery";
 import {
   type AllowanceEvent,
   type AllowanceEventFilter,
   type AllowanceRpc,
   collectExternalAllowances,
   scanExternalAllowances,
-} from "@mc-wallet/transactions/allowance-scan";
+} from "@bramble/transactions/allowance-scan";
 import type { Call } from "starknet";
 
 const OWNER = "0x1234567890abcdef";

@@ -10,12 +10,12 @@
  * actions, a trusted Terminal handoff, then the Tokens section.
  */
 
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type {
   ConnectedSite,

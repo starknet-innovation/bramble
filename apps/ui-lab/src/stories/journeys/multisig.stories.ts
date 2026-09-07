@@ -142,10 +142,10 @@ export const DeployApproval: LabStory = {
     await expect(body?.querySelector('input[name="threshold"]')).toBeVisible();
     await expect(body?.querySelector("[data-deployment-signer-current-avatar]")).toBeVisible();
     await expect(body?.querySelector(".multisig-deployment-signer-field")).toHaveTextContent(
-      "Argent · Key matches",
+      "Ready · Key matches",
     );
     await expect(body?.querySelector(".multisig-deployment-signer-field")).toHaveTextContent(
-      "OpenZeppelin · Key matches",
+      "Bramble · Key matches",
     );
     await expect(body?.querySelector(".flow-header [data-nav-back]")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-deploy-back]")).not.toBeInTheDocument();

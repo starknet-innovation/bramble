@@ -6,15 +6,15 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { UI_COMPONENTS, UI_FOUNDATIONS } from "@mc-wallet/ui-kit/catalog";
-import { emptyState, pill, receipt } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { selectField, textField } from "@mc-wallet/ui-kit/fields";
-import { uiAttributes } from "@mc-wallet/ui-kit/html-attributes";
-import { ICON_NAMES } from "@mc-wallet/ui-kit/icons";
-import type { WalletStatus } from "@mc-wallet/wallet-ui/lab";
-import { onboarding } from "@mc-wallet/wallet-ui/lab";
+import { UI_COMPONENTS, UI_FOUNDATIONS } from "@bramble/ui-kit/catalog";
+import { emptyState, pill, receipt } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { selectField, textField } from "@bramble/ui-kit/fields";
+import { uiAttributes } from "@bramble/ui-kit/html-attributes";
+import { ICON_NAMES } from "@bramble/ui-kit/icons";
+import type { WalletStatus } from "@bramble/wallet-ui/lab";
+import { onboarding } from "@bramble/wallet-ui/lab";
 import {
   COMPONENT_STORY_COVERAGE,
   FOUNDATION_STORY_COVERAGE,
@@ -55,16 +55,16 @@ describe("design system", () => {
       color.toLowerCase(),
     );
     const expectedColors = [
-      "--mc-accent",
-      "--mc-accent-text",
-      "--mc-bg",
-      "--mc-border",
-      "--mc-danger",
-      "--mc-elevated",
-      "--mc-muted",
-      "--mc-panel",
-      "--mc-sunken",
-      "--mc-text",
+      "--bramble-accent",
+      "--bramble-accent-text",
+      "--bramble-bg",
+      "--bramble-border",
+      "--bramble-danger",
+      "--bramble-elevated",
+      "--bramble-muted",
+      "--bramble-panel",
+      "--bramble-sunken",
+      "--bramble-text",
     ].map((name) => darkSkin.tokens[name as keyof typeof darkSkin.tokens]);
     expect(new Set(emittedColors)).toEqual(new Set(expectedColors));
   });
@@ -150,13 +150,14 @@ describe("design system", () => {
         label: "Create a new wallet",
       }),
     );
-    expect(markup).toContain('role="group" aria-label="Account contract"');
-    expect(markup).toContain('data-account-contract="argent"');
-    expect(markup).toContain('data-account-contract="openzeppelin"');
-    expect(markup).toMatch(/data-account-contract="openzeppelin"[^>]*aria-pressed="true"/);
-    expect(markup).toContain("OpenZeppelin is the recommended default");
-    expect(markup).toContain("Argent Account");
-    expect(markup).toContain("OpenZeppelin Account");
+    // Creation flows pin the Bramble account: no contract chooser remains.
+    expect(markup).not.toContain('aria-label="Account contract"');
+    expect(markup).not.toContain("data-account-contract=");
+    expect(markup).toContain('name="accountContractType" type="hidden" value="openzeppelin"');
+    // The private-key import keeps the contract choice for existing accounts.
+    expect(markup).toContain('id="key-method-button"');
+    expect(markup).toContain("Ready Account");
+    expect(markup).toContain("Bramble Account — Recommended");
     expect(markup).toContain("Starknet Mainnet");
   });
 });

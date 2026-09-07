@@ -3,7 +3,7 @@
  * handler: listing the origins with persisted grants and revoking one. Both
  * are privileged and require an unlocked session.
  */
-import { connectedSitesFromVault } from "@mc-wallet/vault/origin-grants";
+import { connectedSitesFromVault } from "@bramble/vault/origin-grants";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { readRevokeOriginInput, readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";

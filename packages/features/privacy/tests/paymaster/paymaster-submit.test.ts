@@ -1,12 +1,12 @@
 /** Submission-side privacy-paymaster contract tests. */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "@mc-wallet/privacy/paymaster";
-import { STRK20_SUBMISSION_UNAVAILABLE } from "@mc-wallet/privacy/service";
+import { WalletError } from "@bramble/core/errors";
+import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "@bramble/privacy/paymaster";
+import { STRK20_SUBMISSION_UNAVAILABLE } from "@bramble/privacy/service";
 import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
-} from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/provider";
 import {
   paymasterCall as call,
   paymasterChainId as chainId,
@@ -197,12 +197,12 @@ describe("STRK20 paymaster submission boundary", () => {
       async () => new Response("not json", { status: 200 }),
       // A JSON-RPC envelope the client cannot interpret.
       async () =>
-        new Response(JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0", surprise: 1 }), {
+        new Response(JSON.stringify({ id: "bramble-strk20", jsonrpc: "2.0", surprise: 1 }), {
           status: 200,
         }),
       // A well-formed envelope carrying neither a result nor an error.
       async () =>
-        new Response(JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0" }), { status: 200 }),
+        new Response(JSON.stringify({ id: "bramble-strk20", jsonrpc: "2.0" }), { status: 200 }),
       // A result the relay accepted, with no usable handle on it.
       async () => response({ transaction_hash: "not-a-hash" }),
       // This client's own deadline ended the exchange after the request went out.
@@ -227,7 +227,7 @@ describe("STRK20 paymaster submission boundary", () => {
         new Response(
           JSON.stringify({
             error: { code: -32_000, message: "failed" },
-            id: "mc-wallet-strk20",
+            id: "bramble-strk20",
             jsonrpc: "2.0",
           }),
           { status: 200 },
@@ -290,7 +290,7 @@ describe("STRK20 paymaster submission boundary", () => {
               data: { execution_error: "proof proof_facts 0x2" },
               message: "rejected proof",
             },
-            id: "mc-wallet-strk20",
+            id: "bramble-strk20",
             jsonrpc: "2.0",
           }),
           { status: 200 },

@@ -11,25 +11,25 @@ import {
   isJson,
   isRecord,
   type Json,
-} from "@mc-wallet/core/json";
-import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/core/json";
+import { isAccountRef } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isHexChainId,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { errorForMessage, unknownError, type WalletRpcError } from "./rpc-errors";
 
 /**
  * The one hex chain-id grammar, re-exported for the page-facing provider. The
- * injected script may only reach `@mc-wallet/wallet-protocol`, and a private
+ * injected script may only reach `@bramble/wallet-protocol`, and a private
  * regex there would be a second definition of the form this module already
  * validates switch-chain params against — the drift MCW-V09-130 closed. Pure
  * predicate: it never throws and admits nothing `isHexChainId` rejects.
  */
-export { isHexChainId } from "@mc-wallet/wallet-model/networks";
+export { isHexChainId } from "@bramble/wallet-model/networks";
 export {
   type ProviderInvokeCall,
   providerInvokeCalls,

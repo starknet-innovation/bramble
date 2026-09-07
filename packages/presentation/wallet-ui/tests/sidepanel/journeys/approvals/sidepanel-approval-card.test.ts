@@ -5,7 +5,7 @@
  * blocked (A-L1).
  */
 import { describe, expect, test } from "bun:test";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
+import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 

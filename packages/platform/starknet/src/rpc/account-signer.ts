@@ -1,9 +1,9 @@
 /** Contract-aware starknet.js signer adapters for wallet account families. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { isStarkFieldElement, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import { WalletError } from "@bramble/core/errors";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { isStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import {
   Account,
   type DeployAccountSignerDetails,

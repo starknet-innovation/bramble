@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "MC Wallet",
+  "name": "Bramble: Starknet Wallet",
   "version": "0.10.0",
-  "description": "Starknet browser extension wallet shell.",
+  "description": "Self-custodial Starknet wallet with private balances, Ledger and multisig support.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -10,7 +10,12 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Open MC Wallet"
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "24": "icons/icon-24.png",
+      "32": "icons/icon-32.png"
+    },
+    "default_title": "Open Bramble"
   },
   "background": {
     "service_worker": "background/index.js",

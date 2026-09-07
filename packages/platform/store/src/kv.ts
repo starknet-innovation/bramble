@@ -1,10 +1,10 @@
 /**
  * Minimal key-value storage boundary for browser storage and tests.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isJson, type Json } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { isJson, type Json } from "@bramble/core/json";
 
-const STORAGE_KEY_PATTERN = /^mc-wallet:[a-z0-9]+(?:[-:][a-z0-9]+)*$/;
+const STORAGE_KEY_PATTERN = /^bramble:[a-z0-9]+(?:[-:][a-z0-9]+)*$/;
 
 /**
  * Minimal async key-value store abstraction used by encrypted storage.

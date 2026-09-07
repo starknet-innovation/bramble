@@ -4,9 +4,9 @@
  * as ERC20 transfers, keyed off the correct recipient index (calldata[1]).
  */
 import { describe, expect, test } from "bun:test";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { AddressBookEntry } from "@mc-wallet/wallet-model/preferences";
+import { verifyCalls } from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { AddressBookEntry } from "@bramble/wallet-model/preferences";
 
 const NFT_CONTRACT = "0x0511a2b3c4d5e6f7a8b9c0d1e2f30411223344556677889900aabbccddeeff00";
 

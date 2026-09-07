@@ -2,8 +2,8 @@
  * Typed runtime message client for the side panel UI.
  */
 
-import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { Strk20NetworkConfig } from "@bramble/privacy/config";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/multisig-responses";
 import {
   type ActivityResponse,
@@ -205,7 +205,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {
-        return { entries: [], historyUnavailable: false };
+        return { entries: [], historyUnavailable: true };
       }
       return {
         entries: response.activity,

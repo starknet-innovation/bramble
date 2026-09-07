@@ -4,12 +4,12 @@
  * operations the wallet uses, so the Ledger packages' incompatible
  * declarations never enter the strict TypeScript program.
  */
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
 import type {
   LedgerDeviceIdentity,
   LedgerTransitionPhase,
-} from "@mc-wallet/ledger-protocol/device-transition";
-import type { LedgerDeviceChoice } from "@mc-wallet/ledger-protocol/session";
+} from "@bramble/ledger-protocol/device-transition";
+import type { LedgerDeviceChoice } from "@bramble/ledger-protocol/session";
 
 /**
  * Cable transports available to the side-panel reconnect path.

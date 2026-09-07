@@ -2,9 +2,9 @@
 import {
   type ArgentMultisigConfigChange,
   argentMultisigConfigChangeCall,
-} from "@mc-wallet/multisig/chain";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { normalizeFeltInput, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/multisig/chain";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
 import { bindMultisigParticipantPicker, type MultisigParticipant } from "./multisig-participant";

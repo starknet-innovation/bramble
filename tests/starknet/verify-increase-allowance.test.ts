@@ -7,13 +7,13 @@
  * "Call increase_allowance on 0x…".
  */
 import { describe, expect, test } from "bun:test";
-import type { AddressBookEntry, TokenConfig } from "@mc-wallet/settings/preferences";
-import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@mc-wallet/transactions/allowance-discovery";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { standingAllowanceTotals } from "@mc-wallet/transactions/allowances";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
-import { isApproveEntrypoint } from "@mc-wallet/transactions/verify-selectors";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AddressBookEntry, TokenConfig } from "@bramble/settings/preferences";
+import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@bramble/transactions/allowance-discovery";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import { standingAllowanceTotals } from "@bramble/transactions/allowances";
+import { verifyCalls } from "@bramble/transactions/verify";
+import { isApproveEntrypoint } from "@bramble/transactions/verify-selectors";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { Call } from "starknet";
 import { allowanceOwner } from "../../apps/extension/src/background/portfolio/allowance-recording";
 

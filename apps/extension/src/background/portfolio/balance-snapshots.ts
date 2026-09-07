@@ -1,15 +1,15 @@
 /** Durable last-known public balance snapshots for instant wallet hydration. */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isTokenBalance, type TokenBalance } from "@mc-wallet/starknet/rpc";
-import { createMemoryStore, type KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
-import { isStarknetNetworkId, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isTokenBalance, type TokenBalance } from "@bramble/starknet/rpc";
+import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
+import { isStarknetNetworkId, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 
 /**
  * Browser-local key for bounded, non-secret portfolio snapshots.
  */
-export const BALANCE_SNAPSHOTS_KEY = "mc-wallet:balance-snapshots";
+export const BALANCE_SNAPSHOTS_KEY = "bramble:balance-snapshots";
 
 const MAX_SCOPES = 50;
 const BALANCE_SNAPSHOT_TTL_MS = 60_000;

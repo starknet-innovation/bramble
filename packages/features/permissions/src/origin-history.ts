@@ -4,15 +4,15 @@
  * The clock is injected so this module never touches `Date.now` directly and
  * stays deterministic in tests.
  */
-import { isRecord } from "@mc-wallet/core/json";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
+import { isRecord } from "@bramble/core/json";
+import { isWalletOrigin } from "@bramble/core/origin";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
 
 /**
  * Browser storage key for the origin first-seen history.
  */
-export const ORIGIN_HISTORY_STORE_KEY = "mc-wallet:origin-history";
+export const ORIGIN_HISTORY_STORE_KEY = "bramble:origin-history";
 
 const MAX_ORIGINS = 500;
 

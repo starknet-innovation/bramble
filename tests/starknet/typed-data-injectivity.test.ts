@@ -42,7 +42,7 @@
  * both revisions.
  */
 import { describe, expect, test } from "bun:test";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
 import { typedData as snip12 } from "starknet";
 
 const ACCOUNT = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
@@ -61,13 +61,13 @@ const rawHash = (payload: unknown): string =>
 const envelope = (graph: Graph, message: unknown, revision: Revision): unknown =>
   revision === "1"
     ? {
-        domain: { name: "MC Test", revision: "1" },
+        domain: { name: "Bramble Test", revision: "1" },
         message,
         primaryType: graph.primaryType,
         types: { ...graph.types, StarknetDomain: REV1_DOMAIN_TYPE },
       }
     : {
-        domain: { name: "MC Test" },
+        domain: { name: "Bramble Test" },
         message,
         primaryType: graph.primaryType,
         types: { ...graph.types, StarkNetDomain: REV0_DOMAIN_TYPE },

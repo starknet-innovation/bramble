@@ -17,10 +17,10 @@
  * declare case in tests/background/background-declare-messages.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { InvokeInput, TransferInput } from "@mc-wallet/starknet/rpc";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { InvokeInput, TransferInput } from "@bramble/starknet/rpc";
+import { memoryActivityLog } from "@bramble/transactions/activity";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";

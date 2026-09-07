@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultWalletPreferences,
   type WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/settings/preferences";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
 import {
   runGuardedNetworkMutation,

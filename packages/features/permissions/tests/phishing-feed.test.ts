@@ -5,19 +5,15 @@
  * that consumes the feed snapshot on top of the always-on baseline list.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  createOriginGuard,
-  isBlockedOrigin,
-  originInsights,
-} from "@mc-wallet/permissions/blocklist";
+import { createOriginGuard, isBlockedOrigin, originInsights } from "@bramble/permissions/blocklist";
 import {
   createPhishingFeed,
   DEFAULT_PHISHING_FEED_URL,
   PHISHING_FEED_STORE_KEY,
   type PhishingFeedResponse,
   parsePhishingFeed,
-} from "@mc-wallet/permissions/phishing-feed";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+} from "@bramble/permissions/phishing-feed";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const okResponse = (body: unknown): PhishingFeedResponse => ({
   json: async () => body,

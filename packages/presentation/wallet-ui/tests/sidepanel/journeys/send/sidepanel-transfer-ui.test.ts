@@ -7,8 +7,8 @@
  * activity refresh/export suites live in `sidepanel-activity-ui.test.ts`.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { account } from "@mc-wallet/testkit/sidepanel";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { account } from "@bramble/testkit/sidepanel";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { TokenBalance } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import {

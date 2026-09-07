@@ -3,8 +3,8 @@
  * visible through activation, shielding, execution, and recovery.
  */
 import { describe, expect, test } from "bun:test";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import { privacyFlow } from "../../../../src/sidepanel/journeys/privacy/privacy-views";

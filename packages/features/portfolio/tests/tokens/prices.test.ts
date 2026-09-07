@@ -7,8 +7,8 @@ import {
   createPriceService,
   type HttpResponse,
   PRICE_CHART_POINT_LIMIT,
-} from "@mc-wallet/portfolio/prices";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+} from "@bramble/portfolio/prices";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 

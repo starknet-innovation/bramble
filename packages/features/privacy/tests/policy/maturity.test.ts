@@ -4,10 +4,10 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { memoryStrk20MaturityStore } from "@mc-wallet/privacy/maturity";
-import { createStrk20MaturityRuntime } from "@mc-wallet/privacy/official-sdk-maturity";
-import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
+import { WalletError } from "@bramble/core/errors";
+import { memoryStrk20MaturityStore } from "@bramble/privacy/maturity";
+import { createStrk20MaturityRuntime } from "@bramble/privacy/official-sdk-maturity";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import type { RpcProvider } from "starknet";
 import { submitStrk20PaymasterPlan } from "../../src/paymaster/paymaster";
 import { paymasterCall, paymasterConfig } from "../support/paymaster";
@@ -403,7 +403,7 @@ describe("STRK20 proof maturity", () => {
         new Response(
           JSON.stringify({
             error: { code: -32_000, message: "failed" },
-            id: "mc-wallet-strk20",
+            id: "bramble-strk20",
             jsonrpc: "2.0",
           }),
         ),

@@ -6,7 +6,7 @@
  * before the home layer in ./styles.ts so home's reduced-motion block still
  * wins over everything here.
  */
-import { CONTROL, RADIUS, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, RADIUS, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Group-management stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -18,9 +18,9 @@ export const GROUP_STYLES = `
   .group-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 2px; }
   button.group-chip {
     align-items: center;
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     font-size: ${TYPE.caption.size};
     font-weight: 650;
@@ -33,24 +33,24 @@ export const GROUP_STYLES = `
      pressed-state hover rules below outrank the resting hover rules, so
      hovering a selected control never visually deselects it. */
   @media (hover: hover) and (pointer: fine) {
-    button.group-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
-    button.group-chip[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); color: var(--mc-accent); }
+    button.group-chip:not(:disabled):hover { background: var(--bramble-hover); color: var(--bramble-text); }
+    button.group-chip[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); color: var(--bramble-accent); }
   }
-  button.group-chip[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
+  button.group-chip[aria-pressed="true"] { background: var(--bramble-accent-soft); color: var(--bramble-accent); }
   .drawer-account-item { display: grid; gap: 4px; }
   .drawer-account-row, .option-row-line { align-items: center; display: flex; gap: 6px; }
   .drawer-account-row .drawer-account, .option-row-line .option-row { flex: 1; min-width: 0; }
   button.drawer-assign { flex: none; }
   /* Ungrouped rows show a muted folder as a "pick a folder" affordance; a filed
      account shows its folder's icon at full ink. */
-  button.drawer-assign.is-ungrouped { color: var(--mc-muted); }
+  button.drawer-assign.is-ungrouped { color: var(--bramble-muted); }
   .option-group-item { display: grid; gap: 4px; }
   .option-name { align-items: center; display: flex; gap: 6px; min-width: 0; }
   .option-name strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .account-groups-line { display: inline-flex; flex: none; gap: 4px; }
-  .account-groups-line .icon { color: var(--mc-muted); height: 13px; width: 13px; }
+  .account-groups-line .icon { color: var(--bramble-muted); height: 13px; width: 13px; }
   .group-assign {
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.md};
     display: grid;
     gap: ${SPACE.sm};
@@ -62,7 +62,7 @@ export const GROUP_STYLES = `
     align-items: center;
     background: transparent;
     border-radius: ${RADIUS.sm};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     gap: ${SPACE.sm};
     justify-content: flex-start;
@@ -71,20 +71,20 @@ export const GROUP_STYLES = `
     width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
-    button.group-toggle:not(:disabled):hover { background: var(--mc-hover); }
-    button.group-toggle[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
+    button.group-toggle:not(:disabled):hover { background: var(--bramble-hover); }
+    button.group-toggle[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); }
   }
-  button.group-toggle[aria-pressed="true"] { background: var(--mc-accent-soft); }
-  .group-toggle-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
+  button.group-toggle[aria-pressed="true"] { background: var(--bramble-accent-soft); }
+  .group-toggle-icon { align-items: center; color: var(--bramble-muted); display: inline-flex; }
   .group-toggle-icon .icon { height: 16px; width: 16px; }
   .group-toggle-name { flex: 1; font-size: ${TYPE.body.size}; overflow: hidden; text-align: left; text-overflow: ellipsis; text-wrap: nowrap; }
   .group-toggle-mark .icon { height: 16px; width: 16px; }
-  button.group-toggle[aria-pressed="true"] .group-toggle-mark .icon { color: var(--mc-accent); }
+  button.group-toggle[aria-pressed="true"] .group-toggle-mark .icon { color: var(--bramble-accent); }
   .new-group-form, .edit-group-form { display: grid; gap: ${SPACE.sm}; }
   .group-name-input {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.sm};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     min-height: ${CONTROL.hitSmall};
     padding: 0 ${SPACE.sm};
     width: 100%;
@@ -96,9 +96,9 @@ export const GROUP_STYLES = `
   }
   button.group-icon-option {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.sm};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     justify-content: center;
     min-height: ${CONTROL.hitSmall};
@@ -106,32 +106,32 @@ export const GROUP_STYLES = `
   }
   button.group-icon-option .icon { height: 18px; width: 18px; }
   @media (hover: hover) and (pointer: fine) {
-    button.group-icon-option:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
-    button.group-icon-option[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); color: var(--mc-accent); }
+    button.group-icon-option:not(:disabled):hover { background: var(--bramble-hover); color: var(--bramble-text); }
+    button.group-icon-option[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); color: var(--bramble-accent); }
   }
-  button.group-icon-option[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
+  button.group-icon-option[aria-pressed="true"] { background: var(--bramble-accent-soft); color: var(--bramble-accent); }
   .group-manage-list {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     overflow: hidden;
   }
   .group-manage-row { display: grid; position: relative; }
   .group-manage-row + .group-manage-row::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
     left: ${SPACE.lg};
     position: absolute;
   }
-  .group-manage-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
+  .group-manage-icon { align-items: center; color: var(--bramble-muted); display: inline-flex; }
   .group-manage-copy { display: grid; flex: 1; gap: 1px; min-width: 0; text-align: left; }
   .group-manage-copy strong { font-size: ${TYPE.body.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   /* Two-tap delete confirm: the first tap arms the control and reveals an
      explicit "Delete?" label beside the icon; a second tap deletes. */
   button[data-remove-group].is-confirming {
-    color: var(--mc-danger);
+    color: var(--bramble-danger);
     gap: 4px;
     padding: 0 ${SPACE.sm};
     width: auto;
@@ -148,7 +148,7 @@ export const GROUP_STYLES = `
     align-items: center;
     background: transparent;
     border-radius: 0;
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     gap: ${SPACE.sm};
     justify-content: flex-start;
@@ -157,15 +157,15 @@ export const GROUP_STYLES = `
     width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
-    button.group-expand:not(:disabled):hover { background: var(--mc-hover); }
-    button.group-expand[aria-expanded="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
+    button.group-expand:not(:disabled):hover { background: var(--bramble-hover); }
+    button.group-expand[aria-expanded="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); }
   }
-  button.group-expand[aria-expanded="true"] { background: var(--mc-accent-soft); }
-  button.group-expand[aria-expanded="true"] .group-manage-icon { color: var(--mc-accent); }
-  .group-expand-mark { align-items: center; color: var(--mc-muted); display: inline-flex; flex: none; }
+  button.group-expand[aria-expanded="true"] { background: var(--bramble-accent-soft); }
+  button.group-expand[aria-expanded="true"] .group-manage-icon { color: var(--bramble-accent); }
+  .group-expand-mark { align-items: center; color: var(--bramble-muted); display: inline-flex; flex: none; }
   .group-expand-mark .icon { height: 16px; width: 16px; }
   .group-members {
-    background: var(--mc-sunken);
+    background: var(--bramble-sunken);
     display: grid;
     gap: ${SPACE.sm};
     padding: ${SPACE.md} ${SPACE.lg};
@@ -177,7 +177,7 @@ export const GROUP_STYLES = `
     align-items: center;
     background: transparent;
     border-radius: ${RADIUS.sm};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     gap: ${SPACE.sm};
     justify-content: flex-start;
@@ -188,7 +188,7 @@ export const GROUP_STYLES = `
     width: 100%;
   }
   .account-check-list > * + *::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
@@ -196,18 +196,18 @@ export const GROUP_STYLES = `
     position: absolute;
   }
   @media (hover: hover) and (pointer: fine) {
-    button.account-check:not(:disabled):hover { background: var(--mc-hover); }
-    button.account-check[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
+    button.account-check:not(:disabled):hover { background: var(--bramble-hover); }
+    button.account-check[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); }
   }
-  button.account-check[aria-pressed="true"] { background: var(--mc-accent-soft); }
+  button.account-check[aria-pressed="true"] { background: var(--bramble-accent-soft); }
   .account-check .option-avatar { flex: none; }
   .account-check-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .account-check-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  .account-check-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .account-check-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
   .account-check-net {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     flex: none;
     font-size: ${TYPE.caption.size};
     font-weight: 650;
@@ -218,6 +218,6 @@ export const GROUP_STYLES = `
     text-wrap: nowrap;
   }
   .account-check-mark { flex: none; }
-  .account-check-mark .icon { color: var(--mc-muted); height: 18px; width: 18px; }
-  button.account-check[aria-pressed="true"] .account-check-mark .icon { color: var(--mc-accent); }
+  .account-check-mark .icon { color: var(--bramble-muted); height: 18px; width: 18px; }
+  button.account-check[aria-pressed="true"] .account-check-mark .icon { color: var(--bramble-accent); }
 `;

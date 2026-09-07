@@ -3,7 +3,7 @@
  */
 import { expect, test } from "bun:test";
 
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 
 test("escapeHtml escapes template-sensitive characters", () => {
   expect(escapeHtml(`<button data-id="x&y" data-name='z'>`)).toBe(

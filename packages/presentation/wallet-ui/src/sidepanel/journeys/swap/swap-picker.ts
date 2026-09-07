@@ -13,9 +13,9 @@
  * receives selections through its callback.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { errorMessage, showToast } from "../../shared/dom";

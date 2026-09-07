@@ -1,23 +1,23 @@
 /** Pure parsers for untrusted background runtime messages. */
-import { isUuid } from "@mc-wallet/core/ids";
-import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@mc-wallet/core/json";
-import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { isUuid } from "@bramble/core/ids";
+import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@bramble/core/json";
+import { normalizeWalletOrigin } from "@bramble/core/origin";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import {
   type AccountContractType,
   isAccountContractType,
   isAccountId,
-} from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/wallet-model/accounts";
 import {
   isHexChainId,
   isStarkFieldElement,
   isStarknetNetworkId,
   STARK_FIELD_PRIME,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
-import { INVOKE_LIMITS } from "@mc-wallet/wallet-protocol/invoke-limits";
-import { isStrk20Proof, type Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-model/networks";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { INVOKE_LIMITS } from "@bramble/wallet-protocol/invoke-limits";
+import { isStrk20Proof, type Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 
 export { readCreateAccountInput } from "../accounts/account-creation-inputs";

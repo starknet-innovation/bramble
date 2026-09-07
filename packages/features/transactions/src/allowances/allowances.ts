@@ -3,7 +3,7 @@
  * both spellings of OpenZeppelin's `increase_allowance` dual, and both spellings
  * of `decrease_allowance` — into allowance-log inputs. Network-free so every
  * rule is unit-testable. The revoke call itself is built with
- * `buildErc20ApproveCall` in @mc-wallet/starknet/rpc; persistence and the ERC20
+ * `buildErc20ApproveCall` in @bramble/starknet/rpc; persistence and the ERC20
  * arithmetic that applies a decoded delta to the tracked total both live inside
  * the allowance store (./allowance-store.ts), and the background
  * allowance-recording module is the one caller every submitting path goes
@@ -16,14 +16,14 @@
  * assuming ERC20.
  */
 
-import { isBaseUnitsAmount } from "@mc-wallet/core/json";
+import { isBaseUnitsAmount } from "@bramble/core/json";
 import type {
   AllowanceInput,
   AllowanceOwner,
   AllowanceRecord,
-} from "@mc-wallet/transactions/allowance-store";
-import { allowancePairKey } from "@mc-wallet/transactions/verify";
-import { uint256Felts } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/allowance-store";
+import { allowancePairKey } from "@bramble/transactions/verify";
+import { uint256Felts } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import { isWatchedNftContract, tokenFor, type VerificationContext } from "../routing/verify-decode";
 import { isApproveEntrypoint, isDecreaseAllowanceEntrypoint } from "../routing/verify-selectors";
@@ -48,7 +48,7 @@ export type DecodedAllowanceCall = {
 };
 
 // Which spellings mean what comes from the shared selector vocabulary
-// (@mc-wallet/transactions/verify-selectors), so the reviewer and the
+// (@bramble/transactions/verify-selectors), so the reviewer and the
 // bookkeeping can never disagree
 // about whether a call grants spend. Exact matching, no case folding: the
 // entrypoint is untrusted text from a dapp or a stored proposal, and an

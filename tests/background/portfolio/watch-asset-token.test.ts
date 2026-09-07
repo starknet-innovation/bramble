@@ -5,7 +5,7 @@
  * token dedupe (A-L8).
  */
 import { describe, expect, test } from "bun:test";
-import { canonicalAddress } from "@mc-wallet/wallet-model/networks";
+import { canonicalAddress } from "@bramble/wallet-model/networks";
 import { watchAssetToken } from "../../../apps/extension/src/background/provider/watch-asset";
 
 const ADDRESS = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";

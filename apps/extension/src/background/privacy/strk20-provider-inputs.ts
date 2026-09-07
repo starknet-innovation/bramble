@@ -2,18 +2,18 @@
  * Resource-bounded parsers for dapp-reachable STRK20 runtime messages. These
  * values are untrusted even after the provider bridge normalizes them.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { normalizeWalletOrigin } from "@bramble/core/origin";
 import {
   isStrk20DappName,
   isStrk20Felt,
   readStrk20Actions,
   readStrk20Tokens,
   type Strk20Action,
-} from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-protocol/strk20";
 
 /**
- * Parses the MC-only one-time registration capability. Rejects parameters and
+ * Parses the legacy one-time registration capability. Rejects parameters and
  * malformed origins before the request reaches the approval queue.
  */
 export const readStrk20RegisterMessage = (message: unknown): { readonly origin: string } | null => {

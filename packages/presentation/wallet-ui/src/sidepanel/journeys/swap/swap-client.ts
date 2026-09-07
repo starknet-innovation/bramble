@@ -5,14 +5,14 @@
  * throws instead of rendering.
  */
 
-import { isSha256Digest } from "@mc-wallet/core/ids";
+import { isSha256Digest } from "@bramble/core/ids";
 import {
   hasOnlyKnownKeys,
   isDecimalAmountText,
   isRecord,
   isRiskFlagCode,
-} from "@mc-wallet/core/json";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+} from "@bramble/core/json";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { RuntimeApi } from "../../runtime/runtime";
 import { responseError } from "../../runtime/runtime-errors";
 

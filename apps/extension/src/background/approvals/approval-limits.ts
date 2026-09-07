@@ -17,7 +17,7 @@
  * closed with the queue's own refusal.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 
 /**
  * Maximum queued dapp approvals kept in background memory across all origins.

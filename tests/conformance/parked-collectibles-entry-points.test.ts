@@ -21,7 +21,7 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { isParkedCollectibleView, PARKED_COLLECTIBLE_VIEWS } from "@mc-wallet/wallet-ui/lab";
+import { isParkedCollectibleView, PARKED_COLLECTIBLE_VIEWS } from "@bramble/wallet-ui/lab";
 
 const WALLET_UI_SRC = join(import.meta.dir, "../../packages/presentation/wallet-ui/src");
 

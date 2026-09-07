@@ -4,8 +4,8 @@
  * re-entered in the message rather than taken from the cached session.
  */
 import { describe, expect, test } from "bun:test";
-import type { AddDerivedAccountInput } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AddDerivedAccountInput } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -64,9 +64,10 @@ const createWallet = (captureAdd?: (input: AddDerivedAccountInput) => void) => (
       accounts: [account],
       accountSecrets: [],
       activeAccountId: account.id,
+      importedSeeds: [],
       mnemonic,
       originGrants: [],
-      schemaVersion: 7 as const,
+      schemaVersion: 8 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x1234" }],
     };
   },

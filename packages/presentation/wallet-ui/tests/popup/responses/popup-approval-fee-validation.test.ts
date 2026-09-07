@@ -7,7 +7,7 @@
  * response rather than rendering.
  */
 import { describe, expect, test } from "bun:test";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { isPendingApprovalsResponse } from "../../../src/popup/responses/approvals-responses";
 
 const INVOKE_ID = "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";

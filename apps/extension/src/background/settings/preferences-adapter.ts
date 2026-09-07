@@ -3,7 +3,7 @@
 import type {
   ApprovalSurfacePreference,
   WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
+} from "@bramble/settings/preferences";
 
 type PreferencesAdapterOptions = {
   readonly onApprovalSurface: (preference: ApprovalSurfacePreference) => void;

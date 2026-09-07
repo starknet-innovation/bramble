@@ -4,8 +4,8 @@
  * reason a route is unavailable.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { routeFor } from "@mc-wallet/transactions/send-routes";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+import { routeFor } from "@bramble/transactions/send-routes";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../../src/popup/responses/responses";
 import type { PrivacyDisclosureState } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 import { bindTransferBuckets } from "../../../../src/sidepanel/journeys/send/transfer-buckets-ui";

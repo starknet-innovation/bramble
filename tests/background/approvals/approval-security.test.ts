@@ -4,14 +4,11 @@
  * verification before any executor is reached.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  memoryOriginHistory,
-  type OriginHistoryStore,
-} from "@mc-wallet/permissions/origin-history";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { memoryOriginHistory, type OriginHistoryStore } from "@bramble/permissions/origin-history";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalContext } from "../../../apps/extension/src/background/approvals/approval-context";
 import {
   type ApprovalDecisionDeps,

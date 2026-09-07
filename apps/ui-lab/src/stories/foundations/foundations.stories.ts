@@ -1,8 +1,8 @@
-import { escapeHtml } from "@mc-wallet/core/html";
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { defaultSkin } from "@mc-wallet/ui-kit/default-skin";
-import type { Skin } from "@mc-wallet/ui-kit/skin";
-import { EASE, MOTION, RADIUS, SHADOW, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { escapeHtml } from "@bramble/core/html";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { defaultSkin } from "@bramble/ui-kit/default-skin";
+import type { Skin } from "@bramble/ui-kit/skin";
+import { EASE, MOTION, RADIUS, SHADOW, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 import type { Meta } from "@storybook/html-vite";
 import {
   CATALOG_META,
@@ -22,21 +22,25 @@ export default meta;
 const skinForTheme = (theme: CatalogArgs["theme"]): Skin =>
   theme === "light" ? defaultSkin : darkSkin;
 
-const semanticColorTokens = new Set(["--mc-danger", "--mc-positive", "--mc-warning"]);
+const semanticColorTokens = new Set([
+  "--bramble-danger",
+  "--bramble-positive",
+  "--bramble-warning",
+]);
 const identityColorTokens = new Set([
-  "--mc-account-avatar-0",
-  "--mc-account-avatar-1",
-  "--mc-account-avatar-2",
-  "--mc-account-avatar-3",
-  "--mc-account-avatar-ink",
-  "--mc-account-avatar-paper",
+  "--bramble-account-avatar-0",
+  "--bramble-account-avatar-1",
+  "--bramble-account-avatar-2",
+  "--bramble-account-avatar-3",
+  "--bramble-account-avatar-ink",
+  "--bramble-account-avatar-paper",
 ]);
 
 const colorSwatches = (entries: readonly (readonly [string, string])[]): string =>
   entries
     .map(([name, value]) =>
       catalogSample(
-        name.replace("--mc-", ""),
+        name.replace("--bramble-", ""),
         `<div class="catalog-swatch" style="--swatch:${escapeHtml(value)}"></div>
          <div class="catalog-token-copy"><code>${escapeHtml(name)}</code><span>${escapeHtml(value)}</span></div>`,
       ),

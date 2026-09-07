@@ -11,13 +11,13 @@
  * decision instead of substituting its own figure.
  */
 
-import type { OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { OriginHistoryStore } from "@mc-wallet/permissions/origin-history";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { type FeeEstimate, sameFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
-import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { OriginGuard } from "@bramble/permissions/blocklist";
+import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { type FeeEstimate, sameFeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {

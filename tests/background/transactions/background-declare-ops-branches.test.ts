@@ -6,8 +6,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { ec } from "starknet";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createSignatureWaiters } from "../../../apps/extension/src/background/approvals/signature-waiters";

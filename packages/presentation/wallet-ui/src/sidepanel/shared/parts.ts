@@ -2,14 +2,14 @@
  * Shared side panel template atoms used by dock and flow screens.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { shortAddress } from "@mc-wallet/transactions/verify-decode";
-import { emptyState, pill } from "@mc-wallet/ui-kit/content";
-import { iconButton } from "@mc-wallet/ui-kit/controls";
-import { type IconName, icon } from "@mc-wallet/ui-kit/icons";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { shortAddress } from "@bramble/transactions/verify-decode";
+import { emptyState, pill } from "@bramble/ui-kit/content";
+import { iconButton } from "@bramble/ui-kit/controls";
+import { type IconName, icon } from "@bramble/ui-kit/icons";
+import { menuRow } from "@bramble/ui-kit/navigation";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
 
 export { accountAvatar } from "../shell/account-avatar";
@@ -30,6 +30,7 @@ export const WALLET_VIEWS = [
   "advanced-network",
   "account",
   "import-key",
+  "import-phrase",
   "address-book",
   "backup",
   "backup-export",
@@ -102,6 +103,7 @@ const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   "deploy-account": "Deploy account",
   home: "Home",
   "import-key": "Private-key import",
+  "import-phrase": "Recovery-phrase import",
   multisigs: "Shared accounts",
   "multisig-add": "Set up multisig",
   "multisig-deploy": "Create multisig",
@@ -155,6 +157,15 @@ export const isWalletView = (value: unknown): value is WalletView =>
  * Truncates a Starknet address for display.
  */
 export const accountLabel = (address: string): string => shortAddress(address);
+
+/**
+ * Light summary text for an account-group disclosure: "N accounts detected"
+ * when the scan found active (deployed or funded) accounts, empty otherwise.
+ * Plain text (callers own the markup) shared by the recovery-phrase and Ledger
+ * import pickers so the two flows describe detection identically.
+ */
+export const accountsDetectedText = (detected: number): string =>
+  detected === 0 ? "" : `${detected} ${detected === 1 ? "account" : "accounts"} detected`;
 
 /**
  * Renders a native, repaint-persistent explanation for protocol concepts. The
