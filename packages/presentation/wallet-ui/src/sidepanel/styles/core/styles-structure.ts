@@ -10,7 +10,7 @@
  * DIVIDERS for separation (never rings around content), values right-aligned
  * with tabular/mono voices where the data warrants it.
  */
-import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Structured-content stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -22,7 +22,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      after the value. */
   dl.receipt, .receipt { margin: 0; }
   .receipt {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     padding: 0 ${SPACE.lg};
@@ -37,21 +37,21 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     position: relative;
   }
   .receipt-row + .receipt-row::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
     position: absolute;
   }
   .receipt-row dt {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     flex: none;
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.medium};
   }
   .receipt-row dd {
     align-items: center;
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.medium};
@@ -60,13 +60,13 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     min-width: 0;
     text-align: right;
   }
-  .receipt-row dd code { color: var(--mc-text); overflow-wrap: normal; word-break: normal; }
+  .receipt-row dd code { color: var(--bramble-text); overflow-wrap: normal; word-break: normal; }
   .receipt-row dd .icon-button { height: 28px; min-height: 0; width: 28px; }
   .receipt-row dd .icon-button .icon { height: 15px; width: 15px; }
   /* Approval request facts use the same receipt grammar, but allow long
      untrusted identifiers to wrap inside the panel instead of widening it. */
   .request-detail {
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.md};
     display: grid;
     min-width: 0;
@@ -82,13 +82,13 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     position: relative;
   }
   .request-detail > div + div::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
     position: absolute;
   }
-  .request-detail dt { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .request-detail dt { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
   .request-detail dd {
     margin: 0;
     min-width: 0;
@@ -115,7 +115,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   /* Segmented control: one recessed track, equal flat options, the active one
      lifted on a soft panel chip. Used for small either/or preferences (theme). */
   .seg {
-    background: var(--mc-sunken);
+    background: var(--bramble-sunken);
     border-radius: ${RADIUS.full};
     display: grid;
     gap: 3px;
@@ -126,7 +126,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   button.seg-option {
     background: transparent;
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.semibold};
     min-height: 34px;
@@ -134,14 +134,14 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     transition: background ${MOTION.pressMs}ms ${MOTION.ease}, color ${MOTION.pressMs}ms ${MOTION.ease};
   }
   @media (hover: hover) and (pointer: fine) {
-    button.seg-option:not(:disabled):hover { background: transparent; color: var(--mc-text); }
-    button.seg-option[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-panel); color: var(--mc-text); }
+    button.seg-option:not(:disabled):hover { background: transparent; color: var(--bramble-text); }
+    button.seg-option[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-panel); color: var(--bramble-text); }
   }
   button.seg-option:not(:disabled):active { background: transparent; transform: scale(0.97); }
   button.seg-option[aria-pressed="true"] {
-    background: var(--mc-panel);
-    box-shadow: var(--mc-elev-xs);
-    color: var(--mc-text);
+    background: var(--bramble-panel);
+    box-shadow: var(--bramble-elev-xs);
+    color: var(--bramble-text);
   }
 
   /* Disclosure: a native details/summary accordion styled as a grouped row.
@@ -149,13 +149,13 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      behind a scannable header so the primary path stays light; the chevron
      rotates on open and the body sits on a recessed fill. */
   details.disclosure {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     overflow: hidden;
   }
   details.disclosure > summary {
     align-items: center;
-    color: var(--mc-text);
+    color: var(--bramble-text);
     cursor: pointer;
     display: flex;
     gap: ${SPACE.sm};
@@ -168,7 +168,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   details.disclosure > summary::-webkit-details-marker { display: none; }
   @media (hover: hover) and (pointer: fine) {
-    details.disclosure > summary:hover { background: var(--mc-hover); }
+    details.disclosure > summary:hover { background: var(--bramble-hover); }
   }
   details.disclosure > summary .menu-copy strong {
     font-size: ${TYPE.body.size};
@@ -178,7 +178,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     text-wrap: nowrap;
   }
   details.disclosure > summary .menu-value { flex: none; }
-  .disclosure-mark { color: var(--mc-muted); display: inline-flex; flex: none; transition: transform ${MOTION.tabMs}ms var(--ease-out); }
+  .disclosure-mark { color: var(--bramble-muted); display: inline-flex; flex: none; transition: transform ${MOTION.tabMs}ms var(--ease-out); }
   .disclosure-mark .icon { height: 16px; width: 16px; }
   details.disclosure[open] > .disclosure-mark, details.disclosure[open] > summary .disclosure-mark { transform: rotate(90deg); }
   .disclosure-body {
@@ -189,7 +189,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   details.disclosure:not([open]) > .disclosure-body { display: none; }
   .disclosure-body::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
@@ -206,7 +206,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   .approval-header .flow-title h1 { font-size: ${TYPE.display.size}; letter-spacing: -0.02em; }
   .takeover-network {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     flex: none;
     font-size: ${TYPE.caption.size};
@@ -227,13 +227,13 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     padding: 0;
   }
   .approval-takeover .request-site {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.md};
     padding: ${SPACE.sm} ${SPACE.md};
   }
   .approval-takeover .request-site-mark {
-    background: var(--mc-accent-soft);
-    color: var(--mc-accent);
+    background: var(--bramble-accent-soft);
+    color: var(--bramble-accent);
   }
   .approval-takeover .request-site-copy strong {
     font-size: ${TYPE.body.size};
@@ -246,23 +246,23 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   .approval-takeover .review-panel {
     background: transparent;
     border-radius: 0;
-    box-shadow: inset 0 1px 0 var(--mc-hairline);
+    box-shadow: inset 0 1px 0 var(--bramble-hairline);
     padding: ${SPACE.md} 0 0;
   }
   .approval-takeover .review-flag {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     gap: ${SPACE.sm};
     line-height: ${TYPE.caption.line};
   }
-  .approval-takeover .review-flag .icon { color: var(--mc-danger); flex: none; }
+  .approval-takeover .review-flag .icon { color: var(--bramble-danger); flex: none; }
   .approval-takeover .button-row {
     grid-template-columns: minmax(0, 1fr) minmax(104px, auto);
     margin-top: auto;
     padding-top: ${SPACE.sm};
   }
-  .takeover-queue { color: var(--mc-muted); font-size: ${TYPE.caption.size}; text-align: center; }
+  .takeover-queue { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; text-align: center; }
   .takeover-foot { display: grid; gap: ${SPACE.sm}; }
   .takeover-foot button.ghost { justify-self: center; min-height: ${CONTROL.hitSmall}; }
 
@@ -272,7 +272,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      the device wherever they were. Owned outside the shell repaint so streaming
      data never resets an in-flight device prompt. */
   .ledger-sign-overlay {
-    background: var(--mc-bg);
+    background: var(--bramble-bg);
     display: grid;
     grid-template-rows: auto 1fr;
     inset: 0;
@@ -290,7 +290,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      account picker renders a top-aligned .onboard-picker that scrolls when its
      list outgrows the panel. All rhythm comes from the scale tokens. */
   .ledger-onboard-overlay {
-    background: var(--mc-bg);
+    background: var(--bramble-bg);
     display: grid;
     inset: 0;
     overflow-y: auto;
@@ -345,9 +345,9 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   .add-account-option {
     align-items: center;
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: grid;
     gap: ${SPACE.md};
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -358,7 +358,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   .add-account-option-icon {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
     display: inline-flex;
     height: ${SIZE.mark};
@@ -372,15 +372,15 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   .add-account-option-copy { display: grid; gap: ${SPACE.xs}; min-width: 0; }
   .add-account-option-copy strong { font-size: ${TYPE.title.size}; }
   .add-account-option-copy span {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
   }
   .add-account-option-check {
     align-items: center;
-    background: var(--mc-text);
+    background: var(--bramble-text);
     border-radius: ${RADIUS.full};
-    color: var(--mc-bg);
+    color: var(--bramble-bg);
     display: inline-flex;
     height: ${SIZE.pill};
     justify-content: center;
@@ -393,8 +393,8 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   .add-account-option-check .icon { height: ${CONTROL.icon}; width: ${CONTROL.icon}; }
   .add-account-option[aria-pressed="true"] {
-    background: var(--mc-elevated);
-    box-shadow: inset 0 0 0 2px var(--mc-text);
+    background: var(--bramble-elevated);
+    box-shadow: inset 0 0 0 2px var(--bramble-text);
   }
   .add-account-option[aria-pressed="true"] .add-account-option-check {
     opacity: 1;
@@ -402,12 +402,12 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   @media (hover: hover) and (pointer: fine) {
     button.add-account-option:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
     button.add-account-option[aria-pressed="true"]:not(:disabled):hover {
-      background: var(--mc-elevated);
-      color: var(--mc-text);
+      background: var(--bramble-elevated);
+      color: var(--bramble-text);
     }
   }
   .onboard-actions { display: grid; gap: ${SPACE.sm}; justify-items: stretch; width: 100%; }
@@ -431,7 +431,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     gap: ${SPACE.md};
     min-width: 0;
   }
-  .select-check { accent-color: var(--mc-accent); flex: none; height: ${SPACE.lg}; width: ${SPACE.lg}; }
+  .select-check { accent-color: var(--bramble-accent); flex: none; height: ${SPACE.lg}; width: ${SPACE.lg}; }
   .allowance-row.is-duplicate { opacity: 0.68; }
   @media (prefers-reduced-motion: reduce) {
     .add-account-option-check { transition: none; }

@@ -8,7 +8,7 @@
  * without depending on each other.
  */
 
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigIntentPackage,

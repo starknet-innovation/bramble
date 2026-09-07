@@ -45,25 +45,15 @@ export const ConfirmRecoveredAccounts = checkpointStory(
   "onboarding",
   "recovery-accounts-confirmed",
 );
-export const ChooseOpenZeppelinContract = checkpointStory(
-  "New wallet · OpenZeppelin contract · Recommended",
+export const ImportPrivateKey = checkpointStory(
+  "Existing wallet · private key",
   "onboarding",
-  "account-contract-openzeppelin",
-);
-export const ChooseArgentContract = checkpointStory(
-  "New wallet · Argent contract",
-  "onboarding",
-  "account-contract-argent",
+  "import-key",
 );
 export const ChooseAccounts = checkpointStory(
-  "New wallet · review OpenZeppelin account",
+  "New wallet · review the Bramble account",
   "onboarding",
   "accounts",
-);
-export const ReviewArgentAccount = checkpointStory(
-  "New wallet · review Argent account",
-  "onboarding",
-  "accounts-argent",
 );
 export const AccountSelected = checkpointStory(
   "Existing wallet · account selected",
@@ -84,16 +74,6 @@ export const LedgerPassword = checkpointStory(
   "Ledger wallet · local passphrase",
   "onboarding",
   "ledger-password",
-);
-export const ChooseOpenZeppelinLedgerContract = checkpointStory(
-  "Ledger wallet · OpenZeppelin contract · Recommended",
-  "onboarding",
-  "ledger-contract-openzeppelin",
-);
-export const ChooseArgentLedgerContract = checkpointStory(
-  "Ledger wallet · Argent contract",
-  "onboarding",
-  "ledger-contract-argent",
 );
 export const SetupComplete = checkpointStory("Setup · complete", "onboarding", "complete");
 export const ReturningLocked = checkpointStory("Returning wallet · locked", "unlock", "locked");

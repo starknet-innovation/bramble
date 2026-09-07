@@ -119,11 +119,11 @@ if (!hasStringList(packageJson["workspaces"], EXPECTED_WORKSPACES)) {
 }
 
 if (
-  packageJson["name"] !== "mc-wallet" ||
+  packageJson["name"] !== "bramble" ||
   packageJson["private"] !== true ||
   packageJson["type"] !== "module"
 ) {
-  failures.push("package.json must stay private ESM mc-wallet package metadata");
+  failures.push("package.json must stay private ESM bramble package metadata");
 }
 
 if (biomeJson["$schema"] !== "https://biomejs.dev/schemas/2.5.8/schema.json") {

@@ -12,7 +12,7 @@
  * Feedback transforms ride the strong ease-out curve — never an overshoot on
  * the press-down frame the user watches most.
  */
-import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 // Chevron shape for the select control, consumed as a CSS mask so the glyph is
 // PAINTED by the skin's muted token — a mask reads only the alpha channel, so
@@ -32,11 +32,11 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
     align-items: center;
     appearance: none;
     -webkit-appearance: none;
-    background: var(--mc-accent);
+    background: var(--bramble-accent);
     border: 0;
     border-radius: ${RADIUS.full};
     box-shadow: none;
-    color: var(--mc-accent-text);
+    color: var(--bramble-accent-text);
     cursor: pointer;
     display: inline-flex;
     font: inherit;
@@ -54,33 +54,33 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
       color ${MOTION.pressMs}ms ${MOTION.ease},
       transform ${MOTION.liftMs}ms var(--ease-out);
   }
-  :where(button:not(:disabled):active), a.icon-button:active { background: var(--mc-accent-press); transform: scale(0.98); }
+  :where(button:not(:disabled):active), a.icon-button:active { background: var(--bramble-accent-press); transform: scale(0.98); }
   button.secondary {
-    background: var(--mc-elevated);
-    color: var(--mc-text);
+    background: var(--bramble-elevated);
+    color: var(--bramble-text);
   }
   button.icon-button, a.icon-button {
     background: transparent;
-    color: var(--mc-text);
+    color: var(--bramble-text);
   }
   button.secondary:not(:disabled):active, button.icon-button:not(:disabled):active, a.icon-button:active {
-    background: var(--mc-soft-press);
+    background: var(--bramble-soft-press);
   }
   button.ghost, a.icon-button.ghost {
     background: transparent;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
   }
-  button.danger { background: var(--mc-elevated); color: var(--mc-danger); }
-  button.danger:not(:disabled):active { background: var(--mc-danger-soft); }
+  button.danger { background: var(--bramble-elevated); color: var(--bramble-danger); }
+  button.danger:not(:disabled):active { background: var(--bramble-danger-soft); }
   @media (hover: hover) and (pointer: fine) {
     /* The primary fill is a fallback, not a specificity trap: component rows
        declare their own neutral hover surfaces later in the cascade. */
-    :where(button:not(:disabled):hover) { background: var(--mc-accent-hover); }
+    :where(button:not(:disabled):hover) { background: var(--bramble-accent-hover); }
     button.secondary:not(:disabled):hover, button.icon-button:not(:disabled):hover, a.icon-button:hover {
-      background: var(--mc-hover);
+      background: var(--bramble-hover);
     }
-    button.ghost:not(:disabled):hover, a.icon-button.ghost:hover { background: var(--mc-hover); color: var(--mc-text); }
-    button.danger:not(:disabled):hover { background: var(--mc-danger-soft); }
+    button.ghost:not(:disabled):hover, a.icon-button.ghost:hover { background: var(--bramble-hover); color: var(--bramble-text); }
+    button.danger:not(:disabled):hover { background: var(--bramble-danger-soft); }
   }
   button.icon-button, a.icon-button { flex: none; height: ${CONTROL.hit}; min-height: 0; padding: 0; width: ${CONTROL.hit}; }
   button.icon-button:not(:disabled):active, a.icon-button:active { transform: scale(0.96); }
@@ -95,7 +95,7 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   form { display: grid; gap: ${SPACE.md}; }
   label { display: grid; gap: 6px; }
   label > span:first-child, .eyebrow, .context-label {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.semibold};
   }
@@ -103,10 +103,10 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   input, select, textarea {
     appearance: none;
     -webkit-appearance: none;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border: 0;
     border-radius: ${RADIUS.md};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font: inherit;
     min-height: ${SIZE.control};
     min-width: 0;
@@ -116,19 +116,19 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   }
   @media (hover: hover) and (pointer: fine) {
     input:not(:disabled):hover, select:not(:disabled):hover, textarea:not(:disabled):hover {
-      background: var(--mc-hover);
+      background: var(--bramble-hover);
     }
   }
   /* Placeholders stay at the full muted ink — a faded placeholder fell below
      WCAG AA (≈2.9:1) on the field fill. Opacity 1 also overrides the UA's own
      placeholder fade so the token value is what actually renders. */
-  input::placeholder, textarea::placeholder { color: var(--mc-muted); opacity: 1; }
+  input::placeholder, textarea::placeholder { color: var(--bramble-muted); opacity: 1; }
   /* Checkboxes are compact native controls, not text fields: the generic input
      treatment (full-width 46px elevated fill with appearance:none) would erase
      the check entirely. Native rendering + accent-color keeps them crisp and
      theme-correct, and their wrapping label lays out as a tappable row. */
   input[type="checkbox"] {
-    accent-color: var(--mc-accent);
+    accent-color: var(--bramble-accent);
     appearance: auto;
     -webkit-appearance: auto;
     flex: none;
@@ -148,7 +148,7 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   select { padding-right: 40px; }
   label:has(> select:last-child) { position: relative; }
   label:has(> select:last-child)::after {
-    background: var(--mc-muted);
+    background: var(--bramble-muted);
     bottom: 16px;
     content: "";
     height: 14px;
@@ -160,36 +160,36 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
     width: 14px;
   }
   textarea {
-    font-family: var(--mc-font-mono);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.mono.size};
     line-height: 1.6;
     min-height: 96px;
     padding: ${SPACE.sm} ${SPACE.md};
     resize: vertical;
   }
-  input.mono { font-family: var(--mc-font-mono); font-size: ${TYPE.mono.size}; }
-  .hint { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
-  .lede { color: var(--mc-muted); }
-  [role="status"] { color: var(--mc-muted); font-size: ${TYPE.caption.size}; min-height: 16px; overflow-wrap: anywhere; }
+  input.mono { font-family: var(--bramble-font-mono); font-size: ${TYPE.mono.size}; }
+  .hint { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .lede { color: var(--bramble-muted); }
+  [role="status"] { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; min-height: 16px; overflow-wrap: anywhere; }
 
   /* Focus system: one accent ring, drawn once here for the whole panel. Filled
      fields focus with a ring hugging just inside their edge (the field lights
      up); everything else gets an offset halo that never collides with hairline
      edges or shadows. Both follow the element's radius. */
-  :focus-visible { outline: 2px solid var(--mc-focus-ring); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--bramble-focus-ring); outline-offset: 2px; }
   input:focus-visible, select:focus-visible, textarea:focus-visible {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     outline-offset: -2px;
   }
-  ::selection { background: color-mix(in srgb, var(--mc-accent) 26%, transparent); }
+  ::selection { background: color-mix(in srgb, var(--bramble-accent) 26%, transparent); }
 
   /* Gate screens: centered brand, big heading, primary action at the bottom */
   .gate { align-items: center; display: flex; flex: 1; flex-direction: column; gap: ${SPACE.lg}; padding-top: ${SPACE.xl}; text-align: center; }
   .gate-brand {
     align-items: center;
-    background: var(--mc-accent);
+    background: var(--bramble-accent);
     border-radius: ${RADIUS.full};
-    color: var(--mc-accent-text);
+    color: var(--bramble-accent-text);
     display: inline-flex;
     height: 64px;
     justify-content: center;
@@ -202,7 +202,7 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   .gate-form { display: flex; flex: 1; flex-direction: column; gap: ${SPACE.md}; text-align: left; width: 100%; }
   .gate-cta { display: grid; gap: ${SPACE.sm}; margin-top: auto; padding-top: ${SPACE.lg}; }
   .gate-cta button { width: 100%; }
-  .gate-alt { border-top: 1px solid var(--mc-hairline); display: grid; gap: ${SPACE.sm}; padding-top: ${SPACE.lg}; text-align: left; width: 100%; }
+  .gate-alt { border-top: 1px solid var(--bramble-hairline); display: grid; gap: ${SPACE.sm}; padding-top: ${SPACE.lg}; text-align: left; width: 100%; }
   .gate-alt .gate-form { flex: none; }
   .gate-alt .gate-cta { margin-top: ${SPACE.sm}; padding-top: 0; }
 `;

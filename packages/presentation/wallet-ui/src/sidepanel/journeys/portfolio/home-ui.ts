@@ -6,7 +6,7 @@
  * replaying their animations.
  */
 
-import { resolveSpring } from "@mc-wallet/ui-kit/spring";
+import { resolveSpring } from "@bramble/ui-kit/spring";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
@@ -33,7 +33,7 @@ export type HomeUiDeps = {
 };
 
 // Settle spring shared by the drawer's release animation and its CSS transitions
-// (the iOS sheet spring, damping 0.8 / response 0.3 — see @mc-wallet/ui-kit/tokens SPRING).
+// (the iOS sheet spring, damping 0.8 / response 0.3 — see @bramble/ui-kit/tokens SPRING).
 const DRAWER_SPRING = resolveSpring("drawer");
 // Movement (px) before a press becomes a drag, so a tap inside the sheet still
 // clicks its control instead of being stolen by the gesture.

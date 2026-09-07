@@ -1,10 +1,10 @@
 /** Shared participant picker for multisig setup and signer management. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { inputControl, textareaField } from "@mc-wallet/ui-kit/fields";
-import { icon } from "@mc-wallet/ui-kit/icons";
-import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
-import { parseWalletContactCard } from "@mc-wallet/wallet-model/preferences";
+import { escapeHtml } from "@bramble/core/html";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { inputControl, textareaField } from "@bramble/ui-kit/fields";
+import { icon } from "@bramble/ui-kit/icons";
+import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
+import { parseWalletContactCard } from "@bramble/wallet-model/preferences";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { accountAvatar, accountLabel } from "../../shared/parts";
 import type { MultisigClient } from "./multisig-runtime";
@@ -77,7 +77,7 @@ export const multisigParticipantScreen = (
       </div>
       <div data-participant-field="address">
         <label><span>Participant account address</span>${inputControl({ ariaLabel: "Participant account address", attributes: { "data-participant-address-input": true }, autocapitalize: "none", className: "mono", placeholder: "0x…", spellcheck: false })}</label>
-        <p class="hint">For deployed OpenZeppelin or Argent accounts.</p>
+        <p class="hint">For deployed Bramble or Ready accounts.</p>
       </div>
       <div data-participant-field="public-key" hidden>
         <label><span>Participant public key</span>${inputControl({ ariaLabel: "Participant public key", attributes: { "data-participant-key-input": true }, autocapitalize: "none", className: "mono", placeholder: "0x…", spellcheck: false })}</label>
@@ -183,7 +183,7 @@ export const bindMultisigParticipantPicker = (
     const card = parseWalletContactCard(walletCardInput?.value.trim() ?? "");
     const label = labelInput?.value.trim() ?? "";
     const message = !card
-      ? "Paste a valid MC Wallet card."
+      ? "Paste a valid Bramble card."
       : card.networkId !== screen.dataset["participantNetwork"]
         ? "That wallet card belongs to a different network."
         : !card.publicKeyX || !card.nostrPublicKey
@@ -247,7 +247,7 @@ export const bindMultisigParticipantPicker = (
       );
       finish({
         address: signer.address,
-        label: signer.accountContractType === "argent" ? "Argent account" : "OpenZeppelin account",
+        label: signer.accountContractType === "argent" ? "Ready account" : "Bramble account",
         publicKeyX: signer.publicKeyX,
         source: "Account address",
       });

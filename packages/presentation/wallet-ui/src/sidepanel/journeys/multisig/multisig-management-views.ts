@@ -1,12 +1,12 @@
 /** Focused add, signer, receive, and intent-import screens for Argent multisig. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { selectField, textareaField, textField } from "@mc-wallet/ui-kit/fields";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -23,7 +23,7 @@ import { type MultisigParticipantOption, multisigParticipantScreen } from "./mul
 import { multisigDisplayName } from "./multisig-views";
 
 const argentMultisigContractLabel = (): string =>
-  `Argent Multisig ${ARGENT_MULTISIG_CONTRACT.version}`;
+  `Ready Multisig ${ARGENT_MULTISIG_CONTRACT.version}`;
 
 type SignerIdentity = {
   readonly address: string;
@@ -48,7 +48,7 @@ const authorityFailureMessage = (status: ArgentMultisigView["authorityStatus"]):
     "invalid-config": "This account returned an invalid signer configuration. Signing is disabled.",
     "network-unavailable": "Signer authority could not be refreshed. Check the network and retry.",
     undeployed: "This account is not deployed yet. Complete deployment before managing signers.",
-    "unsupported-class": "This address is not the pinned Argent Multisig 0.2 account.",
+    "unsupported-class": "This address is not the pinned Ready Multisig 0.2 account.",
     "unsupported-signers": "This account includes signer types this wallet cannot manage.",
   })[status];
 
@@ -60,7 +60,7 @@ const signerIdentities = (
   publicKeys.map((publicKey) => {
     const account = status.accounts.find((candidate) => sameFelt(candidate.publicKeyX, publicKey));
     if (account) {
-      const contract = account.accountContractType === "argent" ? "Argent" : "OpenZeppelin";
+      const contract = account.accountContractType === "argent" ? "Ready" : "Bramble";
       return {
         address: account.address,
         detail: `${contract}${account.derivation.kind === "ledger" ? " · Ledger" : ""} · Key ${accountLabel(publicKey)}`,
@@ -99,7 +99,7 @@ const availableSignerParticipants = (
     )
     .map((account) => ({
       address: account.address,
-      label: `${accountDisplayName(account, preferences)} · ${account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"}${account.derivation.kind === "ledger" ? " · Ledger" : ""}`,
+      label: `${accountDisplayName(account, preferences)} · ${account.accountContractType === "argent" ? "Ready" : "Bramble"}${account.derivation.kind === "ledger" ? " · Ledger" : ""}`,
       publicKeyX: account.publicKeyX,
       source: "Wallet account",
     })),
@@ -149,12 +149,12 @@ const setupOption = (
  * Renders the shared-account gateway without mutating chain state.
  */
 export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Argent Multisig", status, "Multiple signers approve together") +
+  flowHeader("Ready Multisig", status, "Multiple signers approve together") +
   flowScreen(
     "multisig-add",
     `<section class="section">
       ${account ? "" : noAccountEmpty(status)}
-      <div class="multisig-setup-options" role="group" aria-label="Argent multisig setup">
+      <div class="multisig-setup-options" role="group" aria-label="Ready multisig setup">
         ${setupOption("multisig-deploy", "users", "Create a multisig", "Set participants, fund, and deploy.")}
         ${setupOption("multisig-watch", "search", "Add a shared address", "Sync it or resume setup.")}
       </div>
@@ -165,7 +165,7 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
  * Renders address-only discovery; authority is read from chain and matched locally.
  */
 export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Add shared account", status, "Sync or resume an Argent multisig") +
+  flowHeader("Add shared account", status, "Sync or resume a Ready multisig") +
   flowScreen(
     "multisig-watch",
     `<section class="section">
@@ -199,7 +199,7 @@ export const multisigSignersFlow = (
   if (!view) {
     return (
       flowHeader("Signers", status) +
-      flowScreen("multisig-signers", emptyState("This Argent multisig is no longer watched."))
+      flowScreen("multisig-signers", emptyState("This Ready multisig is no longer watched."))
     );
   }
   const { record, config } = view;
@@ -409,7 +409,7 @@ export const multisigReceiveFlow = (
   if (!view) {
     return (
       flowHeader("Receive", status) +
-      flowScreen("multisig-receive", emptyState("This Argent multisig is no longer watched."))
+      flowScreen("multisig-receive", emptyState("This Ready multisig is no longer watched."))
     );
   }
   return (
@@ -442,5 +442,5 @@ export const multisigTrackFlow = (status: WalletStatus, view: ArgentMultisigView
             <p id="multisig-track-result" role="status"></p>
           </form>
         </section>`
-      : emptyState("Select a watched Argent multisig first."),
+      : emptyState("Select a watched Ready multisig first."),
   );

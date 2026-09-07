@@ -3,10 +3,10 @@ import { describe, expect, test } from "bun:test";
 import {
   type ArgentMultisigSigningIntent,
   createMultisigStore,
-} from "@mc-wallet/multisig/repository";
-import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
-import { createMemoryStore, type KeyValueStore } from "@mc-wallet/store/kv";
-import { canonicalFelt, DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/multisig/repository";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
+import { canonicalFelt, DEFAULT_TOKENS } from "@bramble/wallet-model/networks";
 import {
   HARNESS_MULTISIG_ID,
   HARNESS_TARGET,

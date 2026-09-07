@@ -9,10 +9,10 @@ describe("workspace architecture import analysis", () => {
       "fixture.ts",
       `
         import "side-effect";
-        import type { Account } from "@mc-wallet/wallet-model/accounts";
+        import type { Account } from "@bramble/wallet-model/accounts";
         export { value } from "./value";
         type Call = import("starknet").Call;
-        void import("@mc-wallet/vault/service");
+        void import("@bramble/vault/service");
         require("legacy-module");
         require.resolve("resolved-module");
         module.require("module-require");
@@ -23,10 +23,10 @@ describe("workspace architecture import analysis", () => {
     expect(new Set(result.specifiers)).toEqual(
       new Set([
         "side-effect",
-        "@mc-wallet/wallet-model/accounts",
+        "@bramble/wallet-model/accounts",
         "./value",
         "starknet",
-        "@mc-wallet/vault/service",
+        "@bramble/vault/service",
         "legacy-module",
         "resolved-module",
         "module-require",

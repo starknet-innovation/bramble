@@ -9,17 +9,17 @@
  * never contacted here is a gateway the wallet refused to contact.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import {
   createStarkscanClient,
   type StarkscanClient,
   type StarkscanHttp,
-} from "@mc-wallet/transactions/starkscan";
+} from "@bramble/transactions/starkscan";
 import {
   createRpcFirstBalances,
   createRpcFirstHistory,
-} from "@mc-wallet/transactions/starkscan-wallet";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/transactions/starkscan-wallet";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { RpcProvider } from "starknet";
 
 const ACCOUNT = "0x6c16710431efd3962d3c6f55faf00d8c855188029acb42781b9ac77c438ade5";

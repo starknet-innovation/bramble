@@ -3,7 +3,7 @@
  * module changes only extension-owned form state and delegates journey stages
  * to the parent transfer state machine.
  */
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { formatFiat } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
 import { balanceShortcut, fiatInputToken, sendCurrencySymbol, tokenInputFiat } from "./send-model";

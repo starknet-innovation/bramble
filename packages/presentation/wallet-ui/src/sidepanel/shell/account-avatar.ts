@@ -47,8 +47,8 @@ export const accountAvatar = (address: string): string => {
   const backgroundTone = (identity + 13) % 4;
   const faceInk =
     wrapperTone === 1 || wrapperTone === 2
-      ? "var(--mc-account-avatar-ink)"
-      : "var(--mc-account-avatar-paper)";
+      ? "var(--bramble-account-avatar-ink)"
+      : "var(--bramble-account-avatar-paper)";
   const preTranslateX = avatarUnit(identity, 10, 1);
   const preTranslateY = avatarUnit(identity, 10, 2);
   const wrapperTranslateX = preTranslateX < 5 ? preTranslateX + AVATAR_SIZE / 9 : preTranslateX;
@@ -66,8 +66,8 @@ export const accountAvatar = (address: string): string => {
     wrapperTranslateY > AVATAR_SIZE / 6 ? wrapperTranslateY / 2 : avatarUnit(identity, 7, 2);
 
   return `<svg class="avatar" viewBox="0 0 36 36" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
-    <rect width="36" height="36" fill="var(--mc-account-avatar-${backgroundTone})" />
-    <rect class="avatar-head" width="36" height="36" rx="${circular ? 36 : 6}" transform="translate(${wrapperTranslateX} ${wrapperTranslateY}) rotate(${wrapperRotate} 18 18) scale(${wrapperScale})" fill="var(--mc-account-avatar-${wrapperTone})" />
+    <rect width="36" height="36" fill="var(--bramble-account-avatar-${backgroundTone})" />
+    <rect class="avatar-head" width="36" height="36" rx="${circular ? 36 : 6}" transform="translate(${wrapperTranslateX} ${wrapperTranslateY}) rotate(${wrapperRotate} 18 18) scale(${wrapperScale})" fill="var(--bramble-account-avatar-${wrapperTone})" />
     <g class="avatar-character" transform="translate(${faceTranslateX} ${faceTranslateY}) rotate(${faceRotate} 18 18)" fill="${faceInk}" stroke="${faceInk}" stroke-linecap="round">
       ${
         mouthOpen

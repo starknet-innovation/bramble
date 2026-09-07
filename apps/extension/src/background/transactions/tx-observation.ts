@@ -10,16 +10,16 @@
  * clock — no timers, storage, or ambient time.
  */
 
-import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
+import type { TransactionStatusReport } from "@bramble/starknet/rpc";
 import type {
   ActivityEntry,
   ActivityOutcome,
   ActivityStatus,
-} from "@mc-wallet/transactions/activity";
+} from "@bramble/transactions/activity";
 import {
   isUnresolvedActivityStatus,
   monotonicActivityStatus,
-} from "@mc-wallet/transactions/activity";
+} from "@bramble/transactions/activity";
 
 /**
  * Consecutive `TXN_HASH_NOT_FOUND` answers required before a transaction the
@@ -177,5 +177,5 @@ export const failureNoticeMessage = (entry: ActivityEntry): string => {
   if (entry.status === "rejected") {
     return `Starknet dropped "${entry.summary}" after confirming it. The transaction did not happen.`;
   }
-  return `MC Wallet could not confirm "${entry.summary}". Check it on an explorer before retrying.`;
+  return `Bramble could not confirm "${entry.summary}". Check it on an explorer before retrying.`;
 };

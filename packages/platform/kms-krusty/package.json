@@ -1,5 +1,5 @@
 {
-  "name": "@mc-wallet/kms-krusty",
+  "name": "@bramble/kms-krusty",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/vault": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*"
+    "@bramble/core": "workspace:*",
+    "@bramble/vault": "workspace:*",
+    "@bramble/wallet-model": "workspace:*"
   }
 }

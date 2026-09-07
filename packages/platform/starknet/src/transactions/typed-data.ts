@@ -46,7 +46,7 @@
  *   wherever the graphs do, and neither can be hashed as the other.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   hasOnlyKnownKeys,
   hasUniqueStrings,
@@ -54,8 +54,8 @@ import {
   isRecord,
   JSON_BUDGETS,
   type Json,
-} from "@mc-wallet/core/json";
-import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/core/json";
+import { isStarkFieldElement } from "@bramble/wallet-model/networks";
 import { typedData as snip12 } from "starknet";
 import {
   BASIC_TYPES,

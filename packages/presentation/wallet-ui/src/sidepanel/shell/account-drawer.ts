@@ -13,14 +13,14 @@
  * re-renders without replaying the slide.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { type AccountGroups, accountGroup } from "@mc-wallet/settings/groups";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { escapeHtml } from "@bramble/core/html";
+import { type AccountGroups, accountGroup } from "@bramble/settings/groups";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { menuRow } from "@bramble/ui-kit/navigation";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ArgentMultisigView } from "../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { groupFilterChips, groupPickerPanel } from "../journeys/settings/group-controls";
@@ -39,7 +39,7 @@ const drawerMultisigRow = (
       <span class="drawer-copy">
         <strong>${escapeHtml(record.name ?? "Multisig account")}</strong>
         <code>${escapeHtml(accountLabel(record.address))}</code>
-        <span class="account-groups-line">Argent Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}` : "authority unavailable"}${open > 0 ? ` · ${open} open` : ""}</span>
+        <span class="account-groups-line">Ready Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}` : "authority unavailable"}${open > 0 ? ` · ${open} open` : ""}</span>
       </span>
       <span class="option-mark">${icon(record.id === selectedId ? "check" : "chevronRight")}</span>
     </button>

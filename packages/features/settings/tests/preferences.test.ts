@@ -6,8 +6,8 @@ import {
   createPreferencesStore,
   defaultWalletPreferences,
   PREFERENCES_STORE_KEY,
-} from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+} from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 
 // The stored spelling of "0x123": every entry address is canonicalized by the
 // shared id builder (MCW-V09-110), so the id is derived from this form.

@@ -1,6 +1,6 @@
 /** Read-only exact invoke fee estimation. */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import type { RpcProvider } from "starknet";
 import { isCompatibleAccountDeployed } from "../transactions/deployment";
 import { type FeeEstimate, reviewedSpendFor } from "./fee-bounds";

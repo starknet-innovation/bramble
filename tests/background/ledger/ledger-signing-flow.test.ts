@@ -8,10 +8,10 @@
  * The device is a fake signer (a starknet.js key) — no hardware or transport.
  */
 import { describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { Vault } from "@bramble/vault/schema";
+import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { ec } from "starknet";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
 import {
@@ -261,7 +261,7 @@ describe("privileged Ledger messages", () => {
     expect(response).toEqual({ error: "invalid create ledger vault request" });
   });
 
-  test("reads a candidate's on-chain deployed status and STRK balance", async () => {
+  test("reads a candidate's deployed status and first non-zero token balance", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
     const handler = createMessageHandler(walletStub, "extension-id", {
@@ -270,7 +270,19 @@ describe("privileged Ledger messages", () => {
           return true;
         },
         async getTokenBalances() {
+          // ETH is zero and STRK holds value: funded comes from ANY non-zero
+          // known-token balance, and the display shows the held token.
           return [
+            {
+              address: "0x2",
+              balance: "0",
+              decimals: 18,
+              formatted: "0",
+              id: "SN_MAIN:ETH:0x2",
+              name: "Ether",
+              networkId: "SN_MAIN",
+              symbol: "ETH",
+            },
             {
               address: "0x1",
               balance: "1500000000000000000",
@@ -291,7 +303,7 @@ describe("privileged Ledger messages", () => {
       { address: ledgerAccount.address, networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
       extensionSender,
     );
-    expect(response).toEqual({ balance: "1.5 STRK", deployed: true, ok: true });
+    expect(response).toEqual({ balance: "1.5 STRK", deployed: true, funded: true, ok: true });
   });
 
   test("degrades a candidate's status to unavailable when the RPC fails", async () => {
@@ -309,7 +321,7 @@ describe("privileged Ledger messages", () => {
       { address: ledgerAccount.address, networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
       extensionSender,
     );
-    expect(response).toEqual({ balance: null, deployed: null, ok: true });
+    expect(response).toEqual({ balance: null, deployed: null, funded: null, ok: true });
   });
 
   test("rejects a malformed ledger-account-status request", async () => {

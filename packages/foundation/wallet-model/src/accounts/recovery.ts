@@ -1,5 +1,5 @@
 /** Public account-recovery coordinates and bounded discovery results. */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   type AccountContractType,
   type DerivedAccountRef,

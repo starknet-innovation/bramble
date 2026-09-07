@@ -5,7 +5,7 @@
  * validateMnemonic returning a real boolean vs a non-boolean WASM result.
  */
 import { describe, expect, test } from "bun:test";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 
@@ -31,7 +31,7 @@ const createModule = (overrides: Record<string, unknown> = {}) => ({
   openNostrApplicationData() {
     return JSON.stringify({
       content: "payload",
-      identifier: "mc-wallet.multisig",
+      identifier: "bramble.multisig",
       senderPublicKey: "22".repeat(32),
     });
   },

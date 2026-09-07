@@ -26,8 +26,8 @@
  * approve control entirely.
  */
 import { describe, expect, test } from "bun:test";
-import type { Json } from "@mc-wallet/core/json";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
+import type { Json } from "@bramble/core/json";
+import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
 import { typedData as snip12 } from "starknet";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";

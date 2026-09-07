@@ -1,7 +1,7 @@
 /** Gateway analytics stays exact-origin, user-controllable, and pseudonymous. */
 
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   ANALYTICS_GATEWAY_ORIGIN,
   ANALYTICS_INSTALLATION_ID_KEY,

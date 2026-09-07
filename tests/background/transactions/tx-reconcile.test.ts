@@ -8,9 +8,9 @@
  * user already moved past turns out to have failed.
  */
 import { describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
-import { type ActivityEntry, memoryActivityLog } from "@mc-wallet/transactions/activity";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { TransactionStatusReport } from "@bramble/starknet/rpc";
+import { type ActivityEntry, memoryActivityLog } from "@bramble/transactions/activity";
 import { UNRESOLVED_WINDOW_MS } from "../../../apps/extension/src/background/transactions/tx-observation";
 import {
   mergeReconciledHistory,

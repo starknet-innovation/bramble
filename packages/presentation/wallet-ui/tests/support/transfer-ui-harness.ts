@@ -5,8 +5,8 @@
  * support only — never imported by production code.
  */
 
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
 import type { TokenBalance, WalletStatus } from "../../src/popup/responses/responses";
 import { sendFlow } from "../../src/sidepanel/app/screens/flows";
 import type { TransferUiDeps } from "../../src/sidepanel/journeys/send/transfer-ui";

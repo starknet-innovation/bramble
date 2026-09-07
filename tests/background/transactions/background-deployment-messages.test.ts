@@ -3,9 +3,9 @@
  * submissions stay privileged, locked-safe, and scoped to the active network.
  */
 import { describe, expect, test } from "bun:test";
-import type { DeployAccountInput, DeploymentStatusInput } from "@mc-wallet/starknet/rpc";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { DeployAccountInput, DeploymentStatusInput } from "@bramble/starknet/rpc";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";

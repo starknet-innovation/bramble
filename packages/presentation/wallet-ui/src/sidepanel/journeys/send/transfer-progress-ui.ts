@@ -79,8 +79,8 @@ export const workingStatus = <Review>(state: TransferState<Review>): WorkingStat
   if (state.stage === "confirming") {
     return {
       copy: isPrivate(state.fields)
-        ? "The relay accepted the shielded transfer. MC Wallet is checking its chain status now."
-        : "Starknet received the transaction. MC Wallet is checking its chain status now.",
+        ? "The relay accepted the shielded transfer. Bramble is checking its chain status now."
+        : "Starknet received the transaction. Bramble is checking its chain status now.",
       labels: ["Review locked", "Authorized", "Broadcast complete", "Confirm on Starknet"],
       liveness: "Fast confirmations often arrive in under a second.",
       states: ["done", "done", "done", "active"],

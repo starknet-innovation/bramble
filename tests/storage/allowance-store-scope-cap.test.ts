@@ -13,7 +13,7 @@
  * account ids are spelled.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   ALLOWANCE_LIMITS,
   type AllowanceInput,
@@ -22,7 +22,7 @@ import {
   createAllowanceStore,
   isAllowanceRecord,
   memoryAllowanceStore,
-} from "@mc-wallet/transactions/allowance-store";
+} from "@bramble/transactions/allowance-store";
 
 const MAIN_ACCOUNT = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const OTHER_MAIN_ACCOUNT =

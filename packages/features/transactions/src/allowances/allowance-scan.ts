@@ -13,12 +13,12 @@
  * without touching callers.
  */
 
-import { isTransportRpcError, withRpcFallback } from "@mc-wallet/starknet/provider";
+import { isTransportRpcError, withRpcFallback } from "@bramble/starknet/provider";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { type Call, CallData, type RpcProvider } from "starknet";
 import {
   type AllowanceReading,

@@ -1,7 +1,7 @@
 /**
  * Privileged cryptographic capability required by the encrypted vault.
  */
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 
 /** Authenticated public application data recovered inside Krusty. */
 export type NostrApplicationData = {

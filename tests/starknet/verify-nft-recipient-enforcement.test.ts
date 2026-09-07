@@ -18,13 +18,13 @@ import {
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
+} from "@bramble/transactions/verify";
 import {
   BATCH_TRANSFER_FROM_ENTRYPOINTS,
   PLAIN_TRANSFER_FROM_ENTRYPOINTS,
   recipientFeltIndex,
   SAFE_TRANSFER_FROM_ENTRYPOINTS,
-} from "@mc-wallet/transactions/verify-selectors";
+} from "@bramble/transactions/verify-selectors";
 import {
   CLEAN_RECIPIENT,
   POISONED_RECIPIENT,

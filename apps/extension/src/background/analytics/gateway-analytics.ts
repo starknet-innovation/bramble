@@ -4,12 +4,12 @@
  * vendored privacy SDK and starknet.js share the same exact-origin policy.
  */
 
-import { STRK20_GATEWAY_BASE } from "@mc-wallet/privacy/config";
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
+import { STRK20_GATEWAY_BASE } from "@bramble/privacy/config";
+import type { Strk20Service } from "@bramble/privacy/service";
+import type { KeyValueStore } from "@bramble/store/kv";
 
 /** Persistent, non-secret installation metadata kept outside the vault. */
-export const ANALYTICS_INSTALLATION_ID_KEY = "mc-wallet:analytics-installation-id";
+export const ANALYTICS_INSTALLATION_ID_KEY = "bramble:analytics-installation-id";
 
 /** The only origin allowed to receive product-analytics metadata. */
 export const ANALYTICS_GATEWAY_ORIGIN = new URL(STRK20_GATEWAY_BASE).origin;

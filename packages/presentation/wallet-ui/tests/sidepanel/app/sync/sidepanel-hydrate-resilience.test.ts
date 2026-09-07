@@ -1,6 +1,6 @@
 /** Cached hydration resilience and ambient multisig refresh invariants. */
 import { describe, expect, test } from "bun:test";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
 import { hydrateView } from "../../../../src/sidepanel/app/sync/hydrate";

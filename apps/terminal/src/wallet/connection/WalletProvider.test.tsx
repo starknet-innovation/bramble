@@ -5,12 +5,12 @@ import { CallData } from "starknet";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  waitForInjectedMcWallet: vi.fn(),
+  waitForInjectedBramble: vi.fn(),
 }));
 
 vi.mock("./starknet-window", () => ({
   INJECTION_TIMEOUT_MS: 0,
-  waitForInjectedMcWallet: mocks.waitForInjectedMcWallet,
+  waitForInjectedBramble: mocks.waitForInjectedBramble,
 }));
 
 import { useWallet, WalletProvider } from "./WalletProvider";
@@ -41,10 +41,10 @@ const makeWallet = () => {
   });
   return {
     account,
-    id: "mc-wallet",
+    id: "bramble",
     isPreauthorized: vi.fn(async () => false),
     invoke,
-    name: "MC Wallet",
+    name: "Bramble",
     on: vi.fn((event: WalletEvent, listener: (...args: never[]) => void) => {
       listeners.set(event, listener);
     }),
@@ -172,7 +172,7 @@ describe("WalletProvider", () => {
 
   test("requests accounts and reacts to wallet account and network events", async () => {
     const wallet = makeWallet();
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     renderProvider();
 
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
@@ -193,7 +193,7 @@ describe("WalletProvider", () => {
   test("surfaces a rejected approval instead of falling back silently", async () => {
     const wallet = makeWallet();
     wallet.request.mockRejectedValueOnce(Object.assign(new Error("Connection rejected"), { code: 113 }));
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     renderProvider();
 
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
@@ -207,7 +207,7 @@ describe("WalletProvider", () => {
     Object.assign(wallet, { enable });
     wallet.isPreauthorized = vi.fn().mockResolvedValue(true);
     wallet.request.mockResolvedValueOnce([]);
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     renderProvider();
 
     await waitFor(() =>
@@ -222,7 +222,7 @@ describe("WalletProvider", () => {
 
   test("wraps Sierra declarations in the wallet RPC declare_transaction shape", async () => {
     const wallet = makeWallet();
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     render(
       <WalletProvider>
         <DeclareProbe />
@@ -252,7 +252,7 @@ describe("WalletProvider", () => {
 
   test("requests wallet-approved ERC20 tracking with metadata revalidated by the wallet", async () => {
     const wallet = makeWallet();
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     render(
       <WalletProvider>
         <WatchAssetProbe />
@@ -273,7 +273,7 @@ describe("WalletProvider", () => {
     wallet.invoke
       .mockRejectedValueOnce(Object.assign(new Error("User rejected"), { code: 113 }))
       .mockResolvedValueOnce({ transaction_hash: "0xabc" });
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     render(
       <WalletProvider>
         <TransactionProbe />
@@ -327,7 +327,7 @@ describe("WalletProvider", () => {
           release = () => resolve({ transaction_hash: "0xabc" });
         }),
     );
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     render(
       <WalletProvider>
         <TransactionProbe reviewMode="wallet" />
@@ -340,7 +340,7 @@ describe("WalletProvider", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fast send" }));
     await waitFor(() => expect(wallet.invoke).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("button", { name: "Continue in wallet" })).toBeNull();
-    expect(screen.getByText("Request sent to MC Wallet")).toBeTruthy();
+    expect(screen.getByText("Request sent to Bramble")).toBeTruthy();
     await act(async () => release());
     await waitFor(() =>
       expect(screen.getByTestId("transaction-result").textContent).toBe("0xabc"),

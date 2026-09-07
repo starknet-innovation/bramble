@@ -7,8 +7,8 @@
  * mutation and reaches the dapp as USER_REFUSED_OP (113).
  */
 import { describe, expect, test } from "bun:test";
-import type { ProviderMethod, RuntimeMessage } from "@mc-wallet/wallet-protocol/bridge";
-import { toProviderPayload } from "@mc-wallet/wallet-protocol/bridge";
+import type { ProviderMethod, RuntimeMessage } from "@bramble/wallet-protocol/bridge";
+import { toProviderPayload } from "@bramble/wallet-protocol/bridge";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import {
   flushHeld,

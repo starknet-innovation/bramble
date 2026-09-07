@@ -1,7 +1,7 @@
 /**
  * Fail-closed authorization helpers for serialized origin-grant writes.
  */
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 
 /**
  * Requires that the unlock capability which authorized a grant is current.

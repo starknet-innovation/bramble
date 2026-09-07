@@ -3,10 +3,10 @@
  * change on the right. Split from ./views.ts to keep it within the size budget.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { tokenLogoSvg } from "@mc-wallet/portfolio/token-logos";
-import type { DisplayCurrency } from "@mc-wallet/settings/preferences";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import { tokenLogoSvg } from "@bramble/portfolio/token-logos";
+import type { DisplayCurrency } from "@bramble/settings/preferences";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";

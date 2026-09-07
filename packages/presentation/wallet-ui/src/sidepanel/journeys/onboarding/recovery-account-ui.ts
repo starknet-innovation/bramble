@@ -3,18 +3,26 @@
 import type {
   RecoveryAccountCandidate,
   RecoveryAccountSelection,
-} from "@mc-wallet/wallet-model/recovery";
-import { isRecoveryAccountIndex, RECOVERY_SCAN_LIMITS } from "@mc-wallet/wallet-model/recovery";
+} from "@bramble/wallet-model/recovery";
+import { isRecoveryAccountIndex, RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { accountLabel } from "../../shared/parts";
+import { accountLabel, accountsDetectedText } from "../../shared/parts";
 
 type RecoveryAccountUiDeps = {
+  /** Accounts already in the vault; scan candidates matching them are shown but locked. */
+  readonly existingIds?: () => ReadonlySet<string>;
   readonly form: HTMLFormElement;
   readonly mnemonic: () => string;
   readonly networkId: () => string;
   readonly render: (status: WalletStatus) => Promise<void>;
+  /** Overrides first-run `recoverAccounts` — the in-wallet seed import commits here. */
+  readonly restore?: (
+    mnemonic: string,
+    networkId: string,
+    selections: readonly RecoveryAccountSelection[],
+  ) => Promise<unknown>;
   readonly vaultPassphrase: () => string;
   readonly wallet: SidepanelWallet;
 };
@@ -32,16 +40,28 @@ const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelec
   accountIndex: candidate.account.derivation.accountIndex,
 });
 
-const candidateState = (candidate: RecoveryAccountCandidate): string =>
-  candidate.deployed
-    ? "Deployed on Starknet"
-    : candidate.funded
-      ? "Funded and ready to deploy"
-      : "No on-chain activity found";
+const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string =>
+  duplicate
+    ? "Already in this wallet"
+    : candidate.deployed
+      ? "Deployed on Starknet"
+      : candidate.funded
+        ? "Funded and ready to deploy"
+        : candidate.account.accountContractType === "argent"
+          ? "No on-chain activity found — Bramble only imports existing Ready accounts"
+          : "No on-chain activity found";
+
+// Bramble creates only Bramble accounts: a Ready candidate with no on-chain
+// history would be a brand-new Ready deployment, so it is listed but not
+// selectable. Deployed or funded (counterfactual) Ready accounts stay
+// importable.
+const selectable = (candidate: RecoveryAccountCandidate): boolean =>
+  candidate.account.accountContractType !== "argent" || candidate.deployed || candidate.funded;
 
 /** Binds and runs the recovery account picker without retaining the phrase. */
 export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAccountUi => {
-  const list = deps.form.querySelector<HTMLUListElement>("#recovery-account-list");
+  const groupFor = (contractType: "argent" | "openzeppelin"): HTMLDetailsElement | null =>
+    deps.form.querySelector<HTMLDetailsElement>(`[data-recovery-group="${contractType}"]`);
   const status = deps.form.querySelector<HTMLElement>("#recovery-scan-status");
   const result = deps.form.querySelector<HTMLElement>("#recovery-accounts-result");
   const retry = deps.form.querySelector<HTMLButtonElement>("#recovery-scan-retry");
@@ -63,42 +83,65 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     if (restore) restore.disabled = selected.size === 0 || !acknowledgement?.checked;
   };
 
+  const candidateRow = (candidate: RecoveryAccountCandidate): HTMLLIElement => {
+    const key = selectionKey(selectionFor(candidate));
+    const duplicate = deps.existingIds?.().has(candidate.account.id) ?? false;
+    const row = deps.form.ownerDocument.createElement("li");
+    row.className = "allowance-row";
+    const label = deps.form.ownerDocument.createElement("label");
+    label.className = "select-row";
+    const checkbox = deps.form.ownerDocument.createElement("input");
+    checkbox.className = "select-check";
+    checkbox.type = "checkbox";
+    checkbox.disabled = duplicate || !selectable(candidate);
+    checkbox.checked = !duplicate && selected.has(key);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) selected.add(key);
+      else selected.delete(key);
+      refreshGate();
+    });
+    const copy = deps.form.ownerDocument.createElement("span");
+    copy.className = "allowance-copy";
+    const title = deps.form.ownerDocument.createElement("strong");
+    title.textContent = `Account ${candidate.account.derivation.accountIndex}`;
+    const address = deps.form.ownerDocument.createElement("code");
+    address.textContent = accountLabel(candidate.account.address);
+    address.title = candidate.account.address;
+    const hint = deps.form.ownerDocument.createElement("span");
+    hint.className = "hint";
+    hint.textContent = candidateState(candidate, duplicate);
+    copy.append(title, address, hint);
+    label.append(checkbox, copy);
+    row.append(label);
+    return row;
+  };
+
+  // Rebuilds only each group's inner list and detected-count, leaving the
+  // <details> shells (and the user's open/closed choices) untouched. A group
+  // opens itself the first time detected activity appears in it.
+  const autoOpened = new Set<string>();
   const renderCandidates = (): void => {
-    list?.replaceChildren();
-    for (const candidate of [...candidates].sort(
-      (left, right) =>
-        left.account.derivation.accountIndex - right.account.derivation.accountIndex ||
-        right.account.accountContractType.localeCompare(left.account.accountContractType),
-    )) {
-      const selection = selectionFor(candidate);
-      const key = selectionKey(selection);
-      const row = deps.form.ownerDocument.createElement("li");
-      row.className = "allowance-row";
-      const label = deps.form.ownerDocument.createElement("label");
-      label.className = "select-row";
-      const checkbox = deps.form.ownerDocument.createElement("input");
-      checkbox.className = "select-check";
-      checkbox.type = "checkbox";
-      checkbox.checked = selected.has(key);
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) selected.add(key);
-        else selected.delete(key);
-        refreshGate();
-      });
-      const copy = deps.form.ownerDocument.createElement("span");
-      copy.className = "allowance-copy";
-      const title = deps.form.ownerDocument.createElement("strong");
-      title.textContent = `${candidate.account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"} account ${selection.accountIndex}`;
-      const address = deps.form.ownerDocument.createElement("code");
-      address.textContent = accountLabel(candidate.account.address);
-      address.title = candidate.account.address;
-      const hint = deps.form.ownerDocument.createElement("span");
-      hint.className = "hint";
-      hint.textContent = candidateState(candidate);
-      copy.append(title, address, hint);
-      label.append(checkbox, copy);
-      row.append(label);
-      list?.append(row);
+    for (const contractType of ["openzeppelin", "argent"] as const) {
+      const group = groupFor(contractType);
+      const listElement = group?.querySelector("ul");
+      if (!group || !listElement) continue;
+      const rows = [...candidates]
+        .filter((candidate) => candidate.account.accountContractType === contractType)
+        .sort(
+          (left, right) =>
+            left.account.derivation.accountIndex - right.account.derivation.accountIndex,
+        );
+      listElement.replaceChildren(...rows.map(candidateRow));
+      const detected = rows.filter((candidate) => candidate.deployed || candidate.funded).length;
+      const detectedSlot = group.querySelector<HTMLElement>("[data-detected]");
+      if (detectedSlot) {
+        detectedSlot.className = "hint";
+        detectedSlot.textContent = accountsDetectedText(detected);
+      }
+      if (detected > 0 && !autoOpened.has(contractType)) {
+        autoOpened.add(contractType);
+        group.open = true;
+      }
     }
     refreshGate();
   };
@@ -106,7 +149,10 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const apply = (next: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>): void => {
     for (const candidate of next.candidates) {
       const key = selectionKey(selectionFor(candidate));
-      if (!seen.has(key) && (candidate.deployed || candidate.funded)) selected.add(key);
+      const duplicate = deps.existingIds?.().has(candidate.account.id) ?? false;
+      if (!seen.has(key) && !duplicate && (candidate.deployed || candidate.funded)) {
+        selected.add(key);
+      }
       seen.add(key);
     }
     candidates = next.candidates;
@@ -142,7 +188,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       if (generation !== activeGeneration) return;
       const message = errorMessage(error, "Account search paused. Check the network and retry.");
       if (status) status.textContent = message;
-      showToast(message, "error", list);
+      showToast(message, "error", deps.form);
     } finally {
       scanning = false;
       buttonBusy(activeButton, false);
@@ -179,11 +225,14 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     if (selections.length === 0 || !acknowledgement?.checked) return;
     buttonBusy(restore, true);
     if (result) result.textContent = "Restoring the selected accounts into your encrypted vault…";
-    void deps.wallet
-      .recoverAccounts(deps.mnemonic(), deps.networkId(), deps.vaultPassphrase(), selections)
-      .then(async (accounts) => {
+    const commit =
+      deps.restore ??
+      ((mnemonic: string, networkId: string, picks: readonly RecoveryAccountSelection[]) =>
+        deps.wallet.recoverAccounts(mnemonic, networkId, deps.vaultPassphrase(), picks));
+    void commit(deps.mnemonic(), deps.networkId(), selections)
+      .then(async () => {
         showToast(
-          `${accounts.length} account${accounts.length === 1 ? "" : "s"} restored`,
+          `${selections.length} account${selections.length === 1 ? "" : "s"} restored`,
           "success",
           restore,
         );

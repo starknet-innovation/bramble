@@ -4,10 +4,10 @@
  * tokens, and open a token's detail screen from a balance row.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";

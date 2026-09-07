@@ -19,9 +19,9 @@
  * marker that {@link UnlockSession.restore} refuses — so no later MV3 worker
  * resurrects a session the user revoked.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+import { WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
 const MAX_TTL_MS = 8 * 60 * 60 * 1000;

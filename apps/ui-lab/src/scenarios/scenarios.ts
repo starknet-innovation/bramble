@@ -4,7 +4,7 @@ import {
   nftDetailFlow,
   nftGalleryFlow,
   nftSendFlow,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 import {
   discoveredNft,
   invokeApproval,
@@ -171,7 +171,10 @@ const prepareNft =
                 ? [{ code: "address-poisoning", message: "Recipient resembles a recent address." }]
                 : [],
               requiresDeployment: false,
-              summaries: ["Transfer MC Test Collection #342", `Recipient ${RECIPIENT_ADDRESS}`],
+              summaries: [
+                "Transfer Bramble Test Collection #342",
+                `Recipient ${RECIPIENT_ADDRESS}`,
+              ],
             },
           };
         }

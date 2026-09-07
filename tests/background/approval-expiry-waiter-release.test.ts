@@ -12,9 +12,9 @@
  * runner too.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { errorForMessage, userRefusedOp } from "@mc-wallet/wallet-protocol/rpc-errors";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import { errorForMessage, userRefusedOp } from "@bramble/wallet-protocol/rpc-errors";
 import {
   APPROVAL_TTL_MS,
   createApprovalQueue,

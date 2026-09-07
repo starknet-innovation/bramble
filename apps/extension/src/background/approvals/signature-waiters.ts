@@ -8,7 +8,7 @@
  * queue's TTL expiry must release it too — see
  * {@link releaseWaitersOnApprovalDrop}, which the router context binds once.
  */
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { ApprovalQueue } from "./approvals";
 

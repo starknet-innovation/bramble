@@ -17,12 +17,12 @@
  * of granting an authority the real collaborator would not.
  */
 
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import { memoryMultisigStore } from "@mc-wallet/multisig/repository";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { type FeeEstimate, sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import { memoryMultisigStore } from "@bramble/multisig/repository";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import { createMemoryStore } from "@bramble/store/kv";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import { ec } from "starknet";
 import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
 import { createLedgerSignQueue } from "../../apps/extension/src/background/ledger/ledger-sign-queue";

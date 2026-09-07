@@ -4,8 +4,8 @@
  * reviewable and below the repository file-size ceiling.
  */
 import { describe, expect, test } from "bun:test";
-import { createOfficialStrk20Service } from "@mc-wallet/privacy/official-sdk-service";
-import { STARK_FIELD_PRIME } from "@mc-wallet/wallet-model/networks";
+import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
+import { STARK_FIELD_PRIME } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import {
   STRK20_SDK_ACCOUNT as account,

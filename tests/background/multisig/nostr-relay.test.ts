@@ -1,6 +1,6 @@
 /** Relay coordination stays pooled, recipient-bound, bounded, and deduplicated. */
 import { describe, expect, test } from "bun:test";
-import { MAX_NOSTR_BATCH_ITEMS } from "@mc-wallet/wallet-model/nostr";
+import { MAX_NOSTR_BATCH_ITEMS } from "@bramble/wallet-model/nostr";
 import {
   createNostrRelayTransport,
   MULTISIG_NOSTR_RELAYS,

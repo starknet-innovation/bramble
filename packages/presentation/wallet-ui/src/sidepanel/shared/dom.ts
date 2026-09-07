@@ -3,8 +3,8 @@
  * and the audited fragment sink. Focus preservation across repaints lives in
  * ./focus-memo.
  */
-import { friendlyNetworkError } from "@mc-wallet/core/network-error";
-import { resolveSpring } from "@mc-wallet/ui-kit/spring";
+import { friendlyNetworkError } from "@bramble/core/network-error";
+import { resolveSpring } from "@bramble/ui-kit/spring";
 import { friendlyError } from "../runtime/friendly-error";
 import { icon } from "./icons";
 import { animate } from "./motion";

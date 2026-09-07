@@ -1,15 +1,15 @@
 /** Durable last-known NFT ownership snapshots for low-latency gallery hydration. */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { type DiscoveredNft, isDiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
-import { isStarknetNetworkId, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { type DiscoveredNft, isDiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
+import { isStarknetNetworkId, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 
 /**
  * Public browser-storage key for bounded NFT ownership snapshots.
  */
-export const NFT_SNAPSHOTS_KEY = "mc-wallet:nft-snapshots";
+export const NFT_SNAPSHOTS_KEY = "bramble:nft-snapshots";
 const MAX_SNAPSHOTS = 100;
 
 /**

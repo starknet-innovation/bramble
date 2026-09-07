@@ -8,14 +8,14 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type { OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { SignHashInput, WalletStatus } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { OriginGuard } from "@bramble/permissions/blocklist";
+import type { Strk20Service } from "@bramble/privacy/service";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import type { SignHashInput, WalletStatus } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { ec } from "starknet";
 import type { LedgerSignQueue } from "../../../apps/extension/src/background/ledger/ledger-sign-queue";
 import { executeStrk20InvokeApproval } from "../../../apps/extension/src/background/privacy/strk20-approval-execution";
@@ -112,9 +112,10 @@ const walletStub = (
       accounts: [account],
       accountSecrets: [],
       activeAccountId: account.id,
+      importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 7 as const,
+      schemaVersion: 8 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

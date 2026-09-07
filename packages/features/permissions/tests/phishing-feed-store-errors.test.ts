@@ -5,11 +5,8 @@
  * exercise the two best-effort .catch handlers on the storage boundary.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  createPhishingFeed,
-  type PhishingFeedResponse,
-} from "@mc-wallet/permissions/phishing-feed";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
+import { createPhishingFeed, type PhishingFeedResponse } from "@bramble/permissions/phishing-feed";
+import type { KeyValueStore } from "@bramble/store/kv";
 
 const okResponse = (body: unknown): PhishingFeedResponse => ({ json: async () => body, ok: true });
 

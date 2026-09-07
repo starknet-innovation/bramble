@@ -7,8 +7,8 @@
  * before telling the page anything, so events never leak wallet state to
  * unconnected sites.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isHexChainId } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isHexChainId } from "@bramble/wallet-model/networks";
 import { PAGE_TARGET } from "./bridge";
 
 /**

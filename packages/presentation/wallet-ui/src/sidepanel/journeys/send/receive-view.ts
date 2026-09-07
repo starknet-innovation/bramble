@@ -1,9 +1,9 @@
 /** Shared account-address surface used by single-owner and multisig Receive. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { icon } from "@mc-wallet/ui-kit/icons";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import { walletContactCard } from "@mc-wallet/wallet-model/preferences";
+import { escapeHtml } from "@bramble/core/html";
+import { button } from "@bramble/ui-kit/controls";
+import { icon } from "@bramble/ui-kit/icons";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import { walletContactCard } from "@bramble/wallet-model/preferences";
 import { accountLabel, copyButton } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";

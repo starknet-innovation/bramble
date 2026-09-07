@@ -1,5 +1,5 @@
-import type { PendingApproval } from "@mc-wallet/wallet-ui/lab";
-import { bindApprovals, createSidepanelRuntime } from "@mc-wallet/wallet-ui/lab";
+import type { PendingApproval } from "@bramble/wallet-ui/lab";
+import { bindApprovals, createSidepanelRuntime } from "@bramble/wallet-ui/lab";
 import { invokeApproval, watchAssetApproval } from "../fixtures/fixtures";
 import { approvalFixtures } from "../fixtures/journey-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";

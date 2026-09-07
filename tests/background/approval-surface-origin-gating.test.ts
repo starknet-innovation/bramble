@@ -6,13 +6,13 @@
  * able to re-open it on every message it sends.
  */
 import { describe, expect, test } from "bun:test";
-import { createOriginGuard, DEFAULT_ORIGIN_GUARD } from "@mc-wallet/permissions/blocklist";
+import { createOriginGuard, DEFAULT_ORIGIN_GUARD } from "@bramble/permissions/blocklist";
 import {
   type ApprovalSurfaceDeps,
   createApprovalSurfaceOpener,
 } from "../../apps/extension/src/background/approvals/approval-surface";
 
-// A domain on the bundled baseline blocklist in @mc-wallet/permissions/blocklist.
+// A domain on the bundled baseline blocklist in @bramble/permissions/blocklist.
 const BLOCKED_BASELINE = "https://starknet-airdrop.com";
 const HONEST_ORIGIN = "https://dapp.example";
 

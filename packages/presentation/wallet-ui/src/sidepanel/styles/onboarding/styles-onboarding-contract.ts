@@ -1,7 +1,7 @@
 /**
  * Account-contract choice rows shared by software and Ledger onboarding.
  */
-import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Account-contract selector stylesheet fragment.
@@ -10,9 +10,9 @@ export const ONBOARDING_CONTRACT_STYLES = `
   .onboarding-contract-options { display: grid; gap: ${SPACE.sm}; }
   .onboarding-contract {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: grid;
     gap: ${SPACE.md};
     grid-template-columns: minmax(0, 1fr) 32px;
@@ -24,25 +24,25 @@ export const ONBOARDING_CONTRACT_STYLES = `
   }
   .onboarding-contract-copy { display: grid; gap: ${SPACE.xs}; min-width: 0; }
   .onboarding-contract-copy > span:last-child {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
   }
   .onboarding-contract-title { align-items: center; display: flex; flex-wrap: wrap; gap: ${SPACE.sm}; }
   .onboarding-contract-title strong { font-size: ${TYPE.body.size}; font-weight: ${WEIGHT.semibold}; }
   .onboarding-contract-title > span {
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};
     font-weight: ${WEIGHT.semibold};
     padding: 3px ${SPACE.sm};
   }
   .onboarding-contract-check {
     align-items: center;
-    background: var(--mc-text);
+    background: var(--bramble-text);
     border-radius: ${RADIUS.full};
-    color: var(--mc-bg);
+    color: var(--bramble-bg);
     display: flex;
     height: 28px;
     justify-content: center;
@@ -59,10 +59,10 @@ export const ONBOARDING_CONTRACT_STYLES = `
     transform: scale(0.92);
   }
   .onboarding-contract[aria-pressed="true"] {
-    background: var(--mc-soft-press);
-    box-shadow: var(--mc-elev-sm);
+    background: var(--bramble-soft-press);
+    box-shadow: var(--bramble-elev-sm);
   }
   .onboarding-contract[aria-pressed="true"] .onboarding-contract-copy > span:last-child {
-    color: var(--mc-text);
+    color: var(--bramble-text);
   }
 `;

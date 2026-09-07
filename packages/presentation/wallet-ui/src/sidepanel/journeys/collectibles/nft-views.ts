@@ -10,15 +10,15 @@
  * Detail sends through the verified invoke path.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { NftAttribute } from "@mc-wallet/portfolio/nft-metadata";
-import type { WatchedNft } from "@mc-wallet/portfolio/watched-nft";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { NftAttribute } from "@bramble/portfolio/nft-metadata";
+import type { WatchedNft } from "@bramble/portfolio/watched-nft";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { textField } from "@bramble/ui-kit/fields";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { DiscoveredNft, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {

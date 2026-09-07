@@ -4,13 +4,13 @@
  * the `DiscoveredNft` shape itself is defined once in the portfolio package
  * and re-exported here so page code has a single import path.
  */
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
-import { type DiscoveredNft, isDiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import { type DiscoveredNft, isDiscoveredNft } from "@bramble/portfolio/nft-metadata";
 
 /**
  * Re-exported discovered-NFT shape so page code has one import path for it.
  */
-export type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
+export type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 
 /**
  * Auto-discovered NFTs accepted from the background boundary.

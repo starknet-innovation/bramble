@@ -1,12 +1,7 @@
 /**
  * Resource-bounded normalization for untrusted provider request parameters.
  */
-import {
-  JSON_BUDGETS,
-  type Json,
-  type JsonBudget,
-  normalizeFeltBigints,
-} from "@mc-wallet/core/json";
+import { JSON_BUDGETS, type Json, type JsonBudget, normalizeFeltBigints } from "@bramble/core/json";
 
 const budgetForMethod = (method: string): JsonBudget =>
   method === "wallet_addDeclareTransaction"

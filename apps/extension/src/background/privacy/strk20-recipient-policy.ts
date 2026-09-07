@@ -15,14 +15,14 @@
  * recipient in the batch mimics an address this account trusts.
  */
 
-import { strk20CallToInvoke } from "@mc-wallet/privacy/service";
+import { strk20CallToInvoke } from "@bramble/privacy/service";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 
 /**

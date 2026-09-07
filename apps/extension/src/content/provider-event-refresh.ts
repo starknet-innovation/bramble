@@ -3,7 +3,7 @@ import {
   type ProviderEvent,
   pageEventsFor,
   type WalletEventMessage,
-} from "@mc-wallet/wallet-protocol/events";
+} from "@bramble/wallet-protocol/events";
 
 /**
  * Content-script event refresh capability. Enqueue accepts only validated

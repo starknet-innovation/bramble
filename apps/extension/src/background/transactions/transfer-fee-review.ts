@@ -1,8 +1,8 @@
 /** Separate invoke/deployment fee review for wallet-funded direct transfers. */
 
-import { type FeeEstimate, sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
-import type { FeeSpeed } from "@mc-wallet/starknet/rpc-submit";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import type { FeeSpeed } from "@bramble/starknet/rpc-submit";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { Call } from "starknet";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 

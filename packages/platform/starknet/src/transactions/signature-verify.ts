@@ -2,8 +2,8 @@
  * Host-side Stark signature verification against an x-only account public key.
  * This is a public-key operation: it never signs or derives secret material.
  */
-import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
-import type { DeviceSignature } from "@mc-wallet/wallet-model/signing";
+import { isStarkFieldElement } from "@bramble/wallet-model/networks";
+import type { DeviceSignature } from "@bramble/wallet-model/signing";
 import { ec } from "starknet";
 
 const { starkCurve } = ec;

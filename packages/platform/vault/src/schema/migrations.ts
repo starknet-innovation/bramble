@@ -1,14 +1,14 @@
 /**
  * Pure vault migrations. Every branch must be deterministic and tested.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
 import {
   canonicalAccountId,
   canonicalLegacyAccountRef,
   type LegacyAccountRef,
-} from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/accounts";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 import {
   CURRENT_SCHEMA_VERSION,
   isVaultV1,
@@ -18,6 +18,7 @@ import {
   isVaultV5,
   isVaultV6,
   isVaultV7,
+  isVaultV8,
   type Vault,
   type VaultV4,
   type VaultV5,
@@ -125,7 +126,7 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
   },
   {
     fromVersion: 6,
-    // MC Wallet's first Argent account release derived every address with the
+    // Bramble's first Argent account release derived every address with the
     // public key as its salt. Retain that exact historical convention while
     // allowing later imports to carry an explicit upstream deployment salt.
     migrate(value) {
@@ -135,6 +136,19 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
       return withArgentDeploymentSalts(value);
     },
     toVersion: 7,
+  },
+  {
+    fromVersion: 7,
+    // Multi-seed support: the vault gains an (initially empty) imported-seeds
+    // collection; every existing HD account keeps deriving from the founding
+    // phrase, so no account record changes.
+    migrate(value) {
+      if (!isVaultV7(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, importedSeeds: [], schemaVersion: 8 };
+    },
+    toVersion: 8,
   },
 ];
 
@@ -219,7 +233,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV7(value)) {
+  if (isVaultV8(value)) {
     return value;
   }
 
@@ -237,7 +251,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV7(migrated)) {
+  if (!isVaultV8(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

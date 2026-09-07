@@ -1,13 +1,10 @@
 /** Supported account-contract address derivation at the vault boundary. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isRecord } from "@mc-wallet/core/json";
-import {
-  ARGENT_ACCOUNT_CONTRACT,
-  argentAccountAddress,
-} from "@mc-wallet/starknet/account-contracts";
-import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
+import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet/account-contracts";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
+import { isAccountContractType } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -15,7 +12,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type { KmsPort } from "../kms-port";
 
 const OZ_ACCOUNT_VERSION = "3.0.0";

@@ -5,10 +5,10 @@
  * through the frozen preparation.
  */
 import { describe, expect, test } from "bun:test";
-import type { Strk20Service, Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import type { Strk20Service, Strk20SubmissionPlan } from "@bramble/privacy/service";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { POISONED_RECIPIENT, poolPreferences } from "../../support/poisoned-recipients";
 import {
   buildStrk20Handler,

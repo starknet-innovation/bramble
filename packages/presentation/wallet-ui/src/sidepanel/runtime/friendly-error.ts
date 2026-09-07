@@ -5,8 +5,8 @@
  * isolation. Error toasts retain the original diagnostic for copying.
  */
 
-import { friendlyNetworkError } from "@mc-wallet/core/network-error";
-import { WRONG_CHAIN_MESSAGE } from "@mc-wallet/starknet/provider";
+import { friendlyNetworkError } from "@bramble/core/network-error";
+import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 
 /**
  * The result of classifying a raw error string for display.

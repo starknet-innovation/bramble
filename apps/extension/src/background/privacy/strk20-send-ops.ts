@@ -14,14 +14,14 @@ import {
   readStrk20Balances,
   readStrk20RegistrationStatus,
   summarizeStrk20Plan,
-} from "@mc-wallet/privacy/service";
-import { parseTokenAmount } from "@mc-wallet/starknet/rpc";
+} from "@bramble/privacy/service";
+import { parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { isStrk20Felt } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-model/networks";
+import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
 import { createApprovalContext } from "../approvals/approval-context";
 import { activeAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";

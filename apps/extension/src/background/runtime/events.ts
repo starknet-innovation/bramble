@@ -4,9 +4,9 @@
  * re-query what their origin may see before telling any page.
  */
 
-import { isRecord } from "@mc-wallet/core/json";
-import { isStarknetNetworkId, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+import { isRecord } from "@bramble/core/json";
+import { isStarknetNetworkId, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { WalletEventMessage } from "@bramble/wallet-protocol/events";
 
 const accountsChanged: WalletEventMessage = { event: "accountsChanged", type: "wallet.event" };
 const approvalsChanged: WalletEventMessage = { event: "approvalsChanged", type: "wallet.event" };
@@ -62,9 +62,11 @@ const BROADCAST_FACTORIES: Readonly<Record<string, BroadcastFactory>> = {
   "wallet.addLedgerAccount": createAccountBroadcast,
   "wallet.approveOrigin": approveOriginBroadcast,
   "wallet.createAccount": createAccountBroadcast,
+  "wallet.createKeyVault": createAccountBroadcast,
   "wallet.createLedgerVault": createAccountBroadcast,
   "wallet.denyOrigin": () => [approvalsChanged],
   "wallet.importAccount": createAccountBroadcast,
+  "wallet.importSeedAccounts": createAccountBroadcast,
   "wallet.lock": () => [accountsChanged],
   "wallet.revokeOrigin": () => [accountsChanged],
   "wallet.setActiveAccount": () => [accountsChanged],

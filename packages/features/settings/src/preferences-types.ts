@@ -2,10 +2,10 @@
  * Public schema and capability types for the plain preferences store.
  */
 
-import type { WatchedNft } from "@mc-wallet/portfolio/watched-nft";
-import type { Strk20NetworkConfig, Strk20NetworkConfigs } from "@mc-wallet/privacy/config";
-import type { CustomNetwork } from "@mc-wallet/wallet-model/custom-network";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import type { WatchedNft } from "@bramble/portfolio/watched-nft";
+import type { Strk20NetworkConfig, Strk20NetworkConfigs } from "@bramble/privacy/config";
+import type { CustomNetwork } from "@bramble/wallet-model/custom-network";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type {
   AccountLabels,
   AddressBookEntry,
@@ -16,7 +16,7 @@ import type {
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
-} from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/preferences";
 import type { AccountGroupIcon, AccountGroups } from "./groups";
 
 /**

@@ -1,6 +1,6 @@
 /** Argent multisig management screens expose guided, bounded account controls. */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { multisigAccountOptions } from "../../../../src/sidepanel/journeys/multisig/multisig-account-options";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import {
@@ -96,7 +96,7 @@ describe("Argent multisig management views", () => {
     ).toContain("Check the network and retry");
     expect(multisigReceiveFlow(fixture.status, null)).toContain("no longer watched");
     expect(multisigReceiveFlow(fixture.status, fixture.view)).toContain(fixture.record.address);
-    expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched Argent multisig");
+    expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched Ready multisig");
     expect(multisigTrackFlow(fixture.status, fixture.view)).toContain('id="multisig-track-form"');
 
     const options = multisigAccountOptions(

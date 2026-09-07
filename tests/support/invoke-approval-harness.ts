@@ -4,10 +4,10 @@
  * not drift on their security boundary setup.
  */
 
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import { type ActivityLog, memoryActivityLog } from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import { type ActivityLog, memoryActivityLog } from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
@@ -66,9 +66,10 @@ export const invokeWalletStub = (connected: readonly AccountRef[]) => ({
       accounts: [invokeAccount],
       accountSecrets: [],
       activeAccountId: invokeAccount.id,
+      importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [invokeAccount.id], origin: invokeOrigin }],
-      schemaVersion: 7 as const,
+      schemaVersion: 8 as const,
       signingKeys: [{ accountId: invokeAccount.id, privateKey: "0x123456" }],
     };
   },

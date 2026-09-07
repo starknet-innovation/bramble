@@ -23,14 +23,10 @@
  * simply shows the empty state and the manual watch form.
  */
 
-import {
-  type BoundedHttpFetch,
-  fetchBoundedJson,
-  HTTP_BODY_LIMITS,
-} from "@mc-wallet/core/http-json";
-import { isRecord } from "@mc-wallet/core/json";
-import { trimTrailingSlashes } from "@mc-wallet/core/service-url";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { type BoundedHttpFetch, fetchBoundedJson, HTTP_BODY_LIMITS } from "@bramble/core/http-json";
+import { isRecord } from "@bramble/core/json";
+import { trimTrailingSlashes } from "@bramble/core/service-url";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { type DiscoveredNft, normalizeIndexerNft } from "./nft-metadata";
 
 /**

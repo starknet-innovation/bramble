@@ -6,16 +6,19 @@ collected. Chrome's current policy requires prominent disclosure for all data co
 
 ## Store listing
 
-- **Name:** MC Wallet
+- **Name:** Bramble: Starknet Wallet
 - **Category:** Productivity
 - **Primary language:** English
-- **Summary:** A self-custodial Starknet wallet for accounts, dapps, privacy and multisig, with a trusted-tester Ledger preview.
+- **Summary:** Self-custodial Starknet wallet with private balances, Ledger and multisig support.
+  - This is the manifest `description`, which the dashboard shows as "Summary (from
+    package)". Chrome caps it at 132 characters; the two must stay identical, so edit
+    both or neither.
 - **Single purpose:** Securely manage Starknet accounts and review, sign, and submit user-approved
   Starknet transactions from Chrome.
 
 ### Detailed description
 
-MC Wallet is a self-custodial Starknet wallet built for clear transaction review and resilient daily
+Bramble is a self-custodial Starknet wallet built for clear transaction review and resilient daily
 use. Create or recover OpenZeppelin and Argent accounts, inspect balances and activity, connect to
 dapps, send assets, swap tokens, and manage shared Argent multisig accounts.
 
@@ -25,7 +28,7 @@ reviewed in a trusted wallet surface before approval. Cached public data keeps t
 during temporary network disruption, while visible freshness indicators distinguish saved data from
 current network state.
 
-Reliability diagnostics are optional and off by default. If enabled, MC Wallet keeps only anonymous,
+Reliability diagnostics are optional and off by default. If enabled, Bramble keeps only anonymous,
 separate process-local counts for RPC endpoint classes and the optional Starkscan explorer service,
 with outcome classes and average latency. It never includes addresses, sites, hashes, calldata,
 endpoint URLs, or raw errors, and nothing is uploaded automatically. The user may download the
@@ -38,7 +41,7 @@ addresses, sites, balances, hashes, calldata, signatures, or request contents. T
 only keyed pseudonyms and bounded service/method outcomes for 90 days; disabling the setting stops
 every analytics header.
 
-MC Wallet is non-custodial software. Keep your recovery phrase offline. No maintainer or support
+Bramble is non-custodial software. Keep your recovery phrase offline. No maintainer or support
 agent will ask for it.
 
 ## Dashboard fields

@@ -31,131 +31,123 @@ type Workspace = {
 };
 
 const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
-  "@mc-wallet/extension": [
-    "@mc-wallet/core",
-    "@mc-wallet/kms-krusty",
-    "@mc-wallet/ledger-browser",
-    "@mc-wallet/ledger-protocol",
-    "@mc-wallet/multisig",
-    "@mc-wallet/permissions",
-    "@mc-wallet/portfolio",
-    "@mc-wallet/privacy",
-    "@mc-wallet/settings",
-    "@mc-wallet/starknet",
-    "@mc-wallet/store",
-    "@mc-wallet/transactions",
-    "@mc-wallet/ui-kit",
-    "@mc-wallet/vault",
-    "@mc-wallet/wallet-model",
-    "@mc-wallet/wallet-protocol",
-    "@mc-wallet/wallet-ui",
+  "@bramble/extension": [
+    "@bramble/core",
+    "@bramble/kms-krusty",
+    "@bramble/ledger-browser",
+    "@bramble/ledger-protocol",
+    "@bramble/multisig",
+    "@bramble/permissions",
+    "@bramble/portfolio",
+    "@bramble/privacy",
+    "@bramble/settings",
+    "@bramble/starknet",
+    "@bramble/store",
+    "@bramble/transactions",
+    "@bramble/ui-kit",
+    "@bramble/vault",
+    "@bramble/wallet-model",
+    "@bramble/wallet-protocol",
+    "@bramble/wallet-ui",
   ],
-  "@mc-wallet/core": [],
-  "@mc-wallet/kms-krusty": ["@mc-wallet/core", "@mc-wallet/vault", "@mc-wallet/wallet-model"],
-  "@mc-wallet/ledger-browser": [
-    "@mc-wallet/core",
-    "@mc-wallet/ledger-protocol",
-    "@mc-wallet/testkit",
-    "@mc-wallet/wallet-model",
+  "@bramble/core": [],
+  "@bramble/kms-krusty": ["@bramble/core", "@bramble/vault", "@bramble/wallet-model"],
+  "@bramble/ledger-browser": [
+    "@bramble/core",
+    "@bramble/ledger-protocol",
+    "@bramble/testkit",
+    "@bramble/wallet-model",
   ],
-  "@mc-wallet/ledger-protocol": [
-    "@mc-wallet/core",
-    "@mc-wallet/testkit",
-    "@mc-wallet/wallet-model",
+  "@bramble/ledger-protocol": ["@bramble/core", "@bramble/testkit", "@bramble/wallet-model"],
+  "@bramble/multisig": [
+    "@bramble/core",
+    "@bramble/starknet",
+    "@bramble/store",
+    "@bramble/wallet-model",
   ],
-  "@mc-wallet/multisig": [
-    "@mc-wallet/core",
-    "@mc-wallet/starknet",
-    "@mc-wallet/store",
-    "@mc-wallet/wallet-model",
+  "@bramble/permissions": ["@bramble/core", "@bramble/store"],
+  "@bramble/privacy": [
+    "@bramble/core",
+    "@bramble/starknet",
+    "@bramble/store",
+    "@bramble/wallet-model",
+    "@bramble/wallet-protocol",
   ],
-  "@mc-wallet/permissions": ["@mc-wallet/core", "@mc-wallet/store"],
-  "@mc-wallet/privacy": [
-    "@mc-wallet/core",
-    "@mc-wallet/starknet",
-    "@mc-wallet/store",
-    "@mc-wallet/wallet-model",
-    "@mc-wallet/wallet-protocol",
+  "@bramble/portfolio": ["@bramble/core", "@bramble/store", "@bramble/wallet-model"],
+  "@bramble/starknet": ["@bramble/core", "@bramble/wallet-model", "@bramble/wallet-protocol"],
+  "@bramble/settings": [
+    "@bramble/core",
+    "@bramble/portfolio",
+    "@bramble/privacy",
+    "@bramble/store",
+    "@bramble/wallet-model",
   ],
-  "@mc-wallet/portfolio": ["@mc-wallet/core", "@mc-wallet/store", "@mc-wallet/wallet-model"],
-  "@mc-wallet/starknet": [
-    "@mc-wallet/core",
-    "@mc-wallet/wallet-model",
-    "@mc-wallet/wallet-protocol",
+  "@bramble/store": ["@bramble/core"],
+  "@bramble/testkit": ["@bramble/settings", "@bramble/wallet-model"],
+  "@bramble/transactions": [
+    "@bramble/core",
+    "@bramble/starknet",
+    "@bramble/store",
+    "@bramble/wallet-model",
   ],
-  "@mc-wallet/settings": [
-    "@mc-wallet/core",
-    "@mc-wallet/portfolio",
-    "@mc-wallet/privacy",
-    "@mc-wallet/store",
-    "@mc-wallet/wallet-model",
+  "@bramble/ui-kit": ["@bramble/core", "@bramble/wallet-model"],
+  "@bramble/vault": [
+    "@bramble/core",
+    "@bramble/starknet",
+    "@bramble/store",
+    "@bramble/testkit",
+    "@bramble/wallet-model",
   ],
-  "@mc-wallet/store": ["@mc-wallet/core"],
-  "@mc-wallet/testkit": ["@mc-wallet/settings", "@mc-wallet/wallet-model"],
-  "@mc-wallet/transactions": [
-    "@mc-wallet/core",
-    "@mc-wallet/starknet",
-    "@mc-wallet/store",
-    "@mc-wallet/wallet-model",
+  "@bramble/terminal": [],
+  "@bramble/ui-lab": [
+    "@bramble/core",
+    "@bramble/ledger-protocol",
+    "@bramble/multisig",
+    "@bramble/privacy",
+    "@bramble/settings",
+    "@bramble/starknet",
+    "@bramble/transactions",
+    "@bramble/ui-kit",
+    "@bramble/wallet-ui",
+    "@bramble/wallet-model",
   ],
-  "@mc-wallet/ui-kit": ["@mc-wallet/core", "@mc-wallet/wallet-model"],
-  "@mc-wallet/vault": [
-    "@mc-wallet/core",
-    "@mc-wallet/starknet",
-    "@mc-wallet/store",
-    "@mc-wallet/testkit",
-    "@mc-wallet/wallet-model",
+  "@bramble/website": [],
+  "@bramble/wallet-model": ["@bramble/core"],
+  "@bramble/wallet-protocol": ["@bramble/core", "@bramble/wallet-model"],
+  "@bramble/wallet-ui": [
+    "@bramble/core",
+    "@bramble/ledger-protocol",
+    "@bramble/multisig",
+    "@bramble/portfolio",
+    "@bramble/privacy",
+    "@bramble/settings",
+    "@bramble/store",
+    "@bramble/starknet",
+    "@bramble/testkit",
+    "@bramble/transactions",
+    "@bramble/ui-kit",
+    "@bramble/wallet-model",
+    "@bramble/wallet-protocol",
   ],
-  "@mc-wallet/terminal": [],
-  "@mc-wallet/ui-lab": [
-    "@mc-wallet/core",
-    "@mc-wallet/ledger-protocol",
-    "@mc-wallet/multisig",
-    "@mc-wallet/privacy",
-    "@mc-wallet/settings",
-    "@mc-wallet/starknet",
-    "@mc-wallet/transactions",
-    "@mc-wallet/ui-kit",
-    "@mc-wallet/wallet-ui",
-    "@mc-wallet/wallet-model",
-  ],
-  "@mc-wallet/website": [],
-  "@mc-wallet/wallet-model": ["@mc-wallet/core"],
-  "@mc-wallet/wallet-protocol": ["@mc-wallet/core", "@mc-wallet/wallet-model"],
-  "@mc-wallet/wallet-ui": [
-    "@mc-wallet/core",
-    "@mc-wallet/ledger-protocol",
-    "@mc-wallet/multisig",
-    "@mc-wallet/portfolio",
-    "@mc-wallet/privacy",
-    "@mc-wallet/settings",
-    "@mc-wallet/store",
-    "@mc-wallet/starknet",
-    "@mc-wallet/testkit",
-    "@mc-wallet/transactions",
-    "@mc-wallet/ui-kit",
-    "@mc-wallet/wallet-model",
-    "@mc-wallet/wallet-protocol",
-  ],
-  "mc-wallet": [
-    "@mc-wallet/core",
-    "@mc-wallet/kms-krusty",
-    "@mc-wallet/ledger-browser",
-    "@mc-wallet/ledger-protocol",
-    "@mc-wallet/multisig",
-    "@mc-wallet/permissions",
-    "@mc-wallet/privacy",
-    "@mc-wallet/portfolio",
-    "@mc-wallet/starknet",
-    "@mc-wallet/store",
-    "@mc-wallet/settings",
-    "@mc-wallet/testkit",
-    "@mc-wallet/transactions",
-    "@mc-wallet/ui-kit",
-    "@mc-wallet/vault",
-    "@mc-wallet/wallet-ui",
-    "@mc-wallet/wallet-model",
-    "@mc-wallet/wallet-protocol",
+  bramble: [
+    "@bramble/core",
+    "@bramble/kms-krusty",
+    "@bramble/ledger-browser",
+    "@bramble/ledger-protocol",
+    "@bramble/multisig",
+    "@bramble/permissions",
+    "@bramble/privacy",
+    "@bramble/portfolio",
+    "@bramble/starknet",
+    "@bramble/store",
+    "@bramble/settings",
+    "@bramble/testkit",
+    "@bramble/transactions",
+    "@bramble/ui-kit",
+    "@bramble/vault",
+    "@bramble/wallet-ui",
+    "@bramble/wallet-model",
+    "@bramble/wallet-protocol",
   ],
 };
 
@@ -232,10 +224,10 @@ for (const workspace of workspaces) {
     if (!isExactVersion(version)) {
       failures.push(`${workspace.name} dependency ${dependency} must use an exact version`);
     }
-    if (dependency.startsWith("@mc-wallet/") && version !== "workspace:*") {
+    if (dependency.startsWith("@bramble/") && version !== "workspace:*") {
       failures.push(`${workspace.name} dependency ${dependency} must use workspace:*`);
     }
-    if (dependency.startsWith("@mc-wallet/")) {
+    if (dependency.startsWith("@bramble/")) {
       if (!byName.has(dependency)) {
         failures.push(`${workspace.name} declares unknown workspace ${dependency}`);
       }
@@ -309,7 +301,7 @@ const externalPackageName = (specifier: string): string | null => {
 };
 
 const isRuntimeSource = (workspace: Workspace, file: string): boolean => {
-  if (workspace.name === "mc-wallet" || workspace.name === "@mc-wallet/ui-lab") {
+  if (workspace.name === "bramble" || workspace.name === "@bramble/ui-lab") {
     return false;
   }
   const repositoryRelative = relative(resolve("."), resolve(file)).split(sep).join("/");
@@ -323,7 +315,7 @@ const isRuntimeSource = (workspace: Workspace, file: string): boolean => {
   ) {
     return false;
   }
-  const roots = workspace.name === "@mc-wallet/terminal" ? ["api", "shared", "src"] : ["src"];
+  const roots = workspace.name === "@bramble/terminal" ? ["api", "shared", "src"] : ["src"];
   return roots.some((root) => !isOutsideRoot(resolve(workspace.root, root), file));
 };
 
@@ -353,7 +345,7 @@ for (const workspace of workspaces) {
       if (specifier.startsWith("/")) {
         const runtimeFile = specifier.slice(1);
         if (
-          workspace.name !== "@mc-wallet/extension" ||
+          workspace.name !== "@bramble/extension" ||
           !PINNED_RUNTIME_FILES.includes(runtimeFile as (typeof PINNED_RUNTIME_FILES)[number])
         ) {
           failures.push(`${file} imports unpinned extension runtime file ${specifier}`);
@@ -376,7 +368,7 @@ for (const workspace of workspaces) {
         }
         continue;
       }
-      if (!specifier.startsWith("@mc-wallet/")) {
+      if (!specifier.startsWith("@bramble/")) {
         if (surfaceEdges) {
           failures.push(
             `${file} may not import external module ${specifier} from the ${extensionSurface} surface`,
@@ -414,9 +406,9 @@ for (const workspace of workspaces) {
         failures.push(`${file} may not import ${targetName} from the ${extensionSurface} surface`);
       }
       if (
-        specifier === "@mc-wallet/wallet-ui/lab" &&
+        specifier === "@bramble/wallet-ui/lab" &&
         productionSource &&
-        workspace.name !== "@mc-wallet/ui-lab"
+        workspace.name !== "@bramble/ui-lab"
       ) {
         failures.push(`${file} may not import the development-only Wallet UI lab surface`);
       }
@@ -427,7 +419,7 @@ for (const workspace of workspaces) {
       if (targetName === workspace.name) {
         continue;
       }
-      if (targetName === "@mc-wallet/testkit" && productionSource) {
+      if (targetName === "@bramble/testkit" && productionSource) {
         failures.push(`${file} may not import the testkit from production source`);
       }
       edges.add(targetName);

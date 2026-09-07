@@ -28,8 +28,8 @@
  * the value alone, with no declared type and no encoded felt beside it.
  */
 import { describe, expect, test } from "bun:test";
-import { type Snip12Scalar, snip12Scalar } from "@mc-wallet/starknet/snip12-scalars";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { type Snip12Scalar, snip12Scalar } from "@bramble/starknet/snip12-scalars";
+import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
 import { signRequestView } from "../../../../src/sidepanel/shared/sign-request";
 import {
   SIGNED_DOMAIN_LABEL,
@@ -59,13 +59,13 @@ const REV0_DOMAIN = [{ name: "name", type: "felt" }];
 const envelope = (revision: Revision, type: string, value: unknown): unknown =>
   revision === "1"
     ? {
-        domain: { name: "MC Test", revision: "1" },
+        domain: { name: "Bramble Test", revision: "1" },
         message: { v: value },
         primaryType: "Msg",
         types: { Msg: [{ name: "v", type }], StarknetDomain: REV1_DOMAIN },
       }
     : {
-        domain: { name: "MC Test" },
+        domain: { name: "Bramble Test" },
         message: { v: value },
         primaryType: "Msg",
         types: { Msg: [{ name: "v", type }], StarkNetDomain: REV0_DOMAIN },

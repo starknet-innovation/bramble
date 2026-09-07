@@ -3,8 +3,8 @@
 Static public website for Bramble, the Starknet browser-extension wallet.
 
 ```bash
-bun run --filter @mc-wallet/website dev
-bun run --filter @mc-wallet/website check
+bun run --filter @bramble/website dev
+bun run --filter @bramble/website check
 ```
 
 The Vite build writes `apps/website/dist/` with real `/`, `/docs/`, `/support/`, and `/privacy/`
@@ -98,8 +98,8 @@ deploys the assets and then fails. The account id is public and lives in the wor
 To deploy by hand from an authenticated shell, run the same commands the workflow does:
 
 ```bash
-bun run --filter @mc-wallet/website check
-bun run --filter @mc-wallet/website deploy
+bun run --filter @bramble/website check
+bun run --filter @bramble/website deploy
 ```
 
 Keep `name` in `wrangler.jsonc` as `bramble`: a different name deploys a new Worker and leaves the

@@ -13,7 +13,7 @@
  * rather than only as a hover title.
  */
 
-import type { SendRouteResolution, ValueBucket } from "@mc-wallet/transactions/send-routes";
+import type { SendRouteResolution, ValueBucket } from "@bramble/transactions/send-routes";
 import { compactAmount } from "../portfolio/token-row";
 import { sendFormInput } from "./transfer-compose-ui";
 

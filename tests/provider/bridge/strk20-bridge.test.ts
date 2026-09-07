@@ -9,8 +9,8 @@ import {
   readProviderResponse,
   toProviderPayload,
   toRuntimeMessage,
-} from "@mc-wallet/wallet-protocol/bridge";
-import { readProviderParams } from "@mc-wallet/wallet-protocol/request-params";
+} from "@bramble/wallet-protocol/bridge";
+import { readProviderParams } from "@bramble/wallet-protocol/request-params";
 
 const origin = "https://example.com";
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -30,7 +30,7 @@ const callAndProof = {
 };
 
 describe("strk20 bridge params", () => {
-  test("maps the MC registration capability without accepting parameters", () => {
+  test("maps the legacy registration capability without accepting parameters", () => {
     expect(toRuntimeMessage(request("mc_strk20Register"), origin)).toEqual({
       origin,
       type: "wallet.strk20Register",

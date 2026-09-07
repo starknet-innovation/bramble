@@ -5,10 +5,10 @@
  * while Ledger projections remain keyless.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { type AccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { type AccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { KmsPort } from "../kms-port";
 import type { SigningKeyRef, Vault } from "../schema/schema";
 import { deriveAccountContractAddress, deriveLedgerAccount, sameWalletKey } from "./accounts";

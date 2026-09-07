@@ -1,7 +1,7 @@
 /**
  * Browser-owned Ledger device/session capability types.
  */
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
 
 /**
  * A live device client paired with mandatory transport teardown.

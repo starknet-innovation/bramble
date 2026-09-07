@@ -91,7 +91,7 @@ jobs:
       # `check` runs the website's typecheck, lint, unit tests, and production
       # build, so a green step here is also the `dist/` that gets deployed.
       - name: Check and build website
-        run: bun run --filter @mc-wallet/website check
+        run: bun run --filter @bramble/website check
       - name: Deploy to Cloudflare Workers
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -101,7 +101,7 @@ jobs:
             echo "::error::CLOUDFLARE_API_TOKEN is not configured for the bramble-production environment; refusing to deploy."
             exit 1
           fi
-          bun run --filter @mc-wallet/website deploy
+          bun run --filter @bramble/website deploy
       - name: Deployment summary
         if: success()
         run: |

@@ -6,9 +6,13 @@
  * payload never reaches the background.
  */
 import { describe, expect, test } from "bun:test";
-import { isRecord, type Json } from "@mc-wallet/core/json";
-import type { ProviderRequest, RuntimeMessage } from "@mc-wallet/wallet-protocol/bridge";
-import { readProviderRequestArguments, toRuntimeMessage } from "@mc-wallet/wallet-protocol/bridge";
+import { isRecord, type Json } from "@bramble/core/json";
+import type { ProviderRequest, RuntimeMessage } from "@bramble/wallet-protocol/bridge";
+import {
+  misaddressedProviderResponse,
+  readProviderRequestArguments,
+  toRuntimeMessage,
+} from "@bramble/wallet-protocol/bridge";
 import { ORIGIN, REQUEST_ID, SPEC_METHODS } from "./wallet-rpc-spec";
 
 const isApiVersionOnly = (params: Json | undefined): boolean =>
@@ -80,4 +84,61 @@ describe("wallet_rpc request mapping", () => {
       }
     });
   }
+});
+
+describe("misaddressedProviderResponse", () => {
+  const id = "6f2d16aa-1111-4222-8333-944444444444";
+
+  test("answers a bridge-addressed message with an invalid body", () => {
+    const rejection = {
+      error: { code: 114, message: "The request payload is invalid" },
+      id,
+      target: "bramble:page",
+    } as const;
+    // The page's pending promise must reject deterministically, never hang:
+    // an unsupported method name (a dapp speaking a newer wallet API) …
+    expect(
+      misaddressedProviderResponse({
+        id,
+        method: "wallet_futureMethod",
+        params: {},
+        target: "bramble:content",
+      }),
+    ).toEqual(rejection);
+    // … an unexpected extra key, and params the felt normalizer refuses.
+    expect(
+      misaddressedProviderResponse({
+        extra: true,
+        id,
+        method: "wallet_requestChainId",
+        target: "bramble:content",
+      }),
+    ).toEqual(rejection);
+    expect(
+      misaddressedProviderResponse({
+        id,
+        method: "wallet_requestAccounts",
+        params: { note: "x".repeat(1_000_000) },
+        target: "bramble:content",
+      }),
+    ).toEqual(rejection);
+  });
+
+  test("stays silent for foreign traffic and for valid requests", () => {
+    // Foreign window traffic (wrong or missing target, malformed id) must
+    // never receive a response the page could correlate.
+    expect(misaddressedProviderResponse({ id, method: "x" })).toBeNull();
+    expect(
+      misaddressedProviderResponse({ id: "not-a-uuid", method: "x", target: "bramble:content" }),
+    ).toBeNull();
+    expect(misaddressedProviderResponse("junk")).toBeNull();
+    // A request readProviderRequest accepts is handled normally, not salvaged.
+    expect(
+      misaddressedProviderResponse({
+        id,
+        method: "wallet_requestChainId",
+        target: "bramble:content",
+      }),
+    ).toBeNull();
+  });
 });

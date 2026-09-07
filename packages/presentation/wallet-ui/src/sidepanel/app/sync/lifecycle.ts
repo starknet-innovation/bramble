@@ -1,6 +1,6 @@
 /** Browser lifecycle wiring for side-panel refreshes. */
 
-import { isWalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+import { isWalletEventMessage } from "@bramble/wallet-protocol/events";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import {
   type TransactionAlertReader,

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-labelledby="title description">
-  <title id="title">MC fixture collectible</title>
+  <title id="title">Bramble fixture collectible</title>
   <desc id="description">Geometric gray arches on a dark field, created only for the local UI lab.</desc>
   <rect width="800" height="800" fill="#0a0a0a"/>
   <circle cx="400" cy="400" r="300" fill="#151515" stroke="#2b2b2b" stroke-width="6"/>

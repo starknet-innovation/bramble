@@ -1,11 +1,11 @@
 /**
  * Transaction-alert response validation at the background-to-panel boundary.
  */
-import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isJson, isRecord } from "@bramble/core/json";
 import {
   MAX_TRANSACTION_ALERT_CHARACTERS,
   MAX_TRANSACTION_ALERTS_PER_DRAIN,
-} from "@mc-wallet/transactions/alerts";
+} from "@bramble/transactions/alerts";
 
 /**
  * Undelivered transaction failure notices drained from the activity log. Each

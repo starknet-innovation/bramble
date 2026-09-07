@@ -51,7 +51,7 @@ const files = (await walk(distDir)).map((path) => relative(distDir, path));
 if (files.join("\n") !== EXPECTED_RUNTIME_FILES.join("\n")) {
   throw new Error(`unexpected packaged files:\n${files.join("\n")}`);
 }
-const zipName = `mc-wallet-${manifest["version"]}.zip`;
+const zipName = `bramble-${manifest["version"]}.zip`;
 const zipPath = resolve(artifactDir, zipName);
 
 await run(["touch", "-t", reproducibleZipTime, ...files], distDir);

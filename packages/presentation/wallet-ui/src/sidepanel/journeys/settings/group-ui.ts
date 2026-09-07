@@ -6,7 +6,7 @@
  * collapsible picker panels, so the left drawer and the manage-accounts flow
  * drive identical group behaviour without duplication.
  */
-import { isAccountGroupIcon } from "@mc-wallet/settings/groups";
+import { isAccountGroupIcon } from "@bramble/settings/groups";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 

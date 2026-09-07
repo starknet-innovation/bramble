@@ -7,10 +7,10 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { typedDataHash } from "@mc-wallet/starknet/typed-data";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { typedDataHash } from "@bramble/starknet/typed-data";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import {

@@ -4,28 +4,28 @@
  * only, deny-by-default in ../routing/senders.ts) and follow the wallet's
  * execution contract: token addresses come from the user's TRACKED registry
  * (never from the UI message), AVNU responses are validated at the
- * @mc-wallet/transactions/avnu boundary, the COMPLETE built call set passes the
+ * @bramble/transactions/avnu boundary, the COMPLETE built call set passes the
  * intent policy gate in ../privacy/swap-build-policy.ts — against the router
  * address and swap selector the WALLET pins per network and the route calldata
- * DECODED against the pinned exchange ABI (@mc-wallet/transactions/avnu-route),
+ * DECODED against the pinned exchange ABI (@bramble/transactions/avnu-route),
  * not against anything the response asserts — plus the shared call verifier,
  * and signing happens only through the session-gated Krusty signer. Failure
  * behaviour: any validation, quote, build, or policy failure returns an error
  * response — nothing is signed on a path that could not be fully checked.
  */
 
-import type { TokenConfig } from "@mc-wallet/settings/preferences";
-import { formatTokenAmount, parseTokenAmount } from "@mc-wallet/starknet/rpc";
-import { avnuRouterAddress, type SwapService } from "@mc-wallet/transactions/avnu";
-import { reviewedMinBuyAmount } from "@mc-wallet/transactions/avnu-route";
+import type { TokenConfig } from "@bramble/settings/preferences";
+import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
+import { avnuRouterAddress, type SwapService } from "@bramble/transactions/avnu";
+import { reviewedMinBuyAmount } from "@bramble/transactions/avnu-route";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
-import { canonical, shortAddress } from "@mc-wallet/transactions/verify-decode";
-import { isApproveEntrypoint } from "@mc-wallet/transactions/verify-selectors";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/verify";
+import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
+import { isApproveEntrypoint } from "@bramble/transactions/verify-selectors";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { signerForContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import {
   approvalPayloadMatchesContext,

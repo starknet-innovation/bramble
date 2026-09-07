@@ -352,10 +352,10 @@ describe("activity feed", () => {
     });
   });
 
-  test("loadActivity returns an empty, non-degraded feed when the guard fails", async () => {
+  test("loadActivity reports unavailable history when the response guard fails", async () => {
     expect(await runtimeReturning(errorEnvelope).loadActivity()).toEqual({
       entries: [],
-      historyUnavailable: false,
+      historyUnavailable: true,
     });
   });
 });

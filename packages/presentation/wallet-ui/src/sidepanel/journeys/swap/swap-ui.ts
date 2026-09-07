@@ -8,13 +8,13 @@
  * overwrite a newer amount's quote. Templates live in ./swap-views.ts.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { isLikelySpam } from "@mc-wallet/portfolio/token-registry";
+import { escapeHtml } from "@bramble/core/html";
+import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type {
   DisplayCurrency,
   TokenConfig,
   WalletPreferences,
-} from "@mc-wallet/settings/preferences";
+} from "@bramble/settings/preferences";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";

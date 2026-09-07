@@ -8,14 +8,14 @@ web
 
 ## Users
 
-MC Wallet serves people who manage Starknet accounts, assets, dApp requests, and hardware-wallet
+Bramble serves people who manage Starknet accounts, assets, dApp requests, and hardware-wallet
 signatures from Chrome. Its development and review surfaces also serve engineers, designers, and
 product reviewers who need to inspect difficult wallet states without moving real funds or walking
 through every preceding phase.
 
 ## Product Purpose
 
-MC Wallet is a Chrome Manifest V3 Starknet wallet that keeps account management, transfers,
+Bramble is a Chrome Manifest V3 Starknet wallet that keeps account management, transfers,
 signatures, dApp approvals, tokens, NFTs, allowances, and multisig work available in the browser
 side panel. Success means users can understand what the wallet is doing, verify sensitive actions,
 and complete them without losing context or crossing account, origin, or signing boundaries.
@@ -47,7 +47,7 @@ must never depend on a real vault, device, secret, signer, or broadcast.
 
 ## Brand Commitments
 
-The product name is MC Wallet. Product language is direct, calm, and specific about state, risk,
+The product name is Bramble. Product language is direct, calm, and specific about state, risk,
 and recovery. The established wallet interface is monochrome: neutral surfaces, ink, actions,
 focus, and selection, with color reserved for explicit success/positive and failure/danger
 semantics. Crisp hierarchy and purposeful motion carry emphasis, with complete reduced-motion

@@ -3,7 +3,7 @@
  * bridge. Keeping this union separate makes the capability surface easy to
  * compare with the enforced DAPP_MESSAGES allowlist.
  */
-import type { Json } from "@mc-wallet/core/json";
+import type { Json } from "@bramble/core/json";
 import type { Strk20Action, Strk20Proof } from "../privacy/strk20-bridge";
 import type { ProviderChain } from "../transactions/add-chain";
 import type { ProviderDeclare } from "../transactions/declare";

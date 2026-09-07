@@ -1,5 +1,5 @@
-import { receipt } from "@mc-wallet/ui-kit/content";
-import { balanceRow, transactionRow } from "@mc-wallet/wallet-ui/lab";
+import { receipt } from "@bramble/ui-kit/content";
+import { balanceRow, transactionRow } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
 import { balances, softwareActivity } from "../../fixtures/fixtures";
 import {

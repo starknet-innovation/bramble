@@ -4,8 +4,8 @@
  * looks the token up and threads its chart-derived price into tokenDetailFlow.
  */
 import { describe, expect, test } from "bun:test";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
 import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 import { tokenDetailFlow } from "../../../../src/sidepanel/journeys/portfolio/token-flows";

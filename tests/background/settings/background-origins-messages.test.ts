@@ -6,9 +6,9 @@
  * session.
  */
 import { describe, expect, test } from "bun:test";
-import { memoryOriginHistory } from "@mc-wallet/permissions/origin-history";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { memoryOriginHistory } from "@bramble/permissions/origin-history";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";

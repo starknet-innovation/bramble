@@ -4,7 +4,7 @@
  * Motion is reserved for active work and the final submitted receipt, with a
  * complete reduced-motion cut.
  */
-import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Send-flow stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -22,7 +22,7 @@ export const SEND_STYLES = `
   }
   .receive-intro h2 { font-size: ${TYPE.title.size}; margin: 0; }
   .receive-intro p {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
     margin: 0;
@@ -36,7 +36,7 @@ export const SEND_STYLES = `
   details.receive-identity {
     background: transparent;
     border-radius: 0;
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
   }
   details.receive-identity > summary { padding: 0; }
   .receive-identity .disclosure-body {
@@ -52,12 +52,12 @@ export const SEND_STYLES = `
     min-height: ${CONTROL.hit};
   }
   .receive-key-row + .receive-key-row {
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
     padding-top: ${SPACE.md};
   }
   .receive-key-row > strong { font-size: ${TYPE.label.size}; }
   .receive-key-row > [data-nostr-key-status] {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
     text-align: right;
@@ -108,7 +108,7 @@ export const SEND_STYLES = `
   }
   .send-progress li {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: grid;
     font-size: ${TYPE.micro.size};
     font-weight: ${WEIGHT.medium};
@@ -119,7 +119,7 @@ export const SEND_STYLES = `
     text-align: center;
   }
   .send-progress li + li::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     position: absolute;
@@ -129,12 +129,12 @@ export const SEND_STYLES = `
     z-index: 0;
   }
   .send-progress li[data-state="done"] + li::before,
-  .send-progress li[data-state="done"]::before { background: var(--mc-positive); }
+  .send-progress li[data-state="done"]::before { background: var(--bramble-positive); }
   .send-step-mark {
     align-items: center;
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     font-size: ${TYPE.micro.size};
     height: 26px;
@@ -144,15 +144,15 @@ export const SEND_STYLES = `
     width: 26px;
     z-index: 1;
   }
-  .send-progress li[data-state="active"] { color: var(--mc-text); font-weight: ${WEIGHT.semibold}; }
+  .send-progress li[data-state="active"] { color: var(--bramble-text); font-weight: ${WEIGHT.semibold}; }
   .send-progress li[data-state="active"] .send-step-mark {
-    background: var(--mc-accent);
-    color: var(--mc-bg);
+    background: var(--bramble-accent);
+    color: var(--bramble-bg);
     transform: scale(1.06);
   }
   .send-progress li[data-state="done"] .send-step-mark {
-    background: var(--mc-positive-soft);
-    color: var(--mc-positive);
+    background: var(--bramble-positive-soft);
+    color: var(--bramble-positive);
   }
   html[data-send-transition]::view-transition-old(root),
   html[data-send-transition]::view-transition-new(root) { animation: none; }
@@ -213,7 +213,7 @@ export const SEND_STYLES = `
   .send-actions { display: grid; gap: ${SPACE.sm}; }
   .send-actions > button:first-child { width: 100%; }
   .send-result {
-    color: var(--mc-danger);
+    color: var(--bramble-danger);
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.medium};
     margin: 0;
@@ -232,7 +232,7 @@ export const SEND_STYLES = `
   }
   .send-working-mark {
     align-items: center;
-    color: var(--mc-accent);
+    color: var(--bramble-accent);
     display: inline-flex;
     height: ${SIZE.brand};
     justify-content: center;
@@ -241,13 +241,13 @@ export const SEND_STYLES = `
   .send-working-copy { display: grid; gap: ${SPACE.sm}; max-width: 30ch; }
   .send-working-copy h2 { font-size: ${TYPE.title.size}; }
   .send-working-copy p {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.body.size};
     line-height: ${TYPE.body.line};
     margin: 0;
   }
   .send-task-list, .ledger-task-list {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     list-style: none;
@@ -258,7 +258,7 @@ export const SEND_STYLES = `
   }
   .send-task-list li {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     font-size: ${TYPE.label.size};
     gap: ${SPACE.md};
@@ -266,30 +266,30 @@ export const SEND_STYLES = `
     position: relative;
   }
   .send-task-list li + li::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto 24px;
     position: absolute;
   }
   .send-task-list li > span:first-child {
-    background: var(--mc-hairline-strong);
+    background: var(--bramble-hairline-strong);
     border-radius: ${RADIUS.full};
     flex: none;
     height: ${SPACE.sm};
     position: relative;
     width: ${SPACE.sm};
   }
-  .send-task-list li[data-state="done"] { color: var(--mc-text); }
-  .send-task-list li[data-state="done"] > span:first-child { background: var(--mc-positive); }
+  .send-task-list li[data-state="done"] { color: var(--bramble-text); }
+  .send-task-list li[data-state="done"] > span:first-child { background: var(--bramble-positive); }
   .send-task-list li[data-state="active"] {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font-weight: ${WEIGHT.semibold};
   }
-  .send-task-list li[data-state="active"] > span:first-child { background: var(--mc-accent); }
+  .send-task-list li[data-state="active"] > span:first-child { background: var(--bramble-accent); }
   .send-task-list li[data-state="active"] > span:first-child::after {
     animation: send-pulse 1100ms var(--ease-in-out) infinite;
-    background: var(--mc-accent-soft);
+    background: var(--bramble-accent-soft);
     border-radius: inherit;
     content: "";
     inset: 0;
@@ -309,7 +309,7 @@ export const SEND_STYLES = `
     min-height: 360px;
     text-align: center;
   }
-  .send-success-mark { color: var(--mc-positive); display: inline-flex; height: 72px; width: 72px; }
+  .send-success-mark { color: var(--bramble-positive); display: inline-flex; height: 72px; width: 72px; }
   .send-success-mark svg {
     fill: none;
     height: 100%;
@@ -334,7 +334,7 @@ export const SEND_STYLES = `
   .send-success-copy h2 { font-size: ${TYPE.display.size}; }
   .send-success-copy p { margin: 0; }
   .send-success-copy code {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: block;
     font-size: ${TYPE.micro.size};
     max-width: 30ch;
@@ -360,9 +360,9 @@ export const SEND_STYLES = `
   }
   .ledger-device-mark {
     align-items: center;
-    background: var(--mc-accent-soft);
+    background: var(--bramble-accent-soft);
     border-radius: ${RADIUS.full};
-    color: var(--mc-accent);
+    color: var(--bramble-accent);
     display: inline-flex;
     height: 64px;
     justify-content: center;
@@ -377,14 +377,14 @@ export const SEND_STYLES = `
   .ledger-progress-hero h2 { font-size: ${TYPE.title.size}; }
   .ledger-signer-line {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     flex-wrap: wrap;
     font-size: ${TYPE.caption.size};
     gap: 5px;
     justify-content: center;
   }
-  .ledger-signer-line code { color: var(--mc-text); }
+  .ledger-signer-line code { color: var(--bramble-text); }
   .ledger-signer-line span:last-child::before { content: "·"; margin-right: 5px; }
   .ledger-task-list {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -393,7 +393,7 @@ export const SEND_STYLES = `
   }
   .ledger-task-list li {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: grid;
     font-size: ${TYPE.micro.size};
     gap: 6px;
@@ -402,7 +402,7 @@ export const SEND_STYLES = `
   }
   .ledger-task-mark {
     align-items: center;
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.full};
     display: inline-flex;
     height: 24px;
@@ -410,12 +410,12 @@ export const SEND_STYLES = `
     width: 24px;
   }
   .ledger-task-mark .icon { height: 13px; width: 13px; }
-  .ledger-task-list li[data-state="active"] { color: var(--mc-text); font-weight: ${WEIGHT.semibold}; }
-  .ledger-task-list li[data-state="active"] .ledger-task-mark { background: var(--mc-accent); color: var(--mc-bg); }
-  .ledger-task-list li[data-state="done"] { color: var(--mc-text); }
-  .ledger-task-list li[data-state="done"] .ledger-task-mark { background: var(--mc-positive-soft); color: var(--mc-positive); }
+  .ledger-task-list li[data-state="active"] { color: var(--bramble-text); font-weight: ${WEIGHT.semibold}; }
+  .ledger-task-list li[data-state="active"] .ledger-task-mark { background: var(--bramble-accent); color: var(--bramble-bg); }
+  .ledger-task-list li[data-state="done"] { color: var(--bramble-text); }
+  .ledger-task-list li[data-state="done"] .ledger-task-mark { background: var(--bramble-positive-soft); color: var(--bramble-positive); }
   .ledger-hash-check {
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.md};
     display: grid;
     gap: ${SPACE.xs};
@@ -426,7 +426,7 @@ export const SEND_STYLES = `
   .ledger-hash-head .context-label { margin: 0; }
   .ledger-hash-value { margin: 0; }
   .ledger-hash-value code {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     flex-wrap: wrap;
     font-size: ${TYPE.caption.size};
@@ -434,11 +434,11 @@ export const SEND_STYLES = `
     line-height: 1.7;
     overflow-wrap: anywhere;
   }
-  .ledger-hash-help { color: var(--mc-muted); font-size: ${TYPE.micro.size}; margin: 0; }
+  .ledger-hash-help { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; margin: 0; }
   /* The comparison is live only while the device is showing its own hash, so
      the panel lifts to the accent fill for that phase — a fill swap, never a
      ring: surfaces in this language are de-bordered. */
-  .ledger-progress-card[data-phase="confirming"] .ledger-hash-check { background: var(--mc-accent-soft); }
+  .ledger-progress-card[data-phase="confirming"] .ledger-hash-check { background: var(--bramble-accent-soft); }
   .ledger-phase-body {
     display: grid;
     font-size: ${TYPE.body.size};
@@ -446,8 +446,8 @@ export const SEND_STYLES = `
     line-height: ${TYPE.body.line};
     text-align: center;
   }
-  .ledger-phase-body > p { color: var(--mc-muted); margin: 0 auto; max-width: 34ch; }
-  .ledger-phase-body > .review-flag { color: var(--mc-danger); }
+  .ledger-phase-body > p { color: var(--bramble-muted); margin: 0 auto; max-width: 34ch; }
+  .ledger-phase-body > .review-flag { color: var(--bramble-danger); }
   .ledger-phase-actions { display: grid; gap: ${SPACE.sm}; }
   .ledger-phase-actions button { width: 100%; }
   .ledger-phase-actions .ghost, .ledger-phase-body > .ghost { justify-self: center; width: auto; }

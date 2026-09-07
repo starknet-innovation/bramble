@@ -8,6 +8,7 @@ export const EXPECTED_RUNTIME_FILES = [
   "dependencies/krusty-kms/krusty_kms_wasm_bg.wasm",
   "icons/icon-128.png",
   "icons/icon-16.png",
+  "icons/icon-24.png",
   "icons/icon-32.png",
   "icons/icon-48.png",
   "ledger-grant.html",

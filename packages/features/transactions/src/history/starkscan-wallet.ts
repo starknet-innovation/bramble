@@ -11,21 +11,21 @@
  * and read as an endorsement of the third party.
  */
 
-import { isSafeDecimals } from "@mc-wallet/core/json";
-import { isTransportRpcError } from "@mc-wallet/starknet/provider";
+import { isSafeDecimals } from "@bramble/core/json";
+import { isTransportRpcError } from "@bramble/starknet/provider";
 import {
   type BalanceInput,
   formatTokenAmount,
   getTokenBalances,
   type TokenBalance,
-} from "@mc-wallet/starknet/rpc";
-import { type ActivityEntry, isActivityEntry } from "@mc-wallet/transactions/activity";
-import { canonicalFelt, type StarknetNetworkId, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/starknet/rpc";
+import { type ActivityEntry, isActivityEntry } from "@bramble/transactions/activity";
+import { canonicalFelt, type StarknetNetworkId, sameFelt } from "@bramble/wallet-model/networks";
 import {
   type ExplorerLanePreferences,
   explorerFallbackAllowed,
   type TokenConfig,
-} from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/preferences";
 
 import type { StarkscanClient } from "./starkscan";
 import type { StarkscanTransfer } from "./starkscan-types";

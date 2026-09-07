@@ -9,8 +9,8 @@ import {
   isRecord,
   JSON_BUDGETS,
   type Json,
-} from "@mc-wallet/core/json";
-import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/core/json";
+import { isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 /**
  * A declare transaction a dapp asks the wallet to submit, after bridge

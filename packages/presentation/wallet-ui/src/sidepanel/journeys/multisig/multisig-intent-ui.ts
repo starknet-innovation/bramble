@@ -3,7 +3,7 @@
 import {
   ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE,
   isArgentMultisigFeeExpiredMessage,
-} from "@mc-wallet/starknet/multisig-invoke";
+} from "@bramble/starknet/multisig-invoke";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { feeReplacementIntentFor, parseArgentMultisigSignature } from "./multisig-model";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
@@ -59,7 +59,7 @@ const run = (
       }
     },
     (error: unknown) => {
-      const details = errorMessage(error, "Argent multisig request failed");
+      const details = errorMessage(error, "Ready multisig request failed");
       const message = isArgentMultisigFeeExpiredMessage(details)
         ? ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE
         : details;
@@ -79,7 +79,7 @@ const bindCopies = (deps: MultisigUiDeps): void => {
           if (!intent) throw new Error("Signing intent unavailable");
           return copyText(
             button,
-            JSON.stringify({ intent, kind: "mc-wallet.argent-multisig-intent", version: 1 }),
+            JSON.stringify({ intent, kind: "bramble.argent-multisig-intent", version: 1 }),
             "Intent package copied",
           );
         })

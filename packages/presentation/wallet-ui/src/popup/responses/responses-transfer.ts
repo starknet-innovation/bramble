@@ -2,8 +2,8 @@
  * Pure popup validators for pre-sign transfer review responses.
  */
 
-import { hasOnlyKnownKeys, isJson, isRecord, isRiskFlagCode } from "@mc-wallet/core/json";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { hasOnlyKnownKeys, isJson, isRecord, isRiskFlagCode } from "@bramble/core/json";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 
 /**
  * Pre-sign transfer review accepted from the background boundary.

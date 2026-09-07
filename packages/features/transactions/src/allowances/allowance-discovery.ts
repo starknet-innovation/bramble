@@ -5,13 +5,13 @@
  * unit-testable; the actual event/allowance queries live in ./allowance-scan.
  */
 
-import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@bramble/core/json";
 
 import {
   type AllowanceRecord,
   allowanceId,
   hasValidAllowanceFields,
-} from "@mc-wallet/transactions/allowance-store";
+} from "@bramble/transactions/allowance-store";
 
 import {
   canonicalFelt,
@@ -19,18 +19,18 @@ import {
   sameFelt,
   UINT128_LIMIT,
   uint256Felts,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { hash } from "starknet";
 
 /**
  * A uint256 amount at or above this threshold is treated as an effectively
  * unlimited allowance: the conventional max-u128 sentinel, or any value that
  * sets the high 128-bit word, is far beyond a real spend cap. The one shared cut-off — the pre-sign verifier's
- * unlimited-approval risk flag (@mc-wallet/transactions/verify) and the
+ * unlimited-approval risk flag (@bramble/transactions/verify) and the
  * allowance manager's display both read it here, so a transaction flagged
  * before signing is the same one the manager later lists as unlimited. Do not
  * re-derive the `1n << 128n` literal locally — the exponent itself is
- * `UINT128_LIMIT` in @mc-wallet/wallet-model/networks, the same bound the
+ * `UINT128_LIMIT` in @bramble/wallet-model/networks, the same bound the
  * shared uint256 join holds each limb to.
  */
 export const UNLIMITED_ALLOWANCE_THRESHOLD = UINT128_LIMIT - 1n;

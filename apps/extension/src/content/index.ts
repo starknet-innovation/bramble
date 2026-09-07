@@ -4,13 +4,14 @@
 
 import {
   isTrustedPageMessage,
+  misaddressedProviderResponse,
   providerResponse,
   readProviderRequest,
   toProviderPayload,
   toRuntimeMessage,
-} from "@mc-wallet/wallet-protocol/bridge";
-import { addressesFromPayload, isWalletEventMessage } from "@mc-wallet/wallet-protocol/events";
-import { invalidRequestPayload, unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
+} from "@bramble/wallet-protocol/bridge";
+import { addressesFromPayload, isWalletEventMessage } from "@bramble/wallet-protocol/events";
+import { invalidRequestPayload, unknownError } from "@bramble/wallet-protocol/rpc-errors";
 import { createProviderEventRefresh } from "./provider-event-refresh";
 import { createProviderRequestAdmission } from "./provider-request-admission";
 
@@ -43,11 +44,11 @@ const eventRefresh = createProviderEventRefresh({
 });
 
 const injectProvider = (): void => {
-  if (!runtime || document.documentElement.dataset["mcWalletInjected"] === "true") {
+  if (!runtime || document.documentElement.dataset["brambleInjected"] === "true") {
     return;
   }
 
-  document.documentElement.dataset["mcWalletInjected"] = "true";
+  document.documentElement.dataset["brambleInjected"] = "true";
   const script = document.createElement("script");
   script.src = runtime.getURL("provider/inpage.js");
   script.onload = () => script.remove();
@@ -62,6 +63,14 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 
   const request = readProviderRequest(event.data);
   if (!request) {
+    // A message addressed to this bridge with a well-formed request id but an
+    // invalid body gets a deterministic rejection instead of a silent drop, so
+    // the page's pending promise cannot hang forever. Anything not addressed
+    // to the bridge stays unanswered — foreign window traffic gets nothing.
+    const misaddressed = misaddressedProviderResponse(event.data);
+    if (misaddressed) {
+      window.postMessage(misaddressed, pageOrigin);
+    }
     return;
   }
 

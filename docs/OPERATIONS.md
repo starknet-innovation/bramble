@@ -6,7 +6,7 @@ permalink: /operations/
 
 # Production operations
 
-This is the public operational contract for MC Wallet. It covers the extension, the wallet-operated
+This is the public operational contract for Bramble. It covers the extension, the wallet-operated
 Starknet gateway, releases, and support diagnostics. It never authorizes operators to request a
 recovery phrase, private key, signing payload, address, transaction hash, calldata, origin, or raw
 RPC body.
