@@ -19,8 +19,13 @@ import { readFile } from "node:fs/promises";
 /** A release version string, `X.Y.Z`. */
 export const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
 
-/** A release branch, `release/vX.Y` (no patch component — it covers the line). */
-export const RELEASE_BRANCH = /^release\/v(\d+)\.(\d+)$/;
+/**
+ * A release branch: `release/vX.Y` for a minor line, or `release/vX.Y.Z` for a
+ * patch line cut after `release/vX.Y` was integrated into `main` (issue #302 —
+ * an integrated release branch is immutable, so follow-up work moves to the
+ * next patch branch, which must therefore be able to cut its own release).
+ */
+export const RELEASE_BRANCH = /^release\/v(\d+)\.(\d+)(?:\.(\d+))?$/;
 
 /** A hotfix branch, `hotfix/<desc>`. */
 export const HOTFIX_BRANCH = /^hotfix\/.+/;
@@ -61,11 +66,17 @@ export interface GateInput {
 /** The tag that must carry a given version. */
 export const tagForVersion = (version: string): string => `v${version}`;
 
-/** The `X.Y.0` version a `release/vX.Y` branch cuts, or `null` if the name does not match. */
+/**
+ * The version a release branch cuts — `X.Y.0` for `release/vX.Y`, `X.Y.Z` for
+ * `release/vX.Y.Z` — or `null` if the name is not a release branch.
+ */
 export const versionFromReleaseBranch = (branch: string): string | null => {
   const match = RELEASE_BRANCH.exec(branch);
-  return match ? `${match[1]}.${match[2]}.0` : null;
+  return match ? `${match[1]}.${match[2]}.${match[3] ?? "0"}` : null;
 };
+
+/** Whether a branch is a release branch (either a minor or a patch line). */
+export const isReleaseBranch = (branch: string): boolean => RELEASE_BRANCH.test(branch);
 
 /** Whether a branch is a hotfix promotion. */
 export const isHotfixBranch = (branch: string): boolean => HOTFIX_BRANCH.test(branch);

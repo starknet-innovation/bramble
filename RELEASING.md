@@ -83,12 +83,12 @@ The release version has **one source of truth**: `package.json` → `version`.
   fail the build if the two versions differ or are not `x.y.z` (offline, every PR).
 - `scripts/release-version.ts` (`bun run check:release-version`) is the **release
   gate**: it asserts the tag equals `v<version>` and, on an auto-release, that the
-  `release/vX.Y` branch implies exactly that version — the check that was missing
+  `release/vX.Y` (or `release/vX.Y.Z`) branch implies exactly that version — the check that was missing
   when `v0.4.0` shipped as `mc-wallet-0.3.0.zip`. Its pure logic is unit-tested in
   `tests/conformance/release-version-single-source.test.ts`.
 
 To bump, edit **both** files to the same new semver (a `release/vX.Y` branch
-ships `X.Y.0`), then run the gates:
+ships `X.Y.0`, a `release/vX.Y.Z` branch ships `X.Y.Z`), then run the gates:
 
 ```sh
 bun test tests/conformance/release-version-single-source.test.ts
@@ -139,8 +139,8 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
 
 1. resolves the merged head branch from the PR on the merge commit; a chore/docs
    merge resolves to no release and the workflow exits cleanly;
-2. runs the single-source gate — derives `X.Y.0` from `release/vX.Y` (or the
-   package version for a hotfix) and **fails** if `package.json`/`manifest` do
+2. runs the single-source gate — derives `X.Y.0` from `release/vX.Y`, `X.Y.Z`
+   from a `release/vX.Y.Z` patch branch (or the package version for a hotfix) and **fails** if `package.json`/`manifest` do
    not match, so a promotion that skipped the version bump cannot ship;
 3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
    idempotent, so a re-run never double-cuts);
