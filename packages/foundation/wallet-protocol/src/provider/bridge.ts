@@ -39,7 +39,7 @@ import {
   readTypedDataParam,
   toProviderPayload as toProviderPayloadResult,
 } from "./results";
-import { unknownError, type WalletRpcError } from "./rpc-errors";
+import { invalidRequestPayload, unknownError, type WalletRpcError } from "./rpc-errors";
 import type { RuntimeMessage } from "./runtime-message";
 
 /** Marker for page-to-content wallet provider requests.
@@ -426,6 +426,28 @@ export const toRuntimeMessage = (
   isProviderMethod(request.method) && isWalletOrigin(origin)
     ? runtimeBuilderFor(request.method)(request.params, origin)
     : null;
+
+/**
+ * Builds the page-targeted invalid-request response for a message that is
+ * addressed to the content bridge (correct target, well-formed request id) but
+ * fails {@link readProviderRequest}. Without it such a message would be
+ * dropped silently and the page's pending promise would hang forever; with it
+ * the page gets a deterministic rejection. Returns null for anything that is
+ * not addressed to the bridge — foreign window traffic must never receive a
+ * response — and for messages readProviderRequest accepts.
+ */
+export const misaddressedProviderResponse = (value: unknown): ProviderResponse | null => {
+  if (
+    !isRecord(value) ||
+    value["target"] !== CONTENT_TARGET ||
+    typeof value["id"] !== "string" ||
+    !isUuid(value["id"]) ||
+    readProviderRequest(value) !== null
+  ) {
+    return null;
+  }
+  return { error: invalidRequestPayload(), id: value["id"], target: PAGE_TARGET };
+};
 
 /**
  * Builds a page-targeted provider response for the in-page script.
