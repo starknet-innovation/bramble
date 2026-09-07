@@ -13,7 +13,6 @@ import type { Vault } from "@bramble/vault/schema";
 import { findVaultAccount } from "@bramble/vault/vault-account";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
-  DEFAULT_NETWORK,
   STARKNET_NETWORKS,
   type StarknetNetwork,
   type StarknetNetworkId,
@@ -405,7 +404,9 @@ export const observedAccountContext = (
   accountContextFor(wallet, session.peekPassphrase(), preferencesStore);
 
 /**
- * Builds extension-page wallet status from vault and preferences state.
+ * Builds passive extension-page status. Vault results are disclosed only to
+ * the unlock that authorized the read; stale reads return locked status and
+ * failures can revoke only their original session.
  */
 export const statusResponse = async (
   wallet: WalletStatusReader,
@@ -415,21 +416,29 @@ export const statusResponse = async (
   const status = await wallet.status();
   const preferences = await preferencesStore.read();
   const network = STARKNET_NETWORKS[preferences.activeNetworkId];
+  const lockedStatus: WalletStatus = {
+    ...status,
+    accountCount: 0,
+    activeAccountId: null,
+    accounts: [],
+    locked: status.hasVault,
+    network: network.name,
+    networkId: network.id,
+    networks: networkOptions(),
+  };
   // Peek, never renew: the side panel polls status, and a passive poll must
   // not hold the wallet unlocked past the inactivity limit.
   const passphrase = session.peekPassphrase();
+  const authorized = captureSessionAuthorization(session);
   if (!passphrase) {
-    return {
-      ...status,
-      accounts: [],
-      network: network.name,
-      networkId: network.id,
-      networks: networkOptions(),
-    };
+    return lockedStatus;
   }
 
   try {
     const vault = await wallet.readVault(passphrase);
+    if (!authorized.isCurrent()) {
+      return lockedStatus;
+    }
     const activeAccount = accountForNetwork(vault, network.id, vault.activeAccountId);
     return {
       ...status,
@@ -442,13 +451,9 @@ export const statusResponse = async (
       networks: networkOptions(),
     };
   } catch {
-    session.lock();
-    return {
-      ...status,
-      accounts: [],
-      network: DEFAULT_NETWORK.name,
-      networkId: DEFAULT_NETWORK.id,
-      networks: networkOptions(),
-    };
+    if (session.generation() === authorized.generation) {
+      session.lock();
+    }
+    return lockedStatus;
   }
 };
