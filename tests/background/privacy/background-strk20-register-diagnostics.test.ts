@@ -6,8 +6,8 @@
  * while note, proof, authorizing, and service-endpoint material does not.
  */
 import { describe, expect, test } from "bun:test";
-import { mapStrk20StageError } from "@mc-wallet/privacy/official-sdk-errors";
-import type { Strk20Service } from "@mc-wallet/privacy/service";
+import { mapStrk20StageError } from "@bramble/privacy/official-sdk-errors";
+import type { Strk20Service } from "@bramble/privacy/service";
 import {
   approveHeldStrk20,
   buildStrk20Handler,

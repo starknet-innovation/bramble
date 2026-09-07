@@ -4,10 +4,10 @@
  * when teardown also fails; a teardown failure after a good probe is surfaced.
  */
 import { describe, expect, test } from "bun:test";
-import { verifyLedgerGrantSession } from "@mc-wallet/ledger-browser/grant-session";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { verifyLedgerGrantSession } from "@bramble/ledger-browser/grant-session";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 
 const unusedBytes = new Uint8Array(64);
 

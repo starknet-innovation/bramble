@@ -1,7 +1,7 @@
 /** Fail-closed coordination for preference-first encrypted-vault mutations. */
-import { WalletError } from "@mc-wallet/core/errors";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { heldSessionAuthorization, type UnlockSession } from "./session";
 
 /**

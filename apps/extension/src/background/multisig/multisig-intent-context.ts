@@ -1,7 +1,7 @@
 /** Fresh-chain resolution for frozen Argent multisig signing intents. */
-import type { ArgentMultisigConfig } from "@mc-wallet/multisig/chain";
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { ArgentMultisigConfig } from "@bramble/multisig/chain";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import { matchesArgentPublicConfig, storedArgentPublicConfig } from "./multisig-config-reconcile";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";

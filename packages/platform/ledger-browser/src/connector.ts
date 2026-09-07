@@ -16,16 +16,16 @@
  * connectors, while this adapter itself requires a physical Ledger.
  */
 
-import { extensionBrowser, requestDeviceGrant } from "@mc-wallet/ledger-browser/grant-window";
+import { extensionBrowser, requestDeviceGrant } from "@bramble/ledger-browser/grant-window";
 import {
   closeTransport,
   deviceClientFrom,
   listConnectedDevices,
   openConnectedTransport,
-} from "@mc-wallet/ledger-browser/transport";
-import type { LedgerTransport } from "@mc-wallet/ledger-browser/webhid";
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
-import type { LedgerConnector, LedgerDeviceSession } from "@mc-wallet/ledger-protocol/session";
+} from "@bramble/ledger-browser/transport";
+import type { LedgerTransport } from "@bramble/ledger-browser/webhid";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import type { LedgerConnector, LedgerDeviceSession } from "@bramble/ledger-protocol/session";
 
 // Turns an open transport into an OWNED session: the device client plus a `close`
 // that releases the transport. The whole point of the session is that whoever

@@ -3,15 +3,15 @@
  * instrumented SDK calls, and helpers for held approval requests.
  */
 import { expect } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   STRK20_NOT_REGISTERED,
   type Strk20PreparedSubmissionInput,
   type Strk20Service,
-} from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
+} from "@bramble/privacy/service";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import type { ActivityLog } from "@bramble/transactions/activity";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";

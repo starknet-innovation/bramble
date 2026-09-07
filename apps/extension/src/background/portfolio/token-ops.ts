@@ -5,17 +5,17 @@
  * extension-page messages.
  */
 
-import { isTokenSymbol } from "@mc-wallet/core/json";
-import type { PriceService } from "@mc-wallet/portfolio/prices";
-import { isLikelySpam, knownTokensForNetwork } from "@mc-wallet/portfolio/token-registry";
-import type { TokenConfig, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { isTransportRpcError, type TokenMetadata } from "@mc-wallet/starknet/rpc";
+import { isTokenSymbol } from "@bramble/core/json";
+import type { PriceService } from "@bramble/portfolio/prices";
+import { isLikelySpam, knownTokensForNetwork } from "@bramble/portfolio/token-registry";
+import type { TokenConfig, WalletPreferencesStore } from "@bramble/settings/preferences";
+import { isTransportRpcError, type TokenMetadata } from "@bramble/starknet/rpc";
 import {
   STARKNET_NETWORKS,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { withTokenId } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/networks";
+import { withTokenId } from "@bramble/wallet-model/preferences";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { readPricesInput, readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";

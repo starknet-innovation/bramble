@@ -3,7 +3,7 @@
  * prints, so that what reaches the screen cannot say something the payload does
  * not.
  *
- * `@mc-wallet/starknet/typed-data` refuses to hash a payload whose *declared* names
+ * `@bramble/starknet/typed-data` refuses to hash a payload whose *declared* names
  * carry a bidi override, a homoglyph, or 41,000 characters, because such a name
  * "would read as a different structure on the approval card than the one that
  * gets hashed". The card, however, also prints names the gate never vetted — an
@@ -27,8 +27,8 @@
  * here throws, and nothing here decides whether a payload may be signed; it only
  * bounds what the card is able to display.
  */
-import { isSnip12Scalar, type Snip12Scalar } from "@mc-wallet/starknet/snip12-scalars";
-import { isSafeSnip12Name } from "@mc-wallet/starknet/snip12-vocabulary";
+import { isSnip12Scalar, type Snip12Scalar } from "@bramble/starknet/snip12-scalars";
+import { isSafeSnip12Name } from "@bramble/starknet/snip12-vocabulary";
 
 /**
  * The most rows one block prints before it collapses the rest into a single

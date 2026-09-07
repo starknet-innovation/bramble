@@ -15,13 +15,13 @@
  * and every failure degrades to a retryable state rather than a guess.
  */
 
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
-import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { StarkHashSigner } from "@bramble/starknet/provider";
+import type { FeeEstimate } from "@bramble/starknet/rpc";
+import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import { resolveReviewFee } from "../accounts/wallet-ops";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";

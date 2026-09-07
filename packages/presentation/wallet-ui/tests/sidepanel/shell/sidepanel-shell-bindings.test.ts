@@ -10,7 +10,7 @@
  * registerDom harness used by the account-select and deployment-watch suites.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type {
   DeploymentStatusResponse,
   WalletStatus,

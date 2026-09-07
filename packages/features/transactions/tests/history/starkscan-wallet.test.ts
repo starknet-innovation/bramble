@@ -2,15 +2,15 @@
  * Indexed holdings and transfer adapter checks for wallet-facing data.
  */
 import { describe, expect, test } from "bun:test";
-import { resetRpcEndpointCooldownsForTests } from "@mc-wallet/starknet/provider";
-import { createStarkscanClient } from "@mc-wallet/transactions/starkscan";
+import { resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
+import { createStarkscanClient } from "@bramble/transactions/starkscan";
 import {
   createRpcFirstBalances,
   createRpcFirstHistory,
   getStarkscanTokenBalances,
   getStarkscanTransactionHistory,
-} from "@mc-wallet/transactions/starkscan-wallet";
-import type { ExplorerLanePreferences, TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/transactions/starkscan-wallet";
+import type { ExplorerLanePreferences, TokenConfig } from "@bramble/wallet-model/preferences";
 import type { RpcProvider } from "starknet";
 
 // The lane-bearing half of the stored defaults: no per-network opt-out and no

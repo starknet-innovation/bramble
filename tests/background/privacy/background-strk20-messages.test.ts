@@ -3,10 +3,10 @@
  * identity commitments, and invokes stay held until explicit approval.
  */
 import { describe, expect, test } from "bun:test";
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import { toProviderPayload } from "@mc-wallet/wallet-protocol/bridge";
+import type { Strk20Service } from "@bramble/privacy/service";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import { toProviderPayload } from "@bramble/wallet-protocol/bridge";
 import {
   flushHeld,
   latestApprovalId,

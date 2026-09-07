@@ -1,4 +1,4 @@
-import type { WalletView } from "@mc-wallet/wallet-ui/lab";
+import type { WalletView } from "@bramble/wallet-ui/lab";
 
 export type LabSurface = "fullpage" | "popup" | "sidepanel";
 export type LabTheme = "dark" | "light";

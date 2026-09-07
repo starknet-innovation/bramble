@@ -2,14 +2,10 @@
  * Migration checks prove vault schemas move deterministically or fail closed.
  */
 import { describe, expect, test } from "bun:test";
-import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import {
-  CURRENT_SCHEMA_VERSION,
-  migrateVault,
-  VAULT_MIGRATIONS,
-} from "@mc-wallet/vault/migrations";
-import { isVaultV1, isVaultV6, isVaultV7 } from "@mc-wallet/vault/schema";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+import { ARGENT_ACCOUNT_CONTRACT } from "@bramble/starknet/account-contracts";
+import { CURRENT_SCHEMA_VERSION, migrateVault, VAULT_MIGRATIONS } from "@bramble/vault/migrations";
+import { isVaultV1, isVaultV6, isVaultV7, isVaultV8 } from "@bramble/vault/schema";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 
 const legacyVault = {
   accounts: [
@@ -54,7 +50,12 @@ const legacyV6 = {
   })),
   schemaVersion: 6 as const,
 };
-const currentVault = { ...legacyV6, schemaVersion: CURRENT_SCHEMA_VERSION as 7 };
+const legacyV7 = {
+  ...legacyV6,
+  accounts: legacyV6.accounts,
+  schemaVersion: 7 as const,
+};
+const currentVault = { ...legacyV7, importedSeeds: [], schemaVersion: CURRENT_SCHEMA_VERSION as 8 };
 
 describe("migrateVault", () => {
   test("declares contiguous migration steps to the current schema", () => {
@@ -70,6 +71,7 @@ describe("migrateVault", () => {
       accounts: [],
       accountSecrets: [],
       activeAccountId: null,
+      importedSeeds: [],
       mnemonic: null,
       originGrants: [],
       schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -85,7 +87,7 @@ describe("migrateVault", () => {
     expect(isVaultV1(legacyVault)).toBe(true);
     const migrated = migrateVault(legacyVault);
 
-    expect(isVaultV7(migrated)).toBe(true);
+    expect(isVaultV8(migrated)).toBe(true);
     expect(migrated).toEqual({
       ...legacyVault,
       accounts: legacyVault.accounts.map((account) => ({
@@ -93,6 +95,7 @@ describe("migrateVault", () => {
         ...account,
       })),
       accountSecrets: [],
+      importedSeeds: [],
       mnemonic: null,
       schemaVersion: CURRENT_SCHEMA_VERSION,
     });
@@ -109,10 +112,11 @@ describe("migrateVault", () => {
       legacyV4,
       legacyV5,
       legacyV6,
+      legacyV7,
       currentVault,
     ]) {
       const migrated = migrateVault(source);
-      expect(isVaultV7(migrated)).toBe(true);
+      expect(isVaultV8(migrated)).toBe(true);
       expect(migrateVault(migrated)).toBe(migrated);
     }
   });
@@ -136,7 +140,7 @@ describe("migrateVault", () => {
       signingKeys: [{ accountId: aliasedId, privateKey: "0x0456" }],
     });
 
-    expect(isVaultV7(migrated)).toBe(true);
+    expect(isVaultV8(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({
       accountContractType: "openzeppelin",
       address: "0x123",
@@ -166,8 +170,15 @@ describe("migrateVault", () => {
     });
 
     expect(isVaultV6({ ...legacyV6, accounts: [argent] })).toBe(true);
-    expect(isVaultV7(migrated)).toBe(true);
+    expect(isVaultV8(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({ deploymentSalt: argent.publicKeyX });
+
+    // The adjacent v7→v8 step retains the founding phrase and every account,
+    // adding only the empty imported-seeds collection.
+    const fromV7 = migrateVault(legacyV7);
+    expect(isVaultV7(legacyV7)).toBe(true);
+    expect(isVaultV8(fromV7)).toBe(true);
+    expect(fromV7).toEqual({ ...legacyV7, importedSeeds: [], schemaVersion: 8 });
   });
 
   test("ignores inherited schema versions for legacy empty vaults", () => {
@@ -183,6 +194,7 @@ describe("migrateVault", () => {
         accounts: [],
         accountSecrets: [],
         activeAccountId: null,
+        importedSeeds: [],
         mnemonic: null,
         originGrants: [],
         schemaVersion: CURRENT_SCHEMA_VERSION,

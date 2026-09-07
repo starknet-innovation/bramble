@@ -2,15 +2,15 @@
  * Shared protected-account boundary for dapp and extension-owned STRK20 flows.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   STRK20_SERVICE_UNAVAILABLE,
   type Strk20Service,
   unavailableStrk20Service,
-} from "@mc-wallet/privacy/service";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/privacy/service";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";

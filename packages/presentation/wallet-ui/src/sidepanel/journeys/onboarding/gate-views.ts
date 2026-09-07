@@ -4,9 +4,9 @@
  * brand mark, a large heading, and a primary action pinned to the bottom.
  */
 
-import { callout } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
+import { callout } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { textField } from "@bramble/ui-kit/fields";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { onboardingWizard } from "./onboarding-views";

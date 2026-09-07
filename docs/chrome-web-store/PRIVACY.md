@@ -1,13 +1,13 @@
-# MC Wallet privacy policy
+# Bramble privacy policy
 
 Effective date: 27 August 2026
 
-MC Wallet is a self-custodial Starknet browser-extension wallet. This policy describes what data the
+Bramble is a self-custodial Starknet browser-extension wallet. This policy describes what data the
 extension handles, why it is needed, where it goes, and how a user controls it.
 
 ## Data handled on the user's device
 
-MC Wallet stores an encrypted wallet vault, account metadata, locally granted site origins, address
+Bramble stores an encrypted wallet vault, account metadata, locally granted site origins, address
 book entries, preferences, watched assets and multisigs, pending signing intents, activity, and
 cached public network data in Chrome extension storage. Recovery phrases and software signing keys
 are encrypted at rest and are used only for user-approved wallet operations. Ledger signing keys do
@@ -22,7 +22,7 @@ when the user grants that site access.
 
 To provide balances, account discovery, activity, fee estimates, signing preparation, transaction
 submission, swaps, explorer links, public price data, phishing warnings, and optional private
-transaction services, MC Wallet connects to the hosts listed in
+transaction services, Bramble connects to the hosts listed in
 `docs/chrome-web-store/PERMISSIONS.md`. Starknet RPC requests may necessarily include public account
 addresses, contract addresses, transaction hashes, calldata, signatures, and signed transactions.
 Those requests are sent only to the selected user-configured or bundled service needed for the
@@ -33,20 +33,20 @@ history source is unavailable. This outage rescue is enabled by default for the 
 can be disabled per network; it defaults off when the user configures a custom RPC unless they
 explicitly enable it. AVNU receives the asset and amount details needed for a user-requested swap.
 CoinGecko receives public asset identifiers needed for prices. The phishing feed supplies a public
-denylist; MC Wallet does not send the current site to that feed.
+denylist; Bramble does not send the current site to that feed.
 
-When the user explicitly shares or checks for an Argent multisig handoff, MC Wallet connects to the
+When the user explicitly shares or checks for an Argent multisig handoff, Bramble connects to the
 reviewed public Nostr relays `relay.primal.net` and `nos.lol`, or to one custom relay the user chose
 as their replacement. A relay receives the recipient's public Nostr key, an encrypted and signed
 gift-wrap event, request timing, and ordinary connection metadata such as the user's IP address. The
 transaction package and signer identities inside the gift wrap are end-to-end encrypted by Krusty
-KMS; MC Wallet does not use these relays for chat, analytics, or background polling. Manual
+KMS; Bramble does not use these relays for chat, analytics, or background polling. Manual
 copy-and-paste handoff remains available without contacting a relay.
 
 ## Reliability diagnostics
 
 Reliability diagnostics are off by default and require affirmative in-product opt-in. When enabled,
-MC Wallet keeps separate process-local aggregate rows for Starknet JSON-RPC and the optional
+Bramble keeps separate process-local aggregate rows for Starknet JSON-RPC and the optional
 Starkscan explorer lane, using only coarse endpoint or service classes, outcome classes, and average
 latency. Explorer requests are never counted as RPC. The report contains no address, site,
 transaction hash, calldata, RPC method, exact endpoint URL, raw error, raw response, timestamp,
@@ -55,7 +55,7 @@ whether to share that specific file with support. Disabling diagnostics clears t
 
 ## Collection, sharing, and retention
 
-MC Wallet's maintainers do not operate behavioral analytics, advertising, profiling, or automatic
+Bramble's maintainers do not operate behavioral analytics, advertising, profiling, or automatic
 diagnostic collection in the extension. Data remains in the extension's local storage unless a
 wallet feature must send it to the service described above, the user explicitly exports a file, or
 the user chooses to share a diagnostic with support. External services process requests under their
@@ -70,12 +70,12 @@ delete their copy when the issue is closed, unless security or legal obligations
 
 Users can revoke connected sites, remove contacts and tracked assets, change or remove custom
 services, refuse explorer fallback, disable and clear diagnostics, export non-secret preferences,
-clear extension storage, or uninstall MC Wallet. Deleting browser storage or uninstalling before
+clear extension storage, or uninstall Bramble. Deleting browser storage or uninstalling before
 confirming an offline recovery phrase may make a software wallet unrecoverable.
 
 ## Limited Use disclosure
 
-MC Wallet's use and transfer of data received from Chrome APIs complies with the Chrome Web Store
+Bramble's use and transfer of data received from Chrome APIs complies with the Chrome Web Store
 User Data Policy, including the Limited Use requirements. Data is used only to provide, secure, and
 maintain the wallet's disclosed single purpose; it is not sold, used for advertising or credit
 assessment, or transferred except as necessary for the user-requested feature, security, legal

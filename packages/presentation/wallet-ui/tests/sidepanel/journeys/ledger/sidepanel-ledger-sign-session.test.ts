@@ -8,9 +8,9 @@
  * single-flight guard ignores a second concurrent request.
  */
 import { describe, expect, test } from "bun:test";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { LedgerSignRequestSummary } from "../../../../src/popup/responses/responses";
 import type { LedgerSignOutcome } from "../../../../src/sidepanel/journeys/ledger/runtime-client";
 import {

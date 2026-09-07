@@ -1,15 +1,15 @@
 /** Pure display and import helpers for public Argent multisig state. */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import { isArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
+} from "@bramble/multisig/repository";
+import { isArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type { ArgentMultisigIntentPackage } from "../../../popup/responses/multisig-responses";
 import { accountLabel } from "../../shared/parts";
 
@@ -134,7 +134,7 @@ export const parseArgentMultisigIntentPackage = (
     const value: unknown = JSON.parse(raw);
     return isRecord(value) &&
       hasOnlyKnownKeys(value, ["intent", "kind", "version"]) &&
-      value["kind"] === "mc-wallet.argent-multisig-intent" &&
+      value["kind"] === "bramble.argent-multisig-intent" &&
       value["version"] === 1 &&
       isArgentMultisigSigningIntent(value["intent"])
       ? (value as ArgentMultisigIntentPackage)

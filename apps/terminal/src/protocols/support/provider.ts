@@ -5,7 +5,7 @@
  * Adapted for the standalone terminal web app: the extension's in-wallet Krusty
  * signer adapter (krustyAccount / KrustyStarknetSigner) is intentionally NOT
  * ported here — the terminal never signs locally. It builds `Call[]` and hands
- * them to the connected MC Wallet provider (`requestTransaction({ calls, ... })`), so the
+ * them to the connected Bramble provider (`requestTransaction({ calls, ... })`), so the
  * only provider plumbing the protocol layer needs is read-side RPC failover.
  */
 import { RpcProvider } from "starknet";

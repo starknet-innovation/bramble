@@ -3,25 +3,25 @@ import type {
   ArgentMultisigAuthorityStatus,
   ArgentMultisigConfig,
   ArgentUnsupportedSigner,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import type { MultisigSignerAccount } from "@mc-wallet/multisig/signer-account";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { FeeEstimate, TokenBalance } from "@mc-wallet/starknet/rpc";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import type { SwapCatalogToken } from "@mc-wallet/transactions/avnu";
-import type { RiskFlag } from "@mc-wallet/transactions/verify";
-import type { ConnectedSite } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { RecoveryAccountCandidate } from "@mc-wallet/wallet-model/recovery";
-import type { WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
+} from "@bramble/multisig/repository";
+import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
+import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import type { SwapCatalogToken } from "@bramble/transactions/avnu";
+import type { RiskFlag } from "@bramble/transactions/verify";
+import type { ConnectedSite } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
+import type { WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import type { PendingApproval } from "../approvals/approvals";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
 import type {
@@ -428,6 +428,7 @@ type LedgerSignPendingResponse = {
 type LedgerAccountStatusResponse = {
   readonly balance: string | null;
   readonly deployed: boolean | null;
+  readonly funded: boolean | null;
   readonly ok: true;
 };
 

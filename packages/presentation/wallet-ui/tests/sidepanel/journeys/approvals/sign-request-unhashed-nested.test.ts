@@ -16,7 +16,7 @@
  * carries the difference only in the not-signed block.
  */
 import { describe, expect, test } from "bun:test";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
 import { typedData as snip12 } from "starknet";
 import { signRequestView } from "../../../../src/sidepanel/shared/sign-request";
 import {
@@ -34,7 +34,7 @@ const ACCOUNT = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abc
 const rawHash = (payload: unknown): string =>
   snip12.getMessageHash(payload as Parameters<typeof snip12.getMessageHash>[0], ACCOUNT);
 
-const DOMAIN = { chainId: "SN_MAIN", name: "MC Test", revision: "1", version: "1" };
+const DOMAIN = { chainId: "SN_MAIN", name: "Bramble Test", revision: "1", version: "1" };
 const DOMAIN_TYPE = [
   { name: "name", type: "shortstring" },
   { name: "version", type: "shortstring" },

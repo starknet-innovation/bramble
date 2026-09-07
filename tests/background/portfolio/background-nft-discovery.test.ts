@@ -5,14 +5,14 @@
  * and an unconfigured indexer yields an empty gallery.
  */
 import { describe, expect, test } from "bun:test";
-import { type ArgentMultisigRecord, memoryMultisigStore } from "@mc-wallet/multisig/repository";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { NftTokenMetadata } from "@mc-wallet/portfolio/nft-token-metadata";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { type ArgentMultisigRecord, memoryMultisigStore } from "@bramble/multisig/repository";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { NftTokenMetadata } from "@bramble/portfolio/nft-token-metadata";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   createNftSnapshotStore,
   type NftSnapshotStore,

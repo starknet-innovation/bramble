@@ -18,10 +18,10 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { type BoundedHttpFetch, fetchBoundedJson, untrustedFetch } from "@mc-wallet/core/http-json";
-import { createPhishingFeed } from "@mc-wallet/permissions/phishing-feed";
-import { createHttpNftIndexer } from "@mc-wallet/portfolio/nft-indexer";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { type BoundedHttpFetch, fetchBoundedJson, untrustedFetch } from "@bramble/core/http-json";
+import { createPhishingFeed } from "@bramble/permissions/phishing-feed";
+import { createHttpNftIndexer } from "@bramble/portfolio/nft-indexer";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   EXTENSION_SRC_DIR,
   repoRelative,

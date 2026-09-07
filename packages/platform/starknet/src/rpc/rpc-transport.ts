@@ -1,8 +1,8 @@
 /** Bounded Starknet JSON-RPC HTTP transport and local reliability instrumentation. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { readBoundedText } from "@mc-wallet/core/http-json";
-import { isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { readBoundedText } from "@bramble/core/http-json";
+import { isRecord } from "@bramble/core/json";
 import type { RpcProviderOptions } from "starknet";
 import { type RpcOutcome, recordRpcDiagnostic, rpcEndpointClass } from "./rpc-diagnostics";
 

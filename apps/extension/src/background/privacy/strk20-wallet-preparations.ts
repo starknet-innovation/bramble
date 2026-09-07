@@ -4,16 +4,16 @@
  * executable action batch.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isSha256Digest } from "@mc-wallet/core/ids";
-import type { PaymasterAuthorizationReview } from "@mc-wallet/privacy/paymaster-typed-data";
+import { WalletError } from "@bramble/core/errors";
+import { isSha256Digest } from "@bramble/core/ids";
+import type { PaymasterAuthorizationReview } from "@bramble/privacy/paymaster-typed-data";
 import type {
   PreparedStrk20AccountSubmission,
   Strk20SubmissionPlan,
-} from "@mc-wallet/privacy/service";
-import type { TokenConfig } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/privacy/service";
+import type { TokenConfig } from "@bramble/settings/preferences";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { ApprovalContext } from "../approvals/approval-context";
 
 const MAX_PREPARATIONS = 20;

@@ -11,15 +11,15 @@
  * and are reduced to the fixed Ledger rejection catalog.
  */
 
-import { ledgerUSBVendorId } from "@ledgerhq/devices";
-import { StarknetClient } from "@ledgerhq/hw-app-starknet";
-import TransportWebHID from "@ledgerhq/hw-transport-webhid";
-import TransportWebUSB from "@ledgerhq/hw-transport-webusb";
 import {
   exactLedgerDevice,
   ledgerApduHidDevices,
   readLedgerOsAndRestoreStarknet,
-} from "@mc-wallet/ledger-protocol/device-transition";
+} from "@bramble/ledger-protocol/device-transition";
+import { ledgerUSBVendorId } from "@ledgerhq/devices";
+import { StarknetClient } from "@ledgerhq/hw-app-starknet";
+import TransportWebHID from "@ledgerhq/hw-transport-webhid";
+import TransportWebUSB from "@ledgerhq/hw-transport-webusb";
 import { Buffer } from "buffer";
 
 const deviceIds = new WeakMap();

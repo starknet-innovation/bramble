@@ -6,7 +6,7 @@
  * background enqueue the approval, then drive the decision.
  */
 
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
 /**

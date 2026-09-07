@@ -4,9 +4,9 @@
  * the pure rule behind `getGrantedAccounts` without touching storage.
  */
 import { describe, expect, test } from "bun:test";
-import { connectedSitesFromVault, grantedAccountIdsFor } from "@mc-wallet/vault/origin-grants";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { connectedSitesFromVault, grantedAccountIdsFor } from "@bramble/vault/origin-grants";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 
 const ORIGIN = "https://example.com";
 
@@ -32,9 +32,10 @@ const vaultWith = (
   accounts: [first, second, third],
   accountSecrets: [],
   activeAccountId,
+  importedSeeds: [],
   mnemonic: null,
   originGrants: accountIds === null ? [] : [{ accountIds, origin: ORIGIN }],
-  schemaVersion: 7,
+  schemaVersion: 8,
   signingKeys: [],
 });
 

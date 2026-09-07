@@ -4,22 +4,22 @@
  * survives MV3 service-worker restarts, but clears when the browser exits.
  */
 
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type {
   Strk20MaturityRecord,
   Strk20MaturityScope,
   Strk20MaturityStore,
-} from "@mc-wallet/privacy/maturity";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/privacy/maturity";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
-const STORE_KEY = "mc-wallet:strk20-maturity";
+const STORE_KEY = "bramble:strk20-maturity";
 const MAX_RECORDS = 100;
 
 type StoredMaturity = Strk20MaturityRecord & Strk20MaturityScope;

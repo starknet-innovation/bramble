@@ -3,10 +3,10 @@
  * added but hidden by default, while a genuine token stays visible (A-L10).
  */
 import { describe, expect, test } from "bun:test";
-import type { PriceService } from "@mc-wallet/portfolio/prices";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { TokenMetadata } from "@mc-wallet/starknet/rpc";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { PriceService } from "@bramble/portfolio/prices";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import type { TokenMetadata } from "@bramble/starknet/rpc";
+import { createMemoryStore } from "@bramble/store/kv";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
 import {
   handleTokenOps,

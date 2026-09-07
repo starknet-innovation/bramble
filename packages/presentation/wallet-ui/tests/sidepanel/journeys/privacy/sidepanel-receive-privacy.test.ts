@@ -5,7 +5,7 @@
  * must not assert a registration state the wallet has not confirmed.
  */
 import { describe, expect, test } from "bun:test";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import { account } from "@bramble/testkit/sidepanel";
 import type { PrivacyDisclosureState } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 import { privacyPoolNotice } from "../../../../src/sidepanel/journeys/send/receive-view";
 

@@ -1,30 +1,30 @@
 /** Strict response validators for privileged Argent multisig messages. */
-import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isJson, isRecord } from "@bramble/core/json";
 import type {
   ArgentMultisigAuthorityStatus,
   ArgentMultisigConfig,
   ArgentUnsupportedSigner,
-} from "@mc-wallet/multisig/chain";
-import { MULTISIG_LIMITS } from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
+import { MULTISIG_LIMITS } from "@bramble/multisig/chain";
 import {
   type ArgentMultisigRecord,
   type ArgentMultisigSigningIntent,
   canReplaceArgentMultisigSigningIntent,
   isArgentMultisigRecord,
   isArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/multisig/repository";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { FeeAffordability } from "@bramble/transactions/fee-funds";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
+import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import { isNostrPublicKey } from "@mc-wallet/wallet-model/nostr";
+} from "@bramble/wallet-model/networks";
+import { isNostrPublicKey } from "@bramble/wallet-model/nostr";
 
 /**
  * Fresh untrusted chain authority paired with one watched account.
@@ -45,7 +45,7 @@ export type ArgentMultisigView = {
  */
 export type ArgentMultisigIntentPackage = {
   readonly intent: ArgentMultisigSigningIntent;
-  readonly kind: "mc-wallet.argent-multisig-intent";
+  readonly kind: "bramble.argent-multisig-intent";
   readonly version: 1;
 };
 
@@ -174,7 +174,7 @@ const isView = (value: unknown): value is ArgentMultisigView =>
 const isIntentPackage = (value: unknown): value is ArgentMultisigIntentPackage =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["intent", "kind", "version"]) &&
-  value["kind"] === "mc-wallet.argent-multisig-intent" &&
+  value["kind"] === "bramble.argent-multisig-intent" &&
   value["version"] === 1 &&
   isArgentMultisigSigningIntent(value["intent"]);
 

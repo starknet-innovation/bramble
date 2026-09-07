@@ -1,9 +1,9 @@
 /** Supported signer-account public-key discovery. */
 import { describe, expect, test } from "bun:test";
-import { getMultisigSignerAccount } from "@mc-wallet/multisig/signer-account";
-import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import { resetRpcEndpointCooldownsForTests } from "@mc-wallet/starknet/provider";
-import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@mc-wallet/wallet-model/accounts";
+import { getMultisigSignerAccount } from "@bramble/multisig/signer-account";
+import { ARGENT_ACCOUNT_CONTRACT } from "@bramble/starknet/account-contracts";
+import { resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
+import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 import type { RpcProvider } from "starknet";
 
 const ADDRESS = "0x123";

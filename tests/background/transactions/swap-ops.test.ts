@@ -6,9 +6,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { createActivityLog } from "@mc-wallet/transactions/activity";
-import { avnuRouterAddress, type SwapCall, type SwapService } from "@mc-wallet/transactions/avnu";
-import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { createActivityLog } from "@bramble/transactions/activity";
+import { avnuRouterAddress, type SwapCall, type SwapService } from "@bramble/transactions/avnu";
+import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -20,9 +20,9 @@ const mainnetToken = (symbol: string): string =>
 const ETH_TOKEN_ADDRESS = mainnetToken("ETH");
 const STRK_TOKEN_ADDRESS = mainnetToken("STRK");
 
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 
 const account: AccountRef = {
   accountContractType: "openzeppelin",
@@ -382,7 +382,7 @@ describe("swap operations", () => {
 
   test("rejects both additive allowance spellings regardless of token", async () => {
     // Which selectors grant spend is defined once, by isApproveEntrypoint in
-    // @mc-wallet/transactions/verify-selectors. If this gate kept its own list, a build
+    // @bramble/transactions/verify-selectors. If this gate kept its own list, a build
     // could route an approval onto another token under a spelling only the
     // reviewer knows about, and the policy would wave it through.
     for (const entrypoint of ["increase_allowance", "increaseAllowance"]) {

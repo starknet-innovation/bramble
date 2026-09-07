@@ -47,8 +47,8 @@ export const TopNav = ({ active, onNavigate }: TopNavProps): ReactNode => {
   return (
     <div className="topnav">
       <div className="brand">
-        <div className="logo">MC</div>
-        <span>MC Wallet</span>
+        <div className="logo">B</div>
+        <span>Bramble</span>
       </div>
       <div className="navtabs">
         {SCREEN_TABS.map((tab) => (

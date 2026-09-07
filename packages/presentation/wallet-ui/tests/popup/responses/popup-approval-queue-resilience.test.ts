@@ -8,8 +8,8 @@
  * `readPendingApprovals` drops only the offending entry.
  */
 import { describe, expect, test } from "bun:test";
-import { isJson, isJsonWithinBudget, JSON_BUDGETS, type Json } from "@mc-wallet/core/json";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { isJson, isJsonWithinBudget, JSON_BUDGETS, type Json } from "@bramble/core/json";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import {
   isPendingApprovalsResponse,
   type PendingApproval,

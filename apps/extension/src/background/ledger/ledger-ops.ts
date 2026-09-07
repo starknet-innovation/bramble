@@ -9,8 +9,8 @@
  * extension-page senders; no dapp origin can reach the device or the vault.
  */
 
-import { knownTokensForNetwork } from "@mc-wallet/portfolio/token-registry";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
@@ -29,25 +29,35 @@ import {
 
 type LedgerOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
-// Best-effort STRK balance for a candidate address, formatted as "<amount> STRK".
-// Reuses the shared token registry and the same balance RPC the home screen uses;
-// a null result degrades the picker to "balance unavailable" rather than blocking.
-const ledgerStrkBalance = async (
+// Best-effort balances for a candidate address across every known token on the
+// network — the same token set the recovery scan's funded check reads, so a
+// Ready Ledger account holding only ETH is detected exactly like a phrase
+// recovery would detect it. `balance` is the first non-zero holding formatted
+// for display (registry order), or the zero STRK line when nothing is held;
+// `funded` is true when any known token balance is non-zero. A failed read
+// degrades both to null so the picker shows "checking"/"unavailable" rather
+// than blocking or fabricating a value.
+const ledgerAccountBalances = async (
   deps: WalletOpsDeps,
   address: string,
   networkId: StarknetNetworkId,
   rpcUrls: readonly string[],
-): Promise<string | null> => {
-  const strk = knownTokensForNetwork(networkId).find((token) => token.symbol === "STRK");
-  if (!strk) {
-    return null;
+): Promise<{ readonly balance: string | null; readonly funded: boolean | null }> => {
+  const tokens = knownTokensForNetwork(networkId);
+  if (tokens.length === 0) {
+    return { balance: null, funded: null };
   }
-  const [balance] = await deps.runtimeRpc.getTokenBalances({
+  const balances = await deps.runtimeRpc.getTokenBalances({
     accountAddress: address,
     rpcUrls,
-    tokens: [strk],
+    tokens,
   });
-  return balance ? `${balance.formatted} ${balance.symbol}` : null;
+  const held = balances.find((entry) => BigInt(entry.balance) > 0n);
+  const shown = held ?? balances.find((entry) => entry.symbol === "STRK") ?? balances[0];
+  return {
+    balance: shown ? `${shown.formatted} ${shown.symbol}` : null,
+    funded: held !== undefined,
+  };
 };
 
 const handleCreateLedgerVault: LedgerOpsHandler = async (deps, message) => {
@@ -78,13 +88,16 @@ const handleLedgerAccountStatus: LedgerOpsHandler = async (deps, message) => {
   }
   const preferences = await deps.preferencesStore.read();
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
-  const [deployed, balance] = await Promise.all([
+  const [deployed, balances] = await Promise.all([
     deps.runtimeRpc
       .getDeploymentStatus({ accountAddress: input.address, rpcUrls })
       .catch(() => null),
-    ledgerStrkBalance(deps, input.address, input.networkId, rpcUrls).catch(() => null),
+    ledgerAccountBalances(deps, input.address, input.networkId, rpcUrls).catch(() => ({
+      balance: null,
+      funded: null,
+    })),
   ]);
-  return { balance, deployed, ok: true };
+  return { balance: balances.balance, deployed, funded: balances.funded, ok: true };
 };
 
 const handleAddLedgerAccount: LedgerOpsHandler = async (deps, message) => {

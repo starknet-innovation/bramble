@@ -2,10 +2,10 @@
  * Stable error mapping for untrusted official-SDK and service failures.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isRecord } from "@mc-wallet/core/json";
-import { friendlyNetworkError } from "@mc-wallet/core/network-error";
-import { isTransportRpcError } from "@mc-wallet/starknet/provider";
+import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
+import { friendlyNetworkError } from "@bramble/core/network-error";
+import { isTransportRpcError } from "@bramble/starknet/provider";
 import {
   STRK20_INSUFFICIENT_BALANCE,
   STRK20_NOT_REGISTERED,

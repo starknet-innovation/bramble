@@ -1,12 +1,12 @@
 /** Sanitized, local-only support diagnostics for trusted extension pages. */
 
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   type ExplorerDiagnosticRow,
   explorerDiagnosticsSnapshot,
   type RpcDiagnosticRow,
   rpcDiagnosticsSnapshot,
-} from "@mc-wallet/starknet/rpc-diagnostics";
+} from "@bramble/starknet/rpc-diagnostics";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { statusResponse } from "../runtime/runtime-state";
 import type { UnlockSession } from "../runtime/session";

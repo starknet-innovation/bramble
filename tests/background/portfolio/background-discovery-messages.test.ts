@@ -5,9 +5,9 @@
  * unresolvable-data branches to their spec errors.
  */
 import { describe, expect, test } from "bun:test";
-import type { DeploymentStatusInput } from "@mc-wallet/starknet/rpc";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { DeploymentStatusInput } from "@bramble/starknet/rpc";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { CallData, hash } from "starknet";
 import {
   SUPPORTED_SPECS,

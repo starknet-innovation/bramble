@@ -5,10 +5,10 @@
  * the payload has no calls, the wallet is locked, or the origin lost its grant.
  */
 import { describe, expect, test } from "bun:test";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { ec } from "starknet";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createSignatureWaiters } from "../../../apps/extension/src/background/approvals/signature-waiters";

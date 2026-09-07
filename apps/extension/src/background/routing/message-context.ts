@@ -8,18 +8,15 @@
 import {
   memoryNostrCoordinationStore,
   type NostrCoordinationStore,
-} from "@mc-wallet/multisig/coordination";
-import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import {
-  memoryOriginHistory,
-  type OriginHistoryStore,
-} from "@mc-wallet/permissions/origin-history";
-import { type PriceService, unavailablePriceService } from "@mc-wallet/portfolio/prices";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { type ActivityLog, memoryActivityLog, systemClock } from "@mc-wallet/transactions/activity";
-import { type AllowanceStore, memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { type SwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
+} from "@bramble/multisig/coordination";
+import { type MultisigStore, memoryMultisigStore } from "@bramble/multisig/repository";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import { memoryOriginHistory, type OriginHistoryStore } from "@bramble/permissions/origin-history";
+import { type PriceService, unavailablePriceService } from "@bramble/portfolio/prices";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { type ActivityLog, memoryActivityLog, systemClock } from "@bramble/transactions/activity";
+import { type AllowanceStore, memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import { type SwapService, unavailableSwapService } from "@bramble/transactions/avnu";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { type ApprovalQueue, createApprovalQueue } from "../approvals/approvals";

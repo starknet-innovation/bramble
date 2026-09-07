@@ -18,7 +18,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { routeFor, type SendRoute } from "@mc-wallet/transactions/send-routes";
+import { routeFor, type SendRoute } from "@bramble/transactions/send-routes";
 import type { TransferFields } from "../../packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-model";
 import {
   preparationFailure,

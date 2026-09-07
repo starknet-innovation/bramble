@@ -8,8 +8,8 @@
  * an account or leaving the flow in a busy state.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { account } from "@mc-wallet/testkit/sidepanel";
-import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { account } from "@bramble/testkit/sidepanel";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { importKeyFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { bindImportKey } from "../../../../src/sidepanel/journeys/settings/import-key-ui";

@@ -7,9 +7,9 @@
  * behind a locked session with no pending records.
  */
 import { describe, expect, test } from "bun:test";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";

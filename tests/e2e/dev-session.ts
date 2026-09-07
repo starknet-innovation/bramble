@@ -3,14 +3,14 @@
  * persistent profile, onboarding or unlocking it automatically so neither the
  * recovery phrase nor the vault passphrase has to be retyped.
  *
- * Run with `MC_E2E_LIVE_NETWORK=1 bun run dev:session` after `bun run build`.
+ * Run with `BRAMBLE_E2E_LIVE_NETWORK=1 bun run dev:session` after `bun run build`.
  * The explicit network opt-in prevents automation from reaching shared wallet
  * services by accident. The browser stays open until interrupted.
  *
  * Development only. The default phrase is the throwaway fixture already
  * published in this repository, so its accounts are public by construction:
  * never send real funds to an address this session shows, and never point
- * `MC_DEV_MNEMONIC` at a phrase that holds any.
+ * `BRAMBLE_DEV_MNEMONIC` at a phrase that holds any.
  *
  * Onboarding is hard-wired to mainnet in the wallet UI, and the helper ticks
  * the mainnet acknowledgement to get through it, so a fresh profile would
@@ -64,11 +64,11 @@ const SURFACE_WAIT_MS = 4_000;
 // loaded machine is the slow case this covers.
 const STATUS_TIMEOUT_MS = 30_000;
 
-// `||`, not `??`: `MC_DEV_PASSPHRASE= bun run dev:session` is the ordinary way
+// `||`, not `??`: `BRAMBLE_DEV_PASSPHRASE= bun run dev:session` is the ordinary way
 // to clear a variable, and an empty string must fall back rather than drive the
 // wizard into a minlength rejection that surfaces as a locator timeout.
-const mnemonic = process.env["MC_DEV_MNEMONIC"] || IMPORT_MNEMONIC;
-const passphrase = process.env["MC_DEV_PASSPHRASE"] || VAULT_PASSPHRASE;
+const mnemonic = process.env["BRAMBLE_DEV_MNEMONIC"] || IMPORT_MNEMONIC;
+const passphrase = process.env["BRAMBLE_DEV_PASSPHRASE"] || VAULT_PASSPHRASE;
 
 /**
  * Moves the wallet off mainnet after onboarding created a mainnet account from a
@@ -271,9 +271,9 @@ const main = async (): Promise<void> => {
   if (!existsSync(resolve(repoRoot, "dist/manifest.json"))) {
     throw new Error("dist/manifest.json is missing; run bun run build before bun run dev:session");
   }
-  if (process.env["MC_E2E_LIVE_NETWORK"] !== "1") {
+  if (process.env["BRAMBLE_E2E_LIVE_NETWORK"] !== "1") {
     throw new Error(
-      "dev:session blocks live wallet services by default; set MC_E2E_LIVE_NETWORK=1 to opt in",
+      "dev:session blocks live wallet services by default; set BRAMBLE_E2E_LIVE_NETWORK=1 to opt in",
     );
   }
   const extension = await launchExtension({
@@ -312,7 +312,7 @@ const main = async (): Promise<void> => {
     console.log(
       (await isVisible(lockButton(gate)))
         ? "Wallet unlocked."
-        : "Unlock rejected — check MC_DEV_PASSPHRASE; the browser is still open.",
+        : "Unlock rejected — check BRAMBLE_DEV_PASSPHRASE; the browser is still open.",
     );
   } else {
     console.log("Wallet already unlocked.");

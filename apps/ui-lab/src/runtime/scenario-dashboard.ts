@@ -1,8 +1,8 @@
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type {
   ArgentMultisigView,
   BalanceState,
@@ -12,8 +12,8 @@ import type {
   PrivacyDisclosureState,
   PrivacyJourneyState,
   WalletStatus,
-} from "@mc-wallet/wallet-ui/lab";
-import { dashboard, type WalletView } from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
+import { dashboard, type WalletView } from "@bramble/wallet-ui/lab";
 import {
   balances,
   discoveredNft,

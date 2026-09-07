@@ -6,12 +6,12 @@ import {
   ARGENT_MULTISIG_CONTRACT,
   argentAccountAddress,
   argentMultisigAddress,
-} from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/starknet/account-contracts";
 import {
   estimateAccountDeploymentFee,
   submitAccountDeployment,
-} from "@mc-wallet/starknet/deployment";
-import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/starknet/deployment";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import type { Account, RpcProvider } from "starknet";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";

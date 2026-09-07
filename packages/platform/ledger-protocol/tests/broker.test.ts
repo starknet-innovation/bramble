@@ -8,15 +8,15 @@ import {
   isLedgerBrokerResponse,
   ledgerBrokerChannelName,
   ledgerBrokerSessionFromHash,
-} from "@mc-wallet/ledger-protocol/broker";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/ledger-protocol/broker";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 
 const SESSION_ID = "2db2df18-12db-4d66-9b38-02dc16460ce3";
 
 describe("Ledger broker session capability", () => {
   test("accepts a canonical v4 UUID fragment and derives its isolated channel", () => {
     expect(ledgerBrokerSessionFromHash(`#session=${SESSION_ID}`)).toBe(SESSION_ID);
-    expect(ledgerBrokerChannelName(SESSION_ID)).toBe(`mc-wallet-ledger-v1:${SESSION_ID}`);
+    expect(ledgerBrokerChannelName(SESSION_ID)).toBe(`bramble-ledger-v1:${SESSION_ID}`);
   });
 
   test("rejects missing, malformed, and invalidly encoded capabilities", () => {

@@ -11,7 +11,7 @@
  * these, which is the point: drift is only ever visible between two callers.
  */
 import { describe, expect, test } from "bun:test";
-import { isSha256Digest } from "@mc-wallet/core/ids";
+import { isSha256Digest } from "@bramble/core/ids";
 import {
   isBaseUnitsAmount,
   isDecimalAmountText,
@@ -19,26 +19,26 @@ import {
   isSafeDecimals,
   isTokenSymbol,
   type Json,
-} from "@mc-wallet/core/json";
-import { isLedgerBrokerCommand, isLedgerBrokerResponse } from "@mc-wallet/ledger-protocol/broker";
-import { defaultWalletPreferences, type TokenConfig } from "@mc-wallet/settings/preferences";
-import { accountDeployment } from "@mc-wallet/starknet/deployment";
-import { parseTokenAmount } from "@mc-wallet/starknet/rpc";
-import { decodeUint256Response } from "@mc-wallet/starknet/rpc-assets";
+} from "@bramble/core/json";
+import { isLedgerBrokerCommand, isLedgerBrokerResponse } from "@bramble/ledger-protocol/broker";
+import { defaultWalletPreferences, type TokenConfig } from "@bramble/settings/preferences";
+import { accountDeployment } from "@bramble/starknet/deployment";
+import { parseTokenAmount } from "@bramble/starknet/rpc";
+import { decodeUint256Response } from "@bramble/starknet/rpc-assets";
 import {
   isUnlimitedAllowance,
   parseAllowanceAmount,
   UNLIMITED_ALLOWANCE_THRESHOLD,
-} from "@mc-wallet/transactions/allowance-discovery";
-import { decodeAllowanceCall } from "@mc-wallet/transactions/allowances";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { isCustomNetwork, isCustomRpcUrl } from "@mc-wallet/wallet-model/custom-network";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { isHexChainId, STRK_TOKEN_ADDRESS, uint256Felts } from "@mc-wallet/wallet-model/networks";
-import { isTokenConfig, tokenConfigId, withTokenId } from "@mc-wallet/wallet-model/preferences";
-import { readProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
-import { providerSwitchChainId } from "@mc-wallet/wallet-protocol/results";
+} from "@bramble/transactions/allowance-discovery";
+import { decodeAllowanceCall } from "@bramble/transactions/allowances";
+import { verifyCalls } from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { isCustomNetwork, isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { isHexChainId, STRK_TOKEN_ADDRESS, uint256Felts } from "@bramble/wallet-model/networks";
+import { isTokenConfig, tokenConfigId, withTokenId } from "@bramble/wallet-model/preferences";
+import { readProviderChain } from "@bramble/wallet-protocol/add-chain";
+import { providerSwitchChainId } from "@bramble/wallet-protocol/results";
 import { readStrk20WalletExecuteInput } from "../../apps/extension/src/background/privacy/strk20-wallet-inputs";
 import { watchAssetToken } from "../../apps/extension/src/background/provider/watch-asset";
 import { isTransferAmount } from "../../apps/extension/src/background/routing/message-inputs";

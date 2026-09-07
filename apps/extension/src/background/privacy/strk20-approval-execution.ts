@@ -7,8 +7,8 @@
  * No SDK private-state operation, protected signing, or proving happens before
  * this boundary.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import type { PreparedStrk20AccountSubmission } from "@mc-wallet/privacy/service";
+import { WalletError } from "@bramble/core/errors";
+import type { PreparedStrk20AccountSubmission } from "@bramble/privacy/service";
 import {
   prepareStrk20AccountActions,
   prepareStrk20CallAndProof,
@@ -18,14 +18,14 @@ import {
   type Strk20SubmissionPlan,
   type Strk20SubmissionResult,
   submitStrk20Actions,
-} from "@mc-wallet/privacy/service";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
-import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { verificationContext } from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/privacy/service";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import { verificationContext } from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalQueue } from "../approvals/approvals";

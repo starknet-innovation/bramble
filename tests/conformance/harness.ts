@@ -7,9 +7,9 @@
  * handler to prove no mutation happens until `wallet.approveOrigin`.
  */
 
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { WalletStatus } from "@mc-wallet/vault/service";
+import type { Strk20Service } from "@bramble/privacy/service";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import type { WalletStatus } from "@bramble/vault/service";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
@@ -86,9 +86,10 @@ const walletStub = (bump: Bump) => ({
       accounts: [ACCOUNT],
       accountSecrets: [],
       activeAccountId: ACCOUNT.id,
+      importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [ACCOUNT.id], origin: ORIGIN }],
-      schemaVersion: 7 as const,
+      schemaVersion: 8 as const,
       signingKeys: [{ accountId: ACCOUNT.id, privateKey: "0x123456" }],
     };
   },

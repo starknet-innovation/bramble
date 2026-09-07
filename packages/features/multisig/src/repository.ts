@@ -2,10 +2,10 @@
  * Serialized local registry for stable Argent accounts, frozen V3 intents, and durable operation
  * claims. Invalid legacy OpenZeppelin records are ignored and can never become executable intents.
  */
-import { isRecord } from "@mc-wallet/core/json";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { type AddressBookEntry, withAddressBookId } from "@mc-wallet/wallet-model/preferences";
+import { isRecord } from "@bramble/core/json";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import { type AddressBookEntry, withAddressBookId } from "@bramble/wallet-model/preferences";
 import {
   type ArgentMultisigCurrentConfig,
   type ArgentMultisigOperationRecord,
@@ -46,7 +46,7 @@ export {
 /**
  * Browser storage key for the new Argent-only registry format.
  */
-export const MULTISIG_STORE_KEY = "mc-wallet:argent-multisigs:v2";
+export const MULTISIG_STORE_KEY = "bramble:argent-multisigs:v2";
 
 const MAX_MULTISIGS = 20;
 const MAX_INTENTS = 100;

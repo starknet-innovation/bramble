@@ -4,7 +4,7 @@ import { STARKNET_NETWORKS } from "../../protocols/support/networks";
 import {
   INJECTION_TIMEOUT_MS,
   type StarknetWindowObject,
-  waitForInjectedMcWallet,
+  waitForInjectedBramble,
 } from "./starknet-window";
 
 export type WalletRequest = (call: {
@@ -144,7 +144,7 @@ export const resolveAccount = async (
   }
 };
 
-/** Finds MC Wallet first, while preserving standards-based Starknet wallet fallback. */
+/** Finds Bramble first, while preserving standards-based Starknet wallet fallback. */
 export const resolveWallet = async (): Promise<StarknetWindowObject | null> => {
-  return waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
+  return waitForInjectedBramble(INJECTION_TIMEOUT_MS);
 };

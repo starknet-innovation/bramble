@@ -1,12 +1,12 @@
 ---
 layout: default
-title: MC Wallet documentation
+title: Bramble documentation
 permalink: /
 ---
 
-# MC Wallet documentation
+# Bramble documentation
 
-MC Wallet is a Starknet browser-extension wallet. These documents describe the extension's trust
+Bramble is a Starknet browser-extension wallet. These documents describe the extension's trust
 boundaries, release controls, and security posture.
 
 ## Start here

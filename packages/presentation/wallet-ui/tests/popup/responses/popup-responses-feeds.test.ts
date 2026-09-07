@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import {
   MAX_TRANSACTION_ALERT_CHARACTERS,
   MAX_TRANSACTION_ALERTS_PER_DRAIN,
-} from "@mc-wallet/transactions/alerts";
+} from "@bramble/transactions/alerts";
 import {
   isActivityResponse,
   isAllowancesResponse,

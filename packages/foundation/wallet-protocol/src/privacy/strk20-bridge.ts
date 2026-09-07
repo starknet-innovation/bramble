@@ -9,7 +9,7 @@ import {
   isRecord,
   JSON_BUDGETS,
   type Json,
-} from "@mc-wallet/core/json";
+} from "@bramble/core/json";
 import {
   isStrk20BalanceEntry,
   isStrk20CallAndProof,

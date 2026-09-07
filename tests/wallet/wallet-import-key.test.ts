@@ -4,18 +4,21 @@
  * is routed to the encrypted vault (never plaintext, never echoed).
  */
 import { describe, expect, test } from "bun:test";
-import { argentAccountAddress } from "@mc-wallet/starknet/account-contracts";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { deriveImportedAccount } from "@mc-wallet/vault/accounts";
-import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { createWalletVaultService } from "@mc-wallet/vault/service";
-import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { argentAccountAddress } from "@bramble/starknet/account-contracts";
+import { createMemoryStore } from "@bramble/store/kv";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { deriveImportedAccount } from "@bramble/vault/accounts";
+import { createEncryptedStore } from "@bramble/vault/encrypted-store";
+import { createWalletVaultService } from "@bramble/vault/service";
+import { isAccountRef } from "@bramble/wallet-model/accounts";
 import { ec } from "starknet";
-import { readImportAccountInput } from "../../apps/extension/src/background/accounts/import-inputs";
+import {
+  readCreateKeyVaultInput,
+  readImportAccountInput,
+} from "../../apps/extension/src/background/accounts/import-inputs";
 
-const vaultKey = "mc-wallet:vault";
-const migrationKey = "mc-wallet:vault-migration";
+const vaultKey = "bramble:vault";
+const migrationKey = "bramble:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 // Clearly-fake test vector; not a real key.
 const importedKey = "0xfeedface";
@@ -413,5 +416,71 @@ describe("readImportAccountInput", () => {
         type: "wallet.importAccount",
       }),
     ).toBeNull();
+  });
+});
+
+describe("readCreateKeyVaultInput", () => {
+  const message = {
+    accountContractType: "openzeppelin",
+    networkId: "SN_MAIN",
+    privateKey: importedKey,
+    type: "wallet.createKeyVault",
+    vaultPassphrase,
+  } as const;
+
+  test("parses the first-run request with the same key grammar plus a passphrase", () => {
+    expect(readCreateKeyVaultInput(message)).toEqual({
+      accountContractType: "openzeppelin",
+      networkId: "SN_MAIN",
+      privateKey: importedKey,
+      vaultPassphrase,
+    });
+  });
+
+  test("rejects a missing or short passphrase, unknown keys, and an OZ salt", () => {
+    expect(readCreateKeyVaultInput({ ...message, vaultPassphrase: undefined })).toBeNull();
+    expect(readCreateKeyVaultInput({ ...message, vaultPassphrase: "short" })).toBeNull();
+    expect(readCreateKeyVaultInput({ ...message, extra: true })).toBeNull();
+    expect(readCreateKeyVaultInput({ ...message, deploymentSalt: "0x1" })).toBeNull();
+    expect(readCreateKeyVaultInput({ ...message, type: "wallet.importAccount" })).toBeNull();
+  });
+});
+
+describe("createKeyVault service", () => {
+  test("creates a phrase-less vault whose only secret is the imported key", async () => {
+    const service = newService();
+    const account = await service.createKeyVault(serviceImportInput);
+    expect(account.derivation).toEqual({ kind: "imported-raw-key" });
+
+    const vault = await service.readVault(vaultPassphrase);
+    expect(vault.mnemonic).toBeNull();
+    expect(vault.accounts).toEqual([account]);
+    expect(vault.activeAccountId).toBe(account.id);
+    expect(vault.signingKeys).toEqual([{ accountId: account.id, privateKey: importedKey }]);
+
+    // No recovery phrase exists, so HD derivation stays impossible.
+    await expect(
+      service.addDerivedAccount({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        vaultPassphrase,
+      }),
+    ).rejects.toThrow("No recovery phrase stored for this wallet");
+  });
+
+  test("fails closed over an existing key vault, in both directions", async () => {
+    const keyed = newService();
+    await keyed.createKeyVault(serviceImportInput);
+    await expect(
+      keyed.createKeyVault({ ...serviceImportInput, privateKey: "0xfeedfacf" }),
+    ).rejects.toThrow("Wallet already exists");
+    // The symmetric guard: a phrase cannot displace the key-only vault either.
+    await expect(
+      keyed.createAccount({
+        accountContractType: "openzeppelin",
+        mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+        vaultPassphrase,
+      }),
+    ).rejects.toThrow("Wallet already exists");
   });
 });

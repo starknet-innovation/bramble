@@ -13,8 +13,8 @@ import {
   parseArgentMultisigConfigChange,
   requireSafeArgentMultisigCalls,
   reviewArgentMultisigConfigChange,
-} from "@mc-wallet/multisig/chain";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/multisig/chain";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
 import type { RpcProvider } from "starknet";
 
 const ADDRESS = "0x111";

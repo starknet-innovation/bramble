@@ -1,6 +1,6 @@
 /** Content provider event ordering and coalescing regression checks. */
 import { describe, expect, test } from "bun:test";
-import type { ProviderEvent } from "@mc-wallet/wallet-protocol/events";
+import type { ProviderEvent } from "@bramble/wallet-protocol/events";
 import { createProviderEventRefresh } from "../../../apps/extension/src/content/provider-event-refresh";
 import { flushHeld } from "../../support/held";
 
@@ -34,10 +34,10 @@ describe("content provider event refresh", () => {
     await flushHeld();
 
     expect(posted).toEqual([
-      { data: "0x1", event: "networkChanged", target: "mc-wallet:page" },
-      { data: first, event: "accountsChanged", target: "mc-wallet:page" },
-      { data: "0x2", event: "networkChanged", target: "mc-wallet:page" },
-      { data: latest, event: "accountsChanged", target: "mc-wallet:page" },
+      { data: "0x1", event: "networkChanged", target: "bramble:page" },
+      { data: first, event: "accountsChanged", target: "bramble:page" },
+      { data: "0x2", event: "networkChanged", target: "bramble:page" },
+      { data: latest, event: "accountsChanged", target: "bramble:page" },
     ]);
     expect(reads).toBe(2);
   });

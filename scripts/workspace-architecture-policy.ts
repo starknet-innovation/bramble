@@ -25,11 +25,11 @@ export const STRUCTURED_SOURCE_ROOTS: Readonly<Record<string, readonly string[]>
  * Workspace packages each isolated extension surface may import.
  */
 export const EXTENSION_SURFACE_EDGES: Readonly<Record<string, readonly string[]>> = {
-  content: ["@mc-wallet/wallet-protocol"],
-  "ledger-grant": ["@mc-wallet/ledger-browser", "@mc-wallet/ledger-protocol", "@mc-wallet/ui-kit"],
-  provider: ["@mc-wallet/wallet-protocol"],
+  content: ["@bramble/wallet-protocol"],
+  "ledger-grant": ["@bramble/ledger-browser", "@bramble/ledger-protocol", "@bramble/ui-kit"],
+  provider: ["@bramble/wallet-protocol"],
   sandbox: [],
-  sidepanel: ["@mc-wallet/ledger-browser", "@mc-wallet/wallet-ui"],
+  sidepanel: ["@bramble/ledger-browser", "@bramble/wallet-ui"],
 };
 
 /**

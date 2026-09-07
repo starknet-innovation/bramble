@@ -3,15 +3,15 @@
  * registration/deposit details before their one-time submission.
  */
 import { describe, expect, test } from "bun:test";
-import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { Strk20SubmissionPlan } from "@bramble/privacy/service";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import {
   type ActivityLog,
   type ActivityStatus,
   memoryActivityLog,
-} from "@mc-wallet/transactions/activity";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/transactions/activity";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { readStrk20WalletExecuteInput } from "../../../apps/extension/src/background/privacy/strk20-wallet-inputs";
 import { STRK20_REGISTRATION_SUMMARY } from "../../../apps/extension/src/background/privacy/strk20-wallet-ops";
 import { account } from "../../support/background-wallet-stub";

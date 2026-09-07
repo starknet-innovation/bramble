@@ -4,7 +4,7 @@
  * cannot slip past the exact blocklist (A-H2).
  */
 import { describe, expect, test } from "bun:test";
-import { isBlockedOrigin } from "@mc-wallet/permissions/blocklist";
+import { isBlockedOrigin } from "@bramble/permissions/blocklist";
 
 describe("blocklist trailing-dot normalization", () => {
   test("blocks the dotted FQDN form of a blocklisted domain", () => {

@@ -1,10 +1,10 @@
 /**
  * STRK20 service-routing form for the advanced network screen.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
+import { escapeHtml } from "@bramble/core/html";
+import type { Strk20NetworkConfig } from "@bramble/privacy/config";
+import { button } from "@bramble/ui-kit/controls";
+import { textField } from "@bramble/ui-kit/fields";
 
 /**
  * Renders complete, public per-network privacy infrastructure configuration.

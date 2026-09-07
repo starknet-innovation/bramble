@@ -14,7 +14,7 @@ export const EXPECTED_PACKAGE_MANAGER = "bun@1.3.3";
 export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
-  "@mc-wallet/testkit": "workspace:*",
+  "@bramble/testkit": "workspace:*",
   "@biomejs/biome": "2.5.8",
   "@playwright/test": "1.62.1",
   "@types/bun": "1.3.14",
@@ -26,22 +26,22 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
 };
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
-  "@mc-wallet/core": "workspace:*",
-  "@mc-wallet/kms-krusty": "workspace:*",
-  "@mc-wallet/ledger-protocol": "workspace:*",
-  "@mc-wallet/multisig": "workspace:*",
-  "@mc-wallet/permissions": "workspace:*",
-  "@mc-wallet/privacy": "workspace:*",
-  "@mc-wallet/portfolio": "workspace:*",
-  "@mc-wallet/starknet": "workspace:*",
-  "@mc-wallet/store": "workspace:*",
-  "@mc-wallet/settings": "workspace:*",
-  "@mc-wallet/transactions": "workspace:*",
-  "@mc-wallet/ui-kit": "workspace:*",
-  "@mc-wallet/vault": "workspace:*",
-  "@mc-wallet/wallet-ui": "workspace:*",
-  "@mc-wallet/wallet-model": "workspace:*",
-  "@mc-wallet/wallet-protocol": "workspace:*",
+  "@bramble/core": "workspace:*",
+  "@bramble/kms-krusty": "workspace:*",
+  "@bramble/ledger-protocol": "workspace:*",
+  "@bramble/multisig": "workspace:*",
+  "@bramble/permissions": "workspace:*",
+  "@bramble/privacy": "workspace:*",
+  "@bramble/portfolio": "workspace:*",
+  "@bramble/starknet": "workspace:*",
+  "@bramble/store": "workspace:*",
+  "@bramble/settings": "workspace:*",
+  "@bramble/transactions": "workspace:*",
+  "@bramble/ui-kit": "workspace:*",
+  "@bramble/vault": "workspace:*",
+  "@bramble/wallet-ui": "workspace:*",
+  "@bramble/wallet-model": "workspace:*",
+  "@bramble/wallet-protocol": "workspace:*",
   "@starknetfoundation/krusty-kms-wasm": "0.10.0",
   starknet: "10.0.2",
 };
@@ -53,6 +53,7 @@ export const PINNED_RUNTIME_FILES = [
   "dependencies/krusty-kms/krusty_kms_wasm_bg.wasm",
   "icons/icon-128.png",
   "icons/icon-16.png",
+  "icons/icon-24.png",
   "icons/icon-32.png",
   "icons/icon-48.png",
   "ledger-grant.html",
@@ -72,7 +73,7 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   ".claude/*",
   ".dev-profile/",
   // Bun auto-loads a bare `.env`, which makes it the natural place a developer
-  // puts MC_DEV_MNEMONIC. Keeping it ignored is what stops a recovery phrase
+  // puts BRAMBLE_DEV_MNEMONIC. Keeping it ignored is what stops a recovery phrase
   // reaching a commit.
   ".env",
   "artifacts/",
@@ -113,7 +114,7 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 ] as const;
 
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
-  build: "bun run --filter @mc-wallet/extension build",
+  build: "bun run --filter @bramble/extension build",
   check:
     "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
@@ -131,7 +132,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:release-version": "bun run scripts/release-version.ts",
   "check:types": "tsc --noEmit",
   "check:workspaces":
-    "bun run --filter './packages/foundation/**' check && bun run --filter './packages/platform/**' check && bun run --filter './packages/features/**' check && bun run --filter './packages/presentation/**' check && bun run --filter './packages/testing/**' check && bun run --filter @mc-wallet/extension check && bun run --filter @mc-wallet/terminal check && bun run --filter @mc-wallet/ui-lab check:static && bun run --filter @mc-wallet/website check",
+    "bun run --filter './packages/foundation/**' check && bun run --filter './packages/platform/**' check && bun run --filter './packages/features/**' check && bun run --filter './packages/presentation/**' check && bun run --filter './packages/testing/**' check && bun run --filter @bramble/extension check && bun run --filter @bramble/terminal check && bun run --filter @bramble/ui-lab check:static && bun run --filter @bramble/website check",
   changelog: "bun run scripts/generate-changelog.ts",
   "dev:session": "bun run tests/e2e/dev-session.ts",
   format: "biome check --write .",

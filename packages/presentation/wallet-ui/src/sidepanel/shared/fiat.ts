@@ -1,7 +1,7 @@
 /**
  * Pure fiat formatting and portfolio math for the side panel. No DOM.
  */
-import type { DisplayCurrency } from "@mc-wallet/settings/preferences";
+import type { DisplayCurrency } from "@bramble/settings/preferences";
 
 /**
  * Currency glyphs for the three supported display currencies.

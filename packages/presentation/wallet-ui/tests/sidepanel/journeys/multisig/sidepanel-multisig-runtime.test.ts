@@ -245,7 +245,7 @@ describe("createMultisigClient", () => {
     const client = createMultisigClient({ sendMessage: async () => ({ ok: true }) });
     await expect(client.loadMultisigs()).resolves.toBe("error");
     await expect(client.submitIntent("intent-id")).rejects.toThrow(
-      "submit Argent multisig intent failed",
+      "submit Ready multisig intent failed",
     );
   });
 

@@ -3,13 +3,13 @@
  * signatures. Kept out of rpc.ts so that file stays within the size budget.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   accountDeployment,
   type DeploySubmission,
   ensureAccountDeployed,
   isCompatibleAccountDeployed,
-} from "@mc-wallet/starknet/deployment";
+} from "@bramble/starknet/deployment";
 import {
   acceptedRpcWriteHash,
   argentQueryAccount,
@@ -19,14 +19,14 @@ import {
   type StarkHashSigner,
   withRpcFallback,
   withRpcWrite,
-} from "@mc-wallet/starknet/provider";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/starknet/provider";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   STARKNET_NETWORKS,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import {
   type Account,
   type CompiledContract,

@@ -14,9 +14,9 @@
  * never double-settles a result that already settled below.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { setApprovalNotifier } from "../../../apps/extension/src/background/approvals/approval-notifier";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
@@ -42,9 +42,10 @@ const vault = {
   accounts: [account],
   accountSecrets: [],
   activeAccountId: account.id,
+  importedSeeds: [],
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: ORIGIN }],
-  schemaVersion: 7,
+  schemaVersion: 8,
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 

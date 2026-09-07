@@ -1,11 +1,11 @@
 /**
  * Starknet RPC wallet operations backed by starknet-js and Krusty signatures.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isDecimalAmountText, isSafeDecimals } from "@mc-wallet/core/json";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+import { WalletError } from "@bramble/core/errors";
+import { isDecimalAmountText, isSafeDecimals } from "@bramble/core/json";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@bramble/wallet-model/networks";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import { type Call, CallData, cairo, type RpcProvider, shortString } from "starknet";
 import type { FeeEstimate } from "./fee-bounds";
 import {

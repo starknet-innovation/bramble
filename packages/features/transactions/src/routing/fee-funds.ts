@@ -10,7 +10,7 @@
  * malformed numeric input yields "unknown" — never a fabricated verdict, and
  * callers must never block on it.
  */
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 
 /**
  * Affordability verdict. "unknown" means no claim could be made and must be

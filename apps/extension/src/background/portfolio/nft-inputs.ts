@@ -1,13 +1,13 @@
 /**
  * Pure parsers for NFT gallery runtime messages from extension pages.
  */
-import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@bramble/core/json";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 const isTokenId = (value: unknown): value is string =>
   isBaseUnitsAmount(value) && value.length <= 78;

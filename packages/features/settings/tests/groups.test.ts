@@ -18,7 +18,7 @@ import {
   renameGroup,
   setAccountInGroup,
   setGroupIcon,
-} from "@mc-wallet/settings/groups";
+} from "@bramble/settings/groups";
 
 const accountA = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const accountB = "SN_SEPOLIA:0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";

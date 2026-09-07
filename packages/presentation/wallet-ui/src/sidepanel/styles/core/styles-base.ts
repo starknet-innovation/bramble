@@ -20,7 +20,7 @@ import {
   TRACKING,
   TYPE,
   WEIGHT,
-} from "@mc-wallet/ui-kit/tokens";
+} from "@bramble/ui-kit/tokens";
 
 /**
  * Base stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -31,31 +31,31 @@ export const BASE_STYLES = `
     /* Default to the dark scheme of the default midnight skin; the entrypoint
        pins the resolved scheme (dark / light) inline before first paint. */
     color-scheme: dark;
-    --mc-font-mono: ${FONT.mono};
-    --mc-font-ui: ${FONT.ui};
+    --bramble-font-mono: ${FONT.mono};
+    --bramble-font-ui: ${FONT.ui};
     /* Recessed group fill (tab tracks, permission/sign panels). */
-    --mc-soft: var(--mc-sunken);
-    --mc-hover: color-mix(in srgb, var(--mc-text) 6%, var(--mc-elevated));
-    --mc-soft-press: color-mix(in srgb, var(--mc-text) 11%, var(--mc-elevated));
-    --mc-focus-ring: color-mix(in srgb, var(--mc-accent) 72%, var(--mc-bg));
-    --mc-accent-hover: color-mix(in srgb, var(--mc-text) 10%, var(--mc-accent));
-    --mc-accent-press: color-mix(in srgb, var(--mc-text) 18%, var(--mc-accent));
+    --bramble-soft: var(--bramble-sunken);
+    --bramble-hover: color-mix(in srgb, var(--bramble-text) 6%, var(--bramble-elevated));
+    --bramble-soft-press: color-mix(in srgb, var(--bramble-text) 11%, var(--bramble-elevated));
+    --bramble-focus-ring: color-mix(in srgb, var(--bramble-accent) 72%, var(--bramble-bg));
+    --bramble-accent-hover: color-mix(in srgb, var(--bramble-text) 10%, var(--bramble-accent));
+    --bramble-accent-press: color-mix(in srgb, var(--bramble-text) 18%, var(--bramble-accent));
     /* The action tint stays whisper-quiet — enough to read as "active" without
        becoming a second field of contrast. */
-    --mc-accent-soft: color-mix(in srgb, var(--mc-accent) 13%, var(--mc-panel));
-    --mc-positive-soft: color-mix(in srgb, var(--mc-positive) 13%, var(--mc-panel));
-    --mc-danger-soft: color-mix(in srgb, var(--mc-danger) 12%, var(--mc-panel));
-    --mc-shadow: var(--mc-elev-lg);
-    --mc-shadow-sm: var(--mc-elev-sm);
+    --bramble-accent-soft: color-mix(in srgb, var(--bramble-accent) 13%, var(--bramble-panel));
+    --bramble-positive-soft: color-mix(in srgb, var(--bramble-positive) 13%, var(--bramble-panel));
+    --bramble-danger-soft: color-mix(in srgb, var(--bramble-danger) 12%, var(--bramble-panel));
+    --bramble-shadow: var(--bramble-elev-lg);
+    --bramble-shadow-sm: var(--bramble-elev-sm);
     /* Anchored bottom-bar footprint: one source of truth consumed by the dock
        itself, the dock-screen scroll clearance, and the toast stack offset. */
-    --mc-dock-h: calc(${CONTROL.nav} + ${SPACE.sm});
+    --bramble-dock-h: calc(${CONTROL.nav} + ${SPACE.sm});
     /* Token fallbacks remain neutral so unverified assets do not acquire a
        decorative identity that could imply trust. */
-    --mc-avatar-0: hsl(0 0% 42%);
-    --mc-avatar-1: hsl(0 0% 52%);
-    --mc-avatar-2: hsl(0 0% 62%);
-    --mc-avatar-3: hsl(0 0% 72%);
+    --bramble-avatar-0: hsl(0 0% 42%);
+    --bramble-avatar-1: hsl(0 0% 52%);
+    --bramble-avatar-2: hsl(0 0% 62%);
+    --bramble-avatar-3: hsl(0 0% 72%);
   }
   * { box-sizing: border-box; }
   html, body, #app {
@@ -65,9 +65,9 @@ export const BASE_STYLES = `
     width: 100%;
   }
   body {
-    background: var(--mc-bg);
-    color: var(--mc-text);
-    font-family: var(--mc-font-ui);
+    background: var(--bramble-bg);
+    color: var(--bramble-text);
+    font-family: var(--bramble-font-ui);
     font-size: ${TYPE.body.size};
     -webkit-font-smoothing: antialiased;
     line-height: ${TYPE.body.line};
@@ -84,7 +84,7 @@ export const BASE_STYLES = `
   ul { list-style: none; padding: 0; }
   h1 { font-size: ${TYPE.display.size}; font-weight: 700; letter-spacing: -0.02em; line-height: ${TYPE.display.line}; }
   h2 { font-size: ${TYPE.title.size}; font-weight: 700; letter-spacing: -0.01em; line-height: ${TYPE.title.line}; }
-  p { color: var(--mc-muted); }
+  p { color: var(--bramble-muted); }
   .shell {
     display: flex;
     flex-direction: column;
@@ -109,7 +109,7 @@ export const BASE_STYLES = `
      clearance below the content equal to the bar footprint plus a breathing
      gap, so the last row never hides beneath it at any scroll position. Flow
      screens carry no dock. */
-  .screen:not(.flow) { padding-bottom: calc(var(--mc-dock-h) + ${SPACE.lg}); }
+  .screen:not(.flow) { padding-bottom: calc(var(--bramble-dock-h) + ${SPACE.lg}); }
 
   /* Layout primitives */
   .row, .address-line, .context-line, .callout, .token-row {
@@ -147,7 +147,7 @@ export const BASE_STYLES = `
     line-height: ${TYPE.display.line};
   }
   .eyebrow {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -166,7 +166,7 @@ export const BASE_STYLES = `
     align-items: center;
     background: transparent;
     border-radius: ${RADIUS.full};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     flex: 0 1 auto;
     gap: 10px;
@@ -177,14 +177,14 @@ export const BASE_STYLES = `
     text-align: left;
   }
   @media (hover: hover) and (pointer: fine) {
-    button.account-trigger:not(:disabled):hover { background: var(--mc-hover); }
+    button.account-trigger:not(:disabled):hover { background: var(--bramble-hover); }
   }
-  button.account-trigger:not(:disabled):active { background: var(--mc-soft-press); }
+  button.account-trigger:not(:disabled):active { background: var(--bramble-soft-press); }
   .brand-mark {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     flex: none;
     height: 36px;
@@ -200,7 +200,7 @@ export const BASE_STYLES = `
     min-width: 0;
   }
   .account-name strong {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font-size: ${TYPE.body.size};
     font-weight: 700;
     overflow: hidden;
@@ -208,7 +208,7 @@ export const BASE_STYLES = `
     text-wrap: nowrap;
   }
   .account-name .icon {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     flex: none;
     height: 12px;
     transition: transform ${MOTION.tabMs}ms ${MOTION.ease};
@@ -217,7 +217,7 @@ export const BASE_STYLES = `
   .account-trigger[aria-expanded="true"] .account-name .icon { transform: rotate(180deg); }
   .account-net {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     font-size: ${TYPE.caption.size};
     gap: 6px;
@@ -230,7 +230,7 @@ export const BASE_STYLES = `
   .account-network-label { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .account-net.degraded .dot {
     animation: network-status-pulse 2400ms var(--ease-in-out) infinite;
-    background: var(--mc-warning);
+    background: var(--bramble-warning);
   }
   @keyframes network-status-pulse {
     0%, 100% { opacity: 1; }
@@ -251,7 +251,7 @@ export const BASE_STYLES = `
   /* The total carries real presence: large, heavy, tightly tracked, optically
      sized, and tabular so digits never jitter as prices stream. */
   .hero-total {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font-optical-sizing: auto;
     font-size: ${TYPE.portfolio.size};
     font-variant-numeric: tabular-nums;
@@ -269,14 +269,14 @@ export const BASE_STYLES = `
     font-weight: 650;
     gap: 6px;
   }
-  .hero-change .hero-change-amt { color: var(--mc-positive); }
-  .hero-change.down .hero-change-amt { color: var(--mc-danger); }
-  .hero-change .hero-change-win { color: var(--mc-muted); font-weight: 500; }
+  .hero-change .hero-change-amt { color: var(--bramble-positive); }
+  .hero-change.down .hero-change-amt { color: var(--bramble-danger); }
+  .hero-change .hero-change-win { color: var(--bramble-muted); font-weight: 500; }
   /* Shielded-balance qualifier stays quiet beneath the total; network
      freshness now belongs to the persistent header status. */
   .hero-stale {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     font-size: ${TYPE.caption.size};
     font-weight: 500;
@@ -296,9 +296,9 @@ export const BASE_STYLES = `
   }
   .action-tile {
     align-content: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: grid;
     gap: ${SPACE.xs};
     justify-items: center;
@@ -312,18 +312,18 @@ export const BASE_STYLES = `
     width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
-    .action-tile:not(:disabled):hover { background: var(--mc-hover); transform: translateY(-2px); }
-    .action-tile:not(:disabled):hover .tile-label { color: var(--mc-text); }
+    .action-tile:not(:disabled):hover { background: var(--bramble-hover); transform: translateY(-2px); }
+    .action-tile:not(:disabled):hover .tile-label { color: var(--bramble-text); }
   }
-  .action-tile:not(:disabled):active { background: var(--mc-soft-press); transform: scale(0.97); }
+  .action-tile:not(:disabled):active { background: var(--bramble-soft-press); transform: scale(0.97); }
   button.action-tile:disabled { cursor: not-allowed; opacity: 0.4; }
   .tile-icon {
     align-items: center;
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: inline-flex;
     justify-content: center;
   }
-  .tile-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: ${WEIGHT.semibold}; }
+  .tile-label { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; font-weight: ${WEIGHT.semibold}; }
   .tile-icon .icon {
     height: ${CONTROL.majorIcon};
     stroke-width: 1.85;
@@ -341,7 +341,7 @@ export const BASE_STYLES = `
   .flow-title { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .flow-title h1 { font-size: ${TYPE.display.size}; }
   .flow-title p {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     overflow-wrap: anywhere;
   }
@@ -354,7 +354,7 @@ export const BASE_STYLES = `
      rows directly (not inherited): anchor rows (Help & docs) never pass
      through the base button rule. */
   .menu-list, .option-list {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     gap: 0;
@@ -362,7 +362,7 @@ export const BASE_STYLES = `
   }
   .menu-list > * + *, .option-list > * + * { position: relative; }
   .menu-list > * + *::before, .option-list > * + *::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     left: ${SPACE.lg};
@@ -374,7 +374,7 @@ export const BASE_STYLES = `
     align-items: center;
     background: transparent;
     border-radius: 0;
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     gap: ${SPACE.sm};
     justify-content: flex-start;
@@ -387,19 +387,19 @@ export const BASE_STYLES = `
   }
   @media (hover: hover) and (pointer: fine) {
     button.menu-row:not(:disabled):hover, button.option-row:not(:disabled):hover, a.menu-row:hover {
-      background: var(--mc-hover);
+      background: var(--bramble-hover);
     }
-    button.option-row[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
+    button.option-row[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); }
   }
   button.menu-row:not(:disabled):active, button.option-row:not(:disabled):active {
-    background: var(--mc-soft-press);
+    background: var(--bramble-soft-press);
   }
-  button.option-row[aria-pressed="true"] { background: var(--mc-accent-soft); }
+  button.option-row[aria-pressed="true"] { background: var(--bramble-accent-soft); }
   /* Action row: a group-terminal action (e.g. "Add account") reads as accent
      text inside the group rather than a standalone boxed button. */
-  button.menu-row.row-action { color: var(--mc-accent); }
-  button.menu-row.row-action .menu-icon { color: var(--mc-accent); }
-  .menu-icon, .menu-chevron { color: var(--mc-muted); display: inline-flex; flex: none; }
+  button.menu-row.row-action { color: var(--bramble-accent); }
+  button.menu-row.row-action .menu-icon { color: var(--bramble-accent); }
+  .menu-icon, .menu-chevron { color: var(--bramble-muted); display: inline-flex; flex: none; }
   .menu-icon .icon { height: 20px; width: 20px; }
   .avatar {
     border-radius: ${RADIUS.full};
@@ -411,9 +411,9 @@ export const BASE_STYLES = `
   .brand-mark .icon { height: 20px; width: 20px; }
   .option-avatar {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     flex: none;
     height: 36px;
@@ -422,10 +422,10 @@ export const BASE_STYLES = `
     width: 36px;
   }
   input[type="file"] { padding: ${SPACE.sm} ${SPACE.md}; }
-  .option-mark { color: var(--mc-accent); display: inline-flex; flex: none; }
+  .option-mark { color: var(--bramble-accent); display: inline-flex; flex: none; }
   .menu-copy, .option-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .menu-copy strong, .option-copy strong { font-size: ${TYPE.body.size}; font-weight: 600; }
-  .menu-value { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
-  .option-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
-  .option-sub { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .menu-value { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
+  .option-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
+  .option-sub { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
 `;

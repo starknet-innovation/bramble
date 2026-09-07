@@ -8,10 +8,10 @@ import { describe, expect, test } from "bun:test";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
-} from "@mc-wallet/starknet/account-contracts";
-import { argentQueryAccount, krustyAccount } from "@mc-wallet/starknet/provider";
-import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+} from "@bramble/starknet/account-contracts";
+import { argentQueryAccount, krustyAccount } from "@bramble/starknet/provider";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import { EDataAvailabilityMode, ETransactionVersion3, RpcProvider, type Signature } from "starknet";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";

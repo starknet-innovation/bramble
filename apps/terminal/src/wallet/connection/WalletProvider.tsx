@@ -1,8 +1,8 @@
 /**
  * Wallet connection context for the trade terminal.
  *
- * Connects directly to the injected MC Wallet provider (preferring
- * window.starknet_mcWallet), exposes the connected account and address, and
+ * Connects directly to the injected Bramble provider (preferring
+ * window.starknet_bramble), exposes the connected account and address, and
  * drives the Connect / Disconnect buttons throughout the shell.
  *
  * Screens consume this via the `useWallet()` hook. Protocol calldata is handed
@@ -23,7 +23,7 @@ import type { AccountInterface, InvokeFunctionResponse } from "starknet";
 import {
   INJECTION_TIMEOUT_MS,
   type StarknetWindowObject,
-  waitForInjectedMcWallet,
+  waitForInjectedBramble,
 } from "./starknet-window";
 import {
   requestAccounts,
@@ -128,7 +128,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     try {
       const target = await resolveWallet();
       if (target === null) {
-        throw new Error("No Starknet wallet detected. Install the MC Wallet extension.");
+        throw new Error("No Starknet wallet detected. Install the Bramble extension.");
       }
       const addresses = await requestAccounts(target);
       const nextAddress = addresses[0];
@@ -343,7 +343,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     let cancelled = false;
     void (async () => {
       try {
-        const target = await waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
+        const target = await waitForInjectedBramble(INJECTION_TIMEOUT_MS);
         if (cancelled || target === null) {
           return;
         }

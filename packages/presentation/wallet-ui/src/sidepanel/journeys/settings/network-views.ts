@@ -8,12 +8,12 @@
  * background returned. No value here is written directly to storage.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import { explorerFallbackAllowed, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { checkboxField, textField } from "@mc-wallet/ui-kit/fields";
-import { isStarknetNetworkId, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { Strk20NetworkConfig } from "@bramble/privacy/config";
+import { explorerFallbackAllowed, type WalletPreferences } from "@bramble/settings/preferences";
+import { button } from "@bramble/ui-kit/controls";
+import { checkboxField, textField } from "@bramble/ui-kit/fields";
+import { isStarknetNetworkId, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { contextHelp, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";

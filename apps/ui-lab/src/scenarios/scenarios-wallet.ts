@@ -1,5 +1,5 @@
-import type { HomeTab, SidepanelWallet } from "@mc-wallet/wallet-ui/lab";
-import { bindHomeUi, bindReceiveWalletCard } from "@mc-wallet/wallet-ui/lab";
+import type { HomeTab, SidepanelWallet } from "@bramble/wallet-ui/lab";
+import { bindHomeUi, bindReceiveWalletCard } from "@bramble/wallet-ui/lab";
 import { discoveredNft, softwareAccount, statusFor } from "../fixtures/fixtures";
 import {
   allowances,

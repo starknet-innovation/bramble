@@ -1,8 +1,8 @@
 /**
  * Versioned vault schema and validators for decrypted wallet state.
  */
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import { isWalletOrigin } from "@bramble/core/origin";
 import {
   type AccountRef,
   ARGENT_ACCOUNT_CLASS_HASH,
@@ -11,13 +11,19 @@ import {
   canonicalLegacyAccountRef,
   isAccountId,
   isAccountRef,
+  isImportedSeedId,
   isLegacyAccountRef,
   isLegacyV6AccountRef,
   type LegacyAccountRef,
   type LegacyV6AccountRef,
-} from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt, isStarkPrivateKey, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/accounts";
+import { canonicalFelt, isStarkPrivateKey, sameFelt } from "@bramble/wallet-model/networks";
+import { isMnemonicText } from "@bramble/wallet-model/passphrase";
+import type { OriginGrant, SigningKeyRef, VaultV1, VaultV2, VaultV3 } from "./schema-types";
+
+/** Re-exports the legacy type surface from its size-budget split. */
+export type { OriginGrant, SigningKeyRef, VaultV1, VaultV2, VaultV3 } from "./schema-types";
+
 import {
   type AccountSecretRef,
   hasValidAccountSecretBindings,
@@ -27,82 +33,13 @@ import {
 /**
  * Current vault schema version accepted by validators and writers.
  *
- * Version 7 retains the exact Argent deployment salt. Version 6 records
- * account-contract semantics explicitly. Version 5
- * canonicalized account identities and their dependent references.
- * Version 4 introduced optional account secrets separated from public
- * {@link AccountRef} metadata.
+ * Version 8 retains imported seeds, each HD account bound to the phrase that
+ * derived it. Version 7 retains the exact Argent deployment salt. Version 6
+ * records account-contract semantics explicitly. Version 5 canonicalized
+ * account identities. Version 4 introduced optional account secrets separated
+ * from public {@link AccountRef} metadata.
  */
-export const CURRENT_SCHEMA_VERSION = 7;
-
-/**
- * Encrypted-vault reference from an account id to its private key.
- */
-export type SigningKeyRef = {
-  readonly accountId: string;
-  readonly privateKey: string;
-};
-
-/**
- * Origin permission grant scoped to selected account ids.
- */
-export type OriginGrant = {
-  readonly accountIds: readonly string[];
-  readonly origin: string;
-};
-
-/**
- * Legacy vault schema without a retained recovery phrase. Only reachable
- * through migration; new writes always use the current schema.
- */
-export type VaultV1 = {
-  readonly accounts: readonly LegacyAccountRef[];
-  readonly activeAccountId: string | null;
-  readonly originGrants: readonly OriginGrant[];
-  readonly schemaVersion: 1;
-  readonly signingKeys: readonly SigningKeyRef[];
-};
-
-/**
- * Legacy schema-v2 vault, reachable only through migration. Its accounts are
- * key-backed only (`starknet-bip44` or `imported-raw-key`); a keyless Ledger
- * account is invalid at this version. `mnemonic` retains the recovery phrase
- * (null for vaults migrated from v1). New writes always use {@link VaultV4}.
- */
-export type VaultV2 = {
-  readonly accounts: readonly LegacyAccountRef[];
-  readonly activeAccountId: string | null;
-  readonly mnemonic: string | null;
-  readonly originGrants: readonly OriginGrant[];
-  readonly schemaVersion: 2;
-  readonly signingKeys: readonly SigningKeyRef[];
-};
-
-/**
- * Legacy schema-v3 vault. Identical in shape to v2 but its accounts may
- * include the keyless {@link LedgerAccountRef} variant, so the account↔signingKey
- * bijection is relaxed to require a key for every non-Ledger account only.
- *
- * `mnemonic` is `null` when the vault retains no recovery phrase. That covers two
- * cases and needs no shape change beyond v2: a vault migrated from schema v1
- * (where the phrase was never stored, so its seed accounts stay signable through
- * their retained keys but phrase-dependent operations are read-only), and a
- * Ledger-only wallet created with no seed material at all. The phrase-coverage
- * rule is enforced at the mutation boundary, not the schema: `addDerivedAccount`
- * refuses to derive a new HD account when `mnemonic` is null (it has nothing to
- * derive from), and `createLedgerVault` only ever writes null over a fresh store.
- * The grandfathered legacy null-with-seed shape stays valid at this schema so
- * those v1-migrated wallets never fail closed — which is exactly why the coverage
- * rule cannot be a validator invariant.
- */
-export type VaultV3 = {
-  readonly accounts: readonly LegacyAccountRef[];
-  readonly activeAccountId: string | null;
-  readonly mnemonic: string | null;
-  readonly originGrants: readonly OriginGrant[];
-  readonly schemaVersion: 3;
-  readonly signingKeys: readonly SigningKeyRef[];
-};
+export const CURRENT_SCHEMA_VERSION = 8;
 
 /**
  * Current encrypted vault schema. Optional account secrets are deliberately
@@ -146,9 +83,27 @@ export type VaultV7 = Omit<VaultV4, "accounts" | "schemaVersion"> & {
 };
 
 /**
+ * One imported recovery phrase retained beside the founding phrase, inside the
+ * encrypted vault only; `id` is the handle HD derivations reference.
+ */
+export type ImportedSeedRef = {
+  readonly id: string;
+  readonly mnemonic: string;
+};
+
+/**
+ * Current encrypted vault schema. Version 8 retains imported seeds so accounts
+ * recovered from another wallet's phrase stay re-derivable and revealable.
+ */
+export type VaultV8 = Omit<VaultV7, "schemaVersion"> & {
+  readonly importedSeeds: readonly ImportedSeedRef[];
+  readonly schemaVersion: 8;
+};
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV7;
+export type Vault = VaultV8;
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -177,10 +132,11 @@ const isOriginGrant = (value: unknown, canonical: boolean): value is OriginGrant
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV7 => ({
+export const emptyVault = (): VaultV8 => ({
   accounts: [],
   accountSecrets: [],
   activeAccountId: null,
+  importedSeeds: [],
   mnemonic: null,
   originGrants: [],
   schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -425,13 +381,13 @@ export const isVaultV6 = (value: unknown): value is VaultV6 =>
   });
 
 /**
- * Validates the current schema-v7 vault and all internal references.
+ * Validates legacy schema-v7 vaults for the adjacent v8 migration.
  */
 export const isVaultV7 = (value: unknown): value is VaultV7 =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, V4_KEYS) &&
-  value["schemaVersion"] === CURRENT_SCHEMA_VERSION &&
+  value["schemaVersion"] === 7 &&
   isRetainedMnemonic(value["mnemonic"]) &&
   hasValidVaultReferences(value, {
     canonical: true,
@@ -440,3 +396,53 @@ export const isVaultV7 = (value: unknown): value is VaultV7 =>
   }) &&
   hasValidAccountContractBindings(value) &&
   hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: true });
+
+const V8_KEYS = [...V4_KEYS, "importedSeeds"] as const;
+
+const isImportedSeedRef = (value: unknown): value is ImportedSeedRef =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["id", "mnemonic"]) &&
+  isImportedSeedId(value["id"]) &&
+  isMnemonicText(value["mnemonic"]);
+
+// Every HD account naming a seedId must reference a retained imported seed, so
+// a reveal or re-derivation can never dangle (founding-phrase accounts carry
+// none — see the VaultV3 mutation-boundary phrase rules).
+const hasValidSeedBindings = (value: Record<string, unknown>): boolean => {
+  const seeds = value["importedSeeds"];
+  if (!Array.isArray(seeds) || !seeds.every(isImportedSeedRef)) {
+    return false;
+  }
+  if (!hasUniqueStrings(seeds.map((seed) => seed.id))) {
+    return false;
+  }
+  const accounts = value["accounts"];
+  return (
+    Array.isArray(accounts) &&
+    accounts.every((account) => {
+      const seedId =
+        isAccountRef(account) && account.derivation.kind === "starknet-bip44"
+          ? account.derivation.seedId
+          : undefined;
+      return seedId === undefined || seeds.some((seed) => seed.id === seedId);
+    })
+  );
+};
+
+/**
+ * Validates the current schema-v8 vault and all internal references.
+ */
+export const isVaultV8 = (value: unknown): value is VaultV8 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V8_KEYS) &&
+  value["schemaVersion"] === CURRENT_SCHEMA_VERSION &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, {
+    canonical: true,
+    currentAccounts: true,
+    ledgerAllowed: true,
+  }) &&
+  hasValidAccountContractBindings(value) &&
+  hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: true }) &&
+  hasValidSeedBindings(value);

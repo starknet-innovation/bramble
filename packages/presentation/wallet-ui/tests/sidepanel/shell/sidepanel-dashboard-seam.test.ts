@@ -17,7 +17,7 @@
  * that subtree (the same subtree the pre-existing `biome check` bug trips on).
  */
 import { describe, expect, test } from "bun:test";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../src/popup/responses/responses";
 import { dashboard, type WalletView } from "../../../src/sidepanel/app/screens/views";
 

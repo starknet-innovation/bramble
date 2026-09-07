@@ -1,8 +1,8 @@
 /**
  * Browser extension storage adapter kept behind the generic key-value boundary.
  */
-import type { Json } from "@mc-wallet/core/json";
-import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@mc-wallet/store/kv";
+import type { Json } from "@bramble/core/json";
+import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@bramble/store/kv";
 
 type StorageArea = {
   readonly get: (key: string) => Promise<Record<string, unknown>>;

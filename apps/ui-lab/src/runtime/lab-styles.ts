@@ -1,4 +1,4 @@
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
 
 export const LAB_STYLES = `
   :root {
@@ -10,16 +10,16 @@ export const LAB_STYLES = `
   button, input, select, textarea { font: inherit; }
   button { cursor: pointer; }
   .ui-lab {
-    --lab-accent: ${darkSkin.tokens["--mc-accent"]};
-    --lab-accent-text: ${darkSkin.tokens["--mc-accent-text"]};
-    --lab-bg: ${darkSkin.tokens["--mc-bg"]};
-    --lab-border: ${darkSkin.tokens["--mc-border"]};
-    --lab-danger: ${darkSkin.tokens["--mc-danger"]};
-    --lab-elevated: ${darkSkin.tokens["--mc-elevated"]};
-    --lab-muted: ${darkSkin.tokens["--mc-muted"]};
-    --lab-panel: ${darkSkin.tokens["--mc-panel"]};
-    --lab-sunken: ${darkSkin.tokens["--mc-sunken"]};
-    --lab-text: ${darkSkin.tokens["--mc-text"]};
+    --lab-accent: ${darkSkin.tokens["--bramble-accent"]};
+    --lab-accent-text: ${darkSkin.tokens["--bramble-accent-text"]};
+    --lab-bg: ${darkSkin.tokens["--bramble-bg"]};
+    --lab-border: ${darkSkin.tokens["--bramble-border"]};
+    --lab-danger: ${darkSkin.tokens["--bramble-danger"]};
+    --lab-elevated: ${darkSkin.tokens["--bramble-elevated"]};
+    --lab-muted: ${darkSkin.tokens["--bramble-muted"]};
+    --lab-panel: ${darkSkin.tokens["--bramble-panel"]};
+    --lab-sunken: ${darkSkin.tokens["--bramble-sunken"]};
+    --lab-text: ${darkSkin.tokens["--bramble-text"]};
     background: var(--lab-sunken);
     color: var(--lab-text);
     display: grid;

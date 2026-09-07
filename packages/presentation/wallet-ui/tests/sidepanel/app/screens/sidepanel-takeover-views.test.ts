@@ -5,7 +5,7 @@
  * both files stay within the size budget.
  */
 import { describe, expect, test } from "bun:test";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
@@ -50,7 +50,7 @@ describe("approval takeover views", () => {
     expect(home).toContain('data-approval-action="deny"');
     expect(home).toContain(`data-approval-later="${pending[0]?.id}"`);
     expect(home).toContain('data-liquid-dots="approval"');
-    expect(home).toContain('id="mc-liquid-dots-approval"');
+    expect(home).toContain('id="bramble-liquid-dots-approval"');
     expect(home).not.toContain("wallet-dock");
     expect(quiet).not.toContain("Review request");
     expect(quiet).toContain("wallet-dock");

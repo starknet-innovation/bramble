@@ -10,16 +10,16 @@
  * summary.
  */
 
-import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   asFelt,
   canonicalFelt,
   type StarknetNetworkId,
   sameFelt,
   uint256Felts,
-} from "@mc-wallet/wallet-model/networks";
-import type { AddressBookEntry, TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/networks";
+import type { AddressBookEntry, TokenConfig } from "@bramble/wallet-model/preferences";
 import type { Call } from "starknet";
 import {
   APPROVE_ENTRYPOINTS,

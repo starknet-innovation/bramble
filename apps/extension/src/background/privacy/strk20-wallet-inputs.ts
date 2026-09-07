@@ -2,8 +2,8 @@
  * Strict parsers for extension-only STRK20 wallet journey messages.
  */
 
-import { isSha256Digest } from "@mc-wallet/core/ids";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { isSha256Digest } from "@bramble/core/ids";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { isTransferAmount } from "../routing/message-inputs";
 
 /**

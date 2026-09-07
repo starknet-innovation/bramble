@@ -1,10 +1,10 @@
 /** Wallet transaction and activity boundary tests. */
 import { describe, expect, test } from "bun:test";
-import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { type ActivityEntry, createActivityLog } from "@mc-wallet/transactions/activity";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { TransactionStatusReport } from "@bramble/starknet/rpc";
+import { createMemoryStore } from "@bramble/store/kv";
+import { type ActivityEntry, createActivityLog } from "@bramble/transactions/activity";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";

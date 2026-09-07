@@ -5,19 +5,19 @@
  * asset management, refresh, and settings actions.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { friendlyNetworkError } from "@mc-wallet/core/network-error";
+import { escapeHtml } from "@bramble/core/html";
+import { friendlyNetworkError } from "@bramble/core/network-error";
 import type {
   DisplayCurrency,
   TokenConfig,
   WalletPreferences,
-} from "@mc-wallet/settings/preferences";
-import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import { explorerTransactionUrl } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/settings/preferences";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { menuRow } from "@bramble/ui-kit/navigation";
+import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import type { DiscoveredNft, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { type IconName, icon } from "../../shared/icons";
@@ -135,7 +135,7 @@ const PROVISIONAL_TX_HINT: Partial<Record<ActivityEntry["status"], string>> = {
   pending:
     "Broadcast accepted. Starknet normally confirms quickly, and this wallet checks immediately. A pending transaction can't be fee-bumped, replaced, or cancelled.",
   preconfirmed:
-    "Pre-confirmed by the block proposer, so the result is known but not yet final. MC Wallet keeps checking in the background and will tell you if it does not settle.",
+    "Pre-confirmed by the block proposer, so the result is known but not yet final. Bramble keeps checking in the background and will tell you if it does not settle.",
 };
 
 /**

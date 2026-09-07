@@ -2,20 +2,17 @@
  * Authenticated or relay-backed Starkscan HTTP client and endpoint surface.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   HTTP_BODY_LIMITS,
   parseRetryAfterMilliseconds,
   readBoundedText,
   UNTRUSTED_REQUEST_INIT,
-} from "@mc-wallet/core/http-json";
-import { isRecord } from "@mc-wallet/core/json";
-import { trimTrailingSlashes } from "@mc-wallet/core/service-url";
-import {
-  type ExplorerOutcome,
-  recordExplorerDiagnostic,
-} from "@mc-wallet/starknet/rpc-diagnostics";
-import { canonicalFelt, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/core/http-json";
+import { isRecord } from "@bramble/core/json";
+import { trimTrailingSlashes } from "@bramble/core/service-url";
+import { type ExplorerOutcome, recordExplorerDiagnostic } from "@bramble/starknet/rpc-diagnostics";
+import { canonicalFelt, isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import {
   parseStarkscanAddress,
   parseStarkscanAddressActivity,

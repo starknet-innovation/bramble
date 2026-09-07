@@ -26,20 +26,20 @@ import {
   assertLedgerDeviceReady,
   ledgerPublicKeyX,
   ledgerSignHashOnDevice,
-} from "@mc-wallet/ledger-protocol/client";
+} from "@bramble/ledger-protocol/client";
 import {
   asLedgerRejection,
   LedgerRejection,
   type LedgerRejectionCode,
   ledgerMessage,
-} from "@mc-wallet/ledger-protocol/errors";
+} from "@bramble/ledger-protocol/errors";
 import {
   closeLedgerSessionQuietly,
   type LedgerConnector,
   type LedgerDeviceChoice,
   type LedgerDeviceSession,
-} from "@mc-wallet/ledger-protocol/session";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/ledger-protocol/session";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { LedgerSignRequestSummary } from "../../../popup/responses/responses";
 import type { LedgerSignOutcome } from "./runtime-client";
 

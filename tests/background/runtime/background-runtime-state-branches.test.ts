@@ -8,11 +8,11 @@ import {
   defaultWalletPreferences,
   type WalletPreferences,
   type WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { WalletStatus as VaultStatus } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/settings/preferences";
+import type { Vault } from "@bramble/vault/schema";
+import type { WalletStatus as VaultStatus } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
 import {
   activeAccountContext,

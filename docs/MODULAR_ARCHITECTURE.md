@@ -4,10 +4,10 @@ title: Modular architecture
 permalink: /modular-architecture/
 ---
 
-# MC Wallet modular architecture
+# Bramble modular architecture
 
-This document defines the source and package architecture implemented for MC Wallet and records the
-migration that delivered it. MC Wallet remains one statically packaged Chrome MV3 extension with one
+This document defines the source and package architecture implemented for Bramble and records the
+migration that delivered it. Bramble remains one statically packaged Chrome MV3 extension with one
 privileged background authority. The packages are private compile-time boundaries, not separately
 deployed services or runtime plugins.
 
@@ -59,7 +59,7 @@ drift.
 
 ## Architectural decision
 
-MC Wallet is a **modular monolith with hexagonal boundaries**:
+Bramble is a **modular monolith with hexagonal boundaries**:
 
 - Runtime isolation continues to come from Chrome execution contexts, CSP, extension permissions,
   sender validation, and the background-only custody boundary.
@@ -427,10 +427,10 @@ The repository must enforce the architecture offline:
 Fast local commands operate on one package and its dependents:
 
 ```bash
-bun run --filter @mc-wallet/wallet-protocol test
-bun run --filter @mc-wallet/privacy check
-bun run --filter @mc-wallet/wallet-ui test
-bun run --filter @mc-wallet/extension build
+bun run --filter @bramble/wallet-protocol test
+bun run --filter @bramble/privacy check
+bun run --filter @bramble/wallet-ui test
+bun run --filter @bramble/extension build
 ```
 
 The release gate remains authoritative and comprehensive:

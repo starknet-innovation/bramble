@@ -1,8 +1,8 @@
 /** Participant selection preserves its origin and accepts only resolved public signer data. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { canonicalAddress } from "@mc-wallet/wallet-model/networks";
-import { walletContactCard } from "@mc-wallet/wallet-model/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { canonicalAddress } from "@bramble/wallet-model/networks";
+import { walletContactCard } from "@bramble/wallet-model/preferences";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import type { MultisigUiDeps } from "../../../../src/sidepanel/journeys/multisig/multisig-ui";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";

@@ -1,4 +1,4 @@
-# Agent Guide — MC Wallet
+# Agent Guide — Bramble
 
 Browser-extension wallet for Starknet. Bun + strict TypeScript, no framework. This file is the
 operational guide for coding agents; `CONTRIBUTING.md` holds the binding architecture/security
@@ -21,10 +21,10 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
 - `bun run dev:session` is development-only: it onboards from the repository's published test phrase,
   so its accounts are public. It switches to Sepolia after onboarding and keeps its wallet in a
   git-ignored `.dev-profile/`. Read the header of `tests/e2e/dev-session.ts` before overriding
-  `MC_DEV_MNEMONIC`.
+  `BRAMBLE_DEV_MNEMONIC`.
 
 - The E2E suite blackholes DNS, so no test can reach a live host; `test:e2e:mainnet` opts back in
-  via `MC_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
+  via `BRAMBLE_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
   flag is set.
 - Krusty KMS is installed as an exact, lockfile-pinned npm package by `bun install`.
   `bun run vendor:argent` needs network access to the pinned official Argent release; and

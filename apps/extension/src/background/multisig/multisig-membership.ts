@@ -1,11 +1,11 @@
 /**
  * Fresh Argent signer-GUID authorization shared by scoped read features.
  */
-import type { MultisigStore } from "@mc-wallet/multisig/repository";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import type { MultisigStore } from "@bramble/multisig/repository";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 

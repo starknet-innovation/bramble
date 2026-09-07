@@ -7,8 +7,7 @@
  * passphrase; this module never touches the device or the vault directly.
  */
 
-import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import { showToast } from "../../shared/dom";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-ack";
 
@@ -19,11 +18,7 @@ import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-a
  */
 export type LedgerFirstRunDeps = {
   readonly app: Element | null;
-  readonly startLedgerSetup: (
-    networkId: string,
-    vaultPassphrase: string,
-    accountContractType: AccountContractType,
-  ) => void;
+  readonly startLedgerSetup: (networkId: string, vaultPassphrase: string) => void;
 };
 
 /**
@@ -44,9 +39,6 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
   const passwordRequirement = passwordResult?.closest<HTMLElement>(".password-requirement");
   const ackCheckbox = form?.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
   const button = form?.querySelector<HTMLButtonElement>("#ledger-setup-button");
-  const accountContractInput = form?.querySelector<HTMLInputElement>(
-    'input[name="ledgerAccountContractType"]',
-  );
   const result = form?.querySelector<HTMLElement>("#ledger-passphrase-result");
   const initiallyReady = !(button?.disabled ?? true);
 
@@ -98,11 +90,6 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
       showToast("Acknowledge the real-funds warning first", "error", form);
       return;
     }
-    const accountContractType = accountContractInput?.value;
-    if (!isAccountContractType(accountContractType)) {
-      showToast("Choose a supported account contract", "error", form);
-      return;
-    }
-    deps.startLedgerSetup(MAINNET_NETWORK_ID, passphraseInput?.value ?? "", accountContractType);
+    deps.startLedgerSetup(MAINNET_NETWORK_ID, passphraseInput?.value ?? "");
   });
 };

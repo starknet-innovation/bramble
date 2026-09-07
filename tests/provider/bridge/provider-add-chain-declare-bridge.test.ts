@@ -10,8 +10,8 @@ import {
   type ProviderRequest,
   providerResponse,
   toRuntimeMessage,
-} from "@mc-wallet/wallet-protocol/bridge";
-import { toProviderPayload } from "@mc-wallet/wallet-protocol/results";
+} from "@bramble/wallet-protocol/bridge";
+import { toProviderPayload } from "@bramble/wallet-protocol/results";
 
 const origin = "https://dapp.example";
 const requestId = "123e4567-e89b-42d3-a456-426614174000";

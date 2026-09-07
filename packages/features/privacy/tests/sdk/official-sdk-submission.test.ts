@@ -3,9 +3,9 @@
  * verifies registration, approval, and proof boundaries without live services.
  */
 import { describe, expect, test } from "bun:test";
-import { memoryStrk20MaturityStore } from "@mc-wallet/privacy/maturity";
-import { createOfficialStrk20Service } from "@mc-wallet/privacy/official-sdk-service";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+import { memoryStrk20MaturityStore } from "@bramble/privacy/maturity";
+import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import { num } from "starknet";
 import {

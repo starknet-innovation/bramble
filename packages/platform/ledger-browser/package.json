@@ -1,5 +1,5 @@
 {
-  "name": "@mc-wallet/ledger-browser",
+  "name": "@bramble/ledger-browser",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -23,12 +23,12 @@
     "@ledgerhq/hw-transport-web-ble": "6.35.0",
     "@ledgerhq/hw-transport-webhid": "6.36.0",
     "@ledgerhq/hw-transport-webusb": "6.35.0",
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/ledger-protocol": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*",
+    "@bramble/core": "workspace:*",
+    "@bramble/ledger-protocol": "workspace:*",
+    "@bramble/wallet-model": "workspace:*",
     "buffer": "6.0.3"
   },
   "devDependencies": {
-    "@mc-wallet/testkit": "workspace:*"
+    "@bramble/testkit": "workspace:*"
   }
 }

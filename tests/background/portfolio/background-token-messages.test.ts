@@ -4,12 +4,12 @@
  * all gated to extension-page senders.
  */
 import { describe, expect, test } from "bun:test";
-import type { PriceService } from "@mc-wallet/portfolio/prices";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { TokenMetadata } from "@mc-wallet/starknet/rpc";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { PriceService } from "@bramble/portfolio/prices";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import type { TokenMetadata } from "@bramble/starknet/rpc";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";

@@ -1,7 +1,7 @@
 /** Side-panel template and navigation contract checks. */
 import { describe, expect, test } from "bun:test";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard, WALLET_VIEWS } from "../../../../src/sidepanel/app/screens/views";
 import {
@@ -233,7 +233,7 @@ describe("sidepanel views", () => {
     expect(html).toContain("Review send");
     expect(html).toContain('class="liquid-dots"');
     expect(html).toContain('data-liquid-dots="send"');
-    expect(html).toContain('id="mc-liquid-dots-send"');
+    expect(html).toContain('id="bramble-liquid-dots-send"');
     expect(html).not.toContain("send-spin");
   });
 
@@ -343,8 +343,8 @@ describe("sidepanel views", () => {
     expect(html).toContain('class="avatar-character"');
     expect(html).toContain('class="avatar-eyes"');
     expect(html).toContain('class="avatar-mouth"');
-    expect(html).toMatch(/fill="var\(--mc-account-avatar-\d\)"/);
-    expect(html).toMatch(/var\(--mc-account-avatar-(?:ink|paper)\)/);
+    expect(html).toMatch(/fill="var\(--bramble-account-avatar-\d\)"/);
+    expect(html).toMatch(/var\(--bramble-account-avatar-(?:ink|paper)\)/);
     expect(html).not.toContain('class="avatar-frame"');
     expect(html).not.toContain("linearGradient");
     expect(html).not.toContain("<defs>");

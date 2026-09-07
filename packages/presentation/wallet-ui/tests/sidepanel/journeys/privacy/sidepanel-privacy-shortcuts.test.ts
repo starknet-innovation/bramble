@@ -8,7 +8,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
+import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { bindPrivacy } from "../../../../src/sidepanel/journeys/privacy/privacy-ui";
 import type { SendIntent } from "../../../../src/sidepanel/journeys/send/send-model";

@@ -17,24 +17,38 @@ import {
   assertLedgerDeviceReady,
   type LedgerDeviceClient,
   ledgerPublicKeyX,
-} from "@mc-wallet/ledger-protocol/client";
-import {
-  asLedgerRejection,
-  LedgerRejection,
-  ledgerMessage,
-} from "@mc-wallet/ledger-protocol/errors";
+} from "@bramble/ledger-protocol/client";
+import { asLedgerRejection, LedgerRejection, ledgerMessage } from "@bramble/ledger-protocol/errors";
 import {
   closeLedgerSessionQuietly,
-  type LedgerConnector,
   type LedgerDeviceChoice,
   type LedgerDeviceSession,
-} from "@mc-wallet/ledger-protocol/session";
+} from "@bramble/ledger-protocol/session";
 import type {
   AccountContractType,
   LedgerAccountRef,
   LedgerPubKeyEntry,
-} from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@bramble/wallet-model/ledger-path";
+import {
+  type LedgerCandidate,
+  type LedgerCandidateState,
+  type LedgerOnboardAddKind,
+  type LedgerOnboardController,
+  type LedgerOnboardControllerDeps,
+  ledgerCandidateActive,
+  ledgerCandidateSelectable,
+} from "./onboard-types";
+
+/** Re-exports the controller's documented type surface from its size-budget split. */
+export type {
+  LedgerCandidate,
+  LedgerCandidateState,
+  LedgerOnboardAddKind,
+  LedgerOnboardController,
+  LedgerOnboardControllerDeps,
+  LedgerOnboardView,
+} from "./onboard-types";
 
 /**
  * Number of account indices read per enumeration page (a page is `start` …
@@ -71,102 +85,7 @@ export const enumerateLedgerPubKeys = async (
   return entries;
 };
 
-/**
- * One enumerated candidate for the picker: the derived keyless account plus its
- * best-effort on-chain state. `deployed`/`balance` are `null` while still
- * loading or when the RPC degraded; `duplicate` marks an account already in the
- * vault so it cannot be added twice.
- */
-export type LedgerCandidate = {
-  readonly account: LedgerAccountRef;
-  readonly balance: string | null;
-  readonly deployed: boolean | null;
-  readonly duplicate: boolean;
-};
-
-/**
- * Account-contract-aware routes dispatched by the add-account chooser.
- */
-export type LedgerOnboardAddKind =
-  | "argent"
-  | "import"
-  | "ledger-argent"
-  | "ledger-openzeppelin"
-  | "multisig"
-  | "openzeppelin";
-
-/**
- * The onboarding device-prompt view the binder renders: the add-account
- * chooser, the connect gesture, the silent read, the multi-select account
- * picker (with the currently-selected indices), or a typed error.
- */
-export type LedgerOnboardView =
-  | { readonly kind: "chooser"; readonly selected: LedgerOnboardAddKind | null }
-  | { readonly kind: "connect" }
-  | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
-  | { readonly kind: "reading" }
-  | {
-      readonly kind: "picker";
-      readonly candidates: readonly LedgerCandidate[];
-      readonly message?: string;
-      readonly selected: readonly number[];
-    }
-  | { readonly kind: "error"; readonly message: string };
-
-/**
- * Best-effort on-chain state; `null` degrades to unavailable without blocking.
- */
-export type LedgerCandidateState = {
-  readonly balance: string | null;
-  readonly deployed: boolean | null;
-};
-
-/**
- * Injected collaborators keep chooser, enumeration, contract-aware derivation,
- * creation, refresh, and cancellation testable without hardware or a live
- * background.
- */
-export type LedgerOnboardControllerDeps = {
-  readonly addHd: (accountContractType: AccountContractType) => Promise<void>;
-  readonly connector: LedgerConnector;
-  readonly create: (account: LedgerAccountRef) => Promise<void>;
-  readonly derive: (
-    entries: readonly LedgerPubKeyEntry[],
-    accountContractType: AccountContractType,
-  ) => Promise<readonly LedgerAccountRef[]>;
-  readonly describe: (account: LedgerAccountRef) => Promise<LedgerCandidateState>;
-  readonly enumerate: (
-    client: LedgerDeviceClient,
-    startIndex: number,
-    readiness: LedgerDeviceSession["readiness"],
-  ) => Promise<readonly LedgerPubKeyEntry[]>;
-  readonly existingIds: () => ReadonlySet<string>;
-  readonly onCancel: () => void;
-  readonly openImport: () => void;
-  readonly openMultisig: () => void;
-  readonly refresh: () => Promise<void>;
-  readonly render: (view: LedgerOnboardView | null) => void;
-};
-
-/**
- * Drives the Ledger onboarding subflow. Returned by
- * {@link createLedgerOnboardController}.
- */
-export type LedgerOnboardController = {
-  readonly addSelected: () => void;
-  readonly cancel: () => void;
-  readonly choose: (kind: LedgerOnboardAddKind) => void;
-  readonly chooseDevice: (deviceId: string) => void;
-  readonly connect: () => void;
-  readonly continueChoice: () => void;
-  readonly loadMore: () => void;
-  readonly select: (kind: LedgerOnboardAddKind) => void;
-  readonly showChooser: () => void;
-  readonly start: (accountContractType?: AccountContractType) => void;
-  readonly toggle: (accountIndex: number) => void;
-};
-
-const EMPTY_STATE: LedgerCandidateState = { balance: null, deployed: null };
+const EMPTY_STATE: LedgerCandidateState = { balance: null, deployed: null, funded: null };
 
 /**
  * Creates the Ledger onboarding controller. `showChooser` opens the add-account
@@ -186,12 +105,11 @@ export const createLedgerOnboardController = (
   deps: LedgerOnboardControllerDeps,
 ): LedgerOnboardController => {
   let candidates: readonly LedgerCandidate[] = [];
-  let accountContractType: AccountContractType = "openzeppelin";
   const createdIds = new Set<string>();
   let devices: readonly LedgerDeviceChoice[] = [];
   let selectedDeviceId: string | null = null;
-  let selectedAddKind: LedgerOnboardAddKind | null = null;
-  const selected = new Set<number>();
+
+  const selected = new Set<string>();
   let nextIndex = 0;
   let busy = false;
   let flowEpoch = 0;
@@ -202,7 +120,6 @@ export const createLedgerOnboardController = (
     createdIds.clear();
     devices = [];
     selectedDeviceId = null;
-    selectedAddKind = null;
     selected.clear();
     nextIndex = 0;
   };
@@ -212,12 +129,14 @@ export const createLedgerOnboardController = (
     balance: null,
     deployed: null,
     duplicate: createdIds.has(account.id) || deps.existingIds().has(account.id),
+    funded: null,
   });
 
   const withState = (account: LedgerAccountRef, state: LedgerCandidateState): LedgerCandidate => ({
     ...toCandidate(account),
     balance: state.balance,
     deployed: state.deployed,
+    funded: state.funded,
   });
 
   const renderPicker = (message?: string): void => {
@@ -231,9 +150,9 @@ export const createLedgerOnboardController = (
 
   // Append a freshly derived page as pending (Checking…) rows and advance the
   // page cursor, then paint so new indices appear before their on-chain state.
-  const appendPage = (accounts: readonly LedgerAccountRef[], startIndex: number): void => {
+  const appendPage = (accounts: readonly LedgerAccountRef[], nextStartIndex: number): void => {
     candidates = [...candidates, ...accounts.map(toCandidate)];
-    nextIndex = startIndex + accounts.length;
+    nextIndex = nextStartIndex;
     renderPicker();
   };
 
@@ -242,6 +161,13 @@ export const createLedgerOnboardController = (
   const applyDescribed = (described: readonly LedgerCandidate[]): void => {
     const byId = new Map(described.map((item) => [item.account.id, item] as const));
     candidates = candidates.map((item) => byId.get(item.account.id) ?? item);
+    // Every active account is selected by default; the user deselects rather
+    // than hunts. Runs once per candidate (when its on-chain state resolves).
+    for (const item of described) {
+      if (ledgerCandidateActive(item) && ledgerCandidateSelectable(item)) {
+        selected.add(item.account.id);
+      }
+    }
     renderPicker();
   };
 
@@ -278,11 +204,17 @@ export const createLedgerOnboardController = (
       const entries = await deps.enumerate(session.client, startIndex, session.readiness);
       await closeLedgerSessionQuietly(session);
       session = null;
-      const accounts = await deps.derive(entries, accountContractType);
+      // Both contract families derive from the same device keys, so the picker
+      // can group existing Bramble and Ready accounts side by side.
+      const [bramble, ready] = await Promise.all([
+        deps.derive(entries, "openzeppelin"),
+        deps.derive(entries, "argent"),
+      ]);
+      const accounts = [...bramble, ...ready];
       if (epoch !== flowEpoch) {
         return;
       }
-      appendPage(accounts, startIndex);
+      appendPage(accounts, startIndex + entries.length);
       const described = await describePage(accounts);
       if (epoch === flowEpoch) {
         applyDescribed(described);
@@ -363,25 +295,21 @@ export const createLedgerOnboardController = (
     );
   };
 
-  const runToggle = (accountIndex: number): void => {
-    const candidate = candidates.find(
-      (item) => item.account.derivation.accountIndex === accountIndex,
-    );
-    if (!candidate || candidate.duplicate) {
+  const runToggle = (accountId: string): void => {
+    const candidate = candidates.find((item) => item.account.id === accountId);
+    if (!candidate || !ledgerCandidateSelectable(candidate)) {
       return;
     }
-    if (selected.has(accountIndex)) {
-      selected.delete(accountIndex);
+    if (selected.has(accountId)) {
+      selected.delete(accountId);
     } else {
-      selected.add(accountIndex);
+      selected.add(accountId);
     }
     renderPicker();
   };
 
   const runAddSelected = async (): Promise<void> => {
-    const chosen = candidates.filter(
-      (item) => !item.duplicate && selected.has(item.account.derivation.accountIndex),
-    );
+    const chosen = candidates.filter((item) => !item.duplicate && selected.has(item.account.id));
     if (busy || chosen.length === 0) {
       return;
     }
@@ -391,7 +319,7 @@ export const createLedgerOnboardController = (
       for (const candidate of chosen) {
         await deps.create(candidate.account);
         createdIds.add(candidate.account.id);
-        selected.delete(candidate.account.derivation.accountIndex);
+        selected.delete(candidate.account.id);
         candidates = candidates.map((item) =>
           item.account.id === candidate.account.id ? { ...item, duplicate: true } : item,
         );
@@ -442,13 +370,19 @@ export const createLedgerOnboardController = (
   };
 
   const choose = (kind: LedgerOnboardAddKind): void => {
-    if (kind === "ledger-argent" || kind === "ledger-openzeppelin") {
-      accountContractType = kind === "ledger-argent" ? "argent" : "openzeppelin";
+    if (kind === "ledger") {
+      // The Ledger route serves creation and import alike: the picker lists
+      // what the device key derives, existing accounts included.
       resetState();
       deps.render({ kind: "connect" });
-    } else if (kind === "argent" || kind === "openzeppelin") {
-      void runChooseHd(kind);
+    } else if (kind === "regular") {
+      void runChooseHd("openzeppelin");
     } else if (kind === "import") {
+      deps.render({ kind: "import-chooser" });
+    } else if (kind === "import-phrase") {
+      deps.render(null);
+      deps.openImportSeed();
+    } else if (kind === "import-key") {
       deps.render(null);
       deps.openImport();
     } else {
@@ -471,29 +405,19 @@ export const createLedgerOnboardController = (
     connect() {
       startConnect();
     },
-    continueChoice() {
-      if (selectedAddKind) {
-        choose(selectedAddKind);
-      }
-    },
     loadMore() {
       void loadPage(obtainMore, nextIndex, false);
     },
-    select(kind) {
-      selectedAddKind = kind;
-      deps.render({ kind: "chooser", selected: kind });
-    },
     showChooser() {
       resetState();
-      deps.render({ kind: "chooser", selected: null });
+      deps.render({ kind: "chooser" });
     },
-    start(contractType = "openzeppelin") {
+    start() {
       resetState();
-      accountContractType = contractType;
       deps.render({ kind: "connect" });
     },
-    toggle(accountIndex) {
-      runToggle(accountIndex);
+    toggle(accountId) {
+      runToggle(accountId);
     },
   };
 };

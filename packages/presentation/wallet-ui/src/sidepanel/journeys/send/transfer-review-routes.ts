@@ -10,8 +10,8 @@
  * screens is what stops a pool charge being billed as a relay price again.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { SendDisclosure, SendRoute } from "@mc-wallet/transactions/send-routes";
+import { escapeHtml } from "@bramble/core/html";
+import type { SendDisclosure, SendRoute } from "@bramble/transactions/send-routes";
 import { formatFri } from "../../shared/parts";
 import { reviewFeeSection } from "../../shared/review-render";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
