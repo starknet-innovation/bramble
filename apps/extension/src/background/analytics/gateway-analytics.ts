@@ -4,6 +4,7 @@
  * vendored privacy SDK and starknet.js share the same exact-origin policy.
  */
 
+import { STRK20_GATEWAY_BASE } from "@mc-wallet/privacy/config";
 import type { Strk20Service } from "@mc-wallet/privacy/service";
 import type { KeyValueStore } from "@mc-wallet/store/kv";
 
@@ -11,7 +12,7 @@ import type { KeyValueStore } from "@mc-wallet/store/kv";
 export const ANALYTICS_INSTALLATION_ID_KEY = "mc-wallet:analytics-installation-id";
 
 /** The only origin allowed to receive product-analytics metadata. */
-export const ANALYTICS_GATEWAY_ORIGIN = "https://wallet.nodes.starknet.org";
+export const ANALYTICS_GATEWAY_ORIGIN = new URL(STRK20_GATEWAY_BASE).origin;
 
 const INSTALLATION_HEADER = "X-MC-Installation-ID";
 const VERSION_HEADER = "X-MC-App-Version";
@@ -130,7 +131,8 @@ export const analyticsReleaseChannel = (
 /**
  * Creates a fail-open-for-wallet-traffic analytics wrapper. Storage,
  * preference, or metadata failures omit every analytics header rather than
- * blocking the underlying request or emitting a partial set.
+ * blocking the underlying request or emitting a partial set. Requests carrying
+ * metadata reject redirects so identifiers cannot escape the gateway origin.
  */
 export const createGatewayAnalytics = ({
   enabled,
@@ -191,7 +193,11 @@ export const createGatewayAnalytics = ({
       return http(input, stripped ? { ...init, headers } : init);
     }
     await addAnalyticsHeaders(input, headers);
-    return http(input, { ...init, headers });
+    return http(input, {
+      ...init,
+      headers,
+      ...(headers.has(INSTALLATION_HEADER) ? { redirect: "error" as const } : {}),
+    });
   };
 
   const withFlow = async <T>(run: () => Promise<T>): Promise<T> => {

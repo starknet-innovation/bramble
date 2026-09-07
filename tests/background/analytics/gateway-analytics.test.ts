@@ -103,6 +103,32 @@ describe("gateway analytics fetch", () => {
     expect(headersAt(outside.calls, 0).get("x-mc-installation-id")).toBeNull();
   });
 
+  test("rejects redirects carrying identifiers even when the caller requests follow", async () => {
+    const capture = captureHttp();
+    let enabled = true;
+    const analytics = createGatewayAnalytics({
+      enabled: () => enabled,
+      http: capture.http,
+      metadata,
+      randomUuid: () => INSTALLATION_ID,
+      store: createMemoryStore(),
+    });
+    const url = `${ANALYTICS_GATEWAY_ORIGIN}/rpc/mainnet/v0_10`;
+    for (const input of [url, new URL(url), new Request(url, { redirect: "follow" })]) {
+      await analytics.fetch(input, { redirect: "follow" });
+    }
+    for (const call of capture.calls) {
+      const request = new Request(call.input, call.init);
+      expect(request.headers.get("x-mc-installation-id")).toBe(INSTALLATION_ID);
+      expect(request.redirect).toBe("error");
+    }
+    enabled = false;
+    await analytics.fetch(url, { redirect: "follow" });
+    const optedOut = callAt(capture.calls, 3);
+    expect(new Request(optedOut.input, optedOut.init).redirect).toBe("follow");
+    expect(headersFor(optedOut).get("x-mc-installation-id")).toBeNull();
+  });
+
   test("sends no partial or caller-spoofed metadata while disabled", async () => {
     const capture = captureHttp();
     let randomCalls = 0;
