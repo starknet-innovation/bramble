@@ -8,6 +8,7 @@
     "check": "bun run check:types && bun run check:lint && bun run test && bun run build",
     "check:lint": "biome check .",
     "check:types": "tsc --noEmit",
+    "deploy": "wrangler deploy",
     "dev": "vite",
     "preview": "vite preview",
     "test": "bun test"
@@ -30,6 +31,7 @@
     "@vitejs/plugin-react": "6.1.1",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
-    "vite": "8.2.2"
+    "vite": "8.2.2",
+    "wrangler": "4.128.0"
   }
 }
