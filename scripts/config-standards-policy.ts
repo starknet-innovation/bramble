@@ -15,12 +15,12 @@ export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/testkit": "workspace:*",
-  "@biomejs/biome": "2.5.8",
+  "@biomejs/biome": "2.5.11",
   "@playwright/test": "1.62.1",
-  "@types/bun": "1.3.14",
-  "@types/node": "26.2.0",
+  "@types/bun": "1.4.0",
+  "@types/node": "26.4.0",
   "fast-check": "4.9.0",
-  knip: "6.32.2",
+  knip: "6.32.3",
   madge: "8.0.0",
   typescript: "6.0.3",
 };

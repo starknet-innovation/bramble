@@ -27,7 +27,7 @@
     "starknet": "10.0.2"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.11.2",
+    "@happy-dom/global-registrator": "20.11.13",
     "@bramble/store": "workspace:*",
     "@bramble/testkit": "workspace:*"
   }
