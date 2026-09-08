@@ -1,7 +1,7 @@
 /** Argent multisig views expose exact frozen authority and fail closed without freshness. */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { UINT128_LIMIT } from "@bramble/wallet-model/networks";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import { multisigWatchFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
 import {
@@ -466,7 +466,6 @@ describe("Argent frozen-intent composer", () => {
       balances: { balances: [{ ...token, balance: "42000000000000000000", formatted: "42" }] },
       changes: {},
       currency: "usd",
-      nfts: [],
       prices: { [token.address]: 0.5 },
     });
     expect(html).toContain("New transaction");

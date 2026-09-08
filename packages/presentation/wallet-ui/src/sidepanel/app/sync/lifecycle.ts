@@ -1,6 +1,6 @@
 /** Browser lifecycle wiring for side-panel refreshes. */
 
-import { isWalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+import { isWalletEventMessage } from "@bramble/wallet-protocol/events";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import {
   type TransactionAlertReader,
@@ -43,10 +43,6 @@ export const startRefreshLifecycle = ({
     if (isWalletEventMessage(message)) scheduler.refreshNow();
   });
   document.addEventListener("visibilitychange", scheduler.visibilityChanged);
-  window.addEventListener("focus", () => {
-    scheduler.start();
-    scheduler.refreshNow();
-  });
   window.addEventListener("pagehide", scheduler.stop, { once: true });
   scheduler.start();
 };

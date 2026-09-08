@@ -8,7 +8,7 @@
  * the wallet has no reason to trust at all.
  */
 import { describe, expect, test } from "bun:test";
-import { JSON_BUDGETS } from "@mc-wallet/core/json";
+import { JSON_BUDGETS } from "@bramble/core/json";
 import { runtimeReturning } from "../../../support/runtime-client-fixtures";
 
 const ORIGIN = "https://dapp.example";

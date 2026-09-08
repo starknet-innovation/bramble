@@ -8,7 +8,7 @@
  * route rather than once per privacy feature.
  */
 
-import type { SendRoute } from "@mc-wallet/transactions/send-routes";
+import type { SendRoute } from "@bramble/transactions/send-routes";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferFields } from "./transfer-model";

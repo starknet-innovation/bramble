@@ -6,7 +6,7 @@ import {
   isServiceUrl,
   isWebSocketServiceUrl,
   trimTrailingSlashes,
-} from "@mc-wallet/core/service-url";
+} from "@bramble/core/service-url";
 
 describe("service URLs", () => {
   test("accepts reviewed transports and rejects credentialed or remote HTTP URLs", () => {

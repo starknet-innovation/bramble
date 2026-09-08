@@ -1,14 +1,14 @@
 /**
- * Adapter from the pinned official Starknet privacy SDK browser bundle to MC
+ * Adapter from the pinned official Starknet privacy SDK browser bundle to Bramble
  * Wallet's narrow STRK20 middleware contract.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isJson } from "@mc-wallet/core/json";
-import { serializeAccountSignature } from "@mc-wallet/starknet/account-contracts";
-import { createRpcProvider } from "@mc-wallet/starknet/provider";
-import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@mc-wallet/starknet/rpc-submit";
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { isJson } from "@bramble/core/json";
+import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
+import { createRpcProvider } from "@bramble/starknet/provider";
+import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call, RpcProvider, TypedData } from "starknet";
 import { num, typedData } from "starknet";
 import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "../paymaster/paymaster";

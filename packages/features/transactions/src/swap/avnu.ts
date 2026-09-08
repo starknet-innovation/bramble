@@ -23,14 +23,15 @@ import {
   fetchBoundedJson,
   HTTP_BODY_LIMITS,
   HTTP_REQUEST_TIMEOUT_MS,
-} from "@mc-wallet/core/http-json";
-import { isRecord, isSafeDecimals } from "@mc-wallet/core/json";
+} from "@bramble/core/http-json";
+import { isRecord, isSafeDecimals } from "@bramble/core/json";
+import { AVNU_MAX_CALLDATA_LENGTH } from "@bramble/wallet-model/avnu-route";
 import {
   isStarkFieldElement,
   STARKNET_NETWORKS,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { AVNU_MULTI_ROUTE_SWAP } from "./avnu-route";
 
 /**
@@ -207,8 +208,6 @@ const isQuoteId = (value: unknown): value is string =>
 const isEntrypoint = (value: unknown): value is string =>
   typeof value === "string" && /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(value);
 
-const MAX_CALLDATA_LENGTH = 2000;
-
 /**
  * Hard cap on the calls one build may return. A swap is an approval plus a
  * route call, so anything beyond this is a build the wallet will not review.
@@ -308,7 +307,7 @@ const readCall = (value: unknown): SwapCall => {
     !isFelt(contractAddress) ||
     !isEntrypoint(entrypoint) ||
     !Array.isArray(calldata) ||
-    calldata.length > MAX_CALLDATA_LENGTH ||
+    calldata.length > AVNU_MAX_CALLDATA_LENGTH ||
     !calldata.every(isFelt)
   ) {
     throw new Error("invalid swap call");

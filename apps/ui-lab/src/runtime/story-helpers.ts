@@ -18,7 +18,7 @@ export const LAB_META: LabMeta = {
     docs: {
       description: {
         component:
-          "A fixture-only review bench that renders MC Wallet production HTML, CSS, bindings, and motion. Use Canvas for live motion and the Interactions panel for scripted flow steps; use Chromatic snapshots and comments for durable PR review.",
+          "A fixture-only review bench that renders Bramble production HTML, CSS, bindings, and motion. Use Canvas for live motion and the Interactions panel for scripted flow steps; use Chromatic snapshots and comments for durable PR review.",
       },
     },
   },

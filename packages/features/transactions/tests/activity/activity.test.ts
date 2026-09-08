@@ -3,14 +3,14 @@
  * export stay validated and deterministic.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   activityForScope,
   activityToCsv,
   createActivityLog,
   memoryActivityLog,
-} from "@mc-wallet/transactions/activity";
-import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@mc-wallet/transactions/alerts";
+} from "@bramble/transactions/activity";
+import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@bramble/transactions/alerts";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const OTHER_ACCOUNT_ID =
@@ -130,7 +130,7 @@ describe("createActivityLog", () => {
 
   test("drops malformed stored entries instead of trusting them", async () => {
     const store = createMemoryStore();
-    await store.set("mc-wallet:activity", [
+    await store.set("bramble:activity", [
       {
         accountId: ACCOUNT_ID,
         hash: "0x1",
@@ -204,7 +204,7 @@ describe("activityToCsv", () => {
 
   test("exports blank detail cells for entries lacking the optional fields", async () => {
     const store = createMemoryStore();
-    await store.set("mc-wallet:activity", [
+    await store.set("bramble:activity", [
       {
         accountId: ACCOUNT_ID,
         hash: "0x1",
@@ -398,7 +398,7 @@ describe("provisional status and tracking fields", () => {
 
   test("loads entries stored before the tracking fields existed", async () => {
     const store = createMemoryStore();
-    await store.set("mc-wallet:activity", [
+    await store.set("bramble:activity", [
       {
         accountId: ACCOUNT_ID,
         hash: "0x1",
@@ -415,7 +415,7 @@ describe("provisional status and tracking fields", () => {
 
   test("rejects stored entries with a malformed tracking field", async () => {
     const store = createMemoryStore();
-    await store.set("mc-wallet:activity", [
+    await store.set("bramble:activity", [
       {
         accountId: ACCOUNT_ID,
         failureNotice: "shown",

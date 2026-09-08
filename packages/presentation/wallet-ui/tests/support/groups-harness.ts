@@ -18,10 +18,10 @@ import {
   renameGroup,
   setAccountInGroup,
   setGroupIcon,
-} from "@mc-wallet/settings/groups";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/settings/groups";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences } from "@bramble/testkit/sidepanel";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../src/popup/responses/responses";
 import { accountFlow } from "../../src/sidepanel/app/screens/flows";
 import type { HomeUiDeps } from "../../src/sidepanel/journeys/portfolio/home-ui";
@@ -261,7 +261,6 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
     app: container,
     drawerGroupFilter: () => state.filter,
     drawerOpen: () => true,
-    homeTab: () => "tokens",
     networkId: () => "SN_MAIN",
     render: async () => {
       render();
@@ -270,7 +269,6 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
       state.filter = filter;
     },
     setDrawerOpen: () => undefined,
-    setHomeTab: () => undefined,
     startAddAccount: () => {
       calls.startAddAccount += 1;
     },

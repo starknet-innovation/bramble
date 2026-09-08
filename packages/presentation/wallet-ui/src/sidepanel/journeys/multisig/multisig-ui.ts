@@ -1,13 +1,13 @@
 /** Bindings for watched Argent multisigs and frozen signing intents. */
 
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { buildErc20TransferCall, parseTokenAmount } from "@mc-wallet/starknet/rpc";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { buildErc20TransferCall, parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   canonicalFelt,
   normalizeFeltInput,
   STRK_TOKEN_ADDRESS,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
@@ -43,7 +43,7 @@ const run = (
       await rerender(deps);
     },
     (error: unknown) => {
-      const message = errorMessage(error, "Argent multisig request failed");
+      const message = errorMessage(error, "Ready multisig request failed");
       setResult(deps, resultId, message);
       showToast(message, "error", button ?? deps.app);
       buttonBusy(button, false);
@@ -90,7 +90,7 @@ const bindAdd = (deps: MultisigUiDeps): void => {
         deps.openDetail(view.record.id, "multisig-home");
       })
       .catch((error: unknown) => {
-        showToast(errorMessage(error, "Sync Argent multisig failed"), "error", button ?? deps.app);
+        showToast(errorMessage(error, "Sync Ready multisig failed"), "error", button ?? deps.app);
         buttonBusy(button, false);
       });
   });
@@ -129,7 +129,7 @@ const bindList = (deps: MultisigUiDeps): void => {
           throw error;
         }
         deps.openList();
-        return "Argent multisig removed from this wallet";
+        return "Ready multisig removed from this wallet";
       });
     });
   });
@@ -300,7 +300,7 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
           },
           (error: unknown) => {
             showToast(
-              errorMessage(error, "Prepare Argent multisig transaction failed"),
+              errorMessage(error, "Prepare Ready multisig transaction failed"),
               "error",
               button ?? deps.app,
             );
@@ -333,7 +333,7 @@ const bindImport = (deps: MultisigUiDeps): void => {
   });
 };
 
-type MultisigHomeTab = "assets" | "collectibles" | "intents";
+type MultisigHomeTab = "assets" | "intents";
 const bindTabs = (deps: MultisigUiDeps): void => {
   const tabs = Array.from(
     deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]") ?? [],
@@ -352,7 +352,7 @@ const bindTabs = (deps: MultisigUiDeps): void => {
   for (const [index, button] of tabs.entries()) {
     button.addEventListener("click", () => {
       const value = button.dataset["msHomeTab"];
-      if (value === "assets" || value === "collectibles" || value === "intents") apply(value);
+      if (value === "assets" || value === "intents") apply(value);
     });
     button.addEventListener("keydown", (event) => {
       let next = index;
@@ -363,7 +363,7 @@ const bindTabs = (deps: MultisigUiDeps): void => {
       else return;
       const nextTab = tabs[next];
       const value = nextTab?.dataset["msHomeTab"];
-      if (!nextTab || (value !== "assets" && value !== "collectibles" && value !== "intents")) {
+      if (!nextTab || (value !== "assets" && value !== "intents")) {
         return;
       }
       event.preventDefault();

@@ -1,6 +1,6 @@
 /** Popup response validators reject malformed background data before rendering. */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import {
   isAccountsResponse,
   isApprovalDecisionResponse,

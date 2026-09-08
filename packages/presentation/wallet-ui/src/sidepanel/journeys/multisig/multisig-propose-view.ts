@@ -1,10 +1,10 @@
 /** Familiar transaction composer for frozen Argent multisig signing intents. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { inputControl, textareaField, textField } from "@mc-wallet/ui-kit/fields";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { inputControl, textareaField, textField } from "@bramble/ui-kit/fields";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -226,7 +226,7 @@ export const multisigProposeFlow = (
   if (!view) {
     return (
       flowHeader("New transaction", status) +
-      flowScreen("multisig-propose", emptyState("This Argent multisig is no longer watched."))
+      flowScreen("multisig-propose", emptyState("This Ready multisig is no longer watched."))
     );
   }
   if (!view.config || view.authorityStatus !== "available") {
@@ -234,7 +234,7 @@ export const multisigProposeFlow = (
       view.authorityStatus === "unsupported-signers"
         ? "This account uses signer types this wallet cannot sign with. It remains available to watch and receive."
         : view.authorityStatus === "unsupported-class"
-          ? "This address is not the pinned Argent Multisig 0.2 account."
+          ? "This address is not the pinned Ready Multisig 0.2 account."
           : view.authorityStatus === "invalid-config"
             ? "The account returned an invalid signer configuration."
             : view.authorityStatus === "undeployed"
@@ -249,7 +249,6 @@ export const multisigProposeFlow = (
     balances: { error: "Shared balances are loading." },
     changes: {},
     currency: preferences?.displayCurrency ?? "usd",
-    nfts: null,
     prices: {},
   };
   return (

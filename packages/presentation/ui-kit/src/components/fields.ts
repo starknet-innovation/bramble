@@ -3,7 +3,7 @@
  * semantics and autocomplete while keeping label, hint, and option structure
  * identical across onboarding and later flows.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import { type UiAttributes, uiAttributes, uiClassNames } from "./html-attributes";
 
 type FieldBase = {

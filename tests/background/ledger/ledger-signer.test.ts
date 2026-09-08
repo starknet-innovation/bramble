@@ -5,8 +5,8 @@
  * that does not verify — the last gate before a transaction is broadcast.
  */
 import { describe, expect, test } from "bun:test";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { ec } from "starknet";
 import {
   type LedgerSignRequest,

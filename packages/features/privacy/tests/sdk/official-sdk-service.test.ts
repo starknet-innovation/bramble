@@ -7,8 +7,8 @@ import { describe, expect, test } from "bun:test";
 import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
-} from "@mc-wallet/privacy/official-sdk-service";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/privacy/official-sdk-service";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import {
   officialBuilder as builder,
   STRK20_SDK_CONTEXT as context,

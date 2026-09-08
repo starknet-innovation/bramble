@@ -5,7 +5,7 @@
  * "unknown", never a fabricated verdict and never a throw.
  */
 import { describe, expect, test } from "bun:test";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
+import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 
 const FEE = { overallFee: "1000", unit: "FRI" };
 

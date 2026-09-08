@@ -3,7 +3,7 @@
  * and compact management subflows. All color and scale values come from the
  * shared skin tokens.
  */
-import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Journey-specific styles composed after shared component structure.
@@ -11,16 +11,16 @@ import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
 export const JOURNEY_STYLES = `
   #deploy-review { display: grid; gap: ${SPACE.sm}; width: 100%; }
   .allowance-review {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
     margin-top: ${SPACE.xs};
   }
   .approval-live {
     align-items: center;
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
-    box-shadow: var(--mc-elev-sm);
+    box-shadow: var(--bramble-elev-sm);
     display: grid;
     gap: ${SPACE.md};
     grid-template-columns: auto minmax(0, 1fr);
@@ -28,9 +28,9 @@ export const JOURNEY_STYLES = `
   }
   .approval-live-mark {
     align-items: center;
-    background: var(--mc-accent-soft);
+    background: var(--bramble-accent-soft);
     border-radius: ${RADIUS.full};
-    color: var(--mc-accent);
+    color: var(--bramble-accent);
     display: inline-flex;
     height: 40px;
     justify-content: center;
@@ -38,7 +38,7 @@ export const JOURNEY_STYLES = `
   }
   .approval-live div { display: grid; gap: 2px; min-width: 0; }
   .approval-live strong { font-size: ${TYPE.body.size}; font-weight: ${WEIGHT.semibold}; }
-  .approval-live p { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .approval-live p { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
   .request-card[data-state="working"] > :not(.button-row) {
     opacity: 0.46;
     transition: opacity ${MOTION.pressMs}ms ${MOTION.ease};
@@ -55,7 +55,7 @@ export const JOURNEY_STYLES = `
 
   .ledger-liveness {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     font-size: ${TYPE.caption.size};
     gap: ${SPACE.sm};
@@ -65,7 +65,7 @@ export const JOURNEY_STYLES = `
   }
   .ledger-liveness-mark {
     align-items: center;
-    color: var(--mc-accent);
+    color: var(--bramble-accent);
     display: inline-flex;
     flex: none;
   }
@@ -81,9 +81,9 @@ export const JOURNEY_STYLES = `
   .nft-send-art {
     align-items: center;
     aspect-ratio: 1;
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     justify-content: center;
     overflow: hidden;
@@ -93,18 +93,18 @@ export const JOURNEY_STYLES = `
   .nft-send-art .icon { height: 26px; width: 26px; }
   .nft-transfer-outcome {
     align-items: flex-start;
-    background: var(--mc-positive-soft);
+    background: var(--bramble-positive-soft);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-positive);
+    color: var(--bramble-positive);
     display: grid;
     gap: ${SPACE.md};
     grid-template-columns: auto minmax(0, 1fr);
     padding: ${SPACE.lg};
   }
   .nft-transfer-outcome > div { display: grid; gap: 3px; min-width: 0; }
-  .nft-transfer-outcome p { color: var(--mc-text); font-size: ${TYPE.caption.size}; }
+  .nft-transfer-outcome p { color: var(--bramble-text); font-size: ${TYPE.caption.size}; }
   .nft-transfer-outcome code {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};
     overflow: hidden;
     text-overflow: ellipsis;
@@ -112,9 +112,9 @@ export const JOURNEY_STYLES = `
   }
   .nft-transfer-mark {
     align-items: center;
-    background: var(--mc-positive);
+    background: var(--bramble-positive);
     border-radius: ${RADIUS.full};
-    color: var(--mc-bg);
+    color: var(--bramble-bg);
     display: inline-flex;
     height: 30px;
     justify-content: center;

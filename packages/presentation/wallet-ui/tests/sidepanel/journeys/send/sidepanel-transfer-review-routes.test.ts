@@ -3,7 +3,7 @@
  * of what it publishes on chain.
  */
 import { describe, expect, test } from "bun:test";
-import { routeFor } from "@mc-wallet/transactions/send-routes";
+import { routeFor } from "@bramble/transactions/send-routes";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import type { TransferFields } from "../../../../src/sidepanel/journeys/send/transfer-model";
 import {

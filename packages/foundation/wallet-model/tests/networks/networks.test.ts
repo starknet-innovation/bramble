@@ -12,7 +12,7 @@ import {
   networkIdForChainId,
   paddedFelt,
   STARKNET_NETWORKS,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 test("validates bounded Stark field elements", () => {
   expect(isStarkFieldElement("0x1")).toBe(true);

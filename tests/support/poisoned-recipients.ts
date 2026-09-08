@@ -13,13 +13,13 @@ import {
   defaultWalletPreferences,
   type TokenConfig,
   type WalletPreferences,
-} from "@mc-wallet/settings/preferences";
+} from "@bramble/settings/preferences";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STRK20_TOKEN } from "./strk20-background";
 
 /**

@@ -2,21 +2,18 @@
  * Preference message input readers: address book, labels, display settings,
  * RPC overrides, and backup imports.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isStrk20NetworkConfig, type Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import { type AccountGroupIcon, isAccountGroupIcon } from "@mc-wallet/settings/groups";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isStrk20NetworkConfig, type Strk20NetworkConfig } from "@bramble/privacy/config";
+import { type AccountGroupIcon, isAccountGroupIcon } from "@bramble/settings/groups";
+import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import { isNostrPublicKey, isNostrRelayUrl } from "@mc-wallet/wallet-model/nostr";
-import {
-  isApprovalSurfacePreference,
-  isDisplayCurrency,
-} from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/networks";
+import { isNostrPublicKey, isNostrRelayUrl } from "@bramble/wallet-model/nostr";
+import { isApprovalSurfacePreference, isDisplayCurrency } from "@bramble/wallet-model/preferences";
 
 const isGroupNameText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;
@@ -174,6 +171,7 @@ export const readSetAccountInGroupInput = (
 type DisplayPreferenceInput = {
   readonly approvalSurface?: "popup" | "side-panel";
   readonly displayCurrency?: "eur" | "gbp" | "usd";
+  readonly productAnalytics?: boolean;
   readonly reliabilityDiagnostics?: boolean;
   readonly theme?: "dark" | "light";
 };
@@ -188,6 +186,12 @@ const hasValidDisplayValues = (
     return false;
   }
   if (message["displayCurrency"] !== undefined && !isDisplayCurrency(message["displayCurrency"])) {
+    return false;
+  }
+  if (
+    message["productAnalytics"] !== undefined &&
+    typeof message["productAnalytics"] !== "boolean"
+  ) {
     return false;
   }
   if (
@@ -210,6 +214,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
     !hasOnlyKnownKeys(message, [
       "approvalSurface",
       "displayCurrency",
+      "productAnalytics",
       "reliabilityDiagnostics",
       "theme",
       "type",
@@ -225,11 +230,13 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
   }
   const approvalSurface = message["approvalSurface"];
   const displayCurrency = message["displayCurrency"];
+  const productAnalytics = message["productAnalytics"];
   const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
   return {
     ...(approvalSurface === undefined ? {} : { approvalSurface }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
+    ...(productAnalytics === undefined ? {} : { productAnalytics }),
     ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),
     ...(theme === undefined ? {} : { theme }),
   };

@@ -11,13 +11,14 @@
  * inputs to the service behind the vault boundary.
  */
 
-import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
-import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
-import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountDerivationInput } from "@bramble/vault/accounts";
+import type { NostrApplicationData } from "@bramble/vault/kms-port";
+import type { Vault } from "@bramble/vault/schema";
 import type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
   ConnectedSite,
+  CreateKeyVaultInput,
   CreateLedgerVaultInput,
   CreateVaultAccountInput,
   DeriveLedgerAccountsInput,
@@ -33,10 +34,10 @@ import type {
   WalletVaultService,
   WrapNostrApplicationDataBatchInput,
   WrapNostrApplicationDataInput,
-} from "@mc-wallet/vault/service";
-import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
-import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+} from "@bramble/vault/service";
+import type { RecoverVaultAccountsInput } from "@bramble/vault/service-types";
+import type { AccountRef, LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 
 /**
  * Narrow wallet service surface consumed by background message dispatch.
@@ -46,6 +47,8 @@ export type WalletStatusReader = {
   /** Stores a keyless Ledger account; optional only for partial test stubs. */
   readonly addLedgerAccount?: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
+  /** Creates a phrase-less vault from one raw key; fails closed over an existing vault. */
+  readonly createKeyVault?: (input: CreateKeyVaultInput) => Promise<AccountRef>;
   /** Creates a mnemonic-less Ledger vault; fails closed over an existing vault. */
   readonly createLedgerVault?: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
   /** Derives Ledger picker candidates; optional only for partial test stubs. */
@@ -80,6 +83,10 @@ export type WalletStatusReader = {
    * provides it.
    */
   readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
+  /** Imports selected accounts from another phrase; optional only for partial test stubs. */
+  readonly importSeedAccounts?: (
+    input: RecoverVaultAccountsInput,
+  ) => Promise<readonly AccountRef[]>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
   /** Atomically restores a confirmed set of phrase-derived accounts. */
@@ -131,6 +138,9 @@ export const createWalletReader = (
     async createAccount(input) {
       return (await required()).createAccount(input);
     },
+    async createKeyVault(input) {
+      return (await required()).createKeyVault(input);
+    },
     async createLedgerVault(input) {
       return (await required()).createLedgerVault(input);
     },
@@ -163,6 +173,9 @@ export const createWalletReader = (
     },
     async importRawKeyAccount(input) {
       return (await required()).importRawKeyAccount(input);
+    },
+    async importSeedAccounts(input) {
+      return (await required()).importSeedAccounts(input);
     },
     async previewAccount(input) {
       return (await required()).previewAccount(input);

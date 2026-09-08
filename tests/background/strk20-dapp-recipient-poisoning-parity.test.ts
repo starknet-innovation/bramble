@@ -19,8 +19,8 @@
  * subaccount invokes carry full calls and use the exact shared decoder.
  */
 import { describe, expect, test } from "bun:test";
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { Strk20Service } from "@bramble/privacy/service";
+import type { WalletPreferences } from "@bramble/settings/preferences";
 import { flushHeld, waitForPendingApprovals } from "../support/held";
 import {
   CLEAN_RECIPIENT,

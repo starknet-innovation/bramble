@@ -1,5 +1,5 @@
 {
-  "name": "@mc-wallet/ledger-protocol",
+  "name": "@bramble/ledger-protocol",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,10 +17,10 @@
   },
   "dependencies": {
     "@ledgerhq/devices": "8.17.0",
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*"
+    "@bramble/core": "workspace:*",
+    "@bramble/wallet-model": "workspace:*"
   },
   "devDependencies": {
-    "@mc-wallet/testkit": "workspace:*"
+    "@bramble/testkit": "workspace:*"
   }
 }

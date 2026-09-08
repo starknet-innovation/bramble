@@ -6,8 +6,8 @@ import {
   createPreferencesStore,
   defaultWalletPreferences,
   PREFERENCES_STORE_KEY,
-} from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+} from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 
 // The stored spelling of "0x123": every entry address is canonicalized by the
 // shared id builder (MCW-V09-110), so the id is derived from this form.
@@ -20,7 +20,20 @@ describe("createPreferencesStore", () => {
     expect(preferences.activeNetworkId).toBe("SN_MAIN");
     expect(preferences.approvalSurface).toBe("side-panel");
     expect(preferences.addressBook).toEqual([]);
+    expect(preferences.productAnalytics).toBe(true);
     expect(preferences.tokens.some((token) => token.networkId === "SN_DEVNET")).toBe(true);
+  });
+
+  test("enables analytics for legacy preferences while preserving an explicit opt-out", async () => {
+    const store = createMemoryStore();
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>)["productAnalytics"];
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+
+    const preferences = createPreferencesStore({ store });
+    expect((await preferences.read()).productAnalytics).toBe(true);
+    await preferences.setDisplay({ productAnalytics: false });
+    expect((await preferences.read()).productAnalytics).toBe(false);
   });
 
   test("persists active network and address book entries", async () => {
@@ -270,6 +283,7 @@ describe("createPreferencesStore", () => {
     await preferences.setDisplay({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      productAnalytics: true,
       reliabilityDiagnostics: true,
       theme: "dark",
     });
@@ -280,6 +294,7 @@ describe("createPreferencesStore", () => {
     expect(stored.accountLabels?.[accountId]).toBe("Savings");
     expect(stored.approvalSurface).toBe("popup");
     expect(stored.displayCurrency).toBe("eur");
+    expect(stored.productAnalytics).toBe(true);
     expect(stored.reliabilityDiagnostics).toBe(true);
     expect(stored.theme).toBe("dark");
     expect(stored.addressBook).toEqual([]);

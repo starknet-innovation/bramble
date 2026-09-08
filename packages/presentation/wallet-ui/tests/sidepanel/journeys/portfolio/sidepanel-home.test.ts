@@ -1,17 +1,18 @@
 /**
  * Home experience checks: the account-bar header opens a left drawer wired to
  * real accounts, frequent actions render as rounded-square tools, and the
- * portfolio section switches between Tokens and Collectibles while secondary
- * actions live in one overflow menu.
+ * portfolio section shows only the Tokens tab (Collectibles is parked) while
+ * secondary actions live in one overflow menu.
  */
 import { describe, expect, test } from "bun:test";
-import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
-import { STARKSCAN_URL } from "../../../../src/sidepanel/shell/starkscan-link";
+import { homeScreen } from "../../../../src/sidepanel/journeys/portfolio/home-view";
 import { walletHeader } from "../../../../src/sidepanel/shell/wallet-shell";
 
 const status: WalletStatus = {
@@ -46,16 +47,18 @@ describe("sidepanel home", () => {
     expect(drawer).toContain("data-drawer-close");
   });
 
-  test("header keeps ghost shortcuts for sites, Starkscan, and lock", () => {
+  test("header opens the account it is showing on the explorer", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
     const header = html.slice(html.indexOf("wallet-header"), html.indexOf("hero"));
 
     expect(header).toContain('data-view="connected-sites"');
     expect(header).toContain('id="starkscan-button"');
     expect(header).toContain('class="icon-button ghost"');
-    expect(header).toContain(`href="${STARKSCAN_URL}"`);
+    // The account's own page, not the explorer front page: Home no longer carries
+    // an explorer tile, so this is the only account-level explorer route left.
+    expect(header).toContain(`href="https://starkscan.co/contract/${account.address}"`);
     expect(header).toContain('target="_blank" rel="noopener noreferrer"');
-    expect(header).toContain('aria-label="Open Starkscan"');
+    expect(header).toContain('aria-label="View this account on the block explorer"');
     expect(header).toContain('id="lock-button"');
   });
 
@@ -75,18 +78,18 @@ describe("sidepanel home", () => {
     expect(network).not.toContain("Argent Multisig");
   });
 
-  test("quick actions expose Send, Swap, Receive, and the account explorer", () => {
+  test("quick actions expose Send, Swap, Receive, and Shield", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).toMatch(/class="action-tile" data-view="send"/);
     expect(html).toMatch(/class="action-tile" data-view="swap"/);
     expect(html).toMatch(/class="action-tile" data-view="receive"/);
-    // Explorer is the one outbound tile: the active account on Starkscan, opened
-    // in an isolated tab.
-    expect(html).toContain(`href="https://starkscan.co/contract/${account.address}"`);
-    expect(html).toContain(">Explorer<");
-    expect(html).toContain('aria-label="Open this account on the block explorer"');
-    expect(html).not.toContain('aria-label="Open MC Terminal portfolio"');
+    // Shield holds the fourth slot the explorer tile used to. This fixture tracks
+    // no tokens, so it renders in its disabled state; the shield tile suite below
+    // covers what each privacy state renders.
+    expect(html).toContain(">Shield<");
+    expect(html).not.toContain(">Explorer<");
+    expect(html).not.toContain('aria-label="Open Bramble Terminal portfolio"');
     expect(html).not.toMatch(/class="action-tile" data-view="nfts"/);
 
     const noAccounts = dashboard(
@@ -105,99 +108,56 @@ describe("sidepanel home", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).not.toContain("terminal-cta");
-    expect(html).not.toContain("Join MC Terminal");
+    expect(html).not.toContain("Join Bramble Terminal");
     expect(html).not.toContain("Your homebase for all Starknet activity");
     expect(html).toContain('id="starkscan-button"');
   });
 
-  test("portfolio has two text tabs and one accessible quick-actions menu", () => {
+  test("portfolio has a Tokens heading, no tablist, and one accessible quick-actions menu", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
-    expect(html).toMatch(/data-home-tab="tokens"[^>]*aria-selected="true"/);
-    expect(html).toMatch(/data-home-tab="collectibles"[^>]*aria-selected="false"/);
-    expect(html).not.toContain('data-home-tab="activity"');
+    const portfolio = html.slice(
+      html.indexOf('<section class="home-tabs"'),
+      html.indexOf("</main>"),
+    );
+    expect(portfolio).toContain("<h2>Tokens</h2>");
+    // The wallet dock is the only tablist left; the portfolio section is a heading
+    // with no tab, panel, or indicator scaffolding behind it.
+    expect(portfolio).not.toContain('role="tab');
+    expect(portfolio).not.toContain("data-home-tab=");
+    expect(portfolio).not.toContain("tab-panel");
+    expect(html).not.toContain("Collectibles");
     expect(html).not.toContain('class="tab-indicator"');
-    expect(html).toMatch(/data-tab-panel="tokens"[^>]*>/);
-    expect(html).toMatch(/data-tab-panel="collectibles"[^>]*hidden/);
-    expect(html).not.toContain('data-tab-panel="activity"');
     const menuTrigger = html.match(/<button[^>]*id="portfolio-menu-trigger"[^>]*>/)?.[0] ?? "";
     expect(menuTrigger).toContain('aria-haspopup="menu"');
     expect(menuTrigger).toContain('aria-expanded="false"');
     expect(html).toContain('id="portfolio-menu" role="menu"');
     expect(html).toContain('data-view="tokens" role="menuitem"');
-    expect(html).toContain('data-view="nfts" role="menuitem"');
+    expect(html).not.toContain('data-view="nfts"');
     expect(html).toContain('data-view="settings" role="menuitem"');
     expect(html).toContain('id="refresh-button" role="menuitem"');
   });
 
-  test("collectibles tab reuses watched NFTs and hides spam", () => {
-    const withNfts: WalletPreferences = {
-      ...preferences,
-      nfts: [
-        {
-          contract: "0xabc",
-          id: "SN_MAIN:0xabc:1",
-          label: "Starkpunk",
-          networkId: "SN_MAIN",
-          tokenId: "1",
-        },
-        {
-          contract: "0xdef",
-          id: "SN_MAIN:0xdef:2",
-          networkId: "SN_MAIN",
-          spam: true,
-          tokenId: "2",
-        },
-      ],
+  test("home names filtered balances by their action, not as user-hidden tokens", () => {
+    const token = {
+      address: "0x123",
+      decimals: 18,
+      id: "SN_MAIN:FILTERED:0x123",
+      name: "Filtered token",
+      networkId: "SN_MAIN" as const,
+      symbol: "FILTERED",
     };
-    const html = homeTabs({ balances: [] }, withNfts, {}, {}, "usd", status, [
-      {
-        collection: "",
-        contract: "0xabc",
-        id: "SN_MAIN:0xabc:1",
-        image: "",
-        name: "Starkpunk",
-        networkId: "SN_MAIN",
-        tokenId: "1",
-      },
-    ]);
-    const panel = html.slice(html.indexOf('data-tab-panel="collectibles"'), html.length);
+    const html = homeTabs(
+      { balances: [{ ...token, balance: "1", formatted: "0.000000000000000001" }] },
+      { ...preferences, hiddenTokens: [token.id], tokens: [token] },
+      {},
+      {},
+      "usd",
+    );
 
-    expect(panel).toContain('data-nft-open="SN_MAIN:0xabc:1"');
-    expect(panel).toContain("Starkpunk");
-    expect(panel).not.toContain("SN_MAIN:0xdef:2");
-    expect(panel).toContain('data-view="nfts"');
-  });
-
-  test("collectibles tab joins watched NFTs with resolved artwork metadata", () => {
-    const watched: WalletPreferences = {
-      ...preferences,
-      nfts: [
-        {
-          contract: "0xabc",
-          id: "SN_MAIN:0xabc:0",
-          networkId: "SN_MAIN",
-          tokenId: "0",
-        },
-      ],
-    };
-    const html = homeTabs({ balances: [] }, watched, {}, {}, "usd", status, [
-      {
-        attributes: [{ traitType: "Catalog", value: "CryptoPunks" }],
-        collection: "MC Punks",
-        contract: "0xabc",
-        id: "SN_MAIN:0xabc:0",
-        image: "https://cdn.example/punk0000.png",
-        name: "Starknet Test Punk #0",
-        networkId: "SN_MAIN",
-        tokenId: "0",
-      },
-    ]);
-
-    expect(html).toContain('class="nft-image nft-image--pixelated"');
-    expect(html).toContain('src="https://cdn.example/punk0000.png"');
-    expect(html).toContain('loading="eager"');
-    expect(html).toContain("Starknet Test Punk #0");
+    expect(html).toContain("Manage tokens");
+    expect(html).toContain("1 not shown");
+    expect(html).not.toContain("Hidden tokens");
   });
 
   test("Activity stays a top-level dock destination instead of a portfolio tab", () => {
@@ -318,29 +278,63 @@ describe("sidepanel home", () => {
   });
 });
 
-describe("explorer tile availability", () => {
-  test("is disabled rather than hidden when there is nothing to open", () => {
-    // No account yet: the row keeps its shape instead of reflowing.
-    const noAccounts = dashboard(
-      "home",
-      { ...status, accounts: [], activeAccountId: null },
-      [],
-      preferences,
-      { balances: [] },
-    );
-    expect(noAccounts).toContain('aria-label="Explorer unavailable on this network"');
-    expect(noAccounts).not.toContain("starkscan.co/contract");
+describe("shield tile", () => {
+  const homeArgs = (
+    privacy: Parameters<typeof homeScreen>[9],
+    prefs: WalletPreferences | null = defaultWalletPreferences(),
+  ): string =>
+    homeScreen(status, account, { balances: [] }, 0, null, prefs, {}, {}, "usd", privacy);
 
-    // Devnet has no public explorer, so an account there gets the same disabled
-    // tile rather than a link that cannot resolve.
-    const devnet = dashboard(
-      "home",
-      { ...status, network: "Local Devnet", networkId: "SN_DEVNET" },
-      [],
-      preferences,
-      { balances: [] },
-    );
-    expect(devnet).toContain('aria-label="Explorer unavailable on this network"');
-    expect(devnet).not.toContain("starkscan.co/contract");
+  const disclosure = (
+    registration: "pending" | "registered" | "unregistered",
+  ): Parameters<typeof homeScreen>[9] => ({
+    error: null,
+    loading: false,
+    value: {
+      accountId: account.id,
+      balances: [],
+      networkId: status.networkId,
+      poolFeeFri: "0x1",
+      registration,
+      relayConfigured: true,
+    },
+  });
+
+  test("opens the shield send flow once the pool registration is live", () => {
+    const html = homeArgs(disclosure("registered"));
+
+    // The same attribute the token-detail Shield uses, so the one existing
+    // binding drives both and they cannot drift into different flows.
+    expect(html).toMatch(/class="action-tile" data-send-shield="SN_MAIN:STRK:[^"]+"/);
+    expect(html).toContain('aria-label="Shield public value into your private balance"');
+    expect(html).toContain(">Shield<");
+  });
+
+  test("routes to activation instead of a dead control before registering", () => {
+    for (const registration of ["unregistered", "pending"] as const) {
+      const html = homeArgs(disclosure(registration));
+
+      expect(html).toMatch(/class="action-tile" data-privacy-open="SN_MAIN:STRK:[^"]+"/);
+      expect(html).toContain('aria-label="Activate private balances"');
+      expect(html).not.toContain("data-send-shield");
+    }
+  });
+
+  test("is disabled rather than hidden when no token is tracked", () => {
+    // Keeps the row at four tiles instead of reflowing, the same reason the
+    // explorer tile it replaced was disabled rather than dropped.
+    const html = homeArgs(disclosure("registered"), preferences);
+
+    expect(html).toContain('aria-label="Shield unavailable until a token is tracked"');
+    expect(html).toMatch(/class="action-tile" type="button" disabled/);
+    expect(html).not.toContain("data-send-shield");
+    expect(html).not.toContain("data-privacy-open");
+  });
+
+  test("no longer offers an explorer tile, which the header now owns", () => {
+    const html = homeArgs(disclosure("registered"));
+
+    expect(html).not.toContain(">Explorer<");
+    expect(html).not.toContain("starkscan.co/contract");
   });
 });

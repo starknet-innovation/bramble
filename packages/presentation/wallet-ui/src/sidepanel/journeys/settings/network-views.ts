@@ -8,12 +8,12 @@
  * background returned. No value here is written directly to storage.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import { explorerFallbackAllowed, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { checkboxField, textField } from "@mc-wallet/ui-kit/fields";
-import { isStarknetNetworkId, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { Strk20NetworkConfig } from "@bramble/privacy/config";
+import { explorerFallbackAllowed, type WalletPreferences } from "@bramble/settings/preferences";
+import { button } from "@bramble/ui-kit/controls";
+import { checkboxField, textField } from "@bramble/ui-kit/fields";
+import { isStarknetNetworkId, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { contextHelp, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
@@ -43,9 +43,6 @@ const strk20ConfigFor = (
   preferences && isStarknetNetworkId(status.networkId)
     ? (preferences.strk20Networks?.[status.networkId] ?? null)
     : null;
-
-const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
-  preferences?.nftIndexerUrl ?? "";
 
 const explorerApiUrlFor = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   preferences && isStarknetNetworkId(status.networkId)
@@ -159,8 +156,8 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
 
 /**
  * Renders the security-sensitive custom service endpoint editor: expert RPC,
- * prover, NFT-indexer, and explorer-fallback settings, away from the primary
- * network picker. Read-only — every field submits a privileged message and the
+ * prover, and explorer-fallback settings, away from the primary network picker.
+ * The NFT-indexer field is withheld while the collectibles journey is parked. Read-only — every field submits a privileged message and the
  * rendered state always comes from the preferences the background returned.
  */
 export const advancedNetworkFlow = (
@@ -244,29 +241,16 @@ export const advancedNetworkFlow = (
           </form>`,
         )}
         ${endpointDisclosure(
-          "nft-indexer",
-          "NFT indexer",
-          nftIndexerUrlFor(preferences) ? "Configured" : "Off",
-          `<form id="nft-indexer-form">
-            ${textField({
-              autocomplete: "off",
-              className: "mono",
-              hint: "Where the wallet lists NFTs an account owns. Ownership is re-checked on-chain. Leave empty to only show manually watched NFTs.",
-              label: "NFT discovery endpoint",
-              name: "indexerUrl",
-              placeholder: "https://…",
-              spellcheck: false,
-              type: "url",
-              value: nftIndexerUrlFor(preferences),
-            })}
-            ${button({
-              icon: "check",
-              label: "Save indexer",
-              type: "submit",
-              variant: "secondary",
-            })}
-            <p id="nft-indexer-result" role="status"></p>
-          </form>`,
+          "product-analytics",
+          "Product analytics",
+          (preferences?.productAnalytics ?? true) ? "On" : "Off",
+          `${checkboxField({
+            attributes: { id: "product-analytics" },
+            checked: preferences?.productAnalytics ?? true,
+            name: "productAnalytics",
+            text: "Share pseudonymous gateway usage (on by default; turn off anytime)",
+          })}
+          <p class="hint">Helps us understand feature usage and failures. Sends a random installation ID, app version, browser family, release channel, and temporary workflow ID only to wallet.nodes.starknet.org. No addresses, sites, balances, transaction data, or request contents are included.</p>`,
         )}
         ${endpointDisclosure(
           "reliability-diagnostics",

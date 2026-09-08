@@ -4,9 +4,9 @@
  * the review, and a poisoning flag never unlocks confirmation.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { nftSendFlow } from "../../../../src/sidepanel/journeys/collectibles/nft-send-view";
 import { bindNfts, type NftUiDeps } from "../../../../src/sidepanel/journeys/collectibles/nft-ui";

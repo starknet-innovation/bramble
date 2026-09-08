@@ -5,7 +5,7 @@
  * reputation context (first-seen and prior-connection).
  */
 import { describe, expect, test } from "bun:test";
-import { isBlockedOrigin, originInsights } from "@mc-wallet/permissions/blocklist";
+import { isBlockedOrigin, originInsights } from "@bramble/permissions/blocklist";
 
 const DAY_MS = 86_400_000;
 

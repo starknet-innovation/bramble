@@ -1,9 +1,9 @@
 {
-  "name": "@mc-wallet/terminal",
+  "name": "@bramble/terminal",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "MC Wallet Trade Terminal — a standalone Starknet trade terminal that connects to the MC Wallet browser extension as a dApp.",
+  "description": "Bramble Trade Terminal — a standalone Starknet trade terminal that connects to the Bramble browser extension as a dApp.",
   "scripts": {
     "dev": "vite",
     "dev:full": "bunx vercel@58.9.1 dev",
@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@avnu/avnu-sdk": "4.2.0",
+    "@bramble/wallet-model": "workspace:*",
     "lightweight-charts": "5.2.1",
     "lucide-react": "1.35.0",
     "react": "19.2.8",
@@ -27,6 +28,7 @@
     "starknet": "10.0.2"
   },
   "devDependencies": {
+    "@bramble/testkit": "workspace:*",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "16.3.3",
     "@types/node": "26.4.0",

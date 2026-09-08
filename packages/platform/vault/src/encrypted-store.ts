@@ -1,10 +1,10 @@
 /**
  * Encrypted JSON store using Web Crypto for local-at-rest browser extension data.
  */
-import { invariant, WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isRecord, type Json } from "@mc-wallet/core/json";
-import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@mc-wallet/store/kv";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+import { invariant, WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isRecord, type Json } from "@bramble/core/json";
+import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@bramble/store/kv";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -288,13 +288,14 @@ export const createEncryptedStore = (
   freshnessStore: KeyValueStore = store,
 ): EncryptedStore => {
   assertStorageKey(key);
-  const scope = `mc-wallet:encrypted-store:${key}`;
+  const scope = `bramble:encrypted-store:${key}`;
   const commitKey = (lineage: string): string => `${key}:commit:${lineage}`;
   // This authority is deliberately store-wide, not keyed to the one v2
   // envelope present during migration. Once any v3 commit for this store is
   // current, every earlier authentic v2 envelope must be rejected.
   const legacyKey = `${key}:legacy`;
   const keyCache = new Map<string, CryptoKey>();
+  let keyCacheGeneration = 0;
 
   const readRawEnvelope = async (): Promise<EncryptedEnvelope | undefined> => {
     const envelope = await store.get(key);
@@ -436,24 +437,30 @@ export const createEncryptedStore = (
   };
 
   const resolveKey: KeyResolver = async (passphrase, salt, iterations) => {
+    const generation = keyCacheGeneration;
     const cacheId = `${await passphraseFingerprint(passphrase)}:${bytesToBase64(salt)}:${iterations}`;
     const cached = keyCache.get(cacheId);
     if (cached) {
       return cached;
     }
     const derived = await deriveKey(passphrase, salt, iterations);
-    if (keyCache.size >= MAX_CACHED_KEYS) {
-      const oldest = keyCache.keys().next().value;
-      if (oldest !== undefined) {
-        keyCache.delete(oldest);
+    // Lock can invalidate this resolution during either fingerprinting or PBKDF2.
+    // A stale resolution must not evict a key a later unlock has already cached.
+    if (generation === keyCacheGeneration) {
+      if (keyCache.size >= MAX_CACHED_KEYS) {
+        const oldest = keyCache.keys().next().value;
+        if (oldest !== undefined) {
+          keyCache.delete(oldest);
+        }
       }
+      keyCache.set(cacheId, derived);
     }
-    keyCache.set(cacheId, derived);
     return derived;
   };
 
   return {
     clearKeys() {
+      keyCacheGeneration += 1;
       keyCache.clear();
     },
     async exists() {

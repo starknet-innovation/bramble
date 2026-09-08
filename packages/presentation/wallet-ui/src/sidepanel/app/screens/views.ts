@@ -7,15 +7,15 @@
  * Every other view renders as a dedicated flow screen from ./flows.ts with its
  * own back navigation, so each journey has a distinct place to complete its
  * goal. Home follows a compact portfolio structure: hero balance, primary
- * actions, a trusted Terminal handoff, then the Tokens/Collectibles section.
+ * actions, a trusted Terminal handoff, then the Tokens section.
  */
 
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type {
   ConnectedSite,
@@ -288,8 +288,6 @@ export const dashboard = (
   multisigsError = false,
   multisigBalances: BalanceState = { error: "multisig balances unavailable" },
   multisigBalanceId: string | null = null,
-  multisigNfts: readonly DiscoveredNft[] = [],
-  multisigNftId: string | null = null,
   privacy: PrivacyDisclosureState = {
     error: null,
     loading: false,
@@ -316,8 +314,6 @@ export const dashboard = (
       balances: selectedPortfolioBalances,
       changes,
       currency,
-      nfts:
-        selectedMultisigId !== null && multisigNftId === selectedMultisigId ? multisigNfts : null,
       prices,
     },
     multisigIntents,
@@ -433,7 +429,6 @@ export const dashboard = (
               prices,
               changes,
               currency,
-              discoveredNfts,
               privacy,
             );
   return `

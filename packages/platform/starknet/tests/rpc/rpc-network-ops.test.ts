@@ -16,9 +16,9 @@ import {
   TRANSACTION_STATUS_CONCURRENCY,
   type TransactionStatus,
   type TransactionStatusReport,
-} from "@mc-wallet/starknet/rpc";
-import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/starknet/rpc";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import { type Call, logger, type RpcProvider } from "starknet";
 
 // The V3 fee estimate runs a tip analysis that logs a warning when the fake

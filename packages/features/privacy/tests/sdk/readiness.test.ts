@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 import {
   areHistoricalDepositsReady,
   isHistoricalAccountReady,
-} from "@mc-wallet/privacy/official-sdk-readiness";
+} from "@bramble/privacy/official-sdk-readiness";
 import type { RpcProvider } from "starknet";
 
 describe("STRK20 historical state readiness", () => {

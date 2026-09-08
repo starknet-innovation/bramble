@@ -8,8 +8,8 @@ import {
   createOriginHistoryStore,
   memoryOriginHistory,
   ORIGIN_HISTORY_STORE_KEY,
-} from "@mc-wallet/permissions/origin-history";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+} from "@bramble/permissions/origin-history";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const makeClock = (start: number) => {
   let value = start;

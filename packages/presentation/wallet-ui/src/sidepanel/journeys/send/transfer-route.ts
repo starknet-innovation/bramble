@@ -9,7 +9,7 @@
  * would flip meaning mid-edit; deriving it from state cannot.
  */
 
-import { parseTokenAmount } from "@mc-wallet/starknet/rpc";
+import { parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   type PoolRegistration,
   resolveSendRoute,
@@ -19,8 +19,8 @@ import {
   type SendRouteResolution,
   spendableForRoute,
   type ValueBucket,
-} from "@mc-wallet/transactions/send-routes";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/send-routes";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import type { TransferFields } from "./transfer-model";

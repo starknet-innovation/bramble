@@ -8,8 +8,8 @@
  * reads them again.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import {
   createUnlockSession,

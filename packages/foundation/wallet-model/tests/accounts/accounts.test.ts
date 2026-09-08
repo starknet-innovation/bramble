@@ -10,9 +10,9 @@ import {
   isAccountIdForNetwork,
   isAccountRef,
   isKeylessAccount,
-} from "@mc-wallet/wallet-model/accounts";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 
 const argentClassHash = canonicalFelt(ARGENT_ACCOUNT_CLASS_HASH) as string;
 

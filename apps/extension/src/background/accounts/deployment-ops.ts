@@ -1,11 +1,11 @@
 /** Explicit account-deployment fee review and submission. */
 
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate, StarkHashSigner } from "@mc-wallet/starknet/rpc";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { FeeEstimate, StarkHashSigner } from "@bramble/starknet/rpc";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";

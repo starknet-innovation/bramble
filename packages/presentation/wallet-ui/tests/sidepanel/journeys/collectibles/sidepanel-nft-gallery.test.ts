@@ -7,9 +7,9 @@
  * the image) for a discovered token that was never manually watched.
  */
 import { describe, expect, test } from "bun:test";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { nftSendFlow } from "../../../../src/sidepanel/journeys/collectibles/nft-send-view";
 import {
@@ -91,9 +91,12 @@ describe("NFT gallery auto-discovery", () => {
     expect(html).toContain('loading="eager"');
   });
 
-  test("shows the indexer-aware empty state when nothing is discovered or watched", () => {
+  test("shows the watch-first empty state when nothing is discovered or watched", () => {
     const html = nftGalleryFlow(status, account, preferences, []);
-    expect(html).toContain("NFT indexer");
+    // The indexer setting is withheld while the journey is parked, so the empty
+    // state points at the only route a user has: watching a token they own.
+    expect(html).toContain("Watch one you own");
+    expect(html).not.toContain("NFT indexer");
     expect(html).toContain('data-view="nft-watch"');
     expect(html).toContain("0 shown");
   });

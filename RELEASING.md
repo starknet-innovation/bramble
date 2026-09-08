@@ -1,6 +1,6 @@
-# Releasing MC Wallet
+# Releasing Bramble
 
-This runbook takes MC Wallet from a version bump to a published Chrome Web Store
+This runbook takes Bramble from a version bump to a published Chrome Web Store
 listing. Two paths exist and share the same packaged bytes:
 
 - **Automatic (release-on-merge)** — merging a `release/*` (or `hotfix/*`) branch
@@ -83,12 +83,12 @@ The release version has **one source of truth**: `package.json` → `version`.
   fail the build if the two versions differ or are not `x.y.z` (offline, every PR).
 - `scripts/release-version.ts` (`bun run check:release-version`) is the **release
   gate**: it asserts the tag equals `v<version>` and, on an auto-release, that the
-  `release/vX.Y` branch implies exactly that version — the check that was missing
+  `release/vX.Y` (or `release/vX.Y.Z`) branch implies exactly that version — the check that was missing
   when `v0.4.0` shipped as `mc-wallet-0.3.0.zip`. Its pure logic is unit-tested in
   `tests/conformance/release-version-single-source.test.ts`.
 
 To bump, edit **both** files to the same new semver (a `release/vX.Y` branch
-ships `X.Y.0`), then run the gates:
+ships `X.Y.0`, a `release/vX.Y.Z` branch ships `X.Y.Z`), then run the gates:
 
 ```sh
 bun test tests/conformance/release-version-single-source.test.ts
@@ -104,12 +104,12 @@ version **must be strictly greater** than the currently published one.
 bun install --frozen-lockfile
 bun run vendor:argent      # verifies the pinned official Argent release
 bun run build              # writes dist/
-bun run package:extension  # writes artifacts/mc-wallet-<version>.zip (+ .sha256)
+bun run package:extension  # writes artifacts/bramble-<version>.zip (+ .sha256)
 ```
 
 `scripts/package-extension.ts` produces a **reproducible** zip (normalized
 mtimes, pinned file set) plus a matching `.sha256`. The bytes on the Release
-page, in the Chrome Web Store, and in the CI `mc-wallet-extension` artifact are
+page, in the Chrome Web Store, and in the CI `bramble-extension` artifact are
 therefore identical for a given commit.
 
 Verify the checksum before trusting a zip:
@@ -139,15 +139,15 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
 
 1. resolves the merged head branch from the PR on the merge commit; a chore/docs
    merge resolves to no release and the workflow exits cleanly;
-2. runs the single-source gate — derives `X.Y.0` from `release/vX.Y` (or the
-   package version for a hotfix) and **fails** if `package.json`/`manifest` do
+2. runs the single-source gate — derives `X.Y.0` from `release/vX.Y`, `X.Y.Z`
+   from a `release/vX.Y.Z` patch branch (or the package version for a hotfix) and **fails** if `package.json`/`manifest` do
    not match, so a promotion that skipped the version bump cannot ship;
 3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
    idempotent, so a re-run never double-cuts);
 4. calls the reusable `release-build.yml`, which installs the toolchain exactly
    as CI does, runs `vendor:argent`/`build`/`package:extension`, re-asserts the
    tag ↔ version gate, verifies the `.zip` matches its `.sha256`, and uploads the
-   `mc-wallet-release` artifact. A separate hosted job that never checks out
+   `bramble-release` artifact. A separate hosted job that never checks out
    wallet source creates the **GitHub Release** with the zip + `.sha256`
    attached.
 
@@ -170,7 +170,7 @@ A tag that does not match `v*` triggers nothing.
 ### Cutting a release (manual fallback)
 
 Run steps 1-2 locally, then create the Release by hand (Releases → Draft a new
-release), attaching `artifacts/mc-wallet-<version>.zip` and its `.sha256`.
+release), attaching `artifacts/bramble-<version>.zip` and its `.sha256`.
 
 Creating the release via the GitHub UI is also supported: the release step is
 create-or-upload, so it attaches the built assets to an existing (UI-created)
@@ -274,7 +274,7 @@ dispatch from protected `main`:
    - `deploy_percentage` — optional staged rollout (see below).
    - `dry_run: true` — validate the package and request plan without publishing.
 
-The job downloads the `mc-wallet-release` artifact built by `build-release`,
+The job downloads the `bramble-release` artifact built by `build-release`,
 verifies its SHA-256 checksum, checks out the reviewed publish client from
 protected `main` on a fresh hosted runner, and invokes it. The client:
 

@@ -352,10 +352,10 @@ describe("activity feed", () => {
     });
   });
 
-  test("loadActivity returns an empty, non-degraded feed when the guard fails", async () => {
+  test("loadActivity reports unavailable history when the response guard fails", async () => {
     expect(await runtimeReturning(errorEnvelope).loadActivity()).toEqual({
       entries: [],
-      historyUnavailable: false,
+      historyUnavailable: true,
     });
   });
 });
@@ -406,6 +406,7 @@ describe("token and preference wrappers", () => {
       wallet.setDisplay({
         approvalSurface: "popup",
         displayCurrency: "eur",
+        productAnalytics: true,
         reliabilityDiagnostics: true,
         theme: "dark",
       }),
@@ -413,6 +414,7 @@ describe("token and preference wrappers", () => {
     expect(sent[0]).toEqual({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      productAnalytics: true,
       reliabilityDiagnostics: true,
       theme: "dark",
       type: "wallet.setDisplay",
@@ -481,15 +483,6 @@ describe("token and preference wrappers", () => {
     ).resolves.toBeUndefined();
     await expect(runtimeReturning({}).setStrk20NetworkConfig("SN_MAIN", config)).rejects.toThrow(
       "privacy service configuration failed",
-    );
-  });
-
-  test("setNftIndexerUrl resolves on preferences and throws otherwise", async () => {
-    await expect(
-      runtimeReturning(preferencesResponse).setNftIndexerUrl("https://idx"),
-    ).resolves.toBeUndefined();
-    await expect(runtimeReturning({}).setNftIndexerUrl("https://idx")).rejects.toThrow(
-      "indexer endpoint update failed",
     );
   });
 });

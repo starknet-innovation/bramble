@@ -1,6 +1,6 @@
 /**
  * Development-only Wallet UI surface consumed by UI Lab and integration tests.
- * Production extension entrypoints must import `@mc-wallet/wallet-ui/start` instead.
+ * Production extension entrypoints must import `@bramble/wallet-ui/start` instead.
  */
 
 /**

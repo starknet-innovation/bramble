@@ -3,7 +3,7 @@
  * execution payloads stay in background memory; the approval UI receives only
  * a cloned action review, display-safe summaries, and the digest binding.
  */
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 
 /**
  * Approval kinds for STRK20 operations that disclose private state or create a

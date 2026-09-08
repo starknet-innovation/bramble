@@ -1,11 +1,11 @@
-import { button, iconButton, iconLink, segmentedControl } from "@mc-wallet/ui-kit/controls";
+import { button, iconButton, iconLink, segmentedControl } from "@bramble/ui-kit/controls";
 import {
   checkboxField,
   inputControl,
   selectField,
   textareaField,
   textField,
-} from "@mc-wallet/ui-kit/fields";
+} from "@bramble/ui-kit/fields";
 import type { Meta } from "@storybook/html-vite";
 import {
   CATALOG_META,

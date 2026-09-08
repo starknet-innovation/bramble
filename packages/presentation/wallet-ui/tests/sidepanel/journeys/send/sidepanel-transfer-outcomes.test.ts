@@ -4,9 +4,9 @@
  * statuses retain distinct recovery states.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
-import type { ActivityStatus } from "@mc-wallet/transactions/activity";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
+import type { ActivityStatus } from "@bramble/transactions/activity";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/journeys/send/send-views";
 import {

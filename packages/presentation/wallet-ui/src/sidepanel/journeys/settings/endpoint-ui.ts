@@ -4,8 +4,8 @@
  * entrypoint to keep it within the size budget.
  */
 
-import { isServiceUrl } from "@mc-wallet/core/service-url";
-import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
+import { isServiceUrl } from "@bramble/core/service-url";
+import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { HostPermissionApi } from "../../runtime/runtime-global";
@@ -188,8 +188,9 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
 };
 
 /**
- * Binds the RPC-override, explorer-fallback, STRK20-prover, and NFT-indexer
- * forms on the advanced-endpoints screen.
+ * Binds the RPC-override, explorer-fallback, and STRK20-prover forms on the
+ * advanced-endpoints screen. The NFT-indexer form is not rendered while the
+ * collectibles journey is parked, so nothing binds it.
  */
 export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
   bindEndpointForm(deps, "#rpc-form", "rpcUrl", "RPC endpoint", (rpcUrl) =>
@@ -204,8 +205,5 @@ export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
     "Coordination relay",
     (relayUrl) => deps.wallet.setNostrRelayUrl(relayUrl),
     false,
-  );
-  bindEndpointForm(deps, "#nft-indexer-form", "indexerUrl", "Indexer endpoint", (indexerUrl) =>
-    deps.wallet.setNftIndexerUrl(indexerUrl),
   );
 };

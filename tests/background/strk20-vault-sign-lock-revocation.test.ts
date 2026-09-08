@@ -12,9 +12,9 @@ import {
   defaultWalletPreferences,
   type WalletPreferences,
   type WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+} from "@bramble/settings/preferences";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import {
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,

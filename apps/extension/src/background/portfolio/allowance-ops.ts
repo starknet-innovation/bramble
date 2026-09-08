@@ -20,20 +20,20 @@
  * ../starknet/verify-decode).
  */
 
-import { buildErc20ApproveCall } from "@mc-wallet/starknet/rpc";
+import { buildErc20ApproveCall } from "@bramble/starknet/rpc";
 import {
   type AllowanceReading,
   type AllowanceView,
   type ExternalAllowance,
   mergeAllowanceViews,
-} from "@mc-wallet/transactions/allowance-discovery";
-import type { TrackedAllowancePair } from "@mc-wallet/transactions/allowance-scan";
-import { type AllowanceRecord, allowanceTarget } from "@mc-wallet/transactions/allowance-store";
-import { type ApprovedAssets, approvedAssetKind } from "@mc-wallet/transactions/allowances";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
-import { isWatchedNftContract } from "@mc-wallet/transactions/verify-decode";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/allowance-discovery";
+import type { TrackedAllowancePair } from "@bramble/transactions/allowance-scan";
+import { type AllowanceRecord, allowanceTarget } from "@bramble/transactions/allowance-store";
+import { type ApprovedAssets, approvedAssetKind } from "@bramble/transactions/allowances";
+import { verifyCalls } from "@bramble/transactions/verify";
+import { isWatchedNftContract } from "@bramble/transactions/verify-decode";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import { currentArgentSignerRecords } from "../multisig/multisig-membership";
 import { readTypeOnlyInput } from "../routing/message-inputs";

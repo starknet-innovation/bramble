@@ -4,7 +4,7 @@
  * declared under a given basic type, on a given revision.
  *
  * Both the hashing gate (`./typed-data-values`) and the approval card
- * (`@mc-wallet/wallet-ui`'s `sidepanel/shared/sign-request-decode`) resolve every scalar through this one
+ * (`@bramble/wallet-ui`'s `sidepanel/shared/sign-request-decode`) resolve every scalar through this one
  * function, so what the wallet agrees to hash and what the card says it is
  * hashing are the same reading rather than two guesses that can drift.
  *
@@ -41,7 +41,7 @@
  * as signed content.
  */
 
-import { canonicalFelt, STARK_FIELD_PRIME, UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
+import { canonicalFelt, STARK_FIELD_PRIME, UINT128_LIMIT } from "@bramble/wallet-model/networks";
 import { typedData as snip12 } from "starknet";
 import type { Snip12Revision } from "./snip12-vocabulary";
 

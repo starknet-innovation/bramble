@@ -4,13 +4,9 @@
  * explicit and independently testable.
  */
 
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { ValueBucket } from "@mc-wallet/transactions/send-routes";
-import {
-  isStarkFieldElement,
-  normalizeFeltInput,
-  sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { ValueBucket } from "@bramble/transactions/send-routes";
+import { isStarkFieldElement, normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
 import { errorMessage } from "../../shared/dom";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 

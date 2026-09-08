@@ -1,7 +1,7 @@
 /** Frozen Argent multisig V3 preparation and exact-signature submission. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isStarknetNetworkId, STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { isStarknetNetworkId, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import {
   ETransactionVersion3,
   type ResourceBoundsOverhead,

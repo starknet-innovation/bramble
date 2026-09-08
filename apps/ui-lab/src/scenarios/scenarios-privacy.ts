@@ -3,13 +3,13 @@
  * with fixture values only: no vault, hardware, prover, indexer, or RPC access.
  */
 
-import { STRK20_MAINNET_POOL } from "@mc-wallet/privacy/config";
+import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
 import type {
   PrivacyDisclosureState,
   PrivacyJourneyState,
   PrivacyPreparation,
   PrivateBalanceView,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 import { softwareAccount, statusFor } from "../fixtures/fixtures";
 import {
   ETH_TOKEN,

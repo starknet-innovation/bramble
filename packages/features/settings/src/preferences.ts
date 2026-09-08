@@ -1,28 +1,28 @@
 /** Plain wallet preferences kept outside the encrypted vault. */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isJson } from "@mc-wallet/core/json";
-import { isWatchedNft, withNftId } from "@mc-wallet/portfolio/watched-nft";
+import { WalletError } from "@bramble/core/errors";
+import { isJson } from "@bramble/core/json";
+import { isWatchedNft, withNftId } from "@bramble/portfolio/watched-nft";
 import {
   DEFAULT_STRK20_NETWORKS,
   isStrk20NetworkConfig,
   STRK20_MAINNET_POOL,
   type Strk20NetworkConfig,
-} from "@mc-wallet/privacy/config";
-import { assertStoreAccess, type StoreActor } from "@mc-wallet/store/access";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/privacy/config";
+import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   isCustomNetwork,
   isCustomRpcUrl,
   normalizeChainId,
-} from "@mc-wallet/wallet-model/custom-network";
+} from "@bramble/wallet-model/custom-network";
 import {
   DEFAULT_NETWORK,
   DEFAULT_TOKENS,
   isStarknetNetworkId,
   STRK_TOKEN_ADDRESS,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 import {
   isAddressBookEntry,
@@ -34,7 +34,7 @@ import {
   isTokenId,
   withAddressBookId,
   withTokenId,
-} from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/preferences";
 import {
   createGroup as createGroupPure,
   normalizeAccountGroups,
@@ -64,9 +64,9 @@ export type {
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
-} from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/preferences";
 /** Explorer-lane resolver colocated with the preferences it reads. */
-export { explorerFallbackAllowed } from "@mc-wallet/wallet-model/preferences";
+export { explorerFallbackAllowed } from "@bramble/wallet-model/preferences";
 /** Re-exported store schema and capability types. */
 export type {
   WalletPreferences,
@@ -76,7 +76,7 @@ export type {
 /**
  * Browser storage key for non-secret wallet preferences.
  */
-export const PREFERENCES_STORE_KEY = "mc-wallet:preferences";
+export const PREFERENCES_STORE_KEY = "bramble:preferences";
 
 type WalletPreferencesStoreOptions = {
   readonly actor?: StoreActor;
@@ -96,6 +96,9 @@ const isValidDisplayInput = (
     return false;
   }
   if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
+    return false;
+  }
+  if (input.productAnalytics !== undefined && typeof input.productAnalytics !== "boolean") {
     return false;
   }
   if (
@@ -122,6 +125,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   groups: [],
   hiddenTokens: [],
   nfts: [],
+  productAnalytics: true,
   reliabilityDiagnostics: false,
   rpcOverrides: {},
   schemaVersion: 1,
@@ -145,16 +149,17 @@ const isRetiredBundledMainnetRouting = (config: Strk20NetworkConfig | undefined)
   config.proverUrl === `${RETIRED_STRK20_GATEWAY_BASE}/prover` &&
   config.subaccountAnonymizerAddress === undefined;
 
-const withCurrentStrk20Defaults = (preferences: WalletPreferences): WalletPreferences => {
-  if (preferences.strk20Networks === undefined) {
-    return { ...preferences, strk20Networks: DEFAULT_STRK20_NETWORKS };
+const withCurrentDefaults = (preferences: WalletPreferences): WalletPreferences => {
+  const current = { ...preferences, productAnalytics: preferences.productAnalytics ?? true };
+  if (current.strk20Networks === undefined) {
+    return { ...current, strk20Networks: DEFAULT_STRK20_NETWORKS };
   }
-  if (!isRetiredBundledMainnetRouting(preferences.strk20Networks.SN_MAIN)) {
-    return preferences;
+  if (!isRetiredBundledMainnetRouting(current.strk20Networks.SN_MAIN)) {
+    return current;
   }
   return {
-    ...preferences,
-    strk20Networks: { ...preferences.strk20Networks, ...DEFAULT_STRK20_NETWORKS },
+    ...current,
+    strk20Networks: { ...current.strk20Networks, ...DEFAULT_STRK20_NETWORKS },
   };
 };
 
@@ -188,17 +193,15 @@ export const createPreferencesStore = ({
     if (!isWalletPreferences(stored)) {
       throw new WalletError("Invalid stored preferences");
     }
-    const withPrivacyDefaults = withCurrentStrk20Defaults(stored);
+    const current = withCurrentDefaults(stored);
     // Self-heal legacy multi-group membership on read (the validator stays
     // permissive so old data loads rather than erroring): collapse each account
     // to a single folder so every consumer sees the single-group invariant.
-    if (withPrivacyDefaults.groups === undefined) {
-      return withPrivacyDefaults;
+    if (current.groups === undefined) {
+      return current;
     }
-    const groups = normalizeAccountGroups(withPrivacyDefaults.groups);
-    return groups === withPrivacyDefaults.groups
-      ? withPrivacyDefaults
-      : { ...withPrivacyDefaults, groups };
+    const groups = normalizeAccountGroups(current.groups);
+    return groups === current.groups ? current : { ...current, groups };
   };
 
   // Merge base for a restore, the recovery path out of a record this build
@@ -368,6 +371,9 @@ export const createPreferencesStore = ({
           ...(input.displayCurrency === undefined
             ? {}
             : { displayCurrency: input.displayCurrency }),
+          ...(input.productAnalytics === undefined
+            ? {}
+            : { productAnalytics: input.productAnalytics }),
           ...(input.reliabilityDiagnostics === undefined
             ? {}
             : { reliabilityDiagnostics: input.reliabilityDiagnostics }),

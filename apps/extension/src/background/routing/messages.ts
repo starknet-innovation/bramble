@@ -1,8 +1,5 @@
 /** Typed extension message handling for the background service worker. */
-import { activeAccountSecrets } from "@mc-wallet/vault/service";
-import { DEFAULT_NETWORK } from "@mc-wallet/wallet-model/networks";
-import { readCreateAccountInput } from "../accounts/account-creation-inputs";
-import { readImportAccountInput } from "../accounts/import-inputs";
+import { activeAccountSecrets } from "@bramble/vault/service";
 import { handleWalletOps, type WalletOpsDeps } from "../accounts/wallet-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { handleApprovalDecision } from "../approvals/approval-decisions";
@@ -22,10 +19,6 @@ import { handleStrk20WalletOps } from "../privacy/strk20-wallet-ops";
 import { handleAddChainOps } from "../provider/add-chain-ops";
 import { handleProviderOps } from "../provider/provider-ops";
 import {
-  runUnlockedNetworkMutation,
-  runVaultCreationWithNetwork,
-} from "../runtime/active-network-mutation";
-import {
   reconcileActiveAccount,
   reconcileUnlockedActiveAccount,
   selectActiveAccount,
@@ -40,9 +33,9 @@ import { supportDiagnosticsResponse } from "../support/diagnostics";
 import { handleChainOps } from "../transactions/chain-ops";
 import { handleDeclareOps } from "../transactions/declare-ops";
 import { handleSwapOps } from "../transactions/swap-ops";
+import { handleAccountCreationOps, type RouterHandler } from "./account-creation-handlers";
 import { type MessageHandlerOptions, type RouterContext, routerContext } from "./message-context";
 import {
-  readAddAccountInput,
   readGetGrantedAccountsInput,
   readRequestAccountsInput,
   readRevealSecretsInput,
@@ -59,12 +52,6 @@ import {
 } from "./senders";
 import { unlockFailureError } from "./unlock-errors";
 
-type RouterHandler = (
-  ctx: RouterContext,
-  messageType: string,
-  message: unknown,
-  sender: RuntimeSender | undefined,
-) => Promise<RuntimeResponse | null>;
 const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   activeStateCoordinator: ctx.activeStateCoordinator,
   activity: ctx.activity,
@@ -113,74 +100,6 @@ const handleMultisig: RouterHandler = async (ctx, messageType, message) => {
   return MULTISIG_ACTIVE_STATE_MESSAGES.has(messageType)
     ? ctx.activeStateCoordinator.run(handle)
     : handle();
-};
-
-const handleCreateAccount: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.createAccount") {
-    return null;
-  }
-  const input = readCreateAccountInput(message);
-  if (!input) {
-    return { error: "invalid create account request" };
-  }
-  const networkId = input.networkId ?? DEFAULT_NETWORK.id;
-  return ctx.activeStateCoordinator.run(async () => {
-    const account = await runVaultCreationWithNetwork(
-      ctx.session,
-      ctx.preferencesStore,
-      networkId,
-      () => ctx.wallet.createAccount(input),
-    );
-    ctx.session.unlock(input.vaultPassphrase);
-    return { account, ok: true };
-  });
-};
-
-const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.addAccount") {
-    return null;
-  }
-  const input = readAddAccountInput(message);
-  if (!input) {
-    return { error: "invalid add account request" };
-  }
-  return ctx.activeStateCoordinator.run(async () => {
-    const account = await runUnlockedNetworkMutation(
-      ctx.session,
-      ctx.preferencesStore,
-      input.networkId,
-      (vaultPassphrase) =>
-        ctx.wallet.addDerivedAccount({
-          accountContractType: input.accountContractType,
-          networkId: input.networkId,
-          vaultPassphrase,
-        }),
-    );
-    return account ? { account, ok: true } : { error: "wallet locked" };
-  });
-};
-
-const handleImportAccount: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.importAccount") {
-    return null;
-  }
-  const input = readImportAccountInput(message);
-  if (!input) {
-    return { error: "invalid import account request" };
-  }
-  const importRawKeyAccount = ctx.wallet.importRawKeyAccount;
-  if (!importRawKeyAccount) {
-    return { error: "wallet unavailable" };
-  }
-  return ctx.activeStateCoordinator.run(async () => {
-    const account = await runUnlockedNetworkMutation(
-      ctx.session,
-      ctx.preferencesStore,
-      input.networkId,
-      (vaultPassphrase) => importRawKeyAccount({ ...input, vaultPassphrase }),
-    );
-    return account ? { account, ok: true } : { error: "wallet locked" };
-  });
 };
 
 const handleGenerateMnemonic: RouterHandler = async (ctx, messageType, message) => {
@@ -428,9 +347,7 @@ const HANDLERS: readonly RouterHandler[] = [
     ),
   (ctx, messageType, message) => handleOriginOps(ctx, messageType, message),
   (ctx, messageType, message) => handleTokenOps(ctx, messageType, message),
-  handleCreateAccount,
-  handleAddAccount,
-  handleImportAccount,
+  handleAccountCreationOps,
   (ctx, messageType, message) => handleApprovalDecision(ctx, messageType, message),
   handleGenerateMnemonic,
   (ctx, messageType, message) => handleOnboardingOps(ctx, messageType, message),

@@ -1,8 +1,8 @@
 /**
  * Strict parsers for the Starkscan fields consumed by wallet read surfaces.
  */
-import { isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
-import { canonicalFelt, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { isBaseUnitsAmount, isRecord } from "@bramble/core/json";
+import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 import type {
   StarkscanAddressActivity,

@@ -9,10 +9,10 @@
  * fills are solid, and feedback transforms stay inside the press/lift envelope
  * enforced by tests/sidepanel/sidepanel-styles.test.ts. Colour discipline:
  * interactive and active states stay achromatic; market and status semantics
- * ride --mc-positive/--mc-danger so a gain, success, or risk always reads by
+ * ride --bramble-positive/--bramble-danger so a gain, success, or risk always reads by
  * meaning rather than decorative hue.
  */
-import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 import { SIGN_REQUEST_STYLES } from "../../shared/sign-request";
 
 /**
@@ -22,18 +22,19 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
      cards (callout, review panel, request/nft cards) carry their own single
      border below. */
   .section { display: grid; gap: ${SPACE.md}; }
+  #deploy-button { width: 100%; }
   /* Callout: a neutral panel card; the accent lives only in the leading icon
      chip, so a waiting request draws the eye without tinting the surface. */
   .callout {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     padding: ${SPACE.md} ${SPACE.lg};
   }
   .callout-icon {
     align-items: center;
-    background: var(--mc-accent-soft);
+    background: var(--bramble-accent-soft);
     border-radius: ${RADIUS.sm};
-    color: var(--mc-accent);
+    color: var(--bramble-accent);
     display: inline-flex;
     flex: none;
     height: 34px;
@@ -41,28 +42,28 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     width: 34px;
   }
   .deploy-notice { display: grid; gap: 2px; justify-items: start; }
-  button.deploy-chip { color: var(--mc-danger); }
+  button.deploy-chip { color: var(--bramble-danger); }
   @media (hover: hover) and (pointer: fine) {
-    button.deploy-chip:not(:disabled):hover { background: var(--mc-danger-soft); }
+    button.deploy-chip:not(:disabled):hover { background: var(--bramble-danger-soft); }
   }
-  button.deploy-chip:not(:disabled):active { background: var(--mc-danger-soft); }
+  button.deploy-chip:not(:disabled):active { background: var(--bramble-danger-soft); }
   .callout-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .callout-copy strong { font-size: ${TYPE.body.size}; }
   .callout-copy p { font-size: ${TYPE.caption.size}; }
 
   /* Data display */
   code {
-    color: var(--mc-text);
-    font-family: var(--mc-font-mono);
+    color: var(--bramble-text);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.mono.size};
     line-height: ${TYPE.mono.line};
     overflow-wrap: anywhere;
     word-break: break-all;
   }
-  .value { color: var(--mc-text); font-weight: ${WEIGHT.semibold}; overflow-wrap: anywhere; }
+  .value { color: var(--bramble-text); font-weight: ${WEIGHT.semibold}; overflow-wrap: anywhere; }
   .context-line code { overflow-wrap: normal; word-break: normal; }
   .address-line {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.md};
     padding: ${SPACE.sm} ${SPACE.sm} ${SPACE.sm} ${SPACE.md};
   }
@@ -71,7 +72,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   /* Address book / connected sites: one grouped surface, flat rows with inset
      dividers and trailing quiet actions. */
   .address-book {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     overflow: hidden;
@@ -85,7 +86,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     position: relative;
   }
   .address-book > li + li::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
@@ -106,17 +107,17 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     transition: background ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms var(--ease-out);
   }
   /* Divider is a flat pseudo-line, not a border-top: a border-top curls along the row's border-radius and reads as a raised "top shadow" lip. */
-  .token-list > .token-row + .token-row::before { background: var(--mc-hairline); content: ""; height: 1px; inset: 0 0 auto; position: absolute; }
+  .token-list > .token-row + .token-row::before { background: var(--bramble-hairline); content: ""; height: 1px; inset: 0 0 auto; position: absolute; }
   @media (hover: hover) and (pointer: fine) {
-    li.token-row:hover { background: var(--mc-hover); }
+    li.token-row:hover { background: var(--bramble-hover); }
   }
-  li.token-row:has(button.token-open:active) { background: var(--mc-soft-press); transform: scale(0.985); }
+  li.token-row:has(button.token-open:active) { background: var(--bramble-soft-press); transform: scale(0.985); }
   /* Token glyph: a neutral chip — the accent is reserved for signal, not logos. */
   .token-mark {
     align-items: center;
-    background: var(--mc-sunken);
+    background: var(--bramble-sunken);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     flex: none;
     font-size: ${TYPE.micro.size};
@@ -128,10 +129,10 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   }
   /* Deterministic per-token tint for letter badges (avatar-palette hues) so
      catalog lists read as distinct rows, not a grey column. */
-  .token-mark[data-tone="0"] { background: color-mix(in srgb, var(--mc-avatar-0) 20%, var(--mc-sunken)); color: color-mix(in srgb, var(--mc-avatar-0) 80%, var(--mc-text)); }
-  .token-mark[data-tone="1"] { background: color-mix(in srgb, var(--mc-avatar-1) 20%, var(--mc-sunken)); color: color-mix(in srgb, var(--mc-avatar-1) 80%, var(--mc-text)); }
-  .token-mark[data-tone="2"] { background: color-mix(in srgb, var(--mc-avatar-2) 20%, var(--mc-sunken)); color: color-mix(in srgb, var(--mc-avatar-2) 80%, var(--mc-text)); }
-  .token-mark[data-tone="3"] { background: color-mix(in srgb, var(--mc-avatar-3) 20%, var(--mc-sunken)); color: color-mix(in srgb, var(--mc-avatar-3) 80%, var(--mc-text)); }
+  .token-mark[data-tone="0"] { background: color-mix(in srgb, var(--bramble-avatar-0) 20%, var(--bramble-sunken)); color: color-mix(in srgb, var(--bramble-avatar-0) 80%, var(--bramble-text)); }
+  .token-mark[data-tone="1"] { background: color-mix(in srgb, var(--bramble-avatar-1) 20%, var(--bramble-sunken)); color: color-mix(in srgb, var(--bramble-avatar-1) 80%, var(--bramble-text)); }
+  .token-mark[data-tone="2"] { background: color-mix(in srgb, var(--bramble-avatar-2) 20%, var(--bramble-sunken)); color: color-mix(in srgb, var(--bramble-avatar-2) 80%, var(--bramble-text)); }
+  .token-mark[data-tone="3"] { background: color-mix(in srgb, var(--bramble-avatar-3) 20%, var(--bramble-sunken)); color: color-mix(in srgb, var(--bramble-avatar-3) 80%, var(--bramble-text)); }
   .token-logo {
     border-radius: ${RADIUS.full};
     flex: none;
@@ -152,17 +153,17 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     font-weight: ${WEIGHT.bold};
   }
   .token-side { align-items: flex-end; display: grid; flex: none; gap: 2px; text-align: right; }
-  .token-fiat { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-variant-numeric: tabular-nums; }
+  .token-fiat { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; font-variant-numeric: tabular-nums; }
   .token-change { font-size: ${TYPE.caption.size}; font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.semibold}; }
-  .token-change.up { color: var(--mc-positive); }
-  .token-change.down { color: var(--mc-danger); }
+  .token-change.up { color: var(--bramble-positive); }
+  .token-change.down { color: var(--bramble-danger); }
   /* The whole row is the tap target; the row's own fill highlight is the hover
      affordance, so the embedded button stays visually inert (no second fill, no
      name recolor, no nested press scale — the row scales instead). */
   .token-row .token-open {
     background: transparent;
     border-radius: ${RADIUS.md};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     flex: 1;
     justify-content: flex-start;
     min-height: 0;
@@ -177,9 +178,9 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   }
   .token-row.token-hidden { opacity: 0.6; }
   .token-flag {
-    background: var(--mc-danger-soft);
+    background: var(--bramble-danger-soft);
     border-radius: ${RADIUS.full};
-    color: var(--mc-danger);
+    color: var(--bramble-danger);
     flex: none;
     font-size: 10px;
     font-weight: ${WEIGHT.bold};
@@ -187,19 +188,19 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     padding: 3px 8px;
     text-transform: uppercase;
   }
-  .token-detail-price { color: var(--mc-text); font-size: ${TYPE.amount.size}; font-weight: ${WEIGHT.heavy}; letter-spacing: -0.02em; }
+  .token-detail-price { color: var(--bramble-text); font-size: ${TYPE.amount.size}; font-weight: ${WEIGHT.heavy}; letter-spacing: -0.02em; }
   /* Sparkline direction is a market signal: green up, red down — never brand. */
   .sparkline { display: block; height: 48px; width: 100%; }
   .sparkline polyline {
     fill: none;
-    stroke: var(--mc-muted);
+    stroke: var(--bramble-muted);
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 1.5;
     vector-effect: non-scaling-stroke;
   }
-  .sparkline-up polyline { stroke: var(--mc-positive); }
-  .sparkline-down polyline { stroke: var(--mc-danger); }
+  .sparkline-up polyline { stroke: var(--bramble-positive); }
+  .sparkline-down polyline { stroke: var(--bramble-danger); }
   .request-list { gap: ${SPACE.md}; }
   /* Activity list: same de-boxed treatment as the token list — flush rows split
      by a single hairline divider, state on the glyph, summary as the explorer link. */
@@ -208,13 +209,13 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     align-items: center; border-radius: ${RADIUS.sm}; display: flex; gap: ${SPACE.sm};
     min-width: 0; padding: ${SPACE.md} ${SPACE.sm}; position: relative; transition: background ${MOTION.pressMs}ms ${MOTION.ease};
   }
-  .tx-list > .tx-row + .tx-row::before { background: var(--mc-hairline); content: ""; height: 1px; inset: 0 0 auto; position: absolute; } /* flat pseudo-line divider; see .token-row */
+  .tx-list > .tx-row + .tx-row::before { background: var(--bramble-hairline); content: ""; height: 1px; inset: 0 0 auto; position: absolute; } /* flat pseudo-line divider; see .token-row */
   @media (hover: hover) and (pointer: fine) {
-    li.tx-row:hover { background: var(--mc-hover); }
+    li.tx-row:hover { background: var(--bramble-hover); }
   }
   .tx-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .tx-copy strong, .tx-summary-link {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: block;
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.bold};
@@ -225,21 +226,21 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   }
   .tx-summary-link:hover { text-decoration: underline; text-underline-offset: 3px; }
   .review-panel {
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.md};
     display: grid;
     gap: ${SPACE.sm};
     padding: ${SPACE.md};
   }
-  .review-panel p { color: var(--mc-text); font-size: ${TYPE.label.size}; }
-  .review-panel .decision-label { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
+  .review-panel p { color: var(--bramble-text); font-size: ${TYPE.label.size}; }
+  .review-panel .decision-label { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
 ${SIGN_REQUEST_STYLES}
-  .review-flag { color: var(--mc-danger); font-size: ${TYPE.caption.size}; }
-  .review-fee { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
-  .tx-hint { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .review-flag { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; }
+  .review-fee { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
+  .tx-hint { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
   /* Allowances: one grouped surface, flat rows with inset dividers. */
   .allowance-list {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     overflow: hidden;
@@ -252,7 +253,7 @@ ${SIGN_REQUEST_STYLES}
     position: relative;
   }
   .allowance-row + .allowance-row::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
@@ -269,16 +270,16 @@ ${SIGN_REQUEST_STYLES}
   .nft-grid { display: grid; gap: ${SPACE.md}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nft-card { display: grid; gap: ${SPACE.sm}; min-width: 0; position: relative; }
   button.nft-open {
-    align-content: start; background: transparent; color: var(--mc-text); display: grid; gap: ${SPACE.sm};
+    align-content: start; background: transparent; color: var(--bramble-text); display: grid; gap: ${SPACE.sm};
     grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0; text-align: left;
   }
   button.nft-open:not(:disabled):hover, button.nft-open:not(:disabled):active { background: transparent; }
   @media (hover: hover) and (pointer: fine) {
-    button.nft-open:not(:disabled):hover strong { color: var(--mc-accent); }
+    button.nft-open:not(:disabled):hover strong { color: var(--bramble-accent); }
   }
   .nft-art {
-    align-items: center; aspect-ratio: 1 / 1; background: var(--mc-soft); border-radius: ${RADIUS.md};
-    color: var(--mc-muted); display: inline-flex; justify-content: center;
+    align-items: center; aspect-ratio: 1 / 1; background: var(--bramble-soft); border-radius: ${RADIUS.md};
+    color: var(--bramble-muted); display: inline-flex; justify-content: center;
     overflow: hidden; position: relative; transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease}; width: 100%;
   }
   .nft-art .icon { height: 28px; width: 28px; } .nft-image { border-radius: inherit; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; } .nft-image--pixelated { image-rendering: pixelated; } .nft-image--broken { display: none; }
@@ -291,8 +292,8 @@ ${SIGN_REQUEST_STYLES}
   /* The gallery play affordance overlays the art square and is revealed on
      hover/focus so a collectible's on-chain animation can be started in place. */
   .nft-play-tile {
-    align-items: center; aspect-ratio: 1 / 1; background: var(--mc-hover); border: 0;
-    border-radius: ${RADIUS.md}; color: var(--mc-text); cursor: pointer; display: flex; gap: 6px;
+    align-items: center; aspect-ratio: 1 / 1; background: var(--bramble-hover); border: 0;
+    border-radius: ${RADIUS.md}; color: var(--bramble-text); cursor: pointer; display: flex; gap: 6px;
     font-size: ${TYPE.label.size}; font-weight: ${WEIGHT.medium}; justify-content: center; left: 0;
     opacity: 0; pointer-events: none; position: absolute; top: 0; width: 100%;
     transition: opacity ${MOTION.liftMs}ms ${MOTION.ease};
@@ -300,10 +301,10 @@ ${SIGN_REQUEST_STYLES}
   .nft-play-tile[hidden] { display: none; }
   .nft-play-tile .icon { height: 18px; width: 18px; }
   .nft-card:hover .nft-play-tile, .nft-card:focus-within .nft-play-tile { opacity: 1; pointer-events: auto; }
-  button.nft-open:not(:disabled):active .nft-art { box-shadow: var(--mc-shadow-sm); }
+  button.nft-open:not(:disabled):active .nft-art { box-shadow: var(--bramble-shadow-sm); }
   .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  .nft-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .nft-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   /* Compact two-up ghost actions; the danger Remove stays borderless like Hide
      (red ink carries the signal, not a box), with danger-soft hover feedback. */
   .nft-actions { display: grid; gap: 6px; grid-template-columns: 1fr 1fr; }
@@ -312,9 +313,9 @@ ${SIGN_REQUEST_STYLES}
   /* dApp approval/sign prompts are a solid panel card — a hairline edge plus a
      gentle low shadow lift a consequential request above the request list. */
   .request-card {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
-    box-shadow: var(--mc-elev-sm);
+    box-shadow: var(--bramble-elev-sm);
     display: grid;
     gap: ${SPACE.md};
     padding: ${SPACE.lg};
@@ -323,9 +324,9 @@ ${SIGN_REQUEST_STYLES}
   .request-site { align-items: center; display: flex; gap: ${SPACE.md}; min-width: 0; }
   .request-site-mark {
     align-items: center;
-    background: var(--mc-sunken);
+    background: var(--bramble-sunken);
     border-radius: ${RADIUS.md};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     flex: none;
     height: 40px;
@@ -333,12 +334,12 @@ ${SIGN_REQUEST_STYLES}
     width: 40px;
   }
   .request-site-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
-  .request-site-copy > span { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
+  .request-site-copy > span { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
   .request-site-copy strong { font-size: ${TYPE.body.size}; overflow-wrap: anywhere; }
-  .request-site-copy code { color: var(--mc-muted); font-size: ${TYPE.micro.size}; overflow-wrap: anywhere; word-break: normal; }
+  .request-site-copy code { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; overflow-wrap: anywhere; word-break: normal; }
   .detail-grid { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail {
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.md};
     display: grid;
     gap: 2px;
@@ -346,12 +347,12 @@ ${SIGN_REQUEST_STYLES}
     padding: ${SPACE.sm} ${SPACE.md};
   }
   .detail p { font-size: ${TYPE.caption.size}; }
-  .detail .value { font-family: var(--mc-font-mono); font-size: ${TYPE.title.size}; }
+  .detail .value { font-family: var(--bramble-font-mono); font-size: ${TYPE.title.size}; }
   .pill {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: inline-flex;
     flex: none;
     font-size: ${TYPE.caption.size};
@@ -368,23 +369,23 @@ ${SIGN_REQUEST_STYLES}
      account in lists so a keyless device account is never mistaken for a
      software one. Sits inline after the account name. */
   .pill-hardware {
-    background: var(--mc-accent-soft);
-    color: var(--mc-accent);
+    background: var(--bramble-accent-soft);
+    color: var(--bramble-accent);
     margin-left: 6px;
     min-height: 20px;
     padding: 1px ${SPACE.sm};
     vertical-align: middle;
   }
   .pill-hardware .icon { height: 12px; width: 12px; }
-  .dot { background: var(--mc-positive); border-radius: ${RADIUS.full}; height: 7px; width: 7px; }
+  .dot { background: var(--bramble-positive); border-radius: ${RADIUS.full}; height: 7px; width: 7px; }
   /* Badge ink is the page ground so the count stays legible on the danger fill
      in both schemes (dark ink on the soft dark-theme red, light ink on the
      deep light-theme red) — never the accent's paired text colour, which
      tracks the accent. */
   .badge {
-    background: var(--mc-danger);
+    background: var(--bramble-danger);
     border-radius: ${RADIUS.full};
-    color: var(--mc-bg);
+    color: var(--bramble-bg);
     font-size: 10px;
     font-weight: ${WEIGHT.bold};
     line-height: 1;
@@ -395,7 +396,7 @@ ${SIGN_REQUEST_STYLES}
   /* Empty states are plain centered copy — an empty list is an absence, not a
      boxed component demanding attention. */
   .empty {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.label.size};
     line-height: ${TYPE.body.line};
     padding: ${SPACE.lg} ${SPACE.md};
@@ -404,12 +405,12 @@ ${SIGN_REQUEST_STYLES}
 
   /* Reveal secrets: blurred until tapped; wiped whenever the shell re-renders */
   [hidden] { display: none !important; }
-  .reveal-danger { color: var(--mc-danger); font-weight: ${WEIGHT.semibold}; }
+  .reveal-danger { color: var(--bramble-danger); font-weight: ${WEIGHT.semibold}; }
   .reveal-output { display: grid; gap: ${SPACE.sm}; }
   .reveal-value {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.md};
-    font-family: var(--mc-font-mono);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.mono.size};
     line-height: ${TYPE.mono.line};
     overflow-wrap: anywhere;
@@ -432,7 +433,7 @@ ${SIGN_REQUEST_STYLES}
   .qr-card {
     background: hsl(0 0% 100%);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-elev-md);
+    box-shadow: var(--bramble-elev-md);
     color: hsl(0 0% 8%);
     justify-self: center;
     padding: ${SPACE.sm};
@@ -443,7 +444,7 @@ ${SIGN_REQUEST_STYLES}
   /* Toasts: pinned above the dock at the bottom of the panel; the offset is
      derived from the same dock-footprint token the bar itself uses. */
   .toast-stack {
-    bottom: calc(var(--mc-dock-h) + ${SPACE.md});
+    bottom: calc(var(--bramble-dock-h) + ${SPACE.md});
     display: grid;
     gap: ${SPACE.sm};
     left: ${SPACE.md};
@@ -460,10 +461,10 @@ ${SIGN_REQUEST_STYLES}
      deepest shadow tier makes arrival unmistakable over any content. */
   .toast {
     align-items: center;
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-elev-lg);
-    color: var(--mc-text);
+    box-shadow: var(--bramble-elev-lg);
+    color: var(--bramble-text);
     display: flex;
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.medium};
@@ -481,8 +482,8 @@ ${SIGN_REQUEST_STYLES}
     justify-content: center;
     width: 30px;
   }
-  .toast.success .toast-icon { background: var(--mc-positive-soft); color: var(--mc-positive); }
-  .toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }
+  .toast.success .toast-icon { background: var(--bramble-positive-soft); color: var(--bramble-positive); }
+  .toast.error .toast-icon { background: var(--bramble-danger-soft); color: var(--bramble-danger); }
   .toast-icon .icon { height: 16px; width: 16px; }
   .toast-text {
     flex: 1;

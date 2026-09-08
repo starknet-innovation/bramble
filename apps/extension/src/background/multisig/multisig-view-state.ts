@@ -3,12 +3,12 @@ import type {
   ArgentMultisigAuthorityStatus,
   ArgentMultisigConfig,
   ArgentUnsupportedSigner,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import type {
   ArgentMultisigOperationRecord,
   ArgentMultisigRecord,
-} from "@mc-wallet/multisig/repository";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/multisig/repository";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 
 /**
  * Fresh chain state paired with one public persisted shared-account record.

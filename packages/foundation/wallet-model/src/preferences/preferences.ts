@@ -11,16 +11,16 @@ import {
   isRecord,
   isSafeDecimals,
   isTokenSymbol,
-} from "@mc-wallet/core/json";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/core/json";
+import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   canonicalAddress,
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import { isNostrPublicKey } from "@mc-wallet/wallet-model/nostr";
+} from "@bramble/wallet-model/networks";
+import { isNostrPublicKey } from "@bramble/wallet-model/nostr";
 import { isCustomRpcUrl } from "../networks/custom-network";
 
 /**

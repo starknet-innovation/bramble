@@ -3,8 +3,8 @@
  * runtime so no prover, discovery service, RPC, vault, or hardware is touched.
  */
 
-import type { PrivacySdkRuntime } from "@mc-wallet/privacy/official-sdk-service";
-import type { Strk20AccountContext } from "@mc-wallet/privacy/service";
+import type { PrivacySdkRuntime } from "@bramble/privacy/official-sdk-service";
+import type { Strk20AccountContext } from "@bramble/privacy/service";
 import type { RpcProvider } from "starknet";
 
 export const STRK20_POOL_ADDRESS = "0x123";

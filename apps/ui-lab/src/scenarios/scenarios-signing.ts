@@ -1,12 +1,12 @@
-import { ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
-import type { LedgerSignView } from "@mc-wallet/wallet-ui/lab";
+import { ledgerMessage } from "@bramble/ledger-protocol/errors";
+import type { LedgerSignView } from "@bramble/wallet-ui/lab";
 import {
   bindTransfer,
   createSidepanelRuntime,
   ledgerSignScreen,
   markTransferLedgerAuthorized,
   sendFlow,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 import { ledgerAccount, RECIPIENT_ADDRESS, statusFor } from "../fixtures/fixtures";
 import {
   journeyBalances,

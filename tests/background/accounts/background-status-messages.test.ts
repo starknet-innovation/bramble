@@ -2,9 +2,9 @@
  * Background status message checks prove public wallet state is derived from vault state.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import type { WalletStatus } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { WalletStatus } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
@@ -64,9 +64,10 @@ const createStatusWallet = (statusAccount: AccountRef = account) => ({
       accounts: [statusAccount],
       accountSecrets: [],
       activeAccountId: statusAccount.id,
+      importedSeeds: [],
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 7 as const,
+      schemaVersion: 8 as const,
       signingKeys: [{ accountId: statusAccount.id, privateKey: "0x123456" }],
     };
   },
@@ -86,11 +87,14 @@ const createStatusWallet = (statusAccount: AccountRef = account) => ({
 });
 
 describe("background status messages", () => {
-  test("returns public wallet status for trusted senders", async () => {
+  test("returns public wallet status without account metadata while locked", async () => {
     const handler = createMessageHandler(createStatusWallet(), "extension-id");
 
     await expect(handler({ type: "wallet.status" }, sender)).resolves.toMatchObject({
-      accountCount: 1,
+      accountCount: 0,
+      activeAccountId: null,
+      accounts: [],
+      locked: true,
       network: "Starknet Mainnet",
       ready: true,
     });

@@ -9,11 +9,8 @@ import {
   isLedgerBrokerCommand,
   type LedgerBrokerCommand,
   type LedgerBrokerResponse,
-} from "@mc-wallet/ledger-protocol/broker";
-import {
-  type LedgerDeviceClient,
-  ledgerTransportRejection,
-} from "@mc-wallet/ledger-protocol/client";
+} from "@bramble/ledger-protocol/broker";
+import { type LedgerDeviceClient, ledgerTransportRejection } from "@bramble/ledger-protocol/client";
 
 /**
  * Narrow BroadcastChannel surface used by the broker, injectable in tests.

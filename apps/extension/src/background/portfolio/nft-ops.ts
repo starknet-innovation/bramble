@@ -5,13 +5,13 @@
  * preference mutations handled in preference-ops.ts.
  */
 
-import { buildErc721TransferCall, buildErc1155TransferCall } from "@mc-wallet/portfolio/nft";
-import { unavailableNftIndexer } from "@mc-wallet/portfolio/nft-indexer";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { NftStandard } from "@mc-wallet/starknet/rpc";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import { refuseOnPoisonedRecipient, verifyCalls } from "@mc-wallet/transactions/verify";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { buildErc721TransferCall, buildErc1155TransferCall } from "@bramble/portfolio/nft";
+import { unavailableNftIndexer } from "@bramble/portfolio/nft-indexer";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { NftStandard } from "@bramble/starknet/rpc";
+import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import { refuseOnPoisonedRecipient, verifyCalls } from "@bramble/transactions/verify";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import {
   activeAccountContext,

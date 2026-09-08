@@ -1,6 +1,6 @@
-import type { HomeTab, SidepanelWallet } from "@mc-wallet/wallet-ui/lab";
-import { bindHomeUi, bindReceiveWalletCard } from "@mc-wallet/wallet-ui/lab";
-import { discoveredNft, softwareAccount, statusFor } from "../fixtures/fixtures";
+import type { SidepanelWallet } from "@bramble/wallet-ui/lab";
+import { bindHomeUi, bindReceiveWalletCard } from "@bramble/wallet-ui/lab";
+import { softwareAccount, statusFor } from "../fixtures/fixtures";
 import {
   allowances,
   ETH_TOKEN,
@@ -39,11 +39,6 @@ const showAddressOnlyReceiveCard = async (context: FrameContext): Promise<void> 
 };
 
 const bindFixtureHome = (context: FrameContext): void => {
-  let tab: HomeTab = context.app.querySelector(
-    '[data-home-tab="collectibles"][aria-selected="true"]',
-  )
-    ? "collectibles"
-    : "tokens";
   let drawerOpen = context.app.querySelector(".drawer-root")?.getAttribute("data-open") === "true";
   let drawerGroupFilter: string | null = null;
   const wallet = {
@@ -56,7 +51,6 @@ const bindFixtureHome = (context: FrameContext): void => {
     app: context.app,
     drawerGroupFilter: () => drawerGroupFilter,
     drawerOpen: () => drawerOpen,
-    homeTab: () => tab,
     networkId: () => "SN_MAIN",
     render: async () => undefined,
     setDrawerGroupFilter: (value) => {
@@ -65,23 +59,9 @@ const bindFixtureHome = (context: FrameContext): void => {
     setDrawerOpen: (value) => {
       drawerOpen = value;
     },
-    setHomeTab: (value) => {
-      tab = value;
-    },
     wallet,
   });
 };
-
-const selectHomeTab =
-  (tab: "collectibles") =>
-  (context: FrameContext): void => {
-    bindFixtureHome(context);
-    const control = context.app.querySelector<HTMLButtonElement>(`[data-home-tab="${tab}"]`);
-    if (!control) {
-      throw new Error("Missing production portfolio tabs");
-    }
-    control.click();
-  };
 
 const openDrawer = (context: FrameContext): void => {
   bindFixtureHome(context);
@@ -171,21 +151,6 @@ export const portfolioScenario: WalletScenario = {
         "One overflow menu progressively discloses asset management, settings, and refresh.",
       prepare: openPortfolioMenu,
       state: { actions: 4, disclosure: "open" },
-    },
-    {
-      content: () =>
-        walletDashboard({
-          balanceState: { balances: journeyBalances },
-          changes: journeyChanges,
-          discoveredNfts: [discoveredNft],
-          preferences: journeyPreferences,
-          prices: journeyPrices,
-        }),
-      id: "collectibles",
-      label: "Collectibles tab",
-      narrative: "The owned collectible appears at useful gallery scale without leaving Home.",
-      prepare: selectHomeTab("collectibles"),
-      state: { artwork: "ready", tab: "collectibles" },
     },
     {
       content: () =>

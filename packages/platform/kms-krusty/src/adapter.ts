@@ -1,23 +1,23 @@
 /**
  * Krusty KMS WASM adapter. Wallet cryptography must enter through this boundary.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@mc-wallet/core/json";
-import type { KmsPort } from "@mc-wallet/vault/kms-port";
+import { WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@bramble/core/json";
+import type { KmsPort } from "@bramble/vault/kms-port";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarkPrivateKey,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import {
   isNostrApplicationData,
   isNostrPublicKey,
   MAX_NOSTR_APPLICATION_DATA_BYTES,
   MAX_NOSTR_EVENT_JSON_BYTES,
   parseNostrEventJson,
-} from "@mc-wallet/wallet-model/nostr";
-import { isMnemonicPassphrase, isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/nostr";
+import { isMnemonicPassphrase, isMnemonicText } from "@bramble/wallet-model/passphrase";
 
 type Callable = (...args: unknown[]) => unknown;
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;

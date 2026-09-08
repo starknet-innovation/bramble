@@ -1,8 +1,8 @@
 /**
  * Pure parsers for token-management runtime messages from extension pages.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { canonicalAddress, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { canonicalAddress, isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 
 /**
  * Parses custom-token add requests carrying a contract address.

@@ -2,10 +2,10 @@
  * Non-retriable Starknet invoke submission through a Krusty-backed account.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+import { WalletError } from "@bramble/core/errors";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Account, Call, RpcProvider } from "starknet";
 import { ensureAccountDeployed, isCompatibleAccountDeployed } from "../transactions/deployment";
 import {

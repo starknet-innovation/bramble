@@ -3,7 +3,7 @@
  * registration/shielding journey.
  */
 
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";

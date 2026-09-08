@@ -4,8 +4,8 @@
  * from the side panel entrypoint to keep it within the size budget.
  */
 
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import { parseWalletContactCard, walletContactCard } from "@mc-wallet/wallet-model/preferences";
+import { isStarknetNetworkId } from "@bramble/wallet-model/networks";
+import { parseWalletContactCard, walletContactCard } from "@bramble/wallet-model/preferences";
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { SidepanelWallet } from "../runtime/runtime";

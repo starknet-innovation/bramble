@@ -6,8 +6,8 @@ import {
   explorerDiagnosticsSnapshot,
   rpcDiagnosticsSnapshot,
   setReliabilityDiagnosticsEnabled,
-} from "@mc-wallet/starknet/rpc-diagnostics";
-import { createStarkscanClient, StarkscanError } from "@mc-wallet/transactions/starkscan";
+} from "@bramble/starknet/rpc-diagnostics";
+import { createStarkscanClient, StarkscanError } from "@bramble/transactions/starkscan";
 
 const ACCOUNT = "0x6c16710431efd3962d3c6f55faf00d8c855188029acb42781b9ac77c438ade5";
 const TOKEN = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";

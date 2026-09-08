@@ -21,24 +21,39 @@ const networkChanged = (chainId: string) =>
     type: "wallet.event",
   }) as const;
 
-// Members of the vault service object literal start at four-space indent.
-const SERVICE_MEMBER = /^ {4}(?:async )?([a-zA-Z0-9]+)[(:,]/gm;
+// Members of the vault service object literals: four-space indent in the main
+// factory, two-space indent in its size-budget creation split.
+const SERVICE_MEMBERS = [
+  {
+    file: "packages/platform/vault/src/service/service.ts",
+    member: /^ {4}(?:async )?([a-zA-Z0-9]+)[(:,]/gm,
+  },
+  {
+    file: "packages/platform/vault/src/service/service-creation.ts",
+    member: /^ {2}(?:async )?([a-zA-Z0-9]+)[(:,]/gm,
+  },
+];
 
 // Vault-service methods that persist a new activeAccountId, read out of the
 // source rather than listed by hand — the list can never silently go stale.
 const activeAccountMutators = async (): Promise<readonly string[]> => {
-  const source = await readFile("packages/platform/vault/src/service/service.ts", "utf8");
-  const members = [...source.matchAll(SERVICE_MEMBER)].map((match) => ({
-    at: match.index ?? 0,
-    name: match[1] ?? "",
-  }));
-  return members
-    .filter(({ at }, position) => {
-      const body = source.slice(at, members[position + 1]?.at ?? source.length);
-      return body.includes("writeVault(") && body.includes("activeAccountId:");
-    })
-    .map(({ name }) => name)
-    .sort();
+  const names: string[] = [];
+  for (const { file, member } of SERVICE_MEMBERS) {
+    const source = await readFile(file, "utf8");
+    const members = [...source.matchAll(member)].map((match) => ({
+      at: match.index ?? 0,
+      name: match[1] ?? "",
+    }));
+    names.push(
+      ...members
+        .filter(({ at }, position) => {
+          const body = source.slice(at, members[position + 1]?.at ?? source.length);
+          return body.includes("writeVault(") && body.includes("activeAccountId:");
+        })
+        .map(({ name }) => name),
+    );
+  }
+  return names.sort();
 };
 
 // The message types that reach each of those mutators. switchActiveNetwork
@@ -48,6 +63,7 @@ const MUTATOR_MESSAGE_TYPES: Readonly<Record<string, readonly string[]>> = {
   addDerivedAccount: ["wallet.addAccount"],
   addLedgerAccount: ["wallet.addLedgerAccount"],
   createAccount: ["wallet.createAccount"],
+  createKeyVault: ["wallet.createKeyVault"],
   createLedgerVault: ["wallet.createLedgerVault"],
   ensureNetworkAccount: ["wallet.approveOrigin", "wallet.setActiveNetwork", "wallet.switchChain"],
   importRawKeyAccount: ["wallet.importAccount"],

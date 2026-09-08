@@ -2,11 +2,11 @@
  * Sender trust rules for extension pages and content-script provider messages.
  */
 
-import { isOwnDataProperty } from "@mc-wallet/core/json";
+import { isOwnDataProperty } from "@bramble/core/json";
 import {
   APPROVAL_RUNTIME_MESSAGE_TYPES,
   DAPP_RUNTIME_MESSAGE_TYPES,
-} from "@mc-wallet/wallet-protocol/methods";
+} from "@bramble/wallet-protocol/methods";
 
 /**
  * Sender metadata exposed by the extension runtime boundary.

@@ -2,7 +2,7 @@
  * Shared feedback and data-display templates. All content is plain text and
  * escaped; registered icons are the only markup accepted by this boundary.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import { type ButtonProps, button, type IconButtonProps, iconButton } from "./controls";
 import { type UiAttributes, uiAttributes } from "./html-attributes";
 import { type IconName, icon } from "./icons";

@@ -5,7 +5,7 @@
  * message — not a guess, and not a value inverted somewhere in the binding.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { bindEndpointSettings } from "../../../../src/sidepanel/journeys/settings/endpoint-ui";
 import { advancedNetworkFlow } from "../../../../src/sidepanel/journeys/settings/network-views";
@@ -70,15 +70,34 @@ const walletStub = (calls: Array<readonly [string, boolean, string]>, fail = fal
   }) as unknown as SidepanelWallet;
 
 describe("advanced endpoints explorer-fallback control", () => {
+  test("clearly discloses that product analytics are on by default", () => {
+    const html = advancedNetworkFlow(status, null);
+    const start = html.indexOf('data-disclosure="product-analytics"');
+    expect(start).toBeGreaterThan(-1);
+    const section = html.slice(start, html.indexOf("</details>", start));
+
+    expect(section).toContain("Product analytics");
+    expect(section).toContain("On");
+    expect(section).toContain("on by default; turn off anytime");
+    expect(section).toContain('id="product-analytics"');
+    expect(section).toContain("checked");
+  });
+
   test("shows custom coordination relay and diagnostics in infrastructure settings", () => {
     const relayUrl = "wss://relay.team.example";
     const html = advancedNetworkFlow(
       status,
-      preferences({ nostrRelayUrl: relayUrl, reliabilityDiagnostics: true }),
+      preferences({
+        nostrRelayUrl: relayUrl,
+        productAnalytics: true,
+        reliabilityDiagnostics: true,
+      }),
     );
 
     expect(html).toContain('data-disclosure="nostr-relay"');
     expect(html).toContain(`value="${relayUrl}"`);
+    expect(html).toContain('data-disclosure="product-analytics"');
+    expect(html).toContain('id="product-analytics"');
     expect(html).toContain('data-disclosure="reliability-diagnostics"');
     expect(html).toContain('id="reliability-diagnostics"');
   });

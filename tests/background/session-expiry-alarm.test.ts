@@ -64,7 +64,7 @@ const fakeAlarms = () => {
       }
     },
     fireOther() {
-      listener?.({ name: "mc-wallet:tx-observe-fast" });
+      listener?.({ name: "bramble:tx-observe-fast" });
     },
     scheduledAt: () => scheduled?.when ?? null,
   };
@@ -122,7 +122,7 @@ describe("unlock session expiry alarm", () => {
     session.lock();
 
     expect(alarms.scheduledAt()).toBeNull();
-    expect(alarms.cleared()).toEqual(["mc-wallet:session-expiry"]);
+    expect(alarms.cleared()).toEqual(["bramble:session-expiry"]);
   });
 
   test("still erases the plaintext mirror when alarm cancellation throws", async () => {
@@ -228,7 +228,7 @@ describe("unlock session expiry alarm", () => {
     session.unlock(vaultPassphrase);
     now = UNLOCKED_AT + 100;
     for (const listener of listeners) {
-      listener({ name: "mc-wallet:session-expiry" });
+      listener({ name: "bramble:session-expiry" });
     }
 
     // Nothing was scheduled, so nothing may be destroyed on a spurious wake.

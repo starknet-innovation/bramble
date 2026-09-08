@@ -18,3 +18,4 @@ vendor/starknet-privacy/
 /dist.zip
 .claude/*
 !.claude/skills
+.wrangler/

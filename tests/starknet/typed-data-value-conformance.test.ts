@@ -26,7 +26,7 @@
  * accepted, so a future change that simply refused everything would fail here.
  */
 import { describe, expect, test } from "bun:test";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
 
 const ACCOUNT = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const DOMAIN = { chainId: "SN_SEPOLIA", name: "App", revision: "1" };

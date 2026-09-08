@@ -5,7 +5,7 @@
  * valid current vault is rejected after the (empty) migration loop.
  */
 import { describe, expect, test } from "bun:test";
-import { CURRENT_SCHEMA_VERSION, migrateVault } from "@mc-wallet/vault/migrations";
+import { CURRENT_SCHEMA_VERSION, migrateVault } from "@bramble/vault/migrations";
 
 describe("migrateVault guards", () => {
   test("rejects a schema-v1 tag on a value that is not a valid v1 vault", () => {

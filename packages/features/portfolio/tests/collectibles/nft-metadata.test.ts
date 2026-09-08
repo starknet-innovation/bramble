@@ -11,7 +11,7 @@ import {
   normalizeAnimationUri,
   normalizeImageUrl,
   normalizeIndexerNft,
-} from "@mc-wallet/portfolio/nft-metadata";
+} from "@bramble/portfolio/nft-metadata";
 
 const CONTRACT = "0x0511a2b3";
 const CANONICAL = "0x511a2b3";

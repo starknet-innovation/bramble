@@ -14,6 +14,8 @@ import { bindGroupControls } from "./group-ui";
 export type SettingsUiDeps = {
   readonly activeAccountId: () => string | null;
   readonly app: Element | null;
+  /** Ids of accounts already in the vault; phrase-import scan rows matching them lock. */
+  readonly existingAccountIds?: () => ReadonlySet<string>;
   readonly expandedGroup: () => string | null;
   readonly networkId: () => string;
   readonly openAssign: () => string | null;
@@ -194,6 +196,26 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
   });
 
   const diagnosticsToggle = deps.app?.querySelector<HTMLInputElement>("#reliability-diagnostics");
+  const analyticsToggle = deps.app?.querySelector<HTMLInputElement>("#product-analytics");
+  analyticsToggle?.addEventListener("change", () => {
+    analyticsToggle.disabled = true;
+    void deps.wallet.setDisplay({ productAnalytics: analyticsToggle.checked }).then(
+      async () => {
+        showToast(
+          analyticsToggle.checked ? "Product analytics enabled" : "Product analytics disabled",
+          "success",
+          analyticsToggle,
+        );
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        analyticsToggle.checked = !analyticsToggle.checked;
+        showToast(errorMessage(error, "Analytics preference failed"), "error", analyticsToggle);
+        analyticsToggle.disabled = false;
+      },
+    );
+  });
+
   diagnosticsToggle?.addEventListener("change", () => {
     diagnosticsToggle.disabled = true;
     void deps.wallet.setDisplay({ reliabilityDiagnostics: diagnosticsToggle.checked }).then(
@@ -224,7 +246,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         const url = URL.createObjectURL(blob);
         const anchor = diagnosticsExport.ownerDocument.createElement("a");
         anchor.href = url;
-        anchor.download = "mc-wallet-diagnostics.json";
+        anchor.download = "bramble-diagnostics.json";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         showToast("Diagnostics downloaded", "success", diagnosticsExport);
@@ -257,7 +279,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
         const url = URL.createObjectURL(blob);
         const anchor = exportButton.ownerDocument.createElement("a");
         anchor.href = url;
-        anchor.download = "mc-wallet-backup.json";
+        anchor.download = "bramble-backup.json";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         showToast("Backup downloaded", "success", exportButton);

@@ -6,7 +6,7 @@
  * a plain fake.
  */
 import { describe, expect, test } from "bun:test";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import {
   account,
   captureRuntime,
@@ -82,10 +82,16 @@ describe("Ledger runtime wrappers", () => {
   });
 
   test("ledgerAccountStatus returns the resolved on-chain state", async () => {
-    const { sent, wallet } = captureRuntime({ balance: "1.5 STRK", deployed: true, ok: true });
+    const { sent, wallet } = captureRuntime({
+      balance: "1.5 STRK",
+      deployed: true,
+      funded: true,
+      ok: true,
+    });
     expect(await wallet.ledgerAccountStatus("0x123", "SN_MAIN")).toEqual({
       balance: "1.5 STRK",
       deployed: true,
+      funded: true,
     });
     expect(sent[0]).toEqual({
       address: "0x123",
@@ -98,6 +104,7 @@ describe("Ledger runtime wrappers", () => {
     expect(await runtimeReturning({ ok: false }).ledgerAccountStatus("0x123", "SN_MAIN")).toEqual({
       balance: null,
       deployed: null,
+      funded: null,
     });
   });
 

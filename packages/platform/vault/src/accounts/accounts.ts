@@ -2,8 +2,8 @@
  * Starknet account derivation through Krusty KMS with no local crypto fallback.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
+import { WalletError } from "@bramble/core/errors";
+import { verifyStarkSignature } from "@bramble/starknet/signature-verify";
 import type {
   AccountContractType,
   AccountRef,
@@ -11,12 +11,12 @@ import type {
   ImportedAccountRef,
   LedgerAccountRef,
   LedgerPubKeyEntry,
-} from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
   LEDGER_EIP2645_APPLICATION,
   ledgerAccountPath,
-} from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/wallet-model/ledger-path";
 import {
   canonicalFelt,
   DEFAULT_NETWORK,
@@ -25,8 +25,8 @@ import {
   isStarkPrivateKey,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { isMnemonicPassphrase, isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/networks";
+import { isMnemonicPassphrase, isMnemonicText } from "@bramble/wallet-model/passphrase";
 import type { KmsPort } from "../kms-port";
 import { deriveAccountContractAddress, resolveAccountClassHash } from "./account-contract";
 
@@ -51,6 +51,8 @@ export type AccountDerivationInput = {
   readonly mnemonic: string;
   readonly mnemonicPassphrase?: string;
   readonly networkId?: StarknetNetworkId;
+  /** Imported-seed handle stamped into the derivation; absent = founding phrase. */
+  readonly seedId?: string;
 };
 
 /**
@@ -165,6 +167,7 @@ export const deriveAccount = async (
         accountIndex,
         addressIndex,
         kind: "starknet-bip44",
+        ...(input.seedId === undefined ? {} : { seedId: input.seedId }),
       },
       id: `${networkId}:${address}`,
       networkId,
@@ -327,16 +330,21 @@ export const sameWalletKey = (left: AccountRef, right: AccountRef): boolean => {
 };
 
 /**
- * Lowest unused HD account index on a network. Imported accounts hold no HD
- * position, so they never occupy an index here.
+ * Lowest unused HD account index on a network for one seed (the founding
+ * phrase when `seedId` is absent). Imported raw-key accounts hold no HD
+ * position, and another seed's accounts occupy their own index space, so
+ * neither shifts the result.
  */
 export const nextAccountIndex = (
   accounts: readonly AccountRef[],
   networkId: StarknetNetworkId,
+  seedId?: string,
 ): number => {
   const used = new Set(
     accounts.flatMap((account) =>
-      account.networkId === networkId && account.derivation.kind === "starknet-bip44"
+      account.networkId === networkId &&
+      account.derivation.kind === "starknet-bip44" &&
+      account.derivation.seedId === seedId
         ? [account.derivation.accountIndex]
         : [],
     ),

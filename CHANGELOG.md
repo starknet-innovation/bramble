@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to MC Wallet are documented here. The format follows
+All notable changes to Bramble are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -10,6 +10,13 @@ is cut. Older entries are kept in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
 See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
+
+### Changed
+- Hide the Collectibles tab, the "Manage collectibles" menu entry, the multisig Collectibles tab,
+  and the NFT indexer setting while the NFT journey is finished. No view loads NFT data any more:
+  watched-metadata and indexer discovery both stop, so a saved `nftIndexerUrl` stays in
+  preferences unused and can no longer be set. The gallery code stays in the tree, unreachable
+  from the UI, and a conformance test fails if any screen renders a route back into it.
 
 ## [0.9.2] - 2026-08-14
 
@@ -125,7 +132,7 @@ first formal external audit.
 
 ### Changed
 - Default Starknet RPC and bundled STRK20 traffic now route through the managed
-  MC Wallet gateway, with reviewed direct RPC fallbacks retained for transport
+  Bramble gateway, with reviewed direct RPC fallbacks retained for transport
   availability and custom user routing preserved.
 - Public and private balances share one portfolio and asset vocabulary. Shield
   and Unshield open Send preconfigured instead of maintaining parallel transfer
@@ -273,7 +280,7 @@ boundaries.
   selection, token/fiat amount switching, a network-aware summary, decoded
   action accordion, and explicit review before submission.
 - Deterministic account identity artwork, a fourth Portfolio quick action, an
-  MC Terminal handoff, and production Starknet marks wherever a destination
+  Bramble Terminal handoff, and production Starknet marks wherever a destination
   network is displayed.
 - Storybook checkpoints for the unified account chooser and Multisig
   create/add-existing gateway, extending the organized wallet journeys and

@@ -2,13 +2,10 @@
  * Account derivation checks prove wallet metadata comes from Krusty KMS.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  ARGENT_ACCOUNT_CONTRACT,
-  argentAccountAddress,
-} from "@mc-wallet/starknet/account-contracts";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { deriveAccountRef } from "@mc-wallet/vault/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet/account-contracts";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { deriveAccountRef } from "@bramble/vault/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 

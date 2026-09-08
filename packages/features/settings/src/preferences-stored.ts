@@ -11,21 +11,21 @@
  * here for the same reason: it is a statement about which stored fields an
  * untrusted file is allowed to reach, not about how any one entry is shaped.
  */
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
-import { isWatchedNft } from "@mc-wallet/portfolio/watched-nft";
-import { isStrk20NetworkConfigs } from "@mc-wallet/privacy/config";
-import { canonicalAccountId } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import { isWatchedNft } from "@bramble/portfolio/watched-nft";
+import { isStrk20NetworkConfigs } from "@bramble/privacy/config";
+import { canonicalAccountId } from "@bramble/wallet-model/accounts";
 import {
   isCustomNetwork,
   isCustomRpcUrl,
   normalizeChainId,
-} from "@mc-wallet/wallet-model/custom-network";
+} from "@bramble/wallet-model/custom-network";
 import {
   canonicalAddress,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import { isNostrRelayUrl } from "@mc-wallet/wallet-model/nostr";
+} from "@bramble/wallet-model/networks";
+import { isNostrRelayUrl } from "@bramble/wallet-model/nostr";
 import {
   type AccountLabels,
   type AddressBookEntry,
@@ -43,7 +43,7 @@ import {
   type TokenConfig,
   withAddressBookId,
   withTokenId,
-} from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/preferences";
 import { type AccountGroups, isAccountGroups } from "./groups";
 import type { WalletPreferences } from "./preferences-types";
 
@@ -61,6 +61,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "nftIndexerUrl",
   "nfts",
   "nostrRelayUrl",
+  "productAnalytics",
   "rpcOverrides",
   "reliabilityDiagnostics",
   "schemaVersion",
@@ -76,7 +77,7 @@ const hasValidCustomNetworks = (value: Record<string, unknown>): boolean =>
   (Array.isArray(value["customNetworks"]) &&
     value["customNetworks"].every(isCustomNetwork) &&
     hasUniqueStrings(value["customNetworks"].map((network) => normalizeChainId(network.chainId))));
-const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
+const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
   (value["approvalSurface"] === undefined ||
     isApprovalSurfacePreference(value["approvalSurface"])) &&
@@ -86,10 +87,14 @@ const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
   (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
-  (value["reliabilityDiagnostics"] === undefined ||
-    typeof value["reliabilityDiagnostics"] === "boolean") &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
+const hasValidTelemetryEntries = (value: Record<string, unknown>): boolean =>
+  (value["productAnalytics"] === undefined || typeof value["productAnalytics"] === "boolean") &&
+  (value["reliabilityDiagnostics"] === undefined ||
+    typeof value["reliabilityDiagnostics"] === "boolean");
+const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
+  hasValidGeneralOptionalEntries(value) && hasValidTelemetryEntries(value);
 const hasValidUrlAndNftFields = (value: Record<string, unknown>): boolean =>
   (value["strk20ProverUrl"] === undefined ||
     (typeof value["strk20ProverUrl"] === "string" && isCustomRpcUrl(value["strk20ProverUrl"]))) &&

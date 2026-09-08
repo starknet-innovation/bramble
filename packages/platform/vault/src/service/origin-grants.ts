@@ -7,7 +7,7 @@
  * results are deterministic (no locale-sensitive ordering).
  */
 
-import type { ConnectedSite } from "@mc-wallet/core/origin";
+import type { ConnectedSite } from "@bramble/core/origin";
 import type { Vault } from "../schema/schema";
 
 /**

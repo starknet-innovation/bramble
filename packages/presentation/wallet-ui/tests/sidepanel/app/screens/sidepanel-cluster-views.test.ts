@@ -3,10 +3,10 @@
  * transaction speed-up/cancel info affordance.
  */
 import { describe, expect, test } from "bun:test";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences } from "@bramble/testkit/sidepanel";
+import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
@@ -122,7 +122,9 @@ describe("cluster views", () => {
 
   test("home and settings expose their task destinations", () => {
     const home = dashboard("home", status, [], preferences, { balances: [] });
-    expect(home).toContain('data-view="nfts"');
+    expect(home).toContain('data-view="tokens"');
+    // The Collectibles journey is parked: home must not link into the gallery.
+    expect(home).not.toContain('data-view="nfts"');
     const settings = dashboard("settings", status, [], preferences, { balances: [] });
     expect(settings).toContain('data-view="allowances"');
     expect(settings).toContain('data-view="reveal"');

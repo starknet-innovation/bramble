@@ -31,8 +31,14 @@ describe("versionFromReleaseBranch", () => {
     expect(versionFromReleaseBranch("release/v1.12")).toBe("1.12.0");
   });
 
-  test("rejects names that are not release/vX.Y", () => {
-    expect(versionFromReleaseBranch("release/v0.5.1")).toBeNull();
+  test("derives X.Y.Z from a release/vX.Y.Z patch branch (issue #302)", () => {
+    expect(versionFromReleaseBranch("release/v0.5.1")).toBe("0.5.1");
+    expect(versionFromReleaseBranch("release/v0.10.12")).toBe("0.10.12");
+  });
+
+  test("rejects names that are not release branches", () => {
+    expect(versionFromReleaseBranch("release/v0.5.1.2")).toBeNull();
+    expect(versionFromReleaseBranch("release/v0.10-save-orphan")).toBeNull();
     expect(versionFromReleaseBranch("feature/59-x")).toBeNull();
     expect(versionFromReleaseBranch("hotfix/panic")).toBeNull();
     expect(versionFromReleaseBranch("main")).toBeNull();
@@ -180,9 +186,9 @@ describe("repository sources", () => {
     expect(result.ok).toBe(true);
   });
 
-  test("the checked-in version matches the v0.10 release line", async () => {
+  test("the checked-in version matches the v0.10.1 release line", async () => {
     const packageJson = await readJson("package.json");
-    expect(packageJson["version"]).toBe("0.10.0");
+    expect(packageJson["version"]).toBe("0.10.1");
   });
 });
 
@@ -210,8 +216,8 @@ describe("main (CLI over the real repository sources)", () => {
     expect(code).toBe(0);
     const output = await readFile(outPath, "utf8");
     expect(output).toContain("release=true");
-    expect(output).toContain("version=0.10.0");
-    expect(output).toContain("tag=v0.10.0");
+    expect(output).toContain("version=0.10.1");
+    expect(output).toContain("tag=v0.10.1");
     expect(output).toContain("kind=hotfix");
   });
 

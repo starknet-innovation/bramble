@@ -1,6 +1,6 @@
 /** Terminal and blocked multisig outcomes use familiar wallet feedback. */
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import { multisigDetailFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-views";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";

@@ -3,8 +3,8 @@
  * flow, and the token detail flow with a self-drawn sparkline.
  */
 import { describe, expect, test } from "bun:test";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { BalancesResponse, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
@@ -91,7 +91,7 @@ describe("token views", () => {
     expect(html).toContain('data-live-value="2000">$2,000.00</p>');
     expect(html).toContain(">1.00</p>");
     expect(html).not.toContain("Fake USD");
-    expect(html).toContain("1 hidden");
+    expect(html).toContain("1 not shown");
     expect(html).toContain('data-view="tokens"');
     expect(html).toMatch(/data-token-detail="SN_MAIN:ETH:/);
   });

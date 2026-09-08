@@ -6,7 +6,7 @@ permalink: /wallet-store/
 
 # Wallet store architecture and update safety
 
-This document is the reviewed persistence contract for MC Wallet. It covers the store layout at
+This document is the reviewed persistence contract for Bramble. It covers the store layout at
 the v6 encrypted-vault schema, account identity and scoping, mutation rules, Chrome extension
 updates, and the custody boundary for a future Ledger-derived STRK20 viewing key.
 
@@ -43,17 +43,18 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 
 | Key / state | Area | Sensitivity | Identity and bounds | Failure policy |
 | --- | --- | --- | --- | --- |
-| `mc-wallet:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v7; account ids unique; strict cross-references | fail closed |
-| `mc-wallet:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
-| `mc-wallet:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
-| `mc-wallet:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |
-| `mc-wallet:allowances` | `storage.local`, plain | public ERC20 approvals | account + network + token + spender; 200 total | discard invalid rows |
-| `mc-wallet:argent-multisigs:v2` | `storage.local`, plain, trusted contexts only | public contracts, frozen transaction intents, exact-hash authorization fragments | network + canonical contract; 20 multisigs / 100 intents / 100 operations | discard invalid or orphaned rows; never silently evict active authority |
-| `mc-wallet:origin-history` | `storage.local`, plain | first-seen dapp origins | valid HTTPS/localhost origin; 500 origins | discard invalid entries |
-| `mc-wallet:prices`, `mc-wallet:charts` | `storage.local`, plain | recoverable market cache | TTL and cache-size bounded | cached-or-empty |
-| `mc-wallet:phishing-feed` | `storage.local`, plain | signed/validated blocklist cache | TTL and response bounds | bundled baseline remains active |
-| `mc-wallet:session` | `storage.session`, plain trusted-context only | unlock passphrase capability | timeout-bound session | cleared on lock/update/browser exit |
-| `mc-wallet:strk20-maturity` | `storage.session`, plain | public pending transaction metadata | account + network + pool; 100 records | discard invalid rows |
+| `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v7; account ids unique; strict cross-references | fail closed |
+| `bramble:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
+| `bramble:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
+| `bramble:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |
+| `bramble:allowances` | `storage.local`, plain | public ERC20 approvals | account + network + token + spender; 200 total | discard invalid rows |
+| `bramble:argent-multisigs:v2` | `storage.local`, plain, trusted contexts only | public contracts, frozen transaction intents, exact-hash authorization fragments | network + canonical contract; 20 multisigs / 100 intents / 100 operations | discard invalid or orphaned rows; never silently evict active authority |
+| `bramble:origin-history` | `storage.local`, plain | first-seen dapp origins | valid HTTPS/localhost origin; 500 origins | discard invalid entries |
+| `bramble:prices`, `bramble:charts` | `storage.local`, plain | recoverable market cache | TTL and cache-size bounded | cached-or-empty |
+| `bramble:phishing-feed` | `storage.local`, plain | signed/validated blocklist cache | TTL and response bounds | bundled baseline remains active |
+| `bramble:analytics-installation-id` | `storage.local`, plain, trusted contexts only | random pseudonymous installation metadata | canonical UUIDv4; independent of accounts, sites, and browser identity | omit analytics on read/write failure; retained while analytics is off |
+| `bramble:session` | `storage.session`, plain trusted-context only | unlock passphrase capability | timeout-bound session | cleared on lock/update/browser exit |
+| `bramble:strk20-maturity` | `storage.session`, plain | public pending transaction metadata | account + network + pool; 100 records | discard invalid rows |
 | approvals, AES keys, selected UI view | worker/page memory | transient authority or presentation state | request/session/view scoped | lost safely on restart |
 
 `storage.local` and `storage.session` are locked to trusted extension contexts with

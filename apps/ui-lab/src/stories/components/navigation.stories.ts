@@ -1,7 +1,7 @@
-import { dockNavigation, menuLink, menuRow, optionRow } from "@mc-wallet/ui-kit/navigation";
-import { flowHeader, homeTabs } from "@mc-wallet/wallet-ui/lab";
+import { dockNavigation, menuLink, menuRow, optionRow } from "@bramble/ui-kit/navigation";
+import { flowHeader, homeTabs } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
-import { discoveredNft, statusFor } from "../../fixtures/fixtures";
+import { statusFor } from "../../fixtures/fixtures";
 import {
   journeyBalances,
   journeyChanges,
@@ -52,7 +52,7 @@ export const MenuAndOptionRows: CatalogStory = {
         "Grouped navigation",
         "Menu rows navigate; option rows expose selection state.",
         `<div class="catalog-grid wide">
-          ${catalogSample("Menu", `<div class="catalog-menu">${menuRow({ icon: "globe", label: "Network", value: "Starknet Mainnet" })}${menuRow({ icon: "shield", label: "Backup & restore" })}${menuLink({ href: "https://github.com/mc-wallet/mc-wallet#readme", icon: "book", label: "Help & docs", target: "_blank" })}</div>`)}
+          ${catalogSample("Menu", `<div class="catalog-menu">${menuRow({ icon: "globe", label: "Network", value: "Starknet Mainnet" })}${menuRow({ icon: "shield", label: "Backup & restore" })}${menuLink({ href: "https://github.com/starknet-innovation/mc-wallet#readme", icon: "book", label: "Help & docs", target: "_blank" })}</div>`)}
           ${catalogSample("Options", `<div class="catalog-menu">${optionRow({ icon: "wallet", label: "Daily account", pressed: true, supportingText: "0x1234…abcd", value: "Active" })}${optionRow({ icon: "shield", label: "Ledger vault", supportingText: "Hardware account" })}</div>`)}
         </div>`,
       ),
@@ -77,8 +77,6 @@ export const TabsAndDock: CatalogStory = {
             journeyPrices,
             journeyChanges,
             "usd",
-            statusFor(),
-            [discoveredNft],
           ),
         ),
       )}

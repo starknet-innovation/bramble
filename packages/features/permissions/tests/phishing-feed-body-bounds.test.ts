@@ -7,13 +7,13 @@
  * the request itself carries a deadline and no cookies or referrer.
  */
 import { describe, expect, test } from "bun:test";
-import { type BoundedHttpFetch, HTTP_BODY_LIMITS } from "@mc-wallet/core/http-json";
+import { type BoundedHttpFetch, HTTP_BODY_LIMITS } from "@bramble/core/http-json";
 import {
   createPhishingFeed,
   DEFAULT_PHISHING_FEED_URL,
   PHISHING_FEED_STORE_KEY,
-} from "@mc-wallet/permissions/phishing-feed";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+} from "@bramble/permissions/phishing-feed";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const CHUNK_BYTES = 256 * 1024;
 

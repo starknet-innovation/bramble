@@ -9,7 +9,7 @@ import {
   LedgerRejection,
   type LedgerRejectionCode,
   ledgerMessage,
-} from "@mc-wallet/ledger-protocol/errors";
+} from "@bramble/ledger-protocol/errors";
 
 const ALL_CODES: readonly LedgerRejectionCode[] = [
   "webhid-unavailable",

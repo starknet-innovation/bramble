@@ -3,7 +3,7 @@
  * its browser-session persistence boundary.
  */
 
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 
 /**
  * Account/network/pool scope whose latest privacy write must mature before a

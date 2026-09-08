@@ -4,9 +4,9 @@ title: Security audit
 permalink: /security-audit/
 ---
 
-# MC Wallet security audit
+# Bramble security audit
 
-This is the living, directory-by-directory security review of MC Wallet. The source baseline is
+This is the living, directory-by-directory security review of Bramble. The source baseline is
 the released `main` commit below. Later Ledger, multisig, NFT, approval-surface, and release-control
 changes are reviewed in versioned release follow-ups rather than rewriting the historical baseline.
 

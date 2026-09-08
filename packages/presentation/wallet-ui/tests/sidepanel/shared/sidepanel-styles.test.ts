@@ -5,7 +5,7 @@
  * the side panel UI.
  */
 import { describe, expect, test } from "bun:test";
-import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE, TYPE } from "@bramble/ui-kit/tokens";
 import { SIDEPANEL_STYLES } from "../../../src/sidepanel/styles/index";
 
 describe("sidepanel styles", () => {
@@ -51,21 +51,21 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(/backdrop-filter/);
     expect(SIDEPANEL_STYLES).not.toMatch(/-webkit-backdrop-filter/);
     expect(SIDEPANEL_STYLES).not.toMatch(/\.glass\b/);
-    expect(SIDEPANEL_STYLES).not.toMatch(/--mc-glass/);
-    expect(SIDEPANEL_STYLES).not.toMatch(/--mc-aurora/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/--bramble-glass/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/--bramble-aurora/);
     expect(SIDEPANEL_STYLES).not.toMatch(/aurora-drift/);
   });
 
   test("hairlines are dividers between rows, never rings around surfaces", () => {
     // The de-bordered language: structure comes from grouped fills, inset
-    // hairline DIVIDERS, and gentle shadows. The old --mc-edge inset ring is
+    // hairline DIVIDERS, and gentle shadows. The old --bramble-edge inset ring is
     // gone from the vocabulary entirely — no surface may draw a border box.
-    expect(SIDEPANEL_STYLES).toContain(`--mc-elev-sm: ${SHADOW.sm}`);
-    expect(SIDEPANEL_STYLES).toContain(`--mc-elev-md: ${SHADOW.md}`);
-    expect(SIDEPANEL_STYLES).not.toContain("--mc-edge");
+    expect(SIDEPANEL_STYLES).toContain(`--bramble-elev-sm: ${SHADOW.sm}`);
+    expect(SIDEPANEL_STYLES).toContain(`--bramble-elev-md: ${SHADOW.md}`);
+    expect(SIDEPANEL_STYLES).not.toContain("--bramble-edge");
     expect(SIDEPANEL_STYLES).not.toMatch(/inset 0 0 0 1px/);
-    expect(SIDEPANEL_STYLES).toMatch(/\.account-drawer \{[^}]*background: var\(--mc-panel\)/s);
-    expect(SIDEPANEL_STYLES).toMatch(/\.request-card \{[^}]*box-shadow: var\(--mc-elev-sm\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.account-drawer \{[^}]*background: var\(--bramble-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.request-card \{[^}]*box-shadow: var\(--bramble-elev-sm\)/s);
   });
 
   test("settings and picker rows live in grouped lists with inset dividers", () => {
@@ -73,14 +73,14 @@ describe("sidepanel styles", () => {
     // of rows (menu, option, address book, group manage), flat transparent
     // rows inside, separation carried by inset hairline dividers.
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.menu-list, \.option-list \{[^}]*background: var\(--mc-panel\)/s,
+      /\.menu-list, \.option-list \{[^}]*background: var\(--bramble-panel\)/s,
     );
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.menu-row, button\.option-row, a\.menu-row \{[^}]*background: transparent/s,
     );
-    expect(SIDEPANEL_STYLES).toMatch(/\.address-book \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.address-book \{[^}]*background: var\(--bramble-panel\)/s);
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.menu-list > \* \+ \*::before[^{]*\{[^}]*var\(--mc-hairline\)/s,
+      /\.menu-list > \* \+ \*::before[^{]*\{[^}]*var\(--bramble-hairline\)/s,
     );
   });
 
@@ -88,13 +88,15 @@ describe("sidepanel styles", () => {
     // Facts read as receipt rows (label left, value right, divider between),
     // advanced forms collapse behind native details disclosures, and either/or
     // preferences ride the segmented control — not bordered boxes.
-    expect(SIDEPANEL_STYLES).toMatch(/\.receipt \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.receipt \{[^}]*background: var\(--bramble-panel\)/s);
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.receipt-row \+ \.receipt-row::before \{[^}]*var\(--mc-hairline\)/s,
+      /\.receipt-row \+ \.receipt-row::before \{[^}]*var\(--bramble-hairline\)/s,
     );
-    expect(SIDEPANEL_STYLES).toMatch(/details\.disclosure \{[^}]*background: var\(--mc-panel\)/s);
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.seg-option\[aria-pressed="true"\] \{[^}]*background: var\(--mc-panel\)/s,
+      /details\.disclosure \{[^}]*background: var\(--bramble-panel\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.seg-option\[aria-pressed="true"\] \{[^}]*background: var\(--bramble-panel\)/s,
     );
   });
 
@@ -106,17 +108,17 @@ describe("sidepanel styles", () => {
     // Navigation reads as structural chrome: a solid panel drawn to the panel
     // edges (fixed, no rounded floating card, no bottom offset), separated from
     // scrolling content by a top hairline plus the softest upward shadow. Its
-    // footprint is single-sourced as --mc-dock-h, which the dock-screen scroll
+    // footprint is single-sourced as --bramble-dock-h, which the dock-screen scroll
     // clearance and the toast stack both derive from.
-    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*background: var\(--bramble-panel\)/s);
     expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*position: fixed/s);
     expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*bottom: 0/s);
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.wallet-dock \{[^}]*box-shadow: inset 0 1px 0 var\(--mc-hairline\), var\(--mc-elev-up\)/s,
+      /\.wallet-dock \{[^}]*box-shadow: inset 0 1px 0 var\(--bramble-hairline\), var\(--bramble-elev-up\)/s,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(/\.wallet-dock \{[^}]*border-radius/s);
-    expect(SIDEPANEL_STYLES).toMatch(/\.screen:not\(\.flow\) \{[^}]*var\(--mc-dock-h\)/s);
-    expect(SIDEPANEL_STYLES).toMatch(/\.toast-stack \{[^}]*var\(--mc-dock-h\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.screen:not\(\.flow\) \{[^}]*var\(--bramble-dock-h\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.toast-stack \{[^}]*var\(--bramble-dock-h\)/s);
   });
 
   test("reduced motion collapses every lift and press scale", () => {
@@ -138,15 +140,17 @@ describe("sidepanel styles", () => {
       /\.pill \{[^}]*max-width: 100%;[^}]*text-overflow: ellipsis;/s,
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.account-net\.degraded \.dot \{[^}]*network-status-pulse 2400ms[^}]*var\(--mc-warning\)/s,
+      /\.account-net\.degraded \.dot \{[^}]*network-status-pulse 2400ms[^}]*var\(--bramble-warning\)/s,
     );
   });
 
   test("short screens suppress overscroll and activity puts state on the icon", () => {
     expect(SIDEPANEL_STYLES).toMatch(/body \{[^}]*overscroll-behavior-y: none;/s);
     expect(SIDEPANEL_STYLES).toMatch(/\.activity-head h1 \{[^}]*font-size: 22px;/s);
-    expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.accepted { color: var(--mc-positive); }");
-    expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.pending { color: var(--mc-warning); }");
+    expect(SIDEPANEL_STYLES).toContain(
+      ".tx-kind-icon.accepted { color: var(--bramble-positive); }",
+    );
+    expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.pending { color: var(--bramble-warning); }");
     expect(SIDEPANEL_STYLES).not.toContain(".tx-status");
   });
 
@@ -166,11 +170,11 @@ describe("sidepanel styles", () => {
   test("colors come only from skin tokens, never literals", () => {
     // The stylesheet ships zero colour hex literals: every colour is a skin
     // token referenced through var()/color-mix. The near-mono palette adds a
-    // recessed --mc-sunken tier; green/red are semantic tokens only.
+    // recessed --bramble-sunken tier; green/red are semantic tokens only.
     expect(SIDEPANEL_STYLES).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-    expect(SIDEPANEL_STYLES).toContain("var(--mc-accent)");
-    expect(SIDEPANEL_STYLES).toContain("var(--mc-bg)");
-    expect(SIDEPANEL_STYLES).toContain("var(--mc-sunken)");
+    expect(SIDEPANEL_STYLES).toContain("var(--bramble-accent)");
+    expect(SIDEPANEL_STYLES).toContain("var(--bramble-bg)");
+    expect(SIDEPANEL_STYLES).toContain("var(--bramble-sunken)");
   });
 
   test("motion uses shared tokens and respects reduced-motion", () => {
@@ -210,34 +214,38 @@ describe("sidepanel styles", () => {
     // and deliberately carry no containers or underline indicators.
     expect(SIDEPANEL_STYLES).not.toContain(".tab-indicator");
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--mc-text\)/,
+      /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--bramble-text\)/,
     );
     // The active Portfolio tab is plain high-contrast text, never a pill.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.home-tab\[aria-selected="true"\] \{ color: var\(--mc-text\)/,
+      /button\.home-tab\[aria-selected="true"\] \{ color: var\(--bramble-text\)/,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(
       /button\.home-tab\[aria-selected="true"\][^}]*background:(?! transparent)/,
     );
     // The token glyph chip is neutral, not accent-filled.
-    expect(SIDEPANEL_STYLES).toMatch(/\.token-mark \{[^}]*background: var\(--mc-sunken\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.token-mark \{[^}]*background: var\(--bramble-sunken\)/s);
   });
 
-  test("market and status semantics ride --mc-positive/--mc-danger, never action emphasis", () => {
+  test("market and status semantics ride --bramble-positive/--bramble-danger, never action emphasis", () => {
     // Gains, success, and sparkline direction are meaning, not decoration:
     // they read green/red from the semantic tokens.
-    expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--mc-positive); }");
-    expect(SIDEPANEL_STYLES).toContain(".tx-kind-icon.accepted { color: var(--mc-positive); }");
-    expect(SIDEPANEL_STYLES).toContain(".sparkline-up polyline { stroke: var(--mc-positive); }");
+    expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--bramble-positive); }");
+    expect(SIDEPANEL_STYLES).toContain(
+      ".tx-kind-icon.accepted { color: var(--bramble-positive); }",
+    );
+    expect(SIDEPANEL_STYLES).toContain(
+      ".sparkline-up polyline { stroke: var(--bramble-positive); }",
+    );
     // Toast tone is a leading icon chip — green check on positive-soft for
     // success, red alert on danger-soft for error — a fixed heuristic the eye
     // reads before any text, while the surface stays a neutral panel and long
     // messages wrap instead of clipping their recovery guidance.
     expect(SIDEPANEL_STYLES).toContain(
-      ".toast.success .toast-icon { background: var(--mc-positive-soft); color: var(--mc-positive); }",
+      ".toast.success .toast-icon { background: var(--bramble-positive-soft); color: var(--bramble-positive); }",
     );
     expect(SIDEPANEL_STYLES).toContain(
-      ".toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }",
+      ".toast.error .toast-icon { background: var(--bramble-danger-soft); color: var(--bramble-danger); }",
     );
     expect(SIDEPANEL_STYLES).toMatch(
       /\.toast-text \{[^}]*overflow-wrap: anywhere[^}]*text-wrap: pretty/s,
@@ -249,19 +257,19 @@ describe("sidepanel styles", () => {
     expect(reducedBlock).toContain(".swap-success-ring, .swap-success-check");
     // The pending-count badge ink is the page ground, never the accent's paired
     // text colour (which tracks the accent, not the danger fill).
-    expect(SIDEPANEL_STYLES).toMatch(/\.badge \{[^}]*color: var\(--mc-bg\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.badge \{[^}]*color: var\(--bramble-bg\)/s);
   });
 
   test("focus is one consistent softened ring declared once", () => {
     // A single focus system: one generic ring (offset halo) plus a hugging
     // inner ring on filled fields. No other layer may redeclare the outline.
-    const rings = [...SIDEPANEL_STYLES.matchAll(/outline: 2px solid var\(--mc-focus-ring\)/g)];
+    const rings = [...SIDEPANEL_STYLES.matchAll(/outline: 2px solid var\(--bramble-focus-ring\)/g)];
     expect(rings.length).toBe(1);
     expect(SIDEPANEL_STYLES).toContain(
-      "--mc-focus-ring: color-mix(in srgb, var(--mc-accent) 72%, var(--mc-bg));",
+      "--bramble-focus-ring: color-mix(in srgb, var(--bramble-accent) 72%, var(--bramble-bg));",
     );
     expect(SIDEPANEL_STYLES).toContain(
-      ":focus-visible { outline: 2px solid var(--mc-focus-ring); outline-offset: 2px; }",
+      ":focus-visible { outline: 2px solid var(--bramble-focus-ring); outline-offset: 2px; }",
     );
     expect(SIDEPANEL_STYLES).toMatch(
       /input:focus-visible, select:focus-visible, textarea:focus-visible \{[^}]*outline-offset: -2px/s,
@@ -280,43 +288,43 @@ describe("sidepanel styles", () => {
     // it can outrank neutral component rows and produce accent-text on an
     // accent background (white-on-white in the default dark skin).
     expect(SIDEPANEL_STYLES).toContain(
-      ":where(button:not(:disabled):hover) { background: var(--mc-accent-hover); }",
+      ":where(button:not(:disabled):hover) { background: var(--bramble-accent-hover); }",
     );
     expect(SIDEPANEL_STYLES).toContain(
       ":where(button:not(:disabled):active), a.icon-button:active",
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.add-account-option:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+      /button\.add-account-option:not\(:disabled\):hover \{[^}]*background: var\(--bramble-hover\);[^}]*color: var\(--bramble-text\)/s,
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.add-account-option\[aria-pressed="true"\]:not\(:disabled\):hover \{[^}]*background: var\(--mc-elevated\);[^}]*color: var\(--mc-text\)/s,
+      /button\.add-account-option\[aria-pressed="true"\]:not\(:disabled\):hover \{[^}]*background: var\(--bramble-elevated\);[^}]*color: var\(--bramble-text\)/s,
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.onboarding-inline-action:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+      /button\.onboarding-inline-action:not\(:disabled\):hover \{[^}]*background: var\(--bramble-hover\);[^}]*color: var\(--bramble-text\)/s,
     );
     // Selected controls keep their accent-soft fill under the pointer — the
     // pressed-state hover rules exist so hovering never visually deselects.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.group-chip\[aria-pressed="true"\]:not\(:disabled\):hover \{ background: var\(--mc-accent-soft\)/,
+      /button\.group-chip\[aria-pressed="true"\]:not\(:disabled\):hover \{ background: var\(--bramble-accent-soft\)/,
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.account-check\[aria-pressed="true"\]:not\(:disabled\):hover \{ background: var\(--mc-accent-soft\)/,
+      /button\.account-check\[aria-pressed="true"\]:not\(:disabled\):hover \{ background: var\(--bramble-accent-soft\)/,
     );
     // Hovering selected navigation preserves its high-contrast ink.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\]:not\(:disabled\):hover \{\s*color: var\(--mc-text\)/,
+      /button\.nav-item\[aria-selected="true"\]:not\(:disabled\):hover \{\s*color: var\(--bramble-text\)/,
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.home-tab\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-text\)/,
+      /button\.home-tab\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--bramble-text\)/,
     );
     // Non-primary Send and multisig controls must never inherit the generic
     // high-contrast CTA fill, which can produce white-on-white rows in dark
     // mode. Their more-specific selectors preserve neutral surfaces and ink.
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.send-recipient-row:not\(:disabled\):hover,\s*\.send-asset-row:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+      /\.send-recipient-row:not\(:disabled\):hover,\s*\.send-asset-row:not\(:disabled\):hover \{[^}]*background: var\(--bramble-hover\);[^}]*color: var\(--bramble-text\)/s,
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.send-token-trigger:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+      /\.send-token-trigger:not\(:disabled\):hover \{[^}]*background: var\(--bramble-hover\);[^}]*color: var\(--bramble-text\)/s,
     );
   });
 
@@ -324,7 +332,7 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /\.action-row \{[^}]*grid-auto-columns: minmax\(0, 1fr\);[^}]*grid-auto-flow: column/s,
     );
-    expect(SIDEPANEL_STYLES).toMatch(/\.action-tile \{[^}]*background: var\(--mc-elevated\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.action-tile \{[^}]*background: var\(--bramble-elevated\)/s);
     expect(SIDEPANEL_STYLES).toMatch(
       new RegExp(`\\.action-tile \\{[^}]*border-radius: ${RADIUS.lg}`, "s"),
     );
@@ -347,7 +355,7 @@ describe("sidepanel styles", () => {
     // Persistent labels make every destination recognizable; white and muted
     // grey distinguish state without adding an active-state surface.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--mc-text\)/,
+      /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--bramble-text\)/,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*background/);
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*box-shadow/);
@@ -396,7 +404,7 @@ describe("sidepanel styles", () => {
 
   test("the selected onboarding contract keeps readable supporting copy", () => {
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.onboarding-contract\[aria-pressed="true"\] \.onboarding-contract-copy > span:last-child \{\s*color: var\(--mc-text\)/,
+      /\.onboarding-contract\[aria-pressed="true"\] \.onboarding-contract-copy > span:last-child \{\s*color: var\(--bramble-text\)/,
     );
   });
 });

@@ -1,7 +1,7 @@
 /** Frozen Argent multisig V3 hashing, query estimation, and exact submission. */
 
 import { describe, expect, test } from "bun:test";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import {
   type ArgentMultisigCall,
   ArgentMultisigFeeExpiredError,
@@ -11,8 +11,8 @@ import {
   preparedArgentMultisigFee,
   samePreparedArgentMultisigInvokeV3,
   submitPreparedArgentMultisigInvokeV3,
-} from "@mc-wallet/starknet/multisig-invoke";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/starknet/multisig-invoke";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { RpcError, RpcProvider } from "starknet";
 
 const ACCOUNT = {

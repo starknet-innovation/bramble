@@ -3,17 +3,17 @@
  * notice, action tiles, and undeployed-account notice.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { callout } from "@mc-wallet/ui-kit/content";
-import { button, iconButton, iconLink } from "@mc-wallet/ui-kit/controls";
-import { dockNavigation } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { escapeHtml } from "@bramble/core/html";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { callout } from "@bramble/ui-kit/content";
+import { button, iconButton, iconLink } from "@bramble/ui-kit/controls";
+import { dockNavigation } from "@bramble/ui-kit/navigation";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { explorerAccountUrl } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { type IconName, icon } from "../shared/icons";
 import { accountAvatar, accountDisplayName, type WalletView } from "../shared/parts";
-import { STARKSCAN_URL } from "./starkscan-link";
 
 /**
  * Renders the unlocked account header and its trusted destinations.
@@ -29,8 +29,15 @@ export const walletHeader = (
     ? (multisig.name ?? "Multisig account")
     : account
       ? accountDisplayName(account, preferences)
-      : "MC Wallet";
+      : "Bramble";
   const address = multisig?.address ?? account?.address;
+  // Opens the identity this header is showing, not the explorer's front page:
+  // that account view is the only thing wanted from here, and Home no longer
+  // carries an explorer tile. Null on devnet or before an account exists, which
+  // renders a disabled control rather than a link that cannot resolve.
+  const explorerUrl = address
+    ? explorerAccountUrl(multisig?.networkId ?? status.networkId, address)
+    : null;
   const network = status.network
     .replace(/^Starknet Mainnet$/, "Starknet")
     .replace(/^Starknet\s+/, "");
@@ -53,14 +60,24 @@ export const walletHeader = (
         label: "Connected sites",
         variant: "ghost",
       })}
-      ${iconLink({
-        attributes: { id: "starkscan-button" },
-        href: STARKSCAN_URL,
-        icon: "externalLink",
-        label: "Open Starkscan",
-        target: "_blank",
-        variant: "ghost",
-      })}
+      ${
+        explorerUrl === null
+          ? iconButton({
+              attributes: { id: "starkscan-button" },
+              disabled: true,
+              icon: "externalLink",
+              label: "Explorer unavailable on this network",
+              variant: "ghost",
+            })
+          : iconLink({
+              attributes: { id: "starkscan-button" },
+              href: explorerUrl,
+              icon: "externalLink",
+              label: "View this account on the block explorer",
+              target: "_blank",
+              variant: "ghost",
+            })
+      }
       ${iconButton({
         attributes: { id: "lock-button" },
         icon: "lock",
@@ -148,6 +165,29 @@ export const explorerTile = (url: string | null): string => {
   return url === null
     ? `<button class="action-tile" type="button" disabled aria-label="Explorer unavailable on this network">${body}</button>`
     : `<a class="action-tile" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open this account on the block explorer">${body}</a>`;
+};
+
+/**
+ * Renders the home action that shields public value into the private pool.
+ *
+ * Emits the same attributes the token-detail surface uses, so the existing
+ * privacy bindings pick it up with no wiring of its own: `data-send-shield`
+ * opens Send with the buckets preset once privacy is ready, and
+ * `data-privacy-open` starts activation when it is not. Disabled only when there
+ * is no token to name — no account, or a network with none tracked — following
+ * the explorer tile in staying put rather than reflowing the row.
+ */
+export const shieldTile = (tokenId: string | null, ready: boolean): string => {
+  const body = `<span class="tile-icon">${icon("shield")}</span>
+      <span class="tile-label">Shield</span>`;
+  if (tokenId === null) {
+    return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable until a token is tracked">${body}</button>`;
+  }
+  const attribute = ready ? "data-send-shield" : "data-privacy-open";
+  const label = ready
+    ? "Shield public value into your private balance"
+    : "Activate private balances";
+  return `<button class="action-tile" ${attribute}="${escapeHtml(tokenId)}" type="button" aria-label="${label}">${body}</button>`;
 };
 
 /**

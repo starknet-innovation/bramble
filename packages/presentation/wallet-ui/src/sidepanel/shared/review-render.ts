@@ -9,10 +9,10 @@
  * never trusts its inputs, so callers may pass decoded summaries and flag
  * messages directly.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import { button } from "@mc-wallet/ui-kit/controls";
-import type { UiAttributes } from "@mc-wallet/ui-kit/html-attributes";
+import { escapeHtml } from "@bramble/core/html";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { button } from "@bramble/ui-kit/controls";
+import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
 import { icon } from "./icons";
 import { formatFri } from "./parts";

@@ -1,6 +1,6 @@
 <div align="center">
 
-# MC Wallet
+# Bramble
 
 ### A Starknet wallet that lives in your browser side panel.
 
@@ -17,9 +17,9 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 
 - **Accounts & transfers** — choose an OpenZeppelin or Argent account backed by the encrypted software vault, with deploy/send/receive and network switching. Ledger hardware support is available to trusted testers while its physical compatibility matrix is completed.
 - **Onboarding & recovery** — a dedicated full-page first-install flow for creating, importing, or connecting a Ledger; seed-phrase backup includes on-screen verification, while Ledger accounts stay keyless.
-- **dApp connect** — injects `window.starknet_mcWallet` (get-starknet compatible), with per-origin grants so connected sites never see each other.
+- **dApp connect** — injects `window.starknet_bramble` (get-starknet compatible), with per-origin grants so connected sites never see each other.
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
-- **NFT gallery** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`.
+- **NFT gallery (parked)** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`. The Collectibles tab, gallery entry points, and NFT indexer setting are hidden in the current release while the journey is finished.
 - **Multisig** — create or import true Argent M-of-N account contracts, collect exact-hash signatures from local owners, and submit from the shared account.
 - **STRK20 privacy** — explicitly activate private balances, shield tracked ERC-20 assets through a
   reviewed public deposit, read private note totals on demand, submit private action batches, and
@@ -59,13 +59,14 @@ Day to day:
 bun run check       # types, lint, standards, unit tests
 bun run format      # Biome autofix
 bun run test:e2e    # Playwright end-to-end (run test:e2e:install once first)
-bun run dev:session # headed browser on a kept profile, onboards/unlocks itself
+BRAMBLE_E2E_LIVE_NETWORK=1 bun run dev:session # explicit live-network manual session
 ```
 
-`dev:session` is development-only. It onboards from a recovery phrase published in this repository,
-so its accounts are public by construction — never send real funds to an address it shows, and read
-the header of `tests/e2e/dev-session.ts` before pointing `MC_DEV_MNEMONIC` at a phrase of your own.
-The wallet it creates is kept in a git-ignored `.dev-profile/`; delete that directory to start over.
+`dev:session` is development-only and refuses to start without the explicit live-network flag shown
+above. It onboards from a recovery phrase published in this repository, so its accounts are public
+by construction — never send real funds to an address it shows, and read the header of
+`tests/e2e/dev-session.ts` before pointing `BRAMBLE_DEV_MNEMONIC` at a phrase of your own. The wallet it
+creates is kept in a git-ignored `.dev-profile/`; delete that directory to start over.
 
 ### Offline checks
 

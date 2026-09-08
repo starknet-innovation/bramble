@@ -8,7 +8,7 @@
  * target.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { preferences } from "@mc-wallet/testkit/sidepanel";
+import { preferences } from "@bramble/testkit/sidepanel";
 import {
   popView,
   pushView,

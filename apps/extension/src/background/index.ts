@@ -2,33 +2,33 @@
  * MV3 background entrypoint. All privileged wallet state stays behind this worker.
  */
 
-import { untrustedFetch } from "@mc-wallet/core/http-json";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { createNostrCoordinationStore } from "@mc-wallet/multisig/coordination";
-import { createMultisigStore } from "@mc-wallet/multisig/repository";
-import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
-import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
-import { createPhishingFeed } from "@mc-wallet/permissions/phishing-feed";
-import { createPriceService, unavailablePriceService } from "@mc-wallet/portfolio/prices";
-import { createStrk20MaturityStore } from "@mc-wallet/privacy/maturity-store";
+import { untrustedFetch } from "@bramble/core/http-json";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { createNostrCoordinationStore } from "@bramble/multisig/coordination";
+import { createMultisigStore } from "@bramble/multisig/repository";
+import { createOriginGuard } from "@bramble/permissions/blocklist";
+import { createOriginHistoryStore } from "@bramble/permissions/origin-history";
+import { createPhishingFeed } from "@bramble/permissions/phishing-feed";
+import { createPriceService, unavailablePriceService } from "@bramble/portfolio/prices";
+import { createStrk20MaturityStore } from "@bramble/privacy/maturity-store";
 import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
-} from "@mc-wallet/privacy/official-sdk-service";
-import { unavailableStrk20Service } from "@mc-wallet/privacy/service";
+} from "@bramble/privacy/official-sdk-service";
+import { unavailableStrk20Service } from "@bramble/privacy/service";
 import {
   type ApprovalSurfacePreference,
   createPreferencesStore,
   type WalletPreferences,
-} from "@mc-wallet/settings/preferences";
-import { setReliabilityDiagnosticsEnabled } from "@mc-wallet/starknet/rpc-diagnostics";
-import { createActivityLog, systemClock } from "@mc-wallet/transactions/activity";
-import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { createSwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
-import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { createWalletVaultService } from "@mc-wallet/vault/service";
-import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@mc-wallet/vault/store-migration";
-import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+} from "@bramble/settings/preferences";
+import { setReliabilityDiagnosticsEnabled } from "@bramble/starknet/rpc-diagnostics";
+import { createActivityLog, systemClock } from "@bramble/transactions/activity";
+import { createAllowanceStore } from "@bramble/transactions/allowance-store";
+import { createSwapService, unavailableSwapService } from "@bramble/transactions/avnu";
+import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
+import { createWalletVaultService } from "@bramble/vault/service";
+import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@bramble/vault/store-migration";
+import type { WalletEventMessage } from "@bramble/wallet-protocol/events";
 import * as krustyModule from "/dependencies/krusty-kms/krusty_kms_wasm.js";
 import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 import {
@@ -38,6 +38,13 @@ import {
   requireTrustedStorageAccess,
 } from "../browser-storage";
 import { createWalletReader } from "./accounts/wallet-reader";
+import {
+  analyticsPlatform,
+  analyticsReleaseChannel,
+  createGatewayAnalytics,
+  randomAnalyticsUuid,
+  withGatewayAnalyticsFlows,
+} from "./analytics/gateway-analytics";
 import { setApprovalNotifier } from "./approvals/approval-notifier";
 import {
   type ApprovalSurfaceBrowser,
@@ -67,6 +74,7 @@ import { createBackgroundPreferences } from "./settings/preferences-adapter";
 import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
 
 type RuntimeApi = {
+  readonly getManifest?: () => { readonly version?: string };
   readonly getURL?: (path: string) => string;
   readonly id: string;
   readonly onInstalled: {
@@ -108,7 +116,9 @@ type ExtensionGlobal = typeof globalThis & {
 const extensionApi = (globalThis as ExtensionGlobal).chrome;
 const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
+declare const __MC_BUILD_BRANCH__: string | undefined;
 let approvalSurfacePreference: ApprovalSurfacePreference = "side-panel";
+let productAnalyticsEnabled = false;
 const updateApprovalSurface = (preference: ApprovalSurfacePreference): void => {
   approvalSurfacePreference = preference;
   void configureApprovalSurface(extensionApi, preference).catch(() => undefined);
@@ -168,13 +178,17 @@ const preferences = storageReady
   .catch(() => null);
 const preferenceStore = createBackgroundPreferences({
   onApprovalSurface: updateApprovalSurface,
+  onProductAnalytics: (enabled) => {
+    productAnalyticsEnabled = enabled;
+  },
   onReliabilityDiagnostics: setReliabilityDiagnosticsEnabled,
   store: preferences,
 });
-void preferences
+const preferenceSignalsReady = preferences
   .then(async (store) => {
     const stored = await store?.read();
     updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
+    productAnalyticsEnabled = store ? (stored?.productAnalytics ?? true) : false;
     setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
   })
   .catch(() => undefined);
@@ -185,6 +199,29 @@ void preferences
 // lane (MCW-V09-129) treats that rejection as "not permitted", narrowing
 // disclosure rather than widening it.
 const readPreferences = (): Promise<WalletPreferences> => preferenceStore.read();
+const nativeFetch = globalThis.fetch.bind(globalThis);
+const browserNavigator = globalThis.navigator as Navigator & { readonly brave?: unknown };
+const gatewayAnalytics = createGatewayAnalytics({
+  enabled: async () => {
+    await preferenceSignalsReady;
+    return productAnalyticsEnabled;
+  },
+  http: nativeFetch,
+  metadata: {
+    appVersion: runtime?.getManifest?.().version ?? "",
+    platform: analyticsPlatform(browserNavigator.userAgent, browserNavigator.brave !== undefined),
+    releaseChannel: analyticsReleaseChannel(
+      typeof __MC_BUILD_BRANCH__ === "string" ? __MC_BUILD_BRANCH__ : "",
+    ),
+  },
+  randomUuid: randomAnalyticsUuid,
+  store: createBrowserLocalStore(),
+});
+// The pinned privacy SDK performs discovery and proving through its own
+// uninjectable fetch calls. One permanent exact-origin wrapper is therefore the
+// shared boundary for it and starknet.js; every non-gateway request is passed
+// through unchanged.
+globalThis.fetch = gatewayAnalytics.fetch as typeof globalThis.fetch;
 const activityLog = (() => {
   try {
     return createActivityLog({ store: createBrowserLocalStore() });
@@ -266,11 +303,15 @@ const strk20MaturityStore = (() => {
 const runtimeRpc = {
   ...createDefaultRuntimeRpc({ readPreferences }),
   strk20: strk20MaturityStore
-    ? createOfficialStrk20Service({
-        maturityStore: strk20MaturityStore,
-        nowSeconds: () => Math.floor(systemClock() / 1_000),
-        sdk: privacySdkModule as unknown as PrivacySdkRuntime,
-      })
+    ? withGatewayAnalyticsFlows(
+        createOfficialStrk20Service({
+          http: gatewayAnalytics.fetch,
+          maturityStore: strk20MaturityStore,
+          nowSeconds: () => Math.floor(systemClock() / 1_000),
+          sdk: privacySdkModule as unknown as PrivacySdkRuntime,
+        }),
+        gatewayAnalytics.withFlow,
+      )
     : unavailableStrk20Service,
 };
 const walletReader = createWalletReader(wallet);

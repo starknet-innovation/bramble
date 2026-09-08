@@ -14,9 +14,9 @@
  * untracked rather than downgraded.
  */
 
-import type { AllowanceOwner, AllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { type ApprovedAssets, allowanceChangesFromCalls } from "@mc-wallet/transactions/allowances";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import type { AllowanceOwner, AllowanceStore } from "@bramble/transactions/allowance-store";
+import { type ApprovedAssets, allowanceChangesFromCalls } from "@bramble/transactions/allowances";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 
 /**

@@ -23,15 +23,16 @@ sandboxes:
 Without the package and vendored outputs, `check:krusty`, `check:argent`, `check:privacy`, and `build` fail;
 that is expected offline. Run the rest of the gates and say so.
 
-Contributors can enable the local pre-push hook to run the offline-fast checks
-(types, lint, file/config standards, extension manifest, unit tests) before
-every push:
+Contributors can enable the local hooks — a pre-push hook running the
+offline-fast checks (types, lint, file/config standards, extension manifest,
+unit tests), plus the release-branch immutability guard that refuses commits and
+pushes on a `release/v*` branch already integrated into `main`:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-Bypass a single push with `git push --no-verify`.
+Bypass a single commit or push with `--no-verify`.
 
 ## Required Gates
 

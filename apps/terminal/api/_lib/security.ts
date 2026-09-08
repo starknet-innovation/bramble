@@ -52,7 +52,7 @@ const validConfiguredOrigin = (origin: string, audience: GatewayAudience): boole
 const expectedOrigins = (audience: GatewayAudience): ReadonlySet<string> => {
   const configured =
     audience === "extension"
-      ? configuredOrigins("MC_WALLET_EXTENSION_ORIGINS")
+      ? configuredOrigins("BRAMBLE_EXTENSION_ORIGINS")
       : configuredOrigins("TERMINAL_ALLOWED_ORIGINS");
   const valid = configured.filter((origin) => validConfiguredOrigin(origin, audience));
   if (valid.length > 0 && valid.length === configured.length) {

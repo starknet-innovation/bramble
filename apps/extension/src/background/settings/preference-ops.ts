@@ -3,7 +3,7 @@
  * address book management, account labels, display settings, RPC overrides,
  * and backup import. All are privileged extension-page messages.
  */
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   readRemoveNftInput,
   readSetNftIndexerUrlInput,

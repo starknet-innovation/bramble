@@ -2,10 +2,10 @@
  * Pure provider bridge rules shared by the injected page script and content script.
  */
 
-import { isUuid } from "@mc-wallet/core/ids";
-import type { Json } from "@mc-wallet/core/json";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
+import { isUuid } from "@bramble/core/ids";
+import type { Json } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isWalletOrigin } from "@bramble/core/origin";
 import {
   providerStrk20Balances,
   providerStrk20CallAndProof,
@@ -39,15 +39,15 @@ import {
   readTypedDataParam,
   toProviderPayload as toProviderPayloadResult,
 } from "./results";
-import { unknownError, type WalletRpcError } from "./rpc-errors";
+import { invalidRequestPayload, unknownError, type WalletRpcError } from "./rpc-errors";
 import type { RuntimeMessage } from "./runtime-message";
 
 /** Marker for page-to-content wallet provider requests.
  */
-export const CONTENT_TARGET = "mc-wallet:content";
+export const CONTENT_TARGET = "bramble:content";
 /** Marker for content-to-page wallet provider responses.
  */
-export const PAGE_TARGET = "mc-wallet:page";
+export const PAGE_TARGET = "bramble:page";
 /** Maximum unresolved in-page provider requests kept in memory.
  */
 export const MAX_PENDING_PROVIDER_REQUESTS = 100;
@@ -426,6 +426,28 @@ export const toRuntimeMessage = (
   isProviderMethod(request.method) && isWalletOrigin(origin)
     ? runtimeBuilderFor(request.method)(request.params, origin)
     : null;
+
+/**
+ * Builds the page-targeted invalid-request response for a message that is
+ * addressed to the content bridge (correct target, well-formed request id) but
+ * fails {@link readProviderRequest}. Without it such a message would be
+ * dropped silently and the page's pending promise would hang forever; with it
+ * the page gets a deterministic rejection. Returns null for anything that is
+ * not addressed to the bridge — foreign window traffic must never receive a
+ * response — and for messages readProviderRequest accepts.
+ */
+export const misaddressedProviderResponse = (value: unknown): ProviderResponse | null => {
+  if (
+    !isRecord(value) ||
+    value["target"] !== CONTENT_TARGET ||
+    typeof value["id"] !== "string" ||
+    !isUuid(value["id"]) ||
+    readProviderRequest(value) !== null
+  ) {
+    return null;
+  }
+  return { error: invalidRequestPayload(), id: value["id"], target: PAGE_TARGET };
+};
 
 /**
  * Builds a page-targeted provider response for the in-page script.

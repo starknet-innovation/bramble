@@ -12,7 +12,7 @@
  */
 
 /**
- * EIP-2645 application segment mc-wallet pins for Ledger accounts. The device
+ * EIP-2645 application segment Bramble pins for Ledger accounts. The device
  * derives a distinct key per application; pinning one keeps a stored path
  * reproducible without recomputing an application hash at sign time.
  */

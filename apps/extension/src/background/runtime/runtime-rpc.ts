@@ -3,44 +3,44 @@
  * tests can stub network access.
  */
 
-import { untrustedFetch } from "@mc-wallet/core/http-json";
+import { untrustedFetch } from "@bramble/core/http-json";
 import {
   type ArgentMultisigConfigInput,
   type ArgentSignerDiscoveryInput,
   getArgentMultisigConfig,
   getArgentMultisigSignerPublicKeys,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import {
   type ArgentMultisigClassStatusInput,
   isArgentMultisigClassDeclared,
-} from "@mc-wallet/multisig/deploy";
+} from "@bramble/multisig/deploy";
 import {
   getMultisigSignerAccount,
   type MultisigSignerAccountInput,
-} from "@mc-wallet/multisig/signer-account";
+} from "@bramble/multisig/signer-account";
 import {
   createHttpNftIndexer,
   type NftIndexerHttp,
   type NftIndexerService,
-} from "@mc-wallet/portfolio/nft-indexer";
+} from "@bramble/portfolio/nft-indexer";
 import {
   type NftMetadataHttp,
   type NftTokenMetadata,
   resolveNftMetadataUri,
-} from "@mc-wallet/portfolio/nft-token-metadata";
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+} from "@bramble/portfolio/nft-token-metadata";
+import type { Strk20Service } from "@bramble/privacy/service";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import {
   type VerifyClassHashInput,
   verifyAccountClassHash,
-} from "@mc-wallet/starknet/class-hash-verify";
+} from "@bramble/starknet/class-hash-verify";
 import {
   type PrepareArgentMultisigInvokeV3Input,
   prepareArgentMultisigInvokeV3,
   type SubmitPreparedArgentMultisigInvokeV3Input,
   submitPreparedArgentMultisigInvokeV3,
-} from "@mc-wallet/starknet/multisig-invoke";
-import { withRpcFallback } from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/multisig-invoke";
+import { withRpcFallback } from "@bramble/starknet/provider";
 import {
   type BalanceInput,
   type DeclareInput,
@@ -67,24 +67,24 @@ import {
   type TokenMetadataInput,
   type TransactionStatusInput,
   type TransferInput,
-} from "@mc-wallet/starknet/rpc";
+} from "@bramble/starknet/rpc";
 import {
   type ExternalAllowanceScan,
   readTrackedAllowances,
   scanExternalAllowances,
   type TrackedAllowanceScan,
-} from "@mc-wallet/transactions/allowance-scan";
-import { createStarkscanClient, type StarkscanHttp } from "@mc-wallet/transactions/starkscan";
+} from "@bramble/transactions/allowance-scan";
+import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions/starkscan";
 import {
   createRpcFirstBalances,
   createRpcFirstHistory,
-} from "@mc-wallet/transactions/starkscan-wallet";
+} from "@bramble/transactions/starkscan-wallet";
 import type {
   scanTransactionHistory,
   TransactionHistoryScan,
-} from "@mc-wallet/transactions/tx-history-scan";
-import { canonicalFelt, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { ExplorerLanePreferences } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/transactions/tx-history-scan";
+import { canonicalFelt, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { ExplorerLanePreferences } from "@bramble/wallet-model/preferences";
 
 /**
  * Injectable multisig read operations used by the multisig message handlers.

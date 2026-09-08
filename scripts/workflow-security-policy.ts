@@ -12,9 +12,10 @@
  * checked without anyone remembering to list it — which is the whole point: the
  * previous hand-maintained list had already fallen three workflows behind.
  */
-import { escapeRegExp } from "./regexp";
 import { dynamicExecutionFailures } from "./vendor-pin-policy";
-import { readWorkflowSources, WORKFLOW_DIR, type WorkflowSources } from "./workflow-inventory";
+import { websiteDeployFailures } from "./website-deploy-policy";
+import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
+import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
 
 const NODE_SETUP_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
 const GITHUB_EXPRESSION = "$" + "{{";
@@ -31,39 +32,6 @@ const VENDOR_STEPS = [
   { command: "bun run vendor:argent", failure: "must verify the pinned Argent account contracts" },
   { command: "bun run vendor:privacy", failure: "must vendor the pinned privacy SDK" },
 ] as const;
-
-const workflowPath = (name: string): string => `${WORKFLOW_DIR}/${name}`;
-
-const jobBody = (workflow: string, job: string): string => {
-  const bounded = `${workflow}\n  __workflow_policy_end__:\n`;
-  const escaped = escapeRegExp(job);
-  return (
-    bounded.match(new RegExp(`^  ${escaped}:\\n[\\s\\S]*?(?=^  [a-zA-Z0-9_-]+:\\n)`, "m"))?.[0] ??
-    ""
-  );
-};
-
-const requireText = (
-  failures: string[],
-  source: string,
-  expected: string,
-  failure: string,
-): void => {
-  if (!source.includes(expected)) {
-    failures.push(failure);
-  }
-};
-
-const forbidText = (
-  failures: string[],
-  source: string,
-  forbidden: string,
-  failure: string,
-): void => {
-  if (source.includes(forbidden)) {
-    failures.push(failure);
-  }
-};
 
 // Applies to any workflow that vendors a pinned source, selected by content.
 // The privacy SDK build depends on the exact Node runtime, so the pin travels
@@ -151,7 +119,7 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
             echo "::notice::Chromatic is not configured; GitHub Pages remains the published UI Lab."
             exit 0
           fi
-          bun run --filter @mc-wallet/ui-lab chromatic`,
+          bun run --filter @bramble/ui-lab chromatic`,
     `${path} must expose the Chromatic token only to the main-push publish step`,
   );
   if (source.split("CHROMATIC_PROJECT_TOKEN").length - 1 !== 3) {
@@ -467,6 +435,7 @@ export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string
     const named = NAMED_POLICIES[name];
     failures.push(...baselineFailures(name, source, named !== undefined));
     failures.push(...scopedServiceSecretFailures(name, source));
+    failures.push(...websiteDeployFailures(name, source));
     failures.push(...vendoringFailures(name, source));
     failures.push(...(named?.(source) ?? []));
   }

@@ -1,7 +1,7 @@
 /** MCW-V091-001: accepted hashes survive every best-effort local journal. */
 
 import { describe, expect, test } from "bun:test";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
+import type { ActivityLog } from "@bramble/transactions/activity";
 import { recordSubmittedActivity } from "../../apps/extension/src/background/transactions/activity-recording";
 import { latestApprovalId, reviewedApprovalFee } from "../support/held";
 import {

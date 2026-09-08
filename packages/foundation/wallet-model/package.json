@@ -1,10 +1,11 @@
 {
-  "name": "@mc-wallet/wallet-model",
+  "name": "@bramble/wallet-model",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
     "./accounts": "./src/accounts/accounts.ts",
+    "./avnu-route": "./src/swap/avnu-route.ts",
     "./custom-network": "./src/networks/custom-network.ts",
     "./ledger-path": "./src/accounts/ledger-path.ts",
     "./networks": "./src/networks/networks.ts",
@@ -20,6 +21,6 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*"
+    "@bramble/core": "workspace:*"
   }
 }

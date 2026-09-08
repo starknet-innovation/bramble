@@ -5,8 +5,8 @@
  * configuration, and a missing config or RPC URL fails closed.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { Signature } from "starknet";
 import { Strk20CallSetSigner } from "../policy/call-set-signer";
 import { STRK20_SERVICE_UNAVAILABLE, type Strk20AccountContext } from "../service";

@@ -4,8 +4,8 @@
  * through the verified invoke path.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import type { TransferReviewResponse, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../../shared/dom";
@@ -306,7 +306,7 @@ const bindAnimation = (deps: NftUiDeps): void => {
     button.addEventListener("click", () => {
       const animationUrl = button.dataset["nftPlay"];
       const frame = button
-        .closest(".nft-card, .collectible-tile, section")
+        .closest(".nft-card, section")
         ?.querySelector<HTMLIFrameElement>("iframe.nft-animation");
       if (!animationUrl || !frame) {
         return;

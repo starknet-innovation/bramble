@@ -3,15 +3,15 @@
  * mapping, and the origin-gated background signing path.
  */
 import { describe, expect, test } from "bun:test";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   readProviderRequestArguments,
   toProviderPayload,
   toRuntimeMessage,
-} from "@mc-wallet/wallet-protocol/bridge";
-import { unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
+} from "@bramble/wallet-protocol/bridge";
+import { unknownError } from "@bramble/wallet-protocol/rpc-errors";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
@@ -32,7 +32,7 @@ const account: AccountRef = {
 // MCW-V09-101 forgery is closed by the name grammar rather than by a revision
 // ban — and is exercised in `typed-data-revisions.test.ts`.
 const typedData = {
-  domain: { chainId: "SN_MAIN", name: "MC Test", revision: "1", version: "1" },
+  domain: { chainId: "SN_MAIN", name: "Bramble Test", revision: "1", version: "1" },
   message: { content: "hello" },
   primaryType: "Message",
   types: {
