@@ -87,11 +87,14 @@ const createStatusWallet = (statusAccount: AccountRef = account) => ({
 });
 
 describe("background status messages", () => {
-  test("returns public wallet status for trusted senders", async () => {
+  test("returns public wallet status without account metadata while locked", async () => {
     const handler = createMessageHandler(createStatusWallet(), "extension-id");
 
     await expect(handler({ type: "wallet.status" }, sender)).resolves.toMatchObject({
-      accountCount: 1,
+      accountCount: 0,
+      activeAccountId: null,
+      accounts: [],
+      locked: true,
       network: "Starknet Mainnet",
       ready: true,
     });
