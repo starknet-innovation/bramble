@@ -69,6 +69,26 @@ export const WALLET_VIEWS = [
  */
 export type WalletView = (typeof WALLET_VIEWS)[number];
 
+/**
+ * Valid gallery routes withheld while the collectibles journey is parked.
+ * Navigation rejects these before it can alter screen history or start data
+ * hydration; the journey modules remain available for a deliberate restore.
+ */
+export const PARKED_COLLECTIBLE_VIEWS = [
+  "nfts",
+  "nft-watch",
+  "nft-hidden",
+  "nft-detail",
+  "nft-send",
+] as const satisfies readonly WalletView[];
+
+/**
+ * Returns whether a valid screen route is deliberately unavailable while the
+ * collectibles journey is parked.
+ */
+export const isParkedCollectibleView = (view: WalletView): boolean =>
+  PARKED_COLLECTIBLE_VIEWS.some((parked) => parked === view);
+
 const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   account: "Accounts",
   activity: "Activity",

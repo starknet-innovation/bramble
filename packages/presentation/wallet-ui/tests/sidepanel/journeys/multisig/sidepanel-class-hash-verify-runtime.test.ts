@@ -120,7 +120,6 @@ describe("emptyRenderCache (lock-reset single source)", () => {
 
   test("clears the remaining view-scoped lists and price fields", () => {
     expect(empty.allowances).toEqual([]);
-    expect(empty.discoveredNfts).toEqual([]);
     expect(empty.connectedSites).toEqual([]);
     expect(empty.chart).toEqual([]);
     expect(empty.deployment).toBeNull();
@@ -136,15 +135,6 @@ describe("emptyRenderCache (lock-reset single source)", () => {
 describe("updateRenderScope", () => {
   test("retains scoped lanes on resync and clears them on account switches", () => {
     const cache = emptyRenderCache();
-    const nft = {
-      collection: "Punks",
-      contract: "0x123",
-      id: "SN_MAIN:0x123:0",
-      image: "https://cdn.example/punk.png",
-      name: "Punk #0",
-      networkId: "SN_MAIN" as const,
-      tokenId: "0",
-    };
     const transaction = {
       accountId: ACCOUNT_ID,
       hash: "0x1",
@@ -156,17 +146,13 @@ describe("updateRenderScope", () => {
     };
     Object.assign(cache, {
       balances: { accountId: ACCOUNT_ID, balances: [], networkId: "SN_MAIN" },
-      discoveredNfts: [nft],
       historyUnavailable: true,
-      indexedNfts: [nft],
       multisigClassDeclared: true,
       status: { ...cache.status, activeAccountId: ACCOUNT_ID, networkId: "SN_MAIN" as const },
       transactions: [transaction],
-      watchedNfts: [nft],
     });
 
     expect(updateRenderScope(cache, { ...cache.status })).toBeNull();
-    expect(cache.discoveredNfts).toEqual([nft]);
     expect(cache.transactions).toEqual([transaction]);
     expect(cache.historyUnavailable).toBe(true);
     expect(cache.multisigClassDeclared).toBe(true);
@@ -174,9 +160,6 @@ describe("updateRenderScope", () => {
     expect(updateRenderScope(cache, { ...cache.status, activeAccountId: OTHER_ACCOUNT_ID })).toBe(
       "account",
     );
-    expect(cache.discoveredNfts).toEqual([]);
-    expect(cache.indexedNfts).toEqual([]);
-    expect(cache.watchedNfts).toEqual([]);
     expect(cache.transactions).toEqual([]);
     expect(cache.historyUnavailable).toBe(false);
     expect(cache.multisigClassDeclared).toBeNull();

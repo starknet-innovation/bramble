@@ -92,19 +92,6 @@ const hydrateSelectedMultisig = async (
   };
 };
 
-const nftSnapshot = (
-  indexed: RenderData["indexedNfts"],
-  watched: RenderData["watchedNfts"],
-): RenderData["discoveredNfts"] => {
-  const combined = new Map(indexed.map((nft) => [nft.id, nft]));
-  // Explicitly watched metadata wins a same-id indexer record: it comes from
-  // the wallet's privacy-gated on-chain metadata path rather than the directory.
-  for (const nft of watched) {
-    combined.set(nft.id, nft);
-  }
-  return [...combined.values()];
-};
-
 const SELECTED_MULTISIG_VIEWS = new Set<WalletView>([
   "multisig-home",
   "multisig-detail",
@@ -137,8 +124,6 @@ const hydrateCachedView = async (
   activityView: boolean,
   registryView: boolean,
   multisigBalanceView: boolean,
-  walletNftView: boolean,
-  multisigNftView: boolean,
 ): Promise<void> => {
   const {
     status,
@@ -159,16 +144,6 @@ const hydrateCachedView = async (
         })
         .catch(() => undefined),
     );
-  };
-  const cachedStream = <T>(load: Promise<T>, assign: (value: T) => void): void => {
-    void load
-      .then((value) => {
-        if (isCurrent()) {
-          assign(value);
-          paint();
-        }
-      })
-      .catch(() => undefined);
   };
   if (walletBalanceView) {
     cached(wallet.loadBalances(true), (value) => {
@@ -216,24 +191,6 @@ const hydrateCachedView = async (
       }
     });
   }
-  if (walletNftView) {
-    const scope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
-    cachedStream(wallet.loadWatchedNfts(scope, true), (value) => {
-      cache.watchedNfts = value;
-      cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
-    });
-    cachedStream(wallet.discoverNfts(false, scope, undefined, true), (value) => {
-      cache.indexedNfts = value;
-      cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
-    });
-  }
-  if (multisigNftView && selectedMultisigId) {
-    const scope = `${status.networkId}:${selectedMultisigId}`;
-    cachedStream(wallet.discoverNfts(true, scope, selectedMultisigId, true), (value) => {
-      cache.multisigNftId = selectedMultisigId;
-      cache.multisigNfts = value;
-    });
-  }
   if (jobs.length > 0) {
     await Promise.all(jobs);
     if (isCurrent()) paint();
@@ -275,13 +232,6 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     (activeView === "multisig-home" ||
       activeView === "multisig-propose" ||
       activeView === "multisig-receive");
-  const walletNftView =
-    activeView === "home" ||
-    activeView === "nfts" ||
-    activeView === "nft-hidden" ||
-    activeView === "nft-detail" ||
-    activeView === "nft-send";
-  const multisigNftView = activeView === "multisig-home" && selectedMultisigId !== null;
   const authorityCriticalView =
     activeView === "multisig-detail" ||
     activeView === "multisig-signers" ||
@@ -301,12 +251,9 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     activityView,
     registryView,
     multisigBalanceView,
-    walletNftView,
-    multisigNftView,
   );
   const primaryJobs: Promise<unknown>[] = [];
   const deferredJobs: Array<() => Promise<unknown>> = [];
-  const streamingJobs: Promise<unknown>[] = [];
   const fill = <T>(
     load: Promise<T> | (() => Promise<T>),
     assign: (value: T) => void,
@@ -322,18 +269,6 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
         .catch(() => undefined);
     if (deferred) deferredJobs.push(start);
     else primaryJobs.push(start());
-  };
-  const stream = <T>(load: Promise<T>, assign: (value: T) => void): void => {
-    streamingJobs.push(
-      load
-        .then((value) => {
-          if (isCurrent()) {
-            assign(value);
-            paint();
-          }
-        })
-        .catch(() => undefined),
-    );
   };
   if (priceView) {
     if (walletBalanceView) {
@@ -396,26 +331,9 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.allowances = value;
     });
   }
-  // Home paints the last verified NFT snapshot from the cached phase above.
-  // Full indexer discovery can fan out into many ownership proofs, so only NFT
-  // surfaces refresh it live instead of turning an idle dashboard into a scan.
-  if (walletNftView && activeView !== "home" && refreshReason !== "ambient") {
-    const nftScope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
-    // Explicitly watched NFTs take the fast lane: no indexer wait, immediate
-    // repaint when their verified metadata lands, and no wait for balances,
-    // prices, activity, or auto-discovery.
-    stream(wallet.loadWatchedNfts(nftScope), (value) => {
-      cache.watchedNfts = value;
-      cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
-    });
-    fill(
-      () => wallet.discoverNfts(false, nftScope),
-      (value) => {
-        cache.indexedNfts = value;
-        cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
-      },
-    );
-  }
+  // The collectibles journey is parked: no view can reach the gallery, so the
+  // wallet never runs watched-NFT metadata or indexer discovery. Restoring the
+  // gallery restores these lanes with it.
   if (registryView) {
     primaryJobs.push(
       hydrateMultisigs(cache.multisigs, multisig, status.networkId).then((value) => {
@@ -462,13 +380,6 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       }
     });
   }
-  if (activeView === "multisig-home" && selectedMultisigId && refreshReason !== "ambient") {
-    const multisigNftScope = `${status.networkId}:${selectedMultisigId}`;
-    stream(wallet.discoverNfts(true, multisigNftScope, selectedMultisigId), (value) => {
-      cache.multisigNftId = selectedMultisigId;
-      cache.multisigNfts = value;
-    });
-  }
   if (activeView === "multisig-deploy") {
     fill(multisig.loadClassStatus(), (value) => {
       cache.multisigClassDeclared = value;
@@ -492,5 +403,4 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   };
   await flush(primaryJobs);
   await flush(deferredJobs.map((start) => start()));
-  await Promise.all(streamingJobs);
 };

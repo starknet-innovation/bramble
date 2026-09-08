@@ -466,7 +466,6 @@ describe("Argent frozen-intent composer", () => {
       balances: { balances: [{ ...token, balance: "42000000000000000000", formatted: "42" }] },
       changes: {},
       currency: "usd",
-      nfts: [],
       prices: { [token.address]: 0.5 },
     });
     expect(html).toContain("New transaction");
