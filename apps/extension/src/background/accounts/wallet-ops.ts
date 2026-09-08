@@ -99,11 +99,14 @@ const transferContext = async (
   input: { readonly accountId: string; readonly tokenId: string },
 ) => {
   const vaultPassphrase = deps.session.getPassphrase();
+  const authorized = captureSessionAuthorization(deps.session);
   if (!vaultPassphrase) {
     return { error: "wallet locked" } as const;
   }
   const preferences = await deps.preferencesStore.read();
+  if (!authorized.isCurrent()) return { error: "wallet locked" } as const;
   const vault = await deps.wallet.readVault(vaultPassphrase);
+  if (!authorized.isCurrent()) return { error: "wallet locked" } as const;
   const account = vault.accounts.find((stored) => stored.id === input.accountId);
   const token = preferences.tokens.find((stored) => stored.id === input.tokenId);
   if (!account || account.networkId !== preferences.activeNetworkId) {
@@ -112,7 +115,7 @@ const transferContext = async (
   if (!token || token.networkId !== account.networkId) {
     return { error: "token unavailable" } as const;
   }
-  return { account, preferences, token, vaultPassphrase } as const;
+  return { account, authorized, preferences, token, vaultPassphrase } as const;
 };
 
 /**
@@ -285,8 +288,8 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
   if ("error" in context) {
     return { error: context.error };
   }
-  const { account, preferences, token, vaultPassphrase } = context;
-  const authorized = captureSessionAuthorization(deps.session);
+  const { account, authorized, preferences, token, vaultPassphrase } = context;
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   // Verified BEFORE anything is broadcast. This call is built exactly as
   // `submitErc20Transfer` builds it (same parse, same encoder), so the report is
   // about the transaction that would actually go out, and running it first makes
