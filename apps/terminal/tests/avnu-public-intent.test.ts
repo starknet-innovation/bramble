@@ -67,7 +67,7 @@ describe("AVNU public swap intent", () => {
     ["expected output", { buyAmount: 899n }],
     ["beneficiary", { beneficiary: "0xdead" }],
     ["zero beneficiary", { beneficiary: "0x0" }],
-    ["minimum output", { minBuyAmount: 890n }],
+    ["minimum output", { minBuyAmount: 889n }],
     ["zero minimum", { minBuyAmount: 0n }],
     ["unrequested fee", { integratorFeeBps: 1n }],
     ["impossible minimum", { minBuyAmount: 901n }],
@@ -78,6 +78,11 @@ describe("AVNU public swap intent", () => {
       await expect(quoteSwap(params)).rejects.toThrow();
     },
   );
+
+  it("tolerates AVNU's reviewed rounding allowance", async () => {
+    mockApi(callFor({ minBuyAmount: 890n }));
+    await expect(quoteSwap(params)).resolves.toMatchObject({ minBuyAmount: "890" });
+  });
 
   it.each([
     { sellTokenAddress: "0x9" },
@@ -139,6 +144,11 @@ describe("AVNU public swap intent", () => {
     mockApi(callFor({ beneficiary: "0x0003", minBuyAmount: 900n, sellToken: "0x0001" }));
     const quote = await quoteSwap({ ...params, slippageBps: 0 });
     expect(buildSwapCalls({ quote, takerAddress: "0x0003" })).toHaveLength(2);
+  });
+
+  it("requires the quoted output when slippage is zero", async () => {
+    mockApi(callFor({ minBuyAmount: 899n }));
+    await expect(quoteSwap({ ...params, slippageBps: 0 })).rejects.toThrow();
   });
 
   it("binds submission to the current taker and the displayed minimum", async () => {

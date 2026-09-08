@@ -11,13 +11,13 @@
  * The exchange address is pinned to AVNU's published mainnet contract reference.
  * These builders never broadcast; they only produce `Call`s for wallet review.
  */
+import { reviewedMinBuyAmount } from "@bramble/wallet-model/avnu-route";
 import { isNonZeroStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import { WalletError } from "../support/errors";
 import { checkedAvnuExchangeCall } from "./avnu-intent";
 import {
   type AvnuRoute,
-  applySlippageFloor,
   buildApproveCall,
   DEFAULT_SLIPPAGE_BPS,
   fetchAvnuExchangeCall,
@@ -79,11 +79,21 @@ export const quoteSwap = async (params: SwapQuoteParams): Promise<SwapQuote> => 
     slippage,
     takerAddress: params.takerAddress,
   });
+  // AVNU rounds its floating-point build floor a few base units differently
+  // from an exact integer calculation. Reuse the wallet's reviewed tolerance;
+  // zero slippage still requires the full quoted output.
+  const minBuyAmount =
+    slippageBps === 0
+      ? BigInt(quote.buyAmount)
+      : reviewedMinBuyAmount(BigInt(quote.buyAmount), slippage);
+  if (minBuyAmount === null) {
+    throw new WalletError("Invalid AVNU minimum output");
+  }
   const checked = checkedAvnuExchangeCall(
     exchangeCall,
     {
       ...quote,
-      minBuyAmount: applySlippageFloor(BigInt(quote.buyAmount), slippageBps).toString(),
+      minBuyAmount: minBuyAmount.toString(),
     },
     params.takerAddress,
   );
