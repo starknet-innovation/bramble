@@ -147,14 +147,6 @@ export const slippageToFraction = (slippageBps: number): number => {
 };
 
 /**
- * Applies a slippage floor to a positive amount: `amount × (1 - bps/10_000)`. Used
- * to reject calldata below the requested tolerance. The displayed minimum then
- * comes from the validated `buy_token_min_amount` enforced by the router.
- */
-export const applySlippageFloor = (amount: bigint, slippageBps: number): bigint =>
-  (amount * (BPS_DENOMINATOR - BigInt(slippageBps))) / BPS_DENOMINATOR;
-
-/**
  * Builds the AVNU quotes GET URL for a pair, hex-encoding the sell amount and
  * pinning the request to a single best route. Tolerates a trailing slash on base.
  */
