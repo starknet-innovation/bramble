@@ -444,14 +444,17 @@ export const createEncryptedStore = (
       return cached;
     }
     const derived = await deriveKey(passphrase, salt, iterations);
-    if (keyCache.size >= MAX_CACHED_KEYS) {
-      const oldest = keyCache.keys().next().value;
-      if (oldest !== undefined) {
-        keyCache.delete(oldest);
-      }
-    }
     // Lock can invalidate this resolution during either fingerprinting or PBKDF2.
-    if (generation === keyCacheGeneration) keyCache.set(cacheId, derived);
+    // A stale resolution must not evict a key a later unlock has already cached.
+    if (generation === keyCacheGeneration) {
+      if (keyCache.size >= MAX_CACHED_KEYS) {
+        const oldest = keyCache.keys().next().value;
+        if (oldest !== undefined) {
+          keyCache.delete(oldest);
+        }
+      }
+      keyCache.set(cacheId, derived);
+    }
     return derived;
   };
 
