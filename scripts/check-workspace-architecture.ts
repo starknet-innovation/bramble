@@ -98,7 +98,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/testkit",
     "@bramble/wallet-model",
   ],
-  "@bramble/terminal": [],
+  "@bramble/terminal": ["@bramble/testkit", "@bramble/wallet-model"],
   "@bramble/ui-lab": [
     "@bramble/core",
     "@bramble/ledger-protocol",
