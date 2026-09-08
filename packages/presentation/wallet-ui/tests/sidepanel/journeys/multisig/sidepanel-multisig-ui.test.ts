@@ -476,24 +476,24 @@ describe("bindMultisigs frozen-intent forms", () => {
     );
     const tabs = Array.from(app.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]"));
     const panels = Array.from(app.querySelectorAll<HTMLElement>("[data-ms-home-panel]"));
-    expect(tabs[2]?.getAttribute("aria-label")).toBe("Signing intents, 0 open");
+    expect(tabs).toHaveLength(2);
+    expect(tabs[1]?.getAttribute("aria-label")).toBe("Signing intents, 0 open");
     const selectedTab = tabs[1];
-    if (!selectedTab) throw new Error("collectibles tab unavailable");
+    if (!selectedTab) throw new Error("intents tab unavailable");
     expect(tabs.map((tab) => tab.getAttribute("aria-controls"))).toEqual(
       panels.map((panel) => panel.id),
     );
     expect(panels.map((panel) => panel.getAttribute("aria-labelledby"))).toEqual(
       tabs.map((tab) => tab.id),
     );
-    expect(panels.map((panel) => panel.tabIndex)).toEqual([0, 0, 0]);
+    expect(panels.map((panel) => panel.tabIndex)).toEqual([0, 0]);
 
     tabs[0]?.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight" }));
     expect(tabs.map((tab) => [tab.getAttribute("aria-selected"), tab.tabIndex])).toEqual([
       ["false", -1],
       ["true", 0],
-      ["false", -1],
     ]);
-    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true]);
+    expect(panels.map((panel) => panel.hidden)).toEqual([true, false]);
     expect(document.activeElement).toBe(selectedTab);
   });
 });

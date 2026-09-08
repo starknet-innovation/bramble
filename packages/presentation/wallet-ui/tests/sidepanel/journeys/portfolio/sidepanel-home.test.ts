@@ -1,8 +1,8 @@
 /**
  * Home experience checks: the account-bar header opens a left drawer wired to
  * real accounts, frequent actions render as rounded-square tools, and the
- * portfolio section switches between Tokens and Collectibles while secondary
- * actions live in one overflow menu.
+ * portfolio section shows only the Tokens tab (Collectibles is parked) while
+ * secondary actions live in one overflow menu.
  */
 import { describe, expect, test } from "bun:test";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
@@ -113,22 +113,27 @@ describe("sidepanel home", () => {
     expect(html).toContain('id="starkscan-button"');
   });
 
-  test("portfolio has two text tabs and one accessible quick-actions menu", () => {
+  test("portfolio has a Tokens heading, no tablist, and one accessible quick-actions menu", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
-    expect(html).toMatch(/data-home-tab="tokens"[^>]*aria-selected="true"/);
-    expect(html).toMatch(/data-home-tab="collectibles"[^>]*aria-selected="false"/);
-    expect(html).not.toContain('data-home-tab="activity"');
+    const portfolio = html.slice(
+      html.indexOf('<section class="home-tabs"'),
+      html.indexOf("</main>"),
+    );
+    expect(portfolio).toContain("<h2>Tokens</h2>");
+    // The wallet dock is the only tablist left; the portfolio section is a heading
+    // with no tab, panel, or indicator scaffolding behind it.
+    expect(portfolio).not.toContain('role="tab');
+    expect(portfolio).not.toContain("data-home-tab=");
+    expect(portfolio).not.toContain("tab-panel");
+    expect(html).not.toContain("Collectibles");
     expect(html).not.toContain('class="tab-indicator"');
-    expect(html).toMatch(/data-tab-panel="tokens"[^>]*>/);
-    expect(html).toMatch(/data-tab-panel="collectibles"[^>]*hidden/);
-    expect(html).not.toContain('data-tab-panel="activity"');
     const menuTrigger = html.match(/<button[^>]*id="portfolio-menu-trigger"[^>]*>/)?.[0] ?? "";
     expect(menuTrigger).toContain('aria-haspopup="menu"');
     expect(menuTrigger).toContain('aria-expanded="false"');
     expect(html).toContain('id="portfolio-menu" role="menu"');
     expect(html).toContain('data-view="tokens" role="menuitem"');
-    expect(html).toContain('data-view="nfts" role="menuitem"');
+    expect(html).not.toContain('data-view="nfts"');
     expect(html).toContain('data-view="settings" role="menuitem"');
     expect(html).toContain('id="refresh-button" role="menuitem"');
   });
@@ -148,82 +153,11 @@ describe("sidepanel home", () => {
       {},
       {},
       "usd",
-      status,
     );
 
     expect(html).toContain("Manage tokens");
     expect(html).toContain("1 not shown");
     expect(html).not.toContain("Hidden tokens");
-  });
-
-  test("collectibles tab reuses watched NFTs and hides spam", () => {
-    const withNfts: WalletPreferences = {
-      ...preferences,
-      nfts: [
-        {
-          contract: "0xabc",
-          id: "SN_MAIN:0xabc:1",
-          label: "Starkpunk",
-          networkId: "SN_MAIN",
-          tokenId: "1",
-        },
-        {
-          contract: "0xdef",
-          id: "SN_MAIN:0xdef:2",
-          networkId: "SN_MAIN",
-          spam: true,
-          tokenId: "2",
-        },
-      ],
-    };
-    const html = homeTabs({ balances: [] }, withNfts, {}, {}, "usd", status, [
-      {
-        collection: "",
-        contract: "0xabc",
-        id: "SN_MAIN:0xabc:1",
-        image: "",
-        name: "Starkpunk",
-        networkId: "SN_MAIN",
-        tokenId: "1",
-      },
-    ]);
-    const panel = html.slice(html.indexOf('data-tab-panel="collectibles"'), html.length);
-
-    expect(panel).toContain('data-nft-open="SN_MAIN:0xabc:1"');
-    expect(panel).toContain("Starkpunk");
-    expect(panel).not.toContain("SN_MAIN:0xdef:2");
-    expect(panel).toContain('data-view="nfts"');
-  });
-
-  test("collectibles tab joins watched NFTs with resolved artwork metadata", () => {
-    const watched: WalletPreferences = {
-      ...preferences,
-      nfts: [
-        {
-          contract: "0xabc",
-          id: "SN_MAIN:0xabc:0",
-          networkId: "SN_MAIN",
-          tokenId: "0",
-        },
-      ],
-    };
-    const html = homeTabs({ balances: [] }, watched, {}, {}, "usd", status, [
-      {
-        attributes: [{ traitType: "Catalog", value: "CryptoPunks" }],
-        collection: "MC Punks",
-        contract: "0xabc",
-        id: "SN_MAIN:0xabc:0",
-        image: "https://cdn.example/punk0000.png",
-        name: "Starknet Test Punk #0",
-        networkId: "SN_MAIN",
-        tokenId: "0",
-      },
-    ]);
-
-    expect(html).toContain('class="nft-image nft-image--pixelated"');
-    expect(html).toContain('src="https://cdn.example/punk0000.png"');
-    expect(html).toContain('loading="eager"');
-    expect(html).toContain("Starknet Test Punk #0");
   });
 
   test("Activity stays a top-level dock destination instead of a portfolio tab", () => {
@@ -346,14 +280,14 @@ describe("sidepanel home", () => {
 
 describe("shield tile", () => {
   const homeArgs = (
-    privacy: Parameters<typeof homeScreen>[10],
+    privacy: Parameters<typeof homeScreen>[9],
     prefs: WalletPreferences | null = defaultWalletPreferences(),
   ): string =>
-    homeScreen(status, account, { balances: [] }, 0, null, prefs, {}, {}, "usd", [], privacy);
+    homeScreen(status, account, { balances: [] }, 0, null, prefs, {}, {}, "usd", privacy);
 
   const disclosure = (
     registration: "pending" | "registered" | "unregistered",
-  ): Parameters<typeof homeScreen>[10] => ({
+  ): Parameters<typeof homeScreen>[9] => ({
     error: null,
     loading: false,
     value: {

@@ -483,13 +483,4 @@ describe("token and preference wrappers", () => {
       "privacy service configuration failed",
     );
   });
-
-  test("setNftIndexerUrl resolves on preferences and throws otherwise", async () => {
-    await expect(
-      runtimeReturning(preferencesResponse).setNftIndexerUrl("https://idx"),
-    ).resolves.toBeUndefined();
-    await expect(runtimeReturning({}).setNftIndexerUrl("https://idx")).rejects.toThrow(
-      "indexer endpoint update failed",
-    );
-  });
 });

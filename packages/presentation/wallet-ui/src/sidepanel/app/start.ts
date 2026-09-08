@@ -16,7 +16,6 @@ import {
 } from "../journeys/onboarding/onboarding-surface";
 import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
 import { bindUnlock } from "../journeys/onboarding/unlock-ui";
-import type { HomeTab } from "../journeys/portfolio/home-tabs";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";
 import type { SendIntent } from "../journeys/send/send-model";
@@ -31,6 +30,7 @@ import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
 import { bindCopyButtons, showToast } from "../shared/dom";
+import { isParkedCollectibleView } from "../shared/parts";
 import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
 import { applyEntryTheme, bindEntryNavigation } from "../shell/entry-ui";
 import {
@@ -74,7 +74,7 @@ export const startWalletUi = async (
   const multisig = createMultisigClient(mutationRuntime);
   const swapClient = createSwapClient(mutationRuntime);
   let activeView: WalletView = "home";
-  let selectedNftId: string | null = null;
+  const selectedNftId: string | null = null;
   let selectedMultisigId: string | null = null;
   let selectedMultisigIntentId: string | null = null;
   let lastAccountId: string | null = null;
@@ -86,7 +86,6 @@ export const startWalletUi = async (
   let viewHistory: ViewHistory = [];
   let forcedDirection: NavDirection | null = null;
   let selectedTokenId: string | null = null;
-  let homeTab: HomeTab = "tokens";
   let drawerOpen = false;
   let drawerGroupFilter: string | null = null;
   let openAssignId: string | null = null;
@@ -144,6 +143,9 @@ export const startWalletUi = async (
       deploymentScope: () => deploymentPollScope(cache.status, () => cache.status),
       render,
       setActiveView: (view: WalletView) => {
+        if (isParkedCollectibleView(view)) {
+          return;
+        }
         activeView = view;
         if (view === "home") selectedMultisigId = null;
       },
@@ -164,7 +166,6 @@ export const startWalletUi = async (
       app,
       drawerGroupFilter: () => drawerGroupFilter,
       drawerOpen: () => drawerOpen,
-      homeTab: () => homeTab,
       networkId: () => lastNetworkId,
       render,
       selectPortfolio: (id: string | null) => {
@@ -179,9 +180,6 @@ export const startWalletUi = async (
       },
       setDrawerOpen: (open) => {
         drawerOpen = open;
-      },
-      setHomeTab: (tab) => {
-        homeTab = tab;
       },
       startAddAccount: ledgerOnboard.startAddAccount,
       wallet,
@@ -249,10 +247,6 @@ export const startWalletUi = async (
     });
     bindClusterScreens({
       app,
-      openNft: (id) => {
-        selectedNftId = id;
-        navigate("nft-detail");
-      },
       openToken: (tokenId) => {
         selectedTokenId = tokenId;
         navigate("token-detail");
@@ -376,7 +370,7 @@ export const startWalletUi = async (
                 expandedGroupId,
                 cache.priceStale,
                 cache.priceAsOf,
-                cache.discoveredNfts,
+                [],
                 openAssignId,
                 classHashVerification,
                 cache.historyUnavailable,
@@ -384,8 +378,6 @@ export const startWalletUi = async (
                 cache.multisigsError,
                 cache.multisigBalances,
                 cache.multisigBalanceId,
-                cache.multisigNfts,
-                cache.multisigNftId,
                 privacy.disclosure(),
                 privacy.journey(),
                 sendIntent,
@@ -472,6 +464,9 @@ export const startWalletUi = async (
     });
   };
   const navigate = (view: WalletView): void => {
+    if (isParkedCollectibleView(view)) {
+      return;
+    }
     if (view !== activeView) {
       viewHistory = pushView(viewHistory, activeView);
     }
@@ -485,7 +480,7 @@ export const startWalletUi = async (
     const popped = popView(viewHistory);
     viewHistory = popped.history;
     forcedDirection = "back";
-    activeView = popped.view;
+    activeView = isParkedCollectibleView(popped.view) ? "home" : popped.view;
     if (activeView !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();

@@ -11,6 +11,13 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+### Changed
+- Hide the Collectibles tab, the "Manage collectibles" menu entry, the multisig Collectibles tab,
+  and the NFT indexer setting while the NFT journey is finished. No view loads NFT data any more:
+  watched-metadata and indexer discovery both stop, so a saved `nftIndexerUrl` stays in
+  preferences unused and can no longer be set. The gallery code stays in the tree, unreachable
+  from the UI, and a conformance test fails if any screen renders a route back into it.
+
 ## [0.9.2] - 2026-08-14
 
 Official Argent account contracts, true M-of-N multisig, safer account recovery,
