@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./avnu-route": "./src/avnu-route.ts",
     "./fake-kms": "./src/fake-kms.ts",
     "./ledger-management": "./src/ledger-management.ts",
     "./sidepanel": "./src/sidepanel.ts"

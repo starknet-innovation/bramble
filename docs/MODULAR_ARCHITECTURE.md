@@ -198,6 +198,7 @@ flowchart TD
     walletUi[presentation/wallet-ui]
     extension[apps/extension]
     lab[apps/ui-lab]
+    terminal[apps/terminal]
 
     core --> model
     core --> protocol
@@ -233,12 +234,14 @@ flowchart TD
     ledgerBrowser --> extension
     walletUi --> lab
     protocol --> lab
+    model --> terminal
 ```
 
 Arrows mean “is a dependency of.” The graph must remain acyclic. Application packages are the only
 composition roots and may depend on concrete adapters. Foundation packages never depend on
-platform, feature, presentation, application, or testing packages. Terminal is deliberately absent:
-it is a standalone dapp that exercises the public provider surface without importing wallet internals.
+platform, feature, presentation, application, or testing packages. Terminal shares pure AVNU route
+decoding and network values from wallet-model. Its custody boundary remains the public provider;
+it cannot depend on platform, feature, presentation, or extension implementations.
 
 ## Package responsibilities
 
@@ -254,8 +257,8 @@ multiple consumers.
 ### `foundation/wallet-model`
 
 Public account, network, token, address-book, preference, passphrase-policy, Ledger-path, signing,
-and account-selection values plus their pure parsers and smart constructors. Persistent versioned
-vault envelopes and feature-owned activity, allowance, and NFT records do not belong here.
+account-selection, and AVNU route values plus their pure parsers and smart constructors. Persistent
+versioned vault envelopes and feature-owned activity, allowance, and NFT records do not belong here.
 
 Single-signer account selection and signing authority remain in the vault. Argent multisigs live in
 the dedicated public feature repository and never enter `AccountRef`, so an ordinary signing path
@@ -270,8 +273,9 @@ implementation.
 The dapp-reachable and approval-surface method sets are derived from its method registry.
 Extension-only background commands remain colocated with their exact input parsers and handlers in
 the application boundary; enforced catalogs keep their dispatch and secret-boundary coverage
-complete. Terminal remains an external consumer of the public provider API rather than a private
-workspace-package consumer.
+complete. Terminal remains an external consumer of the public provider API; its only internal
+runtime workspace dependency is the pure wallet-model package. Tests outside `src` may use testkit;
+the architecture gate continues to reject testkit imports from production source.
 
 ### `platform/store`
 

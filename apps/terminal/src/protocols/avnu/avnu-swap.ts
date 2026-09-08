@@ -11,10 +11,17 @@
  * target and entrypoint to that constant so the approve and invoke cannot diverge.
  * The route calldata comes from the v3 build API rather than being hand-encoded.
  */
+import { AVNU_MAX_CALLDATA_LENGTH, AVNU_MULTI_ROUTE_SWAP } from "@bramble/wallet-model/avnu-route";
+import {
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+  sameFelt,
+  STARKNET_NETWORKS,
+  UINT128_LIMIT,
+} from "@bramble/wallet-model/networks";
 import { type Call, CallData, cairo } from "starknet";
 import { WalletError } from "../support/errors";
 import { isRecord, isStringArray } from "../support/json";
-import { isNonZeroStarkFieldElement } from "../support/networks";
 import { AVNU_ADDRESSES } from "../constants";
 
 /**
@@ -87,6 +94,8 @@ export type AvnuQuoteRequest = {
  */
 export type AvnuQuoteResult = {
   readonly quoteId: string;
+  readonly sellToken: string;
+  readonly buyToken: string;
   readonly sellAmount: string;
   readonly buyAmount: string;
   readonly gasFeesInStrk: string | null;
@@ -110,15 +119,17 @@ export type AvnuBuildRequest = {
 // Coerces a decimal integer string into the `0x`-hex felt the quotes API expects.
 const toHexAmount = (decimal: string): string => `0x${BigInt(decimal).toString(16)}`;
 
-// Parses an amount felt (hex or decimal string) into a canonical non-negative
-// decimal integer string, or null when it is missing / malformed / negative.
-const parseAmount = (value: unknown): string | null => {
-  if (typeof value !== "string" || value.length === 0) {
+/**
+ * Parses bounded API or review amounts as uint256 decimal strings. Rejects
+ * malformed, negative, or over-wide input before bigint conversion.
+ */
+export const parseAmount = (value: unknown): string | null => {
+  if (typeof value !== "string" || !/^(?:0x[0-9a-fA-F]{1,64}|[0-9]{1,78})$/.test(value)) {
     return null;
   }
   try {
     const amount = BigInt(value);
-    return amount >= 0n ? amount.toString(10) : null;
+    return amount < UINT128_LIMIT * UINT128_LIMIT ? amount.toString(10) : null;
   } catch {
     return null;
   }
@@ -126,18 +137,14 @@ const parseAmount = (value: unknown): string | null => {
 
 /**
  * Converts a basis-points slippage tolerance into the decimal fraction the AVNU
- * build API expects (10 bps -> 0.001).
+ * build API expects (10 bps -> 0.001). Throws for invalid or unbounded slippage.
  */
-export const slippageToFraction = (slippageBps: number): number =>
-  slippageBps / Number(BPS_DENOMINATOR);
-
-/**
- * Applies a slippage floor to a positive amount: `amount × (1 - bps/10_000)`. Used
- * only to surface `minBuyAmount` on the quote — the on-chain floor is enforced by
- * the `buy_token_min_amount` the build API bakes into the calldata.
- */
-export const applySlippageFloor = (amount: bigint, slippageBps: number): bigint =>
-  (amount * (BPS_DENOMINATOR - BigInt(slippageBps))) / BPS_DENOMINATOR;
+export const slippageToFraction = (slippageBps: number): number => {
+  if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps >= Number(BPS_DENOMINATOR)) {
+    throw new WalletError("Invalid AVNU slippage");
+  }
+  return slippageBps / Number(BPS_DENOMINATOR);
+};
 
 /**
  * Builds the AVNU quotes GET URL for a pair, hex-encoding the sell amount and
@@ -192,7 +199,16 @@ export const parseQuoteResponse = (payload: unknown): AvnuQuoteResult => {
   }
   const sellAmount = parseAmount(quote.sellAmount);
   const buyAmount = parseAmount(quote.buyAmount);
-  if (sellAmount === null || buyAmount === null) {
+  if (
+    sellAmount === null ||
+    buyAmount === null ||
+    sellAmount === "0" ||
+    buyAmount === "0" ||
+    typeof quote.sellTokenAddress !== "string" ||
+    !isNonZeroStarkFieldElement(quote.sellTokenAddress) ||
+    typeof quote.buyTokenAddress !== "string" ||
+    !isNonZeroStarkFieldElement(quote.buyTokenAddress)
+  ) {
     throw new WalletError("Invalid AVNU quote response");
   }
   const gasFeesInUsd =
@@ -218,22 +234,29 @@ export const parseQuoteResponse = (payload: unknown): AvnuQuoteResult => {
     : [];
   return {
     buyAmount,
+    buyToken: quote.buyTokenAddress,
     gasFeesInStrk,
     gasFeesInUsd,
     priceImpactBps,
     quoteId: quote.quoteId,
     routeLabels,
     sellAmount,
+    sellToken: quote.sellTokenAddress,
   };
 };
 
 /**
- * Parses an AVNU build response into a validated exchange call. Rejects a target
- * that does not match the audited exchange constant so the approve spender and the
- * invoke target can never diverge.
+ * Parses a mainnet AVNU build into a copied, bounded exchange call. Rejects
+ * unknown chains, targets, selectors, and invalid felts. Callers must also bind
+ * the decoded trade to reviewed intent before displaying or submitting it.
  */
 export const parseBuildResponse = (payload: unknown): AvnuExchangeCall => {
-  if (!isRecord(payload) || !Array.isArray(payload.calls) || payload.calls.length !== 1) {
+  if (
+    !isRecord(payload) ||
+    !sameFelt(payload.chainId, STARKNET_NETWORKS.SN_MAIN.chainId) ||
+    !Array.isArray(payload.calls) ||
+    payload.calls.length !== 1
+  ) {
     throw new WalletError("Invalid AVNU build response");
   }
   const call = payload.calls[0];
@@ -244,16 +267,20 @@ export const parseBuildResponse = (payload: unknown): AvnuExchangeCall => {
   if (typeof contractAddress !== "string" || !isNonZeroStarkFieldElement(contractAddress)) {
     throw new WalletError("Invalid AVNU build response");
   }
-  if (entrypoint !== "multi_route_swap") {
+  if (entrypoint !== AVNU_MULTI_ROUTE_SWAP) {
     throw new WalletError("Invalid AVNU build response");
   }
-  if (!isStringArray(calldata)) {
+  if (
+    !isStringArray(calldata) ||
+    calldata.length > AVNU_MAX_CALLDATA_LENGTH ||
+    !calldata.every(isStarkFieldElement)
+  ) {
     throw new WalletError("Invalid AVNU build response");
   }
-  if (BigInt(contractAddress) !== BigInt(AVNU_ADDRESSES.exchange)) {
+  if (!sameFelt(contractAddress, AVNU_ADDRESSES.exchange)) {
     throw new WalletError("AVNU build returned an unexpected exchange address");
   }
-  return { calldata, contractAddress, entrypoint };
+  return { calldata: [...calldata], contractAddress, entrypoint };
 };
 
 /**
