@@ -261,7 +261,6 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
     app: container,
     drawerGroupFilter: () => state.filter,
     drawerOpen: () => true,
-    homeTab: () => "tokens",
     networkId: () => "SN_MAIN",
     render: async () => {
       render();
@@ -270,7 +269,6 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
       state.filter = filter;
     },
     setDrawerOpen: () => undefined,
-    setHomeTab: () => undefined,
     startAddAccount: () => {
       calls.startAddAccount += 1;
     },

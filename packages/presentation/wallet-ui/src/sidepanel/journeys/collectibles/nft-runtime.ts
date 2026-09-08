@@ -112,17 +112,6 @@ export const createNftRuntimeClient = (sendMessage: (message: unknown) => Promis
       }
       inFlightLoads.clear();
     },
-    async setNftIndexerUrl(url: string): Promise<void> {
-      const response = await sendMessage({ type: "wallet.setNftIndexerUrl", url });
-      if (!isPreferencesResponse(response)) {
-        throw failure(response, "indexer endpoint update failed");
-      }
-      inFlightLoads.clear();
-    },
-    /**
-     * Sends the reviewed NFT under its exact invoke and optional deployment
-     * fee ceilings. A missing required ceiling is refused before signing.
-     */
     async transferNft(
       contract: string,
       tokenId: string,

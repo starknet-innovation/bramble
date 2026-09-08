@@ -482,7 +482,6 @@ export const MULTISIG_STYLES = `
   [data-ms-exact-identity] .receipt-row { align-items: flex-start; }
   [data-ms-exact-identity] .receipt-row dd { max-width: 70%; }
   [data-ms-exact-identity] .receipt-row dd code { overflow-wrap: anywhere; text-align: left; word-break: break-word; }
-  .shared-collectible-card { cursor: default; }
   .drawer-multisig .account-groups-line {
     color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};

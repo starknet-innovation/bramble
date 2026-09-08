@@ -125,7 +125,7 @@ export const visibleNftItems = (
  * Renders a resolved NFT image only after the caller has established that the
  * user solicited it. Remote-load failure is handled by the shared NFT binding.
  * `eager` is reserved for the first visible gallery items and the detail hero
- * so those requests begin before a hidden Collectibles panel is opened.
+ * so those requests begin as the gallery paints rather than after it settles.
  */
 export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
   reveal && item.image
@@ -135,17 +135,14 @@ export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean, eager = fa
 const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
   `<span class="nft-art">${nftImageMarkup(item, reveal, eager)}${icon("image")}</span>`;
 
-/**
- * The tile play affordance for a collectible with an on-chain animation: a button
- * that overlays the art square (revealed on hover/focus) plus the hidden
- * sandboxed iframe it drives. Shared by the NFTs gallery card and the home
- * Collectibles tile so both surface one identical, audited control; nft-ui's
- * `bindAnimation` wires the click. It sits outside the tile's open button (no
- * nested buttons) and is emitted only for watched, solicited tokens carrying an
- * `animationUrl`, so it never runs on gallery paint. The host `<li>` must be
- * positioned (`.nft-card`/`.collectible-tile`) for the overlay to cover the art.
- */
-export const nftTilePlay = (item: NftGalleryItem): string =>
+// The tile play affordance for a collectible with an on-chain animation: a
+// button that overlays the art square (revealed on hover/focus) plus the hidden
+// sandboxed iframe it drives. Used by the gallery card; nft-ui's `bindAnimation`
+// wires the click. It sits outside the tile's open button (no nested buttons)
+// and is emitted only for watched, solicited tokens carrying an `animationUrl`,
+// so it never runs on gallery paint. The host `<li>` must be positioned
+// (`.nft-card`) for the overlay to cover the art.
+const nftTilePlay = (item: NftGalleryItem): string =>
   item.animationUrl
     ? `<button class="nft-play-tile" data-nft-play="${escapeHtml(item.animationUrl)}" type="button" aria-label="Play animation">${icon("gamepad")}<span>Play animation</span></button>
       <iframe class="nft-animation nft-animation--tile" title="Collectible animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>`
@@ -273,7 +270,7 @@ export const nftGalleryFlow = (
         ${
           visible.length === 0
             ? emptyState(
-                "No collectibles found for this account yet. Watch one you own, or configure an NFT indexer in Advanced endpoints.",
+                "No collectibles found for this account yet. Watch one you own to see it here.",
               )
             : `<ul class="nft-grid">${visible.map((nft, index) => nftGalleryCard(nft, index < 4)).join("")}</ul>`
         }

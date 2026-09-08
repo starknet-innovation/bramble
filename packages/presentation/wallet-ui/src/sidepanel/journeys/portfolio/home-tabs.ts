@@ -1,8 +1,10 @@
 /**
- * Tabbed portfolio section on the home screen: Tokens and Collectibles share
- * one immediate local switcher. Activity remains a top-level dock destination
- * rather than appearing twice. A single overflow menu progressively discloses
- * asset management, refresh, and settings actions.
+ * Portfolio section on the home screen. Only Tokens is shown today: the
+ * Collectibles tab is parked until the NFT journey is ready, so the section
+ * renders a heading rather than a tablist and no tab runtime exists. Activity
+ * remains a top-level dock destination rather than appearing twice. A single
+ * overflow menu progressively discloses asset management, refresh, and
+ * settings actions.
  */
 
 import { escapeHtml } from "@bramble/core/html";
@@ -18,39 +20,12 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
-import type { DiscoveredNft, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
+import type { TokenBalance } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { type IconName, icon } from "../../shared/icons";
-import {
-  type NftGalleryItem,
-  nftImageMarkup,
-  nftTilePlay,
-  visibleNftItems,
-} from "../collectibles/nft-views";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
 import { type PrivateBreakdown, unifiedBalanceRow } from "./token-row";
-
-/**
- * Tab ids of the home portfolio section, in display order.
- */
-const HOME_TABS = ["tokens", "collectibles"] as const;
-
-/**
- * One of the home portfolio tabs.
- */
-export type HomeTab = (typeof HOME_TABS)[number];
-
-const TAB_LABELS: Readonly<Record<HomeTab, string>> = {
-  collectibles: "Collectibles",
-  tokens: "Tokens",
-};
-
-/**
- * Checks untrusted dataset values before switching home tabs.
- */
-export const isHomeTab = (value: unknown): value is HomeTab =>
-  typeof value === "string" && HOME_TABS.some((tab) => tab === value);
 
 /**
  * Balances shown on the home Tokens tab: tracked balances minus user-hidden
@@ -291,49 +266,6 @@ const tokensPanel = (
 };
 
 /**
- * Renders one compact collectible card for the home portfolio tab.
- */
-export const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => `
-  <li class="collectible-tile">
-    <button class="collectible-card" data-nft-open="${escapeHtml(nft.id)}" type="button">
-      <span class="collectible-art">${nftImageMarkup(nft, true, eager)}${icon("image")}</span>
-      <span class="collectible-copy">
-        <strong>${escapeHtml(nft.title)}</strong>
-        <code>#${escapeHtml(nft.tokenId)}</code>
-      </span>
-    </button>
-    ${nftTilePlay(nft)}
-  </li>`;
-
-const collectiblesPanel = (
-  status: WalletStatus,
-  preferences: WalletPreferences | null,
-  discoveredNfts: readonly DiscoveredNft[],
-): string => {
-  const owner = status.accounts.find((account) => account.id === status.activeAccountId)?.address;
-  const nfts = visibleNftItems(
-    preferences?.nfts ?? [],
-    discoveredNfts,
-    status.networkId,
-    owner ?? null,
-  ).filter((nft) => nft.watched);
-  return `${
-    nfts.length === 0
-      ? emptyState("No collectibles watched on this network yet. Add one you own from the gallery.")
-      : `<ul class="collectible-grid">${nfts.map((nft, index) => collectibleCard(nft, index < 4)).join("")}</ul>`
-  }
-    ${button({
-      attributes: { "data-view": "nfts" },
-      className: "tab-more",
-      icon: "chevronRight",
-      iconPosition: "after",
-      label: "Open gallery",
-      size: "small",
-      variant: "ghost",
-    })}`;
-};
-
-/**
  * Empty-state copy for the account-partitioned Activity dock.
  */
 export const activityEmptyCopy = (historyUnavailable: boolean): string =>
@@ -341,15 +273,10 @@ export const activityEmptyCopy = (historyUnavailable: boolean): string =>
     ? "No transactions recorded on this device yet."
     : "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.";
 
-const tabButton = (tab: HomeTab): string =>
-  `<button class="home-tab" id="home-tab-${tab}" data-home-tab="${tab}" type="button" role="tab" aria-selected="${tab === "tokens"}" aria-controls="home-panel-${tab}">${TAB_LABELS[tab]}</button>`;
-
-const tabPanel = (tab: HomeTab, body: string): string =>
-  `<div class="tab-panel" id="home-panel-${tab}" data-tab-panel="${tab}" role="tabpanel" aria-labelledby="home-tab-${tab}"${tab === "tokens" ? "" : " hidden"}>${body}</div>`;
-
 /**
- * Renders the tabbed portfolio section. The Tokens tab opens by default; the
- * runtime re-applies the remembered tab after every re-render.
+ * Renders the portfolio section. With only Tokens visible there is no tab
+ * switching: the section title is a plain heading rather than a one-item
+ * tablist, and the token list needs no panel wrapper.
  */
 export const homeTabs = (
   state: BalanceState,
@@ -357,18 +284,16 @@ export const homeTabs = (
   prices: Readonly<Record<string, number>>,
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
-  status: WalletStatus,
-  discoveredNfts: readonly DiscoveredNft[] = [],
   privacy: PrivacyDisclosureState = {
     error: null,
     loading: false,
     value: null,
   },
 ): string => `
-  <section class="home-tabs" data-active-tab="tokens" aria-label="Portfolio">
+  <section class="home-tabs" aria-label="Portfolio">
     <div class="tab-bar">
-      <div class="tab-set" role="tablist" aria-label="Portfolio sections">
-        ${HOME_TABS.map(tabButton).join("")}
+      <div class="tab-set">
+        <h2>Tokens</h2>
       </div>
       <div class="portfolio-actions">
         ${iconButton({
@@ -389,13 +314,6 @@ export const homeTabs = (
             className: "portfolio-menu-item",
             icon: "coins",
             label: "Manage tokens",
-            variant: "ghost",
-          })}
-          ${button({
-            attributes: { "data-view": "nfts", role: "menuitem", tabindex: "-1" },
-            className: "portfolio-menu-item",
-            icon: "image",
-            label: "Manage collectibles",
             variant: "ghost",
           })}
           ${button({
@@ -420,6 +338,5 @@ export const homeTabs = (
         </div>
       </div>
     </div>
-    ${tabPanel("tokens", tokensPanel(state, preferences, prices, changes, currency, privacy))}
-    ${tabPanel("collectibles", collectiblesPanel(status, preferences, discoveredNfts))}
+    ${tokensPanel(state, preferences, prices, changes, currency, privacy)}
   </section>`;

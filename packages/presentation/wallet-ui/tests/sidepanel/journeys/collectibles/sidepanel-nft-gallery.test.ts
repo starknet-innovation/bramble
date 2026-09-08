@@ -91,9 +91,12 @@ describe("NFT gallery auto-discovery", () => {
     expect(html).toContain('loading="eager"');
   });
 
-  test("shows the indexer-aware empty state when nothing is discovered or watched", () => {
+  test("shows the watch-first empty state when nothing is discovered or watched", () => {
     const html = nftGalleryFlow(status, account, preferences, []);
-    expect(html).toContain("NFT indexer");
+    // The indexer setting is withheld while the journey is parked, so the empty
+    // state points at the only route a user has: watching a token they own.
+    expect(html).toContain("Watch one you own");
+    expect(html).not.toContain("NFT indexer");
     expect(html).toContain('data-view="nft-watch"');
     expect(html).toContain("0 shown");
   });

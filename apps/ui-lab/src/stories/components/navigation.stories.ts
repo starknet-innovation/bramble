@@ -1,7 +1,7 @@
 import { dockNavigation, menuLink, menuRow, optionRow } from "@bramble/ui-kit/navigation";
 import { flowHeader, homeTabs } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
-import { discoveredNft, statusFor } from "../../fixtures/fixtures";
+import { statusFor } from "../../fixtures/fixtures";
 import {
   journeyBalances,
   journeyChanges,
@@ -77,8 +77,6 @@ export const TabsAndDock: CatalogStory = {
             journeyPrices,
             journeyChanges,
             "usd",
-            statusFor(),
-            [discoveredNft],
           ),
         ),
       )}
