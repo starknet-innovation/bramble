@@ -18,8 +18,8 @@ describe("full-page onboarding completion", () => {
     document.body.innerHTML = `<main id="app">${onboardingComplete()}</main>`;
   });
 
-  afterEach(() => {
-    GlobalRegistrator.unregister();
+  afterEach(async () => {
+    await GlobalRegistrator.unregister();
   });
 
   test("opens the current window side panel from the completion action", async () => {
