@@ -61,6 +61,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "nftIndexerUrl",
   "nfts",
   "nostrRelayUrl",
+  "productAnalytics",
   "rpcOverrides",
   "reliabilityDiagnostics",
   "schemaVersion",
@@ -76,7 +77,7 @@ const hasValidCustomNetworks = (value: Record<string, unknown>): boolean =>
   (Array.isArray(value["customNetworks"]) &&
     value["customNetworks"].every(isCustomNetwork) &&
     hasUniqueStrings(value["customNetworks"].map((network) => normalizeChainId(network.chainId))));
-const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
+const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
   (value["approvalSurface"] === undefined ||
     isApprovalSurfacePreference(value["approvalSurface"])) &&
@@ -86,10 +87,14 @@ const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
   (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
-  (value["reliabilityDiagnostics"] === undefined ||
-    typeof value["reliabilityDiagnostics"] === "boolean") &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
+const hasValidTelemetryEntries = (value: Record<string, unknown>): boolean =>
+  (value["productAnalytics"] === undefined || typeof value["productAnalytics"] === "boolean") &&
+  (value["reliabilityDiagnostics"] === undefined ||
+    typeof value["reliabilityDiagnostics"] === "boolean");
+const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
+  hasValidGeneralOptionalEntries(value) && hasValidTelemetryEntries(value);
 const hasValidUrlAndNftFields = (value: Record<string, unknown>): boolean =>
   (value["strk20ProverUrl"] === undefined ||
     (typeof value["strk20ProverUrl"] === "string" && isCustomRpcUrl(value["strk20ProverUrl"]))) &&

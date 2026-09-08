@@ -406,6 +406,7 @@ describe("token and preference wrappers", () => {
       wallet.setDisplay({
         approvalSurface: "popup",
         displayCurrency: "eur",
+        productAnalytics: true,
         reliabilityDiagnostics: true,
         theme: "dark",
       }),
@@ -413,6 +414,7 @@ describe("token and preference wrappers", () => {
     expect(sent[0]).toEqual({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      productAnalytics: true,
       reliabilityDiagnostics: true,
       theme: "dark",
       type: "wallet.setDisplay",

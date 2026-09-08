@@ -15,6 +15,7 @@ describe("readSetDisplayInput", () => {
       readSetDisplayInput({
         approvalSurface: "popup",
         displayCurrency: "eur",
+        productAnalytics: true,
         reliabilityDiagnostics: true,
         theme: "dark",
         type: "wallet.setDisplay",
@@ -22,6 +23,7 @@ describe("readSetDisplayInput", () => {
     ).toEqual({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      productAnalytics: true,
       reliabilityDiagnostics: true,
       theme: "dark",
     });
@@ -44,6 +46,7 @@ describe("readSetDisplayInput", () => {
     expect(
       readSetDisplayInput({ reliabilityDiagnostics: "yes", type: "wallet.setDisplay" }),
     ).toBeNull();
+    expect(readSetDisplayInput({ productAnalytics: "yes", type: "wallet.setDisplay" })).toBeNull();
   });
 });
 
