@@ -110,4 +110,26 @@ describe("status session authorization", () => {
     };
     expect((await statusResponse(wallet, createUnlockSession(), preferences)).locked).toBe(false);
   });
+
+  test("an unavailable wallet remains locked", async () => {
+    const wallet = {
+      ...createWallet(),
+      async status() {
+        return {
+          accountCount: 0,
+          activeAccountId: null,
+          hasVault: false,
+          locked: true,
+          ready: false,
+        };
+      },
+    };
+    await expect(statusResponse(wallet, createUnlockSession(), preferences)).resolves.toMatchObject(
+      {
+        accounts: [],
+        locked: true,
+        ready: false,
+      },
+    );
+  });
 });

@@ -421,7 +421,10 @@ export const statusResponse = async (
     accountCount: 0,
     activeAccountId: null,
     accounts: [],
-    locked: status.hasVault,
+    // A wallet reader can be unavailable before it knows whether a vault
+    // exists. Preserve its fail-closed status instead of treating no vault as
+    // an unlocked first-run wallet.
+    locked: status.locked,
     network: network.name,
     networkId: network.id,
     networks: networkOptions(),
