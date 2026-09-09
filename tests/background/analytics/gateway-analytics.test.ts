@@ -255,3 +255,44 @@ describe("gateway analytics build metadata", () => {
     expect(analyticsReleaseChannel("feature/analytics")).toBe("development");
   });
 });
+
+test("analytics randomness failure does not block privacy operations or later flows", async () => {
+  const analytics = createGatewayAnalytics({
+    enabled: () => true,
+    http: captureHttp().http,
+    metadata,
+    randomUuid: () => {
+      throw new Error("randomness unavailable");
+    },
+    store: createMemoryStore(),
+  });
+  await expect(analytics.withFlow(async () => "first")).resolves.toBe("first");
+  await expect(analytics.withFlow(async () => "second")).resolves.toBe("second");
+});
+
+test("an opt-out during installation storage lookup omits analytics", async () => {
+  const capture = captureHttp();
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let enabled = true;
+  const analytics = createGatewayAnalytics({
+    enabled: () => enabled,
+    http: capture.http,
+    metadata,
+    randomUuid: () => INSTALLATION_ID,
+    store: {
+      ...createMemoryStore(),
+      async get() {
+        entered.resolve();
+        await release.promise;
+        return INSTALLATION_ID;
+      },
+    },
+  });
+  const pending = analytics.fetch(`${ANALYTICS_GATEWAY_ORIGIN}/rpc/mainnet/v0_10`);
+  await entered.promise;
+  enabled = false;
+  release.resolve();
+  await pending;
+  expect(headersAt(capture.calls, 0).has("x-mc-installation-id")).toBe(false);
+});
