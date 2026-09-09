@@ -98,6 +98,7 @@ export const executeSignApproval = async (
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, session, wallet } = deps;
   const passphrase = session.peekPassphrase();
+  const authorized = captureSessionAuthorization(session);
   if (!passphrase) {
     return { error: "wallet locked" };
   }
@@ -106,6 +107,7 @@ export const executeSignApproval = async (
     return { error: "approval context changed" };
   }
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   const account = input.context
     ? granted.find(
         (stored) =>
