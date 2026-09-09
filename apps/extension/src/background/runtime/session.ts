@@ -401,6 +401,9 @@ export const createUnlockSession = ({
     return current;
   };
 
+  const canRestore = (generation: number): boolean =>
+    generation === generationCounter && passphrase === null && !mirrorStale;
+
   return {
     generation() {
       return generationCounter;
@@ -417,18 +420,19 @@ export const createUnlockSession = ({
       clear();
     },
     async restore() {
-      if (!store || passphrase !== null || mirrorStale) {
+      const generation = generationCounter;
+      if (!store || !canRestore(generation)) {
         return;
       }
       // Read behind any pending mirror write. A restore that raced the erase a
       // lock had just issued would otherwise reload the very secret the user
       // revoked, because the entry is still there until that erase lands.
       await mirrorWrites;
-      if (passphrase !== null || mirrorStale) {
-        return;
-      }
       const stored = await store.load().catch(() => null);
+      // A delayed storage snapshot cannot undo a lock or a newer unlock.
+      if (!canRestore(generation)) return;
       if (isSessionState(stored) && stored.expiresAt > now()) {
+        generationCounter += 1;
         passphrase = stored.passphrase;
         expiresAt = Math.min(stored.expiresAt, now() + ttlMs);
         persistedAt = stored.expiresAt;
