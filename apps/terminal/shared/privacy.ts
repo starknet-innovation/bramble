@@ -10,3 +10,11 @@ export const PRIVATE_SWAP_FEE_TOKEN =
 
 /** Maximum requested private-swap slippage, shared by build and review. */
 export const PRIVATE_SWAP_SLIPPAGE_BPS = 50;
+
+/**
+ * Independently reviewed private executor deployment. Never learn this anchor
+ * from a quote/build response: it receives withdrawn tokens. No deployment
+ * provenance was available during the v0.10.1 audit, so private swaps fail closed
+ * until a reviewed address and source/upgrade policy are committed here.
+ */
+export const PRIVATE_SWAP_EXECUTOR: string | null = null;

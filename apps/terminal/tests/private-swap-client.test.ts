@@ -3,7 +3,16 @@ import { transaction } from "starknet";
 import { AVNU_ADDRESSES } from "../src/protocols/constants";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PRIVATE_SWAP_FEE_TOKEN } from "../shared/privacy";
-import { fetchPrivateSwapPlan, submitPrivateSwapProof } from "../src/protocols/avnu/private-swap-client";
+import {
+  fetchPrivateSwapPlan,
+  submitPrivateSwapProof,
+} from "../src/protocols/avnu/private-swap-client";
+
+// Exercise the future enabled path with an explicit test-only reviewed anchor.
+vi.mock("../shared/privacy", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/privacy")>()),
+  PRIVATE_SWAP_EXECUTOR: "0x3",
+}));
 
 const executorCalldata = (overrides: Partial<AvnuRouteFixture> = {}) => [
   "0x5",
@@ -89,6 +98,9 @@ describe("private swap server boundary", () => {
         { status: 200 },
       ),
     );
+    fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ ...route, executor: "0x9" }), { status: 200 }),
+    );
     const input = {
       buyToken: "0x5",
       sellAmount: "0x2",
@@ -107,6 +119,7 @@ describe("private swap server boundary", () => {
     });
     await expect(fetchPrivateSwapPlan(input)).rejects.toThrow("substituted route");
     await expect(fetchPrivateSwapPlan(input)).rejects.toThrow();
+    await expect(fetchPrivateSwapPlan(input)).rejects.toThrow("invalid route");
     expect(fetch).toHaveBeenCalledWith(
       "/api/private-swap/plan",
       expect.objectContaining({ method: "POST" }),

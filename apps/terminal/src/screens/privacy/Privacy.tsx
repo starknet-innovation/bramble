@@ -1,4 +1,4 @@
-import { PRIVATE_SWAP_SLIPPAGE_BPS } from "../../../shared/privacy";
+import { PRIVATE_SWAP_EXECUTOR, PRIVATE_SWAP_SLIPPAGE_BPS } from "../../../shared/privacy";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -373,11 +373,15 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
                 {mode === "swap" ? (
                   <button
                     className="privacy-primary"
-                    disabled={busy || amount.length === 0}
+                    disabled={busy || amount.length === 0 || PRIVATE_SWAP_EXECUTOR === null}
                     onClick={() => void quotePrivateSwap()}
                     type="button"
                   >
-                    {busy ? "Finding route…" : "Review private route"}
+                    {PRIVATE_SWAP_EXECUTOR === null
+                      ? "Private swaps unavailable pending security verification"
+                      : busy
+                        ? "Finding route…"
+                        : "Review private route"}
                   </button>
                 ) : (
                   <button

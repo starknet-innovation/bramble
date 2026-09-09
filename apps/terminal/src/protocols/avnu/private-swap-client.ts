@@ -1,6 +1,6 @@
 import type { PrivateCallAndProof } from "../../wallet/privacy/privacy-wallet";
 import { validatedPrivateActions } from "../../wallet/privacy/privacy-wallet";
-import { PRIVATE_SWAP_FEE_TOKEN } from "../../../shared/privacy";
+import { PRIVATE_SWAP_EXECUTOR, PRIVATE_SWAP_FEE_TOKEN } from "../../../shared/privacy";
 import { sameAddress } from "../support/networks";
 import type { Strk20Action } from "../support/strk20-schemas";
 
@@ -101,6 +101,9 @@ export const fetchPrivateSwapPlan = async (input: {
   readonly sellToken: string;
   readonly takerAddress: string;
 }): Promise<PrivateSwapPlan> => {
+  if (PRIVATE_SWAP_EXECUTOR === null) {
+    throw new Error("Private swaps are unavailable while executor verification is pending.");
+  }
   const value = await post("plan", {
     ...input,
     feeMode: { poolFeeToken: PRIVATE_SWAP_FEE_TOKEN, tip: "normal" },
@@ -111,6 +114,7 @@ export const fetchPrivateSwapPlan = async (input: {
     !Array.isArray(value["actions"]) ||
     !isNonZeroFelt(value["buyAmount"]) ||
     !isNonZeroFelt(value["executor"]) ||
+    !sameAddress(value["executor"], PRIVATE_SWAP_EXECUTOR) ||
     !isRecord(value["fee"]) ||
     !hasOnlyKeys(value["fee"], ["amount", "recipient", "token"]) ||
     !isNonZeroFelt(value["fee"]["amount"]) ||
