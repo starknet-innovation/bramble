@@ -233,7 +233,9 @@ const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) =
   // Peek, never renew: a permission query is a passive read a page can issue on
   // a timer, so it must not extend the unlock lifetime.
   const passphrase = deps.session.peekPassphrase();
+  const authorized = captureSessionAuthorization(deps.session);
   const granted = passphrase ? await deps.wallet.getGrantedAccounts(input.origin, passphrase) : [];
+  if (passphrase && !authorized.isCurrent()) return { error: "wallet locked" };
   return { ok: true, permissions: granted.length > 0 ? ["accounts"] : [] };
 };
 
