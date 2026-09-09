@@ -26,7 +26,7 @@ import {
   serviceUrl,
 } from "../_lib/security.js";
 
-import { PRIVATE_SWAP_SLIPPAGE_BPS } from "../../shared/privacy.js";
+import { PRIVATE_SWAP_EXECUTOR, PRIVATE_SWAP_SLIPPAGE_BPS } from "../../shared/privacy.js";
 
 export const config = { maxDuration: 120 };
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -186,6 +186,9 @@ export default async function handler(
   if (action !== "fee" && action !== "plan" && action !== "submit") {
     return reject(response, 404, "route_not_allowed");
   }
+  if (action === "plan" && PRIVATE_SWAP_EXECUTOR === null) {
+    return reject(response, 503, "private_swap_executor_not_verified");
+  }
   const body = readJsonBody<Record<string, unknown>>(request, MAX_BODY_BYTES);
   const feeMode = body ? feeModeFrom(body["feeMode"]) : null;
   const avnuOptions = options();
@@ -269,6 +272,8 @@ export default async function handler(
         !/^[\x21-\x7e]{1,128}$/.test(quote.quoteId) ||
         !built.executorAddress ||
         !isNonZeroFelt(built.executorAddress) ||
+        PRIVATE_SWAP_EXECUTOR === null ||
+        !sameFelt(built.executorAddress, PRIVATE_SWAP_EXECUTOR) ||
         !executorCalls ||
         !isMainnetChain(built.chainId)
       ) {
