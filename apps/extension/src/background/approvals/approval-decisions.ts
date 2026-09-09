@@ -43,6 +43,7 @@ import { executeDeclareApproval } from "../transactions/declare-ops";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { approvalPayloadMatchesContext } from "./approval-context";
 import { pendingFeeRefusal } from "./approval-fee-refusal";
+import { approvalSession } from "./approval-session";
 import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
 import type { SignatureWaiters } from "./signature-waiters";
 
@@ -389,15 +390,6 @@ const settleClaimError = (
   return response;
 };
 
-// Some non-secret approvals may start locked. They still cannot survive a
-// lock/unlock transition after being claimed and removed from the queue.
-const claimSessionGuard = (session: UnlockSession): (() => boolean) => {
-  const authorized = captureSessionAuthorization(session);
-  const initiallyUnlocked = authorized.isCurrent();
-  return () =>
-    initiallyUnlocked ? authorized.isCurrent() : session.generation() === authorized.generation;
-};
-
 const applyApproveDecision = async (
   deps: ApprovalDecisionDeps,
   message: unknown,
@@ -413,7 +405,7 @@ const applyApproveDecision = async (
   }
   // Claim synchronously before any awaited work. A concurrent approve/deny for
   // the same id now sees not-found and can never execute the payload twice.
-  const sessionIsCurrent = claimSessionGuard(deps.session);
+  const heldSession = approvalSession(deps.session);
   const claim = deps.approvals.claim(input.id);
   if (!claim) {
     return NOT_FOUND;
@@ -428,14 +420,18 @@ const applyApproveDecision = async (
   } catch {
     return settleClaimError(deps, input.id, { error: "approval execution failed" });
   }
-  if (!sessionIsCurrent() || contextError) {
+  if (!heldSession.isCurrent() || contextError) {
     return settleClaimError(deps, input.id, contextError ?? { error: "wallet locked" });
   }
   let result: ApplyResult;
   try {
-    result = await APPROVE_APPLIERS[claim.approval.kind](deps, claim, {
-      ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
-    });
+    result = await APPROVE_APPLIERS[claim.approval.kind](
+      { ...deps, session: heldSession.session },
+      claim,
+      {
+        ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
+      },
+    );
   } catch {
     return settleClaimError(deps, input.id, { error: "approval execution failed" });
   }

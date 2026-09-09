@@ -204,6 +204,42 @@ describe("approval execution security", () => {
     });
   }
 
+  test("a connect decision waiting for the coordinator cannot adopt a replacement unlock", async () => {
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const { approvals, deps } = makeDeps();
+    let grants = 0;
+    const guardedDeps = {
+      ...deps,
+      activeStateCoordinator: {
+        async run<T>(operation: () => Promise<T>): Promise<T> {
+          entered.resolve();
+          await release.promise;
+          return operation();
+        },
+      },
+      wallet: {
+        ...deps.wallet,
+        async grantOrigin() {
+          grants += 1;
+          return [account];
+        },
+      },
+    };
+    const { id } = approvals.request(ORIGIN);
+    const pending = handleApprovalDecision(
+      guardedDeps,
+      "wallet.approveOrigin",
+      decision(id, "wallet.approveOrigin"),
+    );
+    await entered.promise;
+    deps.session.lock();
+    deps.session.unlock(PASSPHRASE);
+    release.resolve();
+    await expect(pending).resolves.toEqual({ error: "wallet locked" });
+    expect(grants).toBe(0);
+  });
+
   test("a newly blocked origin is refused at execution time", async () => {
     let writes = 0;
     const { approvals, deps, settled } = makeDeps({
