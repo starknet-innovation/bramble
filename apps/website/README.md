@@ -16,7 +16,7 @@ an item identifier.
 
 The site is served from the Cloudflare Worker `bramble`, configured by `wrangler.jsonc` in this
 directory (assets-only, no server-side code, `workers.dev` and preview URLs disabled).
-`.github/workflows/website-deploy.yml` deploys it on every push to the active release branch that
+`.github/workflows/website-deploy.yml` deploys it on every push to the `main` branch that
 touches `apps/website/`, and on manual dispatch. Pull requests never deploy; they are checked by
 `check:workspaces` in the main CI workflow.
 
@@ -34,7 +34,7 @@ Three things the deploy depends on are Cloudflare or GitHub settings, so no diff
 changing. They are listed so a failure points somewhere rather than nowhere.
 
 - **`bramble-production` environment** (GitHub) — holds `CLOUDFLARE_API_TOKEN` and a
-  deployment-branch policy naming the active release branch. A job from any other ref is refused
+  deployment-branch policy naming the `main` branch. A job from any other ref is refused
   before it starts, which is the control that actually stops an unreviewed revision reaching the
   credential; the ref guard in the workflow is only an early, clearer failure.
 - **Apex has no A or CNAME record.** Attaching the custom domain creates that record itself, and a
@@ -104,3 +104,7 @@ bun run --filter @bramble/website deploy
 
 Keep `name` in `wrangler.jsonc` as `bramble`: a different name deploys a new Worker and leaves the
 live site unchanged.
+
+The website deploys independently of wallet releases. The production environment must allow
+only the `main` branch; replace the old release-branch policy when adopting this workflow.
+Manual deployment: `gh workflow run website-deploy.yml --ref main`.

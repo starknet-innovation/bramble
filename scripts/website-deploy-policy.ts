@@ -166,7 +166,7 @@ export const websiteDeployFailures = (name: string, source: string): readonly st
   // statements of "which branch is production" cannot drift.
   const branch = source.match(/\n {4}branches: \["([^"]+)"\]/)?.[1];
   if (branch === undefined) {
-    failures.push(`${path} must trigger on exactly one literal release branch`);
+    failures.push(`${path} must trigger on exactly one literal production branch`);
   } else {
     requireText(
       failures,

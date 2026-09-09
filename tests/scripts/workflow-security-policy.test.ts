@@ -290,7 +290,7 @@ describe("workflow security policy", () => {
       search: 'branches: ["',
       replacement: 'branches: ["main", "',
       failure:
-        ".github/workflows/website-deploy.yml must trigger on exactly one literal release branch",
+        ".github/workflows/website-deploy.yml must trigger on exactly one literal production branch",
     },
     {
       name: "rejects a website deploy that drops the production environment",
@@ -312,7 +312,7 @@ describe("workflow security policy", () => {
 
   // The website deploy states its production branch once, in its `push` filter,
   // and the policy derives the dispatch guard from it. These two read the branch
-  // out of the workflow rather than naming it, so promoting a release branch
+  // out of the workflow rather than naming it, so changing the production branch
   // does not require editing this suite — only the workflow.
   const activeBranch = async (): Promise<string> => {
     const source = (await readWorkflowSources())["website-deploy.yml"] ?? "";
