@@ -19,7 +19,7 @@ import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { PassiveUnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 
 /**
  * Re-exported from the single-source versions module so callers importing them
@@ -107,12 +107,14 @@ const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, mes
   if (!apiVersionSupported(input.apiVersion)) {
     return { error: "unsupported api version" };
   }
+  const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     return { error: "origin not connected" };
@@ -122,6 +124,7 @@ const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, mes
     accountAddress: account.address,
     rpcUrls: networkRpcUrls(network, preferences),
   });
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   if (deployed) {
     return { error: "account already deployed" };
   }

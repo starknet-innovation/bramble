@@ -166,6 +166,44 @@ describe("approval execution security", () => {
     expect(writes).toBe(1);
   });
 
+  for (const replacement of [false, true]) {
+    test(`a claimed approval cannot cross session revocation (replacement: ${replacement})`, async () => {
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      let writes = 0;
+      const history = memoryOriginHistory();
+      const { approvals, deps, settled } = makeDeps({
+        originHistory: {
+          ...history,
+          async record(origin) {
+            entered.resolve();
+            await release.promise;
+            return history.record(origin);
+          },
+        },
+        onUpsert: async () => {
+          writes += 1;
+        },
+      });
+      const { id } = approvals.requestWatchAsset({
+        origin: ORIGIN,
+        token: { address: "0x1", decimals: 18, name: "Token", networkId: "SN_MAIN", symbol: "TKN" },
+      });
+      const pending = handleApprovalDecision(
+        deps,
+        "wallet.approveOrigin",
+        decision(id, "wallet.approveOrigin"),
+      );
+      await entered.promise;
+      deps.session.lock();
+      if (replacement) deps.session.unlock(PASSPHRASE);
+      release.resolve();
+      await expect(pending).resolves.toEqual({ error: "wallet locked" });
+      expect(writes).toBe(0);
+      expect(settled).toEqual([{ error: "wallet locked" }]);
+    });
+  }
+
   test("a newly blocked origin is refused at execution time", async () => {
     let writes = 0;
     const { approvals, deps, settled } = makeDeps({

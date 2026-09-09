@@ -389,6 +389,15 @@ const settleClaimError = (
   return response;
 };
 
+// Some non-secret approvals may start locked. They still cannot survive a
+// lock/unlock transition after being claimed and removed from the queue.
+const claimSessionGuard = (session: UnlockSession): (() => boolean) => {
+  const authorized = captureSessionAuthorization(session);
+  const initiallyUnlocked = authorized.isCurrent();
+  return () =>
+    initiallyUnlocked ? authorized.isCurrent() : session.generation() === authorized.generation;
+};
+
 const applyApproveDecision = async (
   deps: ApprovalDecisionDeps,
   message: unknown,
@@ -404,6 +413,7 @@ const applyApproveDecision = async (
   }
   // Claim synchronously before any awaited work. A concurrent approve/deny for
   // the same id now sees not-found and can never execute the payload twice.
+  const sessionIsCurrent = claimSessionGuard(deps.session);
   const claim = deps.approvals.claim(input.id);
   if (!claim) {
     return NOT_FOUND;
@@ -418,8 +428,8 @@ const applyApproveDecision = async (
   } catch {
     return settleClaimError(deps, input.id, { error: "approval execution failed" });
   }
-  if (contextError) {
-    return settleClaimError(deps, input.id, contextError);
+  if (!sessionIsCurrent() || contextError) {
+    return settleClaimError(deps, input.id, contextError ?? { error: "wallet locked" });
   }
   let result: ApplyResult;
   try {
