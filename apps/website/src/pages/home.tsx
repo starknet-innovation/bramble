@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { SiteShell } from "../components/site-shell";
 import { Button } from "../components/ui/button";
 import { WalletPreview } from "../components/wallet-preview";
@@ -33,39 +32,17 @@ const setup = [
 ] as const;
 
 export const HomePage = () => {
-  const [scene, setScene] = useState("hero");
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) setScene(entry.target.id);
-        }
-      },
-      { rootMargin: "-45% 0px -45% 0px" },
-    );
-    for (const section of document.querySelectorAll("[data-scene]")) observer.observe(section);
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <SiteShell active="home">
-      <main className={`home-main scene-${scene}`} id="main-content">
-        <div aria-hidden="true" className="story-background">
-          <div className="background-honey" />
-          <div className="background-blossom" />
-          <div className="background-lavender" />
-          <div className="background-sage" />
-        </div>
+      <main className="home-main" id="main-content">
         <div className="home-story">
-          <section className="story-section hero" data-scene id="hero">
-            <div className="foundation-badge">Built by the Starknet Foundation.</div>
+          <section className="story-section hero" data-wallet-screen="home" id="hero">
+            <div className="hero-kicker">
+              <span className="foundation-badge">Built by the Starknet Foundation.</span>
+              <img alt="" src="/brand/hero-birds.svg" />
+            </div>
             <h1>
-              The wa
-              <span className="bird-perch">
-                ll
-                <img alt="" src="/brand/hero-birds.svg" />
-              </span>
-              et for
+              The wallet for
               <br />
               everything Starknet.
             </h1>
@@ -81,14 +58,6 @@ export const HomePage = () => {
               <Button asChild className="button-large button-ink">
                 <a href="/docs/">Read the docs</a>
               </Button>
-              <a
-                className="text-link"
-                href="https://starkscan.co/"
-                rel="noreferrer"
-                target="_blank"
-              >
-                Open Starkscan
-              </a>
             </div>
           </section>
           <aside className="story-stage">
@@ -96,7 +65,7 @@ export const HomePage = () => {
               <WalletPreview />
             </div>
           </aside>
-          <section className="story-section" data-scene id="features">
+          <section className="story-section" data-wallet-screen="review" id="features">
             <h2>Made for Starknet, top to tail.</h2>
             <p className="story-lead">
               Everything you need in one wallet. No bridges, no browser tabs to chase, no signing
@@ -111,7 +80,7 @@ export const HomePage = () => {
               ))}
             </div>
           </section>
-          <section className="story-section" data-scene id="panel">
+          <section className="story-section" data-wallet-screen="receive" id="panel">
             <h2>Beside the page, not on top of it.</h2>
             <p className="story-lead">
               Bramble lives in the Chrome side panel. It stays open while you move around a dapp, so
@@ -123,7 +92,7 @@ export const HomePage = () => {
               <li>Switch accounts without leaving the dapp.</li>
             </ol>
           </section>
-          <section className="story-section setup-section" data-scene id="setup">
+          <section className="story-section setup-section" data-wallet-screen="deploy" id="setup">
             <h2>Set up in about a minute.</h2>
             <ol className="setup-grid">
               {setup.map(([title, copy]) => (

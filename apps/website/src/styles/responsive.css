@@ -3,8 +3,14 @@
     scroll-behavior: auto;
   }
   .button,
-  .story-background > div {
+  .wallet-hotspot,
+  .wallet-screen {
     transition: none;
+  }
+  .wallet-success-ring,
+  .wallet-success-check {
+    animation: none;
+    stroke-dashoffset: 0;
   }
   .button:active {
     transform: none;
@@ -17,11 +23,9 @@
     padding-right: var(--page-gutter);
   }
   .hero h1 {
-    font-size: clamp(40px, 5.6vw, 64px);
+    font-size: clamp(36px, 4.5vw, 56px);
   }
-  .wallet-preview {
-    width: 280px;
-  }
+
   .footer-columns {
     gap: 32px;
   }
@@ -32,27 +36,26 @@
   }
   .story-section {
     min-height: auto;
-    padding: 100px 0;
+    padding: 48px 0;
   }
   .hero {
     min-height: auto;
-    padding: 100px 0 48px;
+    padding: 48px 0 48px;
   }
   .hero h1 {
-    font-size: clamp(40px, 7.5vw, 64px);
+    font-size: clamp(36px, 6vw, 52px);
   }
   .story-stage-sticky {
     position: static;
     height: auto;
-    padding: 0 0 72px;
+    padding: 0 0 32px;
     justify-content: center;
   }
   .wallet-preview {
-    width: 320px;
-    min-height: 480px;
+    width: min(320px, 100%);
   }
   .story-section h2 {
-    font-size: clamp(32px, 5.5vw, 48px);
+    font-size: clamp(30px, 4.5vw, 40px);
   }
   .docs-layout {
     grid-template-columns: 180px minmax(0, 1fr);
@@ -90,7 +93,7 @@
     gap: 32px;
   }
   .hero {
-    padding-top: 80px;
+    padding-top: 40px;
   }
   .hero h1 {
     font-size: clamp(36px, 8.8vw, 52px);
@@ -100,7 +103,7 @@
   }
   .hero-actions .button {
     flex: 1 0 auto;
-    min-height: 60px;
+    min-height: 48px;
     padding: 0 24px;
   }
   .hero-actions .text-link {
@@ -150,6 +153,6 @@
     grid-column: 1 / -1;
   }
   .download-section {
-    min-height: 80svh;
+    min-height: 420px;
   }
 }

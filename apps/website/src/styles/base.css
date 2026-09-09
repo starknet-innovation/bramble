@@ -30,14 +30,16 @@
   color-scheme: light;
   --background: #fff5ec;
   --foreground: #282729;
-  --primary: #6478ff;
+  --primary: #3948b5;
   --card: #fff;
   --honey: #ffe7a9;
   --blossom: #f9d5ee;
   --lavender: #aab0f6;
   --sage: #cdd490;
   --muted: rgb(40 39 41 / 10%);
-  --muted-foreground: rgb(40 39 41 / 75%);
+  --muted-foreground: #45403c;
+  --control-border: #756b63;
+  --disabled-background: #e4e1dc;
   --border: rgb(40 39 41 / 15%);
   --radius: 10px;
   --page-gutter: clamp(20px, 4vw, 60px);
@@ -62,8 +64,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 ::selection {
-  background: var(--blossom);
-  color: var(--foreground);
+  background: var(--foreground);
+  color: var(--background);
 }
 a {
   color: inherit;
@@ -139,8 +141,8 @@ h2 {
   text-underline-offset: 0.3em;
 }
 .header-download {
-  min-height: 51px;
-  padding: 0 32px;
+  min-height: 44px;
+  padding: 0 24px;
 }
 .skip-link {
   position: fixed;
@@ -159,29 +161,28 @@ h2 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 51px;
-  padding: 0 32px;
+  min-height: 44px;
+  padding: 0 24px;
   border: 0;
   border-radius: 50px;
   background: var(--primary);
   color: var(--background);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.01em;
-  transition:
-    opacity 160ms,
-    transform 160ms;
+  transition: transform 160ms;
 }
-.button:hover {
-  opacity: 0.88;
-  text-decoration: none;
+.button:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 .button:active {
   transform: scale(0.98);
 }
 .button:disabled {
-  opacity: 0.5;
-  cursor: default;
+  background: var(--disabled-background);
+  color: var(--muted-foreground);
+  cursor: not-allowed;
 }
 .button svg {
   width: 16px;
@@ -194,12 +195,12 @@ h2 {
 .button-outline {
   background: var(--background);
   color: var(--foreground);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
 }
 .button-large {
-  min-height: 77px;
-  padding: 0 40px;
-  font-size: clamp(18px, 1.6vw, 24px);
+  min-height: 48px;
+  padding: 0 24px;
+  font-size: 16px;
 }
 .button-ink {
   background: var(--foreground);
@@ -222,7 +223,7 @@ h2 {
 .site-footer {
   position: relative;
   background: var(--background);
-  padding: clamp(72px, 9vw, 110px) var(--page-gutter) 60px;
+  padding: clamp(40px, 5vw, 64px) var(--page-gutter) 40px;
 }
 .footer-columns {
   display: grid;
@@ -254,7 +255,7 @@ h2 {
   flex-wrap: wrap;
   gap: 16px;
   max-width: var(--page-width);
-  margin: 60px auto 0;
+  margin: 32px auto 0;
   padding-top: 24px;
   border-top: 1px solid var(--border);
   font-size: 14px;

@@ -2,17 +2,17 @@
 .docs-main {
   max-width: 1560px;
   margin: auto;
-  padding: clamp(40px, 5vw, 72px) var(--page-gutter) clamp(72px, 9vw, 110px);
+  padding: clamp(32px, 4vw, 48px) var(--page-gutter) clamp(48px, 6vw, 64px);
 }
 .reading-main {
   max-width: 1220px;
 }
 .reading-hero h1 {
-  font-size: clamp(40px, 5.2vw, 88px);
+  font-size: clamp(36px, 4vw, 60px);
 }
 .reading-hero > p {
   max-width: 640px;
-  margin-top: 37px;
+  margin-top: 24px;
 }
 .reading-hero > .button {
   margin-top: 32px;
@@ -43,15 +43,15 @@
 }
 .docs-content :where(section + section),
 .docs-content :where(.docs-note + section) {
-  margin-top: clamp(56px, 7vw, 87px);
+  margin-top: clamp(36px, 4vw, 48px);
 }
 .docs-content h2,
 .support-faq > h2,
 .support-compose h2 {
-  font-size: clamp(28px, 3vw, 48px);
+  font-size: clamp(28px, 2.5vw, 38px);
 }
 .docs-content h3 {
-  margin: 37px 0 16px;
+  margin: 24px 0 16px;
   font-size: 24px;
   line-height: 0.95;
 }
@@ -74,7 +74,7 @@
 }
 .docs-note {
   padding: 37px;
-  margin-top: 49px;
+  margin-top: 32px;
   border-radius: var(--radius);
   background: var(--card);
 }
@@ -92,7 +92,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  margin-top: clamp(48px, 6vw, 72px);
+  margin-top: clamp(32px, 4vw, 40px);
 }
 .support-cards section {
   display: flex;
@@ -112,12 +112,12 @@
   margin-top: auto;
 }
 .support-faq {
-  margin-top: clamp(64px, 8vw, 96px);
+  margin-top: clamp(40px, 5vw, 56px);
 }
 .support-faq > div {
   display: grid;
   gap: 14px;
-  margin-top: 37px;
+  margin-top: 24px;
 }
 .support-faq article {
   padding: 24px 37px;
@@ -136,7 +136,7 @@
 }
 .support-compose {
   padding: clamp(24px, 5vw, 54px);
-  margin-top: 96px;
+  margin-top: 48px;
   border-radius: var(--radius);
   background: var(--card);
 }
@@ -148,7 +148,7 @@
   display: grid;
   gap: 14px;
   max-width: 560px;
-  margin-top: 37px;
+  margin-top: 24px;
 }
 .support-compose label {
   font-weight: 500;
@@ -158,7 +158,7 @@
   padding: 18px 20px;
   resize: vertical;
   background: var(--background);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius);
   color: var(--foreground);
 }
