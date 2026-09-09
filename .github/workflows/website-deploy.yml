@@ -9,7 +9,7 @@
 # pinned in `apps/website/package.json` and `bun.lock`.
 #
 # Trust boundaries:
-#   - Runs only on pushes to the active release branch and on manual dispatch,
+#   - Runs only on pushes to the main branch and on manual dispatch,
 #     never on pull requests, so the deploy token is never exposed to a PR
 #     revision. PR feedback for the website comes from ci.yml (`check:workspaces`).
 #   - `workflow_dispatch` does NOT inherit the `push.branches` filter: a dispatch
@@ -42,7 +42,7 @@ name: website-deploy
 
 on:
   push:
-    branches: ["release/v0.10.1"]
+    branches: ["main"]
     paths:
       - "apps/website/**"
       - "bun.lock"
@@ -72,14 +72,14 @@ jobs:
       # policy already refuses a foreign ref; this turns a mistaken dispatch of
       # some other branch into a clear early failure instead of a build that
       # only dies later at the environment gate.
-      - name: Reject manual runs outside the active release branch
+      - name: Reject manual runs outside the main branch
         env:
           EVENT_NAME: ${{ github.event_name }}
           TRIGGER_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/release/v0.10.1" ]; then
-            echo "::error::Manual website deploys must use the workflow from refs/heads/release/v0.10.1 (got $TRIGGER_REF)."
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/main" ]; then
+            echo "::error::Manual website deploys must use the workflow from refs/heads/main (got $TRIGGER_REF)."
             exit 1
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
