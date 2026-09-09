@@ -1,3 +1,4 @@
+import { PRIVATE_SWAP_SLIPPAGE_BPS } from "../../../shared/privacy";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -8,7 +9,10 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { TokenIcon } from "../../components/index";
-import { fetchPrivateSwapPlan, submitPrivateSwapProof } from "../../protocols/avnu/private-swap-client";
+import {
+  fetchPrivateSwapPlan,
+  submitPrivateSwapProof,
+} from "../../protocols/avnu/private-swap-client";
 import { readPrivacyPool, type PrivacyPoolSnapshot } from "../../protocols/privacy/privacy-pool";
 import {
   buildPrivacyDeposit,
@@ -74,14 +78,14 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
   }, []);
 
   const selectedBalance = balances.get(BigInt(token.address)) ?? "0x0";
-  const isMainnet =
-    chainId === "SN_MAIN" || chainId?.toLowerCase() === "0x534e5f4d41494e";
+  const isMainnet = chainId === "SN_MAIN" || chainId?.toLowerCase() === "0x534e5f4d41494e";
   const actionSummary = useMemo(() => {
     if (mode === "deposit") return "Move a public ERC20 balance into private notes.";
     if (mode === "register") return "Complete the one-time public registration for this account.";
     if (mode === "withdraw") return "Return a private balance to a public Starknet address.";
     if (mode === "transfer") return "Send notes privately to a registered pool recipient.";
-    if (mode === "swap") return "Trade through AVNU while settling inputs and output as private notes.";
+    if (mode === "swap")
+      return "Trade through AVNU while settling inputs and output as private notes.";
     return "Only aggregate token balances leave the wallet. Notes and viewing keys stay inside it.";
   }, [mode]);
 
@@ -165,6 +169,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       setSwapReview({
         actions: plan.actions,
         buyAmount: BigInt(plan.buyAmount),
+        minBuyAmount: BigInt(plan.minBuyAmount),
         buyToken,
         executor: plan.executor,
         fee: plan.fee,
@@ -204,8 +209,8 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
         <div>
           <h1>Private balances, without leaving the wallet.</h1>
           <p>
-            Shield, transfer, withdraw, and privately swap through one reviewed action surface.
-            The Terminal never receives viewing keys or individual notes.
+            Shield, transfer, withdraw, and privately swap through one reviewed action surface. The
+            Terminal never receives viewing keys or individual notes.
           </p>
         </div>
         <div className="privacy-pool-status">
@@ -213,7 +218,12 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
           <div>
             <small>Production pool</small>
             <strong>{pool ? "On-chain configuration read" : "Checking pool…"}</strong>
-            <code>{short(pool?.address ?? "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a")}</code>
+            <code>
+              {short(
+                pool?.address ??
+                  "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a",
+              )}
+            </code>
           </div>
         </div>
       </header>
@@ -386,17 +396,56 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
                 {swapReview ? (
                   <>
                     <h3>
-                      {formatRaw(`0x${swapReview.sellAmount.toString(16)}`, swapReview.sellToken.decimals)}{" "}
+                      {formatRaw(
+                        `0x${swapReview.sellAmount.toString(16)}`,
+                        swapReview.sellToken.decimals,
+                      )}{" "}
                       {swapReview.sellToken.symbol} →{" "}
-                      {formatRaw(`0x${swapReview.buyAmount.toString(16)}`, swapReview.buyToken.decimals)}{" "}
+                      {formatRaw(
+                        `0x${swapReview.buyAmount.toString(16)}`,
+                        swapReview.buyToken.decimals,
+                      )}{" "}
                       {swapReview.buyToken.symbol}
                     </h3>
                     <dl>
-                      <div><dt>Estimated received</dt><dd>{formatRaw(`0x${swapReview.buyAmount.toString(16)}`, swapReview.buyToken.decimals)} {swapReview.buyToken.symbol}</dd></div>
-                      <div><dt>Slippage limit</dt><dd>0.50%</dd></div>
-                      <div><dt>Private executor</dt><dd><code>{short(swapReview.executor)}</code></dd></div>
-                      <div><dt>Pool fee</dt><dd>{formatRaw(swapReview.fee.amount, 18)} STRK</dd></div>
-                      <div><dt>Wallet actions</dt><dd>{swapReview.actions.length}</dd></div>
+                      <div>
+                        <dt>Estimated received</dt>
+                        <dd>
+                          {formatRaw(
+                            `0x${swapReview.buyAmount.toString(16)}`,
+                            swapReview.buyToken.decimals,
+                          )}{" "}
+                          {swapReview.buyToken.symbol}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Minimum received</dt>
+                        <dd>
+                          {formatRaw(
+                            `0x${swapReview.minBuyAmount.toString(16)}`,
+                            swapReview.buyToken.decimals,
+                          )}{" "}
+                          {swapReview.buyToken.symbol}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Slippage limit</dt>
+                        <dd>{(PRIVATE_SWAP_SLIPPAGE_BPS / 100).toFixed(2)}%</dd>
+                      </div>
+                      <div>
+                        <dt>Private executor</dt>
+                        <dd>
+                          <code>{short(swapReview.executor)}</code>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Pool fee</dt>
+                        <dd>{formatRaw(swapReview.fee.amount, 18)} STRK</dd>
+                      </div>
+                      <div>
+                        <dt>Wallet actions</dt>
+                        <dd>{swapReview.actions.length}</dd>
+                      </div>
                     </dl>
                     <p>
                       The wallet independently validates this batch, checks balances and privacy
@@ -419,9 +468,20 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
                       appear here before the wallet opens.
                     </p>
                     <dl>
-                      <div><dt>Pool</dt><dd><code>{short(pool?.address ?? "0x040337…812a")}</code></dd></div>
-                      <div><dt>Proof validity</dt><dd>{pool ? `${pool.proofValidityBlocks} blocks` : "Reading…"}</dd></div>
-                      <div><dt>Auto retry</dt><dd>Off</dd></div>
+                      <div>
+                        <dt>Pool</dt>
+                        <dd>
+                          <code>{short(pool?.address ?? "0x040337…812a")}</code>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Proof validity</dt>
+                        <dd>{pool ? `${pool.proofValidityBlocks} blocks` : "Reading…"}</dd>
+                      </div>
+                      <div>
+                        <dt>Auto retry</dt>
+                        <dd>Off</dd>
+                      </div>
                     </dl>
                   </>
                 )}
@@ -431,7 +491,9 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
           <div className="privacy-live-status" aria-live="polite" role="status">
             <span className={busy ? "status-pulse active" : "status-pulse"} />
             {status}
-            <button onClick={() => onNavigate("portfolio")} type="button">View portfolio</button>
+            <button onClick={() => onNavigate("portfolio")} type="button">
+              View portfolio
+            </button>
           </div>
         </section>
       </div>

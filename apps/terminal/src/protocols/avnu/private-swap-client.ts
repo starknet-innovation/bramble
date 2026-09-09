@@ -4,6 +4,8 @@ import { PRIVATE_SWAP_FEE_TOKEN } from "../../../shared/privacy";
 import { sameAddress } from "../support/networks";
 import type { Strk20Action } from "../support/strk20-schemas";
 
+import { checkPrivateSwapCalldata } from "./private-swap-intent";
+
 const FELT = /^0x[0-9a-fA-F]{1,64}$/;
 const STARK_FIELD_PRIME = 0x800000000000011000000000000000000000000000000000000000000000001n;
 const TRANSACTION_HASH = /^0x0[0-8][0-9a-fA-F]{62}$/;
@@ -23,6 +25,7 @@ export type PrivateSwapPlan = {
   readonly actions: readonly Strk20Action[];
   readonly buyAmount: string;
   readonly executor: string;
+  readonly minBuyAmount: string;
   readonly fee: PrivateSwapFee;
   readonly quoteId: string;
   readonly sellAmount: string;
@@ -131,8 +134,17 @@ export const fetchPrivateSwapPlan = async (input: {
   if (!actionsMatchPlan(actions, input, value["executor"], fee)) {
     throw new Error("Private swap service returned a substituted route.");
   }
+  const invoke = actions[3];
+  if (invoke?.type !== "invoke") throw new Error("Missing private swap invocation.");
+  const minBuyAmount = checkPrivateSwapCalldata(
+    invoke.calldata,
+    input,
+    value["buyAmount"],
+    value["executor"],
+  );
   return {
     actions,
+    minBuyAmount,
     buyAmount: value["buyAmount"],
     executor: value["executor"],
     fee,
