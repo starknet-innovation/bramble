@@ -2,6 +2,7 @@
 import { expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { resolveOriginAccount } from "../../../apps/extension/src/background/provider/provider-grant";
+import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { handleOriginOps } from "../../../apps/extension/src/background/settings/origins-ops";
 import { account, createWallet, vaultPassphrase } from "../../support/background-wallet-stub";
@@ -58,4 +59,40 @@ for (const boundary of ["preferences", "grant", "sites"] as const) {
       expect(session.isUnlocked()).toBe(replacement);
     });
   }
+}
+
+for (const type of [
+  "wallet.getGrantedAccounts",
+  "wallet.requestAccounts",
+  "wallet.getPermissions",
+]) {
+  test(`${type} does not return stale grants after lock`, async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const handler = createMessageHandler(
+      {
+        ...createWallet(),
+        async getGrantedAccounts() {
+          entered.resolve();
+          await release.promise;
+          return [account];
+        },
+      },
+      "extension-id",
+      { session },
+    );
+    const pending = handler(
+      { type, origin: "https://example.com" },
+      {
+        id: "extension-id",
+        url: "https://example.com/",
+      },
+    );
+    await entered.promise;
+    session.lock();
+    release.resolve();
+    await expect(pending).resolves.toEqual({ error: "wallet locked" });
+  });
 }
