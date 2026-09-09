@@ -1,16 +1,4 @@
-import { type CSSProperties, useEffect, useState } from "react";
-
-/* ─────────────────────────────────────────────────────────
- * ANIMATION STORYBOARD
- *
- * Read top-to-bottom. Each value is ms after a scroll or click trigger.
- *
- *   0ms   previous screen exits 8px toward its place in the journey
- * 260ms   next screen settles from 12px into the persistent wallet frame
- * ───────────────────────────────────────────────────────── */
-const TIMING = {
-  screenSettle: 260,
-} as const;
+import { useEffect, useState } from "react";
 
 const SCREENS = {
   collectibles: {
@@ -92,12 +80,8 @@ export const WalletPreview = () => {
     return () => observer.disconnect();
   }, []);
 
-  const motionStyle = {
-    "--wallet-screen-duration": `${TIMING.screenSettle}ms`,
-  } as CSSProperties;
-
   return (
-    <figure className="wallet-preview" style={motionStyle}>
+    <figure className="wallet-preview">
       {SCREEN_IDS.map((id) => {
         const details = SCREENS[id];
         const active = id === screen;
