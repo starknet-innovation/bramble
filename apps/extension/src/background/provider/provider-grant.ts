@@ -12,7 +12,7 @@ import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalQueue } from "../approvals/approvals";
 import { promptReconnectForStaleGrant } from "../approvals/reconnect-prompt";
-import type { PassiveUnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 
 /**
  * The active-network account resolved for an origin's live connection grant,
@@ -56,14 +56,17 @@ export const resolveOriginAccount = async (
   expected?: ApprovalContext,
 ): Promise<ResolvedOriginAccount | { readonly error: string }> => {
   const passphrase = deps.session.peekPassphrase();
+  const authorized = captureSessionAuthorization(deps.session);
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const preferences = await deps.preferencesStore.read();
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   if (expected && preferences.activeNetworkId !== expected.networkId) {
     return { error: "approval context changed" };
   }
   const granted = await deps.wallet.getGrantedAccounts(origin, passphrase);
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   const account = expected
     ? granted.find(
         (stored) =>
