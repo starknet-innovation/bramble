@@ -1,8 +1,11 @@
+import { hash } from "starknet";
 import type { ApiRequest, ApiResponse } from "../_lib/http.js";
 import {
   authorizeOrigin,
   AVNU_PAYMASTER_URL,
   isRecord,
+  hasOnlyKeys,
+  isFelt,
   PRIVATE_SWAP_FEE_TOKEN,
   PRIVACY_POOL_ADDRESS,
   reject,
@@ -107,7 +110,12 @@ const paymasterBodyAllowed = (body: Uint8Array): boolean => {
     }
     const transaction = value["params"]["transaction"];
     const parameters = value["params"]["parameters"];
-    if (!isRecord(transaction) || !isRecord(transaction["apply_action"])) {
+    if (
+      !isRecord(transaction) ||
+      transaction["type"] !== "apply_action" ||
+      !hasOnlyKeys(transaction, ["type", "apply_action"]) ||
+      !isRecord(transaction["apply_action"])
+    ) {
       return false;
     }
     if (
@@ -121,6 +129,17 @@ const paymasterBodyAllowed = (body: Uint8Array): boolean => {
       return false;
     }
     const applyAction = transaction["apply_action"];
+    if (method === "paymaster_executeTransaction") {
+      const call = applyAction["apply_actions_call"];
+      if (
+        !hasOnlyKeys(applyAction, ["apply_actions_call", "proof", "proof_facts"]) ||
+        !isRecord(call) ||
+        !hasOnlyKeys(call, ["to", "selector", "calldata"]) ||
+        !isFelt(call["selector"]) ||
+        BigInt(call["selector"]) !== BigInt(hash.getSelectorFromName("apply_actions"))
+      )
+        return false;
+    } else if (!hasOnlyKeys(applyAction, ["pool_address"])) return false;
     const target =
       method === "paymaster_buildTransaction"
         ? applyAction["pool_address"]
@@ -143,10 +162,7 @@ const upstreamFor = (service: Service): string | null => {
   return serviceUrl("STRK20_PAYMASTER_UPSTREAM", AVNU_PAYMASTER_URL);
 };
 
-const copyResponse = async (
-  upstream: Response,
-  response: ApiResponse,
-): Promise<ApiResponse> => {
+const copyResponse = async (upstream: Response, response: ApiResponse): Promise<ApiResponse> => {
   if (!upstream.ok) {
     return reject(response, 502, "upstream_unavailable");
   }
