@@ -69,5 +69,8 @@
     "@bramble/wallet-protocol": "workspace:*",
     "@starknetfoundation/krusty-kms-wasm": "0.10.0",
     "starknet": "10.0.2"
+  },
+  "overrides": {
+    "sharp": "0.35.4"
   }
 }

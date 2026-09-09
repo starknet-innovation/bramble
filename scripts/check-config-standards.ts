@@ -64,6 +64,7 @@ if (
     "devDependencies",
     "license",
     "name",
+    "overrides",
     "packageManager",
     "private",
     "scripts",
@@ -73,6 +74,12 @@ if (
   ])
 ) {
   failures.push("package.json top-level keys must stay explicit");
+}
+
+// Temporary security pin for Wrangler/Miniflare's GHSA-rgj7-g3m4-5g8c dependency.
+const overrides = packageJson["overrides"];
+if (!isRecord(overrides) || !hasOnlyKeys(overrides, ["sharp"]) || overrides["sharp"] !== "0.35.4") {
+  failures.push("package.json must retain the reviewed sharp security override");
 }
 
 if (!hasOnlyKeys(tsconfigJson, ["compilerOptions", "include"])) {
