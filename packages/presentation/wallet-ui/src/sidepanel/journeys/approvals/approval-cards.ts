@@ -308,7 +308,7 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Sign request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Review exactly what this site asks you to sign. Signing does not move funds — only sign messages you understand."}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Signatures can authorize transfers or account access. Only sign requests you understand."}</p>
       ${reviewOutcome("Create a signed authorization over the decoded message shown below and return it to this site.")}
     </div>
     ${view.html}

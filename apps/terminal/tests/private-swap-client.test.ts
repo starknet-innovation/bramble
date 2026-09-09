@@ -1,9 +1,9 @@
 import { avnuRouteCalldata, type AvnuRouteFixture } from "@bramble/testkit/avnu-route";
 import { transaction } from "starknet";
-import { AVNU_ADDRESSES } from "../constants";
+import { AVNU_ADDRESSES } from "../src/protocols/constants";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PRIVATE_SWAP_FEE_TOKEN } from "../../../shared/privacy";
-import { fetchPrivateSwapPlan, submitPrivateSwapProof } from "./private-swap-client";
+import { PRIVATE_SWAP_FEE_TOKEN } from "../shared/privacy";
+import { fetchPrivateSwapPlan, submitPrivateSwapProof } from "../src/protocols/avnu/private-swap-client";
 
 const executorCalldata = (overrides: Partial<AvnuRouteFixture> = {}) => [
   "0x5",
