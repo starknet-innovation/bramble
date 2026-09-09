@@ -7,3 +7,6 @@ export const PRIVACY_POOL_ADDRESS =
 export const AVNU_PAYMASTER_URL = "https://starknet.paymaster.avnu.fi";
 export const PRIVATE_SWAP_FEE_TOKEN =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+
+/** Maximum requested private-swap slippage, shared by build and review. */
+export const PRIVATE_SWAP_SLIPPAGE_BPS = 50;
