@@ -1,5 +1,5 @@
-import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
+import { REPOSITORY_URL } from "../lib/site-links";
 import { chromeStoreUrl } from "../site";
 import { Brand } from "./brand";
 import { Button } from "./ui/button";
@@ -10,12 +10,16 @@ type SiteShellProps = {
 };
 
 const navigation = [
+  { href: "/", id: "home", label: "Home" },
   { href: "/docs/", id: "docs", label: "Docs" },
   { href: "/support/", id: "support", label: "Support" },
 ] as const;
 
 export const SiteShell = ({ active, children }: SiteShellProps) => (
   <div className={`site-shell site-shell--${active}`}>
+    <a className="skip-link" href="#main-content">
+      Skip to content
+    </a>
     <header className="site-header">
       <Brand />
       <nav aria-label="Primary navigation" className="site-nav">
@@ -28,22 +32,47 @@ export const SiteShell = ({ active, children }: SiteShellProps) => (
       <Button asChild className="header-download">
         <a href={chromeStoreUrl} rel="noreferrer" target="_blank">
           Download now
-          <ArrowUpRight aria-hidden="true" />
         </a>
       </Button>
     </header>
     {children}
     <footer className="site-footer">
-      <div>
+      {active === "home" ? (
+        <div className="footer-columns">
+          <div>
+            <Brand />
+            <p>Starknet&apos;s fastest moving wallet. Store and shield your crypto.</p>
+          </div>
+          <nav aria-label="Product">
+            <h2>Product</h2>
+            <a href="/#features">Features</a>
+            <a href="/#setup">Set up</a>
+            <a href="/#download">Download</a>
+          </nav>
+          <nav aria-label="Developers">
+            <h2>Developers</h2>
+            <a href="/docs/">Docs</a>
+            <a href="https://starkscan.co/">Starkscan</a>
+            <a href={REPOSITORY_URL}>GitHub</a>
+          </nav>
+          <nav aria-label="More">
+            <h2>More</h2>
+            <a href="/support/">Support</a>
+            <a href="/privacy/">Privacy Policy</a>
+            <a href={`${REPOSITORY_URL}/security/policy`}>Security</a>
+          </nav>
+        </div>
+      ) : (
         <Brand />
-        <p>A Starknet wallet for Chrome.</p>
+      )}
+      <div className="footer-bottom">
+        <p>Built by the Starknet Foundation.</p>
+        {active === "home" ? (
+          <p>Learn more at bramble.fi</p>
+        ) : (
+          <a href="/privacy/">Privacy Policy</a>
+        )}
       </div>
-      <nav aria-label="Footer navigation">
-        <a href="/docs/">Docs</a>
-        <a href="/support/">Support</a>
-        <a href="/privacy/">Privacy</a>
-        <a href="https://github.com/starknet-innovation/mc-wallet">Source</a>
-      </nav>
     </footer>
   </div>
 );

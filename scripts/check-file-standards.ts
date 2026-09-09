@@ -31,7 +31,7 @@ const EXCLUDED = new Set([
  * and browser-global boundaries. Skipping by path keeps the extension scanned.
  */
 const EXCLUDED_PATHS = new Set(["apps/terminal", "apps/ui-lab"]);
-const BINARY_EXTENSIONS = [".jpg", ".png", ".wasm", ".webp", ".zip"] as const;
+const BINARY_EXTENSIONS = [".jpg", ".otf", ".png", ".wasm", ".webp", ".woff2", ".zip"] as const;
 const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/background/index.ts",
   "apps/extension/src/content/index.ts",

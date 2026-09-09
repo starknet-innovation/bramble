@@ -15,25 +15,11 @@ const sections = [
 
 export const DocsPage = () => (
   <SiteShell active="docs">
-    <main className="docs-main">
-      <section className="reading-hero docs-hero">
-        <h1>Bramble documentation</h1>
-        <p>
-          The short guide to installing the wallet, choosing an account, reviewing transactions, and
-          coordinating shared accounts on Starknet.
-        </p>
-        <Button asChild>
-          <a href={chromeStoreUrl} rel="noreferrer" target="_blank">
-            Download now
-            <ArrowUpRight aria-hidden="true" />
-          </a>
-        </Button>
-      </section>
-
+    <main className="docs-main" id="main-content">
       <div className="docs-layout">
         <aside className="docs-index">
           <nav aria-label="On this page">
-            <strong>On this page</strong>
+            <strong>Documentation</strong>
             {sections.map((section) => (
               <a href={section.href} key={section.href}>
                 {section.label}
@@ -43,6 +29,23 @@ export const DocsPage = () => (
         </aside>
 
         <article className="docs-content">
+          <section className="reading-hero docs-hero">
+            <h1>Documentation</h1>
+            <p>Learn how to install, set up, and use Bramble, the Starknet wallet for Chrome.</p>
+            <Button asChild>
+              <a href={chromeStoreUrl} rel="noreferrer" target="_blank">
+                Download now
+                <ArrowUpRight aria-hidden="true" />
+              </a>
+            </Button>
+          </section>
+          <div className="docs-note">
+            <h3>Before you start</h3>
+            <p>
+              You will need Chrome and a safe, offline place to record your recovery phrase. Never
+              share your phrase, private key, password, or viewing key.
+            </p>
+          </div>
           <section id="getting-started">
             <h2>Getting started</h2>
             <p>
@@ -129,13 +132,22 @@ export const DocsPage = () => (
               </li>
             </ul>
             <p>
-              For implementation detail and the project security policy, use the public source
-              repository.
+              For implementation detail and the project security policy, use the project repository.
             </p>
             <a className="text-link" href={`${REPOSITORY_URL}/blob/main/SECURITY.md`}>
               Read the security policy
               <ArrowUpRight aria-hidden="true" />
             </a>
+          </section>
+          <section id="support">
+            <h2>Support</h2>
+            <p>
+              Need a hand with installation, an account, or a transaction? Read common questions or
+              prepare a support request. Never include wallet secrets.
+            </p>
+            <Button asChild>
+              <a href="/support/">Contact support</a>
+            </Button>
           </section>
         </article>
       </div>
