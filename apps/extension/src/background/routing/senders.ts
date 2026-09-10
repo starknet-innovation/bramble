@@ -3,10 +3,7 @@
  */
 
 import { isOwnDataProperty } from "@bramble/core/json";
-import {
-  APPROVAL_RUNTIME_MESSAGE_TYPES,
-  DAPP_RUNTIME_MESSAGE_TYPES,
-} from "@bramble/wallet-protocol/methods";
+import { DAPP_RUNTIME_MESSAGE_TYPES } from "@bramble/wallet-protocol/methods";
 
 /**
  * Sender metadata exposed by the extension runtime boundary.
@@ -101,13 +98,6 @@ export const isClaimedSenderOrigin = (
  * this list — or vice versa — fails the suite.
  */
 export const DAPP_MESSAGES = DAPP_RUNTIME_MESSAGE_TYPES;
-
-/**
- * Dapp messages that may require a user decision in the wallet UI. The
- * background opens the approval surface as soon as one arrives so Chrome still
- * associates the call with the originating page gesture.
- */
-export const APPROVAL_SURFACE_MESSAGES = APPROVAL_RUNTIME_MESSAGE_TYPES;
 
 /**
  * Marks messages that must only come from extension-controlled pages.

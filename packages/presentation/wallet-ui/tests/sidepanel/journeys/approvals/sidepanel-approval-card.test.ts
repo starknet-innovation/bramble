@@ -29,6 +29,13 @@ const activity = (pending: readonly PendingApproval[]): string =>
 
 describe("invoke approval card (A-H1)", () => {
   const invoke: PendingApproval = {
+    callReviews: [
+      {
+        calldata: ["0x0005", "0x3e8", "0x0"],
+        contractAddress: "0x049d36570d4e46f8",
+        entrypoint: "transfer",
+      },
+    ],
     flags: [{ code: "unknown-contract", message: "Verify the contract before continuing." }],
     id: INVOKE_ID,
     kind: "invoke",
@@ -43,6 +50,9 @@ describe("invoke approval card (A-H1)", () => {
     expect(html).toContain("https://dapp.example");
     expect(html).toContain("Send 1000 units to 0x0005…0005");
     expect(html).toContain("Verify the contract before continuing.");
+    expect(html).toContain("Exact call parameters");
+    expect(html).toContain("0x049d36570d4e46f8");
+    expect(html).toContain("0x0005, 0x3e8, 0x0");
     expect(html).toContain(`data-approval-action="approve" data-approval-id="${INVOKE_ID}"`);
     expect(html).toContain(`data-approval-action="deny" data-approval-id="${INVOKE_ID}"`);
   });

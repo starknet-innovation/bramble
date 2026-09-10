@@ -11,6 +11,7 @@
  * polls through `wallet.strk20PreparationStatus`.
  */
 
+import { WalletError } from "@bramble/core/errors";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
 import {
   prepareStrk20Registration,
@@ -118,7 +119,7 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
     // without it leaves Send in an endless "Checking" state, so an unavailable
     // reader or a failed read rejects this request and reaches the UI's retry.
     if (!service.poolFee) {
-      throw new Error("Private pool fee is unavailable. Retry the balance check.");
+      throw new WalletError("Private pool fee is unavailable. Retry the balance check.");
     }
     const poolFeeFri = await service.poolFee(context.accountContext);
     return {

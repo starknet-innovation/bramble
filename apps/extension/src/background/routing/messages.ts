@@ -147,10 +147,14 @@ const handleGetGrantedAccounts: RouterHandler = async (ctx, messageType, message
   const authorized = captureSessionAuthorization(ctx.session);
   const vaultPassphrase = input.vaultPassphrase ?? ctx.session.peekPassphrase();
   if (!vaultPassphrase) {
-    return { error: "wallet locked" };
+    // A passive dapp grant query returns the same empty result while locked as
+    // it does while unlocked-but-unconnected. Extension pages that explicitly
+    // supplied a passphrase still receive authentication failures below, but a
+    // site cannot use `mc_accounts` as a lock-state oracle.
+    return { accounts: [], ok: true };
   }
   const accounts = await ctx.wallet.getGrantedAccounts(input.origin, vaultPassphrase);
-  if (!input.vaultPassphrase && !authorized.isCurrent()) return { error: "wallet locked" };
+  if (!input.vaultPassphrase && !authorized.isCurrent()) return { accounts: [], ok: true };
   return { accounts, ok: true };
 };
 

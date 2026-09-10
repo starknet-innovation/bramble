@@ -135,6 +135,30 @@ describe("PendingApproval fee review validation (#189)", () => {
   test("still rejects genuinely unknown keys", () => {
     expect(isPendingApprovalsResponse(response(invokeApproval({ surprise: true })))).toBe(false);
   });
+
+  test("accepts only bounded exact-call review data on invoke approvals", () => {
+    const callReviews = [
+      { calldata: ["0x1", "0x2", "0x0"], contractAddress: "0x123", entrypoint: "transfer" },
+    ];
+    expect(isPendingApprovalsResponse(response(invokeApproval({ callReviews })))).toBe(true);
+    expect(
+      isPendingApprovalsResponse(
+        response(
+          invokeApproval({ callReviews: [{ ...callReviews[0], calldata: ["not-a-felt"] }] }),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      isPendingApprovalsResponse(
+        response({
+          callReviews,
+          id: INVOKE_ID,
+          kind: "connect",
+          origin: "https://dapp.example",
+        }),
+      ),
+    ).toBe(false);
+  });
 });
 
 // Affordability verdict validation (issue 191): the verdict is one of the

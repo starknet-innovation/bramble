@@ -43,4 +43,42 @@ describe("decodeCall transfer/approve fallback", () => {
     expect(report.calls[0]?.kind).toBe("unknown");
     expect(report.calls[0]?.summary).toContain("Call transfer on");
   });
+
+  test("known selectors with trailing calldata fall back to an exact opaque call", () => {
+    for (const call of [
+      {
+        calldata: ["0x1", "0x2", "0x0", "0xdead"],
+        contractAddress: ETH,
+        entrypoint: "transfer",
+      },
+      {
+        calldata: ["0x1", "0x2", "0x0", "0xdead"],
+        contractAddress: ETH,
+        entrypoint: "approve",
+      },
+      {
+        calldata: ["0x1", "0x2", "0x3", "0x0", "0xdead"],
+        contractAddress: ETH,
+        entrypoint: "transfer_from",
+      },
+      {
+        calldata: ["0x1", "0x1", "0xdead"],
+        contractAddress: ETH,
+        entrypoint: "set_approval_for_all",
+      },
+    ]) {
+      const report = verifyCalls([call], context);
+      expect(report.calls[0]?.kind).toBe("unknown");
+      expect(report.calls[0]?.summary).toContain(`Call ${call.entrypoint} on`);
+    }
+  });
+
+  test("an untracked approve states the ERC20/ERC721 ambiguity", () => {
+    const report = verifyCalls(
+      [{ calldata: ["0xdead", "5", "0"], contractAddress: "0x456", entrypoint: "approve" }],
+      context,
+    );
+    expect(report.calls[0]?.summary).toContain("amount or NFT #5");
+    expect(report.calls[0]?.summary).toContain("unknown contract");
+  });
 });

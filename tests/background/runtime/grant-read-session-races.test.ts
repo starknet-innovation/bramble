@@ -101,7 +101,11 @@ for (const type of [
     await entered.promise;
     session.lock();
     release.resolve();
-    await expect(pending).resolves.toEqual({ error: "wallet locked" });
+    await expect(pending).resolves.toEqual(
+      type === "wallet.getGrantedAccounts"
+        ? { accounts: [], ok: true }
+        : { error: "wallet locked" },
+    );
   });
 }
 

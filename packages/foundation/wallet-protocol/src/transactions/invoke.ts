@@ -39,7 +39,12 @@ const toCalldataFelt = (value: unknown): string | null => {
   return felt && isStarkFieldElement(felt) ? felt : null;
 };
 
-const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
+/**
+ * Parses one untrusted invoke call into the background's canonical camel-case
+ * shape. Malformed addresses, entrypoints, calldata, or oversized values return
+ * `null`; callers must not guess at a partial call.
+ */
+export const readProviderInvokeCall = (call: unknown): ProviderInvokeCall | null => {
   if (
     !isRecord(call) ||
     !hasOnlyKnownKeys(call, [
@@ -100,7 +105,7 @@ export const providerInvokeRequest = (params: Json | undefined): ProviderInvokeR
   if (!Array.isArray(source) || source.length === 0 || source.length > INVOKE_LIMITS.calls) {
     return null;
   }
-  const calls = source.map(readInvokeCall);
+  const calls = source.map(readProviderInvokeCall);
   if (!calls.every((call): call is ProviderInvokeCall => call !== null)) {
     return null;
   }

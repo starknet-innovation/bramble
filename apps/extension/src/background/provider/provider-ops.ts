@@ -128,6 +128,8 @@ export const queueInvokeApproval = async (
   >,
   resolved: ResolvedOriginAccount,
   input: {
+    /** Background-authored only; provider message input never supplies it. */
+    readonly activitySummary?: string;
     readonly calls: readonly Call[];
     readonly origin: string;
     readonly proof?: ApprovalPayload["proof"];
@@ -148,8 +150,10 @@ export const queueInvokeApproval = async (
     return refusal;
   }
   const approval = deps.approvals.requestInvoke({
+    ...(input.activitySummary === undefined ? {} : { activitySummary: input.activitySummary }),
     calls: input.calls,
     context: await createApprovalContext(resolved.account, {
+      ...(input.activitySummary === undefined ? {} : { activitySummary: input.activitySummary }),
       calls: input.calls,
       ...(input.proof === undefined ? {} : { proof: input.proof }),
     }),
@@ -438,7 +442,9 @@ export const executeInvokeApproval = async (
       hash: result.transactionHash,
       kind: "invoke",
       networkId: account.networkId,
-      summary: `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
+      summary:
+        approval.payload.activitySummary ??
+        `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
     });
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
