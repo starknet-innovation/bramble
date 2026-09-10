@@ -8,6 +8,7 @@
  * ./styles-swap.ts.
  */
 
+import { escapeHtml } from "@bramble/core/html";
 import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
@@ -172,12 +173,12 @@ export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
   `<div class="swap-review-pair" aria-label="What will happen">
     <div class="swap-review-asset">
       ${tokenGlyph(figures.sellAddress, figures.sellSymbol)}
-      <span><small>You sell</small><strong>${compactAmount(figures.sellAmount)} ${figures.sellSymbol}</strong></span>
+      <span><small>You sell</small><strong>${escapeHtml(compactAmount(figures.sellAmount))} ${escapeHtml(figures.sellSymbol)}</strong></span>
     </div>
     <span class="swap-review-arrow">${icon("arrowDown")}</span>
     <div class="swap-review-asset">
       ${tokenGlyph(figures.buyAddress, figures.buySymbol)}
-      <span><small>You receive</small><strong>${compactAmount(figures.buyAmount)} ${figures.buySymbol}</strong></span>
+      <span><small>You receive</small><strong>${escapeHtml(compactAmount(figures.buyAmount))} ${escapeHtml(figures.buySymbol)}</strong></span>
     </div>
   </div>
   <div class="receipt-group">

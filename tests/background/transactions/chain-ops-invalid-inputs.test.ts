@@ -129,6 +129,23 @@ describe("handleChainOps guard branches", () => {
     expect(response).toEqual({ error: "wallet locked" });
   });
 
+  test("rejects typed data for a different network", async () => {
+    const response = await handleChainOps(
+      deps(unlocked(), [account]),
+      "wallet.signTypedData",
+      {
+        origin: ORIGIN,
+        type: "wallet.signTypedData",
+        typedData: {
+          ...typedData,
+          domain: { ...typedData.domain, chainId: "SN_SEPOLIA" },
+        },
+      },
+      matchingSender,
+    );
+    expect(response).toEqual({ error: "invalid typed data" });
+  });
+
   test("rejects a malformed getChainId message", async () => {
     const response = await handleChainOps(
       deps(unlocked()),

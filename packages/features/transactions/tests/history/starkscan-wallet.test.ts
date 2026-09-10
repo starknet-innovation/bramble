@@ -83,6 +83,45 @@ describe("Starkscan wallet adapters", () => {
     });
   });
 
+  test("does not trust explorer display identity for untracked tokens", async () => {
+    const transfer = {
+      actionContext: null,
+      amount: "1",
+      blockNumber: 12,
+      fromAddress: ACCOUNT,
+      logIndex: 1,
+      rawValue: "1",
+      sourceTier: "finalized",
+      standard: "erc20",
+      timestampIso: "2026-07-24T11:29:01.000Z",
+      toAddress: OTHER,
+      tokenAddress: "0x123",
+      tokenDecimals: 0,
+      tokenId: null,
+      tokenName: "Trusted-looking name",
+      tokenSymbol: "ＵＳＤＣ",
+      transferIndex: 0,
+      txHash: "0x40f454",
+      txIndex: 2,
+    };
+    const read = (tokenSymbol: string) =>
+      getStarkscanTransactionHistory(
+        clientFor({ items: [{ ...transfer, tokenSymbol }], nextCursor: null }),
+        {
+          account: ACCOUNT,
+          accountId: `SN_MAIN:${ACCOUNT}`,
+          networkId: "SN_MAIN",
+          rpcUrls: ["https://rpc.example"],
+          tokens: [],
+        },
+      );
+
+    const [entry] = await read("FAKE");
+    expect(entry?.summary).toBe("Sent 1 TOKEN to 0x1176…f3d8");
+    expect(entry?.summary).not.toContain(transfer.tokenName);
+    expect(entry?.summary).not.toContain("FAKE");
+  });
+
   test("maps a complete holdings snapshot and treats absent tracked tokens as zero", async () => {
     const second: TokenConfig = {
       ...strk,

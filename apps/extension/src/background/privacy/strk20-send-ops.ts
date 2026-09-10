@@ -8,6 +8,8 @@
  * bridge.
  */
 
+import { WalletError } from "@bramble/core/errors";
+
 import {
   prepareStrk20AccountActions,
   quoteStrk20Actions,
@@ -368,7 +370,7 @@ const depositPreparation = async (
           recipient,
         );
         if (currentRegistrationError !== null) {
-          throw new Error(currentRegistrationError);
+          throw new WalletError(currentRegistrationError);
         }
       },
       poolFeeFri: plan.poolFeeFri,

@@ -2,10 +2,10 @@
  * Browser boundary for opening the wallet approval surface from a dapp gesture.
  */
 
-import { isRecord } from "@bramble/core/json";
 import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { ApprovalSurfacePreference } from "@bramble/settings/preferences";
-import { APPROVAL_SURFACE_MESSAGES, type RuntimeSender, senderOrigins } from "../routing/senders";
+import { isSenderOrigin, type RuntimeSender, senderOrigins } from "../routing/senders";
+import { readApprovalSurfaceRequest } from "./approval-surface-request";
 
 /**
  * Minimal Chrome UI boundaries used to configure and open approval UI.
@@ -57,20 +57,20 @@ const SURFACE_COOLDOWN_MS = 1_000;
 /**
  * The tab a surface-opening request belongs to, or null when the message is not
  * one this extension's own content script may relay from a tab on behalf of a
- * user decision. This is a shape check only: it makes no origin or rate
- * judgement, both of which the opener applies separately before opening.
+ * user decision. The message must pass the same exact parser its execution
+ * handler uses, including claimed-origin normalization.
  */
-const surfaceRequestTabId = (
+const surfaceRequest = (
   message: unknown,
   sender: RuntimeSender | undefined,
   extensionId: string,
-): number | null => {
+): { readonly origin: string; readonly tabId: number } | null => {
   const tabId = sender?.id === extensionId ? sender.tab?.id : undefined;
-  if (typeof tabId !== "number" || !isRecord(message) || message["silent"] === true) {
+  const request = readApprovalSurfaceRequest(message);
+  if (typeof tabId !== "number" || !request || request.silent) {
     return null;
   }
-  const type = message["type"];
-  return typeof type === "string" && APPROVAL_SURFACE_MESSAGES.has(type) ? tabId : null;
+  return { origin: request.origin, tabId };
 };
 
 /**
@@ -161,13 +161,17 @@ export const createApprovalSurfaceOpener = ({
     if (!browser) {
       return;
     }
-    const tabId = surfaceRequestTabId(message, sender, extensionId);
-    if (tabId === null) {
+    const request = surfaceRequest(message, sender, extensionId);
+    if (!request) {
       return;
     }
-    if (isGatedSender(sender, guard) || coolingDown(tabId, now())) {
+    if (
+      !isSenderOrigin(sender, request.origin) ||
+      isGatedSender(sender, guard) ||
+      coolingDown(request.tabId, now())
+    ) {
       return;
     }
-    raiseSurface(browser, preference(), tabId, sender?.tab?.windowId);
+    raiseSurface(browser, preference(), request.tabId, sender?.tab?.windowId);
   };
 };

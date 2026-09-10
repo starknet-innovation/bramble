@@ -114,7 +114,7 @@ describe("background wallet STRK20 operations", () => {
     });
   });
 
-  test("returns a recoverable error when the pool fee cannot be read", async () => {
+  test("returns a recoverable error without exposing the RPC diagnostic", async () => {
     const capture = {
       registered: { value: true },
       registrations: { value: 0 },
@@ -131,7 +131,7 @@ describe("background wallet STRK20 operations", () => {
     });
 
     await expect(handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)).resolves.toEqual(
-      { error: "could not read the pool fee (node unavailable)" },
+      { error: "Private balances unavailable" },
     );
   });
 

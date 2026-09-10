@@ -170,7 +170,7 @@ describe("createMessageHandler", () => {
 
     await expect(
       handler({ origin: "https://example.com", type: "wallet.getGrantedAccounts" }, sender),
-    ).resolves.toEqual({ error: "wallet locked" });
+    ).resolves.toEqual({ accounts: [], ok: true });
     await expect(
       handler({ type: "wallet.unlock", vaultPassphrase }, sender),
     ).resolves.toMatchObject({

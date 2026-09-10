@@ -41,6 +41,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { PassiveUnlockSession } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { strk20AccountContext, strk20ServiceForRuntime } from "./strk20-account-context";
+import { STRK20_REGISTRATION_SUMMARY } from "./strk20-activity";
 import type { Strk20DisclosureRequest } from "./strk20-approval-types";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
 import {
@@ -92,11 +93,13 @@ const deferPreparedPublicInvoke = async (
         readonly resolved: ResolvedOriginAccount;
       }
     | { readonly error: string },
+  activitySummary?: string,
 ): Promise<
   DeferredStrk20Approval | { readonly status: "reject"; readonly response: RuntimeResponse }
 > => {
   if ("error" in prepared) return { response: prepared, status: "reject" };
   const queued = await queueInvokeApproval(deps, prepared.resolved, {
+    ...(activitySummary === undefined ? {} : { activitySummary }),
     calls: prepared.prepared.calls,
     origin: approval.origin,
     proof: prepared.prepared.proof,
@@ -150,6 +153,7 @@ export const stageApprovedStrk20Registration = async (
       origin: approval.origin,
       request: payload.strk20Request,
     }),
+    STRK20_REGISTRATION_SUMMARY,
   );
 };
 

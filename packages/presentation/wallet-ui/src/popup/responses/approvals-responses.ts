@@ -13,6 +13,7 @@ import {
   isRecord,
   isRiskFlagCode,
   isSafeDecimals,
+  isTokenName,
   isTokenSymbol,
   JSON_BUDGETS,
 } from "@bramble/core/json";
@@ -32,6 +33,7 @@ import type {
   PendingApproval,
   WatchAssetToken,
 } from "@bramble/wallet-protocol/extension-responses";
+import { readProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
 import { readStrk20Action, readStrk20Actions } from "@bramble/wallet-protocol/strk20";
 
 /**
@@ -66,9 +68,7 @@ const isWatchAssetToken = (value: unknown): value is WatchAssetToken =>
   typeof value["address"] === "string" &&
   isStarkFieldElement(value["address"]) &&
   isSafeDecimals(value["decimals"]) &&
-  typeof value["name"] === "string" &&
-  value["name"].length > 0 &&
-  value["name"].length <= 64 &&
+  isTokenName(value["name"]) &&
   isStarknetNetworkId(value["networkId"]) &&
   isTokenSymbol(value["symbol"]);
 
@@ -164,6 +164,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     !hasOnlyKnownKeys(value, [
       "actionReviews",
       "blocked",
+      "callReviews",
       "context",
       "declaration",
       "fee",
@@ -209,7 +210,19 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
         Array.isArray(value["reviewAssets"]) && value["reviewAssets"].every(isApprovalReviewAsset)
       )) ||
     (value["flags"] !== undefined &&
-      !(Array.isArray(value["flags"]) && value["flags"].every(isApprovalRiskFlag)))
+      !(Array.isArray(value["flags"]) && value["flags"].every(isApprovalRiskFlag))) ||
+    (value["callReviews"] !== undefined &&
+      !(
+        value["kind"] === "invoke" &&
+        Array.isArray(value["callReviews"]) &&
+        value["callReviews"].length > 0 &&
+        value["callReviews"].every(
+          (call) =>
+            isRecord(call) &&
+            hasOnlyKnownKeys(call, ["calldata", "contractAddress", "entrypoint"]) &&
+            readProviderInvokeCall(call) !== null,
+        )
+      ))
   ) {
     return false;
   }

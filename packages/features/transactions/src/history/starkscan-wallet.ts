@@ -32,9 +32,6 @@ import type { StarkscanTransfer } from "./starkscan-types";
 import { MAX_HISTORY_ENTRIES, onChainActivityEntry, type TransferDirection } from "./tx-history";
 import { scanTransactionHistory, type TransactionHistoryScan } from "./tx-history-scan";
 
-const usableSymbol = (value: string | null): value is string =>
-  value !== null && value.trim().length > 0 && value.length <= 64;
-
 const matchingToken = (
   tokens: readonly TokenConfig[],
   transfer: StarkscanTransfer,
@@ -44,16 +41,16 @@ const matchingToken = (
   if (configured !== undefined) {
     return configured;
   }
-  if (!isSafeDecimals(transfer.tokenDecimals) || !usableSymbol(transfer.tokenSymbol)) {
+  if (!isSafeDecimals(transfer.tokenDecimals)) {
     return null;
   }
   return {
     address: canonicalFelt(transfer.tokenAddress) ?? transfer.tokenAddress,
     decimals: transfer.tokenDecimals,
     id: `starkscan:${networkId}:${canonicalFelt(transfer.tokenAddress) ?? transfer.tokenAddress}`,
-    name: transfer.tokenName?.slice(0, 128) || transfer.tokenSymbol,
+    name: "Untracked token",
     networkId,
-    symbol: transfer.tokenSymbol,
+    symbol: "TOKEN",
   };
 };
 

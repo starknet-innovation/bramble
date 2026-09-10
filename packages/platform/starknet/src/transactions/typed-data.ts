@@ -55,8 +55,9 @@ import {
   JSON_BUDGETS,
   type Json,
 } from "@bramble/core/json";
-import { isStarkFieldElement } from "@bramble/wallet-model/networks";
+import { isStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
 import { typedData as snip12 } from "starknet";
+import { snip12Scalar } from "./snip12-scalars";
 import {
   BASIC_TYPES,
   CONTAINER_TYPES,
@@ -325,4 +326,41 @@ export const typedDataHash = (data: unknown, accountAddress: string): string => 
     throw new WalletError("Typed data produced an invalid hash");
   }
   return messageHash;
+};
+
+/**
+ * Computes a SNIP-12 message hash only when the signed domain declares a
+ * `chainId` field whose encoded felt equals the active network. The comparison
+ * uses the field's declared SNIP-12 type, so both the conventional `SN_MAIN`
+ * short-string spelling and its numeric felt spelling bind to the same chain.
+ * A missing, undeclared, malformed, or foreign chain id throws before signing;
+ * callers must never fall back to the chain-agnostic {@link typedDataHash} for
+ * a dapp request.
+ */
+export const typedDataHashForChain = (
+  data: unknown,
+  accountAddress: string,
+  expectedChainId: string,
+): string => {
+  if (!isTypedDataShape(data)) {
+    throw new WalletError("Invalid typed data");
+  }
+  const types = data["types"] as Record<string, unknown>;
+  const domain = data["domain"] as Record<string, unknown>;
+  const revision = identifyRevision(types, domain);
+  if (revision === null) {
+    throw new WalletError("Invalid typed data");
+  }
+  const rules = REVISION_RULES[revision];
+  const graph = readTypeGraph(types, rules);
+  const chainField = graph
+    ?.get(rules.domainType)
+    ?.find((field) => field.name === "chainId" && field.contains === undefined);
+  const encoded = chainField
+    ? snip12Scalar(domain["chainId"], chainField.type, revision)?.encoded
+    : undefined;
+  if (!sameFelt(encoded, expectedChainId)) {
+    throw new WalletError("Typed data chain does not match the active network");
+  }
+  return typedDataHash(data, accountAddress);
 };

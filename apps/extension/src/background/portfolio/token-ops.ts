@@ -5,7 +5,7 @@
  * extension-page messages.
  */
 
-import { isTokenSymbol } from "@bramble/core/json";
+import { isTokenName, isTokenSymbol } from "@bramble/core/json";
 import type { PriceService } from "@bramble/portfolio/prices";
 import { isLikelySpam, knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import type { TokenConfig, WalletPreferencesStore } from "@bramble/settings/preferences";
@@ -78,7 +78,7 @@ const buildTokenRecord = (
   return {
     address,
     decimals: metadata.decimals,
-    name: trimmedName.length > 0 ? trimmedName : symbol,
+    name: isTokenName(trimmedName) ? trimmedName : symbol,
     networkId,
     symbol,
   };

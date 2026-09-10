@@ -5,6 +5,7 @@
  * missing network configuration, Ledger accounts, and untracked tokens.
  */
 
+import { WalletError, walletErrorMessage } from "@bramble/core/errors";
 import { canonicalStrk20PoolFee } from "@bramble/privacy/service";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
@@ -35,10 +36,11 @@ export type ActivePrivacyContext = {
 };
 
 /**
- * Shortens an unknown error to a displayable message with a stable fallback.
+ * Returns only wallet-authored errors to the UI. SDK, RPC, and service errors
+ * collapse to a stable fallback so internal diagnostics never reach toast copy.
  */
 export const errorText = (error: unknown, fallback: string): string =>
-  error instanceof Error && error.message.length > 0 ? error.message : fallback;
+  walletErrorMessage(error, fallback);
 
 const firstNetworkToken = (preferences: WalletPreferences, networkId: string): TokenConfig | null =>
   preferences.tokens.find((token) => token.networkId === networkId) ?? null;
@@ -101,22 +103,22 @@ export const assertPublicPoolSpendAffordable = async (
   const balanceOf = (address: string): bigint => {
     const entry = balances.find((balance) => sameFelt(balance.address, address));
     if (!entry || !/^\d+$/.test(entry.balance)) {
-      throw new Error("Could not confirm the public balance required by this transaction");
+      throw new WalletError("Could not confirm the public balance required by this transaction");
     }
     return BigInt(entry.balance);
   };
   const amount = depositAmountRaw === undefined ? 0n : BigInt(depositAmountRaw);
   if (depositIsStrk) {
     if (balanceOf(STRK_TOKEN_ADDRESS) < amount + fee) {
-      throw new Error("Not enough STRK for the amount and pool fee");
+      throw new WalletError("Not enough STRK for the amount and pool fee");
     }
     return;
   }
   if (depositAmountRaw !== undefined && balanceOf(context.token.address) < amount) {
-    throw new Error(`Not enough ${context.token.symbol}`);
+    throw new WalletError(`Not enough ${context.token.symbol}`);
   }
   if (balanceOf(STRK_TOKEN_ADDRESS) < fee) {
-    throw new Error("Not enough STRK for the pool fee");
+    throw new WalletError("Not enough STRK for the pool fee");
   }
 };
 
@@ -136,7 +138,7 @@ export const estimatePublicStrk20Fee = async (
       rpcUrls: context.accountContext.rpcUrls,
     }))
   ) {
-    throw new Error("Deploy this account before using public privacy transactions");
+    throw new WalletError("Deploy this account before using public privacy transactions");
   }
   return deps.runtimeRpc.estimateInvokeFee({
     account: context.accountContext.account,
