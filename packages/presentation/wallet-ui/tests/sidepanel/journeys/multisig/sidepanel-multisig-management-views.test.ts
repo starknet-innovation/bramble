@@ -9,6 +9,7 @@ import {
   multisigSignersFlow,
   multisigTrackFlow,
 } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
+import { accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 
 describe("Argent multisig management views", () => {
@@ -106,5 +107,63 @@ describe("Argent multisig management views", () => {
     expect(options).toContain('aria-pressed="true"');
     expect(options).toContain("1 of 1");
     expect(options).toContain("authority unavailable");
+  });
+
+  test("every truncated multisig identity carries a copy control for its full value", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const account = fixture.status.accounts[0] ?? null;
+    const signerKey = fixture.record.currentConfig?.signerPublicKeys[0] ?? "missing";
+
+    // Signers screen: the address receipt row and each roster row's signer key.
+    const signers = multisigSignersFlow(fixture.status, account, fixture.view);
+    expect(signers).toContain(
+      `<dd><code>${accountLabel(fixture.record.address)}</code><button class="icon-button" data-copy="${fixture.record.address}" type="button" aria-label="Copy multisig address"`,
+    );
+    const roster = signers.slice(
+      signers.indexOf('class="multisig-signer-roster"'),
+      signers.indexOf("Add participant"),
+    );
+    expect(roster).toContain(`<span class="option-sub" title="${signerKey}">`);
+    expect(roster).toContain(`Key 0x${signerKey.slice(2, 6)}…${signerKey.slice(-4)}`);
+    // The signer's shown name (friendly, no user label on this fixture) names the control.
+    expect(roster).toMatch(
+      new RegExp(
+        `<button class="icon-button ghost copy-inline" data-copy="${signerKey}" type="button" aria-label="Copy [^"]+ signer public key"`,
+      ),
+    );
+    // The copy control sits between the identity and the manage disclosure,
+    // never inside a summary or form.
+    expect(roster.indexOf("copy-inline")).toBeLessThan(
+      roster.indexOf('<details class="disclosure multisig-signer-manage">'),
+    );
+
+    // Accounts & groups picker: the row stays the open control; the copy
+    // trails it on the same line.
+    const options = multisigAccountOptions([fixture.view], null);
+    expect(options).toContain(
+      `<code title="${fixture.record.address}">${accountLabel(fixture.record.address)}</code>`,
+    );
+    expect(options).toMatch(
+      new RegExp(
+        `<div class="option-row-line">\\s*<button class="option-row" data-multisig-open="${fixture.record.id}"[\\s\\S]*?</button>\\s*<button class="icon-button ghost copy-inline" data-copy="${fixture.record.address}" type="button" aria-label="Copy Treasury address"`,
+      ),
+    );
+
+    // Deploy composer: each selected signer's key copies whole beside Remove.
+    const deploy = multisigDeployFlow(fixture.status, account, true, defaultWalletPreferences());
+    const selected = deploy.slice(
+      deploy.indexOf('class="multisig-selected-signer"'),
+      deploy.indexOf("Add participant"),
+    );
+    expect(selected).toContain(`<span class="option-sub" title="${account?.publicKeyX}">`);
+    expect(selected).toMatch(
+      new RegExp(
+        `data-copy="${account?.publicKeyX}" type="button" aria-label="Copy [^"]+ signer public key"`,
+      ),
+    );
+    expect(selected.indexOf("copy-inline")).toBeGreaterThan(-1);
+    expect(selected.indexOf("copy-inline")).toBeLessThan(
+      selected.indexOf("data-remove-signer-public-key="),
+    );
   });
 });

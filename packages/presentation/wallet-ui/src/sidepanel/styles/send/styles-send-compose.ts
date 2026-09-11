@@ -391,6 +391,10 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-context-receipt code,
   .send-review-facts code { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
+  /* The reviewed recipient: truncated address and its copy control on one
+     line, the address clipping first so the control never leaves the fact. */
+  .send-review-address { align-items: center; display: flex; gap: 2px; max-width: 100%; min-width: 0; }
+  .send-review-address code { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   #send-review-button { margin-top: auto; width: 100%; }
   /* The busy review button swaps its send glyph for the shared Liquid Dots
      mark, so a running preparation reads as work rather than as a dimmed

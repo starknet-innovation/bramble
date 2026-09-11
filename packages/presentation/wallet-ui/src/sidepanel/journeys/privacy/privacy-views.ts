@@ -143,13 +143,27 @@ const preparationDetails = (
               valueStyle: "code" as const,
             },
             {
+              action: {
+                attributes: { "data-copy": preparation.authorization.caller },
+                icon: "copy" as const,
+                label: "Copy authorization caller address",
+              },
               label: "Authorization caller",
               value: shortAddress(preparation.authorization.caller),
               valueStyle: "code" as const,
             },
           ]
         : []),
-      { label: "Privacy pool", value: shortAddress(preparation.poolAddress), valueStyle: "code" },
+      {
+        action: {
+          attributes: { "data-copy": preparation.poolAddress },
+          icon: "copy",
+          label: "Copy privacy pool address",
+        },
+        label: "Privacy pool",
+        value: shortAddress(preparation.poolAddress),
+        valueStyle: "code",
+      },
     ])}
     <ul class="privacy-facts">
       ${preparation.summaries.map((summary) => `<li>${escapeHtml(summary)}</li>`).join("")}

@@ -37,10 +37,15 @@ export const buttonBusy = (button: HTMLButtonElement | null | undefined, busy: b
 /**
  * Writes a message to the nearest section status line. Returns whether a
  * status line existed, so callers can fall back to a toast when the control
- * lives outside any announced section.
+ * lives outside any announced section. Only a text line (`p`/`span` with
+ * `role="status"`) is a sink: outcome and working stages are live-region
+ * containers that also carry the role, and writing into one would replace its
+ * markup.
  */
 export const scopedStatus = (element: Element, message: string): boolean => {
-  const target = element.closest(".section")?.querySelector<HTMLElement>('[role="status"]');
+  const target = element
+    .closest(".section")
+    ?.querySelector<HTMLElement>('p[role="status"], span[role="status"]');
   if (target) {
     target.textContent = message;
     return true;

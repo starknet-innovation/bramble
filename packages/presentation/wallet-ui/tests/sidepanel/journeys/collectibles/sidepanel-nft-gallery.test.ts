@@ -200,6 +200,18 @@ describe("NFT gallery auto-discovery", () => {
     expect(send).toContain("Review transfer");
   });
 
+  test("detail and send receipts copy the collection contract in full", () => {
+    const detail = nftDetailFlow(status, account, preferences, discovered.id, [discovered]);
+    expect(detail).toContain(
+      `<dt>Contract</dt><dd><code>0x511a…a2b3</code><button class="icon-button" data-copy="${discovered.contract}" type="button" aria-label="Copy contract address"`,
+    );
+    // The send receipt names the collection, so the control says what it copies.
+    const send = nftSendFlow(status, account, preferences, discovered.id, [discovered]);
+    expect(send).toContain(
+      `<dt>Collection</dt><dd>Everai<button class="icon-button" data-copy="${discovered.contract}" type="button" aria-label="Copy collection contract address"`,
+    );
+  });
+
   test("send offers matching address-book recipients and disables without an account", () => {
     const withContacts: WalletPreferences = {
       ...preferences,

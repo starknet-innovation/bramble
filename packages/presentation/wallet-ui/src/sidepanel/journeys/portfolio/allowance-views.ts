@@ -15,7 +15,13 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
-import { accountLabel, contextHelp, flowHeader, flowScreen } from "../../shared/parts";
+import {
+  accountLabel,
+  contextHelp,
+  flowHeader,
+  flowScreen,
+  inlineCopyButton,
+} from "../../shared/parts";
 import { compactAmount } from "./token-row";
 
 // A record the wallet can only bound from below (an increase applied on top of
@@ -47,9 +53,11 @@ const SOURCE_LABELS: Readonly<Record<AllowanceView["source"], string>> = {
   wallet: "this wallet",
 };
 
-// One allowance per row: the spender leads (it is who can move funds), with
-// the token, amount, and provenance as one quiet supporting line — never three
-// stacked label/value pairs fighting for attention. A multisig's allowance is
+// One allowance per row: the spender leads (it is who can move funds), shown
+// truncated with a copy control for the full address so it can be checked
+// against the site that asked, with the token, amount, and provenance as one
+// quiet supporting line — never three stacked label/value pairs fighting for
+// attention. A multisig's allowance is
 // listed but carries no revoke control: zeroing it takes a separately reviewed
 // multisig intent and threshold authorization, so offering the button here would be an
 // affordance that can only fail. An unconfirmed contract is withheld the
@@ -57,8 +65,8 @@ const SOURCE_LABELS: Readonly<Record<AllowanceView["source"], string>> = {
 const allowanceRow = (allowance: AllowanceView): string => `
   <li class="allowance-row">
     <div class="allowance-copy">
-      <code>${escapeHtml(accountLabel(allowance.spender))}</code>
-      <p class="hint">${escapeHtml(amountLabel(allowance))} of ${escapeHtml(accountLabel(allowance.token))} · ${escapeHtml(SOURCE_LABELS[allowance.source])}</p>
+      <span class="allowance-spender"><code title="${escapeHtml(allowance.spender)}">${escapeHtml(accountLabel(allowance.spender))}</code>${inlineCopyButton(allowance.spender, "Copy spender address")}</span>
+      <p class="hint">${escapeHtml(amountLabel(allowance))} of <span title="${escapeHtml(allowance.token)}">${escapeHtml(accountLabel(allowance.token))}</span> · ${escapeHtml(SOURCE_LABELS[allowance.source])}</p>
       ${allowance.unconfirmedToken ? `<p class="hint">${escapeHtml(UNCONFIRMED_TOKEN_NOTE)}</p>` : ""}
       <p class="allowance-review" data-allowance-review-for="${escapeHtml(allowance.id)}" role="status" hidden></p>
     </div>

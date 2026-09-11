@@ -83,6 +83,21 @@ describe("privacy journey templates", () => {
     expect(html).toContain("Authorization caller");
   });
 
+  test("the pool and authorization caller contracts copy in full from the review", () => {
+    const html = privacyFlow(status, preferences, {
+      preparation: relayedRegistration,
+      stage: "activate-review",
+      tokenId: token.id,
+    });
+
+    expect(html).toContain("<code>0x123456…67890</code>");
+    expect(html).toContain('data-copy="0x12345678901234567890"');
+    expect(html).toContain('aria-label="Copy privacy pool address"');
+    expect(html).toContain('data-copy="0x99"');
+    expect(html).toContain('aria-label="Copy authorization caller address"');
+    expect(html).not.toContain("<code>0x12345678901234567890</code>");
+  });
+
   test("working, success, failure, and empty checkpoints communicate liveness and recovery", () => {
     const working = privacyFlow(status, preferences, {
       kind: "register",

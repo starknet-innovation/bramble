@@ -5,7 +5,7 @@
  * access and no state of its own.
  */
 
-import { buttonBusy } from "../../shared/dom";
+import { bindCopyButtons, buttonBusy } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
@@ -216,6 +216,8 @@ export const applyTransferUi = (
   const reviewSummary = form.querySelector<HTMLElement>("#send-review-summary");
   if (reviewSummary) {
     reviewSummary.innerHTML = state.fields ? reviewSummaryHtml(state.fields, mode) : "";
+    // Freshly rendered markup: the shell's copy binding ran before this paint.
+    bindCopyButtons(reviewSummary);
   }
   reviewFee
     ?.querySelector<HTMLButtonElement>("#review-retry-fee")

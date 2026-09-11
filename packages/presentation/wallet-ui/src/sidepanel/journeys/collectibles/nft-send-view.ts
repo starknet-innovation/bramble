@@ -55,6 +55,11 @@ export const nftSendFlow = (
         ${receipt([
           { label: "Collectible", value: nft.title },
           {
+            action: {
+              attributes: { "data-copy": nft.contract },
+              icon: "copy",
+              label: "Copy collection contract address",
+            },
             label: "Collection",
             value: nft.collection || accountLabel(nft.contract),
           },

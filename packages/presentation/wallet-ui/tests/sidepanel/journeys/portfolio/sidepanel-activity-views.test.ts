@@ -250,18 +250,29 @@ describe("activity journey boundaries", () => {
       pricing,
     );
 
-    // Sent: verb, "To <short address>", a negative delta over the amount.
+    // Sent: verb, "To <short address>" with a copy control carrying the full
+    // recorded counterparty, a negative delta over the amount.
+    const party = "0x0123456789abcdef0123456789abcdef";
     expect(html).toContain(
       'aria-label="Sent. Send 12.3456 STRK to 0x0123…cdef. accepted. View transaction on Starkscan">Sent</a>',
     );
-    expect(html).toContain('<span class="tx-detail">To 0x0123…cdef</span>');
+    expect(html).toContain(
+      `<span class="tx-detail tx-counterparty"><span title="${party}">To 0x0123…cdef</span><button class="icon-button ghost copy-inline" data-copy="${party}" type="button" aria-label="Copy recipient address"`,
+    );
     expect(html).toContain('<span class="tx-fiat">−$6.17</span>');
     expect(html).toContain('<span class="tx-amount">12.3456 STRK</span>');
     // Received: the summary already starts with the verb, so the name is the record.
     expect(html).toContain(
       'aria-label="Received 3 STRK from 0x0123…cdef. accepted. View transaction on Starkscan">Received</a>',
     );
-    expect(html).toContain('<span class="tx-detail">From 0x0123…cdef</span>');
+    expect(html).toContain(
+      `<span class="tx-detail tx-counterparty"><span title="${party}">From 0x0123…cdef</span><button class="icon-button ghost copy-inline" data-copy="${party}" type="button" aria-label="Copy sender address"`,
+    );
+    // The visible line stays truncated; only the control carries the full value.
+    expect(html).not.toContain(`>To ${party}<`);
+    // The transaction hash itself is never offered for copy — the summary link
+    // is the sole explorer action.
+    expect(html).not.toContain('data-copy="0x123"');
     expect(html).toContain('<span class="tx-fiat">+$1.50</span>');
     expect(html).toContain('<span class="tx-amount">3 STRK</span>');
     // The trailing mark is the bundled STRK logo, resolved from the tracked token.

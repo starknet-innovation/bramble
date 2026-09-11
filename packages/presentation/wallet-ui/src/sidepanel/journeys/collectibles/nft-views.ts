@@ -440,7 +440,16 @@ export const nftDetailFlow = (
             ${nft.image || nft.collection ? `<div class="nft-hero">${nftArt(nft, true, true)}${nft.collection ? `<p class="eyebrow">${escapeHtml(nft.collection)}</p>` : ""}</div>` : ""}
             ${nft.description ? `<p class="lede">${escapeHtml(nft.description)}</p>` : ""}
             ${receipt([
-              { label: "Contract", value: accountLabel(nft.contract), valueStyle: "code" },
+              {
+                action: {
+                  attributes: { "data-copy": nft.contract },
+                  icon: "copy",
+                  label: "Copy contract address",
+                },
+                label: "Contract",
+                value: accountLabel(nft.contract),
+                valueStyle: "code",
+              },
               { label: "Token id", value: nft.tokenId, valueStyle: "code" },
             ])}
           </section>

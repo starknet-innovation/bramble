@@ -16,6 +16,7 @@ import {
   accountLabel,
   flowHeader,
   flowScreen,
+  inlineCopyButton,
   noAccountEmpty,
 } from "../../shared/parts";
 import { receiveAddressView } from "../send/receive-view";
@@ -252,7 +253,16 @@ export const multisigSignersFlow = (
       <section class="section multisig-authority-summary">
         ${receipt([
           { label: "Contract", value: argentMultisigContractLabel() },
-          { label: "Address", value: accountLabel(record.address), valueStyle: "code" },
+          {
+            action: {
+              attributes: { "data-copy": record.address },
+              icon: "copy",
+              label: "Copy multisig address",
+            },
+            label: "Address",
+            value: accountLabel(record.address),
+            valueStyle: "code",
+          },
           { label: "Required", value: config ? String(config.threshold) : "Unavailable" },
           {
             label: "Current signers",
@@ -265,7 +275,8 @@ export const multisigSignersFlow = (
                 .map(
                   (identity) => `<article class="multisig-signer-identity" role="listitem">
                     <span class="option-avatar">${accountAvatar(identity.address)}</span>
-                    <span class="option-copy"><strong>${escapeHtml(identity.label)}</strong><span class="option-sub">${escapeHtml(identity.detail)}</span></span>
+                    <span class="option-copy"><strong>${escapeHtml(identity.label)}</strong><span class="option-sub" title="${escapeHtml(identity.publicKey)}">${escapeHtml(identity.detail)}</span></span>
+                    ${inlineCopyButton(identity.publicKey, `Copy ${identity.label} signer public key`)}
                     <details class="disclosure multisig-signer-manage">
                       <summary aria-label="Manage ${escapeHtml(identity.label)}"><span>${icon("moreHorizontal")}</span></summary>
                       <div class="disclosure-body">

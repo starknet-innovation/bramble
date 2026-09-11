@@ -23,6 +23,7 @@ import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { icon } from "../../shared/icons";
+import { inlineCopyButton } from "../../shared/parts";
 import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import {
@@ -146,7 +147,10 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
  * from it to avoid a double read. The visible verb is a classification, so the
  * accessible name keeps the full recorded summary (prefixed by the verb when
  * the summary does not already start with it) — the row never announces less
- * than the record says. Without `pricing` the fiat delta is simply absent.
+ * than the record says. A recorded counterparty shows truncated with a quiet
+ * copy control that carries the full stored address (the row itself is not a
+ * button, so the control nests nowhere). Without `pricing` the fiat delta is
+ * simply absent.
  */
 export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
@@ -178,7 +182,13 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
             : `<strong class="tx-summary">${escapeHtml(row.title)}<span class="sr-only">${escapeHtml(name.slice(row.title.length))}. ${escapeHtml(label)}.</span></strong>`
         }
       </span>
-      ${row.detail ? `<span class="tx-detail">${escapeHtml(row.detail)}</span>` : ""}
+      ${
+        row.detail && row.counterparty
+          ? `<span class="tx-detail tx-counterparty"><span title="${escapeHtml(row.counterparty.address)}">${escapeHtml(row.detail)}</span>${inlineCopyButton(row.counterparty.address, `Copy ${row.counterparty.role} address`)}</span>`
+          : row.detail
+            ? `<span class="tx-detail">${escapeHtml(row.detail)}</span>`
+            : ""
+      }
       <span class="tx-meta" aria-hidden="true">${escapeHtml(meta)}</span>
     </div>
     <div class="tx-side">

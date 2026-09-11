@@ -284,11 +284,14 @@ export const MULTISIG_STYLES = `
     display: grid;
     overflow: hidden;
   }
+  /* Avatar, identity, then the signer key's copy control and the manage
+     disclosure as two quiet trailing columns; the identity column alone
+     shrinks, so both controls stay inside the roster at 256px. */
   .multisig-signer-identity {
     align-items: center;
     display: grid;
     gap: ${SPACE.sm};
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     min-height: ${SIZE.row};
     padding: ${SPACE.sm} ${SPACE.md};
     position: relative;

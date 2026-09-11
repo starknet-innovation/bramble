@@ -154,4 +154,31 @@ describe("activityRowModel", () => {
       "With 0x0123…cdef",
     );
   });
+
+  test("exposes the full recorded counterparty with the role the detail line uses", () => {
+    const party = "0x0123456789abcdef0123456789abcdef";
+    const sent = {
+      ...entry,
+      counterparty: ` ${party} `,
+      kind: "transfer" as const,
+      summary: "Send",
+    };
+    expect(activityRowModel(sent).counterparty).toEqual({ address: party, role: "recipient" });
+    expect(activityRowModel({ ...sent, summary: "Received" }).counterparty).toEqual({
+      address: party,
+      role: "sender",
+    });
+    expect(activityRowModel({ ...sent, summary: "Allow 0x… to spend" }).counterparty).toEqual({
+      address: party,
+      role: "recipient",
+    });
+    expect(activityRowModel({ ...sent, kind: "deploy", summary: "Deploy" }).counterparty).toEqual({
+      address: party,
+      role: "counterparty",
+    });
+    // No recorded counterparty: the detail comes from the summary, and there is
+    // no full address to offer.
+    expect(activityRowModel({ ...sent, counterparty: "  " }).counterparty).toBeNull();
+    expect(activityRowModel(entry).counterparty).toBeNull();
+  });
 });

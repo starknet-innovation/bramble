@@ -3,7 +3,7 @@
  */
 import { escapeHtml } from "@bramble/core/html";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { accountLabel } from "../../shared/parts";
+import { accountLabel, inlineCopyButton } from "../../shared/parts";
 import {
   reviewCallsList,
   reviewFeeSection,
@@ -22,7 +22,10 @@ const BUCKET_NAMES = { private: "Private balance", public: "Public balance" } as
  * Renders the confirm-face summary: the amount with its fiat estimate, and who
  * receives it. A shield or unshield has no recipient in the payment sense — the
  * account on both ends is the user's own — so it names the account and the
- * movement between its balances instead.
+ * movement between its balances instead. The recipient shows truncated with a
+ * copy control carrying the full canonical address, so the reviewer can check
+ * it against the source they were given. The caller binds `[data-copy]` after
+ * mounting (see ./transfer-render).
  */
 export const reviewSummaryHtml = (fields: TransferFields, mode: TransferMode = "send"): string => `
   <div class="send-review-hero">
@@ -30,7 +33,7 @@ export const reviewSummaryHtml = (fields: TransferFields, mode: TransferMode = "
     <span><strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong><small>${escapeHtml(fields.fiatEstimate || "Fiat estimate unavailable")}</small></span>
   </div>
   <dl class="send-review-facts">
-    <div><dt>${mode === "send" ? "Recipient" : "Account"}</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong><code>${escapeHtml(accountLabel(fields.recipient))}</code></dd></div>
+    <div><dt>${mode === "send" ? "Recipient" : "Account"}</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong><span class="send-review-address"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(accountLabel(fields.recipient))}</code>${inlineCopyButton(fields.recipient, mode === "send" ? "Copy recipient address" : "Copy account address")}</span></dd></div>
     ${mode === "send" ? "" : `<div><dt>Movement</dt><dd><strong>${BUCKET_NAMES[fields.source]} → ${BUCKET_NAMES[fields.destination]}</strong></dd></div>`}
   </dl>`;
 

@@ -384,7 +384,11 @@ export const BASE_STYLES = `
     gap: 0;
     overflow: hidden;
   }
-  .menu-list > .menu-row, .menu-list > .option-row, .option-list > .menu-row, .option-list > .option-row { border-radius: 0; }
+  .menu-list > .menu-row, .menu-list > .option-row, .option-list > .menu-row, .option-list > .option-row, .option-list > .option-row-line > .option-row { border-radius: 0; }
+  /* A row that is itself a control (select this account) carries its copy
+     action beside it on one line, never inside it; the group's inset divider
+     and clipped corners treat the line as the row. */
+  .option-list > .option-row-line > .icon-button { margin-right: ${SPACE.sm}; }
   .menu-list > * + *, .option-list > * + * { position: relative; }
   .menu-list > * + *::before, .option-list > * + *::before {
     background: var(--bramble-hairline);

@@ -68,6 +68,10 @@ export const ACTIVITY_STYLES = `
     text-wrap: nowrap;
   }
   .tx-meta { font-variant-numeric: tabular-nums; letter-spacing: ${TRACKING.caption}; }
+  /* A recorded counterparty carries its copy control on the same caption
+     line; the truncated address is the part that clips, the control stays. */
+  .tx-counterparty { align-items: center; display: flex; gap: 2px; }
+  .tx-counterparty > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   /* Trailing figures never shrink below their content — a cut amount would
      misstate value — but they are capped so an absurd figure ellipsises inside
      its own column instead of widening the panel. */

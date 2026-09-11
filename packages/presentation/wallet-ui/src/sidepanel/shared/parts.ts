@@ -160,6 +160,14 @@ export const isWalletView = (value: unknown): value is WalletView =>
 export const accountLabel = (address: string): string => shortAddress(address);
 
 /**
+ * The address half of a `<network>:<address>` account id, for surfaces that
+ * receive only the id (approval context, Ledger signing) yet must show and copy
+ * the account address. An id without a separator passes through whole.
+ */
+export const accountIdAddress = (accountId: string): string =>
+  accountId.slice(accountId.indexOf(":") + 1);
+
+/**
  * Light summary text for an account-group disclosure: "N accounts detected"
  * when the scan found active (deployed or funded) accounts, empty otherwise.
  * Plain text (callers own the markup) shared by the recovery-phrase and Ledger
@@ -328,6 +336,22 @@ export const copyButton = (value: string, label: string): string =>
     attributes: { "data-copy": value },
     icon: "copy",
     label,
+  });
+
+/**
+ * Renders the quiet copy control that trails a truncated identifier inline — a
+ * list row's address, a review fact, an activity counterparty, a signer key.
+ * Ghost, and sized like a receipt row's copy action (`.copy-inline`), so every
+ * inline copy affordance reads the same. Copies `value` in full; the visible
+ * text stays the caller's truncated label.
+ */
+export const inlineCopyButton = (value: string, label: string): string =>
+  iconButton({
+    attributes: { "data-copy": value },
+    className: "copy-inline",
+    icon: "copy",
+    label,
+    variant: "ghost",
   });
 
 /**

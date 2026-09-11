@@ -247,6 +247,8 @@ ${SIGN_REQUEST_STYLES}
   /* Revoke is red ink, not a red box — the row stays quiet until hovered. */
   .allowance-row button.danger { background: transparent; }
   .allowance-copy code { overflow-wrap: anywhere; }
+  .allowance-spender { align-items: center; display: flex; gap: 2px; min-width: 0; }
+  .allowance-spender code { min-width: 0; }
   /* Collectibles gallery: clean image tiles, not boxed cards. Each item is a
      minimally framed art square (a hairline on the art tile only) over a tight
      caption, with compact ghost actions — no fill/edge box wraps the whole item. */

@@ -196,20 +196,52 @@ const TRAILING_PRIVATELY = /\s+privately$/i;
 export const capitalise = (value: string): string =>
   value.length === 0 ? value : `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
 
+// What the recorded counterparty was to this account: the sender of value that
+// came in, the recipient (or spender) of value that went out or was approved,
+// or simply the other party. Names both the detail line's preposition and the
+// copy control's accessible name, so the two never disagree.
+type CounterpartyRole = "counterparty" | "recipient" | "sender";
+
+// The recorded counterparty of a row, with its role. Null when the record
+// names none — the detail line then comes from the summary and there is no
+// full address to copy.
+type ActivityCounterparty = {
+  readonly address: string;
+  readonly role: CounterpartyRole;
+};
+
+const COUNTERPARTY_PREPOSITION: Readonly<Record<CounterpartyRole, string>> = {
+  counterparty: "With",
+  recipient: "To",
+  sender: "From",
+};
+
+const activityCounterparty = (
+  entry: ActivityEntry,
+  appearance: ActivityAppearance,
+): ActivityCounterparty | null => {
+  const address = entry.counterparty?.trim();
+  if (!address) return null;
+  const role: CounterpartyRole =
+    appearance.direction === "in"
+      ? "sender"
+      : appearance.direction === "out" || appearance.type === "approval"
+        ? "recipient"
+        : "counterparty";
+  return { address, role };
+};
+
 // The line beneath the verb: the counterparty when one is recorded, the swap
 // pair, or whatever the summary says beyond the verb (and beyond the amount
 // when the asset column carries it).
 const activityDetail = (
   entry: ActivityEntry,
   appearance: ActivityAppearance,
+  counterparty: ActivityCounterparty | null,
   hasAmount: boolean,
 ): string | null => {
-  const counterparty = entry.counterparty?.trim();
   if (counterparty) {
-    const party = accountLabel(counterparty);
-    if (appearance.direction === "in") return `From ${party}`;
-    if (appearance.direction === "out" || appearance.type === "approval") return `To ${party}`;
-    return `With ${party}`;
+    return `${COUNTERPARTY_PREPOSITION[counterparty.role]} ${accountLabel(counterparty.address)}`;
   }
   const summary = compactSummary(entry.summary.trim());
   if (appearance.type === "swap") {
@@ -234,6 +266,7 @@ const activityDetail = (
  */
 export type ActivityRowModel = ActivityAppearance & {
   readonly amount: string | null;
+  readonly counterparty: ActivityCounterparty | null;
   readonly detail: string | null;
   readonly fiat: string | null;
   readonly tokenAddress: string | null;
@@ -270,10 +303,12 @@ export const activityRowModel = (
     value === null || pricing === undefined
       ? null
       : `${appearance.direction === "in" ? "+" : "−"}${formatFiat(value, pricing.currency)}`;
+  const counterparty = activityCounterparty(entry, appearance);
   return {
     ...appearance,
     amount,
-    detail: activityDetail(entry, appearance, amount !== null),
+    counterparty,
+    detail: activityDetail(entry, appearance, counterparty, amount !== null),
     fiat,
     tokenAddress: token?.address ?? null,
     tokenSymbol: symbol,
