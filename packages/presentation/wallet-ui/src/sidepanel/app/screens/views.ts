@@ -416,7 +416,18 @@ export const dashboard = (
           journeyContext.multisigPortfolio,
         )
       : activeView === "activity"
-        ? activityScreen(pending, status, transactions, historyUnavailable, sharedIdentity?.record)
+        ? activityScreen(
+            pending,
+            status,
+            transactions,
+            historyUnavailable,
+            sharedIdentity?.record,
+            {
+              currency,
+              prices,
+              tokens: preferences?.tokens ?? [],
+            },
+          )
         : activeView === "settings"
           ? settingsScreen(status, preferences)
           : homeScreen(

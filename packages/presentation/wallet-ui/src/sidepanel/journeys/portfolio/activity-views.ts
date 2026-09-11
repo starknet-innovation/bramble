@@ -12,13 +12,16 @@ import { iconButton } from "@bramble/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { approvalCard } from "../approvals/approval-cards";
+import type { ActivityPricing } from "./activity-format";
 import { activityEmptyCopy, transactionGroups } from "./home-tabs";
 
 const HISTORY_UNAVAILABLE_NOTICE =
   "Couldn't load on-chain history. Showing transactions recorded on this device only — check your connection or RPC endpoint and refresh.";
 
 /**
- * Renders the Activity dock for the active account and network only.
+ * Renders the Activity dock for the active account and network only. `pricing`
+ * (the display currency, cached prices, and tracked tokens) lets each row show
+ * a signed fiat delta; without it rows show asset amounts alone.
  */
 export const activityScreen = (
   pending: readonly PendingApproval[],
@@ -26,6 +29,7 @@ export const activityScreen = (
   transactions: readonly ActivityEntry[],
   historyUnavailable: boolean,
   multisig: ArgentMultisigRecord | null = null,
+  pricing?: ActivityPricing,
 ): string =>
   dockScreen(
     "activity",
@@ -64,7 +68,7 @@ export const activityScreen = (
       ${
         transactions.length === 0
           ? emptyState(activityEmptyCopy(historyUnavailable))
-          : transactionGroups(transactions)
+          : transactionGroups(transactions, pricing)
       }
       <p id="activity-result" role="status"></p>
     </section>`,

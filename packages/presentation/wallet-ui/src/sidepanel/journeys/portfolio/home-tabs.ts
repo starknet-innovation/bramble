@@ -22,12 +22,22 @@ import { menuRow } from "@bramble/ui-kit/navigation";
 import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
-import { type IconName, icon } from "../../shared/icons";
+import { icon } from "../../shared/icons";
 import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
-import { compactSummary } from "./activity-format";
+import {
+  type ActivityPricing,
+  activityRowModel,
+  capitalise,
+  compactSummary,
+} from "./activity-format";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
-import { type PrivateBreakdown, unifiedBalanceRow } from "./token-row";
+import {
+  type PrivateBreakdown,
+  starknetNetworkGlyph,
+  tokenGlyph,
+  unifiedBalanceRow,
+} from "./token-row";
 
 /**
  * Balances shown on the home Tokens tab: tracked balances minus user-hidden
@@ -123,69 +133,59 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
   preconfirmed: "pre-confirmed",
 };
 
-const activityAppearance = (
-  entry: ActivityEntry,
-): { readonly icon: IconName; readonly label: string; readonly type: string } => {
-  const summary = entry.summary.toLowerCase();
-  if (/\bswap(ped|ping)?\b/.test(summary)) return { icon: "swap", label: "Swap", type: "swap" };
-  if (/\bunstak(e|ed|ing)\b|\bundelegat(e|ed|ing)\b/.test(summary))
-    return { icon: "piggyBankBroken", label: "Unstake", type: "unstake" };
-  if (
-    /\b(claim|claimed|claiming)\b.*\brewards?\b|\brewards?\b.*\b(claim|claimed|claiming)\b/.test(
-      summary,
-    )
-  )
-    return { icon: "blackberry", label: "Claim rewards", type: "reward" };
-  if (/\bstak(e|ed|ing)\b|\bdelegat(e|ed|ing)\b/.test(summary))
-    return { icon: "piggyBank", label: "Stake", type: "stake" };
-  if (/\b(un)?shield(ed|ing)?\b|\bprivate\b/.test(summary))
-    return { icon: "maskedFace", label: "Private transaction", type: "private" };
-  if (/\b(approve|approved|revoke|revoked)\b/.test(summary))
-    return { icon: "lock", label: "Approval", type: "approval" };
-  if (entry.kind === "transfer") {
-    const received = /\b(receive|received)\b/.test(summary);
-    return { icon: received ? "receive" : "send", label: "Transfer", type: "transfer" };
-  }
-  if (entry.kind === "deploy") return { icon: "rocket", label: "Deployment", type: "deploy" };
-  if (entry.kind === "declare")
-    return { icon: "terminal", label: "Contract declaration", type: "declare" };
-  return { icon: "activity", label: "Contract interaction", type: "other" };
-};
-
-const capitalise = (value: string): string =>
-  value.length === 0 ? value : `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
-
 /**
  * Renders one recorded transaction row for the account-partitioned Activity
- * dock and its design-system specimen. A provisional status carries an
- * explanatory hint and its own muted-but-distinct treatment, so a pre-confirmed
- * transaction never reads as settled. Beneath the summary a meta line names
- * the UTC time and the status in words, so state is readable without the
- * glyph colour; the status is repeated for assistive tech in the summary's
- * own label, and the meta line is hidden from it to avoid a double read.
+ * dock and its design-system specimen, in the design kit's transaction-row
+ * anatomy: an inline kind glyph beside the verb, the counterparty or asset
+ * pair beneath it, the signed fiat delta over the asset amount on the right,
+ * and the token mark trailing. A provisional status carries an explanatory
+ * hint and its own muted-but-distinct treatment, so a pre-confirmed transaction
+ * never reads as settled. A meta line names the status in words and the UTC
+ * time, so state is readable without the glyph colour; the status is repeated
+ * for assistive tech in the summary's own label, and the meta line is hidden
+ * from it to avoid a double read. The visible verb is a classification, so the
+ * accessible name keeps the full recorded summary (prefixed by the verb when
+ * the summary does not already start with it) — the row never announces less
+ * than the record says. Without `pricing` the fiat delta is simply absent.
  */
-export const transactionRow = (entry: ActivityEntry): string => {
+export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
   const label = STATUS_LABEL[entry.status] ?? entry.status;
-  const appearance = activityAppearance(entry);
+  const row = activityRowModel(entry, pricing);
   // Devnet has no explorer, so the outbound link is simply absent there rather
   // than pointing somewhere that cannot resolve the hash.
   const explorer = explorerTransactionUrl(entry.networkId, entry.hash);
-  const statusLabel = `${appearance.label}, ${label}`;
-  const summary = escapeHtml(compactSummary(entry.summary));
+  const statusLabel = `${row.label}, ${label}`;
+  const summary = compactSummary(entry.summary);
+  const name = summary.toLowerCase().startsWith(row.title.toLowerCase())
+    ? summary
+    : `${row.title}. ${summary}`;
   const clock = formatUtcClock(entry.submittedAt);
-  const meta = [clock, capitalise(label)].filter((part) => part !== null).join(" · ");
+  // Status leads the clock: the line ellipsises from the right at narrow
+  // widths, and the state is the part that must survive.
+  const meta = [capitalise(label), clock].filter((part) => part !== null).join(" · ");
+  const avatar = row.tokenSymbol
+    ? tokenGlyph(row.tokenAddress ?? "0x0", row.tokenSymbol)
+    : starknetNetworkGlyph();
   return `
-  <li class="tx-row">
-    <span class="tx-kind-icon tx-kind-${appearance.type} ${entry.status}" aria-label="${escapeHtml(statusLabel)}" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(appearance.icon)}</span>
+  <li class="tx-row" data-live-group>
     <div class="tx-copy">
-      ${
-        explorer
-          ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${summary}. ${escapeHtml(label)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${summary}</a>`
-          : `<strong>${summary}<span class="sr-only">. ${escapeHtml(label)}.</span></strong>`
-      }
+      <span class="tx-title">
+        <span class="tx-kind-icon tx-kind-${row.type} ${entry.status}" aria-label="${escapeHtml(statusLabel)}" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
+        ${
+          explorer
+            ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(name)}. ${escapeHtml(label)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${escapeHtml(row.title)}</a>`
+            : `<strong class="tx-summary">${escapeHtml(row.title)}<span class="sr-only">${escapeHtml(name.slice(row.title.length))}. ${escapeHtml(label)}.</span></strong>`
+        }
+      </span>
+      ${row.detail ? `<span class="tx-detail">${escapeHtml(row.detail)}</span>` : ""}
       <span class="tx-meta" aria-hidden="true">${escapeHtml(meta)}</span>
     </div>
+    <div class="tx-side">
+      ${row.fiat ? `<span class="tx-fiat">${escapeHtml(row.fiat)}</span>` : '<span class="tx-fiat is-unknown">—</span>'}
+      ${row.amount ? `<span class="tx-amount">${escapeHtml(row.amount)}</span>` : '<span class="tx-amount is-unknown">—</span>'}
+    </div>
+    <span class="tx-avatar">${avatar}</span>
   </li>`;
 };
 
@@ -195,22 +195,25 @@ export const transactionRow = (entry: ActivityEntry): string => {
  * undifferentiated column. Consecutive entries are grouped, which preserves the
  * feed's own order; an entry without a usable timestamp joins an "Undated" group.
  */
-export const transactionGroups = (entries: readonly ActivityEntry[]): string => {
+export const transactionGroups = (
+  entries: readonly ActivityEntry[],
+  pricing?: ActivityPricing,
+): string => {
   const groups: Array<{ readonly key: number | null; readonly label: string; rows: string[] }> = [];
   for (const entry of entries) {
     const date = formatUtcDate(entry.submittedAt);
     const key = date === null ? null : utcDayKey(entry.submittedAt);
     const current = groups.at(-1);
     if (current && current.key === key) {
-      current.rows.push(transactionRow(entry));
+      current.rows.push(transactionRow(entry, pricing));
     } else {
-      groups.push({ key, label: date ?? "Undated", rows: [transactionRow(entry)] });
+      groups.push({ key, label: date ?? "Undated", rows: [transactionRow(entry, pricing)] });
     }
   }
   return groups
     .map(
       (group) =>
-        `<section class="tx-day"><h3 class="tx-day-label eyebrow">${escapeHtml(group.label)}</h3><ul class="tx-list">${group.rows.join("")}</ul></section>`,
+        `<section class="tx-day"><h3 class="tx-day-label">${escapeHtml(group.label)}</h3><ul class="tx-list">${group.rows.join("")}</ul></section>`,
     )
     .join("");
 };

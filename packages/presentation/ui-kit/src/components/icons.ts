@@ -7,6 +7,11 @@ const ICONS = {
   alert:
     '<path d="M12 4 2.7 19.3a1 1 0 0 0 .9 1.7h16.8a1 1 0 0 0 .9-1.7z" /><path d="M12 10v4" /><path d="M12 17.5h.01" />',
   arrowDown: '<path d="M12 5v14" /><path d="m6 13 6 6 6-6" />',
+  // Lucide `arrow-down-right`, verbatim (Activity: Sent).
+  arrowDownRight: '<path d="m7 7 10 10" /><path d="M17 7v10H7" />',
+  // Lucide `arrow-left-right`, verbatim (Activity: Swapped).
+  arrowLeftRight:
+    '<path d="M8 3 4 7l4 4" /><path d="M4 7h16" /><path d="m16 21 4-4-4-4" /><path d="M20 17H4" />',
   book: '<path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z" /><path d="M4 17a3 3 0 0 1 3-3h11" /><path d="M8 8h6" />',
   blackberry:
     '<path d="M12 6c0-2 1.5-3.5 4-4" /><path d="M13.5 4c2-1 4-.5 5 1-2 1-4 1-5-1Z" /><circle cx="9" cy="9" r="2.5" /><circle cx="15" cy="9" r="2.5" /><circle cx="6.5" cy="13.5" r="2.5" /><circle cx="12" cy="13.5" r="2.5" /><circle cx="17.5" cy="13.5" r="2.5" /><circle cx="9" cy="18" r="2.5" /><circle cx="15" cy="18" r="2.5" />',
@@ -20,7 +25,12 @@ const ICONS = {
   chevronDown: '<path d="m6 10 6 6 6-6" />',
   chevronLeft: '<path d="m14 6-6 6 6 6" />',
   chevronRight: '<path d="m10 6 6 6-6 6" />',
+  // Lucide `corner-right-down`, verbatim (Activity: Received).
+  cornerRightDown: '<path d="m10 15 5 5 5-5" /><path d="M4 4h7a4 4 0 0 1 4 4v12" />',
   copy: '<path d="M8 8h10v10H8z" /><path d="M6 16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />',
+  // Lucide `credit-card`, verbatim (Activity: Claimed rewards).
+  creditCard:
+    '<rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" />',
   flame:
     '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />',
   folder:
@@ -36,8 +46,14 @@ const ICONS = {
   image:
     '<path d="M4 5h16v14H4z" /><path d="M4 15l5-5 4 4 3-3 4 4" /><path d="M9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0z" />',
   info: '<circle cx="12" cy="12" r="9" /><path d="M12 11v6" /><path d="M12 7h.01" />',
+  // Lucide `key-round`, verbatim (Activity: Approval).
+  keyRound:
+    '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" /><circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />',
   landmark:
     '<line x1="3" x2="21" y1="22" y2="22" /><line x1="6" x2="6" y1="18" y2="11" /><line x1="10" x2="10" y1="18" y2="11" /><line x1="14" x2="14" y1="18" y2="11" /><line x1="18" x2="18" y1="18" y2="11" /><polygon points="12 2 20 7 4 7" />',
+  // Lucide `layout-grid`, verbatim (Activity: Interacted).
+  layoutGrid:
+    '<rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" />',
   leaf: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" /><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />',
   maskedFace:
     '<path d="M4 11c0-5 3.5-8 8-8s8 3 8 8v3a8 8 0 0 1-16 0z" /><path d="M4.5 10c2.3 0 4-.7 5.5-2l2 2 2-2c1.5 1.3 3.2 2 5.5 2l-1.2 5H5.7z" /><path d="M8.5 12h.01M15.5 12h.01" /><path d="M9.5 18c1.5.7 3.5.7 5 0" />',
@@ -68,6 +84,12 @@ const ICONS = {
     '<path d="M14 4h6v6" /><path d="M20 4 11 13" /><path d="M17 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4" />',
   link: '<path d="M9 15 15 9" /><path d="M11 6l1.5-1.5a4 4 0 0 1 5.7 5.7L16.7 11.7" /><path d="M13 18l-1.5 1.5a4 4 0 0 1-5.7-5.7L7.3 12.3" />',
   lock: '<path d="M7 11V8a5 5 0 0 1 10 0v3" /><path d="M6 11h12v9H6z" />',
+  // Lucide `lock-keyhole`, verbatim (Activity: Staked).
+  lockKeyhole:
+    '<circle cx="12" cy="16" r="1" /><rect x="3" y="10" width="18" height="12" rx="2" /><path d="M7 10V7a5 5 0 0 1 10 0v3" />',
+  // Lucide `lock-keyhole-open`, verbatim (Activity: Unstaked).
+  lockKeyholeOpen:
+    '<circle cx="12" cy="16" r="1" /><rect width="18" height="12" x="3" y="10" rx="2" /><path d="M7 10V7a5 5 0 0 1 9.33-2.5" />',
   monitor:
     '<rect x="2.5" y="3" width="19" height="14" rx="2.5" /><path d="M6 7.5h5" /><path d="M6 12.5h7" /><path d="M14 7.5h4" /><path d="M16 12.5h2" /><path d="m9.5 17-2 4" /><path d="m14.5 17 2 4" /><path d="M7.5 21h9" />',
   moreHorizontal:
