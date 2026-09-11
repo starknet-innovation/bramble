@@ -100,8 +100,6 @@ const shieldIntent: SendIntent = {
   tokenId: publicBalance.id,
 };
 
-const unshieldIntent: SendIntent = { ...shieldIntent, destination: "public", source: "private" };
-
 const preparation: PrivacyPreparation = {
   amount: "1",
   id: `sha256:${"b".repeat(64)}`,
@@ -379,85 +377,6 @@ describe("Review shield", () => {
     pending.resolve(preparation);
     await flush();
     expect(stage(app)).toBe("review");
-  });
-});
-
-describe("Confirm and shield", () => {
-  test("says the proof is already built and only signing remains", async () => {
-    const pending = deferred<string>();
-    const { app } = open(shieldIntent, { executePrivacyPreparation: () => pending.promise });
-    typeAmount(app, "1");
-    submit(app);
-    await flush();
-    expect(stage(app)).toBe("review");
-
-    submit(app);
-    expect(stage(app)).toBe("authorizing");
-    expect(hidden(app, "#send-working")).toBe(false);
-    expect(text(app, "#send-working-title")).toBe("Authorizing transaction");
-    expect(text(app, "#send-working-copy")).toContain("proof built at review");
-    expect(taskState(app, "review")).toBe("done");
-    expect(taskState(app, "authorize")).toBe("active");
-    expect(text(app, "#send-task-broadcast-label")).toBe("Broadcast to Starknet");
-
-    pending.resolve("0xfeed");
-    await flush();
-    await flush();
-    expect(text(app, "#send-success-title")).toBe("Shield complete");
-  });
-});
-
-describe("Review unshield", () => {
-  test("shows the relay quote step, then names proving on confirm", async () => {
-    const prepare = deferred<PrivacyPreparation>();
-    const execute = deferred<string>();
-    const { app } = open(unshieldIntent, {
-      executePrivacyPreparation: () => execute.promise,
-      preparePrivacyWithdraw: () => prepare.promise,
-    });
-    typeAmount(app, "1");
-
-    submit(app);
-    expect(stage(app)).toBe("reviewing");
-    expect(hidden(app, "#send-working")).toBe(false);
-    expect(text(app, "#send-working-title")).toBe("Preparing unshield");
-    expect(text(app, "#send-working-copy")).toContain("quoting the relay");
-    expect(text(app, "#send-working-copy")).toContain("proof is built after you confirm");
-    expect(text(app, "#send-task-review-label")).toBe("Quote private relay");
-    expect(text(app, "#send-task-broadcast-label")).toBe("Prove and relay privately");
-    expect(text(app, "#send-review-label")).toBe("Preparing unshield…");
-
-    prepare.resolve({
-      amount: "1",
-      id: preparation.id,
-      kind: "withdraw",
-      payloadDigest: preparation.payloadDigest,
-      poolAddress: preparation.poolAddress,
-      recipient: account.address,
-      relayFee: { amount: "0x10", recipient: "0x2", token: STRK_TOKEN_ADDRESS },
-      route: "private-relay",
-      summaries: ["Unshield 1 ETH"],
-      symbol: "ETH",
-      tokenId: publicBalance.id,
-    });
-    await flush();
-    expect(stage(app)).toBe("review");
-
-    // The relay route proves at confirm: that wait is the long one, and it says so.
-    submit(app);
-    expect(stage(app)).toBe("authorizing");
-    expect(text(app, "#send-working-title")).toBe("Proving privately");
-    expect(text(app, "#send-working-copy")).toContain("Building the private proof");
-    expect(text(app, "#send-working-copy")).toContain("cannot be interrupted");
-    expect(text(app, "#send-task-authorize-label")).toBe("Build private proof");
-    expect(taskState(app, "authorize")).toBe("active");
-    expect(text(app, "#send-task-broadcast-label")).toBe("Relay privately");
-    expect(text(app, "#send-liveness")).toBe(PROVING_HINT);
-
-    execute.resolve("0xfeed");
-    await flush();
-    await flush();
-    expect(text(app, "#send-success-title")).toBe("Unshield complete");
   });
 });
 

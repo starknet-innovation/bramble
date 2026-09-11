@@ -16,7 +16,13 @@ import {
   transferSuccessSummary,
 } from "./transfer-mode";
 import type { TransferFields, TransferStage, TransferState } from "./transfer-model";
-import { setSendProgress, setTaskStatus, setText, workingStatus } from "./transfer-progress-ui";
+import {
+  setSendProgress,
+  setTaskStatus,
+  setText,
+  type WorkingStatus,
+  workingStatus,
+} from "./transfer-progress-ui";
 import { reviewDetailsHtml, reviewSummaryHtml } from "./transfer-review-markup";
 import { routeReviewFeeHtml } from "./transfer-review-routes";
 import { transferRoute } from "./transfer-route";
@@ -121,7 +127,19 @@ export const applyTransferProgress = <Review>(
   form: HTMLFormElement,
   state: TransferState<Review>,
 ): void => {
-  setText(form, "send-liveness", workingStatus(state, modeOf(form, state.fields)).liveness);
+  applyWorkingStatus(form, workingStatus(state, modeOf(form, state.fields)));
+};
+
+// Paints the working screen — title, copy, liveness, and the four task rows —
+// from one status, so a job's progress poll and a full repaint agree.
+const applyWorkingStatus = (form: HTMLFormElement, status: WorkingStatus): void => {
+  setText(form, "send-working-title", status.title);
+  setText(form, "send-working-copy", status.copy);
+  setText(form, "send-liveness", status.liveness);
+  setTaskStatus(form, "review", status.labels[0], status.states[0]);
+  setTaskStatus(form, "authorize", status.labels[1], status.states[1]);
+  setTaskStatus(form, "broadcast", status.labels[2], status.states[2]);
+  setTaskStatus(form, "confirm", status.labels[3], status.states[3]);
 };
 
 /**
@@ -204,14 +222,7 @@ export const applyTransferUi = (
     ?.addEventListener("click", () => form.requestSubmit());
 
   if (working) {
-    const status = workingStatus(state, mode);
-    setText(form, "send-working-title", status.title);
-    setText(form, "send-working-copy", status.copy);
-    setText(form, "send-liveness", status.liveness);
-    setTaskStatus(form, "review", status.labels[0], status.states[0]);
-    setTaskStatus(form, "authorize", status.labels[1], status.states[1]);
-    setTaskStatus(form, "broadcast", status.labels[2], status.states[2]);
-    setTaskStatus(form, "confirm", status.labels[3], status.states[3]);
+    applyWorkingStatus(form, workingStatus(state, mode));
   }
   if (state.fields && state.transactionHash) {
     const summary = transferSuccessSummary(

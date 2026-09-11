@@ -165,32 +165,59 @@ const workingStatusFor = <Review>(
   }
   const ledger = state.fields?.signer === "ledger";
   const leg = proofLeg(state.fields);
+  // Once the job reports it is handing the transaction on, the signing (or
+  // proving) step is behind us: the list ticks it off and the next step lights.
+  const handingOn = isHandingOn(state);
   if (!ledger && leg === "confirm") {
     return {
-      copy: "Building the private proof for this transfer, then handing it to the private relay. Proving cannot be interrupted once it starts.",
+      copy: handingOn
+        ? "The private proof is built. It is being handed to the private relay, which submits it for you."
+        : "Building the private proof for this transfer, then handing it to the private relay. Proving cannot be interrupted once it starts.",
       labels: ["Review locked", "Build private proof", "Relay privately", "Confirm on Starknet"],
-      liveness: PROVING_HINT,
-      states: ["done", "active", "pending", "pending"],
-      title: "Proving privately",
+      liveness: handingOn ? "Keep this panel open." : PROVING_HINT,
+      states: handingOn
+        ? ["done", "done", "active", "pending"]
+        : ["done", "active", "pending", "pending"],
+      title: handingOn ? "Relaying privately" : "Proving privately",
     };
   }
+  const relayed = isPrivate(state.fields);
   return {
     copy: ledger
       ? "Review the request on your Ledger. Nothing broadcasts until device approval is verified."
-      : leg === "review"
-        ? "Signing the proof built at review, then broadcasting it from your account."
-        : "The reviewed transaction is being authorized inside the wallet.",
+      : handingOn
+        ? relayed
+          ? "Signed. The transaction is being handed to the private relay."
+          : "Signed. The transaction is being broadcast to Starknet."
+        : leg === "review"
+          ? "Signing the proof built at review, then broadcasting it from your account."
+          : "The reviewed transaction is being authorized inside the wallet.",
     labels: [
       "Review locked",
       ledger ? "Approve on Ledger" : "Sign securely",
-      isPrivate(state.fields) ? "Relay privately" : "Broadcast to Starknet",
+      relayed ? "Relay privately" : "Broadcast to Starknet",
       "Confirm on Starknet",
     ],
     liveness: ledger ? "The wallet is waiting for the device." : "Keep this panel open.",
-    states: ["done", "active", "pending", "pending"],
-    title: ledger ? "Waiting for your Ledger" : "Authorizing transaction",
+    states: handingOn
+      ? ["done", "done", "active", "pending"]
+      : ["done", "active", "pending", "pending"],
+    title: ledger
+      ? "Waiting for your Ledger"
+      : handingOn
+        ? broadcastTitle(mode)
+        : "Authorizing transaction",
   };
 };
+
+// Phases the execute job reports once the transaction has left the signing or
+// proving step and is on its way to the network or the relay.
+const HANDING_ON_PHASES: ReadonlySet<string> = new Set(["broadcasting", "relaying privately"]);
+
+const isHandingOn = <Review>(state: TransferState<Review>): boolean =>
+  state.stage === "authorizing" &&
+  state.progress?.phase !== undefined &&
+  HANDING_ON_PHASES.has(state.progress.phase);
 
 /**
  * Updates one working-screen task row's label and progress state.
