@@ -3,6 +3,8 @@
  * registration/deposit details before their one-time submission.
  */
 import { describe, expect, test } from "bun:test";
+import { WalletError } from "@bramble/core/errors";
+import { strk20WaitExceeded } from "@bramble/privacy/official-sdk-budget";
 import type { Strk20SubmissionPlan } from "@bramble/privacy/service";
 import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import {
@@ -115,6 +117,54 @@ describe("background wallet STRK20 operations", () => {
       token: STRK20_TOKEN,
       tokenId: token.id,
     });
+  });
+
+  test("answers the state read on the request, never through a job", async () => {
+    // The disclosure is what every surface paints its Shield entry from, so it
+    // must settle on the request that asked for it: a job envelope here would
+    // fail the panel's reader and leave the entry reading as unavailable.
+    const handler = buildStrk20Handler({
+      preferences: preferences(),
+      strk20: makeStrk20WalletService({
+        registered: { value: true },
+        registrations: { value: 0 },
+        submissions: [],
+      }),
+    });
+
+    const response = (await handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)) as {
+      readonly strk20Job?: unknown;
+      readonly strk20State?: { readonly registration: string };
+    };
+
+    expect(response.strk20Job).toBeUndefined();
+    expect(response.strk20State?.registration).toBe("registered");
+  });
+
+  test("a lapsed discovery budget is an error, never an unregistered reading", async () => {
+    // A registered account whose indexer read stalls must not be offered
+    // registration again: the lapse reaches the UI's retry as a service error.
+    for (const stalled of ["registrationStatus", "privateBalances"] as const) {
+      const handler = buildStrk20Handler({
+        preferences: preferences(),
+        strk20: {
+          ...makeStrk20WalletService({
+            registered: { value: true },
+            registrations: { value: 0 },
+            submissions: [],
+          }),
+          async [stalled]() {
+            throw new WalletError(strk20WaitExceeded("checking registration", 60_000));
+          },
+        },
+      });
+
+      await expect(
+        handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER),
+      ).resolves.toEqual({
+        error: "strk20 services unavailable: checking registration did not finish within 60 s",
+      });
+    }
   });
 
   test("returns a recoverable error when the pool fee cannot be read", async () => {

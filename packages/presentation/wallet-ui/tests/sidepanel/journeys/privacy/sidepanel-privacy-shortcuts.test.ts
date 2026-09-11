@@ -10,7 +10,9 @@
  * account is registered. It must never be a dead click: whatever stops
  * activation — no STRK for the fee, a registration still indexing, no pool on
  * this network, an unreachable service — lands on the privacy screen with the
- * reason and the next step, never on a toast alone.
+ * reason and the next step, never on a toast alone. Whatever it has to wait for
+ * first is watched on the preparing screen (its own suite,
+ * sidepanel-privacy-preparing.test.ts); here only the outcomes are pinned.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
@@ -162,7 +164,9 @@ const bindActivation = (
     balances: () => [],
     disclosure: () => disclosure,
     generation: () => 0,
-    journey: () => ({ stage: "idle" }),
+    // The journey is read back by the entry's own continuations, so it is real
+    // state here, as the controller keeps it in production.
+    journey: () => journeys.at(-1) ?? { stage: "idle" },
     navigate: (view) => {
       views.push(view);
     },
@@ -198,8 +202,9 @@ describe("the activation entry", () => {
     click(app, "[data-privacy-open]");
     await tick();
 
-    expect(journeys.at(-1)?.stage).toBe("activate-review");
-    expect(views).toEqual(["privacy"]);
+    // The preparing screen is shown at once; the review replaces it.
+    expect(journeys.map((journey) => journey.stage)).toEqual(["preparing", "activate-review"]);
+    expect(views).toEqual(["privacy", "privacy"]);
   });
 
   test("lands on the funding step instead of a toast when STRK is short", async () => {
@@ -215,7 +220,7 @@ describe("the activation entry", () => {
     await tick();
 
     expect(blockerOf(journeys)).toBe("fund");
-    expect(views).toEqual(["privacy"]);
+    expect(views).toEqual(["privacy", "privacy"]);
     expect(document.querySelector(".toast")).toBeNull();
   });
 
@@ -249,8 +254,10 @@ describe("the activation entry", () => {
     click(app, "[data-privacy-open]");
     await tick();
 
+    // Discovery had to run first, so the wait was shown before the answer.
+    expect(journeys.map((journey) => journey.stage)).toEqual(["preparing", "blocked"]);
     expect(blockerOf(journeys)).toBe("network");
-    expect(views).toEqual(["privacy"]);
+    expect(views).toEqual(["privacy", "privacy"]);
     // The screen explains it; the loader's usual toast stays quiet.
     expect(document.querySelector(".toast")).toBeNull();
   });
@@ -291,12 +298,14 @@ describe("the activation entry", () => {
   test("becomes the shield shortcut once registration has settled", async () => {
     // The tile was painted on an older reading; the click finds nothing to
     // activate, so it opens Send in its Shield mode rather than doing nothing.
-    const { app, intents, journeys } = bindActivation(settled("registered"), {});
+    const { app, intents, journeys, views } = bindActivation(settled("registered"), {});
 
     click(app, "[data-privacy-open]");
     await tick();
 
-    expect(journeys).toEqual([]);
+    // No wait and no journey screen: the entry hands straight over to Send.
+    expect(journeys).toEqual([{ stage: "idle" }]);
+    expect(views).toEqual([]);
     expect(intents).toEqual([
       expect.objectContaining({ destination: "private", source: "public", tokenId: TOKEN_ID }),
     ]);

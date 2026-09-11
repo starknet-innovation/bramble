@@ -125,6 +125,48 @@ describe("privacy journey templates", () => {
     );
   });
 
+  test("the preparing screen names its step, the job's progress, and the way back", () => {
+    const discovering = privacyFlow(status, preferences, {
+      progress: null,
+      stage: "preparing",
+      step: "discovering",
+      tokenId: token.id,
+    });
+    expect(discovering).toContain("Go private");
+    expect(discovering).toContain('data-privacy-preparing="discovering"');
+    expect(discovering).toContain("Checking private balances");
+    expect(discovering).toContain('id="privacy-liveness"');
+    expect(discovering).toContain('id="privacy-cancel"');
+    // The proof has not started: its step is still pending.
+    expect(discovering).toContain('<li data-state="active"><span></span>Check registration');
+    expect(discovering).toContain('<li data-state="pending"><span></span>Build registration proof');
+
+    const proving = privacyFlow(status, preferences, {
+      progress: { attempt: 2, attempts: 3, elapsedMs: 95_000, phase: "proving" },
+      stage: "preparing",
+      step: "proving",
+      tokenId: token.id,
+    });
+    expect(proving).toContain("Preparing to go private");
+    expect(proving).toContain('<li data-state="done"><span></span>Check registration');
+    expect(proving).toContain('<li data-state="active"><span></span>Build registration proof');
+    // Phase and elapsed time from the job's own poll, then the standing hint.
+    expect(proving).toContain("Proving (attempt 2 of 3) · 1 min 35 s. Keep the wallet open.");
+    expect(proving).toContain("going back discards this preparation");
+  });
+
+  test("the working screen carries the submission job's progress on its liveness line", () => {
+    const html = privacyFlow(status, preferences, {
+      kind: "register",
+      preparation: registration,
+      progress: { elapsedMs: 4_000, phase: "broadcasting" },
+      stage: "working",
+      tokenId: token.id,
+    });
+    expect(html).toContain('id="privacy-liveness"');
+    expect(html).toContain("Broadcasting · 4 s. Keep the wallet open.");
+  });
+
   test("a blocked activation explains the prerequisite and ends in its next step", () => {
     const blocked = (kind: PrivacyBlockerKind, message: string): string =>
       privacyFlow(status, preferences, {

@@ -17,6 +17,7 @@ import { flowHeader, flowScreen, formatFri } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { reviewPanel } from "../../shared/review-render";
 import type { PrivacyBlockerKind, PrivacyJourneyState } from "./privacy-model";
+import { type PreparationProgress, preparationProgressText } from "./privacy-preparation-job";
 
 /**
  * The one line every proving wait shows. Activation proves here; a shield
@@ -25,6 +26,64 @@ import type { PrivacyBlockerKind, PrivacyJourneyState } from "./privacy-model";
  */
 export const PROVING_HINT =
   "Keep the wallet open. Proving may take longer than a normal token transfer.";
+
+/**
+ * The liveness line of a wait: the job's phase and elapsed time when it has
+ * reported one, ahead of the standing hint. The phase is a fixed label from the
+ * closed vocabulary and the time a number, so this is text, never markup. Both
+ * the template and the in-place update on every poll read it from here.
+ */
+export const privacyLivenessText = (
+  progress: PreparationProgress | null | undefined,
+  hint: string = PROVING_HINT,
+): string => (progress ? `${preparationProgressText(progress)}. ${hint}` : hint);
+
+type PreparingStep = Extract<PrivacyJourneyState, { readonly stage: "preparing" }>["step"];
+
+// The wait before the review. Discovery and the activation proof are the two
+// legs a click on "Go private" may have to sit through, and the second can take
+// minutes: the screen names what it is doing and for how long, and offers the
+// way back, because a bare busy button was exactly what read as a dead click.
+// Backing out is safe — nothing is signed or sent before the review is
+// confirmed; the background finishes the proof it started and never executes an
+// abandoned preparation.
+const PREPARING_COPY: Readonly<
+  Record<PreparingStep, { readonly body: string; readonly hint: string; readonly title: string }>
+> = {
+  discovering: {
+    body: "Reading this account's registration and private notes before anything is prepared.",
+    hint: "Keep the wallet open.",
+    title: "Checking private balances",
+  },
+  proving: {
+    body: "Building the registration proof and estimating the network fee. Nothing is signed or sent until you confirm the review; going back discards this preparation.",
+    hint: PROVING_HINT,
+    title: "Preparing to go private",
+  },
+};
+
+const preparing = (
+  journey: Extract<PrivacyJourneyState, { readonly stage: "preparing" }>,
+): string => {
+  const copy = PREPARING_COPY[journey.step];
+  const proving = journey.step === "proving";
+  return `
+  <section class="privacy-working" role="status" aria-live="polite" data-privacy-preparing="${journey.step}">
+    ${liquidDots("privacy")}${liquidDotsFilter("privacy")}
+    <h2>${escapeHtml(copy.title)}</h2>
+    <p>${escapeHtml(copy.body)}</p>
+    <ol class="privacy-task-list">
+      <li data-state="${proving ? "done" : "active"}"><span></span>Check registration</li>
+      <li data-state="${proving ? "active" : "pending"}"><span></span>Build registration proof</li>
+      <li data-state="pending"><span></span>Review and confirm</li>
+      <li data-state="pending"><span></span>Broadcast to Starknet</li>
+    </ol>
+    <p class="hint" id="privacy-liveness">${escapeHtml(privacyLivenessText(journey.progress, copy.hint))}</p>
+    <div class="privacy-actions">
+      ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
+    </div>
+  </section>`;
+};
 
 const shortAddress = (value: string): string =>
   value.length <= 15 ? value : `${value.slice(0, 8)}…${value.slice(-5)}`;
@@ -106,7 +165,7 @@ const preparationDetails = (
   </section>`;
 };
 
-const working = (): string => `
+const working = (journey: Extract<PrivacyJourneyState, { readonly stage: "working" }>): string => `
   <section class="privacy-working" role="status" aria-live="polite">
     ${liquidDots("privacy")}${liquidDotsFilter("privacy")}
     <h2>Activating private balances</h2>
@@ -117,7 +176,7 @@ const working = (): string => `
       <li data-state="pending"><span></span>Broadcast to Starknet</li>
       <li data-state="pending"><span></span>Discover private balance</li>
     </ol>
-    <p class="hint">${PROVING_HINT}</p>
+    <p class="hint" id="privacy-liveness">${escapeHtml(privacyLivenessText(journey.progress))}</p>
   </section>`;
 
 const success = (journey: Extract<PrivacyJourneyState, { readonly stage: "success" }>): string => `
@@ -234,16 +293,20 @@ export const privacyFlow = (
       ? preparationDetails(journey, status)
       : journey.stage === "blocked"
         ? blocked(journey)
-        : journey.stage === "working"
-          ? working()
-          : journey.stage === "success"
-            ? success(journey)
-            : journey.stage === "failure"
-              ? failure(journey)
-              : emptyState("Choose an asset to begin.");
+        : journey.stage === "preparing"
+          ? preparing(journey)
+          : journey.stage === "working"
+            ? working(journey)
+            : journey.stage === "success"
+              ? success(journey)
+              : journey.stage === "failure"
+                ? failure(journey)
+                : emptyState("Choose an asset to begin.");
   return (
     flowHeader(
-      journey.stage === "activate-review" || journey.stage === "blocked"
+      journey.stage === "activate-review" ||
+        journey.stage === "blocked" ||
+        journey.stage === "preparing"
         ? "Go private"
         : "Private balance",
       status,

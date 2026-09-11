@@ -47,6 +47,10 @@ const PRIVACY_SOURCE = join(
   REPO_DIR,
   "packages/presentation/wallet-ui/src/sidepanel/journeys/privacy/privacy-ui.ts",
 );
+const PRIVACY_DISCLOSURE_SOURCE = join(
+  REPO_DIR,
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/privacy/privacy-disclosure.ts",
+);
 const TRANSACTION_ALERTS_SOURCE = join(
   REPO_DIR,
   "packages/presentation/wallet-ui/src/sidepanel/journeys/approvals/tx-alerts-ui.ts",
@@ -252,9 +256,10 @@ describe("panel polling cannot hold the wallet unlocked", () => {
   });
 
   test("the three ambient readers outside hydration remain classified", async () => {
-    const [lifecycle, privacy, transactionAlerts] = await Promise.all([
+    const [lifecycle, privacy, privacyDisclosure, transactionAlerts] = await Promise.all([
       readFile(LIFECYCLE_SOURCE, "utf8"),
       readFile(PRIVACY_SOURCE, "utf8"),
+      readFile(PRIVACY_DISCLOSURE_SOURCE, "utf8"),
       readFile(TRANSACTION_ALERTS_SOURCE, "utf8"),
     ]);
 
@@ -265,12 +270,14 @@ describe("panel polling cannot hold the wallet unlocked", () => {
     expect(
       transactionAlerts.split("\n").filter((line) => line.includes("wallet.loadTransactionAlerts")),
     ).toEqual(["    const alerts = await wallet.loadTransactionAlerts().catch(() => []);"]);
+    // The single-flight loader and the pending-registration poll are the only
+    // two ambient disclosure reads; the entry's press joins the loader.
+    expect(
+      privacyDisclosure.split("\n").filter((line) => line.includes("deps.wallet.loadPrivacyState")),
+    ).toEqual(["      const value = await deps.wallet.loadPrivacyState();"]);
     expect(
       privacy.split("\n").filter((line) => line.includes("deps.wallet.loadPrivacyState")),
-    ).toEqual([
-      "    const value = await deps.wallet.loadPrivacyState();",
-      "    load: () => deps.wallet.loadPrivacyState(),",
-    ]);
+    ).toEqual(["    load: () => deps.wallet.loadPrivacyState(),"]);
   });
 });
 

@@ -42,7 +42,9 @@ const preparation = {
   route: "public-account" as const,
   summaries: ["Register viewing-key commitment"],
   symbol: "ETH",
-  tokenId: preferences.tokens[0]?.id ?? "",
+  // A real id: the shared fixture tracks no tokens, and an empty id makes the
+  // entry a no-op, which once left the two tests below passing vacuously.
+  tokenId: "SN_MAIN:ETH:0x456",
 };
 
 const deferred = <T>() => {
@@ -305,7 +307,9 @@ describe("privacy UI async scope isolation", () => {
         },
       }),
       generation: () => generation,
-      journey: () => ({ stage: "idle" }),
+      // Real journey state, so the scope guard — not a stale journey — is what
+      // drops the result.
+      journey: () => journeys.at(-1) ?? { stage: "idle" },
       navigate: () => undefined,
       paint: () => undefined,
       preferences: () => preferences,
@@ -323,7 +327,9 @@ describe("privacy UI async scope isolation", () => {
     pending.resolve(preparation);
     await tick();
 
-    expect(journeys).toEqual([]);
+    // The press showed the wait; the review it produced belongs to the account
+    // that was active when it started and is never applied to the next one.
+    expect(journeys.map((journey) => journey.stage)).toEqual(["preparing"]);
   });
 
   test("drops execution success after the reviewed account scope is reset", async () => {

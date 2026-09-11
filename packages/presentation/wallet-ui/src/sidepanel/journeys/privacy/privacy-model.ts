@@ -3,6 +3,7 @@
  * journeys. Nothing here is persisted across lock or extension restart.
  */
 
+import type { PreparationProgress } from "./privacy-preparation-job";
 import type { PrivacyAccountState, PrivacyPreparation } from "./privacy-runtime";
 
 /**
@@ -67,6 +68,13 @@ export const privacyBlockerFor = (message: string): PrivacyBlocker => ({
 });
 
 /**
+ * Which wait the `preparing` screen is showing. Discovery is the account's
+ * registration and private-note read, needed before the entry can decide what
+ * it is; proving is the activation proof itself, a tracked background job.
+ */
+export type PrivacyPreparingStep = "discovering" | "proving";
+
+/**
  * Deterministic checkpoint in the pool-registration journey.
  *
  * Registration is all this surface does. Every movement of value — shielding,
@@ -74,12 +82,23 @@ export const privacyBlockerFor = (message: string): PrivacyBlocker => ({
  * two balances, so the journey has no compose or amount step of its own.
  * `blocked` is the checkpoint before activation: the prerequisite that is not
  * met yet, spelled out with its next action, so no entry point ends in a toast.
+ * `preparing` is the wait before either: the entry lands here the moment it is
+ * pressed, so a discovery still in flight or a proof that takes minutes is
+ * watched on a screen that names its phase and elapsed time, never on a busy
+ * button.
  */
 export type PrivacyJourneyState =
   | { readonly stage: "idle" }
   | {
       readonly blocker: PrivacyBlocker;
       readonly stage: "blocked";
+      readonly tokenId: string;
+    }
+  | {
+      /** Latest poll of the proof job; null before its first poll and while discovering. */
+      readonly progress: PreparationProgress | null;
+      readonly stage: "preparing";
+      readonly step: PrivacyPreparingStep;
       readonly tokenId: string;
     }
   | {
@@ -90,6 +109,8 @@ export type PrivacyJourneyState =
   | {
       readonly kind: "register";
       readonly preparation: PrivacyPreparation;
+      /** Latest poll of the submission job, once it has reported one. */
+      readonly progress?: PreparationProgress;
       readonly stage: "working";
       readonly tokenId: string;
     }
