@@ -1,0 +1,35 @@
+{
+  "name": "@mc-wallet/website",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "check": "bun run check:types && bun run check:lint && bun run test && bun run build",
+    "check:lint": "biome check .",
+    "check:types": "tsc --noEmit",
+    "dev": "vite",
+    "preview": "vite preview",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@fontsource-variable/instrument-sans": "5.3.0",
+    "@radix-ui/react-slot": "1.3.3",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.38.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwind-merge": "3.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.1.1",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}
