@@ -17,6 +17,7 @@ import { defaultWalletPreferences, type WalletPreferences } from "@bramble/setti
 import { STRK20_JOB_INTERRUPTED } from "../../../apps/extension/src/background/privacy/strk20-preparation-jobs";
 import { flushHeld } from "../../support/held";
 import {
+  awaitStrk20Job,
   buildStrk20Handler,
   makeStrk20Service,
   prepareStrk20Registration,
@@ -90,8 +91,9 @@ describe("activation route through the job", () => {
     const built = await base.prepareRegistration?.({} as never);
     if (!built) throw new Error("service double did not build");
     proof.resolve(built);
-    await flushHeld();
-    const settled = (await handler(poll(jobId), STRK20_EXTENSION_SENDER)) as {
+    // The job hashes the built preparation before it settles, so the outcome is
+    // polled the way the panel polls it rather than expected after one tick.
+    const settled = (await awaitStrk20Job((next, to) => handler(next, to), started)) as {
       readonly strk20Preparation?: { readonly id: string; readonly kind: string };
     };
     expect(settled.strk20Preparation?.kind).toBe("register");
@@ -175,8 +177,10 @@ describe("execution through the job", () => {
     ).resolves.toEqual({ error: "Privacy preparation not found" });
 
     relay.resolve({ transactionHash: "0x444" });
-    await flushHeld();
     const settled = { ok: true as const, transactionHash: "0x444" };
+    await expect(awaitStrk20Job((next, to) => handler(next, to), started)).resolves.toEqual(
+      settled,
+    );
     // ...and after it settled. Repeated polls return the stored hash; the
     // service is never asked to submit again.
     for (let attempt = 0; attempt < 3; attempt += 1) {
