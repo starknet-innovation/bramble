@@ -25,8 +25,8 @@ import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
 import { createApprovalContext } from "../approvals/approval-context";
 import { activeAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-
 import { strk20ServiceForRuntime } from "./strk20-account-context";
+import { strk20FeeAssetFor } from "./strk20-fee-reference";
 import {
   type ActivePrivacyContext,
   assertPublicPoolSpendAffordable,
@@ -181,7 +181,10 @@ const transferPreparation = async (
       recipient,
       summaries: [
         `Send ${input.amount} ${context.token.symbol} privately to ${recipient}`,
-        summarizeStrk20Plan(plan),
+        summarizeStrk20Plan(
+          plan,
+          strk20FeeAssetFor(context.accountContext.account.networkId, plan),
+        ),
         "The transfer moves shielded balance; the amount and recipient stay off-chain",
       ],
       token: context.token,
@@ -259,7 +262,10 @@ const withdrawPreparation = async (
       recipient,
       summaries: [
         `Unshield ${input.amount} ${context.token.symbol} to ${own ? "this account" : recipient}`,
-        summarizeStrk20Plan(plan),
+        summarizeStrk20Plan(
+          plan,
+          strk20FeeAssetFor(context.accountContext.account.networkId, plan),
+        ),
         "The withdrawal is public: the amount and destination become visible on-chain",
       ],
       token: context.token,
@@ -388,7 +394,10 @@ const depositPreparation = async (
         toSelf
           ? `Shield ${input.amount} ${context.token.symbol}`
           : `Shield ${input.amount} ${context.token.symbol} into ${recipient}'s private balance`,
-        summarizeStrk20Plan(plan),
+        summarizeStrk20Plan(
+          plan,
+          strk20FeeAssetFor(context.accountContext.account.networkId, plan),
+        ),
         toSelf
           ? "The deposit is public; the resulting balance can be spent privately"
           : "The deposit is public: your address and the amount are on chain, and only the recipient stays hidden",

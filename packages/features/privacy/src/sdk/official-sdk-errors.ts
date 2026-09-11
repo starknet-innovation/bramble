@@ -270,3 +270,19 @@ export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): 
   const label = `${base} (${stage}/${category})`;
   throw new WalletError(detail === "" ? label : `${label}: ${detail}`);
 };
+
+/**
+ * The relay refused the requested `pool_fee_token`.
+ *
+ * AVNU reports this as JSON-RPC code {@link TOKEN_NOT_SUPPORTED_CODE} and
+ * publishes no method to enumerate the accepted set for `sponsored_private`, so
+ * the quote itself is the only authority on what that mode accepts.
+ * Distinguished from every other refusal because it is the one a caller can
+ * recover from, by re-quoting in a different token.
+ */
+export class Strk20FeeTokenUnsupportedError extends WalletError {}
+
+/**
+ * JSON-RPC error code for an unsupported `pool_fee_token` (`TOKEN_NOT_SUPPORTED`).
+ */
+export const TOKEN_NOT_SUPPORTED_CODE = 151;

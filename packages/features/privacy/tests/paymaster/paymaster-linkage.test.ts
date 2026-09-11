@@ -39,7 +39,7 @@ const build = (result: unknown, approveCalls: readonly Call[] = []) =>
     approveCalls,
     chainId: "0x534e5f5345504f4c4941",
     config,
-    expectedFeeAmount: 5n,
+    feeBound: { amount: 5n, kind: "exact" as const },
     http: async () => response(result),
     nowSeconds: 2,
     poolAddress: "0x2",

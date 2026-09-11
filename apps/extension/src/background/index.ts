@@ -60,6 +60,7 @@ import {
 import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
+import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createMessageHandler } from "./routing/messages";
 import type { RuntimeSender } from "./routing/senders";
 import { walletEventBroadcasts } from "./runtime/events";
@@ -305,6 +306,7 @@ const runtimeRpc = {
   strk20: strk20MaturityStore
     ? withGatewayAnalyticsFlows(
         createOfficialStrk20Service({
+          feeReference: createStrk20FeeReference(priceService),
           http: gatewayAnalytics.fetch,
           maturityStore: strk20MaturityStore,
           nowSeconds: () => Math.floor(systemClock() / 1_000),

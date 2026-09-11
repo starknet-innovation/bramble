@@ -35,6 +35,7 @@ import type {
   Strk20DisclosureApprovalKind,
   Strk20DisclosureRequest,
 } from "./strk20-approval-types";
+import { strk20FeeAssetFor } from "./strk20-fee-reference";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
 import {
   readStrk20BalancesMessage,
@@ -303,7 +304,10 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
         ...actionTokenAddresses(input.actions),
         ...("feeAction" in plan ? [plan.feeAction.token] : []),
       ]),
-      summaries: [...input.actions.map(summarizeStrk20Action), summarizeStrk20Plan(plan)],
+      summaries: [
+        ...input.actions.map(summarizeStrk20Action),
+        summarizeStrk20Plan(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
+      ],
     });
     notifyApprovalsChanged();
     return deps.waiters.register(approval.id);
