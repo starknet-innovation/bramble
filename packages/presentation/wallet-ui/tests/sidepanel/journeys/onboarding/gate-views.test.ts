@@ -22,12 +22,11 @@ describe("onboarding gate view", () => {
     expect(html).toContain('data-onboarding-step="welcome"');
     expect(html).toContain('id="create-new-button"');
     expect(html).toContain('id="add-existing-button"');
-    expect(html).toContain('class="orbit-field"');
-    expect(html.match(/class="orbit-ring/g)?.length).toBe(5);
-    expect(html.match(/class="orbit-track/g)?.length).toBe(7);
-    expect(html.match(/orbit-track-reverse/g)?.length).toBe(2);
-    expect(html.match(/class="orbit-pulse/g)?.length).toBe(3);
-    expect(html).not.toContain("orbit-spark");
+    // The card centres the wordmark lockup — the website's bird-and-name —
+    // with no decorative motion around it.
+    expect(html).toContain('<div class="onboarding-lockup">');
+    expect(html).toContain('class="brand-wordmark" role="img" aria-label="Bramble"');
+    expect(html).not.toContain("orbit");
     expect(html).not.toContain('href="onboarding.html"');
   });
 

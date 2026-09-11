@@ -23,7 +23,9 @@ import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { type IconName, icon } from "../../shared/icons";
+import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import { compactSummary } from "./activity-format";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
 import { type PrivateBreakdown, unifiedBalanceRow } from "./token-row";
 
@@ -150,11 +152,17 @@ const activityAppearance = (
   return { icon: "activity", label: "Contract interaction", type: "other" };
 };
 
+const capitalise = (value: string): string =>
+  value.length === 0 ? value : `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
+
 /**
  * Renders one recorded transaction row for the account-partitioned Activity
  * dock and its design-system specimen. A provisional status carries an
  * explanatory hint and its own muted-but-distinct treatment, so a pre-confirmed
- * transaction never reads as settled.
+ * transaction never reads as settled. Beneath the summary a meta line names
+ * the UTC time and the status in words, so state is readable without the
+ * glyph colour; the status is repeated for assistive tech in the summary's
+ * own label, and the meta line is hidden from it to avoid a double read.
  */
 export const transactionRow = (entry: ActivityEntry): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
@@ -164,7 +172,9 @@ export const transactionRow = (entry: ActivityEntry): string => {
   // than pointing somewhere that cannot resolve the hash.
   const explorer = explorerTransactionUrl(entry.networkId, entry.hash);
   const statusLabel = `${appearance.label}, ${label}`;
-  const summary = escapeHtml(entry.summary);
+  const summary = escapeHtml(compactSummary(entry.summary));
+  const clock = formatUtcClock(entry.submittedAt);
+  const meta = [clock, capitalise(label)].filter((part) => part !== null).join(" · ");
   return `
   <li class="tx-row">
     <span class="tx-kind-icon tx-kind-${appearance.type} ${entry.status}" aria-label="${escapeHtml(statusLabel)}" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(appearance.icon)}</span>
@@ -174,8 +184,35 @@ export const transactionRow = (entry: ActivityEntry): string => {
           ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${summary}. ${escapeHtml(label)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${summary}</a>`
           : `<strong>${summary}<span class="sr-only">. ${escapeHtml(label)}.</span></strong>`
       }
+      <span class="tx-meta" aria-hidden="true">${escapeHtml(meta)}</span>
     </div>
   </li>`;
+};
+
+/**
+ * Groups a newest-first feed into UTC calendar days, each rendered as a small
+ * heading over its own list, so a long feed reads by date rather than as one
+ * undifferentiated column. Consecutive entries are grouped, which preserves the
+ * feed's own order; an entry without a usable timestamp joins an "Undated" group.
+ */
+export const transactionGroups = (entries: readonly ActivityEntry[]): string => {
+  const groups: Array<{ readonly key: number | null; readonly label: string; rows: string[] }> = [];
+  for (const entry of entries) {
+    const date = formatUtcDate(entry.submittedAt);
+    const key = date === null ? null : utcDayKey(entry.submittedAt);
+    const current = groups.at(-1);
+    if (current && current.key === key) {
+      current.rows.push(transactionRow(entry));
+    } else {
+      groups.push({ key, label: date ?? "Undated", rows: [transactionRow(entry)] });
+    }
+  }
+  return groups
+    .map(
+      (group) =>
+        `<section class="tx-day"><h3 class="tx-day-label eyebrow">${escapeHtml(group.label)}</h3><ul class="tx-list">${group.rows.join("")}</ul></section>`,
+    )
+    .join("");
 };
 
 // Renders the failed-load state with a friendly, actionable line and an

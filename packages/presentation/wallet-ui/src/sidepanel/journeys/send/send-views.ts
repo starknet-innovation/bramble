@@ -15,6 +15,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
+import { networkDisplayName } from "../../shared/network-label";
 import {
   accountAvatar,
   accountDisplayName,
@@ -30,10 +31,20 @@ import {
   type SendIntent,
   sendAssets,
   sendBalanceLabel,
+  sendBalanceLine,
   sendRecipientAccounts,
 } from "./send-model";
+import {
+  type TransferMode,
+  type TransferModeCopy,
+  transferModeCopy,
+  transferModeFor,
+  transferStageTitle,
+} from "./transfer-mode";
 
-const sendHeader = (): string => `
+// A shortcut opens on the amount step, so the header's first words are the
+// mode's own; a plain send opens on the recipient prompt.
+const sendHeader = (mode: TransferMode, copy: TransferModeCopy): string => `
   <header class="flow-header send-flow-header">
     ${iconButton({
       attributes: { id: "send-header-back" },
@@ -41,17 +52,17 @@ const sendHeader = (): string => `
       label: "Back",
       variant: "ghost",
     })}
-    <div class="flow-title"><h1 id="send-header-title">Send to</h1></div>
+    <div class="flow-title"><h1 id="send-header-title">${escapeHtml(transferStageTitle(mode === "send" ? "recipient" : "details", mode))}</h1></div>
     ${iconButton({
       attributes: { id: "send-close" },
       icon: "x",
-      label: "Close Send",
+      label: copy.closeLabel,
       variant: "ghost",
     })}
   </header>`;
 
-const sendProgress = (): string => `
-  <ol class="send-progress" aria-label="Send progress" hidden>
+const sendProgress = (copy: TransferModeCopy): string => `
+  <ol class="send-progress" aria-label="${escapeHtml(copy.progressLabel)}" hidden>
     <li data-send-step="details" data-state="active">
       <span class="send-step-mark">1</span><span>Amount</span>
     </li>
@@ -208,6 +219,7 @@ const amountStage = (
   canChooseAsset: boolean,
   currency: DisplayCurrency,
   preferences: WalletPreferences | null,
+  copy: TransferModeCopy,
 ): string => `
   <section class="send-stage send-amount-stage" id="send-details" hidden>
     <p class="send-section-title">Accounts</p>
@@ -232,7 +244,7 @@ const amountStage = (
           <button class="send-route-toggle" data-send-bucket="destination" data-bucket="public" type="button" title="Switch to the private balance">Public</button>
         </dd>
       </div>
-      <div><dt>Network</dt><dd class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span><strong>${escapeHtml(status.network)}</strong></dd></div>
+      <div><dt>Network</dt><dd class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span><strong>${escapeHtml(networkDisplayName(status.network))}</strong></dd></div>
     </dl>
     <div class="send-route-feedback">
       <span class="send-route-reason" id="send-route-reason" hidden></span>
@@ -246,10 +258,10 @@ const amountStage = (
         ${icon("chevronDown")}
       </button>
       <label class="send-amount-field">
-        <span class="sr-only">Amount to send</span>
+        <span class="sr-only" id="send-amount-label">${escapeHtml(copy.amountLabel)}</span>
         <span class="send-amount-prefix" id="send-amount-prefix" hidden></span>
         ${inputControl({
-          ariaLabel: "Amount to send",
+          ariaLabel: copy.amountLabel,
           attributes: { id: "send-amount-input" },
           autocomplete: "off",
           inputmode: "decimal",
@@ -257,7 +269,7 @@ const amountStage = (
         })}
       </label>
       <div class="send-amount-meta">
-        <span id="send-balance-label">Balance ${escapeHtml(asset ? `${sendBalanceLabel(asset.formatted)} ${asset.symbol}` : "—")}</span>
+        <span id="send-balance-label">${escapeHtml(asset ? sendBalanceLine("public", asset.formatted, asset.symbol) : "Balance —")}</span>
         <span class="send-amount-shortcuts">
           <button id="send-half" type="button">Half</button>
           <button id="send-max" type="button">Max</button>
@@ -266,13 +278,7 @@ const amountStage = (
       </div>
       <p class="send-fiat-estimate" id="send-fiat-estimate">Estimated value —</p>
     </div>
-    ${button({
-      attributes: { id: "send-review-button" },
-      disabled: account === null || asset === undefined,
-      icon: "send",
-      label: "Review send",
-      type: "submit",
-    })}
+    <button id="send-review-button" type="submit" ${account === null || asset === undefined ? "disabled" : ""}>${icon("send")}${liquidDots("send", true)}<span id="send-review-label">${escapeHtml(copy.reviewLabel)}</span></button>
   </section>`;
 
 const assetStage = (assets: readonly SendAsset[], currency: DisplayCurrency): string => `
@@ -311,14 +317,14 @@ const workingStage = (): string => `
     <p class="send-liveness" id="send-liveness">Keep this panel open.</p>
   </section>`;
 
-const successStage = (): string => `
+const successStage = (copy: TransferModeCopy): string => `
   <section class="send-outcome send-success" id="send-success" role="status" aria-live="polite" hidden>
     <span class="send-outcome-mark" aria-hidden="true">
       <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
     </span>
     <div class="send-outcome-copy">
       <p class="send-outcome-kicker">Confirmed on Starknet</p>
-      <h2>Send complete</h2>
+      <h2 id="send-success-title">${escapeHtml(copy.successTitle)}</h2>
       <p id="send-success-summary"></p>
       <code id="send-success-hash"></code>
     </div>
@@ -328,14 +334,14 @@ const successStage = (): string => `
     </div>
   </section>`;
 
-const failureStage = (): string => `
+const failureStage = (copy: TransferModeCopy): string => `
   <section class="send-outcome send-failure" id="send-failure" role="alert" aria-live="assertive" hidden>
     <span class="send-outcome-mark" aria-hidden="true">
       <svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /></svg>
     </span>
     <div class="send-outcome-copy">
       <p class="send-outcome-kicker">Nothing else will be submitted</p>
-      <h2>Send not completed</h2>
+      <h2 id="send-failure-title">${escapeHtml(copy.failureTitle)}</h2>
       <p id="send-failure-copy">The transaction was not sent. Your balance is unchanged.</p>
       <code id="send-failure-hash"></code>
     </div>
@@ -389,19 +395,23 @@ export const sendFlow = (
   const missingIntentAsset = scopedIntent !== null && asset === undefined;
   const canSend = account !== null && asset !== undefined;
   const signer = account?.derivation.kind === "ledger" ? "ledger" : "software";
+  // The first paint already speaks in the shortcut's words; the binding keeps
+  // the same derivation live as the buckets and recipient change.
+  const mode = scopedIntent ? transferModeFor(scopedIntent, account?.address ?? "") : "send";
+  const copy = transferModeCopy(mode);
   const initialFiat =
     asset?.formatted && tokenFiatValue(asset.formatted, asset.price) !== null
       ? formatFiat(tokenFiatValue(asset.formatted, asset.price) ?? 0, currency)
       : "—";
   return (
-    sendHeader() +
+    sendHeader(mode, copy) +
     flowScreen(
       "send",
       `<section class="section send-flow">
         ${account ? "" : noAccountEmpty(status)}
         ${account && assets.length === 0 ? emptyState("No tokens are tracked on this network yet, so nothing can be sent.") : ""}
         ${missingIntentAsset ? '<p class="review-flag" role="alert">The requested token is no longer tracked on this network. Choose an asset before continuing.</p>' : ""}
-        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
+        <form id="transfer-form" data-signer="${signer}" data-sender="${escapeHtml(account?.address ?? "")}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />
@@ -417,14 +427,14 @@ export const sendFlow = (
           <input name="tokenId" type="hidden" value="${escapeHtml(asset?.id ?? "")}" />
           <input name="tokenPrice" type="hidden" value="${asset?.price ?? ""}" />
           <input name="tokenSymbol" type="hidden" value="${escapeHtml(asset?.symbol ?? "token")}" />
-          ${sendProgress()}
+          ${sendProgress(copy)}
           <div class="send-stage-frame" data-initial-fiat="${escapeHtml(initialFiat)}">
             ${recipientStage(status, account, preferences, multisigs)}
-            ${amountStage(status, account, asset, assets.length > 0, currency, preferences)}
+            ${amountStage(status, account, asset, assets.length > 0, currency, preferences, copy)}
             ${assetStage(assets, currency)}
             <section class="send-stage send-review-stage" id="send-review-stage" hidden>
               <div class="send-review-head">
-                <div><p class="context-label">Review send</p></div>
+                <div><p class="context-label" id="send-review-heading">${escapeHtml(copy.reviewLabel)}</p></div>
                 ${button({ attributes: { id: "send-edit" }, label: "Edit", size: "small", variant: "ghost" })}
               </div>
               <div class="send-review-summary" id="send-review-summary"></div>
@@ -433,15 +443,15 @@ export const sendFlow = (
                 <summary><span>Technical details</span>${icon("chevronDown")}</summary>
                 <div class="send-review-disclosure-body" id="review-panel"></div>
               </details>
-              <p class="send-review-note">${canSend ? "Confirm only if the recipient, amount, and decoded action are correct." : "Send is unavailable."}</p>
+              <p class="send-review-note" id="send-review-note">${escapeHtml(canSend ? copy.reviewNote : "Send is unavailable.")}</p>
               <div class="send-actions">
-                <button id="send-confirm-button" type="submit" ${canSend ? "" : "disabled"}>${icon("check")}<span id="send-confirm-label">Confirm and send</span></button>
+                <button id="send-confirm-button" type="submit" ${canSend ? "" : "disabled"}>${icon("check")}<span id="send-confirm-label">${escapeHtml(copy.confirmLabel)}</span></button>
               </div>
             </section>
             ${workingStage()}
             ${pendingStage()}
-            ${successStage()}
-            ${failureStage()}
+            ${successStage(copy)}
+            ${failureStage(copy)}
             <p class="send-result" id="transfer-result" role="status" aria-live="assertive"></p>
           </div>
         </form>

@@ -369,11 +369,6 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.xl};
     min-width: 0;
   }
-  .multisig-compose-intro {
-    color: var(--bramble-muted);
-    line-height: ${TYPE.body.line};
-    margin: 0;
-  }
   .multisig-compose-form {
     display: grid;
     gap: ${SPACE.md};

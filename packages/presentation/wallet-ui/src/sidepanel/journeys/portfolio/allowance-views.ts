@@ -98,7 +98,7 @@ export const allowancesFlow = (
       "allowances",
       `<section class="section">
         <div class="section-head">
-          <p class="lede">Review who can move your tokens. Revoking sets one spender's allowance to zero after you confirm its network fee.</p>
+          <p class="lede">Revoking sets a spender's allowance to zero after you confirm its network fee.</p>
           ${iconButton({ attributes: { id: "allowance-refresh" }, icon: "refresh", label: "Refresh allowances" })}
         </div>
         ${contextHelp(

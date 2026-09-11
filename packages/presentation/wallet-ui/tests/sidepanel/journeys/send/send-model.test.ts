@@ -9,6 +9,7 @@ import {
   balanceShortcut,
   fiatInputToken,
   sendAssets,
+  sendBalanceLine,
   sendRecipientAccounts,
   tokenInputFiat,
 } from "../../../../src/sidepanel/journeys/send/send-model";
@@ -66,6 +67,18 @@ describe("Send view model", () => {
     expect(balanceShortcut("1250000", 6, "half")).toBe("0.625");
     expect(balanceShortcut("1250000", 6, "max")).toBe("1.25");
     expect(balanceShortcut("invalid", 6, "max")).toBe("");
+  });
+
+  test("renders the balance line compact for every bucket, never at token precision", () => {
+    // Every writer of the amount card's balance line goes through here; a
+    // full-precision figure from a later writer once widened the card past the
+    // narrowest side panel after the compact first paint.
+    expect(sendBalanceLine("public", "1.234567890123456789", "ETH")).toBe("Balance 1.23456 ETH");
+    expect(sendBalanceLine("private", "2845.123456789012345678", "STRK")).toBe(
+      "Private balance 2,845.12345 STRK",
+    );
+    expect(sendBalanceLine("private", null, "STRK")).toBe("Private balance unavailable");
+    expect(sendBalanceLine("public", "", "ETH")).toBe("Balance — ETH");
   });
 
   test("converts fiat entry into a visible token amount and rejects unusable prices", () => {

@@ -317,7 +317,6 @@ export const nftWatchFlow = (status: WalletStatus, account: AccountRef | null): 
           maxlength: 64,
           name: "label",
         })}
-        <p class="hint">Ownership and token metadata are checked on-chain before this collectible is saved.</p>
         ${button({
           disabled: account === null,
           icon: "check",
@@ -349,7 +348,7 @@ export const nftHiddenFlow = (
     flowScreen(
       "nft-hidden",
       `<section class="section">
-        <p class="hint">Hidden collectibles stay out of the gallery. Unhide only tokens you recognize.</p>
+        <p class="hint">Unhide only tokens you recognize.</p>
         ${
           hidden.length === 0
             ? emptyState("No collectibles are hidden on this network.")

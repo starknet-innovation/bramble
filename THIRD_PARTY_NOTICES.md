@@ -33,11 +33,8 @@ SOFTWARE.
 
 The indeterminate progress treatment in
 `packages/presentation/wallet-ui/src/sidepanel/journeys/send/send-views.ts` and
-`packages/presentation/wallet-ui/src/sidepanel/styles/core/styles-progress.ts`, plus the onboarding
-pulse and orbiting icons in
-`packages/presentation/wallet-ui/src/sidepanel/styles/onboarding/styles-onboarding-welcome.ts`, are framework-free
-CSS/SVG adaptations of the Liquid Dots, Concentric Pulse, and Fluid Dot Orbit
-components from
+`packages/presentation/wallet-ui/src/sidepanel/styles/core/styles-progress.ts` is a framework-free
+CSS/SVG adaptation of the Liquid Dots component from
 [Subhan-code/Amicro--Micro-transitions-](https://github.com/Subhan-code/Amicro--Micro-transitions-),
 reviewed at commit `ae2237cd49d6aedcdb6bbdc87384d03a018ea149`.
 

@@ -62,6 +62,7 @@ import {
   securityFlow,
 } from "../../journeys/settings/settings-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
+import { networkDisplayName } from "../../shared/network-label";
 import { addressBookFlow, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
@@ -125,7 +126,7 @@ const deployAccountFlow = (
                   label: "Contract",
                   value: knownAccountType(account.classHash) ?? "Starknet account",
                 },
-                { label: "Network", value: status.network },
+                { label: "Network", value: networkDisplayName(status.network) },
               ])}
               ${reviewPanel([], "Deployment creates this account on-chain. Its address and signing authority do not change.")}
               <div id="deploy-review" aria-live="polite"></div>

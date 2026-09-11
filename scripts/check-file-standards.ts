@@ -35,6 +35,7 @@ const BINARY_EXTENSIONS = [".jpg", ".otf", ".png", ".wasm", ".webp", ".woff2", "
 const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/background/index.ts",
   "apps/extension/src/content/index.ts",
+  "apps/extension/src/ledger-grant/dom.ts",
   "apps/extension/src/ledger-grant/index.ts",
   "apps/extension/src/provider/inpage.ts",
   "apps/extension/src/sandbox/render.ts",
@@ -142,6 +143,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/import-key-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
+  // Setup strength meter: reads the typed vault credential only to score and
+  // describe it; nothing is stored, logged, or sent.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/passphrase-meter.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
   // Recovery discovery keeps the phrase and vault credential only in the
   // first-run DOM closure and forwards them to the privileged background.

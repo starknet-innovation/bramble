@@ -12,8 +12,10 @@ import type { SendIntent } from "../send/send-model";
 import { bindDeployAndRegister } from "./privacy-activation-ui";
 import {
   emptyPrivacyDisclosure,
+  type PrivacyBlocker,
   type PrivacyDisclosureState,
   type PrivacyJourneyState,
+  privacyBlockerFor,
 } from "./privacy-model";
 import { createPendingRegistrationPoll } from "./privacy-pending-poll";
 
@@ -64,9 +66,13 @@ const scopeMatches = (deps: PrivacyUiDeps, scope: PrivacyAsyncScope): boolean =>
 /**
  * Re-reads the active account's privacy state with account/network staleness
  * guards. Exported so Send's recoverable route error uses the same loader and
- * never grows a second disclosure path.
+ * never grows a second disclosure path. A failure is toasted unless the caller
+ * is about to explain it on a screen of its own (`silent`).
  */
-export const loadPrivacyDisclosure = async (deps: PrivacyUiDeps): Promise<boolean> => {
+export const loadPrivacyDisclosure = async (
+  deps: PrivacyUiDeps,
+  options: { readonly silent?: boolean } = {},
+): Promise<boolean> => {
   const scope = captureScope(deps);
   const pending: PrivacyDisclosureState = {
     error: null,
@@ -97,7 +103,7 @@ export const loadPrivacyDisclosure = async (deps: PrivacyUiDeps): Promise<boolea
         value: null,
       });
       deps.paint();
-      showToast(message, "error", deps.app);
+      if (!options.silent) showToast(message, "error", deps.app);
     }
     return false;
   }
@@ -107,6 +113,48 @@ const defaultTokenId = (deps: PrivacyUiDeps): string | null =>
   deps.preferences()?.tokens.find((token) => token.networkId === deps.status().networkId)?.id ??
   null;
 
+// The activation entry always leads somewhere. A prerequisite that is not met
+// lands on the privacy screen with the reason and the next step, never on a
+// toast that clears before it is read — that toast is what made the home
+// Shield tile look dead.
+const block = (deps: PrivacyUiDeps, tokenId: string, blocker: PrivacyBlocker): void => {
+  const current = deps.journey();
+  const unchanged =
+    current.stage === "blocked" &&
+    current.blocker.kind === blocker.kind &&
+    current.blocker.message === blocker.message;
+  deps.setJourney({ blocker, stage: "blocked", tokenId });
+  deps.navigate("privacy");
+  // A retry from the blocked screen that meets the same answer repaints
+  // nothing, so the answer is voiced as well or the retry looks ignored.
+  if (unchanged) showToast(blocker.message, "error", deps.app);
+};
+
+// Shield and unshield are sends between one account's two balances, so both
+// open Send already configured rather than a separate journey: the active
+// account on both ends, and the buckets that name the direction. One builder
+// for every entry — the asset screen's pair, the home tile, and the activation
+// entry that finds registration already settled — so they cannot drift.
+const openBucketSend = (
+  deps: PrivacyUiDeps,
+  tokenId: string,
+  source: SendIntent["source"],
+  destination: SendIntent["destination"],
+): void => {
+  const status = deps.status();
+  const account = status.accounts.find((candidate) => candidate.id === status.activeAccountId);
+  if (!account) return;
+  deps.openSend?.({
+    accountId: account.id,
+    destination,
+    networkId: account.networkId,
+    recipient: account.address,
+    recipientLabel: accountDisplayName(account, deps.preferences()),
+    source,
+    tokenId,
+  });
+};
+
 const startJourney = async (
   deps: PrivacyUiDeps,
   tokenId: string,
@@ -115,34 +163,55 @@ const startJourney = async (
   const scope = captureScope(deps);
   buttonBusy(button, true);
   const current = deps.disclosure();
-  const ready =
-    current.value?.accountId === deps.status().activeAccountId &&
-    current.value.networkId === deps.status().networkId
-      ? true
-      : await loadPrivacyDisclosure(deps);
-  const state = deps.disclosure().value;
-  if (!ready || !state || !scopeMatches(deps, scope)) {
+  if (
+    !(
+      current.value?.accountId === deps.status().activeAccountId &&
+      current.value.networkId === deps.status().networkId
+    )
+  ) {
+    await loadPrivacyDisclosure(deps, { silent: true });
+  }
+  const disclosure = deps.disclosure();
+  if (!scopeMatches(deps, scope)) {
     buttonBusy(button, false);
     return;
   }
+  buttonBusy(button, false);
+  if (!disclosure.value) {
+    // Discovery failed or was superseded: a network without a pool, an
+    // unreachable service, or a read still in flight. All three are explained
+    // in place; the last offers the retry that a settled read would have made
+    // unnecessary.
+    block(
+      deps,
+      tokenId,
+      privacyBlockerFor(
+        disclosure.error ??
+          (disclosure.loading
+            ? "Private balances are still being discovered. Try again in a moment."
+            : "Private balances unavailable"),
+      ),
+    );
+    return;
+  }
+  const state = disclosure.value;
+  if (state.registration === "pending") {
+    // Registered on Starknet, not yet visible to the indexer. The poll flips
+    // this on its own, so the only wrong move here is preparing a second one.
+    block(deps, tokenId, {
+      kind: "pending",
+      message: "Registration is on its way. You'll be able to shield shortly.",
+    });
+    return;
+  }
+  if (state.registration === "registered") {
+    // The surface offered activation on a reading that has since settled:
+    // there is nothing to activate, so this is the shield shortcut itself.
+    openBucketSend(deps, tokenId, "public", "private");
+    return;
+  }
   try {
-    if (state.registration === "pending") {
-      // Registered on Starknet, not yet visible to the indexer. The poll flips
-      // this on its own, so the only wrong move here is preparing a second one.
-      showToast(
-        "Registration is on its way. You'll be able to shield shortly.",
-        "success",
-        button ?? deps.app,
-      );
-      buttonBusy(button, false);
-      return;
-    }
-    if (state.registration !== "unregistered") {
-      // Nothing to do: an activated account shields and unshields from Send, and
-      // no surface offers this entry once registration has settled.
-      buttonBusy(button, false);
-      return;
-    }
+    buttonBusy(button, true);
     const preparation = await deps.wallet.preparePrivacyRegistration();
     if (!scopeMatches(deps, scope)) {
       return;
@@ -150,7 +219,9 @@ const startJourney = async (
     deps.setJourney({ preparation, stage: "activate-review", tokenId });
     deps.navigate("privacy");
   } catch (error) {
-    showToast(errorMessage(error, "Private journey unavailable"), "error", button ?? deps.app);
+    if (scopeMatches(deps, scope)) {
+      block(deps, tokenId, privacyBlockerFor(errorMessage(error, "Private journey unavailable")));
+    }
     buttonBusy(button, false);
   }
 };
@@ -240,13 +311,7 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
   bindShieldShortcuts(deps);
 };
 
-// Shield and unshield are sends between one account's two balances, so both
-// shortcuts open Send already configured rather than a separate journey: the
-// active account on both ends, and the buckets that name the direction.
 const bindShieldShortcuts = (deps: PrivacyUiDeps): void => {
-  const account = deps
-    .status()
-    .accounts.find((candidate) => candidate.id === deps.status().activeAccountId);
   for (const [attribute, key, source, destination] of [
     ["data-send-shield", "sendShield", "public", "private"],
     ["data-send-unshield", "sendUnshield", "private", "public"],
@@ -254,18 +319,7 @@ const bindShieldShortcuts = (deps: PrivacyUiDeps): void => {
     deps.app?.querySelectorAll<HTMLButtonElement>(`[${attribute}]`).forEach((button) => {
       button.addEventListener("click", () => {
         const tokenId = button.dataset[key];
-        if (!tokenId || !account) {
-          return;
-        }
-        deps.openSend?.({
-          accountId: account.id,
-          destination,
-          networkId: account.networkId,
-          recipient: account.address,
-          recipientLabel: accountDisplayName(account, deps.preferences()),
-          source,
-          tokenId,
-        });
+        if (tokenId) openBucketSend(deps, tokenId, source, destination);
       });
     });
   }
@@ -332,7 +386,7 @@ const bindOutcome = (deps: PrivacyUiDeps, journey: PrivacyJourneyState): void =>
       deps.navigate("home");
     });
   }
-  if (journey.stage === "failure") {
+  if (journey.stage === "failure" || journey.stage === "blocked") {
     deps.app?.querySelector("#privacy-retry")?.addEventListener("click", () => {
       void startJourney(deps, journey.tokenId);
     });

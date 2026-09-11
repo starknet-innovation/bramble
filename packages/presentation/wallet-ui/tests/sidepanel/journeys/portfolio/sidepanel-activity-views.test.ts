@@ -69,7 +69,7 @@ describe("activity journey boundaries", () => {
   test("renders parked requests on their own focused review screen", () => {
     const html = requestsFlow(pending, status);
 
-    expect(html).toContain("These requests were parked for later.");
+    expect(html).toContain("Wallet requests");
     expect(html).toContain("https://dapp.example");
     expect(html).toContain('data-approval-action="approve"');
     expect(html).toContain('data-approval-action="deny"');
@@ -86,6 +86,49 @@ describe("activity journey boundaries", () => {
     expect(html).toContain('target="_blank" rel="noopener noreferrer"');
     expect(html).not.toContain('data-copy="0x123"');
     expect(html).not.toContain("0x123…0x123");
+  });
+
+  test("names the UTC time and status beneath every summary, once for assistive tech", () => {
+    const html = activityScreen(
+      [],
+      status,
+      [
+        { ...transaction, submittedAt: 1752501900000 },
+        { ...transaction, hash: "0x124", status: "preconfirmed", submittedAt: 1752501960000 },
+      ],
+      false,
+    );
+
+    expect(html).toContain('<span class="tx-meta" aria-hidden="true">14:05 UTC · Accepted</span>');
+    expect(html).toContain(
+      '<span class="tx-meta" aria-hidden="true">14:06 UTC · Pre-confirmed</span>',
+    );
+    // The status still reaches assistive tech through the summary's own label.
+    expect(html).toContain('aria-label="Send 1 STRK. accepted. View transaction on Starkscan"');
+  });
+
+  test("groups the newest-first feed under one heading per UTC day", () => {
+    const html = activityScreen(
+      [],
+      status,
+      [
+        { ...transaction, submittedAt: 1752501960000 },
+        { ...transaction, hash: "0x124", submittedAt: 1752501900000 },
+        { ...transaction, hash: "0x125", submittedAt: 1752415500000 },
+        { ...transaction, hash: "0x126", submittedAt: 0 },
+      ],
+      false,
+    );
+
+    const headings = [...html.matchAll(/<h3 class="tx-day-label eyebrow">([^<]+)<\/h3>/g)].map(
+      (match) => match[1],
+    );
+    expect(headings).toEqual(["14 Jul 2025", "13 Jul 2025", "Undated"]);
+    // Same-day entries share one list; each day is its own list.
+    expect(html.match(/<ul class="tx-list">/g)?.length).toBe(3);
+    expect(html.indexOf('data-live-key="transaction:0x123:status"')).toBeLessThan(
+      html.indexOf('data-live-key="transaction:0x124:status"'),
+    );
   });
 
   test("uses distinct accessible glyphs for common transaction outcomes", () => {

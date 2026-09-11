@@ -73,13 +73,11 @@ export const LEDGER_GRANT_STYLES = `
     border-radius: ${RADIUS.sm};
     color: var(--bramble-accent-text);
     display: inline-flex;
-    font-size: ${TYPE.micro.size};
-    font-weight: ${WEIGHT.heavy};
     height: 34px;
     justify-content: center;
-    letter-spacing: ${TRACKING.label};
     width: 34px;
   }
+  .grant-brand-mark .brand-glyph { height: 20px; width: 20px; }
   .grant-brand strong {
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.bold};

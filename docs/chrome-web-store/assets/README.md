@@ -1,24 +1,24 @@
 # Store asset sources
 
-`promo-small-source.svg` is an editable, code-native source and its PNG is mechanically rendered
-from it. Screenshots must be recaptured from the production UI template for each store submission;
-never retouch transaction or account content into a screenshot.
-
-`icon-source.png` is the exception: the Bramble mark arrived as a 128×128 raster, so it is the master
-and the four extension icons are downscaled from it with
+The Bramble mark has one vector source, `apps/website/public/brand/mark.svg` (also the website
+favicon). Everything here that shows the mark is rendered from it:
 
 ```bash
-for size in 16 32 48 128; do
-  sips -s format png -z "$size" "$size" docs/chrome-web-store/assets/icon-source.png \
-    --out "apps/extension/public/icons/icon-$size.png"
-done
+bun run scripts/render-brand-assets.ts
 ```
 
-A vector source would be better — the mark loses its silhouette at 16px, which no resampling can fix
-— so replacing `icon-source.png` with an SVG and re-rendering is worthwhile when one exists.
+which writes `icon.svg` (the composed 128×128 icon: cream ground, ink bird), the five extension
+icons in `apps/extension/public/icons/`, the `icon-128.png` listing copy, refreshes the `#mark`
+path inside `promo-small-source.svg`, and renders `promo-small-440x280.png`. It rasterises with the
+Playwright Chromium the E2E suite installs (`bun run test:e2e:install`), one page per size so the
+16px toolbar icon is a true render rather than a downscale. Hand-edit the promo's composition in
+its SVG; never edit the mark path there by hand.
+
+Screenshots must be recaptured from the production UI template for each store submission; never
+retouch transaction or account content into a screenshot.
 
 Expected upload dimensions:
 
-- `icon-source.png` / `icon-128.png`: 128×128
+- `icon-128.png`: 128×128
 - `promo-small-440x280.png`: 440×280
 - `screenshot-*-1280x800.png`: 1280×800

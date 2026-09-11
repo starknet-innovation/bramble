@@ -17,6 +17,9 @@ import { STRK20_REGISTRATION_SUMMARY } from "../../../apps/extension/src/backgro
 import { account } from "../../support/background-wallet-stub";
 import {
   buildStrk20Handler,
+  executeStrk20Preparation,
+  prepareStrk20Deposit,
+  prepareStrk20Registration,
   STRK20_CONTENT_SENDER,
   STRK20_EXTENSION_SENDER,
   STRK20_RECIPIENT,
@@ -145,10 +148,9 @@ describe("background wallet STRK20 operations", () => {
       preferences: preferences(),
       strk20: makeStrk20WalletService(capture),
     });
-    const prepared = (await handler(
-      { type: "wallet.strk20PrepareRegistration" },
-      STRK20_EXTENSION_SENDER,
-    )) as {
+    // The activation proof runs as a tracked job: the review is what the poll
+    // settles on, exactly as a shield's is.
+    const prepared = (await prepareStrk20Registration(handler)) as {
       readonly strk20Preparation: {
         readonly id: string;
         readonly poolFeeFri: string;
@@ -170,10 +172,12 @@ describe("background wallet STRK20 operations", () => {
     expect(readStrk20WalletExecuteInput(execute)).toEqual({
       preparationId: prepared.strk20Preparation.id,
     });
-    await expect(handler(execute, STRK20_EXTENSION_SENDER)).resolves.toEqual({
-      ok: true,
-      transactionHash: "0x111",
-    });
+    // The submission runs as a tracked job too; the hash is what its poll
+    // settles on. The claim happened on the request, so the second execute is
+    // refused on its request, without a job.
+    await expect(executeStrk20Preparation(handler, prepared.strk20Preparation.id)).resolves.toEqual(
+      { ok: true, transactionHash: "0x111" },
+    );
     expect(capture.registrations.value).toBe(1);
     await expect(handler(execute, STRK20_EXTENSION_SENDER)).resolves.toEqual({
       error: "Privacy preparation not found",
@@ -204,9 +208,9 @@ describe("background wallet STRK20 operations", () => {
     // Pending is not shieldable: no private balances are claimed for it.
     expect(response.strk20State.balances).toEqual([]);
 
-    await expect(
-      handler({ type: "wallet.strk20PrepareRegistration" }, STRK20_EXTENSION_SENDER),
-    ).resolves.toEqual({ error: "A registration is already on its way for this account" });
+    await expect(prepareStrk20Registration(handler)).resolves.toEqual({
+      error: "A registration is already on its way for this account",
+    });
     expect(capture.registrations.value).toBe(0);
   });
 
@@ -229,10 +233,9 @@ describe("background wallet STRK20 operations", () => {
     expect(response.strk20State.registration).toBe("unregistered");
     // A registration that never landed must stay retryable rather than locking
     // the account out of the flow forever.
-    const prepared = (await handler(
-      { type: "wallet.strk20PrepareRegistration" },
-      STRK20_EXTENSION_SENDER,
-    )) as { readonly strk20Preparation?: { readonly id: string } };
+    const prepared = (await prepareStrk20Registration(handler)) as {
+      readonly strk20Preparation?: { readonly id: string };
+    };
     expect(prepared.strk20Preparation?.id).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
@@ -269,15 +272,12 @@ describe("background wallet STRK20 operations", () => {
       publicBalance: "2000000000000000000",
       strk20: makeStrk20WalletService(capture),
     });
-    const prepared = (await handler(
-      {
-        amount: "1.5",
-        recipient: account.address,
-        tokenId: token.id,
-        type: "wallet.strk20PrepareDeposit",
-      },
-      STRK20_EXTENSION_SENDER,
-    )) as {
+    const prepared = (await prepareStrk20Deposit(handler, {
+      amount: "1.5",
+      recipient: account.address,
+      tokenId: token.id,
+      type: "wallet.strk20PrepareDeposit",
+    })) as {
       readonly strk20Preparation: {
         readonly amount: string;
         readonly id: string;
@@ -288,15 +288,9 @@ describe("background wallet STRK20 operations", () => {
     expect(prepared.strk20Preparation.amount).toBe("1.5");
     expect(prepared.strk20Preparation.id).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(prepared.strk20Preparation.route).toBe("public-account");
-    await expect(
-      handler(
-        {
-          preparationId: prepared.strk20Preparation.id,
-          type: "wallet.strk20Execute",
-        },
-        STRK20_EXTENSION_SENDER,
-      ),
-    ).resolves.toEqual({ ok: true, transactionHash: "0x222" });
+    await expect(executeStrk20Preparation(handler, prepared.strk20Preparation.id)).resolves.toEqual(
+      { ok: true, transactionHash: "0x222" },
+    );
     // A self-credit rides the batch's implicit surplus, so it stays a bare
     // deposit — naming the sender would add a redundant note to the batch.
     expect(capture.submissions).toEqual([
@@ -327,15 +321,12 @@ describe("background wallet STRK20 operations", () => {
       publicBalance: "2000000000000000000",
       strk20: makeStrk20WalletService(capture),
     });
-    const prepared = (await handler(
-      {
-        amount: "1.5",
-        recipient: STRK20_RECIPIENT,
-        tokenId: token.id,
-        type: "wallet.strk20PrepareDeposit",
-      },
-      STRK20_EXTENSION_SENDER,
-    )) as {
+    const prepared = (await prepareStrk20Deposit(handler, {
+      amount: "1.5",
+      recipient: STRK20_RECIPIENT,
+      tokenId: token.id,
+      type: "wallet.strk20PrepareDeposit",
+    })) as {
       readonly strk20Preparation: {
         readonly id: string;
         readonly recipient: string;
@@ -347,12 +338,9 @@ describe("background wallet STRK20 operations", () => {
     expect(prepared.strk20Preparation.summaries[0]).toBe(
       `Shield 1.5 ETH into ${CANONICAL_RECIPIENT}'s private balance`,
     );
-    await expect(
-      handler(
-        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
-        STRK20_EXTENSION_SENDER,
-      ),
-    ).resolves.toEqual({ ok: true, transactionHash: "0x222" });
+    await expect(executeStrk20Preparation(handler, prepared.strk20Preparation.id)).resolves.toEqual(
+      { ok: true, transactionHash: "0x222" },
+    );
     expect(capture.submissions).toEqual([
       {
         actions: [
@@ -383,16 +371,15 @@ describe("background wallet STRK20 operations", () => {
       strk20: makeStrk20WalletService(capture),
     });
 
+    // Decided inside the job, after the gate: the start request answers with
+    // the running job, and the refusal is what the poll settles on.
     await expect(
-      handler(
-        {
-          amount: "1",
-          recipient: STRK20_RECIPIENT,
-          tokenId: token.id,
-          type: "wallet.strk20PrepareDeposit",
-        },
-        STRK20_EXTENSION_SENDER,
-      ),
+      prepareStrk20Deposit(handler, {
+        amount: "1",
+        recipient: STRK20_RECIPIENT,
+        tokenId: token.id,
+        type: "wallet.strk20PrepareDeposit",
+      }),
     ).resolves.toEqual({ error: "The recipient has not activated private balances" });
     expect(capture.submissions).toEqual([]);
   });
@@ -410,15 +397,12 @@ describe("background wallet STRK20 operations", () => {
     });
 
     await expect(
-      handler(
-        {
-          amount: "1",
-          recipient: account.address,
-          tokenId: token.id,
-          type: "wallet.strk20PrepareDeposit",
-        },
-        STRK20_EXTENSION_SENDER,
-      ),
+      prepareStrk20Deposit(handler, {
+        amount: "1",
+        recipient: account.address,
+        tokenId: token.id,
+        type: "wallet.strk20PrepareDeposit",
+      }),
     ).resolves.toEqual({ error: "Activate private balances before shielding an asset" });
     await expect(
       handler(

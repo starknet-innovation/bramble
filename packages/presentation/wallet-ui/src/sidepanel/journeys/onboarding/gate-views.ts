@@ -4,14 +4,14 @@
  * brand mark, a large heading, and a primary action pinned to the bottom.
  */
 
+import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
 import { callout } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
-import { icon } from "../../shared/icons";
 import { onboardingWizard } from "./onboarding-views";
 
-const gateBrand = (): string => `<div class="gate-brand">${icon("wallet")}</div>`;
+const gateBrand = (): string => `<div class="gate-brand">${BRAMBLE_MARK}</div>`;
 
 /**
  * First-run screen: a staged fresh-wallet, recovery-phrase, or Ledger journey.
@@ -45,6 +45,7 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
       ${textField({
         autocomplete: "current-password",
         label: "Vault passphrase",
+        labelHidden: true,
         minlength: 12,
         name: "vaultPassphrase",
         placeholder: "Enter your passphrase",

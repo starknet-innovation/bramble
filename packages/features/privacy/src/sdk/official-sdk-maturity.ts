@@ -14,6 +14,11 @@ import {
   type Strk20MaturityStore,
 } from "../policy/maturity";
 import { STRK20_SERVICE_UNAVAILABLE } from "../service";
+import {
+  STRK20_WAIT_BUDGETS,
+  type WaitScheduler,
+  withinStrk20WaitBudget,
+} from "./official-sdk-budget";
 
 const PROVING_BLOCK_DEPTH = 10;
 const MAX_MATURITY_POLLS = 120;
@@ -23,7 +28,14 @@ const ACCEPTANCE_LIFECYCLE_RETRIES = 120;
 class RejectedPrivacyTransaction extends Error {}
 
 type MaturityRuntimeOptions = {
+  /**
+   * Wall-clock ceiling on one proving-block wait, receipt wait included. The
+   * poll count alone is not a bound: each poll is two node reads that can
+   * each take the transport's full deadline before answering "not yet".
+   */
+  readonly maturityBudgetMs?: number;
   readonly pause?: () => Promise<void>;
+  readonly schedule?: WaitScheduler;
   readonly store?: Strk20MaturityStore;
   readonly waitForAccepted?: (provider: RpcProvider, transactionHash: string) => Promise<number>;
 };
@@ -77,7 +89,9 @@ export type Strk20MaturityRuntime = {
  * Creates the accepted-receipt and historical-state readiness coordinator.
  */
 export const createStrk20MaturityRuntime = ({
+  maturityBudgetMs = STRK20_WAIT_BUDGETS.maturity,
   pause = defaultPause,
+  schedule,
   store = memoryStrk20MaturityStore(),
   waitForAccepted = defaultWaitForAccepted,
 }: MaturityRuntimeOptions = {}): Strk20MaturityRuntime => {
@@ -146,28 +160,48 @@ export const createStrk20MaturityRuntime = ({
     }
   };
 
-  const provingBlock = async (
+  // One poll: the deepest block the prover may target right now, if it is
+  // already past the prior write and its historical state is visible.
+  const matureCandidate = async (
+    provider: RpcProvider,
+    priorBlock: number | undefined,
+    isHistoricalStateReady?: (block: number) => Promise<boolean>,
+  ): Promise<number | null> => {
+    const latest = await provider.getBlockNumber();
+    const candidate = Math.max(0, latest - PROVING_BLOCK_DEPTH);
+    const pastPrior = priorBlock === undefined || priorBlock < candidate;
+    return pastPrior && (!isHistoricalStateReady || (await isHistoricalStateReady(candidate)))
+      ? candidate
+      : null;
+  };
+  // Bounded twice over: by poll count, and by wall clock through the budget,
+  // whose lapse is the answer the caller gets when the node keeps saying "not
+  // yet". The loop also reads the budget so it stops polling once the race has
+  // already been lost rather than spending the remaining polls on a dead wait.
+  const provingBlock = (
     provider: RpcProvider,
     scope: Strk20MaturityScope,
     isHistoricalStateReady?: (block: number) => Promise<boolean>,
-  ): Promise<number> => {
-    const priorBlock = await priorAcceptedBlock(provider, scope);
-    for (let attempt = 0; attempt <= MAX_MATURITY_POLLS; attempt += 1) {
-      const latest = await provider.getBlockNumber();
-      const candidate = Math.max(0, latest - PROVING_BLOCK_DEPTH);
-      if (
-        (priorBlock === undefined || priorBlock < candidate) &&
-        (!isHistoricalStateReady || (await isHistoricalStateReady(candidate)))
-      ) {
-        return candidate;
-      }
-      if (attempt === MAX_MATURITY_POLLS) {
-        break;
-      }
-      await pause();
-    }
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  };
+  ): Promise<number> =>
+    withinStrk20WaitBudget(
+      "waiting for pool maturity",
+      maturityBudgetMs,
+      async (budget) => {
+        const priorBlock = await priorAcceptedBlock(provider, scope);
+        for (let attempt = 0; attempt <= MAX_MATURITY_POLLS && !budget.expired(); attempt += 1) {
+          const candidate = await matureCandidate(provider, priorBlock, isHistoricalStateReady);
+          if (candidate !== null) {
+            return candidate;
+          }
+          if (attempt === MAX_MATURITY_POLLS) {
+            break;
+          }
+          await pause();
+        }
+        throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      },
+      schedule,
+    );
   const recordSubmission = async (
     provider: RpcProvider,
     scope: Strk20MaturityScope,

@@ -97,7 +97,6 @@ export const nftSendFlow = (
                   </div>
                 </div>`
           }
-          <p class="hint">Ownership and token standard are checked again on-chain. Nothing is submitted until the decoded review is confirmed.</p>
           <div id="nft-review-panel" aria-live="polite"></div>
           ${button({
             disabled: account === null,

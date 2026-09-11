@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import type { PrivacyBlockerKind } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import { privacyFlow } from "../../../../src/sidepanel/journeys/privacy/privacy-views";
 
@@ -122,6 +123,48 @@ describe("privacy journey templates", () => {
     expect(privacyFlow(status, preferences, { stage: "idle" })).toContain(
       "Choose an asset to begin",
     );
+  });
+
+  test("a blocked activation explains the prerequisite and ends in its next step", () => {
+    const blocked = (kind: PrivacyBlockerKind, message: string): string =>
+      privacyFlow(status, preferences, {
+        blocker: { kind, message },
+        stage: "blocked",
+        tokenId: token.id,
+      });
+
+    const fund = blocked("fund", "Not enough STRK for the <pool> fee");
+    expect(fund).toContain("Go private");
+    expect(fund).toContain("Add STRK to go private");
+    expect(fund).toContain('data-view="receive"');
+    expect(fund).toContain("Fund with STRK");
+    // The runtime's own reason is shown, escaped.
+    expect(fund).toContain("Not enough STRK for the &lt;pool&gt; fee");
+    expect(fund).toContain('id="privacy-cancel"');
+    expect(fund).toContain('data-privacy-blocker="fund"');
+
+    const deploy = blocked("deploy", "Deploy this account first");
+    expect(deploy).toContain("Deploy this account first");
+    // The same deploy-then-register control Receive offers, not a second path.
+    expect(deploy).toContain("data-privacy-deploy-register");
+
+    const network = blocked("network", "Private balances are not configured for this network");
+    expect(network).toContain("Not available on this network");
+    expect(network).toContain('data-view="network"');
+
+    const pending = blocked("pending", "Registration is on its way.");
+    expect(pending).toContain("Registration is on its way");
+    expect(pending).toContain("no second registration is needed");
+    expect(pending).toContain('data-view="activity"');
+    expect(pending).not.toContain('id="privacy-retry"');
+
+    const service = blocked("service", "prover offline");
+    expect(service).toContain("Private balances unavailable");
+    expect(service).toContain('id="privacy-retry"');
+    expect(service).toContain("prover offline");
+
+    const ledger = blocked("ledger", "Private balances are not available for Ledger accounts");
+    expect(ledger).toContain("Not available for Ledger accounts");
   });
 
   test("an untracked token still renders the registration checkpoint", () => {

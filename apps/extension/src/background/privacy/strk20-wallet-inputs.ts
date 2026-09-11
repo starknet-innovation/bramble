@@ -2,7 +2,7 @@
  * Strict parsers for extension-only STRK20 wallet journey messages.
  */
 
-import { isSha256Digest } from "@bramble/core/ids";
+import { isSha256Digest, isStrk20JobId } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { isTransferAmount } from "../routing/message-inputs";
 
@@ -95,4 +95,19 @@ export const readStrk20WalletExecuteInput = (
   message["type"] === "wallet.strk20Execute" &&
   isSha256Digest(message["preparationId"])
     ? { preparationId: message["preparationId"] }
+    : null;
+
+/**
+ * Reads the tracked-job id a side panel polls while a shield's or an
+ * activation's proof is built, or while a confirmed preparation is submitted.
+ * One poll serves every job kind; the registry answers by id alone.
+ */
+export const readStrk20PreparationStatusInput = (
+  message: unknown,
+): { readonly jobId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["jobId", "type"]) &&
+  message["type"] === "wallet.strk20PreparationStatus" &&
+  isStrk20JobId(message["jobId"])
+    ? { jobId: message["jobId"] }
     : null;

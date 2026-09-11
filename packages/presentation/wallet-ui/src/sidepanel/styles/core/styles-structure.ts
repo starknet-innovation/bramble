@@ -33,6 +33,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     gap: ${SPACE.md};
     justify-content: space-between;
     min-height: 44px;
+    min-width: 0;
     padding: ${SPACE.xs} 0;
     position: relative;
   }
@@ -60,7 +61,10 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     min-width: 0;
     text-align: right;
   }
-  .receipt-row dd code { color: var(--bramble-text); overflow-wrap: normal; word-break: normal; }
+  /* Identifiers stay whole while they fit; only when the panel is narrower
+     than the value does the value break, rather than overflowing the row and
+     being cut off at the right edge. */
+  .receipt-row dd code { color: var(--bramble-text); overflow-wrap: anywhere; word-break: normal; }
   .receipt-row dd .icon-button { height: 28px; min-height: 0; width: 28px; }
   .receipt-row dd .icon-button .icon { height: 15px; width: 15px; }
   /* Approval request facts use the same receipt grammar, but allow long

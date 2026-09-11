@@ -11,15 +11,24 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
+import type { TokenBalance } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import type { SendIntent } from "../../../../src/sidepanel/journeys/send/send-model";
-import { bindTransferCompose } from "../../../../src/sidepanel/journeys/send/transfer-compose-ui";
-import type {
-  TransferFields,
-  TransferStage,
+import {
+  bindTransferCompose,
+  restoreTransferCompose,
+} from "../../../../src/sidepanel/journeys/send/transfer-compose-ui";
+import {
+  type TransferFields,
+  type TransferStage,
+  transferFields,
 } from "../../../../src/sidepanel/journeys/send/transfer-model";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
-import { paint, walletStatus as status } from "../../../support/transfer-ui-harness";
+import {
+  paint,
+  walletStatus as status,
+  transferPublicBalance,
+} from "../../../support/transfer-ui-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -47,6 +56,7 @@ const preferences: WalletPreferences = {
 const mount = (
   spendable?: () => bigint | null,
   intent: SendIntent | null = null,
+  balances: readonly TokenBalance[] = [],
 ): {
   readonly fields: readonly TransferFields[];
   readonly form: HTMLFormElement;
@@ -54,7 +64,7 @@ const mount = (
 } => {
   const app = document.createElement("div");
   app.id = "app";
-  paint(app, sendFlow(status, account, preferences, [], {}, {}, "usd", [], intent));
+  paint(app, sendFlow(status, account, preferences, balances, {}, {}, "usd", [], intent));
   document.body.append(app);
   const form = app.querySelector<HTMLFormElement>("#transfer-form");
   if (!form) {
@@ -152,6 +162,30 @@ describe("asset and recipient selection", () => {
 
     expect(fields.at(-1)?.tokenSymbol).toBe("ETH");
     expect(stages).toContain("details");
+  });
+
+  test("keeps the balance line compact through an asset pick and a repaint", () => {
+    // Balances arrive at full token precision. The first paint compacts the
+    // figure; the writers that run after it — the asset pick and the repaint
+    // once discovery or a recipient check settles — once printed it whole, and
+    // the unbreakable figure widened the amount card past the narrowest panel.
+    const precise = { ...transferPublicBalance, formatted: "1.234567890123456789" };
+    const { form } = mount(undefined, null, [precise]);
+    const label = (): string => form.querySelector("#send-balance-label")?.textContent ?? "";
+    const firstPaint = label();
+    expect(firstPaint).toBe("Balance 1.23456 ETH");
+
+    click(form, "[data-send-asset]");
+    expect(label()).toBe(firstPaint);
+
+    restoreTransferCompose(form, transferFields(form));
+    expect(label()).toBe(firstPaint);
+
+    // The repaint after a bucket flip keeps naming the bucket it measures.
+    const source = form.querySelector<HTMLInputElement>('[name="source"]');
+    if (source) source.value = "private";
+    restoreTransferCompose(form, { ...transferFields(form), tokenFormatted: "" });
+    expect(label()).toBe("Private balance unavailable");
   });
 
   test("does not auto-select another asset for an unresolved token intent", () => {

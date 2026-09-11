@@ -32,6 +32,7 @@ import { KEY_BOUNDARY_MESSAGES } from "../support/key-boundary-messages";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "../support/key-boundary-multisig-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "../support/key-boundary-strk20-messages";
 import type { KeyBoundaryLiveIds } from "../support/key-boundary-types";
+import { awaitStrk20Job } from "../support/strk20-background";
 import { REPO_DIR } from "../support/workspace-sources";
 
 const HYDRATE_SOURCE = join(
@@ -177,8 +178,12 @@ const makeProbe = async (): Promise<Probe> => {
       const entry = catalogEntry(type);
       const message = { ...entry.message, ...(await entry.live?.(liveIds)) };
       session.resetCounts();
-      await harness.handler(message, entry.sender);
-      return session.counts();
+      const response = await harness.handler(message, entry.sender);
+      const counts = session.counts();
+      // Counted on the request alone: what it started as a tracked job is
+      // settled afterwards so no detached work bleeds into the next probe.
+      await awaitStrk20Job(harness.settle, response, entry.sender);
+      return counts;
     },
     session,
     setNow(value) {
@@ -206,6 +211,18 @@ describe("panel polling cannot hold the wallet unlocked", () => {
       }
     });
   }
+
+  test("polling a running proof job neither renews nor observes the session", async () => {
+    // Every 1.5 s for as long as a shield's proof takes, the panel asks after
+    // the job it started. The click that started it renewed the window once;
+    // the polls must not keep renewing it, or a proof in flight would hold the
+    // wallet unlocked for its whole duration. The registry answers from worker
+    // memory alone, so the poll never reaches the session at all.
+    probe.setNow(UNLOCKED_AT);
+    const counts = await probe.drive("wallet.strk20PreparationStatus");
+
+    expect(counts).toEqual({ peeks: 0, renewals: 0 });
+  });
 
   test("a panel left open across many full inactivity windows still locks", async () => {
     const fresh = await makeProbe();

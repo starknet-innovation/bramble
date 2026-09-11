@@ -11,6 +11,7 @@ import { type IconName, icon } from "@bramble/ui-kit/icons";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
+import { networkDisplayName } from "./network-label";
 
 export { accountAvatar } from "../shell/account-avatar";
 
@@ -332,7 +333,8 @@ export const copyButton = (value: string, label: string): string =>
 /**
  * Renders the network status pill.
  */
-const networkPill = (status: WalletStatus): string => pill(status.network, { dot: true });
+const networkPill = (status: WalletStatus): string =>
+  pill(networkDisplayName(status.network), { dot: true });
 
 /**
  * Renders the shared empty state for networks without an account.

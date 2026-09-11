@@ -18,6 +18,17 @@ import { isTokenId } from "@bramble/wallet-model/preferences";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/wallet-protocol/fee-estimate";
 import { STRK20_LIMITS } from "@bramble/wallet-protocol/strk20";
 import { responseError } from "../../runtime/runtime-errors";
+import {
+  type PreparationJobOptions,
+  type PreparationProgress,
+  runPreparationJob,
+} from "./privacy-preparation-job";
+
+/**
+ * Receives the progress of a tracked job on every poll while it runs. Optional
+ * on every job-backed method: a caller with no working screen passes nothing.
+ */
+export type PreparationProgressSink = (progress: PreparationProgress) => void;
 
 /**
  * Display-safe private balance derived from validated SDK note totals.
@@ -321,121 +332,146 @@ const readState = (response: unknown): PrivacyAccountState | null => {
 /**
  * Creates privacy journey methods over the side panel's privileged send
  * function. Every response is validated before entering render state.
+ *
+ * A shield's proof, an activation's proof, and every confirmed execution are
+ * run by a tracked background job and polled for (see
+ * ./privacy-preparation-job); `options.pause` is that poll's timing seam, and
+ * each of those methods takes an optional progress sink for its working screen.
  */
 export const createPrivacyRuntimeClient = (
   sendMessage: (message: unknown) => Promise<unknown>,
-) => ({
-  async executePrivacyPreparation(preparationId: string): Promise<string> {
-    const response = await sendMessage({
-      preparationId,
-      type: "wallet.strk20Execute",
+  options: PreparationJobOptions = {},
+) => {
+  const job = (
+    start: Readonly<Record<string, unknown>>,
+    onProgress: PreparationProgressSink | undefined,
+  ): Promise<unknown> =>
+    runPreparationJob(sendMessage, start, {
+      ...options,
+      ...(onProgress ? { onProgress } : {}),
     });
-    if (
-      isRecord(response) &&
-      hasOnlyKnownKeys(response, ["ok", "transactionHash"]) &&
-      response["ok"] === true &&
-      typeof response["transactionHash"] === "string" &&
-      isNonZeroStarkFieldElement(response["transactionHash"])
-    ) {
-      return response["transactionHash"];
-    }
-    throw responseError(response, "Private transaction failed");
-  },
-  async loadPrivacyState(): Promise<PrivacyAccountState> {
-    const response = await sendMessage({ type: "wallet.strk20State" });
-    const state = readState(response);
-    if (state) {
-      return state;
-    }
-    throw responseError(response, "Private balances unavailable");
-  },
-  async preparePrivacyDeposit(
-    tokenId: string,
-    amount: string,
-    recipient: string,
-  ): Promise<PrivacyPreparation> {
-    const response = await sendMessage({
-      amount,
-      recipient,
-      tokenId,
-      type: "wallet.strk20PrepareDeposit",
-    });
-    const preparation = readPreparation(response, { amount, kind: "deposit", recipient, tokenId });
-    if (preparation) {
-      return preparation;
-    }
-    throw responseError(response, "Shielding preparation failed");
-  },
-  async preparePrivacyRegistration(): Promise<PrivacyPreparation> {
-    const response = await sendMessage({ type: "wallet.strk20PrepareRegistration" });
-    const preparation = readPreparation(response, { kind: "register" });
-    if (preparation) {
-      return preparation;
-    }
-    throw responseError(response, "Privacy activation preparation failed");
-  },
-  async preparePrivacyTransfer(
-    tokenId: string,
-    recipient: string,
-    amount: string,
-  ): Promise<PrivacyPreparation> {
-    const response = await sendMessage({
-      amount,
-      recipient,
-      tokenId,
-      type: "wallet.strk20PrepareTransfer",
-    });
-    const preparation = readPreparation(response, {
-      amount,
-      kind: "transfer",
-      recipient,
-      tokenId,
-    });
-    if (preparation) {
-      return preparation;
-    }
-    throw responseError(response, "Private send preparation failed");
-  },
-  async preparePrivacyWithdraw(
-    tokenId: string,
-    recipient: string,
-    amount: string,
-  ): Promise<PrivacyPreparation> {
-    const response = await sendMessage({
-      amount,
-      recipient,
-      tokenId,
-      type: "wallet.strk20PrepareWithdraw",
-    });
-    const preparation = readPreparation(response, {
-      amount,
-      kind: "withdraw",
-      recipient,
-      tokenId,
-    });
-    if (preparation) {
-      return preparation;
-    }
-    throw responseError(response, "Unshielding preparation failed");
-  },
-  async loadPrivacyRecipientStatus(
-    tokenId: string,
-    address: string,
-  ): Promise<"registered" | "unregistered"> {
-    const response = await sendMessage({
-      address,
-      tokenId,
-      type: "wallet.strk20RecipientStatus",
-    });
-    if (
-      isRecord(response) &&
-      hasOnlyKnownKeys(response, ["ok", "strk20RecipientRegistration"]) &&
-      response["ok"] === true &&
-      (response["strk20RecipientRegistration"] === "registered" ||
-        response["strk20RecipientRegistration"] === "unregistered")
-    ) {
-      return response["strk20RecipientRegistration"];
-    }
-    throw responseError(response, "Recipient check unavailable");
-  },
-});
+  return {
+    async executePrivacyPreparation(
+      preparationId: string,
+      onProgress?: PreparationProgressSink,
+    ): Promise<string> {
+      // The hash is the job's stored outcome: a poll after settlement returns it
+      // again and submits nothing, and the one-time claim behind it means the
+      // same preparation cannot be executed twice.
+      const response = await job({ preparationId, type: "wallet.strk20Execute" }, onProgress);
+      if (
+        isRecord(response) &&
+        hasOnlyKnownKeys(response, ["ok", "transactionHash"]) &&
+        response["ok"] === true &&
+        typeof response["transactionHash"] === "string" &&
+        isNonZeroStarkFieldElement(response["transactionHash"])
+      ) {
+        return response["transactionHash"];
+      }
+      throw responseError(response, "Private transaction failed");
+    },
+    async loadPrivacyState(): Promise<PrivacyAccountState> {
+      const response = await sendMessage({ type: "wallet.strk20State" });
+      const state = readState(response);
+      if (state) {
+        return state;
+      }
+      throw responseError(response, "Private balances unavailable");
+    },
+    async preparePrivacyDeposit(
+      tokenId: string,
+      amount: string,
+      recipient: string,
+      onProgress?: PreparationProgressSink,
+    ): Promise<PrivacyPreparation> {
+      const response = await job(
+        { amount, recipient, tokenId, type: "wallet.strk20PrepareDeposit" },
+        onProgress,
+      );
+      const preparation = readPreparation(response, {
+        amount,
+        kind: "deposit",
+        recipient,
+        tokenId,
+      });
+      if (preparation) {
+        return preparation;
+      }
+      throw responseError(response, "Shielding preparation failed");
+    },
+    async preparePrivacyRegistration(
+      onProgress?: PreparationProgressSink,
+    ): Promise<PrivacyPreparation> {
+      const response = await job({ type: "wallet.strk20PrepareRegistration" }, onProgress);
+      const preparation = readPreparation(response, { kind: "register" });
+      if (preparation) {
+        return preparation;
+      }
+      throw responseError(response, "Privacy activation preparation failed");
+    },
+    async preparePrivacyTransfer(
+      tokenId: string,
+      recipient: string,
+      amount: string,
+    ): Promise<PrivacyPreparation> {
+      const response = await sendMessage({
+        amount,
+        recipient,
+        tokenId,
+        type: "wallet.strk20PrepareTransfer",
+      });
+      const preparation = readPreparation(response, {
+        amount,
+        kind: "transfer",
+        recipient,
+        tokenId,
+      });
+      if (preparation) {
+        return preparation;
+      }
+      throw responseError(response, "Private send preparation failed");
+    },
+    async preparePrivacyWithdraw(
+      tokenId: string,
+      recipient: string,
+      amount: string,
+    ): Promise<PrivacyPreparation> {
+      const response = await sendMessage({
+        amount,
+        recipient,
+        tokenId,
+        type: "wallet.strk20PrepareWithdraw",
+      });
+      const preparation = readPreparation(response, {
+        amount,
+        kind: "withdraw",
+        recipient,
+        tokenId,
+      });
+      if (preparation) {
+        return preparation;
+      }
+      throw responseError(response, "Unshielding preparation failed");
+    },
+    async loadPrivacyRecipientStatus(
+      tokenId: string,
+      address: string,
+    ): Promise<"registered" | "unregistered"> {
+      const response = await sendMessage({
+        address,
+        tokenId,
+        type: "wallet.strk20RecipientStatus",
+      });
+      if (
+        isRecord(response) &&
+        hasOnlyKnownKeys(response, ["ok", "strk20RecipientRegistration"]) &&
+        response["ok"] === true &&
+        (response["strk20RecipientRegistration"] === "registered" ||
+          response["strk20RecipientRegistration"] === "unregistered")
+      ) {
+        return response["strk20RecipientRegistration"];
+      }
+      throw responseError(response, "Recipient check unavailable");
+    },
+  };
+};
