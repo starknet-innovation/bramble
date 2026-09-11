@@ -29,6 +29,7 @@ import {
 } from "@bramble/privacy/service";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics";
 import { approvalPayloadMatchesContext } from "../approvals/approval-context";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { activeAccountContext } from "../runtime/runtime-state";
@@ -169,12 +170,13 @@ const submitPreparedPrivateBatch = async (
   return submitStrk20Actions(service, {
     ...context.accountContext,
     actions: preparation.actions,
-    beforeProof: async () => {
-      if (preparation.kind === "transfer") {
-        await assertRecipientRegistration(service, preparation.recipient, context);
-      }
-      await assertCurrentRecipientPolicy(deps, preparation, context);
-    },
+    beforeProof: () =>
+      runNestedGatewayAnalyticsService(service, async (nestedService) => {
+        if (preparation.kind === "transfer") {
+          await assertRecipientRegistration(nestedService, preparation.recipient, context);
+        }
+        await assertCurrentRecipientPolicy(deps, preparation, context);
+      }),
     plan: preparation.plan,
   });
 };

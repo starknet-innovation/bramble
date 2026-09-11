@@ -19,6 +19,7 @@ import {
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
+import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics";
 import { createApprovalContext } from "../approvals/approval-context";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
@@ -120,16 +121,17 @@ const depositPreparationWork = async (
     const prepared = await prepareStrk20AccountActions(service, {
       ...context.accountContext,
       actions,
-      beforeProof: async () => {
-        const currentRegistrationError = await depositRegistrationError(
-          service,
-          context,
-          recipient,
-        );
-        if (currentRegistrationError !== null) {
-          throw new Error(currentRegistrationError);
-        }
-      },
+      beforeProof: () =>
+        runNestedGatewayAnalyticsService(service, async (nestedService) => {
+          const currentRegistrationError = await depositRegistrationError(
+            nestedService,
+            context,
+            recipient,
+          );
+          if (currentRegistrationError !== null) {
+            throw new Error(currentRegistrationError);
+          }
+        }),
       poolFeeFri: plan.poolFeeFri,
     });
     report({ phase: "estimating the network fee" });

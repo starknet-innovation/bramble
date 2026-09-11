@@ -1,6 +1,7 @@
 /** Gateway analytics stays exact-origin, user-controllable, and pseudonymous. */
 
 import { describe, expect, test } from "bun:test";
+import type { Strk20Service } from "@bramble/privacy/service";
 import { createMemoryStore } from "@bramble/store/kv";
 import {
   ANALYTICS_GATEWAY_ORIGIN,
@@ -8,6 +9,8 @@ import {
   analyticsPlatform,
   analyticsReleaseChannel,
   createGatewayAnalytics,
+  runNestedGatewayAnalyticsService,
+  withGatewayAnalyticsFlows,
 } from "../../../apps/extension/src/background/analytics/gateway-analytics";
 
 const INSTALLATION_ID = "11111111-1111-4111-8111-111111111111";
@@ -210,6 +213,48 @@ describe("gateway analytics fetch", () => {
 
     await analytics.fetch(`${ANALYTICS_GATEWAY_ORIGIN}/rpc/mainnet/v0_10`);
     expect(headersAt(capture.calls, 3).get("x-mc-flow-id")).toBeNull();
+  });
+
+  test("reuses the active flow for a nested service callback", async () => {
+    const capture = captureHttp();
+    const store = createMemoryStore();
+    await store.set(ANALYTICS_INSTALLATION_ID_KEY, INSTALLATION_ID);
+    const analytics = createGatewayAnalytics({
+      enabled: () => true,
+      http: capture.http,
+      metadata,
+      randomUuid: () => FIRST_FLOW_ID,
+      store,
+    });
+    const registrationInput = {} as never;
+    let wrapped: Strk20Service;
+    const service = {
+      async prepareAccountActions(input: { readonly beforeProof?: () => Promise<void> }) {
+        await analytics.fetch(`${ANALYTICS_GATEWAY_ORIGIN}/api/strk20/preparation`);
+        await input.beforeProof?.();
+        await analytics.fetch(`${ANALYTICS_GATEWAY_ORIGIN}/api/strk20/prover`);
+        return {};
+      },
+      async registrationStatus() {
+        await analytics.fetch(`${ANALYTICS_GATEWAY_ORIGIN}/api/strk20/registration`);
+        return "registered" as const;
+      },
+    } as unknown as Strk20Service;
+    wrapped = withGatewayAnalyticsFlows(service, analytics.withFlow);
+
+    await wrapped.prepareAccountActions?.({
+      beforeProof: () =>
+        runNestedGatewayAnalyticsService(wrapped, async (nested) => {
+          await nested.registrationStatus?.(registrationInput);
+        }),
+    } as never);
+
+    expect(capture.calls).toHaveLength(3);
+    expect(capture.calls.map((call) => headersFor(call).get("x-mc-flow-id"))).toEqual([
+      FIRST_FLOW_ID,
+      FIRST_FLOW_ID,
+      FIRST_FLOW_ID,
+    ]);
   });
 
   test("omits metadata when persistence or app metadata is unusable", async () => {

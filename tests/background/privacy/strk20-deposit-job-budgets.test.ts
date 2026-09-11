@@ -18,7 +18,12 @@ import { describe, expect, test } from "bun:test";
 import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import { STRK20_PHASES } from "@bramble/privacy/phases";
 import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import type { RpcProvider } from "starknet";
+import {
+  createGatewayAnalytics,
+  withGatewayAnalyticsFlows,
+} from "../../../apps/extension/src/background/analytics/gateway-analytics";
 import { createStrk20JobRegistry } from "../../../apps/extension/src/background/privacy/strk20-preparation-jobs";
 import {
   executeResult,
@@ -135,15 +140,30 @@ const officialService = (stall: Stall) => {
   });
 };
 
+const withAnalyticsFlow = (service: ReturnType<typeof officialService>) => {
+  const analytics = createGatewayAnalytics({
+    enabled: () => true,
+    http: async () => new Response("{}"),
+    metadata: {
+      appVersion: "0.10.1",
+      platform: "chrome",
+      releaseChannel: "development",
+    },
+    randomUuid: () => "11111111-1111-4111-8111-111111111111",
+    store: createMemoryStore(),
+  });
+  return withGatewayAnalyticsFlows(service, analytics.withFlow);
+};
+
 // Drives the shield through its job the way the panel does, recording the
 // phase of every running poll and every phase the job closed in the
 // diagnostics lane, and returns the settled reply with the wall time it took.
-const runShield = async (stall: Stall) => {
+const runShield = async (stall: Stall, service = officialService(stall)) => {
   const closed: (readonly [string, string])[] = [];
   const handler = buildStrk20Handler({
     preferences: preferences(),
     publicBalance: "2000000000000000000",
-    strk20: officialService(stall),
+    strk20: service,
     strk20Jobs: createStrk20JobRegistry({
       diagnostics: (_kind, phase, outcome) => {
         closed.push([phase, outcome]);
@@ -193,6 +213,11 @@ describe("a shield's waits are bounded and named", () => {
       ["estimating the network fee", "ok"],
       ["job", "ok"],
     ]);
+  });
+
+  test("completes when product analytics wraps the service flow", async () => {
+    const { response } = await runShield("none", withAnalyticsFlow(officialService("none")));
+    expect(response).toMatchObject({ ok: true, strk20Preparation: { kind: "deposit" } });
   });
 
   for (const stall of [

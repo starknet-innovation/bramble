@@ -45,6 +45,22 @@ export type GatewayAnalytics = {
   readonly withFlow: <T>(run: () => Promise<T>) => Promise<T>;
 };
 
+// The wrapped service owns the flow lock; work invoked from one of its own
+// callbacks must call the underlying service or it will wait on itself. Weak
+// keys keep the relationship instance-scoped without retaining old runtimes.
+const nestedFlowServices = new WeakMap<Strk20Service, Strk20Service>();
+
+/**
+ * Runs a service call that is already inside another wrapped service method.
+ * Its gateway requests inherit the active flow id from the outer method, while
+ * bypassing a second acquisition of the same serialization lock. An unwrapped
+ * service is returned unchanged so test and fallback runtimes keep working.
+ */
+export const runNestedGatewayAnalyticsService = <T>(
+  service: Strk20Service,
+  run: (nested: Strk20Service) => Promise<T>,
+): Promise<T> => run(nestedFlowServices.get(service) ?? service);
+
 type GatewayAnalyticsOptions = {
   readonly enabled: () => boolean | Promise<boolean>;
   readonly http: GatewayHttp;
@@ -236,7 +252,7 @@ export const withGatewayAnalyticsFlows = (
   const register = service.register;
   const registrationStatus = service.registrationStatus;
   const subaccountCommitment = service.subaccountCommitment;
-  return {
+  const wrapped: Strk20Service = {
     ...service,
     prepare: (input) => withFlow(() => service.prepare(input)),
     privateBalances: (input) => withFlow(() => service.privateBalances(input)),
@@ -258,4 +274,6 @@ export const withGatewayAnalyticsFlows = (
       ? { subaccountCommitment: (input) => withFlow(() => subaccountCommitment(input)) }
       : {}),
   };
+  nestedFlowServices.set(wrapped, service);
+  return wrapped;
 };
