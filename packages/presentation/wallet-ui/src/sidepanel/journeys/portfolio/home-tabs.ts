@@ -175,7 +175,7 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
   <li class="tx-row" data-live-group>
     <div class="tx-copy">
       <span class="tx-title">
-        <span class="tx-kind-icon tx-kind-${row.type} ${entry.status}" aria-label="${escapeHtml(statusLabel)}" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
+        <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-label="${escapeHtml(statusLabel)}" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
         ${
           explorer
             ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(name)}. ${escapeHtml(label)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${escapeHtml(row.title)}</a>`
