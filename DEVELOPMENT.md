@@ -397,9 +397,12 @@ owner.
   configure no ruleset bypass actor.
 - **Block force-pushes and deletions** by non-maintainers.
 - Once a release branch is integrated into `main`, it is **immutable**. The
-  `pr-guards` check rejects attempts to reopen it, and the local hooks
+  `pr-guards` check rejects attempts to reopen it (a merged promotion PR from
+  that branch into `main` is the signal), and the local hooks
   (`git config core.hooksPath .githooks`) reject the commit and the push before
-  it reaches GitHub — both fail closed when ancestry cannot be resolved. Create
+  it reaches GitHub (a `main` merge commit with the branch tip as a parent is
+  theirs) — both fail closed when integration cannot be resolved. A freshly cut
+  branch is reachable from `main` but not integrated, so its first PR is fine. Create
   the next patch release branch (`release/vX.Y.Z`) for follow-up work; it cuts
   its own `X.Y.Z` release on promotion exactly as a minor branch does.
 
