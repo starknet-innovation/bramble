@@ -6,7 +6,13 @@
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { formatFiat } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
-import { balanceShortcut, fiatInputToken, sendCurrencySymbol, tokenInputFiat } from "./send-model";
+import {
+  balanceShortcut,
+  fiatInputToken,
+  sendBalanceLine,
+  sendCurrencySymbol,
+  tokenInputFiat,
+} from "./send-model";
 import {
   recipientFieldError,
   type TransferFields,
@@ -48,7 +54,11 @@ export const restoreTransferCompose = (form: HTMLFormElement, fields: TransferFi
   text("send-recipient-name", fields.recipientLabel || accountLabel(fields.recipient));
   text("send-recipient-label", accountLabel(fields.recipient));
   text("send-selected-token-symbol", fields.tokenSymbol);
-  text("send-balance-label", `Balance ${fields.tokenFormatted} ${fields.tokenSymbol}`);
+  // An empty formatted balance is one the bucket controls could not read.
+  text(
+    "send-balance-label",
+    sendBalanceLine(fields.source, fields.tokenFormatted || null, fields.tokenSymbol),
+  );
   const asset = Array.from(form.querySelectorAll<HTMLElement>("[data-send-asset]")).find(
     (row) => row.dataset["sendAsset"] === fields.tokenId,
   );
@@ -120,7 +130,8 @@ const applySelectedAsset = (form: HTMLFormElement, row: HTMLElement): void => {
   if (symbolNode) symbolNode.textContent = symbol;
   const balanceNode = form.querySelector("#send-balance-label");
   if (balanceNode) {
-    balanceNode.textContent = `Balance ${fields["tokenFormatted"] ?? "0"} ${symbol}`;
+    // The picker row carries the public balance, so the line names that bucket.
+    balanceNode.textContent = sendBalanceLine("public", fields["tokenFormatted"] ?? "0", symbol);
   }
   copySelectedGlyph(form, row.querySelector(".send-asset-glyph"));
   const visible = form.querySelector<HTMLInputElement>("#send-amount-input");

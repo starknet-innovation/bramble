@@ -302,6 +302,34 @@ describe("bucket controls", () => {
     );
   });
 
+  test("re-measures the balance against the source bucket after an asset pick", () => {
+    // The picker row carries the public figure and writes it into the balance
+    // fields; when the send spends privately that put the public number under
+    // the "Private balance" label and into Max's fallback.
+    const form = mountForm();
+    form.insertAdjacentHTML(
+      "beforeend",
+      `<button type="button" data-send-asset="${TOKEN_ID}" data-send-balance="100000000000000000000" data-send-formatted="100">STRK</button>`,
+    );
+    const counter = bind(form);
+    pick(form, "source", "private");
+    expect(form.querySelector("#send-balance-label")?.textContent).toBe("Private balance 20 STRK");
+
+    // What the compose binding does on a pick, then the click reaching the form.
+    const balance = form.querySelector<HTMLInputElement>('[name="tokenBalance"]');
+    const formatted = form.querySelector<HTMLInputElement>('[name="tokenFormatted"]');
+    if (balance) balance.value = "100000000000000000000";
+    if (formatted) formatted.value = "100";
+    form
+      .querySelector<HTMLButtonElement>("[data-send-asset]")
+      ?.dispatchEvent(new Event("click", { bubbles: true }));
+
+    expect(form.querySelector("#send-balance-label")?.textContent).toBe("Private balance 20 STRK");
+    expect(balance?.value).toBe("20000000000000000000");
+    // The pick is a route change too: the cached review is dropped.
+    expect(counter.changes).toBe(2);
+  });
+
   test("clears the reason once the route resolves", () => {
     const form = mountForm();
     bind(form);

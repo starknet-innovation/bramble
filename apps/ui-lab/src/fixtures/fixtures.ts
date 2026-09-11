@@ -152,12 +152,43 @@ const activity = (
   summary,
 });
 
+// Two UTC days of varied rows so the feed shows every part of the row anatomy:
+// counterparties, asset amounts (priced USDC and unpriced STRK), a swap pair,
+// and token-less contract interactions.
+const DAY_BEFORE = 1_785_171_200_000 - 86_400_000;
+
 export const softwareActivity: readonly ActivityEntry[] = [
-  activity(softwareAccount, "0x701", "Sent 24 USDC", "accepted"),
-  activity(softwareAccount, "0x702", "Swapped 50 USDC for STRK", "accepted"),
-  { ...activity(softwareAccount, "0x703", "Unstaked 120 STRK", "accepted"), kind: "invoke" },
-  { ...activity(softwareAccount, "0x704", "Claimed staking rewards", "accepted"), kind: "invoke" },
-  { ...activity(softwareAccount, "0x705", "Private transfer 20 USDC", "accepted"), kind: "invoke" },
+  {
+    ...activity(softwareAccount, "0x701", "Sent 24 USDC to 0x4567…cdef", "accepted"),
+    amount: "24",
+    counterparty: RECIPIENT_ADDRESS,
+    token: "USDC",
+  },
+  {
+    ...activity(softwareAccount, "0x702", "Swapped 50 USDC for 186.4 STRK", "accepted"),
+    amount: "50",
+    kind: "invoke",
+    token: "USDC",
+  },
+  {
+    ...activity(softwareAccount, "0x703", "Unstaked 120 STRK", "accepted"),
+    amount: "120",
+    kind: "invoke",
+    submittedAt: DAY_BEFORE,
+    token: "STRK",
+  },
+  {
+    ...activity(softwareAccount, "0x704", "Claimed staking rewards", "accepted"),
+    kind: "invoke",
+    submittedAt: DAY_BEFORE,
+  },
+  {
+    ...activity(softwareAccount, "0x705", "Private transfer 20 USDC", "accepted"),
+    amount: "20",
+    kind: "invoke",
+    submittedAt: DAY_BEFORE,
+    token: "USDC",
+  },
 ];
 
 export const secondActivity: readonly ActivityEntry[] = [

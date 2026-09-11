@@ -4,6 +4,8 @@ import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   type ExplorerDiagnosticRow,
   explorerDiagnosticsSnapshot,
+  type PrivacyDiagnosticRow,
+  privacyDiagnosticsSnapshot,
   type RpcDiagnosticRow,
   rpcDiagnosticsSnapshot,
 } from "@bramble/starknet/rpc-diagnostics";
@@ -19,6 +21,12 @@ type SupportDiagnostics = {
   readonly hasVault: boolean;
   readonly locked: boolean;
   readonly networkId: string;
+  /**
+   * Tracked privacy jobs by kind, phase, and outcome class with average
+   * duration — where a shield, activation, or private send spent its time and
+   * how it ended. Fixed labels only; no account, note, amount, or error text.
+   */
+  readonly privacy: readonly PrivacyDiagnosticRow[];
   readonly ready: boolean;
   readonly rpc: readonly RpcDiagnosticRow[];
 };
@@ -47,6 +55,7 @@ export const supportDiagnosticsResponse = async (
       hasVault: status.hasVault,
       locked: status.locked,
       networkId: status.networkId,
+      privacy: privacyDiagnosticsSnapshot(),
       ready: status.ready,
       rpc: rpcDiagnosticsSnapshot(),
     },

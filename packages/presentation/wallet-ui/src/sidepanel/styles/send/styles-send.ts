@@ -38,7 +38,14 @@ export const SEND_STYLES = `
     border-radius: 0;
     border-top: 1px solid var(--bramble-hairline);
   }
-  details.receive-identity > summary { padding: 0; }
+  /* Flush section inside the receive card: the summary carries its own
+     rounded hover, inset by the section's own gutter, since this details is
+     not a clipped panel. */
+  details.receive-identity > summary {
+    border-radius: ${RADIUS.md};
+    margin: 0 -${SPACE.sm};
+    padding: 0 ${SPACE.sm};
+  }
   .receive-identity .disclosure-body {
     gap: ${SPACE.md};
     padding: ${SPACE.sm} 0 0;

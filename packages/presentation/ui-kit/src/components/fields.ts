@@ -12,6 +12,11 @@ type FieldBase = {
   readonly disabled?: boolean;
   readonly hint?: string;
   readonly label: string;
+  /**
+   * Keeps the label for assistive tech but takes it out of the visible flow,
+   * for a lone field whose heading already says what it is.
+   */
+  readonly labelHidden?: boolean;
   readonly name: string;
   readonly required?: boolean;
 };
@@ -97,6 +102,7 @@ export const textField = ({
   max,
   maxlength,
   label,
+  labelHidden = false,
   min,
   minlength,
   name,
@@ -106,7 +112,7 @@ export const textField = ({
   value,
   spellcheck,
 }: TextFieldProps): string =>
-  `<label><span>${escapeHtml(label)}</span><input${className ? ` class="${uiClassNames(className)}"` : ""} name="${escapeHtml(name)}" type="${type}"${accept ? ` accept="${escapeHtml(accept)}"` : ""}${autocomplete ? ` autocomplete="${escapeHtml(autocomplete)}"` : ""}${autocapitalize ? ` autocapitalize="${autocapitalize}"` : ""}${inputmode ? ` inputmode="${inputmode}"` : ""}${list ? ` list="${escapeHtml(list)}"` : ""}${max === undefined ? "" : ` max="${max}"`}${maxlength === undefined ? "" : ` maxlength="${maxlength}"`}${min === undefined ? "" : ` min="${min}"`}${minlength === undefined ? "" : ` minlength="${minlength}"`}${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}${spellcheck === undefined ? "" : ` spellcheck="${spellcheck}"`}${value === undefined ? "" : ` value="${escapeHtml(value)}"`}${required ? " required" : ""}${disabled ? " disabled" : ""}${uiAttributes(attributes)} />${fieldHint(hint)}</label>`;
+  `<label><span${labelHidden ? ' class="sr-only"' : ""}>${escapeHtml(label)}</span><input${className ? ` class="${uiClassNames(className)}"` : ""} name="${escapeHtml(name)}" type="${type}"${accept ? ` accept="${escapeHtml(accept)}"` : ""}${autocomplete ? ` autocomplete="${escapeHtml(autocomplete)}"` : ""}${autocapitalize ? ` autocapitalize="${autocapitalize}"` : ""}${inputmode ? ` inputmode="${inputmode}"` : ""}${list ? ` list="${escapeHtml(list)}"` : ""}${max === undefined ? "" : ` max="${max}"`}${maxlength === undefined ? "" : ` maxlength="${maxlength}"`}${min === undefined ? "" : ` min="${min}"`}${minlength === undefined ? "" : ` minlength="${minlength}"`}${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}${spellcheck === undefined ? "" : ` spellcheck="${spellcheck}"`}${value === undefined ? "" : ` value="${escapeHtml(value)}"`}${required ? " required" : ""}${disabled ? " disabled" : ""}${uiAttributes(attributes)} />${fieldHint(hint)}</label>`;
 
 /**
  * Shared multiline field configuration.

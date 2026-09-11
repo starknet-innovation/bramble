@@ -11,6 +11,7 @@ import { type IconName, icon } from "@bramble/ui-kit/icons";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
+import { networkDisplayName } from "./network-label";
 
 export { accountAvatar } from "../shell/account-avatar";
 
@@ -157,6 +158,14 @@ export const isWalletView = (value: unknown): value is WalletView =>
  * Truncates a Starknet address for display.
  */
 export const accountLabel = (address: string): string => shortAddress(address);
+
+/**
+ * The address half of a `<network>:<address>` account id, for surfaces that
+ * receive only the id (approval context, Ledger signing) yet must show and copy
+ * the account address. An id without a separator passes through whole.
+ */
+export const accountIdAddress = (accountId: string): string =>
+  accountId.slice(accountId.indexOf(":") + 1);
 
 /**
  * Light summary text for an account-group disclosure: "N accounts detected"
@@ -330,9 +339,26 @@ export const copyButton = (value: string, label: string): string =>
   });
 
 /**
+ * Renders the quiet copy control that trails a truncated identifier inline — a
+ * list row's address, a review fact, an activity counterparty, a signer key.
+ * Ghost, and sized like a receipt row's copy action (`.copy-inline`), so every
+ * inline copy affordance reads the same. Copies `value` in full; the visible
+ * text stays the caller's truncated label.
+ */
+export const inlineCopyButton = (value: string, label: string): string =>
+  iconButton({
+    attributes: { "data-copy": value },
+    className: "copy-inline",
+    icon: "copy",
+    label,
+    variant: "ghost",
+  });
+
+/**
  * Renders the network status pill.
  */
-const networkPill = (status: WalletStatus): string => pill(status.network, { dot: true });
+const networkPill = (status: WalletStatus): string =>
+  pill(networkDisplayName(status.network), { dot: true });
 
 /**
  * Renders the shared empty state for networks without an account.

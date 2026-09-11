@@ -432,6 +432,10 @@ describe("token and preference wrappers", () => {
       hasVault: true,
       locked: false,
       networkId: "SN_MAIN",
+      privacy: [
+        { count: 1, durationMs: 41_000, kind: "deposit", outcome: "ok", phase: "proving" },
+        { count: 1, durationMs: 62_500, kind: "deposit", outcome: "timeout", phase: "job" },
+      ],
       ready: true,
       rpc: [{ count: 3, endpoint: "wallet-gateway", latencyMs: 42, outcome: "ok" }],
     } as const;

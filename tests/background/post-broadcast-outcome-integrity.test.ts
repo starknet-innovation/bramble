@@ -18,7 +18,7 @@ const SUBMITTERS = [
   "apps/extension/src/background/portfolio/allowance-ops.ts",
   "apps/extension/src/background/portfolio/nft-ops.ts",
   "apps/extension/src/background/privacy/strk20-approval-execution.ts",
-  "apps/extension/src/background/privacy/strk20-wallet-ops.ts",
+  "apps/extension/src/background/privacy/strk20-wallet-execution.ts",
   "apps/extension/src/background/provider/provider-ops.ts",
   "apps/extension/src/background/transactions/swap-ops.ts",
 ] as const;

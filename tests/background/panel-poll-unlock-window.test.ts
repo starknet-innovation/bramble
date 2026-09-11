@@ -32,6 +32,7 @@ import { KEY_BOUNDARY_MESSAGES } from "../support/key-boundary-messages";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "../support/key-boundary-multisig-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "../support/key-boundary-strk20-messages";
 import type { KeyBoundaryLiveIds } from "../support/key-boundary-types";
+import { awaitStrk20Job } from "../support/strk20-background";
 import { REPO_DIR } from "../support/workspace-sources";
 
 const HYDRATE_SOURCE = join(
@@ -45,6 +46,10 @@ const LIFECYCLE_SOURCE = join(
 const PRIVACY_SOURCE = join(
   REPO_DIR,
   "packages/presentation/wallet-ui/src/sidepanel/journeys/privacy/privacy-ui.ts",
+);
+const PRIVACY_DISCLOSURE_SOURCE = join(
+  REPO_DIR,
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/privacy/privacy-disclosure.ts",
 );
 const TRANSACTION_ALERTS_SOURCE = join(
   REPO_DIR,
@@ -177,8 +182,12 @@ const makeProbe = async (): Promise<Probe> => {
       const entry = catalogEntry(type);
       const message = { ...entry.message, ...(await entry.live?.(liveIds)) };
       session.resetCounts();
-      await harness.handler(message, entry.sender);
-      return session.counts();
+      const response = await harness.handler(message, entry.sender);
+      const counts = session.counts();
+      // Counted on the request alone: what it started as a tracked job is
+      // settled afterwards so no detached work bleeds into the next probe.
+      await awaitStrk20Job(harness.settle, response, entry.sender);
+      return counts;
     },
     session,
     setNow(value) {
@@ -206,6 +215,18 @@ describe("panel polling cannot hold the wallet unlocked", () => {
       }
     });
   }
+
+  test("polling a running proof job neither renews nor observes the session", async () => {
+    // Every 1.5 s for as long as a shield's proof takes, the panel asks after
+    // the job it started. The click that started it renewed the window once;
+    // the polls must not keep renewing it, or a proof in flight would hold the
+    // wallet unlocked for its whole duration. The registry answers from worker
+    // memory alone, so the poll never reaches the session at all.
+    probe.setNow(UNLOCKED_AT);
+    const counts = await probe.drive("wallet.strk20PreparationStatus");
+
+    expect(counts).toEqual({ peeks: 0, renewals: 0 });
+  });
 
   test("a panel left open across many full inactivity windows still locks", async () => {
     const fresh = await makeProbe();
@@ -235,9 +256,10 @@ describe("panel polling cannot hold the wallet unlocked", () => {
   });
 
   test("the three ambient readers outside hydration remain classified", async () => {
-    const [lifecycle, privacy, transactionAlerts] = await Promise.all([
+    const [lifecycle, privacy, privacyDisclosure, transactionAlerts] = await Promise.all([
       readFile(LIFECYCLE_SOURCE, "utf8"),
       readFile(PRIVACY_SOURCE, "utf8"),
+      readFile(PRIVACY_DISCLOSURE_SOURCE, "utf8"),
       readFile(TRANSACTION_ALERTS_SOURCE, "utf8"),
     ]);
 
@@ -248,12 +270,14 @@ describe("panel polling cannot hold the wallet unlocked", () => {
     expect(
       transactionAlerts.split("\n").filter((line) => line.includes("wallet.loadTransactionAlerts")),
     ).toEqual(["    const alerts = await wallet.loadTransactionAlerts().catch(() => []);"]);
+    // The single-flight loader and the pending-registration poll are the only
+    // two ambient disclosure reads; the entry's press joins the loader.
+    expect(
+      privacyDisclosure.split("\n").filter((line) => line.includes("deps.wallet.loadPrivacyState")),
+    ).toEqual(["      const value = await deps.wallet.loadPrivacyState();"]);
     expect(
       privacy.split("\n").filter((line) => line.includes("deps.wallet.loadPrivacyState")),
-    ).toEqual([
-      "    const value = await deps.wallet.loadPrivacyState();",
-      "    load: () => deps.wallet.loadPrivacyState(),",
-    ]);
+    ).toEqual(["    load: () => deps.wallet.loadPrivacyState(),"]);
   });
 });
 

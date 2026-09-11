@@ -33,6 +33,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     gap: ${SPACE.md};
     justify-content: space-between;
     min-height: 44px;
+    min-width: 0;
     padding: ${SPACE.xs} 0;
     position: relative;
   }
@@ -60,9 +61,17 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     min-width: 0;
     text-align: right;
   }
-  .receipt-row dd code { color: var(--bramble-text); overflow-wrap: normal; word-break: normal; }
-  .receipt-row dd .icon-button { height: 28px; min-height: 0; width: 28px; }
-  .receipt-row dd .icon-button .icon { height: 15px; width: 15px; }
+  /* Identifiers stay whole while they fit; only when the panel is narrower
+     than the value does the value break, rather than overflowing the row and
+     being cut off at the right edge. */
+  .receipt-row dd code { color: var(--bramble-text); overflow-wrap: anywhere; word-break: normal; }
+  .receipt-row dd .icon-button, .icon-button.copy-inline { height: 28px; min-height: 0; width: 28px; }
+  .receipt-row dd .icon-button .icon, .icon-button.copy-inline .icon { height: 15px; width: 15px; }
+  /* Inline copy control (shared/parts inlineCopyButton): trails a truncated
+     identifier on a text line at the receipt action's compact size. The
+     negative vertical margin keeps a caption or mono line at its own height,
+     so a row gains a copy affordance without gaining height. */
+  .icon-button.copy-inline { flex: none; margin: -6px 0; }
   /* Approval request facts use the same receipt grammar, but allow long
      untrusted identifiers to wrap inside the panel instead of widening it. */
   .request-detail {
@@ -101,6 +110,15 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow-wrap: anywhere;
     word-break: break-all;
   }
+  /* A fact with a copy action keeps the identifier and its control on one
+     right-aligned line; the identifier still wraps inside the panel first. */
+  .request-detail dd:has(> .icon-button) {
+    align-items: center;
+    display: flex;
+    gap: 2px;
+    justify-content: flex-end;
+  }
+  .request-detail dd:has(> .icon-button) > code { min-width: 0; }
   .review-calls {
     display: grid;
     gap: ${SPACE.sm};

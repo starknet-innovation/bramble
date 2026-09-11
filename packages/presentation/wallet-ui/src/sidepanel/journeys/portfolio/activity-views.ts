@@ -12,13 +12,16 @@ import { iconButton } from "@bramble/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { approvalCard } from "../approvals/approval-cards";
-import { activityEmptyCopy, transactionRow } from "./home-tabs";
+import type { ActivityPricing } from "./activity-format";
+import { activityEmptyCopy, transactionGroups } from "./home-tabs";
 
 const HISTORY_UNAVAILABLE_NOTICE =
   "Couldn't load on-chain history. Showing transactions recorded on this device only — check your connection or RPC endpoint and refresh.";
 
 /**
- * Renders the Activity dock for the active account and network only.
+ * Renders the Activity dock for the active account and network only. `pricing`
+ * (the display currency, cached prices, and tracked tokens) lets each row show
+ * a signed fiat delta; without it rows show asset amounts alone.
  */
 export const activityScreen = (
   pending: readonly PendingApproval[],
@@ -26,6 +29,7 @@ export const activityScreen = (
   transactions: readonly ActivityEntry[],
   historyUnavailable: boolean,
   multisig: ArgentMultisigRecord | null = null,
+  pricing?: ActivityPricing,
 ): string =>
   dockScreen(
     "activity",
@@ -64,7 +68,7 @@ export const activityScreen = (
       ${
         transactions.length === 0
           ? emptyState(activityEmptyCopy(historyUnavailable))
-          : `<ul class="tx-list">${transactions.map(transactionRow).join("")}</ul>`
+          : transactionGroups(transactions, pricing)
       }
       <p id="activity-result" role="status"></p>
     </section>`,
@@ -82,7 +86,6 @@ export const requestsFlow = (pending: readonly PendingApproval[], status: Wallet
   flowScreen(
     "requests",
     `<section class="section">
-      <p class="hint">These requests were parked for later. Review the requesting site and exact effect before deciding.</p>
       ${
         pending.length === 0
           ? emptyState("No wallet requests are waiting.")

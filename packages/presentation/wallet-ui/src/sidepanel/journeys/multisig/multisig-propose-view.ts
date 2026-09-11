@@ -256,7 +256,6 @@ export const multisigProposeFlow = (
     flowScreen(
       "multisig-propose",
       `<section class="section multisig-compose-flow">
-        <p class="multisig-compose-intro">Create a transaction for shared review. Nothing is signed or submitted until the required signers approve it.</p>
         ${transferComposer(status, view, preferences, data)}
         ${advancedComposer(view)}
       </section>`,

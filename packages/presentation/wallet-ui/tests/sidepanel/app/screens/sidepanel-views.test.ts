@@ -42,7 +42,8 @@ describe("sidepanel views", () => {
     expect(dock).not.toContain('data-view="receive"');
     expect(html).toContain('aria-controls="wallet-screen-home"');
     expect(html).toContain('aria-selected="true"');
-    expect(dock).toContain('class="nav-label"');
+    expect(dock).toContain('aria-label="Home" title="Home"');
+    expect(dock).not.toContain('class="nav-label"');
     expect(dock).not.toContain('class="nav-tooltip"');
   });
 
@@ -99,7 +100,7 @@ describe("sidepanel views", () => {
     expect(requests).toContain('data-approval-surface="popup"');
     expect(requests).toMatch(/data-approval-surface="side-panel"[^>]*aria-pressed="true"/);
     expect(html).not.toContain('data-theme-id="system"');
-    // The dock is a solid anchored bottom bar (Clean Mono — no glass material).
+    // The dock is a solid floating pill (Clean Mono — no glass material).
     expect(html).toContain('class="wallet-dock"');
   });
 

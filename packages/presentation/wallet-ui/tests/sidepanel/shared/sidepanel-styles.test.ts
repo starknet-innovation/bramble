@@ -5,7 +5,7 @@
  * the side panel UI.
  */
 import { describe, expect, test } from "bun:test";
-import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE, TYPE } from "@bramble/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE } from "@bramble/ui-kit/tokens";
 import { SIDEPANEL_STYLES } from "../../../src/sidepanel/styles/index";
 
 describe("sidepanel styles", () => {
@@ -104,19 +104,26 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(/\.nft-hero \{[^}]*max-width: 240px;[^}]*width: 100%;/s);
   });
 
-  test("the dock is an anchored full-bleed bottom bar, not a floating card", () => {
-    // Navigation reads as structural chrome: a solid panel drawn to the panel
-    // edges (fixed, no rounded floating card, no bottom offset), separated from
-    // scrolling content by a top hairline plus the softest upward shadow. Its
-    // footprint is single-sourced as --bramble-dock-h, which the dock-screen scroll
+  test("the dock is a floating pill centred above the panel edge", () => {
+    // Navigation floats as one rounded pill: fixed, lifted off the bottom
+    // edge by a token gap, centred by auto margins at its content width, and
+    // separated from scrolling content by the floating-chrome elevation alone
+    // (no ring, no top hairline). Its footprint from the bottom edge is
+    // single-sourced as --bramble-dock-h, which the dock-screen scroll
     // clearance and the toast stack both derive from.
     expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*background: var\(--bramble-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*border-radius: 999px/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*bottom: 16px/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*box-shadow: var\(--bramble-elev-md\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*margin: 0 auto/s);
     expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*position: fixed/s);
-    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*bottom: 0/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*width: max-content/s);
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.wallet-dock \{[^}]*hairline/s);
+    // The selected root sits on the accent's soft tint with accent ink.
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.wallet-dock \{[^}]*box-shadow: inset 0 1px 0 var\(--bramble-hairline\), var\(--bramble-elev-up\)/s,
+      /button\.nav-item\[aria-selected="true"\] \{ background: var\(--bramble-accent-soft\); color: var\(--bramble-accent\); \}/,
     );
-    expect(SIDEPANEL_STYLES).not.toMatch(/\.wallet-dock \{[^}]*border-radius/s);
+    expect(SIDEPANEL_STYLES).toContain("--bramble-dock-h: calc(44px + 6px * 2 + 16px)");
     expect(SIDEPANEL_STYLES).toMatch(/\.screen:not\(\.flow\) \{[^}]*var\(--bramble-dock-h\)/s);
     expect(SIDEPANEL_STYLES).toMatch(/\.toast-stack \{[^}]*var\(--bramble-dock-h\)/s);
   });
@@ -160,6 +167,26 @@ describe("sidepanel styles", () => {
     );
   });
 
+  test("the send amount card cannot be widened by a balance line written after first paint", () => {
+    // The balance label is rewritten by the bucket controls and by every
+    // repaint. A flex item that could not shrink below its longest figure once
+    // grew the row, the card, and the whole details stage past a 320px panel;
+    // the shortcuts hold their size and drop to their own line instead.
+    expect(SIDEPANEL_STYLES).toMatch(/\.send-amount-meta \{[^}]*flex-wrap: wrap;/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.send-amount-meta > span:first-child \{[^}]*min-width: 0;[^}]*overflow-wrap: anywhere;/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.send-amount-shortcuts \{[^}]*flex: none;[^}]*margin-left: auto;/s,
+    );
+    // The account identity beside each route toggle clips a long single-word
+    // name rather than pushing the receipt out of the panel.
+    expect(SIDEPANEL_STYLES).toMatch(/\.send-context-account \{[^}]*min-width: 0;/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.send-context-account strong,\s*\.send-context-account code \{[^}]*max-width: 100%;[^}]*text-overflow: ellipsis;[^}]*text-wrap: nowrap;/s,
+    );
+  });
+
   test("compact disclosure states cannot collide with their titles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /details\.disclosure > summary \.menu-copy strong \{[^}]*text-overflow: ellipsis;[^}]*text-wrap: nowrap;/s,
@@ -181,15 +208,28 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toContain(MOTION.ease);
     expect(SIDEPANEL_STYLES).toContain(`${MOTION.pressMs}ms`);
     expect(SIDEPANEL_STYLES).toContain(`liquid-dot-left ${MOTION.waitLoopMs}ms`);
-    expect(SIDEPANEL_STYLES).toContain(`onboarding-concentric-pulse ${MOTION.onboardingPulseMs}ms`);
-    expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-track-orbit");
-    expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-track-orbit-reverse");
-    expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-concentric-pulse");
-    expect(SIDEPANEL_STYLES).toContain("--orbit-duration: 600s");
+    // The welcome card is still: no orbit, pulse, or other decorative motion.
+    expect(SIDEPANEL_STYLES).not.toContain("onboarding-track-orbit");
+    expect(SIDEPANEL_STYLES).not.toContain("onboarding-concentric-pulse");
     expect(SIDEPANEL_STYLES).not.toContain("@keyframes journey-spin");
     expect(SIDEPANEL_STYLES).not.toContain("@keyframes send-spin");
     expect(SIDEPANEL_STYLES).toContain("prefers-reduced-motion");
     expect(SIDEPANEL_STYLES).toContain(":focus-visible");
+  });
+
+  test("a busy Review button shows the shared Liquid Dots mark, never a spinner", () => {
+    // The wait behind Review (a proof, a relay quote, a fee estimate) reuses the
+    // one indeterminate treatment the wallet has: the compact mark inside the
+    // button is hidden until the binding marks it busy, and the send glyph
+    // steps aside for it. No rotating icon is introduced for this button.
+    expect(SIDEPANEL_STYLES).toMatch(/#send-review-button \.liquid-dots \{ display: none; \}/);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /#send-review-button\[data-busy\] \.liquid-dots \{ display: inline-flex; \}/,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /#send-review-button\[data-busy\] > \.icon \{ display: none; \}/,
+    );
+    expect(SIDEPANEL_STYLES).not.toMatch(/#send-review-button\[data-busy\][^{]*\{[^}]*animation/);
   });
 
   test("screens only animate when the scene changes", () => {
@@ -210,12 +250,14 @@ describe("sidepanel styles", () => {
   });
 
   test("neutral action emphasis is reserved for signal, not every surface", () => {
-    // The icon-only dock and Portfolio tabs both use text/icon contrast alone
-    // and deliberately carry no containers or underline indicators.
+    // The dock marks its selected root with the accent's soft tint — the same
+    // selection language as group chips — and nothing else in the dock carries
+    // a container; Portfolio tabs use text contrast alone, no underline.
     expect(SIDEPANEL_STYLES).not.toContain(".tab-indicator");
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--bramble-text\)/,
+      /button\.nav-item\[aria-selected="true"\] \{ background: var\(--bramble-accent-soft\); color: var\(--bramble-accent\); \}/,
     );
+    expect(SIDEPANEL_STYLES).toMatch(/button\.nav-item \{[^}]*background: transparent/s);
     // The active Portfolio tab is plain high-contrast text, never a pill.
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.home-tab\[aria-selected="true"\] \{ color: var\(--bramble-text\)/,
@@ -310,9 +352,9 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.account-check\[aria-pressed="true"\]:not\(:disabled\):hover \{ background: var\(--bramble-accent-soft\)/,
     );
-    // Hovering selected navigation preserves its high-contrast ink.
+    // Hovering the selected dock root keeps its tinted disc and accent ink.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\]:not\(:disabled\):hover \{\s*color: var\(--bramble-text\)/,
+      /button\.nav-item\[aria-selected="true"\]:not\(:disabled\):hover \{ background: var\(--bramble-accent-soft\); color: var\(--bramble-accent\); \}/,
     );
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.home-tab\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--bramble-text\)/,
@@ -332,7 +374,25 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /\.action-row \{[^}]*grid-auto-columns: minmax\(0, 1fr\);[^}]*grid-auto-flow: column/s,
     );
-    expect(SIDEPANEL_STYLES).toMatch(/\.action-tile \{[^}]*background: var\(--bramble-elevated\)/s);
+    // Tiles wear the dock's selected-root treatment: the accent's soft tint
+    // with accent ink on both glyph and caption, flat — no shadow. Hover and
+    // press deepen the tint on-family (more accent over the soft tint) and
+    // never fall back to the neutral hover / press fills.
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.action-tile \{[^}]*background: var\(--bramble-accent-soft\);[^}]*color: var\(--bramble-accent\);/s,
+    );
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.action-tile \{[^}]*box-shadow/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.tile-icon \{[^}]*color: var\(--bramble-accent\);/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.tile-label \{[^}]*color: var\(--bramble-accent\);/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.action-tile:not\(:disabled\):hover \{[^}]*background: color-mix\(in srgb, var\(--bramble-accent\) \d+%, var\(--bramble-accent-soft\)\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.action-tile:not\(:disabled\):active \{[^}]*background: color-mix\(in srgb, var\(--bramble-accent\) \d+%, var\(--bramble-accent-soft\)\)/s,
+    );
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.action-tile[^{]*\{[^}]*var\(--bramble-hover\)/s);
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.action-tile[^{]*\{[^}]*var\(--bramble-soft-press\)/s);
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.tile-label[^{]*\{[^}]*var\(--bramble-muted\)/s);
     expect(SIDEPANEL_STYLES).toMatch(
       new RegExp(`\\.action-tile \\{[^}]*border-radius: ${RADIUS.lg}`, "s"),
     );
@@ -351,17 +411,15 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toContain("terminal-cta");
   });
 
-  test("the labelled dock uses white and grey focus without icon containers", () => {
-    // Persistent labels make every destination recognizable; white and muted
-    // grey distinguish state without adding an active-state surface.
+  test("the icon-only dock carries state on the root disc, never on the glyph", () => {
+    // Roots are 44px discs: muted ink at rest, text ink on hover, and the
+    // selected root on the accent's soft tint. The glyph wrapper itself never
+    // gains a surface, and there is no visible caption or custom tooltip.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--bramble-text\)/,
+      /button\.nav-item \{[^}]*color: var\(--bramble-muted\)[^}]*height: 44px[^}]*width: 44px/s,
     );
-    expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*background/);
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*box-shadow/);
-    expect(SIDEPANEL_STYLES).toMatch(
-      new RegExp(`\\.nav-label \\{[^}]*font-size: ${TYPE.micro.size}`, "s"),
-    );
+    expect(SIDEPANEL_STYLES).not.toContain(".nav-label");
     expect(SIDEPANEL_STYLES).not.toContain(".nav-tooltip");
     expect(SIDEPANEL_STYLES).not.toMatch(/\.tab-icon[^{}]*\{[^}]*background/s);
   });
@@ -396,9 +454,9 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toContain("button.onboarding-option:not(:disabled):hover");
   });
 
-  test("onboarding orbit nodes stay inside compact side panels", () => {
+  test("the onboarding lockup scales with the card, not the viewport", () => {
     expect(SIDEPANEL_STYLES).toMatch(
-      /@media \(max-width: 400px\) \{[\s\S]*--orbit-outer-size: min\(350px, calc\(100vw - 48px\)\)/,
+      /\.onboarding-lockup \.brand-wordmark \{[^}]*width: min\(60%, 220px\)/s,
     );
   });
 

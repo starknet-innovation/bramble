@@ -1,12 +1,14 @@
 /**
  * MCW-V09-129: the explorer gateway lane is opt-in, not merely last-resort.
  *
- * The trust ordering (RPC first, gateway only after every configured endpoint
- * fails, RPC failure re-thrown) is pinned by ./starkscan-rpc-first.test.ts.
- * These cases pin the permission on top of it: who gets the outage rescue by
- * default, who does not, and that an explicit choice overrides the default in
- * both directions. Every case drives a *failing* RPC, so a gateway that is
- * never contacted here is a gateway the wallet refused to contact.
+ * The balance trust ordering (RPC first, gateway only after every configured
+ * endpoint fails, RPC failure re-thrown) is pinned by
+ * ./starkscan-rpc-first.test.ts; history's explorer-first ordering by
+ * packages/features/transactions/tests/history/starkscan-history-first.test.ts.
+ * These cases pin the permission on top of both: who gets the lane by default,
+ * who does not, and that an explicit choice overrides the default in both
+ * directions. Every case drives a *failing* RPC, so a gateway that is never
+ * contacted here is a gateway the wallet refused to contact.
  */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
@@ -16,8 +18,8 @@ import {
   type StarkscanHttp,
 } from "@bramble/transactions/starkscan";
 import {
+  createExplorerFirstHistory,
   createRpcFirstBalances,
-  createRpcFirstHistory,
 } from "@bramble/transactions/starkscan-wallet";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { RpcProvider } from "starknet";
@@ -193,7 +195,7 @@ describe("explorer gateway lane is opt-in per network", () => {
 
   test("history obeys the same refusal and keeps the RPC failure", async () => {
     const explorer = gateway(transfersBody);
-    const history = createRpcFirstHistory({
+    const history = createExplorerFirstHistory({
       client: explorer.client,
       readPreferences: async () => preferences({ rpcOverrides: { SN_MAIN: MY_NODE } }),
     });
@@ -202,9 +204,9 @@ describe("explorer gateway lane is opt-in per network", () => {
     expect(explorer.urls).toEqual([]);
   });
 
-  test("history still falls back for a permitted network", async () => {
+  test("history asks a permitted explorer first, even for an override user", async () => {
     const explorer = gateway(transfersBody);
-    const history = createRpcFirstHistory({
+    const history = createExplorerFirstHistory({
       client: explorer.client,
       readPreferences: async () =>
         preferences({

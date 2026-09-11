@@ -81,6 +81,16 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   {
+    // A shield's review, an activation's review, and an execution's hash no
+    // longer ride their own requests: each is what this poll answers with once
+    // its tracked job has settled, so this reply — and, in the scan itself, the
+    // settled reply of every job-starting entry below — is what must be grepped
+    // for the viewing key.
+    live: async (ids) => ({ jobId: await ids.strk20PreparationJobId() }),
+    message: { jobId: "", type: "wallet.strk20PreparationStatus" },
+    sender: extensionSender,
+  },
+  {
     live: async (ids) => ({ tokenId: ids.tokenId }),
     message: {
       amount: "1",

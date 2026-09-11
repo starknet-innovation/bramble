@@ -265,93 +265,10 @@ export const isPreferencesResponse = (value: unknown): value is PreferencesRespo
   value["ok"] === true &&
   isWalletPreferences(value["preferences"]);
 
-/** Identifier-free support report the user may download and share manually. */
-export type SupportDiagnostics = {
-  readonly accountCount: number;
-  readonly collectionEnabled: boolean;
-  readonly explorer: readonly {
-    readonly count: number;
-    readonly latencyMs: number;
-    readonly outcome:
-      | "http-error"
-      | "invalid-response"
-      | "ok"
-      | "rate-limited"
-      | "timeout"
-      | "transport-error";
-    readonly service: "starkscan";
-  }[];
-  readonly hasVault: boolean;
-  readonly locked: boolean;
-  readonly networkId: string;
-  readonly ready: boolean;
-  readonly rpc: readonly {
-    readonly count: number;
-    readonly endpoint: "custom" | "foundation" | "wallet-gateway";
-    readonly latencyMs: number;
-    readonly outcome: "ok" | "rate-limited" | "timeout" | "transport-error";
-  }[];
-};
-
-const isExplorerDiagnosticRow = (value: unknown): boolean =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["count", "latencyMs", "outcome", "service"]) &&
-  Number.isInteger(value["count"]) &&
-  Number.isInteger(value["latencyMs"]) &&
-  value["service"] === "starkscan" &&
-  ["http-error", "invalid-response", "ok", "rate-limited", "timeout", "transport-error"].includes(
-    String(value["outcome"]),
-  );
-
-const isRpcDiagnosticRow = (value: unknown): boolean =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["count", "endpoint", "latencyMs", "outcome"]) &&
-  Number.isInteger(value["count"]) &&
-  (value["endpoint"] === "custom" ||
-    value["endpoint"] === "foundation" ||
-    value["endpoint"] === "wallet-gateway") &&
-  Number.isInteger(value["latencyMs"]) &&
-  (value["outcome"] === "ok" ||
-    value["outcome"] === "rate-limited" ||
-    value["outcome"] === "timeout" ||
-    value["outcome"] === "transport-error");
-
-/** Validates the exact privacy-safe support diagnostic wire shape. */
-export const isSupportDiagnosticsResponse = (
-  value: unknown,
-): value is { readonly diagnostics: SupportDiagnostics; readonly ok: true } => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["diagnostics", "ok"]) ||
-    value["ok"] !== true ||
-    !isRecord(value["diagnostics"])
-  ) {
-    return false;
-  }
-  const diagnostics = value["diagnostics"];
-  return (
-    hasOnlyKnownKeys(diagnostics, [
-      "accountCount",
-      "collectionEnabled",
-      "explorer",
-      "hasVault",
-      "locked",
-      "networkId",
-      "ready",
-      "rpc",
-    ]) &&
-    Number.isInteger(diagnostics["accountCount"]) &&
-    typeof diagnostics["collectionEnabled"] === "boolean" &&
-    Array.isArray(diagnostics["explorer"]) &&
-    diagnostics["explorer"].every(isExplorerDiagnosticRow) &&
-    typeof diagnostics["hasVault"] === "boolean" &&
-    typeof diagnostics["locked"] === "boolean" &&
-    typeof diagnostics["networkId"] === "string" &&
-    typeof diagnostics["ready"] === "boolean" &&
-    Array.isArray(diagnostics["rpc"]) &&
-    diagnostics["rpc"].every(isRpcDiagnosticRow)
-  );
-};
+/**
+ * Re-exported support-diagnostics validator for one import path.
+ */
+export { isSupportDiagnosticsResponse, type SupportDiagnostics } from "./responses-diagnostics";
 
 /**
  * Fiat prices keyed by contract address accepted from the background boundary.

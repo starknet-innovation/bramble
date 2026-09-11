@@ -11,6 +11,7 @@ import { bindMultisigs } from "../journeys/multisig/multisig-ui";
 import { locked, onboarding } from "../journeys/onboarding/gate-views";
 import {
   bindOnboardingCompletion,
+  bindOnboardingLaunch,
   onboardingComplete,
   onboardingLaunch,
 } from "../journeys/onboarding/onboarding-surface";
@@ -131,6 +132,7 @@ export const startWalletUi = async (
     bindEntryNavigation(app, navigate, goBack);
     bindCopyButtons(app);
     bindOnboardingCompletion(app, extensionApi, () => globalThis.close());
+    bindOnboardingLaunch(app, () => globalThis.close());
     bindOnboarding({ app, render, wallet });
     bindLedgerFirstRun({ app, startLedgerSetup: ledgerOnboard.startLedgerSetup });
     bindUnlock({ app, render, wallet }, () => {
@@ -397,6 +399,9 @@ export const startWalletUi = async (
     openSend: (intent) => {
       sendIntent = intent;
       selectedTokenId = intent.tokenId;
+      // Send's Back returns to where the entry was pressed, not to its wait screen.
+      if (activeView === "privacy")
+        ({ history: viewHistory, view: activeView } = popView(viewHistory));
       navigate("send");
     },
     paint,
@@ -422,11 +427,12 @@ export const startWalletUi = async (
       activeView = "home";
       viewHistory = [];
     }
+    // Preferences are display settings, not vault material — the background
+    // serves them without an unlock — so they are read whenever a vault exists.
+    // The lock screen then follows the chosen theme instead of the dark default.
     const [pending, nextPreferences] = await Promise.all([
       wallet.loadPendingApprovals(),
-      status.hasVault && !status.locked
-        ? wallet.loadPreferences().catch(() => null)
-        : Promise.resolve(null),
+      status.hasVault ? wallet.loadPreferences().catch(() => null) : Promise.resolve(null),
     ]);
     if (!isCurrent()) {
       return;

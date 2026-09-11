@@ -136,7 +136,6 @@ export const requestSettingsFlow = (
   flowScreen(
     "request-settings",
     `<section class="section">
-      <p class="lede">A new request opens in front so it cannot hide, while your current wallet task stays paused for a predictable return.</p>
       ${segmentedControl(
         "Wallet request surface",
         (["side-panel", "popup"] as const).map((surface) => ({
@@ -145,7 +144,6 @@ export const requestSettingsFlow = (
           pressed: (preferences?.approvalSurface ?? "side-panel") === surface,
         })),
       )}
-      <p class="hint">Wallet panel keeps the request beside the site. Compact popup opens above the current tab. Both preserve the task you were doing.</p>
     </section>
     <p id="display-result" role="status"></p>`,
   );
@@ -207,7 +205,6 @@ export const backupExportFlow = (status: WalletStatus): string =>
   flowScreen(
     "backup-export",
     `<section class="section">
-      <p class="lede">Download an encrypted-vault-free JSON copy of tokens, contacts, labels, groups, and display settings.</p>
       <p class="hint">Recovery phrases, imported private keys, and Ledger key material are never included.</p>
       ${button({
         attributes: { id: "backup-export" },

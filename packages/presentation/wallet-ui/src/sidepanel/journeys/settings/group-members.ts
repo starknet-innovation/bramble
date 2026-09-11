@@ -143,7 +143,6 @@ export const groupsSection = (
   return `
   <section class="section">
     <p class="eyebrow">Groups</p>
-    <p class="hint">Folders for your accounts. Open one to file accounts into it; an account lives in one folder at a time.</p>
     <ul class="group-manage-list">
       ${createGroupRow(createOpen)}
       ${groups

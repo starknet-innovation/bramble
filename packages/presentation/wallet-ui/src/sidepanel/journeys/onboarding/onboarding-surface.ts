@@ -1,6 +1,8 @@
 /**
  * Dedicated full-page onboarding completion UI and Chrome side-panel handoff.
  */
+
+import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
 import { actionLink, button } from "@bramble/ui-kit/controls";
 import { icon } from "../../shared/icons";
 
@@ -24,11 +26,10 @@ export type OnboardingCompletionBrowser = {
  */
 export const onboardingLaunch = (): string => `
   <main class="screen flow gate onboarding-gate">
-    <div class="gate-brand">${icon("wallet")}</div>
+    <div class="gate-brand">${BRAMBLE_MARK}</div>
     <div class="gate-head">
       <p class="eyebrow">Wallet setup</p>
       <h1>Set up in a browser tab</h1>
-      <p class="lede">Bramble uses a full-screen setup so every recovery, protection, and account choice stays clear.</p>
     </div>
     <div class="onboarding-gate-actions">
       ${actionLink({
@@ -63,7 +64,27 @@ export const onboardingComplete = (): string => `
   </main>`;
 
 /**
- * Hands a completed full-page setup into the wallet side panel. Chrome API
+ * Closes the compact surface once its "Open full-screen setup" link has
+ * opened the dedicated tab, so the side panel does not sit beside setup
+ * showing a stale handoff. The close is deferred past the click's default
+ * action so the new tab is already opening when the panel goes.
+ */
+export const bindOnboardingLaunch = (
+  app: Element | null,
+  closeSurface: () => void,
+  defer: (task: () => void) => void = (task) => setTimeout(task, 0),
+): void => {
+  const link = app?.querySelector<HTMLAnchorElement>('a.onboarding-launch[target="_blank"]');
+  link?.addEventListener("click", () => defer(closeSurface));
+};
+
+const TOOLBAR_FALLBACK = "Open Bramble from the browser toolbar to continue.";
+
+/**
+ * Hands a completed full-page setup into the wallet side panel. Chrome opens
+ * a side panel only inside a user gesture, so the attempt runs once as soon
+ * as the completion screen renders — still within the activation of the
+ * click that finished setup — and the button stays as the retry. Chrome API
  * denial fails visibly and never changes wallet state.
  */
 export const bindOnboardingCompletion = (
@@ -73,12 +94,15 @@ export const bindOnboardingCompletion = (
 ): void => {
   const button = app?.querySelector<HTMLButtonElement>("#onboarding-open-wallet");
   const result = app?.querySelector<HTMLElement>("#onboarding-complete-result");
-  button?.addEventListener("click", () => {
+  if (!button) {
+    return;
+  }
+  const open = (announceFallback: boolean): void => {
     const windowId = browser?.windows?.WINDOW_ID_CURRENT;
     const sidePanel = browser?.sidePanel;
     if (typeof windowId !== "number" || !sidePanel?.open) {
-      if (result) {
-        result.textContent = "Open Bramble from the browser toolbar to continue.";
+      if (result && announceFallback) {
+        result.textContent = TOOLBAR_FALLBACK;
       }
       return;
     }
@@ -89,8 +113,16 @@ export const bindOnboardingCompletion = (
     void sidePanel.open({ windowId }).then(closeSurface, () => {
       button.disabled = false;
       if (result) {
-        result.textContent = "Open Bramble from the browser toolbar to continue.";
+        result.textContent = announceFallback ? TOOLBAR_FALLBACK : "";
       }
     });
-  });
+  };
+  button.addEventListener("click", () => open(true));
+  // One automatic attempt per surface, tracked on the mount so re-renders of
+  // the completion scene do not retry (and flash the button) on every refresh.
+  const mount = app instanceof HTMLElement ? app : null;
+  if (mount && mount.dataset["onboardingAutoOpened"] !== "true") {
+    mount.dataset["onboardingAutoOpened"] = "true";
+    open(false);
+  }
 };

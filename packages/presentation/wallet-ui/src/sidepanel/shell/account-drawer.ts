@@ -7,8 +7,11 @@
  * offers "Add account", and links to the dedicated "Manage accounts & groups"
  * view. All group management (create/rename/change-icon/delete and bulk
  * assignment) lives on that view, not here — the drawer carries no group-CRUD
- * controls. Pure template — open/close state and bindings live in ./home-ui.ts,
- * styles in ./styles-home.ts. Rendered closed on every dock screen; the runtime
+ * controls, and no per-row address copy either: each row is the switch
+ * control, its `<code>` reveals the full address on hover, and the full,
+ * copyable identifiers live one tap away on that same manage view. Pure
+ * template — open/close state and bindings live in ./home-ui.ts, styles in
+ * ./styles-home.ts. Rendered closed on every dock screen; the runtime
  * restores the open state (selected group filter, open assign panel) across
  * re-renders without replaying the slide.
  */
@@ -38,7 +41,7 @@ const drawerMultisigRow = (
       <span class="option-avatar">${accountAvatar(record.address)}</span>
       <span class="drawer-copy">
         <strong>${escapeHtml(record.name ?? "Multisig account")}</strong>
-        <code>${escapeHtml(accountLabel(record.address))}</code>
+        <code title="${escapeHtml(record.address)}">${escapeHtml(accountLabel(record.address))}</code>
         <span class="account-groups-line">Ready Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}` : "authority unavailable"}${open > 0 ? ` · ${open} open` : ""}</span>
       </span>
       <span class="option-mark">${icon(record.id === selectedId ? "check" : "chevronRight")}</span>
@@ -71,7 +74,7 @@ const drawerAccountRow = (
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
-          <code>${accountLabel(stored.address)}</code>
+          <code title="${escapeHtml(stored.address)}">${accountLabel(stored.address)}</code>
           ${selectedMultisigSigner ? `<span class="account-groups-line">Signer for ${escapeHtml(selectedMultisig?.record.name ?? "selected multisig")}</span>` : ""}
         </span>
         ${singleSignerSelected && stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}

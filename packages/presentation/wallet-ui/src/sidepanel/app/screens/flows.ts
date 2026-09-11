@@ -30,6 +30,7 @@ import {
   accountLabel,
   flowHeader,
   flowScreen,
+  inlineCopyButton,
   noAccountEmpty,
   type WalletView,
 } from "../../shared/parts";
@@ -62,6 +63,7 @@ import {
   securityFlow,
 } from "../../journeys/settings/settings-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
+import { networkDisplayName } from "../../shared/network-label";
 import { addressBookFlow, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
@@ -120,12 +122,21 @@ const deployAccountFlow = (
               ${reviewOutcome("Deploy this account contract on Starknet so it can submit transactions.")}
               ${receipt([
                 { label: "Account", value: accountDisplayName(account, preferences) },
-                { label: "Address", value: accountLabel(account.address), valueStyle: "code" },
+                {
+                  action: {
+                    attributes: { "data-copy": account.address },
+                    icon: "copy",
+                    label: "Copy address",
+                  },
+                  label: "Address",
+                  value: accountLabel(account.address),
+                  valueStyle: "code",
+                },
                 {
                   label: "Contract",
                   value: knownAccountType(account.classHash) ?? "Starknet account",
                 },
-                { label: "Network", value: status.network },
+                { label: "Network", value: networkDisplayName(status.network) },
               ])}
               ${reviewPanel([], "Deployment creates this account on-chain. Its address and signing authority do not change.")}
               <div id="deploy-review" aria-live="polite"></div>
@@ -282,9 +293,10 @@ export const accountFlow = (
   const groups = preferences?.groups ?? [];
   // One grouped picker owns the whole "which account" task: every account row,
   // then "Add account" as the group's terminal action — not a separate boxed
-  // section. The active account's editable name and its identifiers follow as
-  // one receipt, truncated with copy controls, so the screen reads top to
-  // bottom: pick → organise → inspect.
+  // section. Each row is the select control, so its address copy sits beside
+  // the row rather than inside it (buttons never nest). The active account's
+  // editable name and its identifiers follow as one receipt, truncated with
+  // copy controls, so the screen reads top to bottom: pick → organise → inspect.
   return (
     flowHeader("Accounts & groups", status, `On ${status.network}`) +
     flowScreen(
@@ -296,14 +308,18 @@ export const accountFlow = (
             .map((stored) => {
               const memberGroups = groups.filter((group) => group.accountIds.includes(stored.id));
               const selected = selectedMultisigId === null && stored.id === account?.id;
-              return `<button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${selected}">
-                    <span class="option-avatar">${accountAvatar(stored.address)}</span>
-                    <span class="option-copy">
-                      <span class="option-name"><strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>${accountGroupsLine(memberGroups)}</span>
-                      <code>${accountLabel(stored.address)}</code>
-                    </span>
-                    ${selected ? `<span class="option-mark">${icon("check")}</span>` : ""}
-                  </button>`;
+              const name = accountDisplayName(stored, preferences);
+              return `<div class="option-row-line">
+                    <button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${selected}">
+                      <span class="option-avatar">${accountAvatar(stored.address)}</span>
+                      <span class="option-copy">
+                        <span class="option-name"><strong>${escapeHtml(name)}</strong>${accountGroupsLine(memberGroups)}</span>
+                        <code title="${escapeHtml(stored.address)}">${accountLabel(stored.address)}</code>
+                      </span>
+                      ${selected ? `<span class="option-mark">${icon("check")}</span>` : ""}
+                    </button>
+                    ${inlineCopyButton(stored.address, `Copy ${name} address`)}
+                  </div>`;
             })
             .join("")}
           ${multisigAccountOptions(networkMultisigs, selectedMultisigId)}
