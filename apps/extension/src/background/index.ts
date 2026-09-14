@@ -72,7 +72,7 @@ import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
 import { createMessageHandler } from "./routing/messages";
 import type { RuntimeSender } from "./routing/senders";
-import { walletEventBroadcasts } from "./runtime/events";
+import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
 import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
 import {
   createActiveStateCoordinator,
@@ -433,20 +433,31 @@ const broadcastEvent = (event: WalletEventMessage): void => {
   });
 };
 
+// On Firefox a dapp-triggered approval cannot raise the wallet by itself, so
+// the toolbar mark is the only indication the user gets that something is
+// waiting. It therefore has to track the queue on EVERY path that changes it,
+// not just the one that enqueues: approve and deny remove entries through
+// `claim`, which announces itself through the broadcasts below instead.
+const refreshPendingApprovals = (): void => {
+  showPendingApprovals(extensionApi, approvals.list().length);
+};
+
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {
-  for (const event of walletEventBroadcasts(message, response)) {
+  const events = walletEventBroadcasts(message, response);
+  for (const event of events) {
     broadcastEvent(event);
+  }
+  if (announcesApprovalsChange(events)) {
+    refreshPendingApprovals();
   }
 };
 
 // A held signTypedData request queues an approval and defers its response, so
-// it pushes an approvals-changed signal at queue time via this notifier. The
-// badge rides the same signal: on Firefox a dapp-triggered approval cannot
-// raise the wallet by itself, so the toolbar mark is the only indication the
-// user gets that something is waiting for them.
+// it pushes an approvals-changed signal at queue time via this notifier, which
+// also covers the lazy expiry sweep.
 setApprovalNotifier(() => {
   broadcastEvent({ event: "approvalsChanged", type: "wallet.event" });
-  showPendingApprovals(extensionApi, approvals.list().length);
+  refreshPendingApprovals();
 });
 
 runtime?.onInstalled.addListener((details) => {

@@ -25,16 +25,48 @@ export type DataConsentPermissions = {
   readonly contains?: (permissions: {
     readonly data_collection: readonly string[];
   }) => Promise<boolean>;
+  readonly getAll?: () => Promise<{ readonly data_collection?: readonly string[] }>;
   readonly onAdded?: { readonly addListener: (listener: () => void) => void };
   readonly onRemoved?: { readonly addListener: (listener: () => void) => void };
+};
+
+/**
+ * Whether this runtime implements data-collection permissions at all.
+ *
+ * The presence of `contains` does NOT answer this: Chromium implements
+ * `permissions.contains` too, rejects `data_collection` as an unknown property,
+ * and that rejection is indistinguishable from a refusal. Treating it as one
+ * disabled product analytics for every Chromium user regardless of their
+ * setting — so capability is detected here, separately from consent.
+ *
+ * `getAll` reports the granted set, and only a browser that knows about data
+ * collection includes a `data_collection` array in it. A runtime that cannot
+ * answer is treated as not having the concept, which leaves the wallet's own
+ * preference in sole control — the behaviour every Chromium build had before
+ * this module existed.
+ */
+const supportsDataCollection = async (
+  permissions: DataConsentPermissions | undefined,
+): Promise<boolean> => {
+  const getAll = permissions?.getAll;
+  if (!getAll) {
+    return false;
+  }
+  try {
+    return Array.isArray((await getAll()).data_collection);
+  } catch {
+    return false;
+  }
 };
 
 /**
  * Whether the browser's consent allows technical and interaction data.
  *
  * Resolves to `true` on a runtime that does not implement data-collection
- * permissions at all, which is every Chromium build: there is no consent to
- * honour, and refusing would silently disable analytics the user did choose.
+ * permissions at all — every Chromium build — because there is no consent to
+ * honour and refusing would silently disable analytics the user did choose.
+ * Support is decided by {@link supportsDataCollection}, never by the presence
+ * of `contains`, which Chromium also has.
  *
  * A runtime that DOES implement it and then fails the query resolves to
  * `false`. Consent that cannot be confirmed is not consent, and the cost of
@@ -44,7 +76,7 @@ export const technicalDataAllowed = async (
   permissions: DataConsentPermissions | undefined,
 ): Promise<boolean> => {
   const contains = permissions?.contains;
-  if (!contains) {
+  if (!contains || !(await supportsDataCollection(permissions))) {
     return true;
   }
   try {
