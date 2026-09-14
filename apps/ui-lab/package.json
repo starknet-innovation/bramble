@@ -33,7 +33,7 @@
     "@storybook/addon-vitest": "10.5.10",
     "@storybook/html-vite": "10.5.10",
     "@types/react": "19.2.18",
-    "@vitest/browser": "4.1.11",
+    "@vitest/browser": "5.0.0",
     "@vitest/browser-playwright": "4.1.11",
     "@vitest/runner": "4.1.11",
     "chromatic": "18.7.0",
