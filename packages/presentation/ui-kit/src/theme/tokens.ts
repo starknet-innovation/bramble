@@ -53,6 +53,9 @@ export const TYPE = {
   micro: { line: "1.25", size: "12px" },
   mono: { line: "1.5", size: "12px" },
   portfolio: { line: "1.05", size: "44px" },
+  // The kit's `body` text style (16px on a 20px line): the verb and figure of
+  // a list row, one step above `body` here so a row reads before its detail.
+  row: { line: "1.25", size: "16px" },
   title: { line: "1.2", size: "17px" },
 } as const;
 

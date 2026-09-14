@@ -66,7 +66,7 @@ describe("activityAppearance", () => {
       [
         { kind: "transfer", summary: "Received 1 STRK from 0x…" },
         "Received",
-        "cornerRightDown",
+        "arrowDownLeft",
         "in",
       ],
       [{ summary: "Swap 1 STRK for USDC" }, "Swapped", "arrowLeftRight", "out"],

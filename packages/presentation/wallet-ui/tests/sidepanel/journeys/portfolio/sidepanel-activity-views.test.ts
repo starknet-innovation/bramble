@@ -16,6 +16,7 @@ import {
   activityScreen,
   requestsFlow,
 } from "../../../../src/sidepanel/journeys/portfolio/activity-views";
+import { utcDayKey } from "../../../../src/sidepanel/shared/timestamp";
 
 const status: WalletStatus = {
   accountCount: 1,
@@ -110,22 +111,27 @@ describe("activity journey boundaries", () => {
     expect(html).not.toContain("0x123…0x123");
   });
 
-  test("names the status and UTC time beneath every summary, once for assistive tech", () => {
+  test("says nothing beneath a settled row and only the status word beneath a provisional one", () => {
     const html = activityScreen(
       [],
       status,
       [
         { ...transaction, submittedAt: 1752501900000 },
         { ...transaction, hash: "0x124", status: "preconfirmed", submittedAt: 1752501960000 },
+        { ...transaction, hash: "0x125", status: "pending", submittedAt: 1752502020000 },
       ],
       false,
     );
 
-    // Status first: the line ellipsises from the right, so the state survives.
-    expect(html).toContain('<span class="tx-meta" aria-hidden="true">Accepted · 14:05 UTC</span>');
+    // A settled row is verb and detail alone; its status and time live on the
+    // row's tooltip, so the feed reads like the kit without losing the record.
+    expect(html.match(/<span class="tx-meta/g)?.length).toBe(2);
+    expect(html).toContain('<li class="tx-row" data-live-group title="Accepted · 14:05 UTC">');
     expect(html).toContain(
-      '<span class="tx-meta" aria-hidden="true">Pre-confirmed · 14:06 UTC</span>',
+      '<span class="tx-meta preconfirmed" aria-hidden="true">Pre-confirmed</span>',
     );
+    expect(html).toContain('<li class="tx-row" data-live-group title="Pre-confirmed · 14:06 UTC">');
+    expect(html).toContain('<span class="tx-meta pending" aria-hidden="true">Pending</span>');
     // The status still reaches assistive tech through the summary's own label.
     expect(html).toContain(
       'aria-label="Sent. Send 1 STRK. accepted. View transaction on Starkscan"',
@@ -157,6 +163,36 @@ describe("activity journey boundaries", () => {
     expect(html.indexOf('data-live-key="transaction:0x123:status"')).toBeLessThan(
       html.indexOf('data-live-key="transaction:0x124:status"'),
     );
+  });
+
+  test("names the current and previous UTC day in words when the clock is known", () => {
+    const entries = [
+      { ...transaction, submittedAt: 1752501960000 },
+      { ...transaction, hash: "0x125", submittedAt: 1752415500000 },
+      { ...transaction, hash: "0x126", submittedAt: 1752329100000 },
+    ];
+    const labels = (html: string): string[] =>
+      [...html.matchAll(/<h3 class="tx-day-label">([^<]+)<\/h3>/g)].map((match) => match[1] ?? "");
+
+    const today = utcDayKey(1752501960000);
+    expect(labels(activityScreen([], status, entries, false, null, undefined, today))).toEqual([
+      "Today",
+      "Yesterday",
+      "12 Jul 2025",
+    ]);
+    // The clock moved on: the same feed is a day older, and only the day
+    // boundary matters, never the time of day.
+    expect(labels(activityScreen([], status, entries, false, null, undefined, today + 1))).toEqual([
+      "Yesterday",
+      "13 Jul 2025",
+      "12 Jul 2025",
+    ]);
+    // Without a clock (older callers, the design-system specimen) every day is dated.
+    expect(labels(activityScreen([], status, entries, false))).toEqual([
+      "14 Jul 2025",
+      "13 Jul 2025",
+      "12 Jul 2025",
+    ]);
   });
 
   test("uses distinct accessible glyphs for common transaction outcomes", () => {
@@ -207,7 +243,7 @@ describe("activity journey boundaries", () => {
       [{ ...transaction, summary: "Received 1 STRK" }],
       false,
     );
-    expect(received).toContain('<path d="M4 4h7a4 4 0 0 1 4 4v12" />'); // corner-right-down
+    expect(received).toContain('<path d="M17 17H7V7" />'); // arrow-down-left
   });
 
   test("omits the explorer link on a network that has none", () => {
@@ -275,11 +311,16 @@ describe("activity journey boundaries", () => {
     expect(html).not.toContain('data-copy="0x123"');
     expect(html).toContain('<span class="tx-fiat">+$1.50</span>');
     expect(html).toContain('<span class="tx-amount">3 STRK</span>');
-    // The trailing mark is the bundled STRK logo, resolved from the tracked token.
+    // The trailing mark is the bundled STRK logo, resolved from the tracked token,
+    // with the network badge (decorative) on its corner.
     expect(html.match(/<span class="tx-avatar"><svg class="token-logo"/g)?.length).toBe(2);
+    expect(
+      html.match(/<span class="tx-avatar-badge" aria-hidden="true"><svg class="token-logo"/g)
+        ?.length,
+    ).toBe(2);
     // Structure: leading copy, trailing figures, then the mark.
     expect(html).toMatch(
-      /<li class="tx-row" data-live-group>\s*<div class="tx-copy">[\s\S]*?<\/div>\s*<div class="tx-side">[\s\S]*?<\/div>\s*<span class="tx-avatar">/,
+      /<li class="tx-row" data-live-group title="[^"]*">\s*<div class="tx-copy">[\s\S]*?<\/div>\s*<div class="tx-side">[\s\S]*?<\/div>\s*<span class="tx-avatar">/,
     );
   });
 

@@ -21,7 +21,9 @@ const HISTORY_UNAVAILABLE_NOTICE =
 /**
  * Renders the Activity dock for the active account and network only. `pricing`
  * (the display currency, cached prices, and tracked tokens) lets each row show
- * a signed fiat delta; without it rows show asset amounts alone.
+ * a signed fiat delta; without it rows show asset amounts alone. `todayKey`
+ * (the current UTC day, from the composition root's clock) lets the two most
+ * recent days read as Today and Yesterday; without it every day shows its date.
  */
 export const activityScreen = (
   pending: readonly PendingApproval[],
@@ -30,6 +32,7 @@ export const activityScreen = (
   historyUnavailable: boolean,
   multisig: ArgentMultisigRecord | null = null,
   pricing?: ActivityPricing,
+  todayKey: number | null = null,
 ): string =>
   dockScreen(
     "activity",
@@ -68,7 +71,7 @@ export const activityScreen = (
       ${
         transactions.length === 0
           ? emptyState(activityEmptyCopy(historyUnavailable))
-          : transactionGroups(transactions, pricing)
+          : transactionGroups(transactions, pricing, todayKey)
       }
       <p id="activity-result" role="status"></p>
     </section>`,

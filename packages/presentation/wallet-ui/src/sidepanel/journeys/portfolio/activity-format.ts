@@ -148,7 +148,7 @@ export const activityAppearance = (entry: ActivityEntry): ActivityAppearance => 
     const received = RECEIVED.test(summary);
     return {
       direction: received ? "in" : "out",
-      icon: received ? "cornerRightDown" : "arrowDownRight",
+      icon: received ? "arrowDownLeft" : "arrowDownRight",
       label: "Transfer",
       title: received ? "Received" : "Sent",
       type: "transfer",

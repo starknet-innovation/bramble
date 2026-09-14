@@ -30,8 +30,9 @@ import { bindSwap } from "../journeys/swap/swap-ui";
 import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
-import { bindCopyButtons, showToast } from "../shared/dom";
+import { bindCopyButtons, hiddenOverlayMount, showToast } from "../shared/dom";
 import { isParkedCollectibleView } from "../shared/parts";
+import { utcDayKey } from "../shared/timestamp";
 import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
 import { applyEntryTheme, bindEntryNavigation } from "../shell/entry-ui";
 import {
@@ -62,10 +63,11 @@ import { startRefreshLifecycle } from "./sync/lifecycle";
 import type { RefreshReason } from "./sync/refresh-scheduler";
 import { createMutationRuntime } from "./sync/runtime-refresh";
 
-/** Starts the wallet with injected Ledger; fails closed without its runtime or root. */
+/** Starts the wallet with injected Ledger and clock (`now` only dates the activity feed); fails closed without its runtime or root. */
 export const startWalletUi = async (
   ledgerConnector: LedgerConnector,
   extensionApi?: WalletUiBrowser,
+  now: (() => number) | null = null,
 ): Promise<void> => {
   const app = document.querySelector("#app");
   const fullPageOnboarding = document.body.classList.contains("onboarding-surface");
@@ -98,10 +100,7 @@ export const startWalletUi = async (
   const deployment = createDeploymentCache(wallet);
   const cache: RenderData = emptyRenderCache();
   let privacy: ReturnType<typeof createPrivacyController>;
-  const ledgerSignMount = document.createElement("div");
-  ledgerSignMount.className = "ledger-sign-overlay";
-  ledgerSignMount.hidden = true;
-  document.body.append(ledgerSignMount);
+  const ledgerSignMount = hiddenOverlayMount("ledger-sign-overlay");
   const ledgerSign = createLedgerSignRuntime({
     connector: ledgerConnector,
     mount: ledgerSignMount,
@@ -109,10 +108,7 @@ export const startWalletUi = async (
     status: () => cache.status,
     wallet,
   });
-  const ledgerOnboardMount = document.createElement("div");
-  ledgerOnboardMount.className = "ledger-onboard-overlay";
-  ledgerOnboardMount.hidden = true;
-  document.body.append(ledgerOnboardMount);
+  const ledgerOnboardMount = hiddenOverlayMount("ledger-onboard-overlay");
   const scopeAnnouncer = createScopeAnnouncer(document);
   const ledgerOnboard = createLedgerOnboardEntry({
     addHd: async (accountContractType) => {
@@ -384,6 +380,7 @@ export const startWalletUi = async (
                 privacy.journey(),
                 sendIntent,
                 selectedMultisigIntentId,
+                now === null ? null : utcDayKey(now()),
               );
     lastActiveView = activeView;
     if (!animate && content === lastContent) {

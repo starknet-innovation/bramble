@@ -7,6 +7,8 @@ const ICONS = {
   alert:
     '<path d="M12 4 2.7 19.3a1 1 0 0 0 .9 1.7h16.8a1 1 0 0 0 .9-1.7z" /><path d="M12 10v4" /><path d="M12 17.5h.01" />',
   arrowDown: '<path d="M12 5v14" /><path d="m6 13 6 6 6-6" />',
+  // Lucide `arrow-down-left`, verbatim (Activity: Received).
+  arrowDownLeft: '<path d="M17 7 7 17" /><path d="M17 17H7V7" />',
   // Lucide `arrow-down-right`, verbatim (Activity: Sent).
   arrowDownRight: '<path d="m7 7 10 10" /><path d="M17 7v10H7" />',
   // Lucide `arrow-left-right`, verbatim (Activity: Swapped).
@@ -25,8 +27,6 @@ const ICONS = {
   chevronDown: '<path d="m6 10 6 6 6-6" />',
   chevronLeft: '<path d="m14 6-6 6 6 6" />',
   chevronRight: '<path d="m10 6 6 6-6 6" />',
-  // Lucide `corner-right-down`, verbatim (Activity: Received).
-  cornerRightDown: '<path d="m10 15 5 5 5-5" /><path d="M4 4h7a4 4 0 0 1 4 4v12" />',
   copy: '<path d="M8 8h10v10H8z" /><path d="M6 16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />',
   // Lucide `credit-card`, verbatim (Activity: Claimed rewards).
   creditCard:
