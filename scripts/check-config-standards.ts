@@ -150,6 +150,7 @@ if (
     "!apps/website",
     "!bun.lock",
     "!dist",
+    "!dist-firefox",
     "!node_modules",
     "!output",
     "!playwright-report",

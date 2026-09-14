@@ -37,6 +37,7 @@ import {
   createBrowserSyncStore,
   requireTrustedStorageAccess,
 } from "../browser-storage";
+import { resolveExtensionApi } from "../extension-api";
 import { createWalletReader } from "./accounts/wallet-reader";
 import {
   analyticsPlatform,
@@ -48,8 +49,10 @@ import {
 import { setApprovalNotifier } from "./approvals/approval-notifier";
 import {
   type ApprovalSurfaceBrowser,
+  bindToolbarActivation,
   configureApprovalSurface,
   createApprovalSurfaceOpener,
+  showPendingApprovals,
 } from "./approvals/approval-surface";
 import { createApprovalQueue } from "./approvals/approvals";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
@@ -106,16 +109,14 @@ type TabsApi = {
   readonly sendMessage: (tabId: number, message: unknown) => Promise<unknown>;
 };
 
-type ExtensionGlobal = typeof globalThis & {
-  readonly chrome?: ApprovalSurfaceBrowser &
-    OnboardingSurfaceBrowser &
-    AlarmsGlobal & {
-      readonly runtime?: RuntimeApi;
-      readonly tabs?: TabsApi;
-    };
-};
+type BackgroundBrowser = ApprovalSurfaceBrowser &
+  OnboardingSurfaceBrowser &
+  AlarmsGlobal & {
+    readonly runtime?: RuntimeApi;
+    readonly tabs?: TabsApi;
+  };
 
-const extensionApi = (globalThis as ExtensionGlobal).chrome;
+const extensionApi = resolveExtensionApi<BackgroundBrowser>();
 const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
 declare const __MC_BUILD_BRANCH__: string | undefined;
@@ -401,8 +402,14 @@ const broadcastWalletEvents = (message: unknown, response: unknown): void => {
 };
 
 // A held signTypedData request queues an approval and defers its response, so
-// it pushes an approvals-changed signal at queue time via this notifier.
-setApprovalNotifier(() => broadcastEvent({ event: "approvalsChanged", type: "wallet.event" }));
+// it pushes an approvals-changed signal at queue time via this notifier. The
+// badge rides the same signal: on Firefox a dapp-triggered approval cannot
+// raise the wallet by itself, so the toolbar mark is the only indication the
+// user gets that something is waiting for them.
+setApprovalNotifier(() => {
+  broadcastEvent({ event: "approvalsChanged", type: "wallet.event" });
+  showPendingApprovals(extensionApi, approvals.list().length);
+});
 
 runtime?.onInstalled.addListener((details) => {
   void openOnboardingOnInstall(extensionApi, details.reason);
@@ -417,6 +424,10 @@ const openApprovalSurface = createApprovalSurfaceOpener({
   now: systemClock,
   preference: () => approvalSurfacePreference,
 });
+// Firefox only: routes its toolbar button to the sidebar, which Chromium does
+// through setPanelBehavior instead. Registered at the top level because the
+// event page is torn down when idle and a listener added later would be lost.
+bindToolbarActivation(extensionApi, () => approvalSurfacePreference);
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
   openApprovalSurface(message, sender);
   void runtimeReady
