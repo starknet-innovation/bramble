@@ -19,6 +19,7 @@ import {
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "../../apps/extension/src/background/privacy/strk20-op-context";
+import { createStrk20JobRegistry } from "../../apps/extension/src/background/privacy/strk20-preparation-jobs";
 import { createStrk20WalletPreparationStore } from "../../apps/extension/src/background/privacy/strk20-wallet-preparations";
 import {
   executeInvokeApproval,
@@ -65,6 +66,7 @@ const makeDeps = (
   } as unknown as WalletPreferencesStore,
   runtimeRpc: makeRuntimeRpc(),
   session,
+  strk20Jobs: createStrk20JobRegistry({ now: () => UNLOCKED_AT }),
   strk20Preparations: createStrk20WalletPreparationStore(),
   wallet: createWallet(captureSign ? { captureSign } : {}),
 });

@@ -7,17 +7,27 @@ import type { Strk20CallAndProof } from "@bramble/wallet-protocol/strk20";
 import type { RpcProvider } from "starknet";
 import type { Strk20NetworkConfig } from "../config";
 import type { Strk20MaturityScope } from "../policy/maturity";
+import { reportStrk20Phase } from "../policy/phases";
 import {
   STRK20_SERVICE_UNAVAILABLE,
   type Strk20AccountContext,
   type Strk20PrepareInput,
 } from "../service";
+import {
+  STRK20_WAIT_BUDGETS,
+  type Strk20Waits,
+  withinStrk20WaitBudget,
+} from "./official-sdk-budget";
 import { strk20BuilderFor } from "./official-sdk-builder";
 import { mapStrk20StageError, type Strk20FailureStage } from "./official-sdk-errors";
 import type { Strk20MaturityRuntime } from "./official-sdk-maturity";
 import { areHistoricalDepositsReady, isHistoricalAccountReady } from "./official-sdk-readiness";
 import { assertNoSdkWarnings, readCallAndProof } from "./official-sdk-results";
-import { retryStrk20ServiceRead, type ServiceRetryPause } from "./official-sdk-retry";
+import {
+  MAX_SERVICE_ATTEMPTS,
+  retryStrk20ServiceRead,
+  type ServiceRetryPause,
+} from "./official-sdk-retry";
 import type { PrivacySdkRuntime, SdkBuilder, SdkTransfers } from "./official-sdk-runtime";
 import { transfersFor } from "./official-sdk-transfers";
 import { requireStrk20Config } from "./official-sdk-values";
@@ -72,6 +82,11 @@ const historicalReadiness = (
   return undefined;
 };
 
+/**
+ * One bounded retry round of a proof, reported to the context's phase sink.
+ */
+type ProofRound = { readonly attempt: number; readonly attempts: number };
+
 const prepareOnce = async (input: {
   readonly beforeProof: () => Promise<void>;
   readonly builder: SdkBuilder;
@@ -80,13 +95,20 @@ const prepareOnce = async (input: {
   readonly maturity: Strk20MaturityRuntime;
   readonly preparation: Strk20PrepareInput;
   readonly provider: RpcProvider;
+  readonly round: ProofRound;
   readonly transfers: SdkTransfers;
+  readonly waits: Strk20Waits;
 }): Promise<Strk20CallAndProof> => {
+  const { onPhase } = input.preparation;
+  const { budgets, schedule } = input.waits;
   const readinessKind =
     input.historicalState ??
     (input.preparation.actions.some((action) => action.type === "deposit")
       ? "deposits"
       : undefined);
+  // The maturity runtime carries its own wall-clock budget; see
+  // ./official-sdk-maturity.
+  reportStrk20Phase(onPhase, "waiting for pool maturity", input.round);
   const block = await input.maturity.provingBlock(
     input.provider,
     maturityScope(input.preparation, input.config.poolAddress),
@@ -94,19 +116,42 @@ const prepareOnce = async (input: {
   );
   let result: unknown;
   if (input.preparation.simulate) {
-    result = await input.builder.simulate({
-      provider: input.provider,
-      provingBlockId: block,
-      validateSignature: false,
-    });
+    reportStrk20Phase(onPhase, "building the proof request", input.round);
+    result = await withinStrk20WaitBudget(
+      "building the proof request",
+      budgets.proofRequest,
+      () =>
+        input.builder.simulate({
+          provider: input.provider,
+          provingBlockId: block,
+          validateSignature: false,
+        }),
+      schedule,
+    );
   } else {
     // This is the last asynchronous wallet-policy boundary before the SDK
     // starts creating a proof. It runs after discovery and maturity waits, so
-    // mutable chain state cannot become stale during those preflights.
+    // mutable chain state cannot become stale during those preflights. The
+    // reads it makes report their own phases.
     await input.beforeProof();
-    const invocation = await input.builder.createProofInvocation({ provingBlockId: block });
+    // Building the invocation refreshes discovery (indexer pagination with no
+    // transport deadline) and fetches the pool nonce, so it is the wait most
+    // likely to park without a budget.
+    reportStrk20Phase(onPhase, "building the proof request", input.round);
+    const invocation = await withinStrk20WaitBudget(
+      "building the proof request",
+      budgets.proofRequest,
+      () => input.builder.createProofInvocation({ provingBlockId: block }),
+      schedule,
+    );
     assertNoSdkWarnings(invocation);
-    result = await input.transfers.executeWithInvocation(invocation, block);
+    reportStrk20Phase(onPhase, "proving", input.round);
+    result = await withinStrk20WaitBudget(
+      "proving",
+      budgets.proving,
+      () => input.transfers.executeWithInvocation(invocation, block),
+      schedule,
+    );
   }
   assertNoSdkWarnings(result);
   return readCallAndProof(result, input.config, input.preparation.simulate);
@@ -124,6 +169,7 @@ export const prepareWith = async (
   beforeProof: () => Promise<void> = noFinalProofGate,
   builderForTransfers?: (transfers: SdkTransfers) => SdkBuilder,
   historicalState?: HistoricalState,
+  waits: Strk20Waits = { budgets: STRK20_WAIT_BUDGETS },
 ): Promise<Strk20CallAndProof> => {
   const config = requireStrk20Config(input);
   if (
@@ -138,8 +184,10 @@ export const prepareWith = async (
   }
   let stage: Strk20FailureStage =
     historicalState === "registration" ? "registration-preparation" : "discovery";
+  let attempt = 0;
   try {
     return await retryStrk20ServiceRead(async () => {
+      attempt += 1;
       stage = historicalState === "registration" ? "registration-preparation" : "discovery";
       const { builder, transfers } = discoverWith(sdk, input, builderForTransfers);
       const provider = providerFor(nodeUrl);
@@ -152,7 +200,9 @@ export const prepareWith = async (
         maturity,
         preparation: input,
         provider,
+        round: { attempt, attempts: MAX_SERVICE_ATTEMPTS },
         transfers,
+        waits,
       });
     }, pauseForServiceRetry);
   } catch (error) {

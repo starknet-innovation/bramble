@@ -6,6 +6,7 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import { errorMessage, showToast } from "../../shared/dom";
 import { watchDeployment } from "../../shell/shell-bindings";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import { transitionSendStage } from "./send-transition";
 import { bindTransferBuckets } from "./transfer-buckets-ui";
 import { bindTransferCompose, sendFormInput } from "./transfer-compose-ui";
@@ -22,7 +23,7 @@ import {
   transferKey,
 } from "./transfer-model";
 import { createRecipientStatus } from "./transfer-recipient-status";
-import { applyTransferUi } from "./transfer-render";
+import { applyTransferProgress, applyTransferUi } from "./transfer-render";
 import {
   balanceInBucket,
   resolveTransferRoute,
@@ -30,7 +31,12 @@ import {
   transferRoute,
   transferSpendable,
 } from "./transfer-route";
-import { preparationFailure, preparationFor, preparedReview } from "./transfer-submit";
+import {
+  preparationFailure,
+  preparationFor,
+  preparedState,
+  reviewedState,
+} from "./transfer-submit";
 
 export { activityExportToast, bindActivity } from "../portfolio/activity-ui";
 export { friendlyReviewError, recipientFieldError } from "./transfer-model";
@@ -130,7 +136,11 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   // Leaving the review discards it. `reviewedKey` is what the submit handler
   // reads to tell "show me the review" from "I have read it, send it", so a
   // return to the amount step that kept it made the next Review send button
-  // submit immediately. Every path out of review goes through here.
+  // submit immediately. Every path out of review goes through here, including
+  // out of a review still being prepared: the epoch bump discards its result
+  // when it lands. That is safe because nothing is signed or sent before the
+  // confirm — the background finishes the proof it started, which cannot be
+  // interrupted, and simply never executes it.
   const editDetails = (): void => {
     transferEpoch += 1;
     transferState = {
@@ -167,7 +177,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   form.ownerDocument.querySelector("#send-header-back")?.addEventListener("click", () => {
     if (transferState.stage === "asset") goTo("details");
     else if (transferState.stage === "details") goTo("recipient");
-    else if (transferState.stage === "review") editDetails();
+    else if (transferState.stage === "review" || transferState.stage === "reviewing") editDetails();
     else exit();
   });
   const recipients = createRecipientStatus({
@@ -193,6 +203,9 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     }
     return resolveTransferRoute(context);
   };
+  // A bucket flip or an asset pick changes the route, so the cached review goes
+  // and the screen is repainted: the header and actions name the operation the
+  // buckets now describe (a shield flipped back to public reads as a send).
   const dropReview = (): void => {
     transferState = {
       ...transferState,
@@ -201,6 +214,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       review: null,
       reviewedKey: null,
     };
+    repaint();
   };
   bindTransferCompose({
     form,
@@ -330,26 +344,36 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       return;
     }
     const key = transferKey(fields);
+    // A preparation already running for exactly these fields is not restarted.
+    // The button and the amount step are locked while it runs, so a second
+    // submit can only arrive programmatically — but a second proof for the
+    // same send would be a minute of wasted work and a discarded first result.
+    if (
+      transferState.stage === "reviewing" &&
+      transferState.fields !== null &&
+      transferKey(transferState.fields) === key
+    ) {
+      return;
+    }
+    // A job's progress poll: rewrite only the liveness line, only for the epoch that started it.
+    const progressFor =
+      (epoch: number) =>
+      (progress: PreparationProgress): void => {
+        if (epoch !== transferEpoch) return;
+        transferState = { ...transferState, progress };
+        applyTransferProgress(form, transferState);
+      };
     if (transferState.reviewedKey !== key) {
       const epoch = ++transferEpoch;
       transferState = { ...initialTransferState<Review>(), fields, stage: "reviewing" };
       repaint();
       const composed = transferRoute(fields);
-      const preparing = preparationFor(composed, fields, wallet);
+      const preparing = preparationFor(composed, fields, wallet, progressFor(epoch));
       if (preparing) {
         void preparing.then(
           (preparation) => {
             if (epoch !== transferEpoch) return;
-            transferState = {
-              error: "",
-              fields,
-              privatePreparation: preparation,
-              requiresDeployment: false,
-              review: preparedReview(preparation),
-              reviewedKey: key,
-              stage: "review",
-              transactionHash: null,
-            };
+            transferState = preparedState(preparation, fields, key);
             repaintActiveTransfer?.();
           },
           (error: unknown) => {
@@ -373,27 +397,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         .then(
           (review) => {
             if (epoch !== transferEpoch) return;
-            const feeFailed =
-              review.feeEstimateFailed || review.deploymentFeeEstimateFailed === true;
-            // Address poisoning is a refusal here, not a notice, matching the
-            // NFT send screen (nft-ui.ts) and the background's own refusal on
-            // submit: leaving the key unreviewed means the next click re-reviews
-            // instead of confirming, so the flag cannot be clicked past.
-            const blocked = review.flags.some((flag) => flag.code === "address-poisoning");
-            transferState = {
-              error: blocked
-                ? "This recipient closely mimics a saved address. Change it and review again."
-                : feeFailed
-                  ? "Fee estimate unavailable. Retry before authorizing this transaction."
-                  : "",
-              fields,
-              privatePreparation: null,
-              requiresDeployment: review.requiresDeployment,
-              review,
-              reviewedKey: blocked || feeFailed ? null : key,
-              stage: "review",
-              transactionHash: null,
-            };
+            transferState = reviewedState(review, fields, key);
             repaintActiveTransfer?.();
           },
           (error: unknown) => {
@@ -411,7 +415,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     const reviewedFee = transferState.review?.fee ?? null;
     const reviewedDeploymentFee = transferState.review?.deploymentFee ?? null;
     const privatePreparation = transferState.privatePreparation;
-    transferState = { ...transferState, error: "", fields, stage: "authorizing" };
+    transferState = { ...transferState, error: "", fields, progress: null, stage: "authorizing" };
     repaint();
     if (transferRoute(fields).id !== "public-public") {
       if (!privatePreparation) {
@@ -423,7 +427,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         repaint();
         return;
       }
-      void wallet.executePrivacyPreparation(privatePreparation.id).then(
+      void wallet.executePrivacyPreparation(privatePreparation.id, progressFor(epoch)).then(
         (transactionHash) => {
           if (epoch !== transferEpoch) return;
           transferState = {

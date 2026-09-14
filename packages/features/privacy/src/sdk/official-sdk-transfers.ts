@@ -10,6 +10,7 @@ import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { Signature } from "starknet";
 import { Strk20CallSetSigner } from "../policy/call-set-signer";
 import { STRK20_SERVICE_UNAVAILABLE, type Strk20AccountContext } from "../service";
+import { STRK20_PROVER_REQUEST } from "./official-sdk-budget";
 import type { PrivacySdkRuntime, SdkTransfers } from "./official-sdk-runtime";
 import { requireStrk20Config } from "./official-sdk-values";
 
@@ -62,6 +63,10 @@ export const transfersFor = (
       chainId,
       nodeUrl,
       ...(ohttp ? { ohttp } : {}),
+      // The prover budget is the wallet's, not the SDK default's: see
+      // ./official-sdk-budget for how it fits inside the proving wait.
+      requestTimeoutMs: STRK20_PROVER_REQUEST.requestTimeoutMs,
+      retry: { maxRetries: STRK20_PROVER_REQUEST.retries },
       url: config.proverUrl,
     },
     ...(config.subaccountAnonymizerAddress

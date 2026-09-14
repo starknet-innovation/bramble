@@ -340,6 +340,7 @@ const HANDLERS: readonly RouterHandler[] = [
     handleStrk20WalletOps(
       {
         ...buildOpsDeps(ctx),
+        strk20Jobs: ctx.strk20Jobs,
         strk20Preparations: ctx.strk20Preparations,
       },
       messageType,

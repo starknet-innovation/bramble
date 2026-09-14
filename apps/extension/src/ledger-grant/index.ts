@@ -35,6 +35,7 @@ import {
 import { LedgerRejection, ledgerMessage } from "@bramble/ledger-protocol/errors";
 import { darkSkin } from "@bramble/ui-kit/dark-skin";
 import { applySkin } from "@bramble/ui-kit/skin";
+import { brandMark, element, textElement } from "./dom";
 import {
   alternateLedgerTransport,
   type LedgerConnectionMethod,
@@ -74,27 +75,6 @@ const closeThisTab = async (): Promise<void> => {
     // failure merely because Chrome raced or rejected its tab-removal call.
   }
   grantGlobal.close?.();
-};
-
-const element = <Name extends keyof HTMLElementTagNameMap>(
-  name: Name,
-  className?: string,
-): HTMLElementTagNameMap[Name] => {
-  const node = document.createElement(name);
-  if (className) {
-    node.className = className;
-  }
-  return node;
-};
-
-const textElement = <Name extends keyof HTMLElementTagNameMap>(
-  name: Name,
-  className: string,
-  text: string,
-): HTMLElementTagNameMap[Name] => {
-  const node = element(name, className);
-  node.textContent = text;
-  return node;
 };
 
 const readinessStep = (index: string, text: string): HTMLLIElement => {
@@ -144,7 +124,9 @@ const render = (): void => {
   const shell = element("section", "grant-shell");
   const header = element("header", "grant-header");
   const brand = element("span", "grant-brand");
-  brand.append(textElement("span", "grant-brand-mark", "B"), textElement("strong", "", "Bramble"));
+  const brandTile = element("span", "grant-brand-mark");
+  brandTile.append(brandMark());
+  brand.append(brandTile, textElement("strong", "", "Bramble"));
   const once = element("span", "grant-once");
   once.append(element("span", "grant-once-dot"), document.createTextNode("Secure device session"));
   header.append(brand, once);

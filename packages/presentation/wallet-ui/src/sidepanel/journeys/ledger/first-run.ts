@@ -10,6 +10,7 @@
 import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import { showToast } from "../../shared/dom";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-ack";
+import { applyPassphraseMeter } from "../onboarding/passphrase-meter";
 
 /**
  * Dependencies the first-run Ledger setup binding closes over. `startLedgerSetup`
@@ -66,14 +67,11 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
           ? "Enter the same passphrase in both fields."
           : "";
     }
-    if (passwordResult) {
-      passwordResult.textContent = !isVaultPassphrase(passphraseInput?.value ?? "")
-        ? "Enter at least 12 characters"
-        : passphraseOk()
-          ? "Passphrases match"
-          : "Passphrases do not match";
-    }
-    passwordRequirement?.classList.toggle("is-ready", passphraseOk());
+    applyPassphraseMeter(
+      { requirement: passwordRequirement, result: passwordResult },
+      passphraseInput?.value ?? "",
+      confirmationInput?.value ?? "",
+    );
   };
 
   passphraseInput?.addEventListener("input", refreshGate);

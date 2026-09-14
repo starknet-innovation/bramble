@@ -144,4 +144,13 @@ describe("account drawer folder picker", () => {
     expect(harness.calls.addAccount).toEqual([]);
     expect(harness.calls.setAccountInGroup).toEqual([]);
   });
+
+  test("rows stay lean switch controls: full address on hover, copy on the manage view", () => {
+    const harness = mount([group("briefcase", "work", "Work")], "drawer");
+    const row = harness.container.querySelector(`[data-switch-account="${acctA.id}"]`);
+
+    expect(row?.querySelector("code")?.getAttribute("title")).toBe(acctA.address);
+    expect(harness.container.querySelector(".account-drawer [data-copy]")).toBeNull();
+    expect(harness.container.querySelector('.account-drawer [data-view="account"]')).not.toBeNull();
+  });
 });

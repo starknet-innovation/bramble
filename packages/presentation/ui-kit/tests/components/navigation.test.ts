@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { dockNavigation, optionRow } from "@bramble/ui-kit/navigation";
 
 describe("dockNavigation", () => {
-  test("renders persistent labelled tabs and positive count badges", () => {
+  test("renders icon-only tabs with accessible names and positive count badges", () => {
     const html = dockNavigation([
       {
         controls: "wallet-screen-home",
@@ -28,7 +28,10 @@ describe("dockNavigation", () => {
     expect(html).toContain('aria-label="Home"');
     expect(html).toContain('aria-selected="true"');
     expect(html).toContain('data-view="activity"');
-    expect(html).toContain('<span class="nav-label">Activity &amp; approvals</span>');
+    expect(html).toContain(
+      'aria-label="Activity &amp; approvals" title="Activity &amp; approvals"',
+    );
+    expect(html).not.toContain("nav-label");
     expect(html).toContain(">2</span>");
     expect(html).not.toContain(">0</span>");
   });

@@ -1,15 +1,23 @@
 /**
  * Light wallet skin — the "Clean Mono" daylight theme. The dark `midnight`
  * skin is the default build; this is the light alternate selected through the
- * theme preference. Every structural and interactive role is achromatic:
- * hierarchy comes from contrast, weight, space, and motion rather than a brand
- * hue. Green is reserved for positive/success semantics and red for
- * danger/failure; orange is reserved for degraded data. Quiet-luxury minimalism — flat and legible, not glass.
+ * theme preference. Structural roles are drawn from the Bramble Design Kit's
+ * blue-grey tinted neutral ramp, so hierarchy still comes from contrast,
+ * weight, space, and motion; the single brand hue is the accent, drawn from
+ * the kit's blue ramp. Green is reserved for positive/success semantics and
+ * red for danger/failure; orange (not in the kit) is reserved for degraded
+ * data. Flat and legible, not glass — solid fills only, never a gradient.
  *
- * Surfaces step in three quiet tiers: `--bramble-sunken` for recessed group
- * containers, `--bramble-panel` (pure white) for cards, and `--bramble-elevated` for
- * controls and rows. Separation is carried by hairline edges and gentle low
- * shadows. Every text/ground pairing is guarded by the contrast test suite.
+ * Surfaces step in three quiet tiers: `--bramble-sunken` (kit `bg/well`) for
+ * recessed group containers, `--bramble-panel` (pure white, kit `bg/ground`)
+ * for cards, and `--bramble-elevated` (also `bg/well`) for controls and rows.
+ * Separation is carried by hairline edges and gentle low shadows.
+ *
+ * The accent is one token for both the CTA fill and accent ink, so it must
+ * hold AA as text on every surface tier. The kit's `accent/base` (blue/600)
+ * only reaches 4.4:1 on the well tier, so this skin pins the next step,
+ * blue/700, which clears AA everywhere. Every text/ground pairing is guarded
+ * by the contrast test suite.
  */
 import type { Skin } from "./skin";
 
@@ -19,23 +27,23 @@ import type { Skin } from "./skin";
 export const defaultSkin: Skin = {
   name: "daylight",
   tokens: {
-    "--bramble-accent": "#171717",
-    "--bramble-accent-text": "#fafafa",
+    "--bramble-accent": "#3545cd",
+    "--bramble-accent-text": "#ffffff",
     "--bramble-account-avatar-0": "#6842a8",
     "--bramble-account-avatar-1": "#e27a35",
     "--bramble-account-avatar-2": "#e9b83f",
     "--bramble-account-avatar-3": "#9f356f",
-    "--bramble-account-avatar-ink": "#171717",
-    "--bramble-account-avatar-paper": "#fafafa",
-    "--bramble-bg": "#f5f5f5",
-    "--bramble-border": "#dedede",
-    "--bramble-danger": "#b4232c",
-    "--bramble-elevated": "#ececec",
-    "--bramble-muted": "#666666",
+    "--bramble-account-avatar-ink": "#0e0f16",
+    "--bramble-account-avatar-paper": "#ffffff",
+    "--bramble-bg": "#f8f9fb",
+    "--bramble-border": "#c9cad9",
+    "--bramble-danger": "#a32f2f",
+    "--bramble-elevated": "#f2f3f7",
+    "--bramble-muted": "#50536d",
     "--bramble-panel": "#ffffff",
-    "--bramble-positive": "#087a4b",
-    "--bramble-sunken": "#f0f0f0",
-    "--bramble-text": "#171717",
+    "--bramble-positive": "#476312",
+    "--bramble-sunken": "#f2f3f7",
+    "--bramble-text": "#0e0f16",
     "--bramble-warning": "#9a3412",
   },
 };

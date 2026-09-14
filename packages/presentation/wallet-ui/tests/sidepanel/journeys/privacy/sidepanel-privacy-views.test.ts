@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import type { PrivacyBlockerKind } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import { privacyFlow } from "../../../../src/sidepanel/journeys/privacy/privacy-views";
 
@@ -82,6 +83,21 @@ describe("privacy journey templates", () => {
     expect(html).toContain("Authorization caller");
   });
 
+  test("the pool and authorization caller contracts copy in full from the review", () => {
+    const html = privacyFlow(status, preferences, {
+      preparation: relayedRegistration,
+      stage: "activate-review",
+      tokenId: token.id,
+    });
+
+    expect(html).toContain("<code>0x123456…67890</code>");
+    expect(html).toContain('data-copy="0x12345678901234567890"');
+    expect(html).toContain('aria-label="Copy privacy pool address"');
+    expect(html).toContain('data-copy="0x99"');
+    expect(html).toContain('aria-label="Copy authorization caller address"');
+    expect(html).not.toContain("<code>0x12345678901234567890</code>");
+  });
+
   test("working, success, failure, and empty checkpoints communicate liveness and recovery", () => {
     const working = privacyFlow(status, preferences, {
       kind: "register",
@@ -122,6 +138,90 @@ describe("privacy journey templates", () => {
     expect(privacyFlow(status, preferences, { stage: "idle" })).toContain(
       "Choose an asset to begin",
     );
+  });
+
+  test("the preparing screen names its step, the job's progress, and the way back", () => {
+    const discovering = privacyFlow(status, preferences, {
+      progress: null,
+      stage: "preparing",
+      step: "discovering",
+      tokenId: token.id,
+    });
+    expect(discovering).toContain("Go private");
+    expect(discovering).toContain('data-privacy-preparing="discovering"');
+    expect(discovering).toContain("Checking private balances");
+    expect(discovering).toContain('id="privacy-liveness"');
+    expect(discovering).toContain('id="privacy-cancel"');
+    // The proof has not started: its step is still pending.
+    expect(discovering).toContain('<li data-state="active"><span></span>Check registration');
+    expect(discovering).toContain('<li data-state="pending"><span></span>Build registration proof');
+
+    const proving = privacyFlow(status, preferences, {
+      progress: { attempt: 2, attempts: 3, elapsedMs: 95_000, phase: "proving" },
+      stage: "preparing",
+      step: "proving",
+      tokenId: token.id,
+    });
+    expect(proving).toContain("Preparing to go private");
+    expect(proving).toContain('<li data-state="done"><span></span>Check registration');
+    expect(proving).toContain('<li data-state="active"><span></span>Build registration proof');
+    // Phase and elapsed time from the job's own poll, then the standing hint.
+    expect(proving).toContain("Proving (attempt 2 of 3) · 1 min 35 s. Keep the wallet open.");
+    expect(proving).toContain("going back discards this preparation");
+  });
+
+  test("the working screen carries the submission job's progress on its liveness line", () => {
+    const html = privacyFlow(status, preferences, {
+      kind: "register",
+      preparation: registration,
+      progress: { elapsedMs: 4_000, phase: "broadcasting" },
+      stage: "working",
+      tokenId: token.id,
+    });
+    expect(html).toContain('id="privacy-liveness"');
+    expect(html).toContain("Broadcasting · 4 s. Keep the wallet open.");
+  });
+
+  test("a blocked activation explains the prerequisite and ends in its next step", () => {
+    const blocked = (kind: PrivacyBlockerKind, message: string): string =>
+      privacyFlow(status, preferences, {
+        blocker: { kind, message },
+        stage: "blocked",
+        tokenId: token.id,
+      });
+
+    const fund = blocked("fund", "Not enough STRK for the <pool> fee");
+    expect(fund).toContain("Go private");
+    expect(fund).toContain("Add STRK to go private");
+    expect(fund).toContain('data-view="receive"');
+    expect(fund).toContain("Fund with STRK");
+    // The runtime's own reason is shown, escaped.
+    expect(fund).toContain("Not enough STRK for the &lt;pool&gt; fee");
+    expect(fund).toContain('id="privacy-cancel"');
+    expect(fund).toContain('data-privacy-blocker="fund"');
+
+    const deploy = blocked("deploy", "Deploy this account first");
+    expect(deploy).toContain("Deploy this account first");
+    // The same deploy-then-register control Receive offers, not a second path.
+    expect(deploy).toContain("data-privacy-deploy-register");
+
+    const network = blocked("network", "Private balances are not configured for this network");
+    expect(network).toContain("Not available on this network");
+    expect(network).toContain('data-view="network"');
+
+    const pending = blocked("pending", "Registration is on its way.");
+    expect(pending).toContain("Registration is on its way");
+    expect(pending).toContain("no second registration is needed");
+    expect(pending).toContain('data-view="activity"');
+    expect(pending).not.toContain('id="privacy-retry"');
+
+    const service = blocked("service", "prover offline");
+    expect(service).toContain("Private balances unavailable");
+    expect(service).toContain('id="privacy-retry"');
+    expect(service).toContain("prover offline");
+
+    const ledger = blocked("ledger", "Private balances are not available for Ledger accounts");
+    expect(ledger).toContain("Not available for Ledger accounts");
   });
 
   test("an untracked token still renders the registration checkpoint", () => {

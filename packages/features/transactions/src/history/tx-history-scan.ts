@@ -14,8 +14,10 @@
  * blank the whole feed.
  */
 
+import { WalletError } from "@bramble/core/errors";
 import { isTransportRpcError, withRpcFallback } from "@bramble/starknet/provider";
 import { type ActivityEntry, isActivityEntry } from "@bramble/transactions/activity";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -34,8 +36,14 @@ import {
 
 // Bounds so a refresh stays cheap against a public RPC node: how many event
 // pages to read per range, the page size, and how far back the recent-history
-// window reaches. A production indexer would lift these; deeper history beyond
-// the window is intentionally not scanned here.
+// window reaches. The window is a block count, so its reach in time shrinks as
+// the chain speeds up: at mainnet's ~1.7 s blocks (measured September 2026)
+// 200,000 blocks is about four days, and a key-filtered `getEvents` over that
+// range on a busy token already takes 0.2-28 s on the bundled nodes against a
+// 15 s per-request deadline. Widening it would push routine scans past the
+// deadline, so deeper history is the explorer lane's job (see
+// `createExplorerFirstHistory` in ./starkscan-wallet); this scan is the
+// keyless fallback and is intentionally shallow.
 const MAX_EVENT_PAGES = 3;
 const EVENT_CHUNK_SIZE = 100;
 const HISTORY_BLOCK_WINDOW = 200_000;
@@ -296,11 +304,22 @@ const datedActivityEntries = (
  * the paging, capping, and timestamp-join logic is testable without a network.
  * A per-token semantic failure is skipped; a transport failure aborts the scan
  * so the caller degrades rather than showing a partial feed as complete.
+ *
+ * `accountId` must be the `<networkId>:<address>` id every produced entry is
+ * stamped with, because {@link isActivityEntry} re-checks that stamp on every
+ * row. Any other spelling would drop every row at that check and present a
+ * live, transaction-rich account as an empty feed with no error — which is
+ * exactly how an ad-hoc caller once read "the scan returns nothing" — so it is
+ * rejected up front, before any RPC call, as a semantic {@link WalletError}
+ * (never a transport failure, so it does not fan out across endpoints).
  */
 export const collectTransactionHistory = async (
   rpc: HistoryRpc,
   { account, accountId, networkId, tokens }: Omit<TransactionHistoryScan, "rpcUrls">,
 ): Promise<readonly ActivityEntry[]> => {
+  if (!isAccountIdForNetwork(accountId, networkId)) {
+    throw new WalletError("History account id does not belong to the network");
+  }
   const canonicalAccount = canonicalFelt(account);
   if (!canonicalAccount || !isNonZeroStarkFieldElement(canonicalAccount)) {
     return [];

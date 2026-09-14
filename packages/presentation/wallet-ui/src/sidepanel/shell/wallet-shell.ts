@@ -6,6 +6,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
 import { callout } from "@bramble/ui-kit/content";
 import { button, iconButton, iconLink } from "@bramble/ui-kit/controls";
 import { dockNavigation } from "@bramble/ui-kit/navigation";
@@ -13,6 +14,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { explorerAccountUrl } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { type IconName, icon } from "../shared/icons";
+import { networkDisplayName } from "../shared/network-label";
 import { accountAvatar, accountDisplayName, type WalletView } from "../shared/parts";
 
 /**
@@ -38,16 +40,14 @@ export const walletHeader = (
   const explorerUrl = address
     ? explorerAccountUrl(multisig?.networkId ?? status.networkId, address)
     : null;
-  const network = status.network
-    .replace(/^Starknet Mainnet$/, "Starknet")
-    .replace(/^Starknet\s+/, "");
+  const network = networkDisplayName(status.network);
   const networkDetail = networkIssue
     ? `<span id="network-status-detail" class="sr-only">${escapeHtml(networkIssue)}</span>`
     : "";
   return `
   <header class="wallet-header">
     <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false"${networkIssue ? ' aria-describedby="network-status-detail"' : ""} title="Manage accounts">
-      <span class="brand-mark">${address ? accountAvatar(address) : icon("wallet")}</span>
+      <span class="brand-mark">${address ? accountAvatar(address) : BRAMBLE_MARK}</span>
       <span class="account-meta">
         <span class="account-name"><strong>${escapeHtml(name)}</strong>${icon("chevronDown")}</span>
         <span class="account-net${networkIssue ? " degraded" : ""}"${networkIssue ? ` title="${escapeHtml(networkIssue)}"` : ""}><span class="dot" aria-hidden="true"></span><span class="account-network-label">${escapeHtml(network)}</span>${networkDetail}</span>
@@ -172,10 +172,13 @@ export const explorerTile = (url: string | null): string => {
  *
  * Emits the same attributes the token-detail surface uses, so the existing
  * privacy bindings pick it up with no wiring of its own: `data-send-shield`
- * opens Send with the buckets preset once privacy is ready, and
- * `data-privacy-open` starts activation when it is not. Disabled only when there
- * is no token to name — no account, or a network with none tracked — following
- * the explorer tile in staying put rather than reflowing the row.
+ * opens Send in its Shield mode once privacy is ready, and `data-privacy-open`
+ * starts activation when it is not — and when activation cannot proceed either
+ * (no STRK for the fee, undeployed account, pending registration, no pool on
+ * this network), that binding lands on the privacy screen with the reason and
+ * the next step, so the tile is never a dead click. Disabled only when there is
+ * no token to name — no account, or a network with none tracked — following the
+ * explorer tile in staying put rather than reflowing the row.
  */
 export const shieldTile = (tokenId: string | null, ready: boolean): string => {
   const body = `<span class="tile-icon">${icon("shield")}</span>

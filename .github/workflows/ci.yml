@@ -98,19 +98,29 @@ jobs:
             }
 
             // 2. Integrated-release guard (BLOCKING, FAIL-CLOSED). A release
-            // branch becomes immutable after main contains its tip. Check the
-            // base via GitHub's compare API rather than checkout ancestry so
-            // GitHub-side merges cannot bypass the local hooks.
+            // branch becomes immutable once `main` has integrated it. Ancestry
+            // alone cannot decide that: a release branch freshly cut from
+            // `main` is reachable from `main` too, and blocking its first PR
+            // would break every release. A promotion is always a pull request
+            // from the release branch into `main` (RELEASING.md; the `main`
+            // ruleset requires one), so a merged PR with exactly that head and
+            // base is the signal — the same rule the local hooks apply through
+            // `main`'s merge parents (scripts/release-branch-guard.ts). The
+            // query goes to GitHub rather than a checkout so a GitHub-side
+            // merge cannot bypass the local hooks.
             if (/^release\/v\d+\.\d+(?:\.\d+)?$/.test(base)) {
               try {
-                const { data: comparison } = await github.rest.repos.compareCommits({
+                const promotions = await github.paginate(github.rest.pulls.list, {
                   owner: context.repo.owner,
                   repo: context.repo.repo,
+                  state: "closed",
                   base: "main",
-                  head: base,
+                  head: `${context.repo.owner}:${base}`,
+                  per_page: 100,
                 });
-                if (comparison.ahead_by === 0) {
-                  fail(`Integrated-release guard: base \`${base}\` is already integrated into \`main\` and is immutable. Retarget this PR to the next patch release branch.`);
+                const promoted = promotions.find((candidate) => candidate.merged_at !== null);
+                if (promoted) {
+                  fail(`Integrated-release guard: base \`${base}\` was promoted to \`main\` by #${promoted.number} and is immutable. Retarget this PR to the next patch release branch.`);
                 }
               } catch (error) {
                 fail(`Integrated-release guard: could not verify whether \`${base}\` is integrated into \`main\` (${error.status || error.message}). Refusing to merge until GitHub can establish branch ancestry.`);

@@ -19,6 +19,7 @@ import {
   flowHeader,
   flowScreen,
   hardwareBadge,
+  inlineCopyButton,
   noAccountEmpty,
 } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
@@ -131,8 +132,9 @@ const selectedSignerRow = (
     <span class="option-avatar">${accountAvatar(source.address)}</span>
     <span class="option-copy">
       <strong>${escapeHtml(source.label)}</strong>
-      <span class="option-sub">${source.source} · Key ${escapeHtml(accountLabel(source.publicKeyX))}</span>
+      <span class="option-sub" title="${escapeHtml(source.publicKeyX)}">${source.source} · Key ${escapeHtml(accountLabel(source.publicKeyX))}</span>
     </span>
+    ${inlineCopyButton(source.publicKeyX, `Copy ${source.label} signer public key`)}
     ${iconButton({
       attributes: { "data-remove-signer-public-key": source.publicKeyX },
       disabled: selected && onlySigner,

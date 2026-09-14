@@ -19,7 +19,8 @@ export type UiCatalogEntry<Id extends string = string> = {
  */
 export const UI_FOUNDATIONS = [
   {
-    description: "Achromatic surface/action roles plus explicit success and failure semantics.",
+    description:
+      "Near-neutral surface/action roles (achromatic midnight, tinted daylight) plus explicit success and failure semantics.",
     group: "Foundations",
     id: "colors",
     name: "Colors",

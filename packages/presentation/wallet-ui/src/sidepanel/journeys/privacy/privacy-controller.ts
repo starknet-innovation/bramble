@@ -7,12 +7,13 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import type { SendIntent } from "../send/send-model";
+import { loadPrivacyDisclosure, type PrivacyUiDeps } from "./privacy-disclosure";
 import {
   emptyPrivacyDisclosure,
   type PrivacyDisclosureState,
   type PrivacyJourneyState,
 } from "./privacy-model";
-import { bindPrivacy, loadPrivacyDisclosure, type PrivacyUiDeps } from "./privacy-ui";
+import { bindPrivacy } from "./privacy-ui";
 
 /**
  * Entrypoint-owned state and navigation supplied to the privacy controller.

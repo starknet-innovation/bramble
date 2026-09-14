@@ -3,6 +3,7 @@
  */
 export const EXPECTED_RUNTIME_FILES = [
   "background/index.js",
+  "brand/onboarding-landscape.webp",
   "content/index.js",
   "dependencies/krusty-kms/krusty_kms_wasm.js",
   "dependencies/krusty-kms/krusty_kms_wasm_bg.wasm",

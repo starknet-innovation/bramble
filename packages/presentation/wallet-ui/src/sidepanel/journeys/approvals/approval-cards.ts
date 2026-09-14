@@ -9,7 +9,7 @@ import { sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountLabel, formatFri } from "../../shared/parts";
+import { accountIdAddress, accountLabel, formatFri, inlineCopyButton } from "../../shared/parts";
 import {
   reviewCallsList,
   reviewConstraints,
@@ -65,12 +65,15 @@ const decisionRow = (
 const denyOnlyRow = (approval: PendingApproval): string =>
   `<div class="button-row">${denyButton(approval)}</div>`;
 
+// The signing account is identified by its `<network>:<address>` id; the row
+// shows the address half truncated and copies it whole.
 const contextDetails = (approval: PendingApproval): string => {
   const context = approval.context;
   if (!context) {
     return "";
   }
-  return `<dl class="request-detail"><div><dt>Account</dt><dd><code>${escapeHtml(accountLabel(context.accountId))}</code></dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
+  const address = accountIdAddress(context.accountId);
+  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>${inlineCopyButton(address, "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
 };
 
 const contextDisclosure = (approval: PendingApproval): string => {
@@ -247,7 +250,7 @@ const watchAssetCard = (approval: PendingApproval): string => {
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Add token request")}
-      <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(token.address))}</code></dd></div></dl>
+      <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Address</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, "Copy token address")}</dd></div></dl>
       ${reviewOutcome("Add this token contract to the wallet's tracked asset list.")}
     </div>
     ${reviewPanel(approval.insights ?? [])}

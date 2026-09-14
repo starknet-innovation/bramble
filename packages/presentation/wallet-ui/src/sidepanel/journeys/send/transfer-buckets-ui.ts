@@ -14,7 +14,7 @@
  */
 
 import type { SendRouteResolution, ValueBucket } from "@bramble/transactions/send-routes";
-import { compactAmount } from "../portfolio/token-row";
+import { sendBalanceLine } from "./send-model";
 import { sendFormInput } from "./transfer-compose-ui";
 
 /**
@@ -82,11 +82,7 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
     if (formattedField) formattedField.value = balance.formatted ?? "";
     const label = form.querySelector<HTMLElement>("#send-balance-label");
     if (label) {
-      const scope = source === "private" ? "Private balance" : "Balance";
-      label.textContent =
-        balance.formatted === null
-          ? `${scope} unavailable`
-          : `${scope} ${compactAmount(balance.formatted)} ${symbol}`;
+      label.textContent = sendBalanceLine(source, balance.formatted, symbol);
     }
   };
 
@@ -128,10 +124,28 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
   }
   retry?.addEventListener("click", () => deps.retry?.());
 
+  // An asset pick writes the picker row's *public* figures into the balance
+  // fields, because the row only knows that bucket. When the send spends from
+  // the private balance that left the amount card naming the public balance as
+  // private, and left Max's fallback reading the wrong pot — so every pick is
+  // re-measured against the source bucket here, and the state re-read, before
+  // the gate runs. The row's own handler runs first (the click bubbles up), so
+  // by the time this fires the picked token is already in the form.
+  const followAsset = (event: Event): void => {
+    if (!(event.target instanceof Element) || event.target.closest("[data-send-asset]") === null) {
+      return;
+    }
+    showBalance();
+    deps.onRouteChange();
+  };
+
   // Recipient edits, asset switches, and stage moves all surface as input or
   // click activity on the form; re-gating is cheap and idempotent.
   form.addEventListener("input", applyGate);
-  form.addEventListener("click", () => applyGate());
+  form.addEventListener("click", (event) => {
+    followAsset(event);
+    applyGate();
+  });
   showBalance();
   applyGate();
 };

@@ -50,7 +50,7 @@ describe("design system", () => {
     expect(new Set(ICON_NAMES).size).toBe(ICON_NAMES.length);
   });
 
-  test("keeps review chrome on the production monochrome palette", () => {
+  test("keeps review chrome on the production palette", () => {
     const emittedColors = [...LAB_STYLES.matchAll(/#[0-9a-fA-F]{6}\b/g)].map(([color]) =>
       color.toLowerCase(),
     );
@@ -69,29 +69,30 @@ describe("design system", () => {
     expect(new Set(emittedColors)).toEqual(new Set(expectedColors));
   });
 
-  test("keeps the provider test bench achromatic outside status semantics", () => {
+  test("keeps the provider test bench on the production dark palette", () => {
     const source = readFileSync(
       join(import.meta.dir, "../../examples/provider-tester/index.html"),
       "utf8",
     );
-    for (const name of [
-      "bg",
-      "panel",
-      "elevated",
-      "border",
-      "text",
-      "muted",
-      "accent",
-      "accent-ink",
-    ]) {
-      const match = source.match(new RegExp(`--${name}: #([0-9a-fA-F]{6})`));
-      expect(match, `missing --${name}`).not.toBeNull();
-      const value = match?.[1] ?? "";
-      expect(value.slice(0, 2), `--${name} must not carry a hue`).toBe(value.slice(2, 4));
-      expect(value.slice(2, 4), `--${name} must not carry a hue`).toBe(value.slice(4, 6));
+    // The bench is a standalone page, so its palette is hand-copied from the
+    // default skin; this pins every role to the skin token it mirrors.
+    const roles: ReadonlyArray<[string, keyof typeof darkSkin.tokens]> = [
+      ["bg", "--bramble-bg"],
+      ["panel", "--bramble-panel"],
+      ["elevated", "--bramble-elevated"],
+      ["border", "--bramble-border"],
+      ["text", "--bramble-text"],
+      ["muted", "--bramble-muted"],
+      ["accent", "--bramble-accent"],
+      ["accent-ink", "--bramble-accent-text"],
+      ["danger", "--bramble-danger"],
+      ["ok", "--bramble-positive"],
+    ];
+    for (const [name, tokenName] of roles) {
+      expect(source, `--${name} must mirror ${tokenName}`).toContain(
+        `--${name}: ${darkSkin.tokens[tokenName]};`,
+      );
     }
-    expect(source).toContain("--ok: #4ade80");
-    expect(source).toContain("--danger: #ff7474");
   });
 
   test("escapes dynamic text across controls, fields, and content", () => {

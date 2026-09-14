@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   bindOnboardingCompletion,
+  bindOnboardingLaunch,
   onboardingComplete,
   onboardingLaunch,
 } from "../../../../src/sidepanel/journeys/onboarding/onboarding-surface";
@@ -22,21 +23,58 @@ describe("full-page onboarding completion", () => {
     await GlobalRegistrator.unregister();
   });
 
-  test("opens the current window side panel from the completion action", async () => {
+  test("opens the current window side panel as soon as completion renders, once", async () => {
     const opened: number[] = [];
-    bindOnboardingCompletion(document.querySelector("#app"), {
+    let closed = 0;
+    const browser = {
       sidePanel: {
-        async open({ windowId }) {
+        async open({ windowId }: { windowId: number }) {
           opened.push(windowId);
         },
       },
       windows: { WINDOW_ID_CURRENT: -2 },
+    };
+    const app = document.querySelector("#app");
+    bindOnboardingCompletion(app, browser, () => {
+      closed += 1;
     });
-
-    document.querySelector<HTMLButtonElement>("#onboarding-open-wallet")?.click();
-    await Promise.resolve();
-
+    await tick();
     expect(opened).toEqual([-2]);
+    expect(closed).toBe(1);
+
+    // A re-render of the same surface binds again without a second attempt.
+    bindOnboardingCompletion(app, browser, () => {
+      closed += 1;
+    });
+    await tick();
+    expect(opened).toEqual([-2]);
+
+    // After a successful handoff the surface is closing, so the action stays
+    // disabled rather than inviting a second open.
+    expect(document.querySelector<HTMLButtonElement>("#onboarding-open-wallet")?.disabled).toBe(
+      true,
+    );
+  });
+
+  test("closes the compact surface after the setup link opens its tab", () => {
+    document.body.innerHTML = `<main id="app">${onboardingLaunch()}</main>`;
+    const deferred: Array<() => void> = [];
+    let closed = 0;
+    bindOnboardingLaunch(
+      document.querySelector("#app"),
+      () => {
+        closed += 1;
+      },
+      (task) => deferred.push(task),
+    );
+    const link = document.querySelector<HTMLAnchorElement>("a.onboarding-launch");
+    link?.addEventListener("click", (event) => event.preventDefault());
+    link?.click();
+    // The close waits for the click's default action (the new tab) to start.
+    expect(closed).toBe(0);
+    expect(deferred).toHaveLength(1);
+    deferred[0]?.();
+    expect(closed).toBe(1);
   });
 
   test("keeps first-run setup out of compact wallet surfaces", () => {
@@ -50,6 +88,8 @@ describe("full-page onboarding completion", () => {
 
   test("keeps a toolbar fallback when the side-panel API is unavailable", () => {
     bindOnboardingCompletion(document.querySelector("#app"), undefined);
+    // The silent automatic attempt says nothing; the manual retry explains.
+    expect(document.querySelector("#onboarding-complete-result")?.textContent).toBe("");
 
     document.querySelector<HTMLButtonElement>("#onboarding-open-wallet")?.click();
 
@@ -67,8 +107,14 @@ describe("full-page onboarding completion", () => {
       },
       windows: { WINDOW_ID_CURRENT: -2 },
     });
-
     const button = document.querySelector<HTMLButtonElement>("#onboarding-open-wallet");
+    // The automatic attempt disables the button while it runs, then restores
+    // it quietly when Chrome refuses (no gesture, no panel).
+    expect(button?.disabled).toBe(true);
+    await tick();
+    expect(button?.disabled).toBe(false);
+    expect(document.querySelector("#onboarding-complete-result")?.textContent).toBe("");
+
     button?.click();
     expect(button?.disabled).toBe(true);
     await tick();

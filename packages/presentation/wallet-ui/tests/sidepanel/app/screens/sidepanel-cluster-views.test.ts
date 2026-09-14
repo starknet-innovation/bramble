@@ -165,6 +165,12 @@ describe("cluster views", () => {
     expect(html).toContain("Revoke");
     // Amounts render through the shared display policy (grouped thousands).
     expect(html).toContain("1,000");
+    // The spender leads truncated, with the full address on hover and a copy
+    // control beside it; the revoke stays the row's only other control.
+    expect(html).toContain(
+      '<span class="allowance-spender"><code title="0x5abcdef1234">0x5abc…1234</code><button class="icon-button ghost copy-inline" data-copy="0x5abcdef1234" type="button" aria-label="Copy spender address"',
+    );
+    expect(html).not.toContain("<code>0x5abcdef1234</code>");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });

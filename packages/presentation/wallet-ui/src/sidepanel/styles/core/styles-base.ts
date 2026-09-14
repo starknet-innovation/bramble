@@ -21,6 +21,7 @@ import {
   TYPE,
   WEIGHT,
 } from "@bramble/ui-kit/tokens";
+import { DOCK_OFFSET, DOCK_PADDING } from "./styles-dock";
 
 /**
  * Base stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -47,9 +48,10 @@ export const BASE_STYLES = `
     --bramble-danger-soft: color-mix(in srgb, var(--bramble-danger) 12%, var(--bramble-panel));
     --bramble-shadow: var(--bramble-elev-lg);
     --bramble-shadow-sm: var(--bramble-elev-sm);
-    /* Anchored bottom-bar footprint: one source of truth consumed by the dock
-       itself, the dock-screen scroll clearance, and the toast stack offset. */
-    --bramble-dock-h: calc(${CONTROL.nav} + ${SPACE.sm});
+    /* Floating-dock footprint from the panel's bottom edge — the pill (a 44px
+       root plus its padding) and the gap beneath it — one source of truth for
+       the dock-screen scroll clearance and the toast stack offset. */
+    --bramble-dock-h: calc(${CONTROL.dockItem} + ${DOCK_PADDING} * 2 + ${DOCK_OFFSET});
     /* Token fallbacks remain neutral so unverified assets do not acquire a
        decorative identity that could imply trust. */
     --bramble-avatar-0: hsl(0 0% 42%);
@@ -121,7 +123,13 @@ export const BASE_STYLES = `
   .row, .address-line { justify-content: space-between; }
   .row.wrap { flex-wrap: wrap; justify-content: flex-start; }
   .stack { display: grid; gap: ${SPACE.sm}; }
-  .stack-tight { display: grid; gap: 3px; min-width: 0; }
+  /* Single-column text stacks beside fixed-width controls. The column is
+     minmax(0, 1fr), not the implicit auto track, so an unbreakable word (a dapp
+     origin, a saved label) can never widen the row past its card and push the
+     trailing control under the card's overflow clip at narrow panel widths;
+     the word wraps as a last resort instead. */
+  .stack-tight { display: grid; gap: 3px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  .stack-tight > * { min-width: 0; overflow-wrap: anywhere; }
   .button-row {
     display: grid;
     gap: ${SPACE.sm};
@@ -294,11 +302,17 @@ export const BASE_STYLES = `
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
   }
+  /* The four home actions wear the floating dock's selected-root treatment —
+     the accent's soft tint with accent ink, flat, no shadow — so the two
+     pieces of chrome on the home screen read as one family. Hover and press
+     stay on-family: a little more accent layered over the soft tint (the
+     accent-side twin of the neutral --bramble-hover / --bramble-soft-press
+     recipes), never the neutral hover fill. */
   .action-tile {
     align-content: center;
-    background: var(--bramble-elevated);
+    background: var(--bramble-accent-soft);
     border-radius: ${RADIUS.lg};
-    color: var(--bramble-text);
+    color: var(--bramble-accent);
     display: grid;
     gap: ${SPACE.xs};
     justify-items: center;
@@ -312,18 +326,23 @@ export const BASE_STYLES = `
     width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
-    .action-tile:not(:disabled):hover { background: var(--bramble-hover); transform: translateY(-2px); }
-    .action-tile:not(:disabled):hover .tile-label { color: var(--bramble-text); }
+    .action-tile:not(:disabled):hover {
+      background: color-mix(in srgb, var(--bramble-accent) 6%, var(--bramble-accent-soft));
+      transform: translateY(-2px);
+    }
   }
-  .action-tile:not(:disabled):active { background: var(--bramble-soft-press); transform: scale(0.97); }
+  .action-tile:not(:disabled):active {
+    background: color-mix(in srgb, var(--bramble-accent) 11%, var(--bramble-accent-soft));
+    transform: scale(0.97);
+  }
   button.action-tile:disabled { cursor: not-allowed; opacity: 0.4; }
   .tile-icon {
     align-items: center;
-    color: var(--bramble-text);
+    color: var(--bramble-accent);
     display: inline-flex;
     justify-content: center;
   }
-  .tile-label { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; font-weight: ${WEIGHT.semibold}; }
+  .tile-label { color: var(--bramble-accent); font-size: ${TYPE.caption.size}; font-weight: ${WEIGHT.semibold}; }
   .tile-icon .icon {
     height: ${CONTROL.majorIcon};
     stroke-width: 1.85;
@@ -331,6 +350,10 @@ export const BASE_STYLES = `
   }
 
   /* Flow screens: back control + goal title */
+  /* Back control, title, network pill on one row, the pill vertically centred
+     against the title block. The title column is minmax(0, 1fr) so a long title
+     wraps its words rather than sliding under the pill; the pill itself never
+     wraps or shrinks. */
   .flow-header {
     align-items: center;
     display: flex;
@@ -338,7 +361,8 @@ export const BASE_STYLES = `
     min-width: 0;
     padding: 2px 0 ${SPACE.xs};
   }
-  .flow-title { display: grid; flex: 1; gap: 1px; min-width: 0; }
+  .flow-header > .pill { flex: none; }
+  .flow-title { display: grid; flex: 1; gap: 1px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
   .flow-title h1 { font-size: ${TYPE.display.size}; }
   .flow-title p {
     color: var(--bramble-muted);
@@ -360,6 +384,16 @@ export const BASE_STYLES = `
     gap: 0;
     overflow: hidden;
   }
+  /* Grouped rows keep the rounded hover of a standalone row: the group's
+     corners clip the card, the fill inside it stays the kit's rounded shape. */
+  /* A row that is itself a control (select this account) carries its copy
+     action beside it on one line, never inside it; the line is the row — it
+     carries the selected and hover fill so the copy action sits inside the
+     highlight — and the group's inset divider treats it as one. */
+  .option-list > .option-row-line > .icon-button { margin-right: ${SPACE.sm}; }
+  .option-row-line { border-radius: ${RADIUS.md}; transition: background ${MOTION.pressMs}ms ${MOTION.ease}; }
+  .option-row-line:has(> button.option-row[aria-pressed="true"]) { background: var(--bramble-accent-soft); }
+  .option-row-line > button.option-row, .option-row-line > button.option-row[aria-pressed="true"] { background: transparent; }
   .menu-list > * + *, .option-list > * + * { position: relative; }
   .menu-list > * + *::before, .option-list > * + *::before {
     background: var(--bramble-hairline);
@@ -370,10 +404,13 @@ export const BASE_STYLES = `
     right: 0;
     top: 0;
   }
+  /* A row is a rounded control on its own (Manage tokens, a lone option) and
+     inside a grouped list alike: the group clips its outer corners, and the
+     hover fill keeps the kit's rounding within it. */
   button.menu-row, button.option-row, a.menu-row {
     align-items: center;
     background: transparent;
-    border-radius: 0;
+    border-radius: ${RADIUS.md};
     color: var(--bramble-text);
     display: flex;
     gap: ${SPACE.sm};
@@ -390,10 +427,15 @@ export const BASE_STYLES = `
       background: var(--bramble-hover);
     }
     button.option-row[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); }
+    .option-row-line:has(> button.option-row:not(:disabled):hover) { background: var(--bramble-hover); }
+    .option-row-line:has(> button.option-row[aria-pressed="true"]:not(:disabled):hover) { background: var(--bramble-accent-soft); }
+    .option-row-line > button.option-row:not(:disabled):hover, .option-row-line > button.option-row[aria-pressed="true"]:not(:disabled):hover { background: transparent; }
   }
   button.menu-row:not(:disabled):active, button.option-row:not(:disabled):active {
     background: var(--bramble-soft-press);
   }
+  .option-row-line:has(> button.option-row:not(:disabled):active) { background: var(--bramble-soft-press); }
+  .option-row-line > button.option-row:not(:disabled):active { background: transparent; }
   button.option-row[aria-pressed="true"] { background: var(--bramble-accent-soft); }
   /* Action row: a group-terminal action (e.g. "Add account") reads as accent
      text inside the group rather than a standalone boxed button. */
@@ -409,6 +451,7 @@ export const BASE_STYLES = `
     width: 100%;
   }
   .brand-mark .icon { height: 20px; width: 20px; }
+  .brand-mark .brand-glyph { height: 20px; width: 20px; }
   .option-avatar {
     align-items: center;
     background: var(--bramble-elevated);

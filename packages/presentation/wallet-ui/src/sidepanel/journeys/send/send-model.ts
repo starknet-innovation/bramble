@@ -165,6 +165,26 @@ export const sendBalanceLabel = (formatted: string): string =>
   formatted.length === 0 ? "—" : compactAmount(formatted);
 
 /**
+ * The amount card's balance line for the bucket being spent from. Every writer
+ * of `#send-balance-label` — the first paint, an asset pick, a bucket flip, and
+ * the repaint after discovery or a recipient check settles — renders through
+ * here, so the line keeps one shape (and one width) for the life of the screen:
+ * a later writer that printed the balance at full token precision widened the
+ * card past the narrowest side panel. A balance that has not been read is named
+ * as such, never shown as zero.
+ */
+export const sendBalanceLine = (
+  source: ValueBucket,
+  formatted: string | null,
+  symbol: string,
+): string => {
+  const scope = source === "private" ? "Private balance" : "Balance";
+  return formatted === null
+    ? `${scope} unavailable`
+    : `${scope} ${sendBalanceLabel(formatted)} ${symbol}`;
+};
+
+/**
  * Currency-aware input prefix for fiat-entry mode.
  */
 export const sendCurrencySymbol = (currency: DisplayCurrency): string => CURRENCY_SYMBOLS[currency];

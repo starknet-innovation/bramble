@@ -11,22 +11,6 @@ import { MOTION, RADIUS, SPACE, TYPE } from "@bramble/ui-kit/tokens";
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const HOME_STYLES = `
-  .tx-kind-icon {
-    align-items: center;
-    background: var(--bramble-soft);
-    border-radius: ${RADIUS.full};
-    color: var(--bramble-text);
-    display: flex;
-    flex: none;
-    height: 36px;
-    justify-content: center;
-    width: 36px;
-  }
-  .tx-kind-icon .icon { height: 18px; width: 18px; }
-  .tx-kind-icon.accepted { color: var(--bramble-positive); }
-  .tx-kind-icon.pending { color: var(--bramble-warning); }
-  .tx-kind-icon.preconfirmed { color: var(--bramble-positive); opacity: 0.68; }
-  .tx-kind-icon.rejected, .tx-kind-icon.reverted { color: var(--bramble-danger); }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger
      block so it cannot be skimmed past. Icon and text share one baseline. */
@@ -112,9 +96,24 @@ export const HOME_STYLES = `
   @media (hover: hover) and (pointer: fine) {
     button.drawer-account:not(:disabled):hover { background: var(--bramble-hover); }
     button.drawer-account[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); }
+    .drawer-account-row:has(> button.drawer-account:not(:disabled):hover) { background: var(--bramble-hover); }
+    .drawer-account-row:has(> button.drawer-account[aria-pressed="true"]:not(:disabled):hover) { background: var(--bramble-accent-soft); }
+    .drawer-account-row > button.drawer-account:not(:disabled):hover, .drawer-account-row > button.drawer-account[aria-pressed="true"]:not(:disabled):hover { background: transparent; }
   }
   button.drawer-account:not(:disabled):active { background: var(--bramble-soft-press); transform: scale(0.985); }
   button.drawer-account[aria-pressed="true"] { background: var(--bramble-accent-soft); }
+  /* An account row and the copy action beside it are one line: the line carries
+     the selected, hover, and press fill so the action sits inside the highlight. */
+  .drawer-account-row {
+    border-radius: ${RADIUS.md};
+    transition:
+      background ${MOTION.pressMs}ms ${MOTION.ease},
+      transform ${MOTION.liftMs}ms var(--ease-out);
+  }
+  .drawer-account-row:has(> button.drawer-account[aria-pressed="true"]) { background: var(--bramble-accent-soft); }
+  .drawer-account-row:has(> button.drawer-account:not(:disabled):active) { background: var(--bramble-soft-press); transform: scale(0.985); }
+  .drawer-account-row > button.drawer-account, .drawer-account-row > button.drawer-account[aria-pressed="true"] { background: transparent; }
+  .drawer-account-row > button.drawer-account:not(:disabled):active { background: transparent; transform: none; }
   .drawer-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .drawer-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .drawer-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
