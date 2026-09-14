@@ -56,12 +56,13 @@ export type ActivityPricing = {
 
 /**
  * Classification of one entry: the glyph, the accessible kind name, the verb
- * shown as the row title, and which way value moved (`null` when the entry is
- * not a value movement — an approval, a deployment, a shield/unshield between
- * the same owner's balances — so no signed fiat delta is ever attached to it).
+ * shown as the row title, and which way value moved: `in` or `out` of the
+ * account, `internal` between the owner's own public and private balances
+ * (priced, but unsigned), or `null` when the entry is not a value movement —
+ * an approval, a deployment, an activation — so no fiat figure is attached.
  */
 export type ActivityAppearance = {
-  readonly direction: "in" | "out" | null;
+  readonly direction: "in" | "internal" | "out" | null;
   readonly icon: IconName;
   readonly label: string;
   readonly title: string;
@@ -87,10 +88,17 @@ const PRIVATE = /\b(un)?shield(ed|ing)?\b|\bprivate(ly)?\b/;
 const APPROVAL = /\b(approve|approved|approval|revoke|revoked|allow|allowance)\b/;
 const RECEIVED = /\b(receive|received)\b/;
 
+// A shield or unshield names its recipient only when that is someone else:
+// "Shield 5 STRK to 0x…" / "… into 0x…'s private balance" / "Unshield 5 STRK
+// to 0x…" leave the account, while "Shield 5 STRK", "Unshield 5 STRK", and
+// "Unshield 5 STRK to this account" stay between the owner's own balances.
+const NAMES_OTHER_PARTY = /\b(?:into|to)\s+(?!this account\b)\S/;
+
 const privateAppearance = (summary: string): ActivityAppearance => {
   const base = { icon: "shield", label: "Private transaction", type: "private" } as const;
-  if (/\bunshield/.test(summary)) return { ...base, direction: null, title: "Unshielded" };
-  if (/\bshield/.test(summary)) return { ...base, direction: null, title: "Shielded" };
+  const direction = NAMES_OTHER_PARTY.test(summary) ? "out" : "internal";
+  if (/\bunshield/.test(summary)) return { ...base, direction, title: "Unshielded" };
+  if (/\bshield/.test(summary)) return { ...base, direction, title: "Shielded" };
   if (/\bprivately\b|\bprivate transfer\b/.test(summary))
     return { ...base, direction: "out", title: "Private transfer" };
   return { ...base, direction: null, title: "Private transaction" };
@@ -148,7 +156,7 @@ export const activityAppearance = (entry: ActivityEntry): ActivityAppearance => 
     const received = RECEIVED.test(summary);
     return {
       direction: received ? "in" : "out",
-      icon: received ? "cornerRightDown" : "arrowDownRight",
+      icon: received ? "arrowDownLeft" : "arrowDownRight",
       label: "Transfer",
       title: received ? "Received" : "Sent",
       type: "transfer",
@@ -260,9 +268,10 @@ const activityDetail = (
 /**
  * Everything one Activity row displays, derived from the entry and the current
  * prices. The asset amount needs the recorded amount and symbol; the fiat
- * delta additionally needs a direction, exactly one tracked token with that
- * symbol on the entry's network (a symbol shared by two tracked tokens is
- * ambiguous and yields nothing), and a price for it.
+ * figure additionally needs a direction (signed in or out, unsigned when the
+ * value only moved between the owner's own balances), exactly one tracked
+ * token with that symbol on the entry's network (a symbol shared by two
+ * tracked tokens is ambiguous and yields nothing), and a price for it.
  */
 export type ActivityRowModel = ActivityAppearance & {
   readonly amount: string | null;
@@ -299,10 +308,11 @@ export const activityRowModel = (
     appearance.direction !== null && rawAmount !== null && price !== undefined
       ? tokenFiatValue(rawAmount, price)
       : null;
+  const sign = appearance.direction === "in" ? "+" : appearance.direction === "out" ? "−" : "";
   const fiat =
     value === null || pricing === undefined
       ? null
-      : `${appearance.direction === "in" ? "+" : "−"}${formatFiat(value, pricing.currency)}`;
+      : `${sign}${formatFiat(value, pricing.currency)}`;
   const counterparty = activityCounterparty(entry, appearance);
   return {
     ...appearance,

@@ -302,3 +302,16 @@ export const bindCopyButtons = (app: Element | null): void => {
 export const renderFragment = (target: Element, markup: string): void => {
   target.replaceChildren(target.ownerDocument.createRange().createContextualFragment(markup));
 };
+
+/**
+ * Appends a hidden overlay host to the document body for a runtime that
+ * reveals itself later (Ledger prompts). The caller owns the returned element;
+ * nothing is rendered into it here.
+ */
+export const hiddenOverlayMount = (className: string): HTMLDivElement => {
+  const mount = document.createElement("div");
+  mount.className = className;
+  mount.hidden = true;
+  document.body.append(mount);
+  return mount;
+};

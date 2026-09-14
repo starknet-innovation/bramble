@@ -416,6 +416,7 @@ for (const file of await walk(".")) {
   if (
     isProductionTypeScript(file) &&
     file !== "apps/extension/src/background/runtime/session.ts" &&
+    file !== "apps/extension/src/sidepanel/index.ts" && // side-panel root injects the clock
     file !== "packages/features/portfolio/src/tokens/prices.ts" &&
     file !== "packages/features/transactions/src/activity/activity.ts" &&
     file !== "packages/features/permissions/src/phishing-feed.ts" &&

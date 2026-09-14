@@ -139,18 +139,18 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
  * dock and its design-system specimen, in the design kit's transaction-row
  * anatomy: an inline kind glyph beside the verb, the counterparty or asset
  * pair beneath it, the signed fiat delta over the asset amount on the right,
- * and the token mark trailing. A provisional status carries an explanatory
- * hint and its own muted-but-distinct treatment, so a pre-confirmed transaction
- * never reads as settled. A meta line names the status in words and the UTC
- * time, so state is readable without the glyph colour; the status is repeated
- * for assistive tech in the summary's own label, and the meta line is hidden
- * from it to avoid a double read. The visible verb is a classification, so the
- * accessible name keeps the full recorded summary (prefixed by the verb when
- * the summary does not already start with it) — the row never announces less
- * than the record says. A recorded counterparty shows truncated with a quiet
- * copy control that carries the full stored address (the row itself is not a
- * button, so the control nests nowhere). Without `pricing` the fiat delta is
- * simply absent.
+ * and the token mark trailing. A settled
+ * row says nothing more; a provisional or failed one adds its status word
+ * beneath the detail in the status hue, carries an explanatory hint, and keeps
+ * its glyph in that hue, so a pre-confirmed transaction never reads as
+ * settled. The status and UTC time stay reachable on the row's tooltip and in
+ * the summary's accessible name (the visible meta line is hidden from
+ * assistive tech), so nothing is announced twice. The visible verb is a classification, so the accessible name keeps
+ * the full recorded summary (prefixed by the verb when the summary does not
+ * already start with it) — the row never announces less than the record says.
+ * A recorded counterparty shows truncated with a quiet copy control that
+ * carries the full stored address (the row itself is not a button, so the
+ * control nests nowhere). Without `pricing` the fiat delta is simply absent.
  */
 export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
@@ -164,22 +164,23 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
   const name = summary.toLowerCase().startsWith(row.title.toLowerCase())
     ? summary
     : `${row.title}. ${summary}`;
+  // Status leads the clock on the tooltip and in the accessible name; the time
+  // is not printed on the row itself.
   const clock = formatUtcClock(entry.submittedAt);
-  // Status leads the clock: the line ellipsises from the right at narrow
-  // widths, and the state is the part that must survive.
-  const meta = [capitalise(label), clock].filter((part) => part !== null).join(" · ");
+  const timing = [capitalise(label), clock].filter((part) => part !== null).join(" · ");
+  const spoken = clock === null ? label : `${label}, ${clock}`;
   const avatar = row.tokenSymbol
     ? tokenGlyph(row.tokenAddress ?? "0x0", row.tokenSymbol)
     : starknetNetworkGlyph();
   return `
-  <li class="tx-row" data-live-group>
+  <li class="tx-row" data-live-group title="${escapeHtml(timing)}">
     <div class="tx-copy">
       <span class="tx-title">
         <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-label="${escapeHtml(statusLabel)}" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
         ${
           explorer
-            ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(name)}. ${escapeHtml(label)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${escapeHtml(row.title)}</a>`
-            : `<strong class="tx-summary">${escapeHtml(row.title)}<span class="sr-only">${escapeHtml(name.slice(row.title.length))}. ${escapeHtml(label)}.</span></strong>`
+            ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(name)}. ${escapeHtml(spoken)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${escapeHtml(row.title)}</a>`
+            : `<strong class="tx-summary">${escapeHtml(row.title)}<span class="sr-only">${escapeHtml(name.slice(row.title.length))}. ${escapeHtml(spoken)}.</span></strong>`
         }
       </span>
       ${
@@ -189,7 +190,11 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
             ? `<span class="tx-detail">${escapeHtml(row.detail)}</span>`
             : ""
       }
-      <span class="tx-meta" aria-hidden="true">${escapeHtml(meta)}</span>
+      ${
+        entry.status === "accepted"
+          ? ""
+          : `<span class="tx-meta ${escapeHtml(entry.status)}" aria-hidden="true">${escapeHtml(capitalise(label))}</span>`
+      }
     </div>
     <div class="tx-side">
       ${row.fiat ? `<span class="tx-fiat">${escapeHtml(row.fiat)}</span>` : '<span class="tx-fiat is-unknown">—</span>'}
@@ -199,15 +204,23 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
   </li>`;
 };
 
+// The heading for one UTC day: the two most recent days read as words when
+// the caller knows which day it is, every other day shows its date.
+const dayLabel = (key: number, date: string, todayKey: number | null): string =>
+  key === todayKey ? "Today" : key === (todayKey ?? Number.NaN) - 1 ? "Yesterday" : date;
+
 /**
  * Groups a newest-first feed into UTC calendar days, each rendered as a small
  * heading over its own list, so a long feed reads by date rather than as one
  * undifferentiated column. Consecutive entries are grouped, which preserves the
- * feed's own order; an entry without a usable timestamp joins an "Undated" group.
+ * feed's own order; an entry without a usable timestamp joins an "Undated"
+ * group. `todayKey` (the current UTC day from `utcDayKey`) labels that day
+ * "Today" and the one before it "Yesterday"; without it every day is dated.
  */
 export const transactionGroups = (
   entries: readonly ActivityEntry[],
   pricing?: ActivityPricing,
+  todayKey: number | null = null,
 ): string => {
   const groups: Array<{ readonly key: number | null; readonly label: string; rows: string[] }> = [];
   for (const entry of entries) {
@@ -217,7 +230,8 @@ export const transactionGroups = (
     if (current && current.key === key) {
       current.rows.push(transactionRow(entry, pricing));
     } else {
-      groups.push({ key, label: date ?? "Undated", rows: [transactionRow(entry, pricing)] });
+      const label = key === null || date === null ? "Undated" : dayLabel(key, date, todayKey);
+      groups.push({ key, label, rows: [transactionRow(entry, pricing)] });
     }
   }
   return groups
