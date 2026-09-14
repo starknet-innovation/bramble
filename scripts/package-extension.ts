@@ -1,12 +1,19 @@
 /**
  * Creates a versioned browser-extension zip from the built MV3 output.
+ *
+ * Pass `--target=firefox` to build and package the Gecko output instead; the
+ * two differ only in the manifest and in the collectible renderer, which the
+ * Firefox package omits (see `apps/extension/firefox-manifest.ts`).
  */
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
+import { type BuildTarget, outputDirectory } from "../apps/extension/build-target";
+import { EXPECTED_RUNTIME_FILES, FIREFOX_RUNTIME_FILES } from "./extension-runtime-files";
 
-const distDir = "dist";
+const target: BuildTarget = Bun.argv.includes("--target=firefox") ? "firefox" : "chrome";
+const distDir = outputDirectory(target);
+const expectedFiles = target === "firefox" ? FIREFOX_RUNTIME_FILES : EXPECTED_RUNTIME_FILES;
 const artifactDir = "artifacts";
 const reproducibleZipTime = "198001010000";
 
@@ -38,8 +45,7 @@ const run = async (cmd: string[], cwd = "."): Promise<void> => {
   }
 };
 
-await run(["bun", "run", "build"]);
-await rm(artifactDir, { force: true, recursive: true });
+await run(["bun", "run", target === "firefox" ? "build:firefox" : "build"]);
 await mkdir(artifactDir, { recursive: true });
 
 const manifest = await readJson(join(distDir, "manifest.json"));
@@ -48,11 +54,20 @@ if (typeof manifest["version"] !== "string") {
 }
 
 const files = (await walk(distDir)).map((path) => relative(distDir, path));
-if (files.join("\n") !== EXPECTED_RUNTIME_FILES.join("\n")) {
+if (files.join("\n") !== expectedFiles.join("\n")) {
   throw new Error(`unexpected packaged files:\n${files.join("\n")}`);
 }
-const zipName = `bramble-${manifest["version"]}.zip`;
+const zipName =
+  target === "firefox"
+    ? `bramble-firefox-${manifest["version"]}.zip`
+    : `bramble-${manifest["version"]}.zip`;
 const zipPath = resolve(artifactDir, zipName);
+
+// Only this target's own artifacts are cleared, so packaging one browser never
+// deletes the other's zip from a prior run — and `zip` appends to an archive
+// that already exists, so a stale one must go before this one is written.
+await rm(zipPath, { force: true });
+await rm(`${zipPath}.sha256`, { force: true });
 
 await run(["touch", "-t", reproducibleZipTime, ...files], distDir);
 await run(["zip", "-X", "-q", zipPath, ...files], distDir);

@@ -83,6 +83,7 @@ export type GrantSessionRuntime = {
 };
 
 type ExtensionGlobal = typeof globalThis & {
+  readonly browser?: Partial<GrantBrowser>;
   readonly chrome?: Partial<GrantBrowser>;
 };
 
@@ -95,12 +96,26 @@ const hasGrantBrowserShape = (value: Partial<GrantBrowser> | undefined): value i
   typeof value?.tabs?.remove === "function";
 
 /**
- * Reads and validates the extension browser surface, or returns null outside a
- * Chromium extension page.
+ * Reads and validates the extension browser surface, or returns null outside an
+ * extension page.
+ *
+ * `browser` is preferred over `chrome` for the same reason the extension's own
+ * resolver prefers it: on Firefox the `chrome` alias is callback-style and its
+ * functions return `undefined`, so `tabs.create` would resolve to nothing, the
+ * shape check here would still pass, and reading the new tab's id would throw
+ * an unexpected-device error while leaving an untracked tab open. Gecko cannot
+ * run a Ledger at all — it implements no WebHID, WebUSB or Web Bluetooth — so
+ * what this buys is the grant tab reaching its own honest "use a Chromium
+ * browser" message instead of a generic failure.
+ *
+ * This package cannot import `apps/extension`'s resolver across the workspace
+ * boundary, which is why the two-line idiom appears twice; both are the same
+ * decision and must stay the same.
  */
 export const extensionBrowser = (): GrantBrowser | null => {
-  const chrome = (globalThis as ExtensionGlobal).chrome;
-  return hasGrantBrowserShape(chrome) ? chrome : null;
+  const scope = globalThis as ExtensionGlobal;
+  const api = scope.browser ?? scope.chrome;
+  return hasGrantBrowserShape(api) ? api : null;
 };
 
 const GRANT_TAB_TIMEOUT: GrantTabTimeout = {

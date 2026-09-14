@@ -53,6 +53,38 @@ bun run build             # -> dist/
 Open `chrome://extensions`, turn on Developer mode, hit **Load unpacked** and pick `dist/`. A
 fresh install opens the full-page setup flow; after setup, use the toolbar icon for the side panel.
 
+### Browser targets
+
+`bun run build:firefox` writes `dist-firefox/`, and `bun run build:all` writes both from one run of
+the prerequisite gates. Load the Gecko build at `about:debugging#/runtime/this-firefox` →
+**Load Temporary Add-on** → `dist-firefox/manifest.json`.
+
+There is one manifest definition. `apps/extension/public/manifest.json` is it;
+`apps/extension/firefox-manifest.ts` derives the Gecko one and refuses to guess — a top-level key
+nobody has classified throws, so a manifest change forces the Firefox decision at `check:extension`
+rather than at upload time. What differs, and why none of it is a matter of taste:
+
+| | Chrome | Firefox |
+| --- | --- | --- |
+| Background | service worker | event page (Gecko has no extension service worker) |
+| Wallet panel | `side_panel` | `sidebar_action` (Gecko has no `sidePanel` API) |
+| Collectible animations | sandboxed page | **not shipped** |
+| Ledger | supported | **not supported** |
+
+Firefox is supported from **140**, the current ESR — so the release channel, both ESR lines, and the
+forks that track them. Two capabilities are genuinely absent rather than merely unported:
+
+- **Collectible animations.** The renderer runs in a manifest-sandboxed page, and Firefox only
+  gained the `sandbox` key in 154. No ESR line has it, so supporting ESR and shipping that page are
+  mutually exclusive; shipping it unsandboxed would run untrusted on-chain HTML with extension
+  privileges, so it is withheld from the Firefox package entirely.
+- **Ledger.** Gecko implements no WebHID, WebUSB or Web Bluetooth, so no hardware transport exists.
+
+One security difference is worth stating plainly: Firefox implements no `storage.setAccessLevel`, so
+`storage.local` and `storage.sync` stay reachable from this extension's own content script and
+cannot be closed off. The encrypted vault stays unreadable without the unlock credential, but the
+rollback-freshness markers are reachable. See `apps/extension/src/browser-storage.ts`.
+
 Day to day:
 
 ```bash
