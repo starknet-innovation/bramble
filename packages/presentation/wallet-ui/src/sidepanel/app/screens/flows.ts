@@ -298,7 +298,7 @@ export const accountFlow = (
   // editable name and its identifiers follow as one receipt, truncated with
   // copy controls, so the screen reads top to bottom: pick → organise → inspect.
   return (
-    flowHeader("Accounts & groups", status, `On ${status.network}`) +
+    flowHeader("Accounts & groups", status) +
     flowScreen(
       "account",
       `<section class="section">

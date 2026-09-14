@@ -58,7 +58,9 @@ export type ActivityPricing = {
  * Classification of one entry: the glyph, the accessible kind name, the verb
  * shown as the row title, and which way value moved (`null` when the entry is
  * not a value movement — an approval, a deployment, a shield/unshield between
- * the same owner's balances — so no signed fiat delta is ever attached to it).
+ * the same owner's balances — so no signed fiat delta is ever attached to it;
+ * a shield or unshield still prices its amount, unsigned, because value did
+ * move, only between the owner's own balances).
  */
 export type ActivityAppearance = {
   readonly direction: "in" | "out" | null;
@@ -260,9 +262,9 @@ const activityDetail = (
 /**
  * Everything one Activity row displays, derived from the entry and the current
  * prices. The asset amount needs the recorded amount and symbol; the fiat
- * delta additionally needs a direction, exactly one tracked token with that
- * symbol on the entry's network (a symbol shared by two tracked tokens is
- * ambiguous and yields nothing), and a price for it.
+ * figure additionally needs a direction (or a shield/unshield, shown unsigned),
+ * exactly one tracked token with that symbol on the entry's network (a symbol
+ * shared by two tracked tokens is ambiguous and yields nothing), and a price.
  */
 export type ActivityRowModel = ActivityAppearance & {
   readonly amount: string | null;
@@ -295,14 +297,14 @@ export const activityRowModel = (
       : [];
   const token = matches.length === 1 ? (matches[0] ?? null) : null;
   const price = token ? pricing?.prices[token.address] : undefined;
+  const priced = appearance.direction !== null || appearance.type === "private";
   const value =
-    appearance.direction !== null && rawAmount !== null && price !== undefined
-      ? tokenFiatValue(rawAmount, price)
-      : null;
+    priced && rawAmount !== null && price !== undefined ? tokenFiatValue(rawAmount, price) : null;
+  const sign = appearance.direction === "in" ? "+" : appearance.direction === "out" ? "−" : "";
   const fiat =
     value === null || pricing === undefined
       ? null
-      : `${appearance.direction === "in" ? "+" : "−"}${formatFiat(value, pricing.currency)}`;
+      : `${sign}${formatFiat(value, pricing.currency)}`;
   const counterparty = activityCounterparty(entry, appearance);
   return {
     ...appearance,

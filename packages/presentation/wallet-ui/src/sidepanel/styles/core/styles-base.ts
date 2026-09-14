@@ -384,11 +384,16 @@ export const BASE_STYLES = `
     gap: 0;
     overflow: hidden;
   }
-  .menu-list > .menu-row, .menu-list > .option-row, .option-list > .menu-row, .option-list > .option-row, .option-list > .option-row-line > .option-row { border-radius: 0; }
+  /* Grouped rows keep the rounded hover of a standalone row: the group's
+     corners clip the card, the fill inside it stays the kit's rounded shape. */
   /* A row that is itself a control (select this account) carries its copy
-     action beside it on one line, never inside it; the group's inset divider
-     and clipped corners treat the line as the row. */
+     action beside it on one line, never inside it; the line is the row — it
+     carries the selected and hover fill so the copy action sits inside the
+     highlight — and the group's inset divider treats it as one. */
   .option-list > .option-row-line > .icon-button { margin-right: ${SPACE.sm}; }
+  .option-row-line { border-radius: ${RADIUS.md}; transition: background ${MOTION.pressMs}ms ${MOTION.ease}; }
+  .option-row-line:has(> button.option-row[aria-pressed="true"]) { background: var(--bramble-accent-soft); }
+  .option-row-line > button.option-row, .option-row-line > button.option-row[aria-pressed="true"] { background: transparent; }
   .menu-list > * + *, .option-list > * + * { position: relative; }
   .menu-list > * + *::before, .option-list > * + *::before {
     background: var(--bramble-hairline);
@@ -421,10 +426,15 @@ export const BASE_STYLES = `
       background: var(--bramble-hover);
     }
     button.option-row[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); }
+    .option-row-line:has(> button.option-row:not(:disabled):hover) { background: var(--bramble-hover); }
+    .option-row-line:has(> button.option-row[aria-pressed="true"]:not(:disabled):hover) { background: var(--bramble-accent-soft); }
+    .option-row-line > button.option-row:not(:disabled):hover, .option-row-line > button.option-row[aria-pressed="true"]:not(:disabled):hover { background: transparent; }
   }
   button.menu-row:not(:disabled):active, button.option-row:not(:disabled):active {
     background: var(--bramble-soft-press);
   }
+  .option-row-line:has(> button.option-row:not(:disabled):active) { background: var(--bramble-soft-press); }
+  .option-row-line > button.option-row:not(:disabled):active { background: transparent; }
   button.option-row[aria-pressed="true"] { background: var(--bramble-accent-soft); }
   /* Action row: a group-terminal action (e.g. "Add account") reads as accent
      text inside the group rather than a standalone boxed button. */

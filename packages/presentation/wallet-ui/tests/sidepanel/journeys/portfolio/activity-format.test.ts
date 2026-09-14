@@ -124,6 +124,13 @@ describe("activityRowModel", () => {
       activityRowModel(sent, { ...pricing, tokens: [strk, { ...strk, address: "0x7" }] }).fiat,
     ).toBeNull();
     expect(activityRowModel({ ...sent, summary: "Allow spend" }, pricing).fiat).toBeNull();
+    // A shield or unshield moves value between the owner's own balances: the
+    // figure is priced but carries no sign.
+    expect(activityRowModel({ ...sent, summary: "Shield 3 STRK" }, pricing).fiat).toBe("$3.00");
+    expect(activityRowModel({ ...sent, summary: "Unshield 3 STRK" }, pricing).fiat).toBe("$3.00");
+    expect(
+      activityRowModel({ ...sent, summary: "Activate private balances", amount: "" }, pricing).fiat,
+    ).toBeNull();
     expect(activityRowModel({ ...sent, amount: "" }, pricing).fiat).toBeNull();
   });
 
