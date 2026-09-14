@@ -28,6 +28,6 @@
     "@bramble/wallet-protocol": "workspace:*",
     "@bramble/wallet-ui": "workspace:*",
     "buffer": "6.0.3",
-    "starknet": "10.0.2"
+    "starknet": "10.8.0"
   }
 }
