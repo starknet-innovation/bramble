@@ -156,3 +156,53 @@
     min-height: 420px;
   }
 }
+
+/*
+ * Below this width a four-column legal table leaves ~110px per column, so the
+ * policy tables restack as labelled rows (`data-label` on each cell) instead of
+ * scrolling sideways or shredding sentences one word per line.
+ */
+@media (max-width: 1000px) {
+  .policy-table,
+  .policy-table tbody,
+  .policy-table tr,
+  .policy-table td {
+    display: block;
+  }
+  .policy-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .policy-table tr {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .policy-table tr:last-child {
+    border-bottom: 0;
+  }
+  .policy-table td {
+    padding: 8px 20px;
+    border-bottom: 0;
+  }
+  .policy-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+}
+@media (max-width: 600px) {
+  .policy-clauses p {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  .policy-table td {
+    padding-inline: 16px;
+  }
+}
