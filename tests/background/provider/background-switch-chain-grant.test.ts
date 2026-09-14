@@ -10,6 +10,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { flushHeld, latestApprovalId } from "../../support/held";
 
 const MAINNET_CHAIN_ID = "0x534e5f4d41494e";
@@ -93,7 +94,7 @@ describe("switchChain grant gate (A-M1)", () => {
     let coordinatedMutations = 0;
     const handler = createMessageHandler(
       walletStub(() => [account]),
-      "extension-id",
+      testExtension,
       {
         activeStateCoordinator: {
           run: async (operation) => {
@@ -124,7 +125,7 @@ describe("switchChain grant gate (A-M1)", () => {
     session.unlock(vaultPassphrase);
     const handler = createMessageHandler(
       walletStub(() => []),
-      "extension-id",
+      testExtension,
       { session },
     );
 
@@ -136,7 +137,7 @@ describe("switchChain grant gate (A-M1)", () => {
   test("rejects a switch while the wallet is locked", async () => {
     const handler = createMessageHandler(
       walletStub(() => [account]),
-      "extension-id",
+      testExtension,
       { session: createUnlockSession() },
     );
 
@@ -155,7 +156,7 @@ describe("switchChain grant gate (A-M1)", () => {
     const grants: string[] = [];
     const handler = createMessageHandler(
       walletStub(() => [other], grants),
-      "extension-id",
+      testExtension,
       { session },
     );
 
@@ -186,7 +187,7 @@ describe("switchChain grant gate (A-M1)", () => {
         throw new Error("wallet locked");
       },
     };
-    const handler = createMessageHandler(wallet, "extension-id", { session });
+    const handler = createMessageHandler(wallet, testExtension, { session });
 
     const held = handler(switchMessage, contentSender);
     await flushHeld();
@@ -210,7 +211,7 @@ describe("switchChain grant gate (A-M1)", () => {
     let connected: readonly AccountRef[] = [account];
     const handler = createMessageHandler(
       walletStub(() => connected, grants),
-      "extension-id",
+      testExtension,
       { session },
     );
 

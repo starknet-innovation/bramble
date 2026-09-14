@@ -15,6 +15,7 @@ import type { RuntimeSender } from "../../apps/extension/src/background/routing/
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { chromiumExtension } from "../support/background-wallet-stub";
 import { ACCOUNT, CALL_AND_PROOF, ORIGIN } from "./spec-fixtures";
 
 /** Extension id every harness sender claims. */
@@ -212,7 +213,7 @@ export const buildHarness = (): Harness => {
   };
   const session = createUnlockSession();
   session.unlock(VAULT_PASSPHRASE);
-  const handler = createMessageHandler(walletStub(bump), EXTENSION_ID, {
+  const handler = createMessageHandler(walletStub(bump), chromiumExtension(EXTENSION_ID), {
     preferencesStore: preferencesStub(bump),
     runtimeRpc: rpcStub(bump),
     session,

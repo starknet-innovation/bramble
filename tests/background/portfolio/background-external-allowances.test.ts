@@ -21,6 +21,7 @@ import {
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -95,7 +96,7 @@ const makeHarness = (
   const invokeCalls: (readonly unknown[])[] = [];
   const trackedReads: TrackedAllowanceScan[] = [];
   const allowanceStore = memoryAllowanceStore();
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     allowanceStore,
     runtimeRpc: makeRuntimeRpc({
       // Faithful to the real scan: it can only answer about the tokens it was
@@ -318,7 +319,7 @@ describe("NFT collection approvals are not ERC20 allowances", () => {
     session.unlock("correct horse battery staple");
     const invokeCalls: (readonly unknown[])[] = [];
     const allowanceStore = memoryAllowanceStore();
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       allowanceStore,
       preferencesStore,
       runtimeRpc: makeRuntimeRpc({

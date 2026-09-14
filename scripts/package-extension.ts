@@ -8,10 +8,23 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { type BuildTarget, outputDirectory } from "../apps/extension/build-target";
+import {
+  type BuildTarget,
+  outputDirectory,
+  requestedTargets,
+} from "../apps/extension/build-target";
 import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
 
-const target: BuildTarget = Bun.argv.includes("--target=firefox") ? "firefox" : "chrome";
+// Parsed by the same strict reader the build uses, so a misspelt target, a
+// space-separated `--target firefox`, or a future target this script has not
+// been taught about fails loudly. An equality check here silently produced a
+// Chrome-named artifact from a command that asked for something else.
+const requested = requestedTargets(Bun.argv);
+const [first] = requested;
+if (requested.length !== 1 || first === undefined) {
+  throw new Error("package one target at a time; --target=all is not packageable");
+}
+const target: BuildTarget = first;
 const distDir = outputDirectory(target);
 const artifactDir = "artifacts";
 const reproducibleZipTime = "198001010000";

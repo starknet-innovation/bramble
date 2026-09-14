@@ -17,6 +17,7 @@ import {
   createWallet,
   extensionSender,
   grantedOrigin,
+  testExtension,
   vaultPassphrase,
 } from "../support/background-wallet-stub";
 import { handledWalletMessages } from "../support/key-boundary-messages";
@@ -28,7 +29,7 @@ describe("callerless privileged messages", () => {
     const signed: unknown[] = [];
     const handler = createMessageHandler(
       createWallet({ captureSign: (input) => signed.push(input) }),
-      "extension-id",
+      testExtension,
     );
 
     await expect(
@@ -49,7 +50,7 @@ describe("callerless privileged messages", () => {
     const granted: unknown[] = [];
     const handler = createMessageHandler(
       createWallet({ captureGrant: (input) => granted.push(input) }),
-      "extension-id",
+      testExtension,
     );
 
     await expect(
@@ -73,7 +74,7 @@ describe("callerless privileged messages", () => {
         captureGrant: (input) => granted.push(input),
         captureSign: (input) => signed.push(input),
       }),
-      "extension-id",
+      testExtension,
     );
 
     for (const type of REMOVED_TYPES) {

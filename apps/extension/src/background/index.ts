@@ -40,6 +40,11 @@ import {
 import { resolveExtensionApi } from "../extension-api";
 import { createWalletReader } from "./accounts/wallet-reader";
 import {
+  type DataConsentPermissions,
+  observeTechnicalDataConsent,
+  technicalDataAllowed,
+} from "./analytics/data-consent";
+import {
   analyticsPlatform,
   analyticsReleaseChannel,
   createGatewayAnalytics,
@@ -113,6 +118,7 @@ type TabsApi = {
 type BackgroundBrowser = ApprovalSurfaceBrowser &
   OnboardingSurfaceBrowser &
   AlarmsGlobal & {
+    readonly permissions?: DataConsentPermissions;
     readonly runtime?: RuntimeApi;
     readonly tabs?: TabsApi;
   };
@@ -188,12 +194,26 @@ const preferenceStore = createBackgroundPreferences({
   onReliabilityDiagnostics: setReliabilityDiagnosticsEnabled,
   store: preferences,
 });
+// The browser's own data-collection consent, which outranks the wallet's
+// preference in one direction only: it can withhold analytics the preference
+// enables, never enable analytics the user turned off. Firefox collects this
+// answer at install because the manifest declares `technicalAndInteraction` as
+// optional; honouring it here is what makes that declaration true. Re-read on
+// every permission change so a later revoke takes effect without a restart.
+let technicalDataConsent = true;
+const refreshTechnicalDataConsent = async (): Promise<void> => {
+  technicalDataConsent = await technicalDataAllowed(extensionApi?.permissions);
+};
+observeTechnicalDataConsent(extensionApi?.permissions, () => {
+  void refreshTechnicalDataConsent();
+});
 const preferenceSignalsReady = preferences
   .then(async (store) => {
     const stored = await store?.read();
     updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
     productAnalyticsEnabled = store ? (stored?.productAnalytics ?? true) : false;
     setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
+    await refreshTechnicalDataConsent();
   })
   .catch(() => undefined);
 // The read-only slice of the fail-closed adapter above, handed to collaborators
@@ -208,7 +228,7 @@ const browserNavigator = globalThis.navigator as Navigator & { readonly brave?: 
 const gatewayAnalytics = createGatewayAnalytics({
   enabled: async () => {
     await preferenceSignalsReady;
-    return productAnalyticsEnabled;
+    return productAnalyticsEnabled && technicalDataConsent;
   },
   http: nativeFetch,
   metadata: {
@@ -338,7 +358,23 @@ const strk20Jobs = createStrk20JobRegistry({
     : {}),
   now: systemClock,
 });
-const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
+// This extension's own identity. The origin MUST come from the runtime rather
+// than be built from the id: on Firefox `runtime.id` is the add-on id from
+// `browser_specific_settings` while extension pages are served from
+// `moz-extension://<per-install uuid>`, so a synthesized origin matches nothing
+// and every privileged message from the sidebar, popup and onboarding page is
+// refused. An origin that cannot be read stays empty, which fails the gate
+// closed rather than opening it.
+const extensionOrigin = (): string => {
+  try {
+    const url = runtime?.getURL?.("");
+    return url === undefined ? "" : new URL(url).origin;
+  } catch {
+    return "";
+  }
+};
+const extension = { id: runtime?.id ?? "", origin: extensionOrigin() };
+const handleMessage = createMessageHandler(walletReader, extension, {
   activeStateCoordinator,
   approvals,
   balanceSnapshots,

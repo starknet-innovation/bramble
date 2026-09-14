@@ -11,13 +11,14 @@ import {
   handleAddChainOps,
 } from "../../../apps/extension/src/background/provider/add-chain-ops";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const ORIGIN = "https://dapp.example";
 
 const deps = (): AddChainOpsDeps =>
   ({
     approvals: {} as AddChainOpsDeps["approvals"],
-    extensionId: "extension-id",
+    extension: testExtension,
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
     waiters: {} as AddChainOpsDeps["waiters"],
   }) as AddChainOpsDeps;

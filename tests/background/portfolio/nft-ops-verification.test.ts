@@ -12,6 +12,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const CONTRACT = "0x0511a2b3";
@@ -80,7 +81,7 @@ const makeHarness = (options?: { readonly owner?: string }) => {
   session.unlock(vaultPassphrase);
   const invokeCalls: (readonly unknown[])[] = [];
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     preferencesStore,
     runtimeRpc: makeRuntimeRpc({
       async getNftOwner() {

@@ -24,6 +24,7 @@ import type { RuntimeSender } from "../../../apps/extension/src/background/routi
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { chromiumExtension } from "../../support/background-wallet-stub";
 
 const EXTENSION_ID = "extension-id";
 const ORIGIN = "https://a.test";
@@ -73,7 +74,7 @@ const providerDeps = (locked: boolean): ProviderOpsDeps => {
   return {
     allowanceStore: memoryAllowanceStore(),
     approvals: createApprovalQueue(),
-    extensionId: EXTENSION_ID,
+    extension: chromiumExtension(EXTENSION_ID),
     preferencesStore: unavailablePreferencesStore,
     runtimeRpc: {} as unknown as RuntimeRpc,
     session,

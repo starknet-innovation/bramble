@@ -24,6 +24,7 @@ import type { RuntimeSender } from "../../../apps/extension/src/background/routi
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const origin = "https://example.com";
@@ -206,7 +207,7 @@ const buildHandler = (options: {
     session.unlock(vaultPassphrase);
   }
   const preferences = { ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const };
-  return createMessageHandler(walletStub(options.granted ?? [account]), "extension-id", {
+  return createMessageHandler(walletStub(options.granted ?? [account]), testExtension, {
     ...(options.guard ? { originGuard: options.guard } : {}),
     preferencesStore: {
       ...unavailablePreferencesStore,
