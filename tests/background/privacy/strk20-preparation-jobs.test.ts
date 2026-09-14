@@ -26,6 +26,7 @@ import type { RuntimeResponse } from "../../../apps/extension/src/background/run
 import { account } from "../../support/background-wallet-stub";
 import { flushHeld } from "../../support/held";
 import {
+  awaitStrk20Job,
   buildStrk20Handler,
   executeStrk20Preparation,
   makeStrk20Service,
@@ -309,8 +310,9 @@ describe("shield route through the job", () => {
     const built = await base.prepareAccountActions?.({} as never);
     if (!built) throw new Error("service double did not build");
     proof.resolve(built);
-    await flushHeld();
-    const settled = (await handler(poll(jobId), STRK20_EXTENSION_SENDER)) as {
+    // The job hashes the built preparation before it settles, so the outcome is
+    // polled the way the panel polls it rather than expected after one tick.
+    const settled = (await awaitStrk20Job((next, to) => handler(next, to), started)) as {
       readonly ok?: boolean;
       readonly strk20Preparation?: { readonly id: string };
     };
