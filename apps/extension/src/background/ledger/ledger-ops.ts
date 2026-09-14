@@ -10,15 +10,24 @@
  */
 
 import { knownTokensForNetwork } from "@mc-wallet/portfolio/token-registry";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import {
+  canonicalFelt,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+} from "@mc-wallet/wallet-model/networks";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
   runUnlockedNetworkMutation,
   runVaultCreationWithNetwork,
 } from "../runtime/active-network-mutation";
-import { networkRpcUrls, runActiveStateMutation } from "../runtime/runtime-state";
+import {
+  activeAccountContext,
+  networkRpcUrls,
+  runActiveStateMutation,
+} from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { accountHashSigner } from "./account-hash-signer";
 import {
   readAddLedgerAccountInput,
   readCompleteLedgerSignInput,
@@ -142,6 +151,49 @@ const handleCompleteLedgerSign: LedgerOpsHandler = async (deps, message) => {
   return settled ? { ok: true } : { error: "no pending ledger sign for id" };
 };
 
+// Runs the viewing-key ceremony for the ACTIVE Ledger account and its configured
+// pool. The scope is taken from wallet state, never from the message: a
+// caller-supplied chain or pool would let one device signature be bound to the
+// wrong pool, and a viewing key registered with a pool cannot be changed
+// afterwards. The message therefore carries nothing but its type.
+const handleDeriveLedgerViewingKey: LedgerOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.strk20DeriveLedgerViewingKey")) {
+    return { error: "invalid derive ledger viewing key request" };
+  }
+  const derive = deps.wallet.deriveLedgerStrk20ViewingKey;
+  if (!derive) {
+    return { error: "wallet unavailable" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
+  const { account, networkId, vaultPassphrase } = context;
+  if (account.derivation.kind !== "ledger") {
+    return { error: "active account is not a Ledger account" };
+  }
+  const preferences = await deps.preferencesStore.read();
+  const poolAddress = canonicalFelt(preferences.strk20Networks?.[networkId]?.poolAddress ?? "");
+  if (!poolAddress) {
+    return { error: "Private balances are not configured for this network" };
+  }
+  try {
+    await derive({
+      accountId: account.id,
+      chainId: STARKNET_NETWORKS[networkId].chainId,
+      poolAddress,
+      // The device round-trip, wrapped in the verify-against-publicKeyX gate. A
+      // rejection, timeout, or unverifiable signature throws here, so nothing is
+      // written and the account stays without a retained key.
+      sign: accountHashSigner(deps, account, vaultPassphrase, "strk20-viewing-key"),
+      vaultPassphrase,
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "viewing key ceremony failed" };
+  }
+  return { ok: true };
+};
+
 const LEDGER_OPS_HANDLERS: Readonly<Record<string, LedgerOpsHandler>> = {
   "wallet.addLedgerAccount": handleAddLedgerAccount,
   "wallet.completeLedgerSign": handleCompleteLedgerSign,
@@ -149,6 +201,7 @@ const LEDGER_OPS_HANDLERS: Readonly<Record<string, LedgerOpsHandler>> = {
   "wallet.deriveLedgerAccounts": handleDeriveLedgerAccounts,
   "wallet.ledgerAccountStatus": handleLedgerAccountStatus,
   "wallet.ledgerSignPending": handleLedgerSignPending,
+  "wallet.strk20DeriveLedgerViewingKey": handleDeriveLedgerViewingKey,
 };
 
 /**

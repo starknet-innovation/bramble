@@ -1,4 +1,5 @@
 /** Wallet vault service: privileged account metadata persistence behind encryption. */
+
 import { WalletError } from "@mc-wallet/core/errors";
 import { isWalletOrigin } from "@mc-wallet/core/origin";
 import { assertStoreAccess, type StoreActor } from "@mc-wallet/store/access";
@@ -29,7 +30,7 @@ import {
   findNetworkAccount,
   selectSourceAccount,
 } from "../accounts/network-account";
-import { deriveVaultStrk20ViewingKey } from "../accounts/strk20-viewing-key";
+
 import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
@@ -40,6 +41,7 @@ import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
 import { recoverVaultAccounts } from "./recovery";
 import type { WalletVaultService } from "./service-types";
+import { strk20ViewingKeyMethods } from "./strk20-viewing-key-methods";
 
 export { activeAccountSecrets } from "./reveal";
 /** Re-exports the documented type surface from its size-budget split. */
@@ -50,6 +52,7 @@ export type {
   CreateLedgerVaultInput,
   CreateVaultAccountInput,
   DeriveLedgerAccountsInput,
+  DeriveLedgerStrk20ViewingKeyInput,
   EnsureNetworkAccountInput,
   ForgetLedgerStrk20ViewingKeyInput,
   ImportRawKeyAccountInput,
@@ -263,16 +266,12 @@ export const createWalletVaultService = ({
         networkId: input.networkId,
       });
     },
-    async deriveStrk20ViewingKey(input) {
-      const vault = await readVault(input.vaultPassphrase);
-      return deriveVaultStrk20ViewingKey(
-        kms,
-        vault,
-        input.accountId,
-        input.chainId,
-        input.poolAddress,
-      );
-    },
+    ...strk20ViewingKeyMethods(kms, {
+      readVault,
+      readVaultSnapshot,
+      serialized,
+      writeVault: (vault, passphrase) => writeVault(encryptedStore, vault, passphrase),
+    }),
     async ensureNetworkAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const source = selectSourceAccount(vault);

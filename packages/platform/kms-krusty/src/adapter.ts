@@ -4,6 +4,7 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@mc-wallet/core/json";
 import type { KmsPort } from "@mc-wallet/vault/kms-port";
+import { isDerivationIndex } from "@mc-wallet/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -20,6 +21,11 @@ import {
 import { isMnemonicPassphrase, isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
 
 type Callable = (...args: unknown[]) => unknown;
+/**
+ * The counterfactual-address salt every account this wallet derives was created
+ * with. Held here, not left to the KMS, because a deployed address cannot change.
+ */
+const ZERO_SALT = "0x0";
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
 const KRUSTY_RESULT_CLASSES = new Set(["WasmKeypair", "WasmNostrPublicKey", "WasmStarkSignature"]);
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
@@ -106,7 +112,6 @@ const requireNonZeroFieldElementField = (value: unknown, field: string): string 
   return fieldValue;
 };
 
-const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
 const isMnemonicWordCount = (value: number): boolean =>
   Number.isSafeInteger(value) && MNEMONIC_WORD_COUNTS.some((count) => count === value);
 
@@ -121,12 +126,16 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
 
   const deriveOzAccountAddress = requireFunction(module, "deriveOzAccountAddress");
   const deriveNostrPublicKey = requireFunction(module, "deriveNostrPublicKey");
+  // The scoped derivation, deliberately not the unscoped `deriveStrk20ViewingKey`
+  // the KMS also exports — see KmsPort.deriveScopedStrk20ViewingKey.
   const deriveScopedStrk20ViewingKey = requireFunction(module, "deriveScopedStrk20ViewingKey");
   const deriveStarknetKeypair = requireFunction(module, "deriveStarknetKeypair");
+  const foldStrk20ViewingKey = requireFunction(module, "foldStrk20ViewingKey");
   const generateMnemonic = requireFunction(module, "generateMnemonic");
   const getAccountClassHashes = requireFunction(module, "getAccountClassHashes");
   const openNostrApplicationData = requireFunction(module, "openNostrApplicationData");
   const signStarkHash = requireFunction(module, "signStarkHash");
+  const strk20ViewingKeyMessageHash = requireFunction(module, "strk20ViewingKeyMessageHash");
   const validateMnemonic = requireFunction(module, "validateMnemonic");
   const wrapNostrApplicationData = requireFunction(module, "wrapNostrApplicationData");
 
@@ -158,13 +167,20 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
         throw new WalletError("Invalid Stark address derivation input");
       }
 
-      const result = await deriveOzAccountAddress(publicKeyX, classHash, salt);
+      // Salt 0 explicitly, never the KMS's default. An account's address is
+      // immutable once deployed, so the salt that produced it is a wallet
+      // invariant and cannot be inherited from a library default: upstream
+      // changed that default from 0 to the public key in 0.6.0 — same signature,
+      // different address — which silently re-derived every account to an
+      // address that had never been deployed. Callers that need another salt pass
+      // it; nobody may rely on what the KMS would have chosen.
+      const result = await deriveOzAccountAddress(publicKeyX, classHash, salt ?? ZERO_SALT);
       if (typeof result !== "string" || !isStarkFieldElement(result)) {
         throw new WalletError("Krusty KMS returned an invalid account address");
       }
       return canonicalFelt(result) as string;
     },
-    async deriveStrk20ViewingKey(privateKey, chainId, poolAddress) {
+    async deriveScopedStrk20ViewingKey(privateKey, chainId, poolAddress) {
       await ready;
       if (
         !isStarkPrivateKey(privateKey) ||
@@ -181,6 +197,44 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
         throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
       }
       return canonicalFelt(result) as string;
+    },
+    async foldStrk20ViewingKey(publicKey, messageHash, r, s) {
+      await ready;
+      // (r, s) arrive from a device the wallet does not control, and the KMS
+      // verifies them against publicKey/messageHash, so all four are checked as
+      // field elements before crossing into WASM.
+      if (
+        !isNonZeroStarkFieldElement(publicKey) ||
+        !isStarkFieldElement(messageHash) ||
+        !isStarkFieldElement(r) ||
+        !isStarkFieldElement(s)
+      ) {
+        throw new WalletError("Invalid STRK20 viewing-key signature input");
+      }
+      const result = await foldStrk20ViewingKey(publicKey, messageHash, r, s);
+      // The fold promises a key in [1, n/2]; isStarkPrivateKey pins the range
+      // this wallet will accept, so a WASM build that broke that guarantee
+      // fails closed here instead of registering an unusable key with the pool.
+      if (typeof result !== "string" || !isStarkPrivateKey(result)) {
+        throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
+      }
+      return result;
+    },
+    async strk20ViewingKeyMessageHash(chainId, poolAddress) {
+      await ready;
+      if (
+        !isNonZeroStarkFieldElement(chainId) ||
+        !isNonZeroStarkFieldElement(poolAddress) ||
+        canonicalFelt(chainId) !== chainId ||
+        canonicalFelt(poolAddress) !== poolAddress
+      ) {
+        throw new WalletError("Invalid STRK20 viewing-key scope");
+      }
+      const result = await strk20ViewingKeyMessageHash(chainId, poolAddress);
+      if (typeof result !== "string" || !isNonZeroStarkFieldElement(result)) {
+        throw new WalletError("Krusty KMS returned an invalid STRK20 message hash");
+      }
+      return result;
     },
     async deriveStarknetKeypair(mnemonic, addressIndex, accountIndex, passphrase) {
       await ready;

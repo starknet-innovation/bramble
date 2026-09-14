@@ -264,6 +264,9 @@ export const sendScenario: WalletScenario = {
 const ledgerRequest = {
   accountId: ledgerAccount.id,
   id: "ledger-sign-fixture",
+  // The prompt states what the device approval authorizes, since blind signing
+  // shows the user nothing but the hash. This scenario is the wallet send flow.
+  intent: "send-token" as const,
   // Full-width: the takeover renders this at the padded 64 digits a Ledger
   // shows, so a short stub would misrepresent the block's real density.
   messageHash: "0x7d1f4b2c9e8a06d35f1c2b8e4a97d05c3e6f1a2b8c4d9e0f3a5b7c1d2e4f6a8",

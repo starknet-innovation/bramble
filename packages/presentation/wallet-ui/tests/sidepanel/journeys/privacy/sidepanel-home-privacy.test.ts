@@ -65,6 +65,7 @@ const privateState = (loading = false): PrivacyDisclosureState => ({
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "registered",
+        privateBalances: "ready",
       },
 });
 
@@ -171,6 +172,49 @@ describe("unified portfolio scope", () => {
     expect(row).not.toContain("shield-confirm");
   });
 
+  // The reported bug's visible half: an account re-added after clearing the
+  // extension is registered on chain but holds no key here. Offering registration
+  // named an action the pool refuses; the remaining step is the ceremony.
+  test("a registered account with no local viewing key is offered the ceremony", () => {
+    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status, [], {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        privateBalances: "setup-required",
+        registration: "registered",
+        relayConfigured: true,
+      },
+    });
+
+    expect(html).toContain('title="Generate your viewing key to read private balances"');
+    expect(html).toContain("Generate your viewing key");
+    expect(html).not.toContain("Register to start shielding");
+  });
+
+  test("no viewing key and no registration still reads as registering", () => {
+    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status, [], {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        privateBalances: "setup-required",
+        registration: "unregistered",
+        relayConfigured: true,
+      },
+    });
+
+    // The ceremony is a step inside that journey, not a separate destination.
+    expect(html).toContain('title="Register to start shielding"');
+    expect(html).not.toContain("Generate your viewing key");
+  });
+
   test("an unregistered account greys the private line into the activation entry", () => {
     const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status, [], {
       error: null,
@@ -182,6 +226,7 @@ describe("unified portfolio scope", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "unregistered",
+        privateBalances: "ready",
       },
     });
 
@@ -204,6 +249,7 @@ describe("unified portfolio scope", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "pending",
+        privateBalances: "ready",
       },
     });
 

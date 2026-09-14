@@ -15,6 +15,7 @@
  * and every failure degrades to a retryable state rather than a guess.
  */
 
+import { errorDetail } from "@mc-wallet/core/errors";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
 import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
@@ -27,6 +28,7 @@ import { resolveReviewFee } from "../accounts/wallet-ops";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import { readStrkBalance } from "../transactions/fee-guard";
+import { FEE_ESTIMATE_SUMMARY } from "../transactions/transfer-fee-review";
 import type { InvokeFeeReview } from "./approvals";
 
 /**
@@ -110,6 +112,11 @@ export const estimateInvokeApprovalFee = async (
     .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
     .catch(() => true);
   let estimated: FeeEstimate | null = null;
+  // The node's own reason for a rejected estimate. Without it the card can only
+  // blame the connection, which is wrong for the common case: `skipValidate`
+  // skips `__validate__` but still executes the calls, so a dapp transaction
+  // that would revert on chain fails here for a reason only the node knows.
+  let estimateDetail: string | null = null;
   if (deployed) {
     try {
       estimated = await deps.runtimeRpc.estimateInvokeFee({
@@ -119,8 +126,9 @@ export const estimateInvokeApprovalFee = async (
         rpcUrls,
         signHash: review.signer(),
       });
-    } catch {
+    } catch (error) {
       estimated = null;
+      estimateDetail = errorDetail(error, FEE_ESTIMATE_SUMMARY);
     }
   }
   const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
@@ -134,6 +142,9 @@ export const estimateInvokeApprovalFee = async (
   return {
     fee,
     feeAffordability,
+    // Only alongside a failure the user can act on; a recovered estimate never
+    // ships a stale reason.
+    ...(feeEstimateFailed && estimateDetail !== null ? { feeEstimateDetail: estimateDetail } : {}),
     feeEstimateFailed,
     feeEstimatePending: false,
     requiresDeployment: !deployed,

@@ -219,6 +219,9 @@ export const showToast = (
   text.className = "toast-text";
   text.textContent = friendly ? friendly.message : message;
   toast.append(text);
+  // The toast stays short and the clipboard carries everything: a node's
+  // rejection reason is far too long to read in a toast but is exactly what
+  // belongs in a bug report. Callers pass that combined text as `details`.
   if (tone === "error") {
     toast.append(toastCopyButton(doc, details));
   }

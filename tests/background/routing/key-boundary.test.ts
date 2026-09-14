@@ -95,6 +95,7 @@ describe("key boundary", () => {
       "wallet.removeMultisig",
       "wallet.shareArgentMultisigIntent",
       "wallet.status",
+      "wallet.strk20DeriveLedgerViewingKey",
       "wallet.syncArgentMultisigIntents",
       "wallet.unlock",
     ]);

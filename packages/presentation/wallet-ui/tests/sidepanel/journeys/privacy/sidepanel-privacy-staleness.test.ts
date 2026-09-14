@@ -52,6 +52,7 @@ const staleUnregistered = {
   poolFeeFri: "0x1",
   relayConfigured: true,
   registration: "unregistered" as const,
+  privateBalances: "ready" as const,
 };
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));

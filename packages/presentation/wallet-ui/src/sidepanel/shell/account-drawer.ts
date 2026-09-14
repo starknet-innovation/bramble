@@ -70,7 +70,7 @@ const drawerAccountRow = (
       <button class="drawer-account" data-switch-account="${escapeHtml(stored.id)}" data-active-signer="${stored.id === activeId}"${selectedMultisigSigner ? ' data-selected-multisig-signer="true"' : ""} type="button" aria-pressed="${singleSignerSelected && stored.id === activeId}">
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
-          <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
+          <span class="drawer-name"><strong>${escapeHtml(name)}</strong>${hardwareBadge(stored)}</span>
           <code>${accountLabel(stored.address)}</code>
           ${selectedMultisigSigner ? `<span class="account-groups-line">Signer for ${escapeHtml(selectedMultisig?.record.name ?? "selected multisig")}</span>` : ""}
         </span>

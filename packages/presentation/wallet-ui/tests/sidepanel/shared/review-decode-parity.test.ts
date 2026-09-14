@@ -101,6 +101,7 @@ const reviewForCalls = (
 type FeeState = {
   readonly fee: { readonly overallFee: string; readonly unit: string } | null;
   readonly feeAffordability: "insufficient" | "ok" | "unknown";
+  readonly feeEstimateDetail?: string;
   readonly feeEstimateFailed: boolean;
   readonly requiresDeployment: boolean;
 };
@@ -362,11 +363,31 @@ describe("Send review vs dApp invoke card fee parity (#189)", () => {
       'data-approval-action="approve" data-approval-id="b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14" type="button" disabled',
     );
   });
+
+  test("the node's reason and its copy control render identically on both surfaces", () => {
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    const reason = "41 Transaction execution error Execution failed: ERC20: insufficient allowance";
+    const fee: FeeState = {
+      fee: null,
+      feeAffordability: "unknown",
+      feeEstimateDetail: reason,
+      feeEstimateFailed: true,
+      requiresDeployment: false,
+    };
+
+    for (const rendered of [sendReview(summaries, flags, fee), dappCard(summaries, flags, fee)]) {
+      expect(rendered).toContain(reason);
+      expect(rendered).toContain(`data-copy="${reason}"`);
+      expect(rendered).toContain("Copy fee estimate error");
+    }
+  });
 });
 
-// Warn-only affordability guard (issue 191): the shared predicate's verdict
-// renders the same shortfall notice on both surfaces, makes no claim when
-// unknown, and never disables a decision.
+// Affordability guard (issue 191): the shared predicate's verdict renders the
+// same shortfall notice on both surfaces and makes no claim when unknown. A
+// positive "insufficient" verdict also blocks the decision — the balance was read
+// and cannot cover the transaction — while "unknown" still blocks nothing, so the
+// guard keeps failing open on an unreadable balance.
 describe("fee shortfall warning parity (issue 191)", () => {
   const NOTICE = "STRK balance is less than this transaction needs";
   const feeWith = (feeAffordability: FeeState["feeAffordability"]): FeeState => ({
@@ -381,17 +402,38 @@ describe("fee shortfall warning parity (issue 191)", () => {
     const fee = feeWith("insufficient");
 
     expect(sendReview(summaries, flags, fee)).toContain(NOTICE);
-    const card = dappCard(summaries, flags, fee);
-    expect(card).toContain(NOTICE);
-    // Warn-only: the shortfall never disables the card's decision buttons.
-    expect(card).not.toContain('type="button" disabled');
+    expect(dappCard(summaries, flags, fee)).toContain(NOTICE);
   });
 
-  test("ok and unknown verdicts make no shortfall claim on either surface", () => {
+  test("an insufficient verdict disables Approve but never Deny", () => {
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    const card = dappCard(summaries, flags, feeWith("insufficient"));
+
+    // Approving would spend a device confirmation on a transaction the network
+    // rejects, so the card blocks it. Deny must stay live — the user still has to
+    // be able to get rid of the request.
+    const approve = card.slice(card.indexOf('data-approval-action="approve"'));
+    expect(approve.slice(0, approve.indexOf("</button>"))).toContain("disabled");
+    const deny = card.slice(card.indexOf('data-approval-action="deny"'));
+    expect(deny.slice(0, deny.indexOf("</button>"))).not.toContain("disabled");
+  });
+
+  test("the notice tells the user what unblocks it, since the control is dead", () => {
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+
+    // A disabled button with no stated reason reads as a broken panel.
+    expect(dappCard(summaries, flags, feeWith("insufficient"))).toContain("Add STRK to continue");
+  });
+
+  test("ok and unknown verdicts make no shortfall claim and block nothing", () => {
     const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
     for (const verdict of ["ok", "unknown"] as const) {
       expect(sendReview(summaries, flags, feeWith(verdict))).not.toContain(NOTICE);
-      expect(dappCard(summaries, flags, feeWith(verdict))).not.toContain(NOTICE);
+      const card = dappCard(summaries, flags, feeWith(verdict));
+      expect(card).not.toContain(NOTICE);
+      // Fail-open: an unreadable balance ("unknown") must never block a
+      // transaction that would otherwise have gone through.
+      expect(card).not.toContain('type="button" disabled');
     }
   });
 });

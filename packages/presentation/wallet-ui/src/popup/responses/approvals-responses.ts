@@ -3,6 +3,7 @@
  * the background boundary.
  */
 
+import { isErrorDetail } from "@mc-wallet/core/errors";
 import { isSha256Digest, isUuid } from "@mc-wallet/core/ids";
 import {
   hasOnlyArrayEntries,
@@ -144,6 +145,10 @@ const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
     value["feeAffordability"] === "insufficient" ||
     value["feeAffordability"] === "ok" ||
     value["feeAffordability"] === "unknown") &&
+  // Bounded by the producer's own shape check, and only ever alongside a real
+  // failure — a reason without one would contradict the card it renders on.
+  (value["feeEstimateDetail"] === undefined ||
+    (isErrorDetail(value["feeEstimateDetail"]) && value["feeEstimateFailed"] === true)) &&
   (value["feeEstimateFailed"] === undefined || typeof value["feeEstimateFailed"] === "boolean") &&
   (value["feeEstimatePending"] === undefined || typeof value["feeEstimatePending"] === "boolean") &&
   (value["requiresDeployment"] === undefined || typeof value["requiresDeployment"] === "boolean") &&
@@ -168,6 +173,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "declaration",
       "fee",
       "feeAffordability",
+      "feeEstimateDetail",
       "feeEstimateFailed",
       "feeEstimatePending",
       "flags",
@@ -226,6 +232,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       ? isInvokeFeeReview(value)
       : value["fee"] === undefined &&
         value["feeAffordability"] === undefined &&
+        value["feeEstimateDetail"] === undefined &&
         value["feeEstimateFailed"] === undefined &&
         value["feeEstimatePending"] === undefined &&
         value["requiresDeployment"] === undefined;

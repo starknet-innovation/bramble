@@ -158,7 +158,7 @@ const declarationReview = async (
           compiledClassHash: declare.compiledClassHash,
           contractClass: declare.contractClass,
           rpcUrls,
-          signHash: accountHashSigner(deps, account, passphrase),
+          signHash: accountHashSigner(deps, account, passphrase, "declare-class"),
           ...(declare.classHash === undefined ? {} : { classHash: declare.classHash }),
         })
         .catch(() => null)
@@ -169,7 +169,7 @@ const declarationReview = async (
           .estimateAccountDeploymentFee({
             account,
             rpcUrls,
-            signHash: accountHashSigner(deps, account, passphrase),
+            signHash: accountHashSigner(deps, account, passphrase, "deploy-account"),
           })
           .catch(() => null)
       : null;
@@ -386,7 +386,7 @@ export const executeDeclareApproval = async (
         ? { reviewedDeploymentFee: input.reviewedDeploymentFee }
         : {}),
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-      signHash: accountHashSigner(deps, account, passphrase),
+      signHash: accountHashSigner(deps, account, passphrase, "declare-class"),
       ...(input.declare.classHash === undefined ? {} : { classHash: input.declare.classHash }),
     });
   } catch (error) {

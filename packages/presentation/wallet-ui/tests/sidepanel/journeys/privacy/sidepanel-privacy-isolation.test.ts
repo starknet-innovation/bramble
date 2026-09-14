@@ -71,6 +71,7 @@ describe("privacy UI async scope isolation", () => {
       poolFeeFri: "0x1",
       relayConfigured: true,
       registration: "registered" as const,
+      privateBalances: "ready" as const,
     };
     let disclosure: PrivacyDisclosureState = { error: null, loading: false, value: null };
     let paints = 0;
@@ -184,6 +185,7 @@ describe("privacy UI async scope isolation", () => {
       readonly poolFeeFri: "0x1";
       readonly relayConfigured: true;
       readonly registration: "registered";
+      readonly privateBalances: "ready";
     }>();
     let disclosure: PrivacyDisclosureState = { error: null, loading: false, value: null };
     let generation = 0;
@@ -219,6 +221,7 @@ describe("privacy UI async scope isolation", () => {
       poolFeeFri: "0x1",
       relayConfigured: true,
       registration: "registered",
+      privateBalances: "ready",
     });
     await tick();
 
@@ -243,6 +246,7 @@ describe("privacy UI async scope isolation", () => {
           poolFeeFri: "0x1",
           relayConfigured: true,
           registration,
+          privateBalances: "ready" as const,
         },
       }),
       generation: () => 0,
@@ -302,6 +306,7 @@ describe("privacy UI async scope isolation", () => {
           poolFeeFri: "0x1",
           relayConfigured: true,
           registration: "unregistered",
+          privateBalances: "ready",
         },
       }),
       generation: () => generation,

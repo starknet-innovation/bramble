@@ -13,8 +13,8 @@ import { ec } from "starknet";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createSignatureWaiters } from "../../../apps/extension/src/background/approvals/signature-waiters";
 import type { LedgerSignQueue } from "../../../apps/extension/src/background/ledger/ledger-sign-queue";
+import { executeInvokeApproval } from "../../../apps/extension/src/background/provider/invoke-execution";
 import {
-  executeInvokeApproval,
   handleProviderOps,
   type InvokeExecuteDeps,
   type ProviderOpsDeps,

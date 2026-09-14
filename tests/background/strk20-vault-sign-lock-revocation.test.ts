@@ -7,7 +7,9 @@
  * user hit Lock. `AccountHashSignerDeps.session` is now required, which makes
  * "forgot the session" a compile error; these checks pin the runtime half.
  */
+
 import { describe, expect, test } from "bun:test";
+import { STRK20_SIGN_INTENTS } from "@mc-wallet/ledger-protocol/intent";
 import {
   defaultWalletPreferences,
   type WalletPreferences,
@@ -20,10 +22,8 @@ import {
   type Strk20WalletOpsDeps,
 } from "../../apps/extension/src/background/privacy/strk20-op-context";
 import { createStrk20WalletPreparationStore } from "../../apps/extension/src/background/privacy/strk20-wallet-preparations";
-import {
-  executeInvokeApproval,
-  type InvokeExecuteDeps,
-} from "../../apps/extension/src/background/provider/provider-ops";
+import { executeInvokeApproval } from "../../apps/extension/src/background/provider/invoke-execution";
+import type { InvokeExecuteDeps } from "../../apps/extension/src/background/provider/provider-ops";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { activeAccountContext } from "../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
@@ -72,6 +72,7 @@ const makeDeps = (
 const privacySigner = async (deps: Strk20WalletOpsDeps) => {
   const context = await resolvePrivacyContext(deps, {
     active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    intents: STRK20_SIGN_INTENTS.transfer,
   });
   if ("error" in context) {
     throw new Error(context.error);

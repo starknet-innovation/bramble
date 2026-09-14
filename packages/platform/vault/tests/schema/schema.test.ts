@@ -158,7 +158,7 @@ describe("mnemonic-less Ledger-only vault", () => {
     const key = {
       chainId: "0x534e5f4d41494e",
       poolAddress: "0x123",
-      scheme: "ledger-strk20-typed-data-v1" as const,
+      scheme: "ledger-strk20-scope-keccak-v1" as const,
       viewingKey: "0x654321",
     };
     const withSecret = {
@@ -206,7 +206,7 @@ describe("mnemonic-less Ledger-only vault", () => {
     const key = {
       chainId: "0x534e5f4d41494e",
       poolAddress: "0x123",
-      scheme: "ledger-strk20-typed-data-v1" as const,
+      scheme: "ledger-strk20-scope-keccak-v1" as const,
       viewingKey: "0x654321",
     };
     expect(

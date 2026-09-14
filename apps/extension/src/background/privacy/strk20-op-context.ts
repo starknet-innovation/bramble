@@ -5,6 +5,7 @@
  * missing network configuration, Ledger accounts, and untracked tokens.
  */
 
+import type { LedgerStrk20Intents } from "@mc-wallet/ledger-protocol/intent";
 import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
 import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
@@ -152,19 +153,28 @@ export const estimatePublicStrk20Fee = async (
  * `tokenId` or the network's first tracked token. Returns a displayable error
  * instead of throwing so handlers stay single-shape.
  *
- * The account context is an argument rather than something resolved here
- * because resolving it is what decides whether the unlock window is renewed.
- * The disclosure read the privacy screen polls passes
- * `observedAccountContext`; the preparation and execution routes the user just
- * triggered pass `activeAccountContext`. Keeping that choice at the
- * call site is what stops one shared builder from silently renewing the
- * inactivity window for ambient traffic (MCW-V09-105).
+ * `active` is an argument rather than something resolved here because resolving
+ * it is what decides whether the unlock window is renewed. The disclosure read
+ * the privacy screen polls passes `observedAccountContext`; the preparation and
+ * execution routes the user just triggered pass `activeAccountContext`. Keeping
+ * that choice at the call site is what stops one shared builder from silently
+ * renewing the inactivity window for ambient traffic (MCW-V09-105).
+ *
+ * `intents` names what this operation's two device prompts authorize, and is
+ * required rather than defaulted: a shared default is what once described a
+ * registration as a private transfer on the one screen a hardware user has to
+ * read. A read-only caller passes the operation its surface leads to, since no
+ * read reaches either signer.
  */
 export const resolvePrivacyContext = async (
   deps: Strk20WalletOpsDeps,
-  input: { readonly active: ActiveAccountContext; readonly tokenId?: string },
+  input: {
+    readonly active: ActiveAccountContext;
+    readonly intents: LedgerStrk20Intents;
+    readonly tokenId?: string;
+  },
 ): Promise<ActivePrivacyContext | { readonly error: string }> => {
-  const { active, tokenId } = input;
+  const { active, intents, tokenId } = input;
   if (active.error !== undefined) {
     return { error: active.error };
   }
@@ -173,9 +183,11 @@ export const resolvePrivacyContext = async (
   if (!config) {
     return { error: "Private balances are not configured for this network" };
   }
-  if (active.account.derivation.kind === "ledger") {
-    return { error: "Private balances are not available for Ledger accounts" };
-  }
+  // A Ledger account is no longer refused outright: it reaches private balances
+  // through a retained, scope-bound viewing key produced by the device ceremony.
+  // Without one, every read below fails with
+  // LEDGER_STRK20_VIEWING_KEY_UNAVAILABLE, which callers map to the recoverable
+  // "run the ceremony" state rather than an error.
   const token = tokenId
     ? preferences.tokens.find(
         (stored) => stored.id === tokenId && stored.networkId === active.networkId,
@@ -200,6 +212,7 @@ export const resolvePrivacyContext = async (
         preferences,
         rpcUrls: networkRpcUrls(STARKNET_NETWORKS[active.networkId], preferences),
       },
+      intents,
     ),
     preferences,
     token,

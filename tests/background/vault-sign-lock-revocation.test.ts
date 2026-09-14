@@ -23,6 +23,7 @@ describe("vault hash signer is bound to its unlock session", () => {
       { session, wallet: createWallet() },
       account,
       vaultPassphrase,
+      "send-token",
     );
 
     await expect(signHash(MESSAGE_HASH)).resolves.toEqual({
@@ -48,6 +49,7 @@ describe("vault hash signer is bound to its unlock session", () => {
       },
       account,
       vaultPassphrase,
+      "send-token",
     );
 
     await expect(signHash(MESSAGE_HASH)).rejects.toThrow("Krusty KMS signature key mismatch");
@@ -68,6 +70,7 @@ describe("vault hash signer is bound to its unlock session", () => {
       },
       account,
       vaultPassphrase,
+      "send-token",
     );
 
     session.lock();
@@ -85,6 +88,7 @@ describe("vault hash signer is bound to its unlock session", () => {
       { session, wallet: createWallet({ captureSign: () => session.lock() }) },
       account,
       vaultPassphrase,
+      "send-token",
     );
 
     await expect(signHash(MESSAGE_HASH)).rejects.toThrow("wallet locked");
@@ -98,6 +102,7 @@ describe("vault hash signer is bound to its unlock session", () => {
       { session, wallet: createWallet() },
       account,
       vaultPassphrase,
+      "send-token",
     );
 
     now = UNLOCKED_AT + TTL_MS + 1;
@@ -112,6 +117,7 @@ describe("vault hash signer is bound to its unlock session", () => {
       { session, wallet: createWallet() },
       account,
       vaultPassphrase,
+      "send-token",
     );
 
     // Same passphrase, new session boundary: the authorization the signer was
@@ -140,6 +146,7 @@ describe("vault hash signer is bound to its unlock session", () => {
       },
       account,
       vaultPassphrase,
+      "send-token",
     );
 
     await expect(signHash(MESSAGE_HASH)).rejects.toThrow("wallet locked");

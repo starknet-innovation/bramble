@@ -19,6 +19,12 @@ const createModule = (overrides: Record<string, unknown> = {}) => ({
   deriveScopedStrk20ViewingKey() {
     return "0x456";
   },
+  foldStrk20ViewingKey() {
+    return "0x789";
+  },
+  strk20ViewingKeyMessageHash() {
+    return "0xabc";
+  },
   deriveStarknetKeypair() {
     return { private_key: "0x123", public_key_x: "0xabc", public_key_y: "0xdef" };
   },

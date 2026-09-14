@@ -8,6 +8,7 @@
  * bridge.
  */
 
+import { type LedgerStrk20Intents, STRK20_SIGN_INTENTS } from "@mc-wallet/ledger-protocol/intent";
 import {
   prepareStrk20AccountActions,
   quoteStrk20Actions,
@@ -65,8 +66,12 @@ const refusePoisonedPoolRecipient = (
  * the wallet refuses to pay. Returns the resolved context and canonical
  * recipient, or the error response the caller returns unchanged.
  */
+// `intents` is a parameter, not a default: the shield lane and the private-transfer
+// lane authorize different things on the device screen, and this helper is the one
+// place both pass through.
 const openPoolRoute = async (
   deps: Strk20WalletOpsDeps,
+  intents: LedgerStrk20Intents,
   input: { readonly recipient: string; readonly tokenId: string },
 ): Promise<
   | { readonly context: ActivePrivacyContext; readonly recipient: string }
@@ -79,6 +84,7 @@ const openPoolRoute = async (
   // User-initiated: the user composed a send and asked for a preparation.
   const context = await resolvePrivacyContext(deps, {
     active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    intents,
     tokenId: input.tokenId,
   });
   if ("error" in context) {
@@ -99,6 +105,7 @@ const recipientStatus = async (
   // typing, so it only ever runs because the user acted.
   const context = await resolvePrivacyContext(deps, {
     active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    intents: STRK20_SIGN_INTENTS.transfer,
     tokenId: input.tokenId,
   });
   if ("error" in context) {
@@ -119,7 +126,7 @@ const transferPreparation = async (
   deps: Strk20WalletOpsDeps,
   input: { readonly amount: string; readonly recipient: string; readonly tokenId: string },
 ): Promise<RuntimeResponse> => {
-  const opened = await openPoolRoute(deps, input);
+  const opened = await openPoolRoute(deps, STRK20_SIGN_INTENTS.transfer, input);
   if ("error" in opened) {
     return opened;
   }
@@ -207,7 +214,7 @@ const withdrawPreparation = async (
   deps: Strk20WalletOpsDeps,
   input: { readonly amount: string; readonly recipient: string; readonly tokenId: string },
 ): Promise<RuntimeResponse> => {
-  const opened = await openPoolRoute(deps, input);
+  const opened = await openPoolRoute(deps, STRK20_SIGN_INTENTS.transfer, input);
   if ("error" in opened) {
     return opened;
   }
@@ -315,7 +322,7 @@ const depositPreparation = async (
   deps: Strk20WalletOpsDeps,
   input: { readonly amount: string; readonly recipient: string; readonly tokenId: string },
 ): Promise<RuntimeResponse> => {
-  const opened = await openPoolRoute(deps, input);
+  const opened = await openPoolRoute(deps, STRK20_SIGN_INTENTS.shield, input);
   if ("error" in opened) {
     return opened;
   }

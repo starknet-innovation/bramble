@@ -227,10 +227,11 @@ const reviewDeployment = async (
     {
       account,
       rpcUrls: context.rpcUrls,
-      signHash: signerForContext(deps, {
-        account: context.signer,
-        vaultPassphrase: context.active.vaultPassphrase,
-      }),
+      signHash: signerForContext(
+        deps,
+        { account: context.signer, vaultPassphrase: context.active.vaultPassphrase },
+        "multisig-deploy",
+      ),
     },
     context.authorized.isCurrent,
   );
@@ -314,10 +315,11 @@ const submitDeployment = async (
       account: record,
       reviewedFee: review.fee,
       rpcUrls: context.rpcUrls,
-      signHash: signerForContext(deps, {
-        account: context.signer,
-        vaultPassphrase: context.active.vaultPassphrase,
-      }),
+      signHash: signerForContext(
+        deps,
+        { account: context.signer, vaultPassphrase: context.active.vaultPassphrase },
+        "multisig-deploy",
+      ),
       isAuthorized: context.authorized.isCurrent,
     });
     transactionHash = submitted.transactionHash;

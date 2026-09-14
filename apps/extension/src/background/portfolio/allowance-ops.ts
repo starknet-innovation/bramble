@@ -260,7 +260,7 @@ const handleRevokeAllowance: AllowanceOpsHandler = async (deps, message) => {
   }
   const call = buildErc20ApproveCall(target.token, target.spender, 0n);
   const report = verifyCalls([call], trusted);
-  const signHash = signerForContext(deps, context);
+  const signHash = signerForContext(deps, context, "revoke-spending");
   if (!input.reviewedFee) {
     return requiredFeeReview(() =>
       deps.runtimeRpc.estimateInvokeFee({

@@ -25,6 +25,7 @@ afterAll(unregisterDom);
 
 const PENDING: LedgerSignRequestSummary = {
   accountId: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  intent: "send-token",
   id: "ledger-sign-1",
   messageHash: "0xabc",
   path: ledgerAccountPath(0),

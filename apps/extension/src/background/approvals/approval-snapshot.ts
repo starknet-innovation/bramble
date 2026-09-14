@@ -31,6 +31,13 @@ export type {
 export type InvokeFeeReview = {
   readonly fee: FeeEstimate | null;
   readonly feeAffordability: FeeAffordability;
+  /**
+   * The node's own reason a fee estimate was rejected, present only when
+   * `feeEstimateFailed` is true. A wallet-internal diagnostic for the panel's
+   * own surface — it must never be returned to the requesting page, which sees
+   * only the curated `invoke request failed`.
+   */
+  readonly feeEstimateDetail?: string;
   readonly feeEstimateFailed: boolean;
   readonly feeEstimatePending: boolean;
   readonly requiresDeployment: boolean;
@@ -50,6 +57,9 @@ const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> 
   ...(approval.feeAffordability === undefined
     ? {}
     : { feeAffordability: approval.feeAffordability }),
+  ...(approval.feeEstimateDetail === undefined
+    ? {}
+    : { feeEstimateDetail: approval.feeEstimateDetail }),
   ...(approval.feeEstimateFailed === undefined
     ? {}
     : { feeEstimateFailed: approval.feeEstimateFailed }),

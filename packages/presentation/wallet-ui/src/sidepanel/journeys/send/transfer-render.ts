@@ -86,7 +86,11 @@ export const applyTransferUi = (
   );
   buttonBusy(confirmButton, state.stage === "authorizing");
   if (confirmButton && state.stage === "review") {
-    confirmButton.disabled = state.review?.feeEstimateFailed === true;
+    // A known shortfall blocks alongside a failed estimate: the balance was read
+    // and cannot cover the transaction, so sending only spends an approval on a
+    // rejection. "unknown" never blocks — an unreadable balance makes no claim.
+    confirmButton.disabled =
+      state.review?.feeEstimateFailed === true || state.review?.feeAffordability === "insufficient";
   }
   setText(
     form,

@@ -257,7 +257,7 @@ export const createOfficialStrk20Service = ({
               proof: callAndProof.proof,
               rpcUrls: input.rpcUrls,
               signHash: async (messageHash) => {
-                const signature = await input.signHash(messageHash);
+                const signature = await input.submitSignHash(messageHash);
                 return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
               },
             });
@@ -390,7 +390,7 @@ export const createOfficialStrk20Service = ({
                 reviewedFee,
                 rpcUrls: input.rpcUrls,
                 signHash: async (messageHash) => {
-                  const signature = await input.signHash(messageHash);
+                  const signature = await input.submitSignHash(messageHash);
                   return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
                 },
               });
@@ -448,7 +448,7 @@ export const createOfficialStrk20Service = ({
                 value as unknown as TypedData,
                 input.account.address,
               );
-              const signature = await input.signHash(messageHash);
+              const signature = await input.submitSignHash(messageHash);
               return serializeAccountSignature(input.account.accountContractType, signature);
             },
           })),
@@ -487,7 +487,7 @@ export const createOfficialStrk20Service = ({
             ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
             rpcUrls: prepared.rpcUrls,
             signHash: async (messageHash) => {
-              const signature = await prepared.signHash(messageHash);
+              const signature = await prepared.submitSignHash(messageHash);
               return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
             },
           });

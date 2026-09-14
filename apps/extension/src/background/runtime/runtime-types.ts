@@ -494,4 +494,6 @@ export type RuntimeResponse =
   | ValidateMnemonicResponse
   | WalletStatus
   | WatchAssetResponse
-  | { readonly error: string };
+  // `detail` is the uncurated reason behind `error`, for the panel alone: it is
+  // stripped before an error settles to a dapp (see `settleExecutor`).
+  | { readonly detail?: string; readonly error: string };

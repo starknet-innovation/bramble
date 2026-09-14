@@ -104,6 +104,12 @@ export const walletStub = {
   async deriveLedgerAccounts(): Promise<readonly LedgerAccountRef[]> {
     return [ledgerAccount];
   },
+  // Writes inside the vault boundary and returns nothing, so there is no key to
+  // hand back — the ceremony's own contract. Present so the scan exercises the
+  // handler's Ledger-account guard instead of stopping at a missing collaborator.
+  async deriveLedgerStrk20ViewingKey() {
+    viewingKeyDerivations.value += 1;
+  },
   // The scan's whole point: a handler that reaches the viewing key must still
   // never put it in a response, so the stub hands out the salted secret.
   async deriveStrk20ViewingKey() {

@@ -105,6 +105,44 @@ including the residual on the partially remediated `MCW-V09-127`, is in
 - The sign-request card renders domain rows by the payload's actual revision;
   rows that were never in the hash no longer appear as signed.
 
+## [Unreleased]
+
+### Added
+- Accounts held on a Ledger can now use STRK20 private balances. The viewing key
+  is derived on the device — it signs a hash of the account's exact chain and pool
+  scope, which the KMS folds into the key — and is retained only in encrypted
+  custody bound to that account, chain, pool, and derivation scheme.
+- Device approval prompts name what each one authorizes, and an operation that
+  genuinely needs two signatures now numbers them, so a second prompt is no longer
+  unexplained.
+- Importing a recovery phrase lists the accounts that phrase already has on chain,
+  found by deployment or by an STRK, ETH, USDC, or strkBTC balance. Every account
+  found is listed and preselected, and only the ones selected are added.
+- The Send recipient list marks a hardware-backed account with the same
+  **Hardware** tag as the account selector.
+
+### Changed
+- The vendored Krusty KMS pin now tracks a commit on the upstream default branch
+  rather than a pull-request branch tip, so the build no longer depends on a
+  revision that could be rebased away. The wallet uses the KMS's scoped
+  viewing-key derivation explicitly, and the viewing-key fold now verifies the
+  device signature against the account's public key and the signed scope before
+  producing a key.
+
+### Fixed
+- A registered Ledger account re-added after an extension reset now offers to
+  generate its viewing key, instead of offering a second registration the privacy
+  pool refuses.
+- Approve and Confirm are disabled when the account's STRK balance cannot cover a
+  transaction's estimated fee, and the notice says what unblocks it. An unreadable
+  balance still blocks nothing.
+- A transaction the network rejects now reports the node's own reason in the panel
+  and copies it to the clipboard, rather than only "invoke request failed".
+- A *fee estimate* the network rejects now names its reason too, on both the Send
+  review and the dapp approval card, behind a disclosure with a copy control. The
+  banner previously advised checking the connection, which is the wrong story for
+  the common case: the estimate reached the node and the calls reverted.
+
 ## [0.9.0] - 2026-08-10
 
 Account-safe upgrades, one coherent public/private Send journey, managed service

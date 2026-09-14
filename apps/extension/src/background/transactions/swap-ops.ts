@@ -199,7 +199,7 @@ const swapPrepareResponse = async (
       return { error: policy.error };
     }
     const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[networkId], preferences);
-    const signHash = signerForContext(deps, context);
+    const signHash = signerForContext(deps, context, "swap-tokens");
     const reviewedFee = await deps.runtimeRpc
       .estimateInvokeFee({ account, calls, rpcUrls, signHash })
       .catch(() => null);
@@ -291,7 +291,7 @@ const swapExecuteResponse = async (
       isAuthorized: authorized.isCurrent,
       reviewedFee: preparation.reviewedFee,
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
-      signHash: signerForContext(deps, context),
+      signHash: signerForContext(deps, context, "swap-tokens"),
     });
     // The build always carries an approval of the sell token to the router
     // (buildPolicy refuses one without it). The route is expected to spend it

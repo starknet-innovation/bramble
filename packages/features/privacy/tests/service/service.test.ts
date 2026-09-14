@@ -39,6 +39,9 @@ const context: Strk20AccountContext = {
   async signHash() {
     return { publicKey: "0x3", r: "0x1", s: "0x2" };
   },
+  async submitSignHash() {
+    return { publicKey: "0x3", r: "0x1", s: "0x2" };
+  },
   async viewingKey() {
     return "0x5";
   },

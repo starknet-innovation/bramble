@@ -4,13 +4,14 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
-import type {
-  AccountContractType,
-  AccountRef,
-  DerivedAccountRef,
-  ImportedAccountRef,
-  LedgerAccountRef,
-  LedgerPubKeyEntry,
+import {
+  type AccountContractType,
+  type AccountRef,
+  type DerivedAccountRef,
+  type ImportedAccountRef,
+  isDerivationIndex,
+  type LedgerAccountRef,
+  type LedgerPubKeyEntry,
 } from "@mc-wallet/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
@@ -80,8 +81,6 @@ export type ImportedAccountResult = {
   readonly account: ImportedAccountRef;
   readonly privateKey: string;
 };
-
-const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
 
 const requireDerivationInput = (input: AccountDerivationInput): void => {
   if (!isMnemonicText(input.mnemonic) || !isMnemonicPassphrase(input.mnemonicPassphrase)) {

@@ -1,0 +1,99 @@
+/**
+ * The two halves of the error boundary. `walletErrorMessage` is the curated,
+ * dapp-safe message; `errorDetail` is the uncurated reason kept for the wallet's
+ * own surfaces. The pair only works if callers can tell them apart, so these
+ * tests pin what each one does and does not reveal.
+ */
+import { describe, expect, test } from "bun:test";
+import { errorDetail, isErrorDetail, WalletError, walletErrorMessage } from "../src/errors";
+
+describe("walletErrorMessage", () => {
+  test("keeps a curated WalletError message and collapses anything else", () => {
+    expect(walletErrorMessage(new WalletError("Device rejected the request"), "fallback")).toBe(
+      "Device rejected the request",
+    );
+    expect(walletErrorMessage(new Error("node said something internal"), "fallback")).toBe(
+      "fallback",
+    );
+    expect(walletErrorMessage("a bare string", "fallback")).toBe("fallback");
+  });
+});
+
+describe("errorDetail", () => {
+  test("returns the raw reason a curated message throws away", () => {
+    // The point of the helper: this text is exactly what `walletErrorMessage`
+    // discards, and exactly what a user needs to see a rejected fee.
+    expect(
+      errorDetail(
+        new Error("Account balance is smaller than the max fee"),
+        "invoke request failed",
+      ),
+    ).toBe("Account balance is smaller than the max fee");
+    expect(errorDetail("rate limited by the node", "invoke request failed")).toBe(
+      "rate limited by the node",
+    );
+  });
+
+  test("uses the RPC response envelope instead of starknet.js's request dump", () => {
+    const request =
+      'RPC: starknet_estimateFee with params {"request":[{"calldata":["0xuser-trade"]}]}';
+    const error = Object.assign(new Error(request), {
+      baseError: {
+        code: 41,
+        data: { execution_error: "Execution failed: insufficient fee balance" },
+        message: "Transaction execution error",
+      },
+    });
+
+    expect(errorDetail(error, "invoke request failed")).toBe(
+      "41 Transaction execution error Execution failed: insufficient fee balance",
+    );
+  });
+
+  test("never falls back to a raw request when an RPC envelope is malformed", () => {
+    const request = 'RPC: starknet_estimateFee with params {"request":["0xuser-trade"]}';
+    const error = Object.assign(new Error(request), { baseError: null });
+
+    expect(errorDetail(error, "invoke request failed")).toBeNull();
+  });
+
+  test("returns null when it would only repeat the summary or add nothing", () => {
+    // Callers omit the field on null, so an error whose own message is already
+    // the curated one does not get shown twice.
+    expect(errorDetail(new Error("invoke request failed"), "invoke request failed")).toBeNull();
+    expect(errorDetail(new Error("   "), "invoke request failed")).toBeNull();
+    expect(errorDetail(new Error(""), "invoke request failed")).toBeNull();
+    // A non-Error, non-string carries no message to extract.
+    expect(errorDetail({ code: -32_005 }, "invoke request failed")).toBeNull();
+    expect(errorDetail(undefined, "invoke request failed")).toBeNull();
+  });
+
+  test("trims and truncates so a node cannot push an unbounded string into the UI", () => {
+    expect(errorDetail(new Error("  padded reason  "), "summary")).toBe("padded reason");
+    const long = errorDetail(new Error("x".repeat(5000)), "summary");
+    expect(long).not.toBeNull();
+    // Bounded, and the truncation is visible rather than a silent cut.
+    expect((long ?? "").length).toBeLessThanOrEqual(601);
+    expect(long?.endsWith("…")).toBe(true);
+  });
+});
+
+describe("isErrorDetail", () => {
+  test("accepts exactly what errorDetail can produce, including a truncated one", () => {
+    expect(isErrorDetail("40 Contract error: entry point not found")).toBe(true);
+    // The producer's own worst case — the full bound plus its ellipsis — must
+    // survive the boundary that re-checks it, or a real diagnostic would be
+    // dropped for being too long.
+    const truncated = errorDetail(new Error("x".repeat(5000)), "summary");
+    expect(isErrorDetail(truncated)).toBe(true);
+  });
+
+  test("rejects anything the producer could not have returned", () => {
+    expect(isErrorDetail("")).toBe(false);
+    expect(isErrorDetail("x".repeat(602))).toBe(false);
+    expect(isErrorDetail(undefined)).toBe(false);
+    expect(isErrorDetail(null)).toBe(false);
+    expect(isErrorDetail(42)).toBe(false);
+    expect(isErrorDetail({ message: "reason" })).toBe(false);
+  });
+});

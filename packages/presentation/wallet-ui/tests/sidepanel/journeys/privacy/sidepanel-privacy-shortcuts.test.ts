@@ -51,6 +51,7 @@ const bindWith = (html: string): { intents: readonly SendIntent[]; app: HTMLElem
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "registered",
+        privateBalances: "ready",
       },
     }),
     generation: () => 0,

@@ -11,6 +11,7 @@
  * reason. Identifiers the background mints at run time (approvals, proposals,
  * one-time preparations) are filled in by the harness through `live`.
  */
+
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
@@ -26,6 +27,7 @@ import {
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
+import { LEDGER_KEY_BOUNDARY_MESSAGES } from "./key-boundary-ledger-messages";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "./key-boundary-multisig-messages";
 import { RECOVERY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-recovery-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "./key-boundary-strk20-messages";
@@ -52,8 +54,7 @@ const TYPED_DATA = {
   },
 };
 
-// Broadcast event envelope: emitted by the background, never handled as an
-// inbound request, so it has no scan entry.
+// Broadcast event envelope: emitted by the background, never handled inbound.
 const OUTBOUND_ONLY = new Set(["wallet.event"]);
 
 /**
@@ -192,46 +193,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   ...RECOVERY_KEY_BOUNDARY_MESSAGES,
-  {
-    message: {
-      accountContractType: "openzeppelin",
-      accountIndex: 0,
-      networkId: "SN_MAIN",
-      publicKeyX: account.publicKeyX,
-      type: "wallet.addLedgerAccount",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      accountContractType: "openzeppelin",
-      accountIndex: 0,
-      networkId: "SN_MAIN",
-      publicKeyX: account.publicKeyX,
-      type: "wallet.createLedgerVault",
-      vaultPassphrase: SECRET_PASSPHRASE,
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      accountContractType: "openzeppelin",
-      entries: [{ accountIndex: 0, publicKeyX: account.publicKeyX }],
-      networkId: "SN_MAIN",
-      type: "wallet.deriveLedgerAccounts",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: { address: account.address, networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
-    sender: extensionSender,
-  },
-  { message: { type: "wallet.ledgerSignPending" }, sender: extensionSender },
-  {
-    live: async (ids) => ({ id: await ids.ledgerSignId() }),
-    message: { id: "", r: "0x1", s: "0x2", type: "wallet.completeLedgerSign" },
-    sender: extensionSender,
-  },
+  ...LEDGER_KEY_BOUNDARY_MESSAGES,
   {
     message: {
       accountContractType: "openzeppelin",
@@ -482,9 +444,9 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.supportedWalletApi" },
     sender: contentSender,
   },
-  // Negative entries, last so the state they tear down or refuse cannot starve
-  // an entry above. Each one is here because refusal is the response being
-  // scanned: an error path leaks secrets just as easily as a success path.
+  // Negative entries last, so the state they tear down cannot starve an entry
+  // above. Refusal is the response being scanned: an error path leaks just as
+  // easily as a success path.
   { message: { type: "wallet.lock" }, sender: extensionSender },
   {
     message: { type: "wallet.status" },

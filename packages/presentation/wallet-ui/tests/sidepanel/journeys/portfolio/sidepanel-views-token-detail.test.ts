@@ -103,6 +103,7 @@ describe("dashboard token-detail arm", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "registered",
+        privateBalances: "ready",
       },
     };
 
@@ -113,6 +114,34 @@ describe("dashboard token-detail arm", () => {
     expect(html).toContain("0.5 ETH");
     expect(html).toContain("$1,000.00");
     expect(html).not.toContain("Discovered from shielded notes");
+  });
+
+  // Registered is not enough to show an amount: with no viewing key on this device
+  // nothing private was read, and rendering "0 ETH" would state a balance the
+  // wallet never looked at. Shield/Unshield would fail for the same reason.
+  test("a registered account with no local viewing key shows no amount and no shield", () => {
+    const privacy: PrivacyDisclosureState = {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        privateBalances: "setup-required",
+        registration: "registered",
+        relayConfigured: true,
+      },
+    };
+
+    const html = tokenDetailFlow(status, token, balance, [10, 20, 30], 2_000, "usd", privacy);
+
+    expect(html).toContain("Generate your viewing key");
+    expect(html).toContain('title="Generate your viewing key to read private balances"');
+    expect(html).toContain('data-privacy-open="' + token.id + '"');
+    expect(html).not.toContain("data-send-shield");
+    expect(html).not.toContain("data-send-unshield");
+    expect(html).not.toContain("Register to start shielding");
   });
 
   test("an unregistered account sees the greyed register hint instead of a split", () => {
@@ -126,6 +155,7 @@ describe("dashboard token-detail arm", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "unregistered",
+        privateBalances: "ready",
       },
     };
 
@@ -147,6 +177,7 @@ describe("dashboard token-detail arm", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "pending",
+        privateBalances: "ready",
       },
     };
 

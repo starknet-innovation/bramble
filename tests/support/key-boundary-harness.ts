@@ -216,6 +216,7 @@ export const makeKeyBoundaryHarness = async (
       park(
         ledgerSignQueue.request({
           accountId: account.id,
+          intent: "send-token",
           messageHash: "0x9",
           path: "m/2645'/1195502025'/1148870696'/0'/0'/0",
           publicKeyX: account.publicKeyX,

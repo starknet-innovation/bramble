@@ -123,6 +123,45 @@ describe("createApprovalQueue invoke fee review", () => {
     expect(queue.get(id)?.feeEstimatePending).toBe(false);
   });
 
+  test("a fresh estimate clears a previous attempt's failure detail", () => {
+    const queue = createApprovalQueue();
+    const { id } = queue.requestInvoke({
+      calls,
+      context: CONTEXT,
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateDetail: "40 Contract error: entry point not found",
+        feeEstimateFailed: true,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
+      flags: [],
+      origin: ORIGIN,
+      summaries: ["Invoke"],
+    });
+    expect(queue.get(id)?.feeEstimateDetail).toBe("40 Contract error: entry point not found");
+
+    // A retry that succeeds must not leave the earlier reason on the card: the
+    // detail slot is replaced wholesale, never merged over.
+    const revision = queue.beginFeeEstimate(id);
+    if (!revision) {
+      throw new Error("expected a fee-slot claim for a queued invoke");
+    }
+    queue.updateFee(revision, {
+      kind: "invoke",
+      review: {
+        fee: { overallFee: "77", unit: "FRI" },
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
+    });
+    expect(queue.get(id)?.feeEstimateDetail).toBeUndefined();
+    expect(Object.hasOwn(queue.get(id) ?? {}, "feeEstimateDetail")).toBe(false);
+  });
+
   test("updateFee rejects unknown ids and approvals with another kind", () => {
     const queue = createApprovalQueue();
     const connect = queue.request(ORIGIN);

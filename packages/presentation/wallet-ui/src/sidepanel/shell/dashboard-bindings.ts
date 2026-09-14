@@ -9,6 +9,7 @@ import { parseWalletContactCard, walletContactCard } from "@mc-wallet/wallet-mod
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { SidepanelWallet } from "../runtime/runtime";
+import { errorCause } from "../runtime/runtime-errors";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
@@ -215,9 +216,19 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Approval failed"), "error", button);
+          const message = errorMessage(error, "Approval failed");
+          // The node's reason, when the background sent one. Too long to read in
+          // a toast, but exactly what belongs in a bug report, so it rides in the
+          // clipboard text rather than the visible line.
+          const detail = errorCause(error);
+          showToast(
+            message,
+            "error",
+            button,
+            detail === undefined ? message : `${message}\n\n${detail}`,
+          );
           if (result) {
-            result.textContent = errorMessage(error, "Approval failed");
+            result.textContent = detail === undefined ? message : `${message}: ${detail}`;
           }
           // The background atomically consumes an approval before execution.
           // Repaint after any executor error so stale controls cannot decide the

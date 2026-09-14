@@ -295,7 +295,7 @@ const handleReviewNftTransfer = async (
     account: context.account,
     calls: [call],
     rpcUrls,
-    signHash: signerForContext(deps, context),
+    signHash: signerForContext(deps, context, "send-collectible"),
   });
   // Fee-affordability guard (issue 191): the NFT itself never spends STRK, so
   // only the estimate is compared against the balance. Warn-only, fail-open.
@@ -357,7 +357,7 @@ const handleTransferNft = async (
     ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
     reviewedFee: input.reviewedFee,
     rpcUrls,
-    signHash: signerForContext(deps, context),
+    signHash: signerForContext(deps, context, "send-collectible"),
   });
   await recordSubmittedActivity(deps.activity, {
     accountId: context.account.id,

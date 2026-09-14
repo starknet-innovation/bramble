@@ -1,10 +1,17 @@
 /**
- * The shared STRK20 account context keeps viewing-key derivation lazy and
- * fails closed when the wallet boundary does not provide it.
+ * The shared STRK20 account context keeps viewing-key derivation lazy, labels
+ * each phase's device prompt separately, and fails closed when the wallet
+ * boundary does not provide derivation.
  */
 
 import { describe, expect, test } from "bun:test";
+import { STRK20_SIGN_INTENTS } from "@mc-wallet/ledger-protocol/intent";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { ec } from "starknet";
+import type { LedgerSignQueue } from "../../../apps/extension/src/background/ledger/ledger-sign-queue";
+import type { LedgerSignRequest } from "../../../apps/extension/src/background/ledger/ledger-signer";
 import { strk20AccountContext } from "../../../apps/extension/src/background/privacy/strk20-account-context";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { account, createWallet, vaultPassphrase } from "../../support/background-wallet-stub";
@@ -49,6 +56,7 @@ describe("STRK20 account context", () => {
         },
       },
       resolved,
+      STRK20_SIGN_INTENTS.dapp,
     );
 
     expect(seen).toEqual([]);
@@ -83,6 +91,7 @@ describe("STRK20 account context", () => {
         },
       },
       resolved,
+      STRK20_SIGN_INTENTS.dapp,
     );
 
     session.lock();
@@ -96,8 +105,56 @@ describe("STRK20 account context", () => {
     const context = strk20AccountContext(
       { session: unlockedSession(), wallet: createWallet() },
       resolved,
+      STRK20_SIGN_INTENTS.dapp,
     );
 
     await expect(context.viewingKey()).rejects.toThrow("strk20 services unavailable");
+  });
+
+  // One private operation asks a Ledger to approve twice, for two different
+  // things. If both prompts carry the same intent the user is shown the same
+  // screen twice with no way to tell what the second approval is for, which is
+  // indistinguishable from a wallet asking again for the one they already gave.
+  test("the two phases reach the device under different intents", async () => {
+    const deviceKey = "0x1234567890abcdef";
+    const seen: LedgerSignRequest[] = [];
+    const ledgerAccount: LedgerAccountRef = {
+      accountContractType: "openzeppelin",
+      address: "0xabc111111",
+      classHash: "0x111111",
+      derivation: {
+        accountIndex: 2,
+        eip2645application: "LedgerW",
+        kind: "ledger",
+        path: ledgerAccountPath(2),
+      },
+      id: "SN_SEPOLIA:0xabc111111",
+      networkId: "SN_SEPOLIA",
+      publicKeyX: ec.starkCurve.getStarkKey(deviceKey),
+    };
+    const queue: LedgerSignQueue = {
+      pending: () => [],
+      reject: () => false,
+      rejectAll: () => 0,
+      settle: () => false,
+      async request(request) {
+        seen.push(request as LedgerSignRequest);
+        const signature = ec.starkCurve.sign(request.messageHash, deviceKey);
+        return { r: `0x${signature.r.toString(16)}`, s: `0x${signature.s.toString(16)}` };
+      },
+    };
+    const context = strk20AccountContext(
+      { ledgerSignQueue: queue, session: unlockedSession(), wallet: createWallet() },
+      { ...resolved, account: ledgerAccount },
+      STRK20_SIGN_INTENTS.shield,
+    );
+
+    await context.signHash("0x1e240");
+    await context.submitSignHash("0x1e241");
+
+    expect(seen.map((request) => request.intent)).toEqual([
+      "strk20-shield-authorize",
+      "strk20-shield-broadcast",
+    ]);
   });
 });

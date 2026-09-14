@@ -59,6 +59,45 @@ describe("isTransferReviewResponse", () => {
     ).toBe(true);
   });
 
+  test("accepts a failed review carrying the node's reason", () => {
+    expect(
+      isTransferReviewResponse({
+        ok: true,
+        review: {
+          ...validReview(),
+          fee: null,
+          feeAffordability: "unknown",
+          feeEstimateDetail: "41 Transaction execution error",
+          feeEstimateFailed: true,
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a reason that contradicts the review or outgrows its producer", () => {
+    const failed = { ...validReview(), fee: null, feeAffordability: "unknown" };
+    // A reason with no failure would render under a review claiming success.
+    expect(
+      isTransferReviewResponse({
+        ok: true,
+        review: { ...validReview(), feeEstimateDetail: "41 Transaction execution error" },
+      }),
+    ).toBe(false);
+    // Longer than `errorDetail` can return, so it did not come from it.
+    expect(
+      isTransferReviewResponse({
+        ok: true,
+        review: { ...failed, feeEstimateDetail: "x".repeat(602), feeEstimateFailed: true },
+      }),
+    ).toBe(false);
+    expect(
+      isTransferReviewResponse({
+        ok: true,
+        review: { ...failed, feeEstimateDetail: "", feeEstimateFailed: true },
+      }),
+    ).toBe(false);
+  });
+
   test("accepts a review with empty flags and summaries", () => {
     expect(
       isTransferReviewResponse({

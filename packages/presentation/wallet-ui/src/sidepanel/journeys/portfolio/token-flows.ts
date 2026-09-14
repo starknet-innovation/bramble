@@ -212,6 +212,26 @@ export const tokenDetailFlow = (
     : null;
   const registered = privacy.value?.registration === "registered";
   const registrationPending = privacy.value?.registration === "pending";
+  // Registered is not enough to show a private amount: a hardware account with no
+  // viewing key on this device reads nothing, and rendering "0" there would state
+  // a balance the wallet has not looked at.
+  const keyMissing = privacy.value?.privateBalances === "setup-required";
+  const privateReady = registered && !keyMissing;
+  const pendingLabel = keyMissing
+    ? "Generate your viewing key to read private balances"
+    : registrationPending
+      ? "Waiting for the privacy indexer to see your registration"
+      : "Register to start shielding";
+  const pendingValue = keyMissing
+    ? "Generate your viewing key"
+    : registrationPending
+      ? "Registration pending…"
+      : "Register to start shielding";
+  const privateActionLabel = keyMissing
+    ? "Generate viewing key"
+    : registrationPending
+      ? "Registration pending"
+      : "Go private";
   return (
     flowHeader(token.symbol, status, token.name) +
     flowScreen(
@@ -234,7 +254,7 @@ export const tokenDetailFlow = (
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-fiat">Try again</span>
               </button>`
-            : registered
+            : privateReady
               ? `<div class="private-balance-summary">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-side">
@@ -243,16 +263,16 @@ export const tokenDetailFlow = (
                 </span>
               </div>`
               : privacy.value
-                ? `<div class="private-balance-summary muted" title="${registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
+                ? `<div class="private-balance-summary muted" title="${escapeHtml(pendingLabel)}">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
-                <span class="token-fiat">${registrationPending ? "Registration pending…" : "Register to start shielding"}</span>
+                <span class="token-fiat">${escapeHtml(pendingValue)}</span>
               </div>`
                 : ""
         }
         ${
           privacy.error
             ? ""
-            : registered
+            : privateReady
               ? `<div class="token-privacy-actions">${button({
                   attributes: { "data-send-shield": token.id },
                   icon: "shield",
@@ -265,7 +285,7 @@ export const tokenDetailFlow = (
               : button({
                   attributes: { "data-privacy-open": token.id },
                   icon: "shield",
-                  label: registrationPending ? "Registration pending" : "Go private",
+                  label: privateActionLabel,
                 })
         }
       </section>

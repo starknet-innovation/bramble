@@ -3,6 +3,7 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
+import type { LedgerSignIntent, LedgerStrk20Intents } from "@mc-wallet/ledger-protocol/intent";
 import {
   STRK20_SERVICE_UNAVAILABLE,
   type Strk20Service,
@@ -32,7 +33,18 @@ export const strk20ServiceForRuntime = (runtimeRpc: RuntimeRpc): Strk20Service =
  * balance disclosed here fail closed once the user locks, exactly as the public
  * transaction paths do.
  *
- * The two thunks are deliberately bound the same way. `signHash` inherits the
+ * `intents` labels the device prompts for a keyless Ledger account, so the pair
+ * must match the operation this context is built for — build a separate context
+ * rather than reusing one across operations that sign for different reasons
+ * (registration versus authorizing a private action). Read-only operations
+ * never reach either signer, so their intents are never shown.
+ *
+ * The two signers are separate because one operation takes two approvals for two
+ * different things: `signHash` for the pool's CallSet authorization, and
+ * `submitSignHash` for the broadcast or relay handoff that follows. Sharing one
+ * signer between them is what once showed the same prompt twice.
+ *
+ * Both thunks are bound to the unlock the same way. `signHash` inherits the
  * boundary from {@link accountHashSigner}; `viewingKey` re-checks the same
  * captured authorization before it asks the vault and again before it hands the
  * key to the SDK, because an approved disclosure reaches for the key late —
@@ -51,9 +63,12 @@ export const strk20AccountContext = (
     readonly preferences: Awaited<ReturnType<WalletPreferencesStore["read"]>>;
     readonly rpcUrls: readonly string[];
   },
+  intents: LedgerStrk20Intents,
 ) => {
   const deriveViewingKey = deps.wallet.deriveStrk20ViewingKey;
   const config = resolved.preferences.strk20Networks?.[resolved.account.networkId] ?? null;
+  const signerFor = (intent: LedgerSignIntent) =>
+    accountHashSigner(deps, resolved.account, resolved.passphrase, intent);
   const authorized = captureSessionAuthorization(deps.session);
   const requireLiveSession = (): void => {
     if (!authorized.isCurrent()) {
@@ -65,7 +80,8 @@ export const strk20AccountContext = (
     config,
     isAuthorized: authorized.isCurrent,
     rpcUrls: resolved.rpcUrls,
-    signHash: accountHashSigner(deps, resolved.account, resolved.passphrase),
+    signHash: signerFor(intents.authorize),
+    submitSignHash: signerFor(intents.submit),
     viewingKey: async () => {
       // Checked before the vault is asked, so a locked wallet derives nothing
       // at all, and again before the key is returned, so a lock during

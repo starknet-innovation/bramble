@@ -263,6 +263,13 @@ const watchAssetCard = (approval: PendingApproval): string => {
 // retry button targets this approval by data attribute. A failed or absent fee
 // estimate disables Approve exactly as Send does: without a displayed amount
 // there is no fee ceiling for the user's consent to bind.
+//
+// A *known* shortfall disables it for a separate reason. The two are different
+// facts: a missing estimate leaves nothing to bind consent to, while
+// "insufficient" means the balance was read and cannot cover the transaction, so
+// approving spends a device confirmation on something the network rejects. Only
+// that verdict gates — "unknown" stays approvable, so an unreadable balance can
+// never block a transaction that would have gone through.
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -276,6 +283,9 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
         {
           fee: approval.fee ?? null,
           feeAffordability: approval.feeAffordability ?? "unknown",
+          ...(approval.feeEstimateDetail === undefined
+            ? {}
+            : { feeEstimateDetail: approval.feeEstimateDetail }),
           feeEstimateFailed: approval.feeEstimateFailed === true,
           feeEstimatePending: approval.feeEstimatePending === true,
           requiresDeployment: approval.requiresDeployment === true,
@@ -293,7 +303,8 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       status.locked ||
         approval.feeEstimatePending === true ||
         approval.feeEstimateFailed === true ||
-        approval.fee == null,
+        approval.fee == null ||
+        approval.feeAffordability === "insufficient",
       approval.fee ?? undefined,
     )}
   </li>`;

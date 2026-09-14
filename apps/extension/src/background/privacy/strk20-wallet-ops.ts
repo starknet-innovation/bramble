@@ -7,6 +7,7 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
+import { type LedgerStrk20Intents, STRK20_SIGN_INTENTS } from "@mc-wallet/ledger-protocol/intent";
 import {
   prepareStrk20Registration,
   readStrk20Balances,
@@ -14,8 +15,6 @@ import {
   type Strk20SubmissionResult,
   submitStrk20Actions,
 } from "@mc-wallet/privacy/service";
-import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
-import { systemClock } from "@mc-wallet/transactions/activity";
 import { verificationContext } from "@mc-wallet/transactions/verify";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import {
@@ -24,7 +23,7 @@ import {
 } from "../approvals/approval-context";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { readTypeOnlyInput } from "../routing/message-inputs";
-import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
+import { activeAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
@@ -38,24 +37,22 @@ import {
 } from "./strk20-op-context";
 import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
 import { handleStrk20SendOps } from "./strk20-send-ops";
+import { needsViewingKeyCeremony, viewingKeyCustodyDisclosure } from "./strk20-viewing-key-state";
 import { readStrk20WalletExecuteInput } from "./strk20-wallet-inputs";
 import {
   type Strk20WalletPreparation,
   strk20WalletPreparationPayload,
 } from "./strk20-wallet-preparations";
+import {
+  hasPendingRegistration,
+  STRK20_REGISTRATION_SUMMARY,
+  stateResponse,
+} from "./strk20-wallet-state";
 
 /**
  * Re-exported deps type so existing wiring keeps one import site.
  */
 export type { Strk20WalletOpsDeps } from "./strk20-op-context";
-
-/**
- * Activity summary recorded for a pool registration. Exported because the
- * pending-registration derivation below matches on it: that entry is the only
- * durable local record that a registration was broadcast, so the string is
- * load-bearing in two places and must never be duplicated as a literal.
- */
-export const STRK20_REGISTRATION_SUMMARY = "Activate private balances";
 
 /**
  * How long a broadcast registration is trusted over the privacy indexer. The
@@ -64,112 +61,29 @@ export const STRK20_REGISTRATION_SUMMARY = "Activate private balances";
  * attempt that truly never landed leaves the user able to retry rather than
  * locked out of the flow forever.
  */
-const REGISTRATION_PENDING_WINDOW_MS = 30 * 60_000;
 
-// A registration the privacy indexer cannot see yet. Derived from the activity
-// log rather than stored separately: the registration is already recorded there
-// with its hash, and background reconciliation already advances that entry, so a
-// rejected or reverted attempt drops out of this check on its own.
-const hasPendingRegistration = async (
-  deps: Strk20WalletOpsDeps,
-  context: ActivePrivacyContext,
-): Promise<boolean> => {
-  const now = (deps.now ?? systemClock)();
-  const entries = await deps.activity.list();
-  return entries.some(
-    (entry) =>
-      entry.summary === STRK20_REGISTRATION_SUMMARY &&
-      entry.accountId === context.accountContext.account.id &&
-      entry.networkId === context.accountContext.account.networkId &&
-      entry.status !== "rejected" &&
-      entry.status !== "reverted" &&
-      now - entry.submittedAt < REGISTRATION_PENDING_WINDOW_MS,
-  );
-};
-
-const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
-  // The privacy screen re-reads this disclosure on every hydration and, while a
-  // registration is settling, on a three-second poll. It is pure observation of
-  // state the user did not ask for again, so it must not extend the unlock
-  // window — otherwise one open panel keeps the wallet unlocked forever.
-  const context = await resolvePrivacyContext(deps, {
-    active: await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore),
-  });
-  if ("error" in context) {
-    return { error: context.error };
-  }
-  try {
-    const service = strk20ServiceForRuntime(deps.runtimeRpc);
-    const status = await readStrk20RegistrationStatus(service, {
-      ...context.accountContext,
-      token: context.token.address,
-    });
-    // An accepted-but-unindexed registration reads as `pending` rather than
-    // `unregistered`, so no surface offers to register a second time while the
-    // first one is still settling.
-    const registration =
-      status === "registered"
-        ? "registered"
-        : (await hasPendingRegistration(deps, context))
-          ? "pending"
-          : "unregistered";
-    const balances =
-      registration === "registered"
-        ? await readStrk20Balances(strk20ServiceForRuntime(deps.runtimeRpc), {
-            ...context.accountContext,
-            tokens: context.preferences.tokens
-              .filter((token) => token.networkId === context.accountContext.account.networkId)
-              .map((token) => token.address),
-          })
-        : [];
-    // The fee is a hard input to every pool route. Returning a successful state
-    // without it leaves Send in an endless "Checking" state, so an unavailable
-    // reader or a failed read rejects this request and reaches the UI's retry.
-    if (!service.poolFee) {
-      throw new Error("Private pool fee is unavailable. Retry the balance check.");
-    }
-    const poolFeeFri = await service.poolFee(context.accountContext);
-    return {
-      ok: true,
-      strk20State: {
-        accountId: context.accountContext.account.id,
-        balances: balances.map((entry) => {
-          const token = context.preferences.tokens.find(
-            (candidate) =>
-              candidate.networkId === context.accountContext.account.networkId &&
-              sameFelt(candidate.address, entry.token),
-          );
-          return {
-            balance: entry.balance,
-            formatted: token ? formatTokenAmount(BigInt(entry.balance), token.decimals) : "0",
-            symbol: token?.symbol ?? "Token",
-            token: entry.token,
-            tokenId: token?.id ?? "",
-          };
-        }),
-        networkId: context.accountContext.account.networkId,
-        poolFeeFri,
-        relayConfigured: context.accountContext.config?.paymaster !== undefined,
-        registration,
-      },
-    };
-  } catch (error) {
-    return { error: errorText(error, "Private balances unavailable") };
-  }
-};
+export { STRK20_REGISTRATION_SUMMARY } from "./strk20-wallet-state";
 
 const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
   // User-initiated: the user pressed "activate private balances".
   const context = await resolvePrivacyContext(deps, {
     active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    intents: STRK20_SIGN_INTENTS.register,
   });
   if ("error" in context) {
     return { error: context.error };
   }
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    // The account's OWN status normally comes from the SDK's discovery preflight,
+    // which needs the viewing key a hardware account does not have yet here. Ask
+    // the pool directly instead — it answers "is this address registered" for any
+    // address with no key required, which is the question being asked.
     const status = await readStrk20RegistrationStatus(service, {
       ...context.accountContext,
+      ...((await needsViewingKeyCeremony(context))
+        ? { subject: context.accountContext.account.address }
+        : {}),
       token: context.token.address,
     });
     if (status === "registered") {
@@ -204,6 +118,8 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
       summaries: [
         "Register this account with the privacy pool",
         "Registration is public and links this wallet address to its viewing key",
+        "Opens this account's own private channel, so later private sends need no extra setup",
+        ...viewingKeyCustodyDisclosure(context),
         `Approve and pay the reviewed ${poolFeeFri} STRK fri pool fee from this account`,
       ],
       token: context.token,
@@ -271,6 +187,16 @@ const activitySummary = (
     : `Shield ${value} to ${preparation.recipient}`;
 };
 
+// What each submitted preparation's two device prompts say. Withdrawals share
+// the transfer pair: both spend notes through the relay, so both authorize a
+// private movement and then hand it off rather than broadcasting it.
+const signIntentsFor = (kind: Strk20WalletPreparation["kind"]): LedgerStrk20Intents => {
+  if (kind === "register") {
+    return STRK20_SIGN_INTENTS.register;
+  }
+  return kind === "deposit" ? STRK20_SIGN_INTENTS.shield : STRK20_SIGN_INTENTS.transfer;
+};
+
 const executePreparation = async (
   deps: Strk20WalletOpsDeps,
   preparationId: string,
@@ -282,6 +208,7 @@ const executePreparation = async (
   // User-initiated: the user confirmed a reviewed preparation.
   const context = await resolvePrivacyContext(deps, {
     active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    intents: signIntentsFor(preparation.kind),
     tokenId: preparation.token.id,
   });
   if ("error" in context) {

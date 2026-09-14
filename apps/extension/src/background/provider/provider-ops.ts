@@ -1,11 +1,7 @@
 /** Dapp provider operations validate origin and phishing policy on every request. */
 
-import { walletErrorMessage } from "@mc-wallet/core/errors";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import { mapStrk20StageError } from "@mc-wallet/privacy/official-sdk-errors";
-import { unavailableStrk20Service } from "@mc-wallet/privacy/service";
 import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { standingAllowanceTotals } from "@mc-wallet/transactions/allowances";
@@ -16,7 +12,7 @@ import {
   verifyCalls,
 } from "@mc-wallet/transactions/verify";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
@@ -31,15 +27,12 @@ import {
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
-import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
-import { strk20AccountContext } from "../privacy/strk20-account-context";
+import { allowanceOwner } from "../portfolio/allowance-recording";
 import { readAddInvokeTransactionInput } from "../routing/message-inputs";
 import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
-import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import type { PassiveUnlockSession } from "../runtime/session";
 import {
   readGetPermissionsInput,
   readRetryApprovalFeeInput,
@@ -119,13 +112,16 @@ type GrantResolverDeps = {
   readonly wallet: WalletStatusReader;
 };
 
-// Resolves the account an origin's grant currently maps to on the active
-// network, or an error response the caller returns directly. A locked wallet or
-// a revoked grant fails safely. Single source for the dapp handlers and the
-// held-invoke executor so the fail-closed ordering never drifts between them.
-// Peek, never renew: an origin that keeps calling must not be able to hold the
-// wallet unlocked past its inactivity limit.
-const resolveOriginAccount = async (
+/**
+ * Resolves the account an origin's grant currently maps to on the active
+ * network, or an error response the caller returns directly. A locked wallet or
+ * a revoked grant fails safely. Single source for the dapp handlers and the
+ * held-invoke executor so the fail-closed ordering never drifts between them.
+ *
+ * Peek, never renew: an origin that keeps calling must not be able to hold the
+ * wallet unlocked past its inactivity limit.
+ */
+export const resolveOriginAccount = async (
   deps: GrantResolverDeps,
   origin: string,
   expected?: ApprovalContext,
@@ -167,7 +163,7 @@ const feeReviewTarget = (
   calls,
   preferences: resolved.preferences,
   ...(proof ? { proof } : {}),
-  signer: () => accountHashSigner(deps, resolved.account, resolved.passphrase),
+  signer: () => accountHashSigner(deps, resolved.account, resolved.passphrase, "dapp-transaction"),
 });
 
 /**
@@ -236,18 +232,6 @@ export const queueInvokeApproval = async (
     );
   }
   return { approval };
-};
-
-const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
-  if (!hasProof) {
-    return walletErrorMessage(error, "invoke request failed");
-  }
-  try {
-    mapStrk20StageError("submission", error);
-  } catch (mapped) {
-    return walletErrorMessage(mapped, "invoke request failed");
-  }
-  return "invoke request failed";
 };
 
 // Fail-closed perimeter shared by the dapp surfaces that error on a blocked
@@ -398,102 +382,4 @@ export const handleProviderOps = async (
     ? PROVIDER_OPS_HANDLERS[messageType]
     : undefined;
   return handler ? handler(deps, message, sender) : null;
-};
-
-/**
- * Executes a user-approved invoke: re-resolves the currently active account for
- * the origin (a locked wallet or a revoked grant fails safely), submits the held
- * calls, and records the transaction and any approvals. Returns an error
- * response instead of throwing so the caller can keep the approval queued.
- *
- * `reviewedFee` is the estimate the approval card was showing when the user
- * approved. It travels into the submit boundary as a signing ceiling, so a
- * transaction whose cost has moved past it since the review is refused rather
- * than signed — the site that asked for the call also controls state the call's
- * gas can depend on, and can move it while the card is open.
- */
-export const executeInvokeApproval = async (
-  deps: InvokeExecuteDeps,
-  approval: {
-    readonly context?: ApprovalContext;
-    readonly origin: string;
-    readonly payload: ApprovalPayload;
-    readonly reviewedFee?: FeeEstimate;
-  },
-): Promise<RuntimeResponse> => {
-  const { activity, allowanceStore, runtimeRpc } = deps;
-  const calls = approval.payload.calls;
-  if (!calls) {
-    return { error: "approval not found" };
-  }
-  const resolved = await resolveOriginAccount(deps, approval.origin, approval.context);
-  if ("error" in resolved) {
-    return resolved;
-  }
-  const { account, preferences } = resolved;
-  const authorized = captureSessionAuthorization(deps.session);
-  // The recipient policy is re-applied to the exact calls that are about to be
-  // broadcast, not only to the ones that were queued: the address book can gain
-  // a contact while the prompt sits open, and a payee that mimics it becomes a
-  // lookalike only at that moment. Same shared gate as the queue-time check
-  // above and as the post-consent check the STRK20 executor applies, so a
-  // decision the user made against one trusted set is never carried out against
-  // another. Refusal, not annotation — nothing is submitted.
-  const refusal =
-    refuseOnAccountSelfCall(calls, account.address) ??
-    refuseOnPoisonedRecipient(verifyCalls(calls, verificationContext(account, preferences)));
-  if (refusal) {
-    return refusal;
-  }
-  // A keyless Ledger account signs on the device (verified against publicKeyX),
-  // every other account through the vault — the same seam the wallet-initiated
-  // paths use. A device rejection/timeout/verify-failure, or a Ledger account
-  // with no queue wired, throws a WalletError from the sign path: catch it and
-  // return `{ error }` (mirroring executeStrk20InvokeApproval) so the applier
-  // settles the held request with the reason. Fails closed — nothing submitted.
-  // Spread into whichever submit lane runs: the ceiling is a property of the
-  // approval, not of the lane, so it is decided once here rather than at each.
-  const ceiling = approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {};
-  const strk20 = runtimeRpc.strk20 ?? unavailableStrk20Service;
-  try {
-    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
-    // One protected-account boundary for both lanes. The signing thunk and the
-    // viewing-key thunk are built there, bound to the unlock that authorized
-    // this approval, so a lock between the click and the broadcast revokes both
-    // — a second local viewing-key reader here was the one copy that derived a
-    // key for an already-locked wallet.
-    const context = strk20AccountContext(deps, { ...resolved, rpcUrls });
-    const result = approval.payload.proof
-      ? await strk20.submitPrepared({
-          ...context,
-          calls,
-          proof: approval.payload.proof,
-          ...ceiling,
-        })
-      : await runtimeRpc.submitInvokeTransaction({
-          account,
-          calls,
-          ...ceiling,
-          isAuthorized: authorized.isCurrent,
-          rpcUrls,
-          signHash: context.signHash,
-        });
-    // Recorded before the activity line: see ./allowance-recording.
-    await recordApproveAllowances({
-      assets: verificationContext(account, preferences),
-      calls,
-      owner: allowanceOwner(account),
-      store: allowanceStore,
-    });
-    await recordSubmittedActivity(activity, {
-      accountId: account.id,
-      hash: result.transactionHash,
-      kind: "invoke",
-      networkId: account.networkId,
-      summary: `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
-    });
-    return { ok: true, transactionHash: result.transactionHash };
-  } catch (error) {
-    return { error: invokeFailureMessage(error, approval.payload.proof !== undefined) };
-  }
 };

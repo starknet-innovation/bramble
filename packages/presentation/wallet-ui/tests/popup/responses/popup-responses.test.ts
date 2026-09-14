@@ -6,7 +6,6 @@ import {
   isApprovalDecisionResponse,
   isBalancesResponse,
   isCreateAccountResponse,
-  isErrorResponse,
   isGenerateMnemonicResponse,
   isPendingApprovalsResponse,
   isPreferencesResponse,
@@ -131,7 +130,7 @@ describe("popup response validators", () => {
     ).toBe(false);
   });
 
-  test("validates account and error responses", () => {
+  test("validates account responses", () => {
     expect(isCreateAccountResponse({ account, ok: true })).toBe(true);
     expect(isCreateAccountResponse({ account: null, ok: true })).toBe(false);
     expect(isCreateAccountResponse({ account: { ...account, address: "not-hex" }, ok: true })).toBe(
@@ -140,10 +139,6 @@ describe("popup response validators", () => {
     expect(
       isCreateAccountResponse({ account: { ...account, privateKey: "0x456" }, ok: true }),
     ).toBe(false);
-    expect(isErrorResponse({ error: "bad passphrase" })).toBe(true);
-    expect(isErrorResponse({ code: "bad", error: "bad passphrase" })).toBe(false);
-    expect(isErrorResponse({ error: 1 })).toBe(false);
-    expect(isErrorResponse({ error: "" })).toBe(false);
   });
 
   test("validates generated mnemonic responses", () => {

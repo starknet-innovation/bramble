@@ -9,39 +9,23 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { isUuid } from "@mc-wallet/core/ids";
 import { isWalletOrigin } from "@mc-wallet/core/origin";
-import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
 import { systemClock } from "@mc-wallet/transactions/activity";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { ProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
-import type { ProviderDeclare } from "@mc-wallet/wallet-protocol/declare";
-import type { Strk20Action, Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
-import type { Call } from "starknet";
-import {
-  matchesStrk20DisclosureKind,
-  type Strk20DisclosureApprovalKind,
-  type Strk20DisclosureRequest,
-} from "../privacy/strk20-approval-types";
-import type { ApprovalContext } from "./approval-context";
-import type { ApprovalFeeRevision } from "./approval-limits";
+import { matchesStrk20DisclosureKind } from "../privacy/strk20-approval-types";
 import {
   approvalAdmissionRefusal,
   approvalCapacityVictim,
   isExpiredApproval,
 } from "./approval-limits";
 import {
-  type ApprovalPayload,
   cloneApprovalCall,
   cloneApprovalValue,
   readStoredApprovalPayload,
 } from "./approval-payload";
 import {
   type ApprovalRequest,
-  type ApprovalRiskFlag,
   approvalSnapshot,
-  type DeclarationReview,
   type InvokeFeeReview,
   type PendingApproval,
-  type WatchAssetToken,
 } from "./approval-snapshot";
 
 /** Queue admission caps and the abandoned-approval TTL. */
@@ -72,118 +56,45 @@ type ApprovalEntry = ApprovalRequest & { readonly feeRevision: number; readonly 
  * Observer invoked after approval ids are removed without a user decision.
  * External state keyed by those ids must be released here.
  */
-type ApprovalDropObserver = (ids: readonly string[]) => void;
+
+import type {
+  ApprovalClaim,
+  ApprovalDropObserver,
+  ApprovalQueue,
+  ApprovalQueueOptions,
+} from "./approval-queue-types";
 
 /**
- * Atomically claimed snapshot and private payload. The id cannot be reclaimed.
+ * The queue's contract, re-exported from its own module so existing importers of
+ * `./approvals` keep working while the shapes live beside each other.
  */
-export type ApprovalClaim = {
-  readonly approval: PendingApproval;
-  readonly payload: ApprovalPayload | null;
-};
-/**
- * In-memory dapp approval queue; all claim and admission failures are explicit.
- */
-export type ApprovalQueue = {
-  /**
-   * Claims the fee slot of a queued invoke or declare approval, invalidating
-   * every claim outstanding on it.
-   */
-  readonly beginFeeEstimate: (id: string) => ApprovalFeeRevision | null;
-  /**
-   * The refusal one more approval for `origin` would fail with, or null when
-   * there is room. A probe; dapp surfaces apply `requireApprovalAdmission`.
-   */
-  readonly canAdmit: (origin: string) => string | null;
-  readonly claim: (id: string) => ApprovalClaim | null;
-  readonly get: (id: string) => PendingApproval | null;
-  readonly list: () => readonly PendingApproval[];
-  /**
-   * Registers the {@link ApprovalDropObserver} for this queue. Exactly one
-   * observer is held — a second call replaces the first — because the runtime
-   * registers it once while wiring the router context. Registration is the only
-   * way expiry becomes visible: the sweep is lazy and fires no event of its own.
-   */
-  readonly observeDrops: (observe: ApprovalDropObserver) => void;
-  readonly payload: (id: string) => ApprovalPayload | null;
-  readonly request: (origin: string) => PendingApproval;
-  readonly requestAddChain: (input: {
-    readonly chain: ProviderChain;
-    readonly origin: string;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
-  readonly requestDeclare: (input: {
-    readonly context: ApprovalContext;
-    readonly declare: ProviderDeclare;
-    readonly declaration: DeclarationReview;
-    readonly origin: string;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
-  readonly requestInvoke: (input: {
-    readonly calls: readonly Call[];
-    readonly context: ApprovalContext;
-    readonly fee: InvokeFeeReview;
-    readonly flags: readonly ApprovalRiskFlag[];
-    readonly origin: string;
-    readonly proof?: Strk20Proof;
-    readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
-  readonly requestSignTypedData: (input: {
-    readonly context: ApprovalContext;
-    readonly origin: string;
-    readonly summary: string;
-    readonly typedData: unknown;
-  }) => PendingApproval;
-  readonly requestStrk20Disclosure: (input: {
-    readonly context: ApprovalContext;
-    readonly kind: Strk20DisclosureApprovalKind;
-    readonly origin: string;
-    readonly request: Strk20DisclosureRequest;
-    readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
-  readonly requestStrk20Invoke: (input: {
-    readonly actions: readonly Strk20Action[];
-    readonly context: ApprovalContext;
-    readonly origin: string;
-    readonly plan: Strk20SubmissionPlan;
-    readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
-  readonly requestSwitchChain: (input: {
-    readonly chainId: string;
-    readonly networkId: StarknetNetworkId;
-    readonly origin: string;
-    readonly summary: string;
-  }) => PendingApproval;
-  readonly requestWatchAsset: (input: {
-    readonly origin: string;
-    readonly token: WatchAssetToken;
-  }) => PendingApproval;
-  /** Writes a fee review only while its queue revision remains current. */
-  readonly updateFee: (
-    revision: ApprovalFeeRevision,
-    update:
-      | { readonly declaration: DeclarationReview; readonly kind: "declare" }
-      | { readonly kind: "invoke"; readonly review: InvokeFeeReview },
-  ) => PendingApproval | null;
-};
-
-/**
- * Construction options for the approval queue.
- */
-export type ApprovalQueueOptions = {
-  /**
-   * Wall-clock reader used to stamp and age queued approvals. Injected so the
-   * TTL sweep is deterministic under test; defaults to the system clock, which
-   * keeps this module free of a clock boundary of its own.
-   */
-  readonly now?: () => number;
-};
+export type { ApprovalClaim, ApprovalQueue, ApprovalQueueOptions };
 
 const copyReviewAssets = (assets: NonNullable<PendingApproval["reviewAssets"]>) =>
   assets.length === 0 ? {} : { reviewAssets: assets.map((asset) => ({ ...asset })) };
+
+/**
+ * Rewrites a queued invoke's fee review from a completed estimate.
+ *
+ * The detail slot is replaced wholesale, not merged: a retry that succeeds — or
+ * fails with no node reason — must not leave the previous attempt's text on the
+ * card. It is dropped via rest so the key is absent rather than set to
+ * `undefined`, which is what the response validators distinguish.
+ */
+const withInvokeFeeReview = (approval: ApprovalEntry, review: InvokeFeeReview): ApprovalEntry => {
+  const { feeEstimateDetail: _previous, ...carried } = approval;
+  return {
+    ...carried,
+    fee: review.fee && { ...review.fee },
+    feeAffordability: review.feeAffordability,
+    ...(review.feeEstimateDetail === undefined
+      ? {}
+      : { feeEstimateDetail: review.feeEstimateDetail }),
+    feeEstimateFailed: review.feeEstimateFailed,
+    feeEstimatePending: review.feeEstimatePending,
+    requiresDeployment: review.requiresDeployment,
+  };
+};
 
 /**
  * Creates a deduplicating approval queue. Connection prompts dedupe per origin;
@@ -362,6 +273,9 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         context: { ...context },
         fee: fee.fee && { ...fee.fee },
         feeAffordability: fee.feeAffordability,
+        ...(fee.feeEstimateDetail === undefined
+          ? {}
+          : { feeEstimateDetail: fee.feeEstimateDetail }),
         feeEstimateFailed: fee.feeEstimateFailed,
         feeEstimatePending: fee.feeEstimatePending,
         flags: flags.map((flag) => ({ ...flag })),
@@ -483,14 +397,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
           },
         });
       } else if (approval.kind === "invoke" && update.kind === "invoke") {
-        pending.set(id, {
-          ...approval,
-          fee: update.review.fee && { ...update.review.fee },
-          feeAffordability: update.review.feeAffordability,
-          feeEstimateFailed: update.review.feeEstimateFailed,
-          feeEstimatePending: update.review.feeEstimatePending,
-          requiresDeployment: update.review.requiresDeployment,
-        });
+        pending.set(id, withInvokeFeeReview(approval, update.review));
       }
       return get(id);
     },

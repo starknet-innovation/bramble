@@ -8,6 +8,7 @@
  * this boundary.
  */
 import { WalletError } from "@mc-wallet/core/errors";
+import { STRK20_SIGN_INTENTS } from "@mc-wallet/ledger-protocol/intent";
 import type { PreparedStrk20AccountSubmission } from "@mc-wallet/privacy/service";
 import {
   prepareStrk20AccountActions,
@@ -185,7 +186,7 @@ const prepareApprovedStrk20Registration = async (
   if ("error" in resolved) {
     return resolved;
   }
-  const context = strk20AccountContext(deps, resolved);
+  const context = strk20AccountContext(deps, resolved, STRK20_SIGN_INTENTS.register);
   try {
     const registration = approval.request;
     const config = context.config;
@@ -276,7 +277,7 @@ const prepareApprovedStrk20AccountActions = async (
     ) {
       return { error: "Deploy this account before submitting a public private deposit" };
     }
-    const context = strk20AccountContext(deps, resolved);
+    const context = strk20AccountContext(deps, resolved, STRK20_SIGN_INTENTS.dapp);
     const actions = await bindStrk20ActionsToOrigin(approval.origin, approval.actions);
     return {
       prepared: await prepareStrk20AccountActions(strk20ServiceForRuntime(deps.runtimeRpc), {
@@ -390,7 +391,7 @@ export const executeStrk20DisclosureApproval = async (
   if ("error" in resolved) {
     return resolved;
   }
-  const context = strk20AccountContext(deps, resolved);
+  const context = strk20AccountContext(deps, resolved, STRK20_SIGN_INTENTS.dapp);
   try {
     if (approval.request.type === "register") {
       return { error: "registration requires a network-fee approval" };
@@ -466,7 +467,7 @@ export const executeStrk20InvokeApproval = async (
   }
   try {
     const result = await submitStrk20Actions(strk20ServiceForRuntime(deps.runtimeRpc), {
-      ...strk20AccountContext(deps, resolved),
+      ...strk20AccountContext(deps, resolved, STRK20_SIGN_INTENTS.dapp),
       actions: await bindStrk20ActionsToOrigin(approval.origin, approval.actions),
       beforeProof: () => assertCurrentRecipientPolicy(deps, resolved.account, approval.actions),
       plan: approval.plan,

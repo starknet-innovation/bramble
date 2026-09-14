@@ -4,6 +4,7 @@
  * All six are dapp-reachable, so every session read here is a non-renewing peek.
  */
 
+import { STRK20_SIGN_INTENTS } from "@mc-wallet/ledger-protocol/intent";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
 
 import {
@@ -144,9 +145,9 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
   if ("error" in resolved) {
     return resolved;
   }
-  if (resolved.account.derivation.kind === "ledger") {
-    return { error: "Private balances are not available for Ledger accounts" };
-  }
+  // A Ledger account registers through its retained, scope-bound key; without one
+  // the derivation below fails closed, which is honest here — a dapp cannot drive
+  // the device ceremony, so the user must run it from the wallet first.
   const config = resolved.preferences.strk20Networks?.[resolved.account.networkId];
   const token = resolved.preferences.tokens.find(
     (candidate) => candidate.networkId === resolved.account.networkId,
@@ -155,7 +156,7 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
     return { error: "strk20 services unavailable" };
   }
   try {
-    const accountContext = strk20AccountContext(deps, resolved);
+    const accountContext = strk20AccountContext(deps, resolved, STRK20_SIGN_INTENTS.register);
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
     if (!service.poolFee) {
       return { error: "strk20 services unavailable" };
@@ -180,7 +181,7 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
         `Privacy pool ${config.poolAddress}`,
         `Registration preflight token ${token.address}`,
         `Approve and pay the reviewed ${poolFeeFri} STRK fri pool fee`,
-        "Publishes a viewing-key commitment, never the viewing key",
+        "Publishes a viewing-key commitment (never the key) and opens this account's own channel",
       ],
     });
   } catch (error) {
@@ -290,7 +291,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   }
   try {
     const plan = await quoteStrk20Plan(strk20ServiceForRuntime(deps.runtimeRpc), {
-      ...strk20AccountContext(deps, resolved),
+      ...strk20AccountContext(deps, resolved, STRK20_SIGN_INTENTS.dapp),
       actions: input.actions,
     });
     const payload = { actions: input.actions, strk20Plan: plan };

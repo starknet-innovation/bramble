@@ -53,6 +53,13 @@ export type PrivacyAccountState = {
    * that window is how a duplicate registration gets broadcast.
    */
   readonly registration: "pending" | "registered" | "unregistered";
+  /**
+   * `setup-required` means a Ledger account has no retained viewing key for this
+   * pool yet: the device ceremony must run before any private read is possible.
+   * Balances are empty in that state and say nothing about what the account
+   * holds, so no surface may render them as a zero private balance.
+   */
+  readonly privateBalances: "ready" | "setup-required";
 };
 
 /**
@@ -273,6 +280,7 @@ const readState = (response: unknown): PrivacyAccountState | null => {
       "poolFeeFri",
       "relayConfigured",
       "registration",
+      "privateBalances",
     ]) ||
     !isStarknetNetworkId(state["networkId"]) ||
     !isAccountIdForNetwork(state["accountId"], state["networkId"]) ||
@@ -281,6 +289,7 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     (state["registration"] !== "pending" &&
       state["registration"] !== "registered" &&
       state["registration"] !== "unregistered") ||
+    (state["privateBalances"] !== "ready" && state["privateBalances"] !== "setup-required") ||
     !Array.isArray(state["balances"]) ||
     state["balances"].length > STRK20_LIMITS.balances
   ) {
@@ -320,6 +329,7 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     poolFeeFri: state["poolFeeFri"],
     relayConfigured: state["relayConfigured"],
     registration: state["registration"],
+    privateBalances: state["privateBalances"],
   };
 };
 
@@ -345,6 +355,20 @@ export const createPrivacyRuntimeClient = (
       return response["transactionHash"];
     }
     throw responseError(response, "Private transaction failed");
+  },
+  /**
+   * Runs the hardware viewing-key ceremony for the active account and pool.
+   *
+   * Resolves to nothing on purpose: the key is derived and retained inside the
+   * vault boundary, and no response carries it. Callers re-read the privacy state
+   * afterwards to observe `privateBalances` flipping to `ready`.
+   */
+  async derivePrivacyViewingKey(): Promise<void> {
+    const response = await sendMessage({ type: "wallet.strk20DeriveLedgerViewingKey" });
+    if (isRecord(response) && hasOnlyKnownKeys(response, ["ok"]) && response["ok"] === true) {
+      return;
+    }
+    throw responseError(response, "Could not unlock private balances on your Ledger");
   },
   async loadPrivacyState(): Promise<PrivacyAccountState> {
     const response = await sendMessage({ type: "wallet.strk20State" });

@@ -14,6 +14,7 @@ import { ledgerSignScreen } from "../../../../src/sidepanel/journeys/ledger/sign
 
 const request: LedgerSignRequestSummary = {
   accountId: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  intent: "send-token",
   id: "ledger-sign-1",
   messageHash: "0xabc",
   path: ledgerAccountPath(3),
@@ -87,6 +88,59 @@ describe("ledgerSignScreen", () => {
     expect(render({ kind: "submitting" })).toContain("Signature received");
   });
 
+  test("states what the signature authorizes in every phase", () => {
+    // Under blind signing the device shows only a bare hash, so this line is the
+    // sole description of the operation the user gets. It must be present
+    // wherever the prompt is, including the error phase they may retry from.
+    const phases: readonly LedgerSignView["phase"][] = [
+      { kind: "connect" },
+      { kind: "confirming" },
+      { kind: "submitting" },
+      { code: "device-locked", kind: "error", message: "Unlock your Ledger." },
+    ];
+    for (const phase of phases) {
+      expect(render(phase)).toContain("Sign to send");
+    }
+  });
+
+  test("each intent renders its own copy rather than a shared generic label", () => {
+    const copyFor = (intent: LedgerSignRequestSummary["intent"]): string =>
+      ledgerSignScreen({ phase: { kind: "confirming" }, request: { ...request, intent } }, status);
+    expect(copyFor("dapp-message")).toContain("Sign a message from this site");
+    expect(copyFor("multisig-revoke")).toContain("Sign to revoke your confirmation");
+    expect(copyFor("revoke-spending")).toContain("Sign to revoke a spending approval");
+    expect(copyFor("strk20-register-authorize")).toContain(
+      "Sign to authorize joining the privacy pool",
+    );
+    // Each half of a two-signature operation authorizes something different, so
+    // no pair may share one label — that is indistinguishable from the wallet
+    // asking twice for the same approval.
+    for (const [first, second] of [
+      ["strk20-authorize", "strk20-broadcast"],
+      ["strk20-register-authorize", "strk20-register-broadcast"],
+      ["strk20-shield-authorize", "strk20-shield-broadcast"],
+      ["strk20-transfer-authorize", "strk20-transfer-relay"],
+    ] as const) {
+      expect(copyFor(first)).not.toBe(copyFor(second));
+      expect(copyFor(first)).toContain("Signature 1 of 2");
+      expect(copyFor(second)).toContain("Signature 2 of 2");
+    }
+    // A relayed transfer broadcasts nothing from this account, so its second
+    // prompt must not claim otherwise.
+    expect(copyFor("strk20-transfer-relay")).not.toContain("broadcast");
+  });
+
+  test("a single-signature operation states no step count", () => {
+    const html = ledgerSignScreen(
+      { phase: { kind: "confirming" }, request: { ...request, intent: "strk20-viewing-key" } },
+      status,
+    );
+
+    expect(html).toContain("Sign to derive your viewing key");
+    // "Signature 1 of 1" would invent a sequence the user is not in.
+    expect(html).not.toContain("Signature");
+  });
+
   test("a path with no recoverable index omits the index suffix", () => {
     const html = ledgerSignScreen(
       { phase: { kind: "confirming" }, request: { ...request, path: "m/not-a-path" } },
@@ -108,6 +162,9 @@ describe("ledgerSignScreen", () => {
       { kind: "confirming" },
       { kind: "verifying" },
       { kind: "submitting" },
+      // Including the phase a user may retry from: the comparison has to be on
+      // screen there too, not only on the happy path.
+      { code: "device-locked", kind: "error", message: "Unlock your Ledger." },
     ] as const) {
       const html = ledgerSignScreen({ phase, request: { ...request, messageHash } }, status);
       expect(html).toContain("Hash shown on your Ledger");

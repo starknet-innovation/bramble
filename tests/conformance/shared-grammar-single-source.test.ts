@@ -234,6 +234,8 @@ const kmsReturning = (privateKey: string, viewingKey: string) =>
       public_key_y: "0xdef",
     }),
     deriveScopedStrk20ViewingKey: () => viewingKey,
+    foldStrk20ViewingKey: () => viewingKey,
+    strk20ViewingKeyMessageHash: () => "0xabc",
     generateMnemonic: () => "habit hope tip crystal because grunt nation idea electric witness",
     getAccountClassHashes: () => "{}",
     openNostrApplicationData: () =>
@@ -290,11 +292,15 @@ describe("the Stark signing-scalar grammar has one definition", () => {
     await expect(kms.signStarkHash(ABOVE_CURVE_ORDER, "0x1")).rejects.toThrow(
       "Invalid Stark signing input",
     );
-    await expect(kms.deriveStrk20ViewingKey(ABOVE_CURVE_ORDER, "0x1", "0x2")).rejects.toThrow(
+    await expect(kms.deriveScopedStrk20ViewingKey(ABOVE_CURVE_ORDER, "0x1", "0x2")).rejects.toThrow(
       "Invalid STRK20 viewing-key input",
     );
     await expect(
-      kmsReturning(VALID_KEY, ABOVE_CURVE_ORDER).deriveStrk20ViewingKey(VALID_KEY, "0x1", "0x2"),
+      kmsReturning(VALID_KEY, ABOVE_CURVE_ORDER).deriveScopedStrk20ViewingKey(
+        VALID_KEY,
+        "0x1",
+        "0x2",
+      ),
     ).rejects.toThrow("Krusty KMS returned an invalid STRK20 viewing key");
   });
 
@@ -304,6 +310,8 @@ describe("the Stark signing-scalar grammar has one definition", () => {
       privateKey: VALID_KEY,
     });
     await expect(kms.signStarkHash(VALID_KEY, "0x1")).resolves.toMatchObject({ r: "0x1" });
-    await expect(kms.deriveStrk20ViewingKey(VALID_KEY, "0x1", "0x2")).resolves.toBe(VALID_KEY);
+    await expect(kms.deriveScopedStrk20ViewingKey(VALID_KEY, "0x1", "0x2")).resolves.toBe(
+      VALID_KEY,
+    );
   });
 });

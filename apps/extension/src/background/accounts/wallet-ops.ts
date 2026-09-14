@@ -1,5 +1,6 @@
 /** RPC-backed wallet operations dispatched from the background message handler. */
 
+import type { LedgerSignIntent } from "@mc-wallet/ledger-protocol/intent";
 import type { MultisigStore } from "@mc-wallet/multisig/repository";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import {
@@ -91,12 +92,15 @@ export { verificationContext } from "@mc-wallet/transactions/verify";
 
 /**
  * Builds a hash signer for a resolved active-account context without exposing
- * the vault secret to caller modules.
+ * the vault secret to caller modules. `intent` names what the signature
+ * authorizes and is required — on a Ledger it is the only description of the
+ * operation the user sees before blind-signing (see {@link accountHashSigner}).
  */
 export const signerForContext = (
   deps: WalletOpsDeps,
   context: { readonly account: AccountRef; readonly vaultPassphrase: string },
-) => accountHashSigner(deps, context.account, context.vaultPassphrase);
+  intent: LedgerSignIntent,
+) => accountHashSigner(deps, context.account, context.vaultPassphrase, intent);
 
 const transferContext = async (
   deps: WalletOpsDeps,
@@ -148,7 +152,7 @@ const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
     isAuthorized: authorized.isCurrent,
     networkId: context.networkId,
     ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
-    signHash: accountHashSigner(deps, context.account, context.vaultPassphrase),
+    signHash: accountHashSigner(deps, context.account, context.vaultPassphrase, "deploy-account"),
   });
 };
 
@@ -253,7 +257,7 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
     account,
     calls: [call],
     rpcUrls,
-    signHash: accountHashSigner(deps, account, vaultPassphrase),
+    signHash: accountHashSigner(deps, account, vaultPassphrase, "send-token"),
     speed: input.speed,
   });
   // Fee-affordability guard (issue 191): compare the estimate against the
@@ -272,6 +276,9 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
       deploymentFeeEstimateFailed: fees.deploymentFeeEstimateFailed,
       fee: fees.fee,
       feeAffordability,
+      // Only alongside a failure the user can act on; a recovered estimate never
+      // ships a stale reason.
+      ...(fees.feeEstimateDetail === null ? {} : { feeEstimateDetail: fees.feeEstimateDetail }),
       feeEstimateFailed: fees.feeEstimateFailed,
       flags: report.flags,
       requiresDeployment: fees.requiresDeployment,
@@ -323,7 +330,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
     reviewedFee: input.reviewedFee,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-    signHash: accountHashSigner(deps, account, vaultPassphrase),
+    signHash: accountHashSigner(deps, account, vaultPassphrase, "send-token"),
     speed: input.speed,
     token,
   });

@@ -114,15 +114,25 @@ export const strk20BuilderFor = (
 };
 
 /**
- * Creates the explicit registration-only builder; missing SDK support fails
- * closed before any proof or transaction can be produced.
+ * Creates the explicit registration builder; missing SDK support fails closed
+ * before any proof or transaction can be produced.
+ *
+ * `autoSetup` opens the account's own channel in the same batch, which is
+ * load-bearing rather than a convenience. Every batch needs the sender's own
+ * channel, so leaving it closed here defers it to whatever the account does
+ * next — and if that is a transfer to someone else, the batch opens two
+ * channels at once, which the SDK reports as `USER_LINKAGE` and this wallet
+ * refuses. Registration is the right place to spend that channel: it is already
+ * a public event naming this address, so opening the self channel alongside it
+ * discloses nothing new, whereas opening it beside a recipient's channel would
+ * link the two.
  */
 export const strk20RegistrationBuilderFor = (transfers: SdkTransfers): SdkBuilder => {
   const builder = transfers.build({
     autoDiscover: { channels: "refresh", notes: "refresh" },
     autoRegister: false,
     autoSelectNotes: "naive",
-    autoSetup: false,
+    autoSetup: true,
     registryConst: true,
   });
   if (!builder.register) {

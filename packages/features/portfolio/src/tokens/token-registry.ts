@@ -9,6 +9,7 @@
  */
 
 import {
+  DEFAULT_TOKENS,
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
   sameFelt,
@@ -86,6 +87,15 @@ const MAINNET_TOKENS: readonly RegistryToken[] = [
     networkId: "SN_MAIN",
     symbol: "WBTC",
   },
+  {
+    // Symbol, name, and decimals read from the contract itself over two of the
+    // wallet's own default mainnet endpoints, not from a token list.
+    address: "0x0787150e306e6eae6e3f79dea881770e8bbff2c1b8eb490f969669ee945b3135",
+    decimals: 8,
+    name: "strkBTC",
+    networkId: "SN_MAIN",
+    symbol: "strkBTC",
+  },
 ];
 
 const REGISTRY: Readonly<Record<StarknetNetworkId, readonly RegistryToken[]>> = {
@@ -147,6 +157,30 @@ export const knownTokensForNetwork = (networkId: StarknetNetworkId): readonly To
   // three fields: a curated entry and a user-added entry for the same token must
   // land on the same id, or "already tracked" comparisons silently miss.
   REGISTRY[networkId].map(withTokenId);
+
+/**
+ * Tokens whose balance decides whether an undeployed address is worth restoring
+ * during a recovery-phrase scan: the curated registry for the network plus the
+ * bundled defaults, deduplicated by address.
+ *
+ * Deliberately not the wallet's tracked tokens. A scan must return the same
+ * accounts for the same phrase on any device, and keying it off whatever the
+ * current wallet happens to track would make one device find an account another
+ * device misses. On networks the registry does not curate, this is exactly the
+ * bundled defaults (ETH and STRK).
+ */
+export const discoveryTokensForNetwork = (networkId: StarknetNetworkId): readonly TokenConfig[] => {
+  const tokens = [
+    ...knownTokensForNetwork(networkId),
+    ...DEFAULT_TOKENS.filter((token) => token.networkId === networkId).map((token) => ({
+      ...token,
+      id: `${networkId}:${token.symbol}:${token.address}`,
+    })),
+  ];
+  return tokens.filter(
+    (token, index) => tokens.findIndex((other) => sameFelt(other.address, token.address)) === index,
+  );
+};
 
 /**
  * Metadata shape scored by the spam heuristics; accepts both stored token

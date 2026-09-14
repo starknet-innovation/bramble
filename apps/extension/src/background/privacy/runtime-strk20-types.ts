@@ -56,6 +56,13 @@ export type Strk20WalletStateResponse = {
      * Callers must treat it as "not shieldable, do not register again".
      */
     readonly registration: "pending" | "registered" | "unregistered";
+    /**
+     * Whether a private read is possible at all. `setup-required` means a Ledger
+     * account has no retained viewing key for this exact pool yet, so the device
+     * ceremony has to run first; balances are empty and say nothing about what
+     * the account holds. Software accounts are always `ready`.
+     */
+    readonly privateBalances: "ready" | "setup-required";
   };
 };
 

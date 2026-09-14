@@ -19,6 +19,7 @@ const ID = `SN_MAIN:${ADDRESS}`;
 const pending = {
   accountId: ID,
   id: "ledger-sign-1",
+  intent: "send-token",
   messageHash: "0xabc",
   path: ledgerAccountPath(0),
   publicKeyX: "0xabc",
@@ -45,9 +46,21 @@ describe("isLedgerSignPendingResponse", () => {
     expect(isLedgerSignPendingResponse({ ok: true, pending: [] })).toBe(true);
   });
 
-  test("rejects a bad hash, path, account id, or shape", () => {
+  test("rejects a bad hash, path, account id, intent, or shape", () => {
     expect(
       isLedgerSignPendingResponse({ ok: true, pending: [{ ...pending, messageHash: "zz" }] }),
+    ).toBe(false);
+    // An unknown intent is rejected rather than rendered unlabelled: the prompt
+    // copy is a total map over the union, so admitting a stray string would mean
+    // showing the user a hash with no stated purpose.
+    expect(
+      isLedgerSignPendingResponse({
+        ok: true,
+        pending: [{ ...pending, intent: "send-everything" }],
+      }),
+    ).toBe(false);
+    expect(
+      isLedgerSignPendingResponse({ ok: true, pending: [{ ...pending, intent: undefined }] }),
     ).toBe(false);
     expect(isLedgerSignPendingResponse({ ok: true, pending: [{ ...pending, path: "m/x" }] })).toBe(
       false,

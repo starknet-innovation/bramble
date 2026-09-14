@@ -375,6 +375,29 @@ export const SEND_STYLES = `
   }
   @keyframes send-pulse-icon { 50% { opacity: 0.55; transform: scale(0.9); } }
   .ledger-progress-hero h2 { font-size: ${TYPE.title.size}; }
+  /* What the device approval authorizes. Blind signing shows the user only a
+     hash, so this is the one statement of purpose they get: it sits directly
+     under the phase title and carries accent weight so it reads before the
+     progress rail or the hash itself. */
+  .ledger-sign-intent {
+    color: var(--mc-accent);
+    font-size: ${TYPE.body.size};
+    font-weight: 600;
+  }
+  /* Which of an operation's two approvals this is. Sits above the intent as a
+     quiet label: it answers "why again?" without competing with the statement of
+     what is being approved. */
+  .ledger-sign-step {
+    letter-spacing: 0.08em;
+  }
+  /* Why a second approval exists at all. Muted and below the intent, so the
+     order read is count, then purpose, then justification. */
+  .ledger-sign-because {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    margin: 0 auto;
+    max-width: 34ch;
+  }
   .ledger-signer-line {
     align-items: center;
     color: var(--mc-muted);

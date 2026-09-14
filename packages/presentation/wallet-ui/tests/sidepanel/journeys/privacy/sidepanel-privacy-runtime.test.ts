@@ -61,6 +61,7 @@ describe("privacy runtime client", () => {
             poolFeeFri: "0x1",
             relayConfigured: true,
             registration: "registered",
+            privateBalances: "ready",
           },
         };
       }
@@ -76,6 +77,7 @@ describe("privacy runtime client", () => {
     await expect(client.loadPrivacyState()).resolves.toMatchObject({
       balances: [{ balance: "0x2", symbol: "ETH" }],
       registration: "registered",
+      privateBalances: "ready",
     });
     await expect(
       client.preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT),
@@ -150,6 +152,7 @@ describe("privacy runtime client", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "registered",
+        privateBalances: "ready",
       },
     }));
 
@@ -164,6 +167,7 @@ describe("privacy runtime client", () => {
         balances: [],
         networkId: "SN_SEPOLIA",
         registration: "registered",
+        privateBalances: "ready",
       },
     }));
 
@@ -178,6 +182,7 @@ describe("privacy runtime client", () => {
       poolFeeFri: "0x1",
       relayConfigured: true,
       registration: "pending" as const,
+      privateBalances: "ready" as const,
     };
     const pending = createPrivacyRuntimeClient(async () => ({ ok: true, strk20State: state }));
     await expect(pending.loadPrivacyState()).resolves.toEqual(state);
@@ -199,6 +204,7 @@ describe("privacy runtime client", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "registered",
+        privateBalances: "ready",
       },
     }));
     await expect(crossAccount.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
@@ -220,6 +226,7 @@ describe("privacy runtime client", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "registered",
+        privateBalances: "ready",
       },
     }));
     await expect(crossToken.loadPrivacyState()).rejects.toThrow("Private balances unavailable");

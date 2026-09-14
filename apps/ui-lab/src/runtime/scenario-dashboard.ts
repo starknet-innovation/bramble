@@ -75,6 +75,9 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
           balances: [],
           networkId: status.networkId,
           poolFeeFri: "0",
+          // A software account's key is derived on demand, so reads are ready
+          // without a ceremony; the lab's Ledger scenarios set setup-required.
+          privateBalances: "ready" as const,
           registration: "unregistered" as const,
           relayConfigured: false,
         }

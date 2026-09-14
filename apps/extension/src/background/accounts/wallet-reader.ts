@@ -21,6 +21,7 @@ import type {
   CreateLedgerVaultInput,
   CreateVaultAccountInput,
   DeriveLedgerAccountsInput,
+  DeriveLedgerStrk20ViewingKeyInput,
   EnsureNetworkAccountInput,
   ImportRawKeyAccountInput,
   OpenNostrApplicationDataBatchInput,
@@ -52,6 +53,14 @@ export type WalletStatusReader = {
   readonly deriveLedgerAccounts?: (
     input: DeriveLedgerAccountsInput,
   ) => Promise<readonly LedgerAccountRef[]>;
+  /**
+   * Runs the Ledger viewing-key ceremony and retains the result inside the vault
+   * boundary. Returns nothing — the key is never handed back across this seam.
+   * Optional only for partial test stubs; production fails closed when absent.
+   */
+  readonly deriveLedgerStrk20ViewingKey?: (
+    input: DeriveLedgerStrk20ViewingKeyInput,
+  ) => Promise<void>;
   /**
    * Derives the account-scoped STRK20 viewing key inside the vault boundary.
    * Optional only for partial test stubs; production fails closed when absent.
@@ -136,6 +145,9 @@ export const createWalletReader = (
     },
     async deriveLedgerAccounts(input) {
       return (await required()).deriveLedgerAccounts(input);
+    },
+    async deriveLedgerStrk20ViewingKey(input) {
+      return (await required()).deriveLedgerStrk20ViewingKey(input);
     },
     async deriveStrk20ViewingKey(input) {
       return (await required()).deriveStrk20ViewingKey(input);

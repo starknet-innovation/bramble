@@ -307,4 +307,7 @@ describe("settings UI bindings", () => {
     expect(importButton?.disabled).toBe(false);
     expect(app.querySelector("#backup-result")?.textContent).not.toBe("");
   });
+
+  // The reported bug's other half: the accounts surface must offer a choice, not
+  // add everything it finds.
 });

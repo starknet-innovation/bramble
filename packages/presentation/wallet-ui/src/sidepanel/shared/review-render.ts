@@ -15,7 +15,7 @@ import { button } from "@mc-wallet/ui-kit/controls";
 import type { UiAttributes } from "@mc-wallet/ui-kit/html-attributes";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
 import { icon } from "./icons";
-import { formatFri } from "./parts";
+import { copyButton, formatFri } from "./parts";
 
 /**
  * Fee state shared by the pre-sign review surfaces. The Send/NFT review
@@ -34,6 +34,13 @@ export type ReviewFeeState = {
    * fails open.
    */
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
+  /**
+   * The node's own reason a fee estimate was rejected, rendered only alongside
+   * `feeEstimateFailed`. Untrusted text — escaped before display, and shown
+   * behind a disclosure with a copy control so the banner stays calm while the
+   * reason remains readable and reportable.
+   */
+  readonly feeEstimateDetail?: string;
   readonly feeEstimateFailed?: boolean;
   readonly feeEstimatePending?: boolean;
   readonly requiresDeployment?: boolean;
@@ -41,9 +48,12 @@ export type ReviewFeeState = {
 
 // Warn-only shortfall notice appended under the fee line when the shared
 // predicate says the STRK balance cannot cover the transaction (issue 191).
+// Names the blocked control, because both surfaces disable it on this verdict
+// (issue 191) — a notice that only warned would leave the user staring at a dead
+// button with no reason given.
 const shortfallHtml = (state: ReviewFeeState): string =>
   state.feeAffordability === "insufficient"
-    ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it.</p>`
+    ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. Add STRK to continue — the network would reject it as it stands.</p>`
     : "";
 
 const reviewBoundary = (content: string): string =>
@@ -77,6 +87,21 @@ export const reviewConstraints = (copy: string): string =>
  */
 export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): string =>
   fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
+
+// The node's own rejection reason, kept behind a disclosure so the default view
+// stays calm while the text remains selectable and one click from the clipboard
+// — "check your connection" is the wrong story for the common case, an estimate
+// that executed the calls and reverted. Escaped: this is untrusted node output.
+const feeDetailHtml = (state: ReviewFeeState): string =>
+  state.feeEstimateDetail === undefined || state.feeEstimateDetail === ""
+    ? ""
+    : `<details class="disclosure review-fee-detail">
+    <summary><span class="menu-copy"><strong>Why it failed</strong><span>The network's own reason</span></span><span class="disclosure-mark">${icon("chevronRight")}</span></summary>
+    <div class="disclosure-body">
+      <code>${escapeHtml(state.feeEstimateDetail)}</code>
+      ${copyButton(state.feeEstimateDetail, "Copy fee estimate error")}
+    </div>
+  </details>`;
 
 /**
  * Renders the shared fee section of a pre-sign review: the estimated fee when
@@ -123,13 +148,13 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
   }
   if (state.feeEstimateFailed === true) {
     return reviewBoundary(
-      `<p class="review-flag" role="alert">Couldn't estimate the network fee right now. Check your connection and retry before sending.</p>${button(
-        {
-          attributes: retryAttributes,
-          label: "Retry fee estimate",
-          variant: "secondary",
-        },
-      )}`,
+      `<p class="review-flag" role="alert">Couldn't estimate the network fee right now. Check your connection and retry before sending.</p>${feeDetailHtml(
+        state,
+      )}${button({
+        attributes: retryAttributes,
+        label: "Retry fee estimate",
+        variant: "secondary",
+      })}`,
     );
   }
   return "";

@@ -12,6 +12,7 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
+import type { LedgerSignIntent } from "@mc-wallet/ledger-protocol/intent";
 import { pill } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
@@ -33,6 +34,108 @@ const signerLine = (request: LedgerSignRequestSummary): string => {
     <code>${escapeHtml(accountLabel(addressOfAccountId(request.accountId)))}</code>
     ${suffix}
   </div>`;
+};
+
+/**
+ * One intent's prompt: what the signature authorizes, and where it falls in a
+ * multi-signature operation.
+ */
+type IntentPrompt = {
+  /** Why a second signature exists, shown only when `step` is set. */
+  readonly because?: string;
+  readonly step?: 1 | 2;
+  readonly text: string;
+};
+
+// What the signature authorizes, in the user's terms. The device shows only a
+// bare hash under v1 blind signing, so this is the sole statement of purpose the
+// user gets before approving. Typed as a total record over the intent union, so
+// adding an intent without writing its copy fails to type-check rather than
+// rendering an unlabelled prompt.
+//
+// Every private operation takes two approvals, and they authorize different
+// things: the first signs the CallSet the pool verifies against the proof, the
+// second either broadcasts the transaction or hands it to the relay. Both halves
+// say which of the two they are, because "sign twice for one action" is
+// indistinguishable from a wallet asking twice for the same thing.
+const intentCopy: Readonly<Record<LedgerSignIntent, IntentPrompt>> = {
+  "dapp-message": { text: "Sign a message from this site" },
+  "dapp-transaction": { text: "Sign to approve this site's transaction" },
+  "declare-class": { text: "Sign to declare a contract class" },
+  "deploy-account": { text: "Sign to deploy this account" },
+  "multisig-confirm": { text: "Sign to confirm this multisig transaction" },
+  "multisig-deploy": { text: "Sign to deploy this multisig" },
+  "multisig-execute": { text: "Sign to execute this multisig transaction" },
+  "multisig-propose": { text: "Sign to propose this multisig transaction" },
+  "multisig-revoke": { text: "Sign to revoke your confirmation" },
+  "revoke-spending": { text: "Sign to revoke a spending approval" },
+  "send-collectible": { text: "Sign to send this collectible" },
+  "send-token": { text: "Sign to send" },
+  "strk20-authorize": {
+    because: "Authorizes the private actions themselves. Nothing is submitted yet.",
+    step: 1,
+    text: "Sign to authorize this site's private actions",
+  },
+  "strk20-broadcast": {
+    because: "Sends the authorized actions to Starknet.",
+    step: 2,
+    text: "Sign to broadcast this site's private transaction",
+  },
+  "strk20-register-authorize": {
+    because: "Authorizes joining the pool. Nothing is submitted yet.",
+    step: 1,
+    text: "Sign to authorize joining the privacy pool",
+  },
+  "strk20-register-broadcast": {
+    because: "Sends the registration to Starknet and pays the pool fee.",
+    step: 2,
+    text: "Sign to broadcast the registration transaction",
+  },
+  "strk20-shield-authorize": {
+    because: "Authorizes the deposit into your private balance. Nothing moves yet.",
+    step: 1,
+    text: "Sign to authorize this deposit",
+  },
+  "strk20-shield-broadcast": {
+    because: "Sends the deposit to Starknet from this account.",
+    step: 2,
+    text: "Sign to broadcast the deposit transaction",
+  },
+  "strk20-transfer-authorize": {
+    because: "Authorizes the private movement. Nothing is submitted yet.",
+    step: 1,
+    text: "Sign to authorize this private transfer",
+  },
+  "strk20-transfer-relay": {
+    because: "Lets the relay submit it for you, so your account never appears on chain.",
+    step: 2,
+    text: "Sign to hand this transfer to the private relay",
+  },
+  "strk20-viewing-key": {
+    text: "Sign to derive your viewing key",
+  },
+  "swap-tokens": { text: "Sign to swap these tokens" },
+};
+
+// Named "Signature N of 2" rather than as a progress bar: the count is about how
+// many times the device will ask, which is the question a user holding a Ledger
+// is actually asking. Absent for a single-signature operation, where a "1 of 1"
+// would invent a sequence.
+const stepLine = (prompt: IntentPrompt): string =>
+  prompt.step === undefined
+    ? ""
+    : `<p class="context-label ledger-sign-step">Signature ${prompt.step} of 2</p>`;
+
+const becauseLine = (prompt: IntentPrompt): string =>
+  prompt.because === undefined
+    ? ""
+    : `<p class="ledger-sign-because">${escapeHtml(prompt.because)}</p>`;
+
+const intentLine = (request: LedgerSignRequestSummary): string => {
+  const prompt = intentCopy[request.intent];
+  return `${stepLine(prompt)}
+  <p class="ledger-sign-intent">${escapeHtml(prompt.text)}</p>
+  ${becauseLine(prompt)}`;
 };
 
 const cancelButton = (): string =>
@@ -239,6 +342,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
         <span class="ledger-device-mark" aria-hidden="true">${icon("shield")}</span>
         <p class="context-label">Secure hardware signature</p>
         <h2>${escapeHtml(phaseTitle[view.phase.kind])}</h2>
+        ${intentLine(view.request)}
         ${signerLine(view.request)}
       </div>
       ${ledgerProgress(view)}

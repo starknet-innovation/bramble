@@ -1,7 +1,8 @@
 /**
- * Official privacy-SDK registration discovery tests. These isolate the public
- * pool reads from proof/submission coverage so both trust boundaries remain
- * reviewable and below the repository file-size ceiling.
+ * Official privacy-SDK registration tests: the public pool reads, and the
+ * builder configuration registration is created with. These isolate both from
+ * proof/submission coverage so every trust boundary stays reviewable and below
+ * the repository file-size ceiling.
  */
 import { describe, expect, test } from "bun:test";
 import { createOfficialStrk20Service } from "@mc-wallet/privacy/official-sdk-service";
@@ -138,5 +139,40 @@ describe("official STRK20 SDK registration discovery", () => {
     await expect(statusFrom(`0x${STARK_FIELD_PRIME.toString(16)}`)).rejects.toThrow(
       "out-of-field public key",
     );
+  });
+
+  // Every batch needs the sender's own channel. Registering without it defers
+  // that channel to whatever the account does next, and a private send to
+  // someone else then opens two channels in one batch — which the SDK reports as
+  // USER_LINKAGE and this wallet refuses, stranding the account one step after
+  // it paid to register. Registration is also the only free place to open it:
+  // that transaction already names this address publicly.
+  test("registration opens the account's own channel in the same batch", async () => {
+    const options: unknown[] = [];
+    const sdk = runtime(() => ({
+      build: (value: unknown) => {
+        options.push(value);
+        return builder(executeResult());
+      },
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({
+      providerFor,
+      sdk,
+      async submitInvoke(input) {
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    // A zero pool fee grants no allowance, so the batch carries none — but the
+    // field is still returned, because the caller records whatever it holds.
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).resolves.toEqual({
+      allowanceGrants: [],
+      transactionHash: "0xabc",
+    });
+    expect(options).toEqual([expect.objectContaining({ autoRegister: false, autoSetup: true })]);
   });
 });

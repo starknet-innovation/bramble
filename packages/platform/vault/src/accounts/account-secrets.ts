@@ -20,11 +20,23 @@ type AccountSecretOwner = {
 };
 
 /**
- * Versioned provenance for a cached Ledger STRK20 viewing key. The future
- * hardware ceremony must bind its typed data to the account, chain, pool, and
- * this exact scheme before it may write the resulting key.
+ * Versioned provenance for a retained Ledger STRK20 viewing key. The hardware
+ * ceremony must bind its message to the account, chain, pool, and this exact
+ * scheme before it may write the resulting key.
+ *
+ * The name states the derivation, because that is what has to change in lockstep
+ * with the tag: the device signs `starknet_keccak("<chainId>:<poolAddress>")` —
+ * the chain/pool SCOPE hashed with `starknet_keccak` — and the returned `(r, s)`
+ * is Poseidon-folded into the pool's valid key range. `ledger` carries the third
+ * variable, the device's RFC-6979 variant, which differs from the host's.
+ *
+ * Any change to the message, the signer, or the fold is a NEW scheme and a new
+ * value here: a key derived one way cannot be recovered the other way, and a
+ * viewing key already registered with a pool cannot be replaced. The validator
+ * accepts only this exact string, so a record written under a retired scheme
+ * stops validating rather than being silently misread as current.
  */
-export const LEDGER_STRK20_VIEWING_KEY_SCHEME = "ledger-strk20-typed-data-v1";
+export const LEDGER_STRK20_VIEWING_KEY_SCHEME = "ledger-strk20-scope-keccak-v1";
 
 /**
  * Maximum retained pool-scoped Ledger viewing keys for one account.

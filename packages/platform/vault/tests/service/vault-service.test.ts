@@ -176,7 +176,7 @@ describe("createWalletVaultService", () => {
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
       kms: {
         ...fakeKms(),
-        async deriveStrk20ViewingKey(privateKey, chainId, poolAddress) {
+        async deriveScopedStrk20ViewingKey(privateKey, chainId, poolAddress) {
           derivationSeen = [privateKey, chainId, poolAddress];
           return "0x654321";
         },

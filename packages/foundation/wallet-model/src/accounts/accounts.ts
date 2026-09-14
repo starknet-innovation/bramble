@@ -491,3 +491,9 @@ export const canonicalLegacyAccountRef = (value: unknown): LegacyAccountRef | nu
  */
 export const isKeylessAccount = (account: AccountRef): account is LedgerAccountRef =>
   account.derivation.kind === "ledger";
+
+/**
+ * A BIP-32 derivation index, single-sourced so its three validators cannot drift.
+ */
+export const isDerivationIndex = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;

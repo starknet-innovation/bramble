@@ -91,6 +91,12 @@ export type PendingApproval = {
   readonly declaration?: DeclarationReview;
   readonly fee?: FeeEstimate | null;
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
+  /**
+   * The node's own reason a fee estimate was rejected, only ever present with
+   * `feeEstimateFailed`. Rendered on the wallet's own surface so a user can read
+   * and copy why an estimate failed; never echoed back to the requesting page.
+   */
+  readonly feeEstimateDetail?: string;
   readonly feeEstimateFailed?: boolean;
   readonly feeEstimatePending?: boolean;
   readonly flags?: readonly ApprovalRiskFlag[];

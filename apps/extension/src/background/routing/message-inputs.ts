@@ -311,7 +311,7 @@ export const readSetActiveNetworkInput = (
 
 /**
  * Parses add-account messages; the passphrase comes from the unlocked session,
- * not the message, so only the target network is carried.
+ * so only the target network and account contract are carried.
  */
 export const readAddAccountInput = (
   message: unknown,

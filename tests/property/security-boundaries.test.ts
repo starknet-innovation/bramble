@@ -144,6 +144,8 @@ const validModule = (overrides: Record<string, unknown> = {}) => ({
   deriveNostrPublicKey: () => ({ public_key: "11".repeat(32) }),
   deriveOzAccountAddress: () => "0xabc",
   deriveScopedStrk20ViewingKey: () => "0x456",
+  foldStrk20ViewingKey: () => "0x456",
+  strk20ViewingKeyMessageHash: () => "0xabc",
   deriveStarknetKeypair: () => ({
     private_key: "0x123",
     public_key_x: "0xabc",

@@ -18,6 +18,7 @@ const settled = (registration: "registered" | "unregistered"): PrivacyDisclosure
     networkId: "SN_MAIN",
     poolFeeFri: "0x1",
     relayConfigured: true,
+    privateBalances: "ready" as const,
     registration,
   },
 });
