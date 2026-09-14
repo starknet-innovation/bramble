@@ -8,10 +8,12 @@ import { isJson } from "@bramble/core/json";
 import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
 import { createRpcProvider } from "@bramble/starknet/provider";
 import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { Call, RpcProvider, TypedData } from "starknet";
 import { num, typedData } from "starknet";
-import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "../paymaster/paymaster";
+import { submitStrk20PaymasterPlan } from "../paymaster/paymaster";
+import { quoteStrk20RelayPlan } from "../paymaster/relay-quote";
+import type { Strk20FeeReference } from "../policy/fee-policy";
 import type { Strk20MaturityScope, Strk20MaturityStore } from "../policy/maturity";
 import { reportStrk20Phase } from "../policy/phases";
 import {
@@ -49,6 +51,12 @@ import {
 export type { PrivacySdkRuntime } from "./official-sdk-runtime";
 
 type OfficialServiceOptions = {
+  /**
+   * Independent price used only to bound a converted (non-STRK) relay fee.
+   * Omitting it leaves the converted route refused; the STRK route never
+   * consults it, because the pool's own charge bounds that one on-chain.
+   */
+  readonly feeReference?: Strk20FeeReference;
   readonly http?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   readonly maturityStore?: Strk20MaturityStore;
   readonly nowSeconds?: () => number;
@@ -72,6 +80,7 @@ type OfficialServiceOptions = {
  * tracked job can settle with a reason and show what it is doing meanwhile.
  */
 export const createOfficialStrk20Service = ({
+  feeReference,
   http,
   maturityStore,
   nowSeconds,
@@ -248,38 +257,18 @@ export const createOfficialStrk20Service = ({
       );
     },
     async quoteActions(input) {
-      const config = requireStrk20Config(input);
-      if (!config.paymaster) {
-        throw new WalletError(
-          `${STRK20_SUBMISSION_UNAVAILABLE}: no private relay is configured for this network`,
-        );
-      }
-      if (!nowSeconds) {
-        throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-      }
-      // The upstream supports converted fee tokens, but its response does not
-      // expose enough independently-verifiable pricing data to cap that
-      // conversion. Restrict the wallet route to STRK, then bind the quoted
-      // withdrawal exactly to the pool's on-chain fee before proving.
-      if (!sameFelt(config.paymaster.feeToken, STRK_TOKEN_ADDRESS)) {
-        throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-      }
       reportStrk20Phase(input.onPhase, "quoting the private relay");
-      const expectedFeeAmount = await readStrk20PoolFee(
-        providerFor,
-        input.rpcUrls,
-        config.poolAddress,
-        pauseForServiceRetry,
-      );
-      return buildStrk20PaymasterPlan({
+      return quoteStrk20RelayPlan({
         accountAddress: input.account.address,
-        approveCalls: approveCalls(input.actions, config.poolAddress, RELAY_PAYS_POOL_FEE),
-        chainId: STARKNET_NETWORKS[input.account.networkId].chainId,
-        config: config.paymaster,
-        expectedFeeAmount,
+        actions: input.actions,
+        config: requireStrk20Config(input),
+        ...(feeReference ? { feeReference } : {}),
         ...(http ? { http } : {}),
-        nowSeconds: nowSeconds(),
-        poolAddress: config.poolAddress,
+        networkId: input.account.networkId,
+        ...(nowSeconds ? { nowSeconds } : {}),
+        pauseForServiceRetry,
+        providerFor,
+        rpcUrls: input.rpcUrls,
       });
     },
     async submitActions(input) {

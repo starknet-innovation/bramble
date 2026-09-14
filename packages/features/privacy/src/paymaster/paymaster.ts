@@ -21,8 +21,14 @@ import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import { CallData, hash } from "starknet";
 import type { Strk20PaymasterConfig } from "../config";
-import { sanitizeStrk20Detail } from "../sdk/official-sdk-errors";
+import type { Strk20FeeBound } from "../policy/fee-policy";
+import {
+  Strk20FeeTokenUnsupportedError,
+  sanitizeStrk20Detail,
+  TOKEN_NOT_SUPPORTED_CODE,
+} from "../sdk/official-sdk-errors";
 import { STRK20_SUBMISSION_UNAVAILABLE, type Strk20PrivateRelayPlan } from "../service";
+import { reviewedFeeCeiling, withinFeeBound } from "./fee-bound";
 
 import { bindPaymasterTypedData, isPaymasterAuthorizationLive } from "./paymaster-typed-data";
 
@@ -106,11 +112,15 @@ const relayReportedError = (method: string, reported: unknown): WalletError => {
       ? [reported["message"], ...reportedDetails(reported["data"])].join(": ")
       : String(reported),
   );
-  return new WalletError(
+  const message =
     detail === ""
       ? STRK20_SUBMISSION_UNAVAILABLE
-      : `${STRK20_SUBMISSION_UNAVAILABLE}: the private relay rejected the request (${detail})`,
-  );
+      : `${STRK20_SUBMISSION_UNAVAILABLE}: the private relay rejected the request (${detail})`;
+  // Only a quote reaches here, so recovering by re-quoting is always safe: no
+  // proof has been built and nothing is in flight.
+  return isRecord(reported) && reported["code"] === TOKEN_NOT_SUPPORTED_CODE
+    ? new Strk20FeeTokenUnsupportedError(message)
+    : new WalletError(message);
 };
 
 const feeMode = (config: Strk20PaymasterConfig) => ({
@@ -330,7 +340,7 @@ export const buildStrk20PaymasterPlan = async (input: {
   readonly approveCalls: readonly Call[];
   readonly chainId: string;
   readonly config: Strk20PaymasterConfig;
-  readonly expectedFeeAmount: bigint;
+  readonly feeBound: Strk20FeeBound;
   readonly http?: PaymasterHttp;
   readonly nowSeconds: number;
   readonly poolAddress: string;
@@ -378,22 +388,23 @@ export const buildStrk20PaymasterPlan = async (input: {
     : undefined;
   // A relay fee withdrawn to the user's public account would link the private
   // action to that account on-chain. Compare numerically so padding cannot
-  // bypass the boundary. For the wallet's STRK-only relay route, the quoted
-  // amount must also equal the pool's independently-read on-chain fee: AVNU's
-  // sponsored-private STRK path applies neither conversion nor overhead to it.
-  // A mixed route also identifies the forwarder as the typed-data caller, so
+  // bypass the boundary. The quoted amount must additionally satisfy the
+  // route's fee bound — an exact match against the pool's on-chain charge on
+  // the STRK route, an independently derived ceiling on a converted one. A
+  // mixed route also identifies the forwarder as the typed-data caller, so
   // bind the fee recipient to that independently reviewed field.
   if (
     !feeAction ||
     !sameFelt(feeAction.token, input.config.feeToken) ||
     sameFelt(feeAction.recipient, input.accountAddress) ||
-    !sameFelt(feeAction.amount, input.expectedFeeAmount.toString()) ||
+    !withinFeeBound(feeAction.amount, input.feeBound) ||
     (boundTypedData ? !sameFelt(feeAction.recipient, boundTypedData.review.caller) : false)
   ) {
     throw quoteRejected("the relay returned a fee outside the reviewed route");
   }
+  const feeCeiling = reviewedFeeCeiling(input.feeBound);
   if (!hasApprovals) {
-    return { feeAction, mode: "private-relay" };
+    return { feeAction, ...feeCeiling, mode: "private-relay" };
   }
   if (!boundTypedData) {
     throw quoteRejected("the relay returned no usable typed data for the public approvals");
@@ -401,6 +412,7 @@ export const buildStrk20PaymasterPlan = async (input: {
   return {
     authorization: boundTypedData.review,
     feeAction,
+    ...feeCeiling,
     mode: "private-relay",
     typedData: boundTypedData.typedData,
   };

@@ -32,6 +32,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import { depositPreparation } from "./strk20-deposit-ops";
+import { strk20FeeAssetFor } from "./strk20-fee-reference";
 import { errorText, resolvePrivacyContext, type Strk20WalletOpsDeps } from "./strk20-op-context";
 import { openPoolRoute } from "./strk20-pool-route";
 import {
@@ -137,7 +138,10 @@ const transferPreparation = async (
       recipient,
       summaries: [
         `Send ${input.amount} ${context.token.symbol} privately to ${recipient}`,
-        summarizeStrk20Plan(plan),
+        summarizeStrk20Plan(
+          plan,
+          strk20FeeAssetFor(context.accountContext.account.networkId, plan),
+        ),
         "The transfer moves shielded balance; the amount and recipient stay off-chain",
       ],
       token: context.token,
@@ -215,7 +219,10 @@ const withdrawPreparation = async (
       recipient,
       summaries: [
         `Unshield ${input.amount} ${context.token.symbol} to ${own ? "this account" : recipient}`,
-        summarizeStrk20Plan(plan),
+        summarizeStrk20Plan(
+          plan,
+          strk20FeeAssetFor(context.accountContext.account.networkId, plan),
+        ),
         "The withdrawal is public: the amount and destination become visible on-chain",
       ],
       token: context.token,

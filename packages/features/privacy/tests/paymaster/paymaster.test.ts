@@ -51,7 +51,7 @@ describe("STRK20 paymaster boundary", () => {
       approveCalls: [approvalCall],
       chainId,
       config,
-      expectedFeeAmount: 5n,
+      feeBound: { amount: 5n, kind: "exact" as const },
       http: async (_url, init) => {
         requests.push(JSON.parse(String(init?.body)));
         return response(
@@ -106,7 +106,7 @@ describe("STRK20 paymaster boundary", () => {
       approveCalls: [approve],
       chainId,
       config,
-      expectedFeeAmount: 5n,
+      feeBound: { amount: 5n, kind: "exact" as const },
       http: async (_url, init) => {
         body = String(init?.body);
         return response(
@@ -137,7 +137,7 @@ describe("STRK20 paymaster boundary", () => {
       approveCalls: [],
       chainId,
       config,
-      expectedFeeAmount: 5n,
+      feeBound: { amount: 5n, kind: "exact" as const },
       http: async () =>
         response({
           fee: {
@@ -164,7 +164,7 @@ describe("STRK20 paymaster boundary", () => {
         approveCalls: [],
         chainId,
         config,
-        expectedFeeAmount: 5n,
+        feeBound: { amount: 5n, kind: "exact" as const },
         http: async () =>
           response({
             fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
@@ -183,7 +183,7 @@ describe("STRK20 paymaster boundary", () => {
         approveCalls: [],
         chainId,
         config,
-        expectedFeeAmount: 5n,
+        feeBound: { amount: 5n, kind: "exact" as const },
         http: async () => response(quoteResult({ feeToken: "0x99", type: "apply_action" })),
         nowSeconds: 2,
         poolAddress: "0x2",
@@ -198,7 +198,7 @@ describe("STRK20 paymaster boundary", () => {
         approveCalls: [call],
         chainId,
         config,
-        expectedFeeAmount: 5n,
+        feeBound: { amount: 5n, kind: "exact" as const },
         http: async () =>
           response(
             quoteResult({
@@ -221,7 +221,7 @@ describe("STRK20 paymaster boundary", () => {
         approveCalls: [call],
         chainId,
         config,
-        expectedFeeAmount: 5n,
+        feeBound: { amount: 5n, kind: "exact" as const },
         http: async () =>
           response(
             quoteResult({
@@ -253,7 +253,7 @@ describe("STRK20 paymaster boundary", () => {
           approveCalls: [call],
           chainId,
           config,
-          expectedFeeAmount: 5n,
+          feeBound: { amount: 5n, kind: "exact" as const },
           http: async () =>
             response(
               quoteResult({
@@ -288,7 +288,7 @@ describe("STRK20 paymaster boundary", () => {
       approveCalls: [],
       chainId,
       config,
-      expectedFeeAmount: 5n,
+      feeBound: { amount: 5n, kind: "exact" as const },
       http: async () => response(result),
       nowSeconds: 2,
       poolAddress: "0x2",
@@ -326,7 +326,7 @@ describe("STRK20 paymaster boundary", () => {
           approveCalls: [],
           chainId,
           config,
-          expectedFeeAmount: 5n,
+          feeBound: { amount: 5n, kind: "exact" as const },
           http: async () => response(result),
           nowSeconds: 2,
           poolAddress: "0x2",
@@ -343,7 +343,7 @@ describe("STRK20 paymaster boundary", () => {
         approveCalls: [{ ...call, contractAddress: "0x0" }],
         chainId,
         config,
-        expectedFeeAmount: 5n,
+        feeBound: { amount: 5n, kind: "exact" as const },
         http: async () => {
           requested = true;
           return response(quoteResult({ type: "invoke_and_apply_action" }));

@@ -3,6 +3,7 @@
  * sender's public account solely to pay the pool fee.
  */
 import { describe, expect, test } from "bun:test";
+import { STRK20_FEE_CEILING_MULTIPLIER } from "@bramble/privacy/fee-policy";
 import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
@@ -210,7 +211,7 @@ describe("relay quote approvals", () => {
           paymaster: { feeToken: token, url: "https://relay.example" },
         },
       }),
-    ).rejects.toThrow("strk20 private submission unavailable");
+    ).rejects.toThrow("strk20 converted fee could not be verified independently");
     expect(requested).toBe(false);
   });
 
@@ -239,5 +240,236 @@ describe("relay quote approvals", () => {
     expect(invoke.calls).toHaveLength(1);
     expect(invoke.calls[0]?.calldata).toEqual(["0x123", "0x64", "0x0"]);
     expect(sameFelt(invoke.calls[0]?.to ?? "", STRK_TOKEN_ADDRESS)).toBe(true);
+  });
+});
+
+/**
+ * A converted fee token has no on-chain value denominating it, so the relay's
+ * own number is admitted only under a bound the relay did not supply. These
+ * cases pin both directions of that bound and the record it leaves in the plan.
+ */
+describe("converted relay fee", () => {
+  const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+  // What an independent price says 6 STRK is worth, in USDC base units.
+  const REFERENCE = 1_200_000n;
+
+  const quoteConvertedFee = async (input: {
+    readonly quotedAmount: bigint;
+    readonly reference?: bigint | null;
+  }) => {
+    const service = createOfficialStrk20Service({
+      feeReference: async () => (input.reference === undefined ? REFERENCE : input.reference),
+      http: async () =>
+        new Response(
+          JSON.stringify({
+            id: "bramble-strk20",
+            jsonrpc: "2.0",
+            result: {
+              fee: {
+                estimated_fee_in_gas_token: "0x1",
+                estimated_fee_in_strk: "0x1",
+                gas_token_price_in_strk: "0x1",
+                suggested_max_fee_in_gas_token: "0x1",
+                suggested_max_fee_in_strk: "0x1",
+              },
+              fee_action: {
+                amount: `0x${input.quotedAmount.toString(16)}`,
+                recipient: "0x2",
+                token: USDC,
+                type: "withdraw",
+              },
+              parameters: {
+                fee_mode: { mode: "sponsored_private", pool_fee_token: USDC, tip: "normal" },
+                time_bounds: null,
+                version: "0x1",
+              },
+              type: "apply_action",
+            },
+          }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        ),
+      nowSeconds: () => 1_000,
+      providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
+      sdk: runtime(() => ({
+        build: () => builder(executeResult()),
+        discoverNotes: async () => ({ notes: new Map() }),
+        executeWithInvocation: async () => executeResult(),
+      })),
+    });
+    // The batch spends USDC, so USDC is also the preferred fee token: this
+    // exercises the converted bound on a single quote, not the fallback.
+    return service.quoteActions({
+      ...relayContext,
+      actions: [{ amount: "0x1", recipient: "0x999", token: USDC, type: "transfer" }],
+      config: {
+        ...relayContext.config,
+        paymaster: { feeToken: USDC, url: "https://relay.example" },
+      },
+    });
+  };
+
+  test("admits a quote inside the ceiling and records the bound it was admitted under", async () => {
+    const plan = await quoteConvertedFee({ quotedAmount: REFERENCE });
+
+    expect(plan.mode).toBe("private-relay");
+    if (plan.mode === "account") {
+      throw new Error("expected the relay route");
+    }
+    expect(plan.feeAction).toEqual({
+      amount: `0x${REFERENCE.toString(16)}`,
+      recipient: "0x2",
+      token: USDC,
+      type: "withdraw",
+    });
+    // The reviewed ceiling travels with the plan so submission re-checks the
+    // same number, not one re-derived from a price that has since moved.
+    expect(plan.feeCeiling).toEqual({
+      ceiling: `0x${(REFERENCE * STRK20_FEE_CEILING_MULTIPLIER).toString(16)}`,
+      reference: `0x${REFERENCE.toString(16)}`,
+    });
+  });
+
+  test("admits a quote exactly at the ceiling", async () => {
+    const plan = await quoteConvertedFee({
+      quotedAmount: REFERENCE * STRK20_FEE_CEILING_MULTIPLIER,
+    });
+
+    expect(plan.mode).toBe("private-relay");
+  });
+
+  test("refuses a quote one unit above the ceiling", async () => {
+    await expect(
+      quoteConvertedFee({ quotedAmount: REFERENCE * STRK20_FEE_CEILING_MULTIPLIER + 1n }),
+    ).rejects.toThrow("the relay returned a fee outside the reviewed route");
+  });
+
+  test("refuses the drain a relay-set rate would otherwise allow", async () => {
+    await expect(quoteConvertedFee({ quotedAmount: 50_000_000_000n })).rejects.toThrow(
+      "the relay returned a fee outside the reviewed route",
+    );
+  });
+
+  test("refuses the route when the reference cannot price the token", async () => {
+    await expect(quoteConvertedFee({ quotedAmount: REFERENCE, reference: null })).rejects.toThrow(
+      "strk20 converted fee could not be verified independently",
+    );
+  });
+});
+
+/**
+ * The fee follows the token being sent, and lands back on the configured token
+ * when the relay will not take it. The relay is the only authority on which
+ * tokens `sponsored_private` accepts — it publishes no list — so the refusal
+ * has to be recoverable rather than predicted.
+ */
+describe("fee token follows the token being sent", () => {
+  const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+
+  const quoteRequestingTokens = async (input: {
+    readonly refuse?: readonly string[];
+    readonly sent: string;
+  }) => {
+    const requested: string[] = [];
+    const service = createOfficialStrk20Service({
+      feeReference: async () => 1_000n,
+      http: async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as {
+          readonly params: {
+            readonly parameters: { readonly fee_mode: { readonly pool_fee_token: string } };
+          };
+        };
+        const feeToken = body.params.parameters.fee_mode.pool_fee_token;
+        requested.push(feeToken);
+        if (input.refuse?.some((token) => sameFelt(token, feeToken))) {
+          return new Response(
+            JSON.stringify({
+              error: { code: 151, message: "pool_fee_token is not supported" },
+              id: "bramble-strk20",
+              jsonrpc: "2.0",
+            }),
+            { headers: { "content-type": "application/json" }, status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            id: "bramble-strk20",
+            jsonrpc: "2.0",
+            result: {
+              fee: {
+                estimated_fee_in_gas_token: "0x1",
+                estimated_fee_in_strk: "0x1",
+                gas_token_price_in_strk: "0x1",
+                suggested_max_fee_in_gas_token: "0x1",
+                suggested_max_fee_in_strk: "0x1",
+              },
+              // STRK is matched against the pool's on-chain charge exactly; a
+              // converted token only has to sit inside its ceiling.
+              fee_action: {
+                amount: sameFelt(feeToken, STRK_TOKEN_ADDRESS) ? POOL_FEE_6_STRK : "0x1",
+                recipient: "0x2",
+                token: feeToken,
+                type: "withdraw",
+              },
+              parameters: {
+                fee_mode: { mode: "sponsored_private", pool_fee_token: feeToken, tip: "normal" },
+                time_bounds: null,
+                version: "0x1",
+              },
+              type: "apply_action",
+            },
+          }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        );
+      },
+      nowSeconds: () => 1_000,
+      providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
+      sdk: runtime(() => ({
+        build: () => builder(executeResult()),
+        discoverNotes: async () => ({ notes: new Map() }),
+        executeWithInvocation: async () => executeResult(),
+      })),
+    });
+    const plan = await service.quoteActions({
+      ...relayContext,
+      actions: [{ amount: "0x1", recipient: "0x999", token: input.sent, type: "transfer" }],
+    });
+    return { plan, requested };
+  };
+
+  test("quotes the sent token, not the configured default", async () => {
+    const { plan, requested } = await quoteRequestingTokens({ sent: USDC });
+
+    expect(requested.map((value) => sameFelt(value, USDC))).toEqual([true]);
+    if (plan.mode === "account") {
+      throw new Error("expected the relay route");
+    }
+    expect(sameFelt(plan.feeAction.token, USDC)).toBe(true);
+  });
+
+  test("falls back to the configured token when the relay refuses the sent one", async () => {
+    const { plan, requested } = await quoteRequestingTokens({ refuse: [USDC], sent: USDC });
+
+    expect(requested).toHaveLength(2);
+    expect(sameFelt(requested[0] ?? "", USDC)).toBe(true);
+    expect(sameFelt(requested[1] ?? "", STRK_TOKEN_ADDRESS)).toBe(true);
+    if (plan.mode === "account") {
+      throw new Error("expected the relay route");
+    }
+    expect(sameFelt(plan.feeAction.token, STRK_TOKEN_ADDRESS)).toBe(true);
+    // The fallback is the exact route, so it carries no conversion band.
+    expect(plan.feeCeiling).toBeUndefined();
+  });
+
+  test("asks once when the sent token is already the configured one", async () => {
+    const { requested } = await quoteRequestingTokens({ sent: STRK_TOKEN_ADDRESS });
+
+    expect(requested).toHaveLength(1);
+    expect(sameFelt(requested[0] ?? "", STRK_TOKEN_ADDRESS)).toBe(true);
+  });
+
+  test("surfaces a refusal that is not about the fee token instead of retrying", async () => {
+    await expect(
+      quoteRequestingTokens({ refuse: [USDC, STRK_TOKEN_ADDRESS], sent: USDC }),
+    ).rejects.toThrow("strk20 private submission unavailable");
   });
 });

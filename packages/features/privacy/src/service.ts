@@ -9,7 +9,6 @@ import { WalletError } from "@bramble/core/errors";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { REVIEWED_FEE_REQUIRED } from "@bramble/starknet/rpc-submit";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { sameFelt } from "@bramble/wallet-model/networks";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
 import type {
   Strk20Action,
@@ -19,14 +18,25 @@ import type {
 } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { Strk20NetworkConfig } from "./config";
+import {
+  assertFeeBalance,
+  assertReviewedFeeCeiling,
+  assertSufficientPrivateBalance,
+  spentTokens,
+} from "./policy/fee-guards";
 import { canonicalStrk20PoolFee, STRK20_SERVICE_UNAVAILABLE } from "./policy/fee-policy";
 import type { Strk20PhaseSink } from "./policy/phases";
 import type { Strk20SubmissionPlan } from "./policy/submission-plan";
 
+export { STRK20_INSUFFICIENT_BALANCE } from "./policy/fee-guards";
 export {
   canonicalStrk20PoolFee,
+  STRK20_FEE_ABOVE_CEILING,
+  STRK20_FEE_CEILING_MULTIPLIER,
+  STRK20_FEE_UNVERIFIABLE,
   STRK20_MAX_POOL_FEE,
   STRK20_SERVICE_UNAVAILABLE,
+  type Strk20FeeReference,
 } from "./policy/fee-policy";
 /**
  * Frozen account and relay route types, defined beside privacy policy and
@@ -38,6 +48,7 @@ export type {
   Strk20SubmissionPlan,
 } from "./policy/submission-plan";
 export {
+  type Strk20FeeAsset,
   strk20CallToInvoke,
   summarizeStrk20Action,
   summarizeStrk20Plan,
@@ -50,7 +61,6 @@ export const STRK20_NOT_REGISTERED = "account not registered in strk20";
 /**
  * Wallet-API INSUFFICIENT_PRIVATE_BALANCE (119).
  */
-export const STRK20_INSUFFICIENT_BALANCE = "insufficient private balance";
 /**
  * Wallet-API PRIVACY_LEAK (120).
  */
@@ -236,55 +246,6 @@ export const unavailableStrk20Service: Strk20Service = {
   },
 };
 
-const spentTokens = (actions: readonly Strk20Action[]): readonly string[] => {
-  const seen = new Map<bigint, string>();
-  for (const action of actions) {
-    if (action.type === "withdraw" || action.type === "transfer") {
-      seen.set(BigInt(action.token), action.token);
-    }
-  }
-  return [...seen.values()];
-};
-
-const assertSufficientPrivateBalance = (
-  actions: readonly Strk20Action[],
-  balances: readonly Strk20BalanceEntry[],
-): void => {
-  const required = new Map<bigint, bigint>();
-  for (const action of actions) {
-    if ((action.type === "withdraw" || action.type === "transfer") && action.amount !== "OPEN") {
-      const token = BigInt(action.token);
-      required.set(token, (required.get(token) ?? 0n) + BigInt(action.amount));
-    }
-  }
-  for (const [token, amount] of required) {
-    const entry = balances.find((balance) => BigInt(balance.token) === token);
-    if (amount > (entry ? BigInt(entry.balance) : 0n)) {
-      throw new WalletError(STRK20_INSUFFICIENT_BALANCE);
-    }
-  }
-};
-
-const assertFeeBalance = async (
-  service: Strk20Service,
-  input: Strk20AccountContext & {
-    readonly actions: readonly Strk20Action[];
-    readonly plan: Strk20SubmissionPlan;
-  },
-): Promise<void> => {
-  if (input.plan.mode === "account") {
-    return;
-  }
-  const feeAction = input.plan.feeAction;
-  const balances = await service.privateBalances({ ...input, tokens: [feeAction.token] });
-  const sameTokenSpend = input.actions.filter(
-    (action) =>
-      (action.type === "withdraw" || action.type === "transfer") &&
-      sameFelt(action.token, feeAction.token),
-  );
-  assertSufficientPrivateBalance([...sameTokenSpend, feeAction], balances);
-};
-
 const assertReviewedPoolFee = async (
   service: Strk20Service,
   input: Strk20AccountContext,
@@ -412,6 +373,7 @@ export const submitStrk20Actions = async (
     }
     await assertReviewedPoolFee(service, input, input.plan.poolFeeFri);
   }
+  assertReviewedFeeCeiling(input.plan);
   await assertFeeBalance(service, input);
   return service.submitActions(input);
 };
