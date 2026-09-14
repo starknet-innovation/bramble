@@ -61,6 +61,14 @@ export const FIREFOX_EXTENSION_ID = "bramble@starknet.org";
  * Raise this to 154.0 only if that trade is deliberately reversed.
  *
  * When ESR 140 reaches end of life this should move to the next ESR.
+ *
+ * Desktop only. No `gecko_android` key is declared, which is how an add-on
+ * declines Android compatibility, and `web-ext lint` warning that Firefox for
+ * Android 140 predates the consent key is about a platform this build does not
+ * claim. Gecko has no sidebar on Android at all — `sidebar_action` and the
+ * `sidebarAction` API are both absent there — so the wallet's primary surface
+ * could not render. Android is a future native app, not this package: do not
+ * silence that warning by adding `gecko_android`.
  */
 export const FIREFOX_MIN_VERSION = "140.0";
 
