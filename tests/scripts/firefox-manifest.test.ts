@@ -13,18 +13,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   FIREFOX_DATA_COLLECTION_PERMISSIONS,
-  FIREFOX_EXCLUDED_FILES,
   FIREFOX_EXTENSION_ID,
   FIREFOX_MIN_VERSION,
   FIREFOX_NAME_LIMIT,
   type Manifest,
-  shipsSandboxedRenderer,
   toFirefoxManifest,
 } from "../../apps/extension/firefox-manifest";
-import {
-  EXPECTED_RUNTIME_FILES,
-  FIREFOX_RUNTIME_FILES,
-} from "../../scripts/extension-runtime-files";
 
 const chromeManifest = async (): Promise<Manifest> =>
   JSON.parse(await Bun.file("apps/extension/public/manifest.json").text()) as Manifest;
@@ -52,6 +46,8 @@ describe("firefox manifest derivation", () => {
       "host_permissions",
       "optional_host_permissions",
       "web_accessible_resources",
+      "content_security_policy",
+      "sandbox",
     ]) {
       expect(manifest[key], key).toEqual(chrome[key]);
     }
@@ -114,18 +110,19 @@ describe("firefox manifest derivation", () => {
     expect(manifest["permissions"]).not.toContain("sidePanel");
   });
 
-  test("declares no sandboxed page and no sandbox policy", async () => {
-    const manifest = await firefoxManifest();
+  // The reason the floor is 154: below it Firefox ignores this key and the
+  // collectible renderer — which runs untrusted on-chain HTML — would load as
+  // an ordinary privileged extension page. Shipped identically to Chrome or
+  // not at all; there is no safe middle.
+  test("declares the collectible renderer as a sandboxed page, exactly as chrome does", async () => {
     const chrome = await chromeManifest();
-    // The Chrome manifest still declares both; Firefox below 154 would ignore
-    // the key and load the renderer as a privileged page, so neither ships.
-    expect(chrome["sandbox"]).toBeDefined();
-    expect(manifest["sandbox"]).toBeUndefined();
-    expect(manifest["content_security_policy"]).toEqual({
-      extension_pages: (chrome["content_security_policy"] as Record<string, unknown>)[
-        "extension_pages"
-      ],
-    });
+    const manifest = await firefoxManifest();
+    expect(manifest["sandbox"]).toEqual(chrome["sandbox"]);
+    expect(manifest["content_security_policy"]).toEqual(chrome["content_security_policy"]);
+    expect(
+      (manifest["content_security_policy"] as Record<string, unknown>)["sandbox"],
+    ).toBeDefined();
+    expect(Number.parseFloat(FIREFOX_MIN_VERSION)).toBeGreaterThanOrEqual(154);
   });
 
   // The literals, not the constants. Comparing the derived manifest against the
@@ -136,11 +133,11 @@ describe("firefox manifest derivation", () => {
     expect(FIREFOX_EXTENSION_ID).toBe("bramble@starknet.org");
   });
 
-  // The current ESR, and the first release that understands the consent key
-  // below. Lowering it ships a consent declaration the browser cannot honour;
-  // raising it past 153 drops ESR.
-  test("supports the current ESR and everything newer", () => {
-    expect(FIREFOX_MIN_VERSION).toBe("140.0");
+  // The release that added the `sandbox` manifest key. Lowering this ships the
+  // collectible renderer as a privileged page — or, if the renderer is withheld
+  // again, a Firefox build without it. Both are decisions, not edits.
+  test("requires the first firefox that can sandbox the renderer", () => {
+    expect(FIREFOX_MIN_VERSION).toBe("154.0");
   });
 
   // A public statement of data practice. addons.mozilla.org refuses to sign a
@@ -172,20 +169,5 @@ describe("firefox manifest derivation", () => {
     expect(() =>
       toFirefoxManifest({ ...chrome, name: "B".repeat(FIREFOX_NAME_LIMIT) }),
     ).not.toThrow();
-  });
-
-  test("packages the chrome file set minus exactly the sandboxed renderer", () => {
-    const chromeFiles: readonly string[] = EXPECTED_RUNTIME_FILES;
-    expect(FIREFOX_EXCLUDED_FILES).toEqual(["sandbox/render.html", "sandbox/render.js"]);
-    expect(FIREFOX_RUNTIME_FILES.length).toBe(chromeFiles.length - FIREFOX_EXCLUDED_FILES.length);
-    // The one decision behind both halves: the build skips bundling the page
-    // and the packaged set withholds it. If these ever disagree, the page
-    // ships without the manifest entry that sandboxes it.
-    expect(shipsSandboxedRenderer("firefox")).toBe(false);
-    expect(shipsSandboxedRenderer("chrome")).toBe(true);
-    for (const excluded of FIREFOX_EXCLUDED_FILES) {
-      expect(chromeFiles).toContain(excluded);
-      expect(FIREFOX_RUNTIME_FILES).not.toContain(excluded);
-    }
   });
 });

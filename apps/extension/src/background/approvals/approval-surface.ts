@@ -55,14 +55,16 @@ const BADGE_LIMIT = 9;
  * Marks the toolbar button with the number of approvals waiting, or clears it
  * at zero.
  *
- * On Chromium this is a convenience. On Firefox it is the only thing that
- * tells the user a dapp is waiting: `sidebarAction.open` and, before Firefox
- * 149, `action.openPopup` may only be called while handling a user action, and
- * a `runtime.onMessage` handler reacting to a click on a web page does not
- * count as one — Mozilla documents that case exactly. So a dapp-triggered
- * approval cannot raise the wallet itself. It queues, this badge appears, and
- * the user's click on the toolbar button is the real gesture that opens the
- * panel through {@link bindToolbarActivation}.
+ * On Chromium this is a convenience. On Firefox it is what tells the user a
+ * dapp is waiting when their surface is the sidebar: `sidebarAction.open` may
+ * only be called while handling a user action, and a `runtime.onMessage`
+ * handler reacting to a click on a web page does not count as one — Mozilla
+ * documents that case exactly. So a dapp-triggered approval cannot raise the
+ * sidebar itself. It queues, this badge appears, and the user's click on the
+ * toolbar button is the real gesture that opens the panel through
+ * {@link bindToolbarActivation}. The popup surface has no such limit at this
+ * build's minimum Firefox, which is above the 149 that freed
+ * `action.openPopup` from needing a gesture.
  *
  * Browser failures are swallowed for the same reason every other call in this
  * module swallows them: the queued approval, not its announcement, is what the

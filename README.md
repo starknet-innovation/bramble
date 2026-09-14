@@ -68,17 +68,19 @@ rather than at upload time. What differs, and why none of it is a matter of tast
 | --- | --- | --- |
 | Background | service worker | event page (Gecko has no extension service worker) |
 | Wallet panel | `side_panel` | `sidebar_action` (Gecko has no `sidePanel` API) |
-| Collectible animations | sandboxed page | **not shipped** |
 | Ledger | supported | **not supported** |
 
-Firefox is supported from **140**, the current ESR — so the release channel, both ESR lines, and the
-forks that track them. Two capabilities are genuinely absent rather than merely unported:
+Both targets ship the same files; only the manifest differs.
 
-- **Collectible animations.** The renderer runs in a manifest-sandboxed page, and Firefox only
-  gained the `sandbox` key in 154. No ESR line has it, so supporting ESR and shipping that page are
-  mutually exclusive; shipping it unsandboxed would run untrusted on-chain HTML with extension
-  privileges, so it is withheld from the Firefox package entirely.
-- **Ledger.** Gecko implements no WebHID, WebUSB or Web Bluetooth, so no hardware transport exists.
+Firefox is supported from **154**, the release that added the `sandbox` manifest key. That floor is
+deliberate: the collectible renderer executes untrusted on-chain HTML and is only safe because the
+manifest gives it its own security principal and an egress-blocking policy. Below 154 Firefox
+ignores that key and the page would load with full extension privileges, so this build either ships
+it under the same guarantees Chrome gives it or refuses to install. The cost is that **ESR is
+excluded** — the current ESR is 140 and the next is 153.
+
+**Ledger is not supported on Firefox.** Gecko implements no WebHID, WebUSB or Web Bluetooth, so no
+hardware transport exists.
 
 One security difference is worth stating plainly: Firefox implements no `storage.setAccessLevel`, so
 `storage.local` and `storage.sync` stay reachable from this extension's own content script and

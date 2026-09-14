@@ -69,22 +69,14 @@ export const artifactPolicyFailures = (
   const packageTouch = packageScript.indexOf('await run(["touch", "-t", reproducibleZipTime');
   const packageZip = packageScript.indexOf('await run(["zip", "-X", "-q", zipPath');
   const packageRuntimeImport = packageScript.indexOf(
-    'import { EXPECTED_RUNTIME_FILES, FIREFOX_RUNTIME_FILES } from "./extension-runtime-files";',
-  );
-  // The packaged set is selected per target, so the selection itself is pinned
-  // here as well: both lists must come from the reviewed module above, and
-  // neither target may be packaged against a set assembled anywhere else.
-  const packageRuntimeSelection = packageScript.indexOf(
-    'const expectedFiles = target === "firefox" ? FIREFOX_RUNTIME_FILES : EXPECTED_RUNTIME_FILES;',
+    'import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";',
   );
   const packageRuntimeCheck = packageScript.indexOf(
-    'files.join("\\n") !== expectedFiles.join("\\n")',
+    'files.join("\\n") !== EXPECTED_RUNTIME_FILES.join("\\n")',
   );
   const packageRuntimeFailure = packageScript.indexOf("unexpected packaged files");
   if (
     packageRuntimeImport === -1 ||
-    packageRuntimeSelection === -1 ||
-    packageRuntimeSelection < packageRuntimeImport ||
     packageRuntimeCheck === -1 ||
     packageRuntimeFailure === -1 ||
     packageRuntimeImport > packageRuntimeCheck ||

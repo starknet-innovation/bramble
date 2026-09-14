@@ -1,19 +1,18 @@
 /**
  * Creates a versioned browser-extension zip from the built MV3 output.
  *
- * Pass `--target=firefox` to build and package the Gecko output instead; the
- * two differ only in the manifest and in the collectible renderer, which the
- * Firefox package omits (see `apps/extension/firefox-manifest.ts`).
+ * Pass `--target=firefox` to build and package the Gecko output instead. The
+ * two packages carry the same files and differ only in their manifest (see
+ * `apps/extension/firefox-manifest.ts`).
  */
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { type BuildTarget, outputDirectory } from "../apps/extension/build-target";
-import { EXPECTED_RUNTIME_FILES, FIREFOX_RUNTIME_FILES } from "./extension-runtime-files";
+import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
 
 const target: BuildTarget = Bun.argv.includes("--target=firefox") ? "firefox" : "chrome";
 const distDir = outputDirectory(target);
-const expectedFiles = target === "firefox" ? FIREFOX_RUNTIME_FILES : EXPECTED_RUNTIME_FILES;
 const artifactDir = "artifacts";
 const reproducibleZipTime = "198001010000";
 
@@ -54,7 +53,7 @@ if (typeof manifest["version"] !== "string") {
 }
 
 const files = (await walk(distDir)).map((path) => relative(distDir, path));
-if (files.join("\n") !== expectedFiles.join("\n")) {
+if (files.join("\n") !== EXPECTED_RUNTIME_FILES.join("\n")) {
   throw new Error(`unexpected packaged files:\n${files.join("\n")}`);
 }
 const zipName =
