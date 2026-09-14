@@ -127,7 +127,7 @@ export const ActivityRows: CatalogStory = {
   render: (args) =>
     catalogFrame(
       "Activity rows",
-      "Activity is account-partitioned and concise: a 16px glyph and the verb name the event, the counterparty or asset pair sits flush beneath, the signed fiat delta and asset amount trail on the right, the token mark carries the network badge, only an unsettled row names its status, and the verb opens the transaction on Starkscan.",
+      "Activity is account-partitioned and concise: a 16px glyph and the verb name the event, the counterparty or asset pair sits flush beneath, the signed fiat delta and asset amount trail on the right, the token mark trails, only an unsettled row names its status, and the verb opens the transaction on Starkscan.",
       catalogGroup(
         "Transaction types",
         "Distinct outline glyphs make transfers, swaps, staking, rewards, and other contract interactions scannable before reading; a row prices itself only when its token and price are both known.",

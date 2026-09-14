@@ -139,7 +139,7 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
  * dock and its design-system specimen, in the design kit's transaction-row
  * anatomy: an inline kind glyph beside the verb, the counterparty or asset
  * pair beneath it, the signed fiat delta over the asset amount on the right,
- * and the token mark trailing with the network badge on its corner. A settled
+ * and the token mark trailing. A settled
  * row says nothing more; a provisional or failed one adds its status word
  * beneath the detail in the status hue, carries an explanatory hint, and keeps
  * its glyph in that hue, so a pre-confirmed transaction never reads as
@@ -199,7 +199,7 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
       ${row.fiat ? `<span class="tx-fiat">${escapeHtml(row.fiat)}</span>` : '<span class="tx-fiat is-unknown">—</span>'}
       ${row.amount ? `<span class="tx-amount">${escapeHtml(row.amount)}</span>` : '<span class="tx-amount is-unknown">—</span>'}
     </div>
-    <span class="tx-avatar">${avatar}<span class="tx-avatar-badge" aria-hidden="true">${starknetNetworkGlyph()}</span></span>
+    <span class="tx-avatar">${avatar}</span>
   </li>`;
 };
 

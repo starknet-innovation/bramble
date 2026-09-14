@@ -311,13 +311,10 @@ describe("activity journey boundaries", () => {
     expect(html).not.toContain('data-copy="0x123"');
     expect(html).toContain('<span class="tx-fiat">+$1.50</span>');
     expect(html).toContain('<span class="tx-amount">3 STRK</span>');
-    // The trailing mark is the bundled STRK logo, resolved from the tracked token,
-    // with the network badge (decorative) on its corner.
+    // The trailing mark is the bundled STRK logo, resolved from the tracked
+    // token, and nothing else: every row is on Starknet, so no network badge.
     expect(html.match(/<span class="tx-avatar"><svg class="token-logo"/g)?.length).toBe(2);
-    expect(
-      html.match(/<span class="tx-avatar-badge" aria-hidden="true"><svg class="token-logo"/g)
-        ?.length,
-    ).toBe(2);
+    expect(html).not.toContain("tx-avatar-badge");
     // Structure: leading copy, trailing figures, then the mark.
     expect(html).toMatch(
       /<li class="tx-row" data-live-group title="[^"]*">\s*<div class="tx-copy">[\s\S]*?<\/div>\s*<div class="tx-side">[\s\S]*?<\/div>\s*<span class="tx-avatar">/,

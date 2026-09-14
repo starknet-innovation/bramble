@@ -2,7 +2,7 @@
  * Activity feed stylesheet fragment: the design kit's transaction-row anatomy
  * — a 16px kind glyph beside the verb, the counterparty or asset pair beneath
  * it, the signed fiat delta over the asset amount on the right, and the token
- * mark trailing with the network badge on its corner — grouped under one small
+ * mark trailing — grouped under one small
  * heading per day. Rows are airy rather than ruled: a 4px gap and a rounded
  * hover fill, no divider, no per-row box. Only the leading column shrinks, so
  * a long verb or counterparty ellipsises before a figure is ever cut or the
@@ -17,10 +17,6 @@ import { MOTION, RADIUS, SIZE, SPACE, TRACKING, TYPE, WEIGHT } from "@bramble/ui
 const SECONDARY_TEXT = "color-mix(in srgb, var(--bramble-text) 27%, var(--bramble-muted))";
 // Kit glyph: 16px box, 1.2px stroke — the registry's 1.8 at 24 scaled down.
 const GLYPH_SIZE = "16px";
-// Kit network badge on the token mark's corner, ringed in the panel colour
-// (a shadow ring, since the stylesheet draws no strokes).
-const BADGE_SIZE = "14px";
-const BADGE_RING = "2px";
 
 /**
  * Activity feed stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -113,23 +109,9 @@ export const ACTIVITY_STYLES = `
   .tx-side .is-unknown { color: var(--bramble-muted); font-weight: ${WEIGHT.regular}; }
   /* Token mark trails the row at the kit's 36px, reusing the shared glyph
      renderers (bundled logo or tinted letter badge; the network mark when the
-     entry names no token). The network badge sits on its bottom-right corner,
-     ringed in the panel colour so it reads as a badge, not a blemish. */
-  .tx-avatar { display: inline-flex; flex: none; position: relative; }
+     entry names no token). No network badge: every row here is on Starknet. */
+  .tx-avatar { display: inline-flex; flex: none; }
   .tx-avatar > .token-logo, .tx-avatar > .token-mark { height: ${SIZE.avatar}; width: ${SIZE.avatar}; }
-  .tx-avatar-badge {
-    background: var(--bramble-panel);
-    border-radius: ${RADIUS.full};
-    bottom: calc(-1 * ${BADGE_RING});
-    box-shadow: 0 0 0 ${BADGE_RING} var(--bramble-panel);
-    display: inline-flex;
-    height: ${BADGE_SIZE};
-    overflow: hidden;
-    position: absolute;
-    right: calc(-1 * ${BADGE_RING});
-    width: ${BADGE_SIZE};
-  }
-  .tx-avatar-badge .token-logo, .tx-avatar-badge .token-mark { height: ${BADGE_SIZE}; width: ${BADGE_SIZE}; }
   /* One heading per UTC day in the kit's small medium voice, aligned with the
      rows' inner edge; the list hangs 12px below it and days sit 32px apart. */
   .tx-day { display: grid; gap: ${SPACE.md}; }
