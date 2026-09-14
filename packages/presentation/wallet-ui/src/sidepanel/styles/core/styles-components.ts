@@ -8,7 +8,8 @@
  * Surface rules: controls are borderless (structure from elevation and space),
  * fills are solid, and feedback transforms stay inside the press/lift envelope
  * enforced by tests/sidepanel/sidepanel-styles.test.ts. Colour discipline:
- * interactive and active states stay achromatic; market and status semantics
+ * interactive and active states use the skin's neutral ramp or its accent
+ * (neutral ink in midnight, brand blue in daylight); market and status semantics
  * ride --bramble-positive/--bramble-danger so a gain, success, or risk always reads by
  * meaning rather than decorative hue.
  */
@@ -80,6 +81,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .address-book > li {
     align-items: center;
     display: flex;
+    flex-wrap: wrap;
     gap: ${SPACE.sm};
     min-height: 52px;
     padding: ${SPACE.sm} ${SPACE.md} ${SPACE.sm} ${SPACE.lg};
@@ -93,7 +95,10 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     left: ${SPACE.lg};
     position: absolute;
   }
-  .address-book .stack-tight { flex: 1; }
+  /* Keep a readable text column; when a row's trailing controls would leave
+     less than that at narrow widths, the controls wrap beneath instead of
+     being clipped at the card's right edge. */
+  .address-book .stack-tight { flex: 1 1 120px; }
   /* Token list: de-boxed, flush rows carried by alignment and a single hairline
      divider — no per-row fill/edge/radius box. The right-hand fiat/change column
      is right-aligned with tabular figures; a hover fill still highlights a row. */
@@ -202,29 +207,6 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .sparkline-up polyline { stroke: var(--bramble-positive); }
   .sparkline-down polyline { stroke: var(--bramble-danger); }
   .request-list { gap: ${SPACE.md}; }
-  /* Activity list: same de-boxed treatment as the token list — flush rows split
-     by a single hairline divider, state on the glyph, summary as the explorer link. */
-  .tx-list { display: grid; }
-  .tx-row {
-    align-items: center; border-radius: ${RADIUS.sm}; display: flex; gap: ${SPACE.sm};
-    min-width: 0; padding: ${SPACE.md} ${SPACE.sm}; position: relative; transition: background ${MOTION.pressMs}ms ${MOTION.ease};
-  }
-  .tx-list > .tx-row + .tx-row::before { background: var(--bramble-hairline); content: ""; height: 1px; inset: 0 0 auto; position: absolute; } /* flat pseudo-line divider; see .token-row */
-  @media (hover: hover) and (pointer: fine) {
-    li.tx-row:hover { background: var(--bramble-hover); }
-  }
-  .tx-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
-  .tx-copy strong, .tx-summary-link {
-    color: var(--bramble-text);
-    display: block;
-    font-size: ${TYPE.label.size};
-    font-weight: ${WEIGHT.bold};
-    overflow: hidden;
-    text-decoration: none;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
-  .tx-summary-link:hover { text-decoration: underline; text-underline-offset: 3px; }
   .review-panel {
     background: var(--bramble-soft);
     border-radius: ${RADIUS.md};
@@ -260,10 +242,13 @@ ${SIGN_REQUEST_STYLES}
     left: ${SPACE.lg};
     position: absolute;
   }
-  .allowance-copy { display: grid; flex: 1; gap: 2px; min-width: 0; }
+  .allowance-copy { display: grid; flex: 1; gap: 2px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  .allowance-copy > * { min-width: 0; overflow-wrap: anywhere; }
   /* Revoke is red ink, not a red box — the row stays quiet until hovered. */
   .allowance-row button.danger { background: transparent; }
   .allowance-copy code { overflow-wrap: anywhere; }
+  .allowance-spender { align-items: center; display: flex; gap: 2px; min-width: 0; }
+  .allowance-spender code { min-width: 0; }
   /* Collectibles gallery: clean image tiles, not boxed cards. Each item is a
      minimally framed art square (a hairline on the art tile only) over a tight
      caption, with compact ghost actions — no fill/edge box wraps the whole item. */

@@ -8,6 +8,7 @@ import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { ValueBucket } from "@bramble/transactions/send-routes";
 import { isStarkFieldElement, normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
 import { errorMessage } from "../../shared/dom";
+import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 
 /**
@@ -82,6 +83,12 @@ export type TransferState<Review> = {
   readonly error: string;
   readonly fields: TransferFields | null;
   readonly privatePreparation: PrivacyPreparation | null;
+  /**
+   * The latest progress of the tracked background job behind a pool route's
+   * review or confirm — the phase it is in and for how long — so the working
+   * screen can say what the wait is doing. Null outside such a wait.
+   */
+  readonly progress: PreparationProgress | null;
   readonly requiresDeployment: boolean;
   readonly review: Review | null;
   readonly reviewedKey: string | null;
@@ -96,6 +103,7 @@ export const initialTransferState = <Review>(): TransferState<Review> => ({
   error: "",
   fields: null,
   privatePreparation: null,
+  progress: null,
   requiresDeployment: false,
   review: null,
   reviewedKey: null,
@@ -210,19 +218,3 @@ export const CONFIRMATION_DELAYS_MS: readonly number[] = [
 export const confirmationOutcome = (
   status: ActivityEntry["status"] | null,
 ): ConfirmationOutcome | null => (status === null ? null : (CONFIRMATION_OUTCOMES[status] ?? null));
-
-/**
- * Human-readable title for the current Send checkpoint.
- */
-export const transferStageTitle = (stage: TransferStage): string => {
-  if (stage === "recipient") return "Send to";
-  if (stage === "asset") return "Select an asset";
-  if (stage === "details" || stage === "reviewing") return "Send";
-  if (stage === "review") return "Review send";
-  if (stage === "authorizing") return "Authorize send";
-  if (stage === "broadcasting") return "Sending";
-  if (stage === "confirming") return "Confirming";
-  if (stage === "pending") return "Confirmation pending";
-  if (stage === "submitted") return "Confirmed";
-  return "Send failed";
-};

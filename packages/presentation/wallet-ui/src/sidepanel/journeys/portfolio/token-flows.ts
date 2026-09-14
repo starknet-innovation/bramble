@@ -19,6 +19,7 @@ import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
+import { networkDisplayName } from "../../shared/network-label";
 import { accountLabel, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import { sparklinePath, sparklineTrend } from "./sparkline";
@@ -167,7 +168,6 @@ export const tokenDiscoverFlow = (status: WalletStatus): string =>
   flowScreen(
     "token-discover",
     `<section class="section">
-      <p class="lede">Check well-known Starknet token contracts for balances held by the active account.</p>
       <p class="hint">Nothing is added until the scan identifies a balance. Likely-spam tokens remain hidden from Home.</p>
       ${button({
         attributes: { id: "detect-tokens" },
@@ -284,7 +284,7 @@ export const tokenDetailFlow = (
           },
           { label: "Symbol", value: token.symbol },
           { label: "Decimals", value: String(token.decimals) },
-          { label: "Network", value: status.network },
+          { label: "Network", value: networkDisplayName(status.network) },
         ])}
       </section>`,
     )

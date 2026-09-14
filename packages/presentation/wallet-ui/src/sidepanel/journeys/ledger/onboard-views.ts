@@ -277,7 +277,7 @@ export const ledgerAccountPicker = (
   <div class="onboard-picker">
     <div class="gate-head">
       <h1>Select accounts</h1>
-      <p class="lede">Pick the accounts to add. Each address is read straight from your device, and accounts with on-chain activity are selected automatically.</p>
+      <p class="lede">Each address is read from your device; accounts with on-chain activity are preselected.</p>
     </div>
     ${message ? `<p class="review-flag" role="alert">${escapeHtml(message)}</p>` : ""}
     ${list}

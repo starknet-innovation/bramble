@@ -61,6 +61,7 @@ import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
+import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
 import { createMessageHandler } from "./routing/messages";
 import type { RuntimeSender } from "./routing/senders";
 import { walletEventBroadcasts } from "./runtime/events";
@@ -76,6 +77,7 @@ import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monit
 
 type RuntimeApi = {
   readonly getManifest?: () => { readonly version?: string };
+  readonly getPlatformInfo?: () => Promise<unknown>;
   readonly getURL?: (path: string) => string;
   readonly id: string;
   readonly onInstalled: {
@@ -325,6 +327,16 @@ const runtimeReady = sessionReady.then(async () => {
     await reconcileUnlockedActiveAccount(walletReader, session, store, activeStateCoordinator);
   }
 });
+// A private proof outlives one runtime request, so it runs as a tracked job
+// the panel polls. While one runs, a cheap extension API call every 20 s is
+// what Chrome's lifecycle guidance prescribes to keep the worker from idling
+// out; the call's result is irrelevant and its failure is ignored.
+const strk20Jobs = createStrk20JobRegistry({
+  ...(runtime?.getPlatformInfo
+    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
+    : {}),
+  now: systemClock,
+});
 const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   activeStateCoordinator,
   approvals,
@@ -343,6 +355,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   multisigDeploymentReviews,
   multisigStore: multisigLog,
   nostrCoordinationStore: nostrCoordinationLog,
+  strk20Jobs,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm

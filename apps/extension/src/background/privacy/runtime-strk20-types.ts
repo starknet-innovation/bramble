@@ -2,6 +2,7 @@
  * STRK20 response envelopes returned by privileged background handlers.
  */
 
+import type { Strk20Phase } from "@bramble/privacy/phases";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { Strk20BalanceEntry, Strk20CallAndProof } from "@bramble/wallet-protocol/strk20";
 import type { Strk20WalletPreparationReview } from "./strk20-wallet-preparations";
@@ -60,13 +61,46 @@ export type Strk20WalletStateResponse = {
 };
 
 /**
- * Frozen registration, deposit, or private-send review returned to the
- * extension side panel.
+ * A tracked background job the side panel polls for, returned by the request
+ * that started it and by every poll while it still runs. A settled job answers
+ * its poll with the response the work itself produced instead.
+ *
+ * `phase` is the fixed label the job last reported (absent until it reports
+ * one); `attempt`/`attempts` name a bounded retry round; `elapsedMs` is how
+ * long the job has run. None of it derives from the account or its notes.
  */
-export type Strk20WalletPreparationResponse = {
+export type Strk20JobResponse = {
   readonly ok: true;
-  readonly strk20Preparation: Strk20WalletPreparationReview;
+  readonly strk20Job: {
+    readonly attempt?: number;
+    readonly attempts?: number;
+    readonly elapsedMs: number;
+    readonly id: string;
+    readonly phase?: Strk20Phase;
+    readonly state: "running";
+  };
 };
+
+/**
+ * Frozen registration, deposit, or private-send review returned to the
+ * extension side panel — or, for a route whose review is built by a tracked
+ * job (a shield or an activation), the running job the panel polls for it.
+ */
+export type Strk20WalletPreparationResponse =
+  | Strk20JobResponse
+  | {
+      readonly ok: true;
+      readonly strk20Preparation: Strk20WalletPreparationReview;
+    };
+
+/**
+ * Outcome of `wallet.strk20Execute`: the running job the panel polls, or —
+ * once the poll settles — the broadcast hash. Idempotent on repeated polls:
+ * the hash is the stored outcome of the one submission the claim allowed.
+ */
+export type Strk20WalletExecuteResponse =
+  | Strk20JobResponse
+  | { readonly ok: true; readonly transactionHash: string };
 
 /**
  * Pool-registration status of a prospective private-send recipient, returned

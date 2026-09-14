@@ -25,6 +25,7 @@ import {
   spentTokens,
 } from "./policy/fee-guards";
 import { canonicalStrk20PoolFee, STRK20_SERVICE_UNAVAILABLE } from "./policy/fee-policy";
+import type { Strk20PhaseSink } from "./policy/phases";
 import type { Strk20SubmissionPlan } from "./policy/submission-plan";
 
 export { STRK20_INSUFFICIENT_BALANCE } from "./policy/fee-guards";
@@ -78,6 +79,13 @@ export type Strk20AccountContext = {
   readonly config: Strk20NetworkConfig | null;
   /** Live unlock authorization checked at the final public-account write. */
   readonly isAuthorized: () => boolean;
+  /**
+   * Progress sink for the phases of a long operation (maturity, discovery,
+   * proving, broadcast). Set only by a tracked background job; absent on every
+   * request-path call, where reporting is a no-op. Receives fixed labels from
+   * `./policy/phases` and nothing derived from the account or its notes.
+   */
+  readonly onPhase?: Strk20PhaseSink;
   readonly rpcUrls: readonly string[];
   readonly signHash: (messageHash: string) => Promise<StarkSignature>;
   readonly viewingKey: () => Promise<string>;

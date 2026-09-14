@@ -10,6 +10,7 @@
     "./fee-policy": "./src/policy/fee-policy.ts",
     "./maturity": "./src/policy/maturity.ts",
     "./maturity-store": "./src/policy/maturity-store.ts",
+    "./official-sdk-budget": "./src/sdk/official-sdk-budget.ts",
     "./official-sdk-builder": "./src/sdk/official-sdk-builder.ts",
     "./official-sdk-errors": "./src/sdk/official-sdk-errors.ts",
     "./official-sdk-maturity": "./src/sdk/official-sdk-maturity.ts",
@@ -22,6 +23,7 @@
     "./official-sdk-values": "./src/sdk/official-sdk-values.ts",
     "./paymaster": "./src/paymaster/paymaster.ts",
     "./paymaster-typed-data": "./src/paymaster/paymaster-typed-data.ts",
+    "./phases": "./src/policy/phases.ts",
     "./service": "./src/service.ts"
   },
   "scripts": {

@@ -12,6 +12,7 @@ import {
 import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import type { InvokeInput } from "@bramble/starknet/rpc";
 import type { ActivityLog } from "@bramble/transactions/activity";
+import type { Strk20JobRegistry } from "../../apps/extension/src/background/privacy/strk20-preparation-jobs";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
@@ -63,6 +64,8 @@ export type Strk20HarnessOptions = {
   readonly registerCalls?: { value: number };
   readonly registered?: boolean;
   readonly strk20?: Strk20Service;
+  /** A registry of the suite's own, e.g. one with a diagnostics recorder. */
+  readonly strk20Jobs?: Strk20JobRegistry;
   readonly subaccountCalls?: { value: number };
 };
 
@@ -193,6 +196,7 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
   return createMessageHandler(createWallet(), "extension-id", {
     ...(options.activity ? { activity: options.activity } : {}),
     ...(options.now ? { now: options.now } : {}),
+    ...(options.strk20Jobs ? { strk20Jobs: options.strk20Jobs } : {}),
     preferencesStore: {
       ...unavailablePreferencesStore,
       async read() {
@@ -262,3 +266,76 @@ export const approveHeldStrk20 = async (
   }
   return held;
 };
+
+/**
+ * The id of a still-running tracked job in a background reply, or `null` for
+ * any other reply — mirrors the panel's own reader without importing it, so the
+ * harness cannot inherit a panel bug.
+ */
+export const strk20RunningJobId = (response: unknown): string | null => {
+  const job = (
+    response as { readonly strk20Job?: { readonly id?: unknown; readonly state?: unknown } }
+  )?.strk20Job;
+  return typeof job?.id === "string" && job.state === "running" ? job.id : null;
+};
+
+type Settle = (message: Record<string, unknown>, sender: RuntimeSender) => Promise<unknown>;
+
+/**
+ * Polls `wallet.strk20PreparationStatus` the way the panel does until a started
+ * job settles, returning the settled reply. A reply that is not a running job
+ * — a refusal at the gate, or a route that answers on the request — comes back
+ * unchanged. Bounded, so a job that never settles fails the test rather than
+ * hanging it.
+ */
+export const awaitStrk20Job = async (
+  settle: Settle,
+  started: unknown,
+  sender: RuntimeSender = STRK20_EXTENSION_SENDER,
+): Promise<unknown> => {
+  let response = started;
+  for (let poll = 0; poll < 50; poll += 1) {
+    const jobId = strk20RunningJobId(response);
+    if (jobId === null) {
+      return response;
+    }
+    await flushHeld();
+    response = await settle({ jobId, type: "wallet.strk20PreparationStatus" }, sender);
+  }
+  throw new Error("STRK20 preparation job never settled");
+};
+
+/**
+ * Drives a shield preparation through its tracked job: the start request, then
+ * the polls, returning the settled reply — the review envelope or the job's
+ * own refusal. Any request that may start a job settles the same way, so the
+ * activation and execution helpers below are spelled through this one.
+ */
+export const prepareStrk20Deposit = async (
+  handler: Strk20Handler,
+  message: Readonly<Record<string, unknown>>,
+  sender: RuntimeSender = STRK20_EXTENSION_SENDER,
+): Promise<unknown> =>
+  awaitStrk20Job((next, to) => handler(next, to), await handler(message, sender), sender);
+
+/**
+ * Drives the activation preparation through its tracked job, returning the
+ * settled review or refusal.
+ */
+export const prepareStrk20Registration = (
+  handler: Strk20Handler,
+  sender: RuntimeSender = STRK20_EXTENSION_SENDER,
+): Promise<unknown> =>
+  prepareStrk20Deposit(handler, { type: "wallet.strk20PrepareRegistration" }, sender);
+
+/**
+ * Executes a reviewed preparation through its tracked job: the execute request
+ * (whose gate answers refusals itself), then the polls, returning the settled
+ * `{ ok, transactionHash }` or the refusal.
+ */
+export const executeStrk20Preparation = (
+  handler: Strk20Handler,
+  preparationId: unknown,
+  sender: RuntimeSender = STRK20_EXTENSION_SENDER,
+): Promise<unknown> =>
+  prepareStrk20Deposit(handler, { preparationId, type: "wallet.strk20Execute" }, sender);

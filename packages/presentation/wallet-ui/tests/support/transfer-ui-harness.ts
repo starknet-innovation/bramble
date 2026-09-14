@@ -53,6 +53,25 @@ export const flush = (): Promise<void> =>
   new Promise((resolve) => originalSetTimeout(resolve as () => void, 0));
 
 /**
+ * A promise a test settles by hand, for holding the wallet stub mid-flight —
+ * the review preparation or the execute call — so the feedback shown while it
+ * runs can be asserted before it lands.
+ */
+export const deferred = <T>(): {
+  readonly promise: Promise<T>;
+  readonly reject: (error: Error) => void;
+  readonly resolve: (value: T) => void;
+} => {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (error: Error) => void = () => undefined;
+  const promise = new Promise<T>((settle, fail) => {
+    resolve = settle;
+    reject = fail;
+  });
+  return { promise, reject, resolve };
+};
+
+/**
  * Replaces a container's children from markup without assigning markup as a
  * property, matching the shared harness's fragment-based paint.
  */
@@ -105,11 +124,17 @@ const feeReview = {
 // carrying the verifier's wording, which is what the background really returns.
 const poolPreparation = {
   amount: "1",
-  id: "prep-1",
-  poolFeeFri: "0",
+  id: `sha256:${"b".repeat(64)}`,
+  kind: "deposit" as const,
+  networkFee: { overallFee: "2000", unit: "FRI" },
+  payloadDigest: `sha256:${"b".repeat(64)}`,
+  poolAddress: "0x0000000000000000000000000000000000000000000000000000000000000abc",
+  poolFeeFri: "1000",
   recipient: "0x0",
-  summary: "Private send",
-  token: { id: "SN_MAIN:ETH", symbol: "ETH" },
+  route: "public-account" as const,
+  summaries: ["Private send"],
+  symbol: "ETH",
+  tokenId: `SN_MAIN:ETH:${TOKEN_ADDRESS}`,
 };
 
 /**

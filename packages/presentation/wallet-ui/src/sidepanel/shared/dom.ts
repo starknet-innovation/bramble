@@ -37,10 +37,15 @@ export const buttonBusy = (button: HTMLButtonElement | null | undefined, busy: b
 /**
  * Writes a message to the nearest section status line. Returns whether a
  * status line existed, so callers can fall back to a toast when the control
- * lives outside any announced section.
+ * lives outside any announced section. Only a text line (`p`/`span` with
+ * `role="status"`) is a sink: outcome and working stages are live-region
+ * containers that also carry the role, and writing into one would replace its
+ * markup.
  */
 export const scopedStatus = (element: Element, message: string): boolean => {
-  const target = element.closest(".section")?.querySelector<HTMLElement>('[role="status"]');
+  const target = element
+    .closest(".section")
+    ?.querySelector<HTMLElement>('p[role="status"], span[role="status"]');
   if (target) {
     target.textContent = message;
     return true;
@@ -296,4 +301,17 @@ export const bindCopyButtons = (app: Element | null): void => {
  */
 export const renderFragment = (target: Element, markup: string): void => {
   target.replaceChildren(target.ownerDocument.createRange().createContextualFragment(markup));
+};
+
+/**
+ * Appends a hidden overlay host to the document body for a runtime that
+ * reveals itself later (Ledger prompts). The caller owns the returned element;
+ * nothing is rendered into it here.
+ */
+export const hiddenOverlayMount = (className: string): HTMLDivElement => {
+  const mount = document.createElement("div");
+  mount.className = className;
+  mount.hidden = true;
+  document.body.append(mount);
+  return mount;
 };

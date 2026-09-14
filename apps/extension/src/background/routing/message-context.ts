@@ -45,6 +45,10 @@ import {
 } from "../portfolio/balance-snapshots";
 import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
 import {
+  createStrk20JobRegistry,
+  type Strk20JobRegistry,
+} from "../privacy/strk20-preparation-jobs";
+import {
   createStrk20WalletPreparationStore,
   type Strk20WalletPreparationStore,
 } from "../privacy/strk20-wallet-preparations";
@@ -87,6 +91,7 @@ export type RouterContext = {
   readonly session: UnlockSession;
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
+  readonly strk20Jobs: Strk20JobRegistry;
   readonly strk20Preparations: Strk20WalletPreparationStore;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
@@ -122,6 +127,12 @@ export type MessageHandlerOptions = {
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
   readonly swapPreparations?: SwapPreparationStore;
+  /**
+   * Tracked-job registry for proofs that outlive one runtime request. The
+   * entrypoint supplies one wired to the worker keepalive; the default keeps
+   * jobs but relies on the panel's polls alone to hold the worker open.
+   */
+  readonly strk20Jobs?: Strk20JobRegistry;
   readonly strk20Preparations?: Strk20WalletPreparationStore;
   readonly watchAssetAdmission?: WatchAssetAdmission;
 };
@@ -147,6 +158,11 @@ const runtimeLedgerSignQueue = (
 const strk20PreparationsFor = (
   provided: Strk20WalletPreparationStore | undefined,
 ): Strk20WalletPreparationStore => provided ?? createStrk20WalletPreparationStore();
+
+const strk20JobsFor = (
+  provided: Strk20JobRegistry | undefined,
+  now: () => number,
+): Strk20JobRegistry => provided ?? createStrk20JobRegistry({ now });
 
 const activeStateCoordinatorFor = (
   provided: ActiveStateCoordinator | undefined,
@@ -200,6 +216,7 @@ export const routerContext = (
 ): RouterContext => {
   const approvals = options.approvals ?? createApprovalQueue();
   const waiters = createSignatureWaiters();
+  const now = options.now ?? systemClock;
   releaseWaitersOnApprovalDrop(approvals, waiters, notifyApprovalsChanged);
   return {
     activeStateCoordinator: activeStateCoordinatorFor(options.activeStateCoordinator),
@@ -215,7 +232,7 @@ export const routerContext = (
     nostrCoordinationStore: nostrCoordinationStoreFor(options.nostrCoordinationStore),
     ...nftSnapshotsFor(options.nftSnapshots),
     ...nostrRelayTransportFor(options.nostrRelayTransport),
-    now: options.now ?? systemClock,
+    now,
     originHistory: options.originHistory ?? memoryOriginHistory(),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
@@ -224,6 +241,7 @@ export const routerContext = (
     session,
     swap: options.swap ?? unavailableSwapService,
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
+    strk20Jobs: strk20JobsFor(options.strk20Jobs, now),
     strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
     waiters,
     wallet,

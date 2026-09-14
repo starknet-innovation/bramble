@@ -10,8 +10,8 @@
 
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import type { PrivacyPreparation } from "../privacy/privacy-runtime";
-import type { TransferFields } from "./transfer-model";
+import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
+import type { TransferFields, TransferState } from "./transfer-model";
 
 /**
  * Review shape the Send screen renders. Structurally the public review, so the
@@ -23,13 +23,21 @@ const preparePrivateRoute = (
   route: SendRoute,
   fields: TransferFields,
   wallet: SidepanelWallet,
+  onProgress?: PreparationProgressSink,
 ): Promise<PrivacyPreparation> => {
   if (route.id === "public-private") {
     // Every route passes the composed recipient through, deposits included. The
     // recipient being a required argument rather than an optional extra is what
     // makes the old failure structurally unreachable: a deposit that ignored it
     // shielded to the sender while every screen reported a payment to a friend.
-    return wallet.preparePrivacyDeposit(fields.tokenId, fields.amount, fields.recipient);
+    // The shield proves at review inside a tracked job; its progress feeds the
+    // working screen. The relayed routes only quote here and report nothing.
+    return wallet.preparePrivacyDeposit(
+      fields.tokenId,
+      fields.amount,
+      fields.recipient,
+      onProgress,
+    );
   }
   if (route.id === "private-private") {
     return wallet.preparePrivacyTransfer(fields.tokenId, fields.recipient, fields.amount);
@@ -54,8 +62,9 @@ export const preparationFor = (
   route: SendRoute,
   fields: TransferFields,
   wallet: SidepanelWallet,
+  onProgress?: PreparationProgressSink,
 ): Promise<PrivacyPreparation> | null =>
-  route.id === "public-public" ? null : preparePrivateRoute(route, fields, wallet);
+  route.id === "public-public" ? null : preparePrivateRoute(route, fields, wallet, onProgress);
 
 /**
  * The copy shown when a route's preparation fails, named per route so the toast
@@ -97,3 +106,62 @@ export const preparedReview = (preparation: PrivacyPreparation): TransferReview 
     requiresDeployment: false,
     summaries: [...preparation.summaries],
   }) as TransferReview;
+
+const FEE_UNAVAILABLE = "Fee estimate unavailable. Retry before authorizing this transaction.";
+
+/**
+ * The review state a public transfer lands in. The reviewed key — what the
+ * submit handler reads to tell "show me the review" from "I have read it, send
+ * it" — is withheld when the fee could not be estimated or the recipient trips
+ * the poisoning rule, so the next click re-reviews instead of confirming.
+ * Address poisoning is a refusal here, not a notice, matching the NFT send
+ * screen (nft-ui.ts) and the background's own refusal on submit.
+ */
+export const reviewedState = (
+  review: TransferReview,
+  fields: TransferFields,
+  key: string,
+): TransferState<TransferReview> => {
+  const feeFailed = review.feeEstimateFailed || review.deploymentFeeEstimateFailed === true;
+  const blocked = review.flags.some((flag) => flag.code === "address-poisoning");
+  return {
+    error: blocked
+      ? "This recipient closely mimics a saved address. Change it and review again."
+      : feeFailed
+        ? FEE_UNAVAILABLE
+        : "",
+    fields,
+    privatePreparation: null,
+    progress: null,
+    requiresDeployment: review.requiresDeployment,
+    review,
+    reviewedKey: blocked || feeFailed ? null : key,
+    stage: "review",
+    transactionHash: null,
+  };
+};
+
+/**
+ * The review state a pool route lands in once its preparation exists. Same
+ * rule as the public path: a review whose fee could not be estimated is not a
+ * reviewed key, so the fee retry re-prepares instead of executing what the user
+ * has not been able to read.
+ */
+export const preparedState = (
+  preparation: PrivacyPreparation,
+  fields: TransferFields,
+  key: string,
+): TransferState<TransferReview> => {
+  const review = preparedReview(preparation);
+  return {
+    error: review.feeEstimateFailed ? FEE_UNAVAILABLE : "",
+    fields,
+    privatePreparation: preparation,
+    progress: null,
+    requiresDeployment: false,
+    review,
+    reviewedKey: review.feeEstimateFailed ? null : key,
+    stage: "review",
+    transactionHash: null,
+  };
+};

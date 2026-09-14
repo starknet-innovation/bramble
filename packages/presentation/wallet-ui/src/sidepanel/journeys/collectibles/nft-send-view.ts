@@ -55,6 +55,11 @@ export const nftSendFlow = (
         ${receipt([
           { label: "Collectible", value: nft.title },
           {
+            action: {
+              attributes: { "data-copy": nft.contract },
+              icon: "copy",
+              label: "Copy collection contract address",
+            },
             label: "Collection",
             value: nft.collection || accountLabel(nft.contract),
           },
@@ -97,7 +102,6 @@ export const nftSendFlow = (
                   </div>
                 </div>`
           }
-          <p class="hint">Ownership and token standard are checked again on-chain. Nothing is submitted until the decoded review is confirmed.</p>
           <div id="nft-review-panel" aria-live="polite"></div>
           ${button({
             disabled: account === null,

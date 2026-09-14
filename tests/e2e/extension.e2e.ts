@@ -35,8 +35,9 @@ test("discovers and restores an imported wallet in a fresh profile", async ({ ex
   const onboarding = await extension.openExtensionPage("onboarding.html");
 
   await importWalletFromPhrase(onboarding, IMPORT_MNEMONIC);
-  await expect(onboarding.getByRole("heading", { name: "You’re all set" })).toBeVisible();
-  await expect(onboarding.getByRole("button", { name: "Open Bramble" })).toBeVisible();
+  // Completion hands off on its own: it opens the side panel inside the
+  // finishing click's activation and closes the setup tab, no second click.
+  await expect.poll(() => onboarding.isClosed(), { timeout: 10_000 }).toBe(true);
 });
 
 test("loads the built toolbar popup surface", async ({ extension }) => {

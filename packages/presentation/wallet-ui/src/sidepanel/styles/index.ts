@@ -1,13 +1,14 @@
 /**
  * Side panel stylesheet composed from the shared design-system tokens.
  *
- * DESIGN DIRECTION — "Clean Mono": quiet-luxury minimalism. Structural and
- * interactive roles are monochrome in both skins; contrast, weight, space, and
- * motion carry hierarchy. Green is reserved for positive/success semantics and
- * red for danger/failure. Hairline edges, gentle low elevation, generous
- * whitespace, and a
- * crisp, precise type scale. Deliberately FLAT and legible — no glass, no
- * aurora, no backdrop-filter.
+ * DESIGN DIRECTION — "Clean Mono": quiet-luxury minimalism. Structural roles
+ * are near-neutral: achromatic in the default midnight skin, the Bramble
+ * Design Kit's blue-grey tinted ramp with its brand-blue accent in daylight.
+ * Contrast, weight, space, and motion carry hierarchy. Green is reserved for
+ * positive/success semantics and red for danger/failure. Hairline edges,
+ * gentle low elevation, generous whitespace, and a crisp, precise type scale.
+ * Deliberately FLAT and legible — no gradients, no glass, no aurora, no
+ * backdrop-filter.
  *
  * ANIMATION STORYBOARD
  *
@@ -51,16 +52,18 @@ import { MULTISIG_PARTICIPANT_STYLES } from "./multisig/styles-multisig-particip
 import { ONBOARDING_STYLES } from "./onboarding/styles-onboarding";
 import { ONBOARDING_CONTRACT_STYLES } from "./onboarding/styles-onboarding-contract";
 import { ONBOARDING_WELCOME_STYLES } from "./onboarding/styles-onboarding-welcome";
+import { ACTIVITY_STYLES } from "./portfolio/styles-activity";
 import { HOME_STYLES } from "./portfolio/styles-home";
 import { TOKEN_STYLES } from "./portfolio/styles-tokens";
 import { PRIVACY_STYLES } from "./privacy/styles-privacy";
 import { SEND_STYLES } from "./send/styles-send";
 import { SEND_COMPOSE_STYLES } from "./send/styles-send-compose";
+import { SEND_OUTCOME_STYLES } from "./send/styles-send-outcome";
 import { GROUP_STYLES } from "./settings/styles-groups";
 import { SWAP_STYLES } from "./swap/styles-swap";
 
 /**
  * Skin-token-only stylesheet injected by the side panel entrypoint.
  */
-export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${DOCK_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${DECISION_STYLES}${SWAP_STYLES}${PROGRESS_STYLES}${PRIVACY_STYLES}${SEND_STYLES}${SEND_COMPOSE_STYLES}${COMPONENT_STYLES}${JOURNEY_STYLES}${MULTISIG_STYLES}${MULTISIG_PARTICIPANT_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
+export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${DOCK_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${DECISION_STYLES}${SWAP_STYLES}${PROGRESS_STYLES}${PRIVACY_STYLES}${SEND_STYLES}${SEND_COMPOSE_STYLES}${SEND_OUTCOME_STYLES}${COMPONENT_STYLES}${ACTIVITY_STYLES}${JOURNEY_STYLES}${MULTISIG_STYLES}${MULTISIG_PARTICIPANT_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
 ${HOME_STYLES}${ONBOARDING_CONTRACT_STYLES}${ONBOARDING_STYLES}${ONBOARDING_WELCOME_STYLES}`;

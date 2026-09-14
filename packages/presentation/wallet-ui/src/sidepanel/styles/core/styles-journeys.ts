@@ -78,6 +78,12 @@ export const JOURNEY_STYLES = `
     grid-template-columns: 92px minmax(0, 1fr);
   }
   .nft-send-identity .receipt { min-width: 0; }
+  /* Below the art-plus-receipt pair's comfortable width the receipt stacks
+     under the art instead of squeezing its values into a sliver. */
+  @media (max-width: 300px) {
+    .nft-send-identity { grid-template-columns: minmax(0, 1fr); }
+    .nft-send-identity .nft-send-art { width: 92px; }
+  }
   .nft-send-art {
     align-items: center;
     aspect-ratio: 1;

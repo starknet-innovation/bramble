@@ -25,8 +25,23 @@ const fullScreenSetup = async (
   await onboarding.goto(new URL("onboarding.html", walletSurface.url()).toString());
   return {
     finish: async () => {
-      await expect(onboarding.getByRole("heading", { name: "You’re all set" })).toBeVisible();
-      await onboarding.close();
+      // Completion hands itself off: it opens the side panel and closes its
+      // own tab. Headless Chromium resolves that open too, so the tab may
+      // already be gone by the time we look; accept either state.
+      await expect
+        .poll(
+          async () =>
+            onboarding.isClosed() ||
+            (await onboarding
+              .getByRole("heading", { name: "You’re all set" })
+              .isVisible()
+              .catch(() => false)),
+          { timeout: 15_000 },
+        )
+        .toBe(true);
+      if (!onboarding.isClosed()) {
+        await onboarding.close();
+      }
       await walletSurface.reload();
     },
     page: onboarding,

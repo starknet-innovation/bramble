@@ -1,3 +1,4 @@
+import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
 import { ICON_NAMES, icon } from "@bramble/ui-kit/icons";
 import { accountAvatar, tokenGlyph } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
@@ -48,6 +49,10 @@ export const IdentityMarks: CatalogStory = {
         "Account and token identity",
         "Account marks are derived locally from the full public address. Known tokens use bundled vector marks; unknown tokens fall back to escaped deterministic initials.",
         `<div class="catalog-grid">
+          ${catalogSample(
+            "Brand mark",
+            `<div class="catalog-row"><span class="brand-mark">${BRAMBLE_MARK}</span><span>The website's bird, used wherever no account is selected</span></div>`,
+          )}
           ${catalogSample(
             "Address identities",
             `<div class="catalog-row">

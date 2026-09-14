@@ -8,9 +8,12 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   accountAvatar,
   accountDisplayName,
+  accountIdAddress,
+  copyButton,
   dockScreen,
   flowScreen,
   formatFri,
+  inlineCopyButton,
   isWalletView,
 } from "../../../src/sidepanel/shared/parts";
 
@@ -102,5 +105,42 @@ describe("formatFri", () => {
 
   test("returns the raw input unchanged when it is not a number", () => {
     expect(formatFri("not-a-number")).toBe("not-a-number");
+  });
+});
+
+describe("accountIdAddress", () => {
+  test("returns the address half of a network-scoped account id", () => {
+    expect(accountIdAddress("SN_MAIN:0x1234")).toBe("0x1234");
+  });
+
+  test("passes a bare value through untouched", () => {
+    expect(accountIdAddress("0x1234")).toBe("0x1234");
+  });
+});
+
+describe("copy controls", () => {
+  test("both carry the full value on data-copy and the label as the accessible name", () => {
+    const value = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+    for (const html of [
+      copyButton(value, "Copy address"),
+      inlineCopyButton(value, "Copy address"),
+    ]) {
+      expect(html).toContain(`data-copy="${value}"`);
+      expect(html).toContain('aria-label="Copy address"');
+      expect(html).toContain('type="button"');
+    }
+  });
+
+  test("the inline variant is the ghost, compact one; the receipt variant is unchanged", () => {
+    expect(inlineCopyButton("0x1", "Copy")).toContain('class="icon-button ghost copy-inline"');
+    expect(copyButton("0x1", "Copy")).toContain('class="icon-button"');
+    expect(copyButton("0x1", "Copy")).not.toContain("copy-inline");
+  });
+
+  test("escapes the value and label rather than trusting them", () => {
+    const html = inlineCopyButton('0x1" onclick="steal()', "Copy <b>");
+    expect(html).toContain('data-copy="0x1&quot; onclick=&quot;steal()"');
+    expect(html).not.toContain('" onclick="');
+    expect(html).toContain("&lt;b&gt;");
   });
 });

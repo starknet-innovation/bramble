@@ -4,6 +4,7 @@
  * escaped controls and never reads or stores wallet material.
  */
 
+import { BRAMBLE_WORDMARK } from "@bramble/ui-kit/brand-mark";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import {
   checkboxField,
@@ -14,7 +15,6 @@ import {
 } from "@bramble/ui-kit/fields";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
-import { BRAMBLE_MARK } from "../../shared/brand-mark";
 import { icon } from "../../shared/icons";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 
@@ -132,40 +132,7 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
 
 const welcomeStep = (ready: boolean): string => `
   <section class="onboarding-step onboarding-welcome" data-onboarding-step="welcome">
-    <div class="onboarding-orbit" aria-hidden="true">
-      <div class="orbit-field">
-        <span class="orbit-ring orbit-ring-outer"></span>
-        <span class="orbit-ring orbit-ring-wide"></span>
-        <span class="orbit-ring orbit-ring-middle"></span>
-        <span class="orbit-ring orbit-ring-inner"></span>
-        <span class="orbit-ring orbit-ring-core"></span>
-        <span class="orbit-pulse orbit-pulse-a"></span>
-        <span class="orbit-pulse orbit-pulse-b"></span>
-        <span class="orbit-pulse orbit-pulse-c"></span>
-        <span class="orbit-track orbit-track-outer-a">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("shield")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-outer-b">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("send")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-wide orbit-track-reverse orbit-track-wide-a">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("activity")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-middle orbit-track-middle-a">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("image")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-middle orbit-track-middle-b">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("globe")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-inner orbit-track-reverse orbit-track-inner-a">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("link")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-core orbit-track-core-a">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("coins")}</span></span>
-        </span>
-        <span class="orbit-core">${BRAMBLE_MARK}<span>Bramble</span></span>
-      </div>
-    </div>
+    <div class="onboarding-lockup">${BRAMBLE_WORDMARK}</div>
     <div class="onboarding-welcome-actions">
       ${button({
         attributes: { id: "create-new-button" },
@@ -456,9 +423,9 @@ const ledgerStep = (status: WalletStatus): string => `
 export const onboardingWizard = (status: WalletStatus): string => `
   <!--
   THESIS: First-run security is a short sequence of explicit choices, never one long form.
-  OWN-WORLD: Achromatic panel, generous dark field, crisp controls, orbital linework, semantic green/red only.
+  OWN-WORLD: Neutral panel over the brand landscape, the wordmark lockup at its centre, one accent for the primary action, semantic green/red only.
   STORY: Choose a wallet path, supply only the required credential, protect it, select the account, finish.
-  FIRST VIEWPORT: One centered wallet stage; an orbiting Bramble mark leads to two full-width actions at the foot.
+  FIRST VIEWPORT: One centered wallet stage; the Bramble wordmark leads to two full-width actions at the foot.
   FORM: Staged wallet setup based on the supplied reference flow, adapted to Bramble trust boundaries.
   -->
   <main class="screen flow gate onboarding-wizard" aria-label="Wallet setup">

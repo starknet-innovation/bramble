@@ -6,12 +6,16 @@ import type { LabSurface, LabTheme } from "./types";
 const DESIGN_CONTRACT = `
 <!--
 THESIS: A precise review bench makes wallet state, motion, and trust boundaries inspectable.
-OWN-WORLD: Bramble Clean Mono; achromatic interaction, honest success and failure colour.
+OWN-WORLD: Bramble Clean Mono; near-neutral surfaces with one accent, honest success and failure colour.
 STORY: Choose a scenario, inspect the wallet, step through its state machine, then leave feedback.
 FIRST VIEWPORT: The wallet frame and current checkpoint lead; controls and evidence sit beside it.
 FORM: A workbench, not a marketing page. Dense enough for review, quiet enough for concentration.
 -->`;
 
+// Emitted after the production stylesheet so the frame's `color-scheme` wins
+// over the base layer's dark default, the way the extension entrypoint pins it
+// inline on the root. Anything resolved through `light-dark()` — and every
+// native control — then follows the selected skin.
 const skinCss = (theme: LabTheme): string => {
   const skin = theme === "light" ? defaultSkin : darkSkin;
   const tokens = Object.entries(skin.tokens)
@@ -44,7 +48,7 @@ export const walletFrameDocument = (
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>${skinCss(theme)}${SIDEPANEL_STYLES}${reducedMotionCss(reducedMotion)}${extraStyles}</style>
+  <style>${SIDEPANEL_STYLES}${skinCss(theme)}${reducedMotionCss(reducedMotion)}${extraStyles}</style>
 </head>
 <body class="${surfaceClass(surface)}">
   ${DESIGN_CONTRACT}

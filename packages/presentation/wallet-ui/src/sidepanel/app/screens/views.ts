@@ -296,6 +296,7 @@ export const dashboard = (
   privacyJourney: PrivacyJourneyState = { stage: "idle" },
   sendIntent: SendIntent | null = null,
   selectedMultisigIntentId: string | null = null,
+  todayKey: number | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -416,7 +417,19 @@ export const dashboard = (
           journeyContext.multisigPortfolio,
         )
       : activeView === "activity"
-        ? activityScreen(pending, status, transactions, historyUnavailable, sharedIdentity?.record)
+        ? activityScreen(
+            pending,
+            status,
+            transactions,
+            historyUnavailable,
+            sharedIdentity?.record,
+            {
+              currency,
+              prices,
+              tokens: preferences?.tokens ?? [],
+            },
+            todayKey,
+          )
         : activeView === "settings"
           ? settingsScreen(status, preferences)
           : homeScreen(

@@ -76,8 +76,8 @@ import {
 } from "@bramble/transactions/allowance-scan";
 import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions/starkscan";
 import {
+  createExplorerFirstHistory,
   createRpcFirstBalances,
-  createRpcFirstHistory,
 } from "@bramble/transactions/starkscan-wallet";
 import type {
   scanTransactionHistory,
@@ -180,9 +180,11 @@ export type RuntimeRpc = {
   readonly getTokenMetadata: (input: TokenMetadataInput) => ReturnType<typeof getTokenMetadata>;
   /**
    * Reads the account's recent on-chain transaction history for the activity
-   * feed. Optional so existing RPC stubs stay valid; when absent the feed shows
-   * only locally recorded transactions. A thrown transport error is treated by
-   * the handler as "history unavailable" and degrades to the local log.
+   * feed — explorer first when the user's preference permits, RPC scan
+   * otherwise. Optional so existing RPC stubs stay valid; when absent the feed
+   * shows only locally recorded transactions. A thrown error means neither lane
+   * answered and is treated by the handler as "history unavailable", degrading
+   * to the local log.
    */
   readonly getTransactionHistory?: (
     input: TransactionHistoryScan,
@@ -237,9 +239,13 @@ const nftMetadataHttp: NftMetadataHttp = (url, init) =>
   fetch(url, { ...init, signal: AbortSignal.timeout(NFT_METADATA_TIMEOUT_MS) });
 const starkscanHttp: StarkscanHttp = untrustedFetch;
 // The public explorer read lane is used because an extension cannot safely
-// embed an external API key. The client keeps its base injectable so a
-// deployment-owned authenticated relay can replace this without changing
-// wallet consumers.
+// embed an external API key; the bundled base answers without one and lives on
+// a host the manifest already permits. The client keeps its base injectable so
+// a deployment-owned authenticated relay can replace this without changing
+// wallet consumers. Balances stay RPC-first with the explorer as the outage
+// rescue; transaction history is explorer-first (the RPC scan reaches back
+// only a few days of blocks) with the RPC scan as the keyless fallback. Both
+// obey the user's per-network `explorerFallback` choice.
 const DEFAULT_EXPLORER_API_URL = "https://starkscan.co/v1";
 const starkscanClients = new Map<string, ReturnType<typeof createStarkscanClient>>();
 const starkscanClientFor = (baseUrl: string): ReturnType<typeof createStarkscanClient> => {
@@ -262,9 +268,10 @@ const getNftMetadata = async (input: NftTokenUriInput): Promise<NftTokenMetadata
  * Collaborators the production RPC wiring needs beyond the network itself.
  *
  * `readPreferences` is only consulted to decide whether the third-party
- * explorer read lane may run after every configured RPC has failed
- * (MCW-V09-129). A rejected read is treated as "not permitted", so a
- * preferences outage narrows disclosure rather than widening it.
+ * explorer read lane may run for a network (MCW-V09-129): as the outage rescue
+ * for balances, and as the primary source for transaction history. A rejected
+ * read is treated as "not permitted", so a preferences outage narrows
+ * disclosure rather than widening it.
  */
 export type RuntimeRpcOptions = {
   readonly readPreferences: () => Promise<ExplorerLanePreferences>;
@@ -289,7 +296,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     readPreferences,
   }),
   getTokenMetadata,
-  getTransactionHistory: createRpcFirstHistory({
+  getTransactionHistory: createExplorerFirstHistory({
     client: starkscanClient,
     clientFor: configuredStarkscanClient,
     readPreferences,

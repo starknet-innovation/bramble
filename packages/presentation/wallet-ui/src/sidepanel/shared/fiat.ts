@@ -2,6 +2,7 @@
  * Pure fiat formatting and portfolio math for the side panel. No DOM.
  */
 import type { DisplayCurrency } from "@bramble/settings/preferences";
+import { formatUtcClock, formatUtcDay } from "./timestamp";
 
 /**
  * Currency glyphs for the three supported display currencies.
@@ -41,29 +42,13 @@ export const formatFiat = (amount: number, currency: DisplayCurrency): string =>
 /**
  * Formats a cached-price capture time (epoch ms) as a compact, fixed-UTC label
  * for the "last saved" stale indicator, or null when there is no timestamp.
- * UTC is deliberate: it keeps the label deterministic and avoids the implicit
- * clock and date-construction sources the file-standards gate forbids outside
- * the approved boundary modules — the epoch number is formatted directly.
- * Date and time are formatted separately and joined with an explicit ", ":
- * a combined format leaves the joiner to the ICU version (", " vs " at "),
- * so the label would vary across Chrome builds and test environments.
+ * Day and clock come from the shared UTC formatters (see ./timestamp.ts for
+ * why UTC and why they are joined here with an explicit ", ").
  */
 export const formatPriceTimestamp = (asOf: number | null): string | null => {
-  if (asOf === null || !Number.isFinite(asOf) || asOf <= 0) {
-    return null;
-  }
-  const date = new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    timeZone: "UTC",
-  }).format(asOf);
-  const time = new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    hour12: false,
-    minute: "2-digit",
-    timeZone: "UTC",
-  }).format(asOf);
-  return `${date}, ${time} UTC`;
+  const day = formatUtcDay(asOf);
+  const clock = formatUtcClock(asOf);
+  return day !== null && clock !== null ? `${day}, ${clock}` : null;
 };
 
 /**

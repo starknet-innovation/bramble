@@ -1,10 +1,5 @@
 /** Pure screens for stable Argent multisig accounts and frozen intents. */
 import { escapeHtml } from "@bramble/core/html";
-import {
-  type ArgentMultisigConfigReview,
-  type ArgentMultisigPublicConfig,
-  reviewArgentMultisigConfigChange,
-} from "@bramble/multisig/chain";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
@@ -38,6 +33,7 @@ import {
 } from "../../shared/review-render";
 import { multisigIntentActions, multisigIntentOutcome } from "./multisig-intent-actions";
 import { type CompactIntentList, intentDeleteButton } from "./multisig-intent-list";
+import { configReviewFor, configReviewView, exactCalls } from "./multisig-intent-review";
 import {
   actionableArgentMultisigIntents,
   feeReplacementIntentFor,
@@ -165,68 +161,6 @@ const intentReviewAssets = (
       intent.prepared.calls.some((call) => sameFelt(call.contractAddress, token.address)),
     )
     .map((token) => ({ address: token.address, symbol: token.symbol }));
-
-const exactCalls = (intent: ArgentMultisigSigningIntent): string =>
-  intent.prepared.calls
-    .map(
-      (call, index) => `<li class="review-panel">
-        <p><strong>Call ${index + 1}</strong> · <code>${escapeHtml(call.entrypoint)}</code></p>
-        <p>Contract · <code title="${escapeHtml(call.contractAddress)}">${escapeHtml(accountLabel(call.contractAddress))}</code></p>
-        <p>Calldata · <code>${escapeHtml(call.calldata.join(" ") || "none")}</code></p>
-      </li>`,
-    )
-    .join("");
-
-const configReviewFor = (
-  intent: ArgentMultisigSigningIntent,
-  view: ArgentMultisigView,
-): ArgentMultisigConfigReview | null => {
-  const current = view.record.currentConfig;
-  const call = intent.prepared.calls[0];
-  if (
-    !current ||
-    intent.prepared.calls.length !== 1 ||
-    !call ||
-    current.threshold !== intent.configSnapshot.threshold ||
-    current.signerPublicKeys.length !== intent.configSnapshot.signerGuids.length ||
-    current.signerPublicKeys
-      .map(argentSignerGuid)
-      .some((guid, index) => guid !== intent.configSnapshot.signerGuids[index])
-  ) {
-    return null;
-  }
-  try {
-    return reviewArgentMultisigConfigChange(view.record.address, current, call);
-  } catch {
-    return null;
-  }
-};
-
-const configReviewView = (
-  review: ArgentMultisigConfigReview,
-  current: ArgentMultisigPublicConfig,
-): string => {
-  const change = review.change;
-  const changedSigners =
-    change.kind === "replace_signer"
-      ? [`Remove ${change.removeSignerPublicKey}`, `Add ${change.addSignerPublicKey}`]
-      : change.kind === "change_threshold"
-        ? []
-        : change.signerPublicKeys.map(
-            (key) => `${change.kind === "add_signers" ? "Add" : "Remove"} ${key}`,
-          );
-  return `<section class="review-panel" aria-label="Signer authority change">
-    <p class="review-flag"><strong>${escapeHtml(review.summary)}</strong></p>
-    <p>Threshold · <strong>${current.threshold} of ${current.signerPublicKeys.length} before → ${review.nextConfig.threshold} of ${review.nextConfig.signerPublicKeys.length} after</strong></p>
-    <p>Current signers</p>
-    <ol>${current.signerPublicKeys.map((key) => `<li><code title="${escapeHtml(key)}">${escapeHtml(accountLabel(key))}</code></li>`).join("")}</ol>
-    <p>Exact change</p>
-    ${changedSigners.map((line) => `<p><code title="${escapeHtml(line)}">${escapeHtml(line.length > 24 ? `${line.slice(0, 14)}…${line.slice(-6)}` : line)}</code></p>`).join("")}
-    <p>Resulting threshold · <strong>${review.nextConfig.threshold} of ${review.nextConfig.signerPublicKeys.length}</strong></p>
-    <p>Resulting signers</p>
-    <ol>${review.nextConfig.signerPublicKeys.map((key) => `<li><code title="${escapeHtml(key)}">${escapeHtml(accountLabel(key))}</code></li>`).join("")}</ol>
-  </section>`;
-};
 
 const configMatchesIntent = (
   intent: ArgentMultisigSigningIntent,

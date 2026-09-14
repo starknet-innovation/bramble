@@ -1,7 +1,14 @@
+import type { ActivityEntry } from "@bramble/transactions/activity";
 import { receipt } from "@bramble/ui-kit/content";
 import { balanceRow, transactionRow } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
-import { balances, softwareActivity } from "../../fixtures/fixtures";
+import {
+  balances,
+  preferences,
+  RECIPIENT_ADDRESS,
+  softwareActivity,
+  USDC_ADDRESS,
+} from "../../fixtures/fixtures";
 import {
   CATALOG_META,
   type CatalogArgs,
@@ -22,11 +29,50 @@ const accepted = softwareActivity[0];
 if (!balance || !accepted) {
   throw new Error("Missing UI Lab data-display fixtures");
 }
-const activityExamples = [
+// Priced through the same fixture price the wallet frame uses, so the USDC
+// rows carry a signed fiat delta while STRK (unpriced here) shows its amount alone.
+const pricing = {
+  currency: "usd" as const,
+  prices: { [USDC_ADDRESS]: 1 },
+  tokens: preferences.tokens,
+};
+// A bare base (no amount, counterparty, or token) so each example declares
+// exactly the fields its row anatomy demonstrates.
+const { amount: _amount, counterparty: _counterparty, token: _token, ...bareAccepted } = accepted;
+const activityExamples: readonly ActivityEntry[] = [
+  {
+    ...bareAccepted,
+    amount: "12.5",
+    counterparty: RECIPIENT_ADDRESS,
+    hash: "0x711",
+    summary: "Received 12.5 USDC from 0x4567…cdef",
+    token: "USDC",
+  },
   accepted,
-  { ...accepted, hash: "0x702", kind: "invoke" as const, summary: "Swap 50 USDC for STRK" },
-  { ...accepted, hash: "0x703", kind: "invoke" as const, summary: "Stake 20 STRK" },
-  { ...accepted, hash: "0x704", kind: "invoke" as const, summary: "Claim rewards" },
+  {
+    ...bareAccepted,
+    amount: "50",
+    hash: "0x702",
+    kind: "invoke",
+    summary: "Swap 50 USDC for STRK",
+    token: "USDC",
+  },
+  {
+    ...bareAccepted,
+    amount: "20",
+    hash: "0x703",
+    kind: "invoke",
+    summary: "Stake 20 STRK",
+    token: "STRK",
+  },
+  { ...bareAccepted, hash: "0x704", kind: "invoke", summary: "Claim rewards" },
+  {
+    ...bareAccepted,
+    hash: "0x705",
+    kind: "invoke",
+    status: "pending",
+    summary: "Supplied 200 USDC to Vesu",
+  },
 ];
 
 export const Receipts: CatalogStory = {
@@ -81,13 +127,13 @@ export const ActivityRows: CatalogStory = {
   render: (args) =>
     catalogFrame(
       "Activity rows",
-      "Activity is account-partitioned and concise: the glyph carries state and the summary opens the transaction on Starkscan.",
+      "Activity is account-partitioned and concise: a 16px glyph and the verb name the event, the counterparty or asset pair sits flush beneath, the signed fiat delta and asset amount trail on the right, the token mark trails, only an unsettled row names its status, and the verb opens the transaction on Starkscan.",
       catalogGroup(
         "Transaction types",
-        "Distinct glyphs make transfers, swaps, staking, and other contract interactions scannable before reading.",
+        "Distinct outline glyphs make transfers, swaps, staking, rewards, and other contract interactions scannable before reading; a row prices itself only when its token and price are both known.",
         catalogSample(
-          "Accepted activity",
-          `<ul class="tx-list">${activityExamples.map(transactionRow).join("")}</ul>`,
+          "Activity rows",
+          `<ul class="tx-list">${activityExamples.map((entry) => transactionRow(entry, pricing)).join("")}</ul>`,
           "catalog-card-limit",
         ),
       ),
