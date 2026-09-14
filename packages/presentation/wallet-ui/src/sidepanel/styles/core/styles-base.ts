@@ -404,8 +404,9 @@ export const BASE_STYLES = `
     right: 0;
     top: 0;
   }
-  /* A row on its own (Manage tokens, a lone option) is a rounded control;
-     inside a grouped list the group clips the corners, so rows stay flush. */
+  /* A row is a rounded control on its own (Manage tokens, a lone option) and
+     inside a grouped list alike: the group clips its outer corners, and the
+     hover fill keeps the kit's rounding within it. */
   button.menu-row, button.option-row, a.menu-row {
     align-items: center;
     background: transparent;

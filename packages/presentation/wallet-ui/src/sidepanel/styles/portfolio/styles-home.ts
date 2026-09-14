@@ -104,10 +104,16 @@ export const HOME_STYLES = `
   button.drawer-account[aria-pressed="true"] { background: var(--bramble-accent-soft); }
   /* An account row and the copy action beside it are one line: the line carries
      the selected, hover, and press fill so the action sits inside the highlight. */
-  .drawer-account-row { border-radius: ${RADIUS.md}; transition: background ${MOTION.pressMs}ms ${MOTION.ease}; }
+  .drawer-account-row {
+    border-radius: ${RADIUS.md};
+    transition:
+      background ${MOTION.pressMs}ms ${MOTION.ease},
+      transform ${MOTION.liftMs}ms var(--ease-out);
+  }
   .drawer-account-row:has(> button.drawer-account[aria-pressed="true"]) { background: var(--bramble-accent-soft); }
-  .drawer-account-row:has(> button.drawer-account:not(:disabled):active) { background: var(--bramble-soft-press); }
-  .drawer-account-row > button.drawer-account, .drawer-account-row > button.drawer-account[aria-pressed="true"], .drawer-account-row > button.drawer-account:not(:disabled):active { background: transparent; }
+  .drawer-account-row:has(> button.drawer-account:not(:disabled):active) { background: var(--bramble-soft-press); transform: scale(0.985); }
+  .drawer-account-row > button.drawer-account, .drawer-account-row > button.drawer-account[aria-pressed="true"] { background: transparent; }
+  .drawer-account-row > button.drawer-account:not(:disabled):active { background: transparent; transform: none; }
   .drawer-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .drawer-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .drawer-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }

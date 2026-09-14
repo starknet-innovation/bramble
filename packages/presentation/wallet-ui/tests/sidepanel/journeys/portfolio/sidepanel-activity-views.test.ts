@@ -103,7 +103,7 @@ describe("activity journey boundaries", () => {
     // The visible text is the verb; the accessible name keeps the whole record
     // (prefixed by the verb, since "Send 1 STRK" does not start with "Sent").
     expect(html).toContain(
-      'aria-label="Sent. Send 1 STRK. accepted. View transaction on Starkscan">Sent</a>',
+      'aria-label="Sent. Send 1 STRK. accepted, 00:00 UTC. View transaction on Starkscan">Sent</a>',
     );
     // A new browsing context, never one that can reach back into the panel.
     expect(html).toContain('target="_blank" rel="noopener noreferrer"');
@@ -132,12 +132,12 @@ describe("activity journey boundaries", () => {
     );
     expect(html).toContain('<li class="tx-row" data-live-group title="Pre-confirmed · 14:06 UTC">');
     expect(html).toContain('<span class="tx-meta pending" aria-hidden="true">Pending</span>');
-    // The status still reaches assistive tech through the summary's own label.
+    // The status and time still reach assistive tech through the summary's own label.
     expect(html).toContain(
-      'aria-label="Sent. Send 1 STRK. accepted. View transaction on Starkscan"',
+      'aria-label="Sent. Send 1 STRK. accepted, 14:05 UTC. View transaction on Starkscan"',
     );
     expect(html).toContain(
-      'aria-label="Sent. Send 1 STRK. pre-confirmed. View transaction on Starkscan"',
+      'aria-label="Sent. Send 1 STRK. pre-confirmed, 14:06 UTC. View transaction on Starkscan"',
     );
   });
 
@@ -256,7 +256,7 @@ describe("activity journey boundaries", () => {
     // No link, so the verb is plain text and the record plus status follow it
     // for assistive tech only.
     expect(html).toContain(
-      '<strong class="tx-summary">Sent<span class="sr-only">. Send 1 STRK. accepted.</span></strong>',
+      '<strong class="tx-summary">Sent<span class="sr-only">. Send 1 STRK. accepted, 00:00 UTC.</span></strong>',
     );
   });
 
@@ -290,7 +290,7 @@ describe("activity journey boundaries", () => {
     // recorded counterparty, a negative delta over the amount.
     const party = "0x0123456789abcdef0123456789abcdef";
     expect(html).toContain(
-      'aria-label="Sent. Send 12.3456 STRK to 0x0123…cdef. accepted. View transaction on Starkscan">Sent</a>',
+      'aria-label="Sent. Send 12.3456 STRK to 0x0123…cdef. accepted, 00:00 UTC. View transaction on Starkscan">Sent</a>',
     );
     expect(html).toContain(
       `<span class="tx-detail tx-counterparty"><span title="${party}">To 0x0123…cdef</span><button class="icon-button ghost copy-inline" data-copy="${party}" type="button" aria-label="Copy recipient address"`,
@@ -299,7 +299,7 @@ describe("activity journey boundaries", () => {
     expect(html).toContain('<span class="tx-amount">12.3456 STRK</span>');
     // Received: the summary already starts with the verb, so the name is the record.
     expect(html).toContain(
-      'aria-label="Received 3 STRK from 0x0123…cdef. accepted. View transaction on Starkscan">Received</a>',
+      'aria-label="Received 3 STRK from 0x0123…cdef. accepted, 00:00 UTC. View transaction on Starkscan">Received</a>',
     );
     expect(html).toContain(
       `<span class="tx-detail tx-counterparty"><span title="${party}">From 0x0123…cdef</span><button class="icon-button ghost copy-inline" data-copy="${party}" type="button" aria-label="Copy sender address"`,

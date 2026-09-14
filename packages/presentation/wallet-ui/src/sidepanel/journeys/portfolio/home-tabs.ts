@@ -144,8 +144,8 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
  * beneath the detail in the status hue, carries an explanatory hint, and keeps
  * its glyph in that hue, so a pre-confirmed transaction never reads as
  * settled. The status and UTC time stay reachable on the row's tooltip and in
- * the summary's accessible name, once, so assistive tech never hears them
- * twice. The visible verb is a classification, so the accessible name keeps
+ * the summary's accessible name (the visible meta line is hidden from
+ * assistive tech), so nothing is announced twice. The visible verb is a classification, so the accessible name keeps
  * the full recorded summary (prefixed by the verb when the summary does not
  * already start with it) — the row never announces less than the record says.
  * A recorded counterparty shows truncated with a quiet copy control that
@@ -164,10 +164,11 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
   const name = summary.toLowerCase().startsWith(row.title.toLowerCase())
     ? summary
     : `${row.title}. ${summary}`;
-  // Status leads the clock on the tooltip, the one place the time is shown.
-  const timing = [capitalise(label), formatUtcClock(entry.submittedAt)]
-    .filter((part) => part !== null)
-    .join(" · ");
+  // Status leads the clock on the tooltip and in the accessible name; the time
+  // is not printed on the row itself.
+  const clock = formatUtcClock(entry.submittedAt);
+  const timing = [capitalise(label), clock].filter((part) => part !== null).join(" · ");
+  const spoken = clock === null ? label : `${label}, ${clock}`;
   const avatar = row.tokenSymbol
     ? tokenGlyph(row.tokenAddress ?? "0x0", row.tokenSymbol)
     : starknetNetworkGlyph();
@@ -178,8 +179,8 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
         <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-label="${escapeHtml(statusLabel)}" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
         ${
           explorer
-            ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(name)}. ${escapeHtml(label)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${escapeHtml(row.title)}</a>`
-            : `<strong class="tx-summary">${escapeHtml(row.title)}<span class="sr-only">${escapeHtml(name.slice(row.title.length))}. ${escapeHtml(label)}.</span></strong>`
+            ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(name)}. ${escapeHtml(spoken)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${escapeHtml(row.title)}</a>`
+            : `<strong class="tx-summary">${escapeHtml(row.title)}<span class="sr-only">${escapeHtml(name.slice(row.title.length))}. ${escapeHtml(spoken)}.</span></strong>`
         }
       </span>
       ${

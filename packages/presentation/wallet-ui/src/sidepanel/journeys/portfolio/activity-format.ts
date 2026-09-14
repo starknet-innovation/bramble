@@ -56,14 +56,13 @@ export type ActivityPricing = {
 
 /**
  * Classification of one entry: the glyph, the accessible kind name, the verb
- * shown as the row title, and which way value moved (`null` when the entry is
- * not a value movement — an approval, a deployment, a shield/unshield between
- * the same owner's balances — so no signed fiat delta is ever attached to it;
- * a shield or unshield still prices its amount, unsigned, because value did
- * move, only between the owner's own balances).
+ * shown as the row title, and which way value moved: `in` or `out` of the
+ * account, `internal` between the owner's own public and private balances
+ * (priced, but unsigned), or `null` when the entry is not a value movement —
+ * an approval, a deployment, an activation — so no fiat figure is attached.
  */
 export type ActivityAppearance = {
-  readonly direction: "in" | "out" | null;
+  readonly direction: "in" | "internal" | "out" | null;
   readonly icon: IconName;
   readonly label: string;
   readonly title: string;
@@ -89,10 +88,17 @@ const PRIVATE = /\b(un)?shield(ed|ing)?\b|\bprivate(ly)?\b/;
 const APPROVAL = /\b(approve|approved|approval|revoke|revoked|allow|allowance)\b/;
 const RECEIVED = /\b(receive|received)\b/;
 
+// A shield or unshield names its recipient only when that is someone else:
+// "Shield 5 STRK to 0x…" / "… into 0x…'s private balance" / "Unshield 5 STRK
+// to 0x…" leave the account, while "Shield 5 STRK", "Unshield 5 STRK", and
+// "Unshield 5 STRK to this account" stay between the owner's own balances.
+const NAMES_OTHER_PARTY = /\b(?:into|to)\s+(?!this account\b)\S/;
+
 const privateAppearance = (summary: string): ActivityAppearance => {
   const base = { icon: "shield", label: "Private transaction", type: "private" } as const;
-  if (/\bunshield/.test(summary)) return { ...base, direction: null, title: "Unshielded" };
-  if (/\bshield/.test(summary)) return { ...base, direction: null, title: "Shielded" };
+  const direction = NAMES_OTHER_PARTY.test(summary) ? "out" : "internal";
+  if (/\bunshield/.test(summary)) return { ...base, direction, title: "Unshielded" };
+  if (/\bshield/.test(summary)) return { ...base, direction, title: "Shielded" };
   if (/\bprivately\b|\bprivate transfer\b/.test(summary))
     return { ...base, direction: "out", title: "Private transfer" };
   return { ...base, direction: null, title: "Private transaction" };
@@ -262,9 +268,10 @@ const activityDetail = (
 /**
  * Everything one Activity row displays, derived from the entry and the current
  * prices. The asset amount needs the recorded amount and symbol; the fiat
- * figure additionally needs a direction (or a shield/unshield, shown unsigned),
- * exactly one tracked token with that symbol on the entry's network (a symbol
- * shared by two tracked tokens is ambiguous and yields nothing), and a price.
+ * figure additionally needs a direction (signed in or out, unsigned when the
+ * value only moved between the owner's own balances), exactly one tracked
+ * token with that symbol on the entry's network (a symbol shared by two
+ * tracked tokens is ambiguous and yields nothing), and a price for it.
  */
 export type ActivityRowModel = ActivityAppearance & {
   readonly amount: string | null;
@@ -297,9 +304,10 @@ export const activityRowModel = (
       : [];
   const token = matches.length === 1 ? (matches[0] ?? null) : null;
   const price = token ? pricing?.prices[token.address] : undefined;
-  const priced = appearance.direction !== null || appearance.type === "private";
   const value =
-    priced && rawAmount !== null && price !== undefined ? tokenFiatValue(rawAmount, price) : null;
+    appearance.direction !== null && rawAmount !== null && price !== undefined
+      ? tokenFiatValue(rawAmount, price)
+      : null;
   const sign = appearance.direction === "in" ? "+" : appearance.direction === "out" ? "−" : "";
   const fiat =
     value === null || pricing === undefined

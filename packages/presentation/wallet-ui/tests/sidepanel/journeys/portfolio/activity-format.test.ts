@@ -74,8 +74,12 @@ describe("activityAppearance", () => {
       [{ summary: "Unstake 10 STRK" }, "Unstaked", "lockKeyholeOpen", "in"],
       [{ summary: "Claimed staking rewards" }, "Claimed rewards", "creditCard", "in"],
       [{ summary: "Send 5 USDC privately" }, "Private transfer", "shield", "out"],
-      [{ summary: "Shield 5 USDC" }, "Shielded", "shield", null],
-      [{ summary: "Unshield 5 USDC" }, "Unshielded", "shield", null],
+      [{ summary: "Shield 5 USDC" }, "Shielded", "shield", "internal"],
+      [{ summary: "Shield 5 USDC to 0xabc" }, "Shielded", "shield", "out"],
+      [{ summary: "Shield 5 USDC into 0xabc's private balance" }, "Shielded", "shield", "out"],
+      [{ summary: "Unshield 5 USDC" }, "Unshielded", "shield", "internal"],
+      [{ summary: "Unshield 5 USDC to this account" }, "Unshielded", "shield", "internal"],
+      [{ summary: "Unshield 5 USDC to 0xabc" }, "Unshielded", "shield", "out"],
       [{ summary: "Activate private balances" }, "Private transaction", "shield", null],
       [{ summary: "Allow 0x… to spend 5 STRK" }, "Approved", "keyRound", null],
       [{ summary: "Revoke approval" }, "Revoked", "keyRound", null],
@@ -124,10 +128,13 @@ describe("activityRowModel", () => {
       activityRowModel(sent, { ...pricing, tokens: [strk, { ...strk, address: "0x7" }] }).fiat,
     ).toBeNull();
     expect(activityRowModel({ ...sent, summary: "Allow spend" }, pricing).fiat).toBeNull();
-    // A shield or unshield moves value between the owner's own balances: the
-    // figure is priced but carries no sign.
+    // A shield or unshield between the owner's own balances is priced but
+    // carries no sign; one that credits someone else is an outflow.
     expect(activityRowModel({ ...sent, summary: "Shield 3 STRK" }, pricing).fiat).toBe("$3.00");
     expect(activityRowModel({ ...sent, summary: "Unshield 3 STRK" }, pricing).fiat).toBe("$3.00");
+    expect(activityRowModel({ ...sent, summary: "Shield 3 STRK to 0xabc" }, pricing).fiat).toBe(
+      "−$3.00",
+    );
     expect(
       activityRowModel({ ...sent, summary: "Activate private balances", amount: "" }, pricing).fiat,
     ).toBeNull();
