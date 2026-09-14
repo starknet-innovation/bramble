@@ -31,8 +31,38 @@ export type ExplorerDiagnosticRow = {
   readonly service: "starkscan";
 };
 
+/** Which tracked STRK20 background job a privacy row belongs to. */
+export type PrivacyJobKind = "deposit" | "execute" | "register";
+
+/**
+ * Fixed outcomes of one phase of a privacy job, or of the whole job (`phase`
+ * `"job"`). Derived from the job's settled response by class only; the
+ * response text itself is never retained.
+ */
+export type PrivacyOutcome = "error" | "locked" | "ok" | "timeout" | "unavailable";
+
+/**
+ * One identifier-free aggregate for the privacy-job lane: how often a job of
+ * this kind spent time in this phase with this outcome, and for how long on
+ * average. Phases are the fixed labels of `@bramble/privacy/phases` plus
+ * `"job"` for the whole run; nothing about the account, its notes, or the
+ * amounts reaches this row.
+ */
+export type PrivacyDiagnosticRow = {
+  readonly count: number;
+  readonly durationMs: number;
+  readonly kind: PrivacyJobKind;
+  readonly outcome: PrivacyOutcome;
+  readonly phase: string;
+};
+
+// A phase label longer than this is not one of the fixed labels; it is
+// dropped rather than aggregated under a name the export was not designed for.
+const MAX_PHASE_LABEL = 64;
+
 const rows = new Map<string, RpcDiagnosticRow>();
 const explorerRows = new Map<string, ExplorerDiagnosticRow>();
+const privacyRows = new Map<string, PrivacyDiagnosticRow>();
 let enabled = false;
 
 /** Enables or clears process-local reliability counters. No diagnostic is transmitted. */
@@ -41,6 +71,7 @@ export const setReliabilityDiagnosticsEnabled = (next: boolean): void => {
   if (!next) {
     rows.clear();
     explorerRows.clear();
+    privacyRows.clear();
   }
 };
 
@@ -102,4 +133,35 @@ export const recordExplorerDiagnostic = (
 export const explorerDiagnosticsSnapshot = (): readonly ExplorerDiagnosticRow[] =>
   [...explorerRows.values()].sort((left, right) =>
     `${left.service}:${left.outcome}`.localeCompare(`${right.service}:${right.outcome}`),
+  );
+
+/**
+ * Records one phase (or whole-job) outcome of a tracked privacy job as
+ * aggregate data only. Off unless the user enabled reliability diagnostics.
+ */
+export const recordPrivacyDiagnostic = (
+  kind: PrivacyJobKind,
+  phase: string,
+  outcome: PrivacyOutcome,
+  durationMs: number,
+): void => {
+  if (!enabled || phase.length === 0 || phase.length > MAX_PHASE_LABEL) return;
+  const key = `${kind}:${phase}:${outcome}`;
+  const previous = privacyRows.get(key);
+  const count = (previous?.count ?? 0) + 1;
+  privacyRows.set(key, {
+    count,
+    durationMs: Math.round(((previous?.durationMs ?? 0) * (count - 1) + durationMs) / count),
+    kind,
+    outcome,
+    phase,
+  });
+};
+
+/** Returns privacy-job aggregates; neither RPC nor explorer calls are included. */
+export const privacyDiagnosticsSnapshot = (): readonly PrivacyDiagnosticRow[] =>
+  [...privacyRows.values()].sort((left, right) =>
+    `${left.kind}:${left.phase}:${left.outcome}`.localeCompare(
+      `${right.kind}:${right.phase}:${right.outcome}`,
+    ),
   );

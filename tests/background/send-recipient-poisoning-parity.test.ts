@@ -55,6 +55,7 @@ import {
 } from "../support/poisoned-recipients";
 import {
   buildStrk20Handler,
+  prepareStrk20Deposit,
   STRK20_CALL_AND_PROOF,
   STRK20_EXTENSION_SENDER,
   STRK20_TOKEN,
@@ -354,12 +355,11 @@ describe("privacy pool routes", () => {
     test(`prepares the ${label} route for an untrusted-looking recipient`, async () => {
       const handler = buildStrk20Handler({ preferences, strk20: poolService() });
 
+      // The shield answers through a tracked job, so the review is what its
+      // poll settles on; the relay quotes answer on the request itself.
       await expect(
-        handler(
-          { amount: "0.5", recipient: CLEAN, tokenId: token.id, type },
-          STRK20_EXTENSION_SENDER,
-        ),
-      ).resolves.toMatchObject({ ok: true });
+        prepareStrk20Deposit(handler, { amount: "0.5", recipient: CLEAN, tokenId: token.id, type }),
+      ).resolves.toMatchObject({ ok: true, strk20Preparation: expect.anything() });
     });
 
     // The preparation gate alone would leave a window: the user composes a send,
@@ -371,10 +371,12 @@ describe("privacy pool routes", () => {
         preferencesRead: () => current,
         strk20: poolService(),
       });
-      const prepared = (await handler(
-        { amount: "0.5", recipient: POISONED, tokenId: token.id, type },
-        STRK20_EXTENSION_SENDER,
-      )) as { readonly strk20Preparation?: { readonly id: string } };
+      const prepared = (await prepareStrk20Deposit(handler, {
+        amount: "0.5",
+        recipient: POISONED,
+        tokenId: token.id,
+        type,
+      })) as { readonly strk20Preparation?: { readonly id: string } };
       const preparationId = prepared.strk20Preparation?.id;
       if (!preparationId) {
         throw new Error(`${label} route did not prepare against an empty address book`);

@@ -16,7 +16,24 @@ const ONBOARDING_TRANSITION = {
  * Full-page onboarding and compact toolbar-handoff styles.
  */
 export const ONBOARDING_STYLES = `
-  body.onboarding-surface { min-width: 320px; }
+  /* The full-page setup field is the brand landscape the website's download
+     section already uses (apps/extension/public/brand, copied by the build).
+     It sits behind the solid wizard card, never behind text. The midnight skin
+     multiplies it down to the same uniform dark tint the website applies, so
+     the field still reads as the calm dark ground; daylight leaves it untinted.
+     The tint is one solid colour blended over the image, nothing ramped. */
+  body.onboarding-surface {
+    background-blend-mode: multiply;
+    background-color: light-dark(
+      var(--bramble-panel),
+      color-mix(in srgb, var(--bramble-bg) 55%, var(--bramble-text))
+    );
+    background-image: url("brand/onboarding-landscape.webp");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    min-width: 320px;
+  }
   .onboarding-surface #app { min-height: 100vh; }
   .onboarding-surface .shell {
     --onboarding-canvas-y: clamp(16px, 3vh, 48px);
@@ -132,11 +149,15 @@ export const ONBOARDING_STYLES = `
     margin-top: auto;
     width: 100%;
   }
+  /* The handoff link is the screen's primary action, so it takes the primary
+     button's fill, ink, and hover — and pins its ink on hover, because the
+     welcome screen's quiet text-link variant of the same class brightens its
+     ink on hover, which on a filled control would wash the label out. */
   .onboarding-gate .onboarding-launch {
     align-items: center;
-    background: var(--bramble-text);
-    border-radius: ${RADIUS.md};
-    color: var(--bramble-bg);
+    background: var(--bramble-accent);
+    border-radius: ${RADIUS.full};
+    color: var(--bramble-accent-text);
     display: inline-flex;
     font-size: ${TYPE.body.size};
     font-weight: ${WEIGHT.semibold};
@@ -144,6 +165,14 @@ export const ONBOARDING_STYLES = `
     min-height: 46px;
     padding: 0 ${SPACE.lg};
     text-decoration: none;
+    transition: background ${MOTION.pressMs}ms ${MOTION.ease};
+  }
+  .onboarding-gate .onboarding-launch:active { background: var(--bramble-accent-press); }
+  @media (hover: hover) and (pointer: fine) {
+    .onboarding-gate .onboarding-launch:hover {
+      background: var(--bramble-accent-hover);
+      color: var(--bramble-accent-text);
+    }
   }
 
   .onboarding-option, .onboarding-account {
@@ -310,21 +339,23 @@ export const ONBOARDING_STYLES = `
     height: 4px;
     overflow: hidden;
   }
+  /* The fill follows the strength estimate as the value is typed and its
+     colour steps through the danger → warning → positive bands; the text
+     turns positive only once the confirmation matches. */
   .password-requirement-bar > span {
     background: var(--bramble-muted);
     display: block;
     height: 100%;
-    transform: scaleX(0.32);
+    transform: scaleX(var(--meter-fill, 0));
     transform-origin: left;
     transition:
       background ${MOTION.enterMs}ms var(--ease-out),
       transform ${MOTION.enterMs}ms var(--ease-out);
   }
+  .password-requirement[data-strength="weak"] .password-requirement-bar > span { background: var(--bramble-danger); }
+  .password-requirement[data-strength="fair"] .password-requirement-bar > span { background: var(--bramble-warning); }
+  .password-requirement[data-strength="strong"] .password-requirement-bar > span { background: var(--bramble-positive); }
   .password-requirement.is-ready { color: var(--bramble-positive); }
-  .password-requirement.is-ready .password-requirement-bar > span {
-    background: var(--bramble-positive);
-    transform: scaleX(1);
-  }
 
   .onboarding-complete {
     align-content: center;

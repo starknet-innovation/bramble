@@ -294,6 +294,11 @@ export const PRIVACY_STYLES = `
   }
   .privacy-success .privacy-outcome-mark { color: var(--bramble-positive); }
   .privacy-failure .privacy-outcome-mark { color: var(--bramble-danger); }
+  /* A prerequisite, not a failure: the shield mark in the muted tone, drawn at
+     the registry icon's own weight rather than the receipt marks' heavier one. */
+  .privacy-blocked .privacy-outcome-mark { color: var(--bramble-muted); }
+  .privacy-blocked .privacy-outcome-mark svg { stroke-width: 1.5; }
+  .privacy-blocked .hint { color: var(--bramble-muted); margin: 0 auto; max-width: 36ch; }
   .privacy-actions { display: grid; gap: ${SPACE.sm}; width: 100%; }
   @keyframes privacy-pulse {
     0%, 100% { opacity: 0.45; transform: scale(0.8); }

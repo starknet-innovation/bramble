@@ -72,10 +72,13 @@ fixed service/endpoint classes, outcomes, and average latency. Disabling the set
 sets of counters. No diagnostic is uploaded automatically.
 
 **Download diagnostics** creates a JSON file containing build metadata, coarse wallet state
-(network, locked/ready/vault booleans, and account count), plus distinct `rpc` and `explorer`
-aggregate rows. Explorer traffic is never counted as RPC. Exact URLs, addresses, origins, hashes,
-calldata, RPC methods, raw errors, bodies, secrets, device identities, and timestamps are
-structurally absent. A support responder must ask the user to inspect the file and share it
+(network, locked/ready/vault booleans, and account count), plus distinct `rpc`, `explorer`, and
+`privacy` aggregate rows. Explorer traffic is never counted as RPC. A `privacy` row aggregates
+one phase of a tracked privacy job (a shield's or activation's proof, or a confirmed execution) by
+job kind, fixed phase label, and outcome class — `ok`, `timeout`, `unavailable`, `locked`, or
+`error` — with the average duration, so a stuck attempt shows where it stalled without saying
+what was being proved. Exact URLs, addresses, origins, hashes, calldata, RPC methods, raw errors,
+bodies, secrets, device identities, and timestamps are structurally absent. A support responder must ask the user to inspect the file and share it
 voluntarily; support must never ask for any other wallet export.
 
 ## Incident procedure

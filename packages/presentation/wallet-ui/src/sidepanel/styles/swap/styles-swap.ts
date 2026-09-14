@@ -56,12 +56,22 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     min-height: 40px;
     min-width: 0;
     padding: 0;
-    width: 100%;
+    /* A value longer than the space beside the token ends in an ellipsis at
+       rest rather than a hard cut; while editing, the field scrolls as usual. */
+    text-overflow: ellipsis;
+    /* Width 0, not 100%: an input's intrinsic width (its default size="20" at
+       headline scale) would otherwise set the card's minimum and push it past
+       a narrow panel. flex-grow alone sizes it to the space beside the token. */
+    width: 0;
   }
+  /* Focus reads on the panel, as it does on the send amount card, rather
+     than as an underline beneath the figure. */
   input.swap-amount:focus-visible {
     background: transparent;
-    box-shadow: inset 0 -2px 0 var(--bramble-focus-ring);
     outline: none;
+  }
+  .swap-panel:has(input.swap-amount:focus-visible) {
+    box-shadow: inset 0 0 0 2px var(--bramble-focus-ring);
   }
   @media (hover: hover) and (pointer: fine) {
     input.swap-amount:not(:disabled):hover { background: transparent; }
@@ -127,8 +137,10 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     align-items: center;
     color: var(--bramble-muted);
     display: flex;
+    flex-wrap: wrap;
     font-size: ${TYPE.caption.size};
     font-variant-numeric: tabular-nums;
+    gap: 2px ${SPACE.md};
     justify-content: space-between;
     min-height: 18px;
     padding: 0 ${SPACE.sm};

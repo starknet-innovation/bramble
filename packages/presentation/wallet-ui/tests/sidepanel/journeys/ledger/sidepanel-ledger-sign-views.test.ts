@@ -43,6 +43,11 @@ describe("ledgerSignScreen", () => {
     // The account index is recovered from the stored path for the signer line.
     expect(html).toContain("Account 3");
     expect(html).toContain("Starknet Mainnet");
+    // The signer line shows the account's address (never the id's network
+    // prefix) truncated, with the full address on hover.
+    const address = request.accountId.slice(request.accountId.indexOf(":") + 1);
+    expect(html).toContain(`<code title="${address}">0x1234…bcde</code>`);
+    expect(html).not.toContain("SN_MAI…");
   });
 
   test("confirming phase shows the on-device wait and a cancel control", () => {

@@ -5,12 +5,24 @@
  * access and no state of its own.
  */
 
-import { buttonBusy } from "../../shared/dom";
+import { bindCopyButtons, buttonBusy } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
+import {
+  type TransferMode,
+  transferModeCopy,
+  transferModeFor,
+  transferStageTitle,
+  transferSuccessSummary,
+} from "./transfer-mode";
 import type { TransferFields, TransferStage, TransferState } from "./transfer-model";
-import { transferStageTitle } from "./transfer-model";
-import { setSendProgress, setTaskStatus, setText, workingStatus } from "./transfer-progress-ui";
+import {
+  setSendProgress,
+  setTaskStatus,
+  setText,
+  type WorkingStatus,
+  workingStatus,
+} from "./transfer-progress-ui";
 import { reviewDetailsHtml, reviewSummaryHtml } from "./transfer-review-markup";
 import { routeReviewFeeHtml } from "./transfer-review-routes";
 import { transferRoute } from "./transfer-route";
@@ -46,6 +58,90 @@ const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | n
   restoreTransferCompose(form, fields);
 };
 
+// The sender travels on the form rather than through another parameter: the
+// template that rendered it knew the account, and the mode is a function of
+// those fields plus that one address, so this stays a pure paint.
+const modeOf = (form: HTMLFormElement, fields: TransferFields | null): TransferMode =>
+  fields ? transferModeFor(fields, form.dataset["sender"] ?? "") : "send";
+
+const WORKING_STAGES: ReadonlySet<TransferStage> = new Set([
+  "authorizing",
+  "broadcasting",
+  "confirming",
+]);
+
+// A pool route's review is a proof or a relay quote, tens of seconds to over a
+// minute, so its wait takes the working screen like a broadcast does. A public
+// review is a fee estimate: the amount step stays in view with its button busy.
+const isPreparing = <Review>(state: TransferState<Review>): boolean =>
+  state.stage === "reviewing" &&
+  state.fields !== null &&
+  transferRoute(state.fields).id !== "public-public";
+
+// Locks the amount step while its review is being prepared, so the fields a
+// preparation was started from cannot change under it and a second submit is
+// impossible. Only controls this lock disabled are re-enabled: one the template
+// disabled for its own reason (no asset to choose) keeps that reason.
+const lockCompose = (form: HTMLFormElement, locked: boolean): void => {
+  for (const control of form.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
+    "#send-details button, #send-details input",
+  )) {
+    if (control.id === "send-review-button") continue;
+    if (locked && !control.disabled) {
+      control.disabled = true;
+      control.toggleAttribute("data-send-locked", true);
+    } else if (!locked && control.hasAttribute("data-send-locked")) {
+      control.disabled = false;
+      control.removeAttribute("data-send-locked");
+    }
+  }
+};
+
+// Every string that names the operation, rewritten on each paint so the header,
+// the actions, and the receipts follow a bucket flip together. The review
+// button names the wait while it runs, and its own action otherwise.
+const applyModeCopy = (form: HTMLFormElement, mode: TransferMode, reviewing: boolean): void => {
+  const copy = transferModeCopy(mode);
+  const doc = form.ownerDocument;
+  doc.querySelector("#send-close")?.setAttribute("aria-label", copy.closeLabel);
+  doc.querySelector("#send-close")?.setAttribute("title", copy.closeLabel);
+  form.querySelector(".send-progress")?.setAttribute("aria-label", copy.progressLabel);
+  form.querySelector("#send-amount-input")?.setAttribute("aria-label", copy.amountLabel);
+  setText(form, "send-amount-label", copy.amountLabel);
+  setText(form, "send-review-label", reviewing ? `${copy.preparing}…` : copy.reviewLabel);
+  setText(form, "send-review-heading", copy.reviewLabel);
+  // A form the template marked unsendable keeps its own note about that.
+  if (form.dataset["sendAvailable"] !== "false") {
+    setText(form, "send-review-note", copy.reviewNote);
+  }
+  setText(form, "send-success-title", copy.successTitle);
+  setText(form, "send-failure-title", copy.failureTitle);
+};
+
+/**
+ * Rewrites only the working screen's liveness line for a progress poll, so a
+ * job that reports every second and a half does not repaint the whole form.
+ * The full repaint renders the same line from the same state.
+ */
+export const applyTransferProgress = <Review>(
+  form: HTMLFormElement,
+  state: TransferState<Review>,
+): void => {
+  applyWorkingStatus(form, workingStatus(state, modeOf(form, state.fields)));
+};
+
+// Paints the working screen — title, copy, liveness, and the four task rows —
+// from one status, so a job's progress poll and a full repaint agree.
+const applyWorkingStatus = (form: HTMLFormElement, status: WorkingStatus): void => {
+  setText(form, "send-working-title", status.title);
+  setText(form, "send-working-copy", status.copy);
+  setText(form, "send-liveness", status.liveness);
+  setTaskStatus(form, "review", status.labels[0], status.states[0]);
+  setTaskStatus(form, "authorize", status.labels[1], status.states[1]);
+  setTaskStatus(form, "broadcast", status.labels[2], status.states[2]);
+  setTaskStatus(form, "confirm", status.labels[3], status.states[3]);
+};
+
 /**
  * Paints the Send form for one state. `poolFeeFri` is threaded in rather than
  * read here: the privacy reading belongs to the binding, so this stays a
@@ -58,8 +154,16 @@ export const applyTransferUi = (
 ): void => {
   const currentForm = form;
   const previousStage = currentForm.dataset["stage"];
-  const working = ["authorizing", "broadcasting", "confirming"].includes(state.stage);
-  const visibleStage = state.stage === "reviewing" ? "details" : state.stage;
+  const reviewing = state.stage === "reviewing";
+  const preparing = isPreparing(state);
+  const working = WORKING_STAGES.has(state.stage) || preparing;
+  // A preparing pool route shows no stage section at all: the working screen
+  // is the stage until the review lands or the preparation is abandoned.
+  const visibleStage: TransferStage | null = reviewing
+    ? preparing
+      ? null
+      : "details"
+    : state.stage;
   currentForm.dataset["stage"] = state.stage;
   currentForm.toggleAttribute("aria-busy", working);
   const stageIds: Readonly<Record<string, TransferStage>> = {
@@ -75,15 +179,15 @@ export const applyTransferUi = (
     form.querySelector(`#${id}`)?.toggleAttribute("hidden", visibleStage !== stage);
   }
   form.querySelector("#send-working")?.toggleAttribute("hidden", !working);
-  setText(form.ownerDocument, "send-header-title", transferStageTitle(state.stage));
+  const mode = modeOf(form, state.fields);
+  setText(form.ownerDocument, "send-header-title", transferStageTitle(state.stage, mode));
+  if (state.fields) applyModeCopy(form, mode, reviewing);
   setSendProgress(form, state.stage);
   restoreTransferFields(form, state.fields);
 
   const confirmButton = form.querySelector<HTMLButtonElement>("#send-confirm-button");
-  buttonBusy(
-    form.querySelector<HTMLButtonElement>("#send-review-button"),
-    state.stage === "reviewing",
-  );
+  lockCompose(form, reviewing);
+  buttonBusy(form.querySelector<HTMLButtonElement>("#send-review-button"), reviewing);
   buttonBusy(confirmButton, state.stage === "authorizing");
   if (confirmButton && state.stage === "review") {
     confirmButton.disabled = state.review?.feeEstimateFailed === true;
@@ -91,7 +195,7 @@ export const applyTransferUi = (
   setText(
     form,
     "send-confirm-label",
-    state.fields?.signer === "ledger" ? "Approve with Ledger" : "Confirm and send",
+    state.fields?.signer === "ledger" ? "Approve with Ledger" : transferModeCopy(mode).confirmLabel,
   );
 
   const route = state.fields ? transferRoute(state.fields) : null;
@@ -111,24 +215,24 @@ export const applyTransferUi = (
   }
   const reviewSummary = form.querySelector<HTMLElement>("#send-review-summary");
   if (reviewSummary) {
-    reviewSummary.innerHTML = state.fields ? reviewSummaryHtml(state.fields) : "";
+    reviewSummary.innerHTML = state.fields ? reviewSummaryHtml(state.fields, mode) : "";
+    // Freshly rendered markup: the shell's copy binding ran before this paint.
+    bindCopyButtons(reviewSummary);
   }
   reviewFee
     ?.querySelector<HTMLButtonElement>("#review-retry-fee")
     ?.addEventListener("click", () => form.requestSubmit());
 
   if (working) {
-    const status = workingStatus(state);
-    setText(form, "send-working-title", status.title);
-    setText(form, "send-working-copy", status.copy);
-    setText(form, "send-liveness", status.liveness);
-    setTaskStatus(form, "review", status.labels[0], status.states[0]);
-    setTaskStatus(form, "authorize", status.labels[1], status.states[1]);
-    setTaskStatus(form, "broadcast", status.labels[2], status.states[2]);
-    setTaskStatus(form, "confirm", status.labels[3], status.states[3]);
+    applyWorkingStatus(form, workingStatus(state, mode));
   }
   if (state.fields && state.transactionHash) {
-    const summary = `${state.fields.amount} ${state.fields.tokenSymbol} sent to ${state.fields.recipientLabel || accountLabel(state.fields.recipient)}`;
+    const summary = transferSuccessSummary(
+      mode,
+      state.fields.amount,
+      state.fields.tokenSymbol,
+      state.fields.recipientLabel || accountLabel(state.fields.recipient),
+    );
     setText(form, "send-success-summary", summary);
     setText(form, "send-success-hash", state.transactionHash);
     setText(form, "send-pending-hash", state.transactionHash);

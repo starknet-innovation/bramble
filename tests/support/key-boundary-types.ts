@@ -57,6 +57,12 @@ export type KeyBoundaryLiveIds = {
   readonly invokeApprovalId: () => Promise<string>;
   /** Runs a private-send preparation and returns its one-time id. */
   readonly strk20PreparationId: () => Promise<string>;
+  /**
+   * Starts a shield preparation, waits for its tracked job to settle, and
+   * returns the job id — so the status poll under scan answers with the
+   * settled review, the reply that now carries the preparation.
+   */
+  readonly strk20PreparationJobId: () => Promise<string>;
   /** Runs a swap preparation and returns its one-time id. */
   readonly swapPreparationId: () => Promise<string>;
   /** Id of a token tracked for the active network. */

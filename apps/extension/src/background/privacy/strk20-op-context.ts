@@ -5,7 +5,8 @@
  * missing network configuration, Ledger accounts, and untracked tokens.
  */
 
-import { canonicalStrk20PoolFee } from "@bramble/privacy/service";
+import type { Strk20PhaseSink } from "@bramble/privacy/phases";
+import { canonicalStrk20PoolFee, type Strk20AccountContext } from "@bramble/privacy/service";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
@@ -15,13 +16,16 @@ import type { Call } from "starknet";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { type ActiveAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import { strk20AccountContext } from "./strk20-account-context";
+import type { Strk20JobRegistry } from "./strk20-preparation-jobs";
 import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations";
 
 /**
- * Extension-owned privacy dependencies, including the one-time preparation
- * store that keeps executable payloads out of the side panel.
+ * Extension-owned privacy dependencies: the one-time preparation store that
+ * keeps executable payloads out of the side panel, and the job registry that
+ * lets a proof outlive the runtime request that asked for it.
  */
 export type Strk20WalletOpsDeps = WalletOpsDeps & {
+  readonly strk20Jobs: Strk20JobRegistry;
   readonly strk20Preparations: Strk20WalletPreparationStore;
 };
 
@@ -29,10 +33,24 @@ export type Strk20WalletOpsDeps = WalletOpsDeps & {
  * Resolved active account, its privacy configuration, and the selected token.
  */
 export type ActivePrivacyContext = {
-  readonly accountContext: ReturnType<typeof strk20AccountContext>;
+  readonly accountContext: Strk20AccountContext;
   readonly preferences: WalletPreferences;
   readonly token: TokenConfig;
 };
+
+/**
+ * The same context with a phase sink attached, for the service calls a tracked
+ * job makes. The sink is the only addition: the account, its signer, and the
+ * viewing-key thunk stay bound to the unlock that resolved the context, so a
+ * lock during the job still revokes them.
+ */
+export const reportingPrivacyContext = (
+  context: ActivePrivacyContext,
+  onPhase: Strk20PhaseSink,
+): ActivePrivacyContext => ({
+  ...context,
+  accountContext: { ...context.accountContext, onPhase },
+});
 
 /**
  * Shortens an unknown error to a displayable message with a stable fallback.

@@ -5,12 +5,11 @@
  */
 import {
   CONTROL,
-  EASE,
   MOTION,
   RADIUS,
-  SHADOW,
   SIZE,
   SPACE,
+  TRACKING,
   TYPE,
   WEIGHT,
 } from "@bramble/ui-kit/tokens";
@@ -77,10 +76,16 @@ export const SEND_COMPOSE_STYLES = `
   }
 
   .send-search { gap: ${SPACE.sm}; }
+  /* Both stage headings share one explicit weight: the paragraph would
+     otherwise inherit body weight while the label's span inherits the
+     semibold label rule, and the pair read as two different headings. */
   .send-section-title,
   .send-search > span:first-child:not(.sr-only) {
     color: var(--bramble-text);
     font-size: ${TYPE.title.size};
+    font-weight: ${WEIGHT.semibold};
+    letter-spacing: ${TRACKING.title};
+    line-height: ${TYPE.title.line};
     margin: 0;
   }
   .send-search-control {
@@ -102,6 +107,15 @@ export const SEND_COMPOSE_STYLES = `
   .send-search-control:has(input:focus-visible) {
     box-shadow: inset 0 0 0 2px var(--bramble-focus-ring);
   }
+  /* The icon and the input are one control: hover tints the whole box, never
+     just the input's share of it. The bare amount field sits inside a card
+     rather than a box of its own, so it takes no hover fill at all. */
+  .send-search-control { transition: background ${MOTION.pressMs}ms ${MOTION.ease}; }
+  @media (hover: hover) and (pointer: fine) {
+    .send-search-control:has(input:not(:disabled):hover) { background: var(--bramble-hover); }
+    .send-search-control input:not(:disabled):hover,
+    .send-amount-field input:not(:disabled):hover { background: transparent; }
+  }
   .send-recipient-tabs {
     border-bottom: 1px solid var(--bramble-hairline);
     display: grid;
@@ -109,7 +123,7 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-recipient-tabs button {
     background: transparent;
-    border-radius: 0;
+    border-radius: ${RADIUS.sm} ${RADIUS.sm} 0 0;
     color: var(--bramble-muted);
     min-height: ${CONTROL.hit};
     padding: 0 ${SPACE.sm};
@@ -243,6 +257,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-amount-field input {
     background: transparent;
     border-radius: 0;
+    text-overflow: ellipsis;
     font-size: ${TYPE.amount.size};
     font-variant-numeric: tabular-nums;
     font-weight: ${WEIGHT.semibold};
@@ -263,11 +278,28 @@ export const SEND_COMPOSE_STYLES = `
     align-items: center;
     color: var(--bramble-muted);
     display: flex;
+    flex-wrap: wrap;
     font-size: ${TYPE.caption.size};
     gap: ${SPACE.sm};
     justify-content: space-between;
   }
-  .send-amount-shortcuts { align-items: center; display: flex; gap: ${SPACE.xs}; }
+  /* The balance line is rewritten after first paint — an asset pick, a bucket
+     flip, the repaint once discovery or the recipient check settles — with
+     whatever the balance carries. It must never widen the card: the label may
+     shrink and, as a last resort, break inside a long figure, while the
+     shortcuts keep their size and drop below it when the two no longer share a
+     line. A row that could not shrink grew the whole stage past the panel. */
+  .send-amount-meta > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .send-amount-shortcuts {
+    align-items: center;
+    display: flex;
+    flex: none;
+    gap: ${SPACE.xs};
+    margin-left: auto;
+  }
   .send-amount-shortcuts button {
     background: transparent;
     color: var(--bramble-muted);
@@ -330,7 +362,24 @@ export const SEND_COMPOSE_STYLES = `
     gap: ${SPACE.md};
     justify-content: flex-end;
   }
-  .send-context-account { display: grid; justify-items: end; }
+  /* The identity column is repainted with the chosen account's own name; a
+     long single word must clip beside its toggle, not push the receipt out. */
+  .send-context-account { display: grid; justify-items: end; min-width: 0; }
+  .send-context-account strong,
+  .send-context-account code {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  /* The network row keeps its mark beside the name; the generic dd grid
+     below would otherwise stack them. */
+  .send-context-receipt dd.network-inline-value {
+    align-items: center;
+    display: flex;
+    gap: ${SPACE.sm};
+    justify-content: flex-end;
+  }
   .send-context-receipt dd,
   .send-review-facts dd {
     display: grid;
@@ -342,7 +391,17 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-context-receipt code,
   .send-review-facts code { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
+  /* The reviewed recipient: truncated address and its copy control on one
+     line, the address clipping first so the control never leaves the fact. */
+  .send-review-address { align-items: center; display: flex; gap: 2px; max-width: 100%; min-width: 0; }
+  .send-review-address code { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   #send-review-button { margin-top: auto; width: 100%; }
+  /* The busy review button swaps its send glyph for the shared Liquid Dots
+     mark, so a running preparation reads as work rather than as a dimmed
+     control — the same treatment the working screen uses, at button scale. */
+  #send-review-button .liquid-dots { display: none; }
+  #send-review-button[data-busy] .liquid-dots { display: inline-flex; }
+  #send-review-button[data-busy] > .icon { display: none; }
 
   .send-asset-stage { gap: ${SPACE.lg}; }
   .send-asset-search .send-search-control { background: var(--bramble-panel); }
@@ -373,127 +432,4 @@ export const SEND_COMPOSE_STYLES = `
   .send-asset-change[data-direction="down"] { color: var(--bramble-danger); }
   .send-asset-change[data-direction="up"] { color: var(--bramble-positive); }
 
-  .send-review-summary {
-    background: var(--bramble-panel);
-    border-radius: ${RADIUS.xl};
-    display: grid;
-    padding: ${SPACE.lg};
-  }
-  .proposal-review-stack { display: grid; gap: ${SPACE.sm}; }
-  .send-review-hero {
-    align-items: center;
-    display: grid;
-    gap: ${SPACE.md};
-    grid-template-columns: ${SIZE.mark} minmax(0, 1fr);
-    padding-bottom: ${SPACE.lg};
-  }
-  .send-review-token,
-  .send-review-token > svg,
-  .send-review-token .token-mark { height: ${SIZE.mark}; width: ${SIZE.mark}; }
-  .send-review-hero > span:last-child { display: grid; gap: ${SPACE.xs}; }
-  .send-review-hero strong {
-    font-size: ${TYPE.display.size};
-    font-variant-numeric: tabular-nums;
-  }
-  .send-review-hero small { color: var(--bramble-muted); }
-  .send-review-facts { border-top: 1px solid var(--bramble-hairline); margin: 0; }
-  .send-review-fee {
-    background: var(--bramble-panel);
-    border-radius: ${RADIUS.lg};
-    display: grid;
-    gap: ${SPACE.sm};
-    padding: ${SPACE.md} ${SPACE.lg};
-  }
-  .send-review-fee:empty { display: none; }
-  .send-review-disclosure {
-    background: var(--bramble-panel);
-    border-radius: ${RADIUS.lg};
-    overflow: hidden;
-  }
-  .send-review-disclosure summary {
-    align-items: center;
-    cursor: pointer;
-    display: flex;
-    font-size: ${TYPE.body.size};
-    font-weight: ${WEIGHT.semibold};
-    justify-content: space-between;
-    list-style: none;
-    min-height: ${SIZE.rowCompact};
-    padding: 0 ${SPACE.lg};
-  }
-  .send-review-disclosure summary::-webkit-details-marker { display: none; }
-  .send-review-disclosure summary .icon {
-    color: var(--bramble-muted);
-    transition: transform ${MOTION.tabMs}ms ${EASE.out};
-  }
-  .send-review-disclosure[open] summary .icon { transform: rotate(180deg); }
-  .send-review-disclosure-body {
-    border-top: 1px solid var(--bramble-hairline);
-    display: grid;
-    gap: ${SPACE.md};
-    padding: ${SPACE.md};
-  }
-  .send-review-note { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; }
-
-  .send-task-list { box-shadow: ${SHADOW.xs}; }
-  .send-task-list li { min-height: ${CONTROL.hit}; }
-  .send-liveness { color: var(--bramble-muted); margin: -${SPACE.sm} 0 0; }
-
-  .send-outcome {
-    align-content: center;
-    display: grid;
-    gap: ${SPACE.lg};
-    justify-items: center;
-    min-height: 390px;
-    text-align: center;
-  }
-  .send-outcome-mark { display: inline-flex; height: 76px; width: 76px; }
-  .send-outcome-mark svg {
-    fill: none;
-    height: 100%;
-    stroke: currentColor;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 3.2;
-    width: 100%;
-  }
-  .send-success .send-outcome-mark { color: var(--bramble-positive); }
-  .send-failure .send-outcome-mark { color: var(--bramble-danger); }
-  .send-failure-ring {
-    animation: send-draw 420ms ${EASE.out} forwards;
-    stroke-dasharray: 158;
-    stroke-dashoffset: 158;
-  }
-  .send-failure-mark {
-    animation: send-draw 280ms ${EASE.out} 360ms forwards;
-    stroke-dasharray: 46;
-    stroke-dashoffset: 46;
-  }
-  .send-outcome-copy {
-    display: grid;
-    gap: ${SPACE.sm};
-    justify-items: center;
-    max-width: 32ch;
-  }
-  .send-outcome-copy h2 { font-size: ${TYPE.headline.size}; }
-  .send-outcome-copy p { margin: 0; }
-  .send-outcome-copy code {
-    color: var(--bramble-muted);
-    font-size: ${TYPE.micro.size};
-    max-width: 30ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
-  .send-outcome-kicker {
-    color: var(--bramble-muted);
-    font-size: ${TYPE.caption.size};
-    font-weight: ${WEIGHT.semibold};
-  }
-  .send-outcome .send-actions { width: 100%; }
-
-  @media (prefers-reduced-motion: reduce) {
-    .send-review-disclosure summary .icon { transition: none; }
-    .send-failure-ring, .send-failure-mark { animation: none; stroke-dashoffset: 0; }
-  }
 `;

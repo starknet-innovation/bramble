@@ -469,7 +469,8 @@ describe("Argent frozen-intent composer", () => {
       prices: { [token.address]: 0.5 },
     });
     expect(html).toContain("New transaction");
-    expect(html).toContain("Nothing is signed or submitted");
+    // The compose screen opens on its controls, not an explainer paragraph.
+    expect(html).not.toContain("multisig-compose-intro");
     expect(html).toContain("<strong>Treasury</strong>");
     expect(html).toContain(`data-multisig-id="${fixture.record.id}"`);
     expect(html).toContain("Review transaction");

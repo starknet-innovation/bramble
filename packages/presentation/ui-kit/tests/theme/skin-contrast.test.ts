@@ -6,6 +6,11 @@
  * contrast audit. The derived soft fills (accent-soft, danger-soft — see
  * styles-base.ts) are reproduced here with the same srgb mix the stylesheet
  * uses, so their ink pairings are gated too.
+ *
+ * Structural roles stay near-neutral in both skins — achromatic in the
+ * midnight skin, the Bramble Design Kit's blue-grey tinted ramp in daylight —
+ * never a saturated surface. The accent is either neutral ink (midnight) or
+ * the kit's brand blue (daylight); green/orange/red stay reserved semantics.
  */
 import { describe, expect, test } from "bun:test";
 import { darkSkin } from "@bramble/ui-kit/dark-skin";
@@ -66,8 +71,7 @@ const GROUNDS: readonly SkinToken[] = [
   "--bramble-elevated",
   "--bramble-sunken",
 ];
-const ACHROMATIC_TOKENS: readonly SkinToken[] = [
-  "--bramble-accent",
+const NEUTRAL_TOKENS: readonly SkinToken[] = [
   "--bramble-accent-text",
   "--bramble-bg",
   "--bramble-border",
@@ -77,6 +81,10 @@ const ACHROMATIC_TOKENS: readonly SkinToken[] = [
   "--bramble-sunken",
   "--bramble-text",
 ];
+// Widest channel spread a structural role may carry. The kit's tinted grey
+// ramp peaks at 35 (grey/500); any step of its blue ramp is well over 100, so
+// this catches a saturated surface or ink sneaking into a structural slot.
+const NEUTRAL_MAX_SPREAD = 40;
 const LIGHT_AVATAR_TONES: readonly SkinToken[] = [
   "--bramble-account-avatar-0",
   "--bramble-account-avatar-3",
@@ -138,11 +146,20 @@ describe.each([
     );
   });
 
-  test("interaction and structural roles are strictly achromatic", () => {
-    for (const name of ACHROMATIC_TOKENS) {
-      const [red, green, blue] = token(skin, name);
-      expect(red, `${name} must not carry a hue`).toBe(green);
-      expect(green, `${name} must not carry a hue`).toBe(blue);
+  test("structural roles stay on the tinted neutral ramp, never a saturated hue", () => {
+    for (const name of NEUTRAL_TOKENS) {
+      const channels = token(skin, name);
+      const spread = Math.max(...channels) - Math.min(...channels);
+      expect(spread, `${name} must stay near-neutral`).toBeLessThanOrEqual(NEUTRAL_MAX_SPREAD);
+    }
+  });
+
+  test("the accent is neutral ink or the brand blue, never another hue", () => {
+    const [red, green, blue] = token(skin, "--bramble-accent");
+    const spread = Math.max(red, green, blue) - Math.min(red, green, blue);
+    if (spread > NEUTRAL_MAX_SPREAD) {
+      expect(blue, "a hued accent must be the brand blue").toBeGreaterThan(red);
+      expect(blue, "a hued accent must be the brand blue").toBeGreaterThan(green);
     }
   });
 

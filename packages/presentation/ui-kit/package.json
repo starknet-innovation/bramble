@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./brand-mark": "./src/components/brand-mark.ts",
     "./catalog": "./src/components/catalog.ts",
     "./content": "./src/components/content.ts",
     "./controls": "./src/components/controls.ts",

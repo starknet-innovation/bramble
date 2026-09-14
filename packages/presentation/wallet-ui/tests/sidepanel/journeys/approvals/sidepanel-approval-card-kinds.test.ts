@@ -320,4 +320,47 @@ describe("approvalCard renders each approval kind", () => {
     const approval: PendingApproval = { id: ID, kind: "watch-asset", origin: ORIGIN };
     expect(approvalCard(approval, status)).toBe("");
   });
+
+  test("watch-asset shows the token contract truncated and copies it in full", () => {
+    const address = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+    const html = approvalCard(
+      {
+        id: ID,
+        kind: "watch-asset",
+        origin: ORIGIN,
+        token: { address, decimals: 6, name: "USD Coin", networkId: "SN_MAIN", symbol: "USDC" },
+      },
+      status,
+    );
+
+    expect(html).toContain(
+      `<dt>Address</dt><dd><code title="${address}">0x053c…68a8</code><button class="icon-button ghost copy-inline" data-copy="${address}" type="button" aria-label="Copy token address"`,
+    );
+    expect(html).not.toContain(`<code>${address}</code>`);
+  });
+
+  test("technical details name the signing account by address, truncated and copyable", () => {
+    const html = approvalCard(
+      {
+        context: {
+          accountId: account.id,
+          chainId: "0x534e5f4d41494e",
+          networkId: "SN_MAIN",
+          payloadDigest: `sha256:${"a".repeat(64)}`,
+        },
+        id: ID,
+        kind: "invoke",
+        origin: ORIGIN,
+        summaries: ["Transfer 1 STRK"],
+      },
+      status,
+    );
+
+    // The account id's network prefix never leaks into the shown value.
+    expect(html).toContain(
+      `<dt>Account</dt><dd><code title="${account.address}">0x1234…bcde</code><button class="icon-button ghost copy-inline" data-copy="${account.address}" type="button" aria-label="Copy account address"`,
+    );
+    expect(html).not.toContain("SN_MAI…");
+    expect(html).not.toContain(`data-copy="${account.id}"`);
+  });
 });

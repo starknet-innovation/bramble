@@ -9,6 +9,7 @@ import { verifyBackupWords } from "./backup-verify";
 import { bindKeyImport } from "./import-key-ui";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
+import { applyPassphraseMeter } from "./passphrase-meter";
 import { bindRecoveryAccountUi } from "./recovery-account-ui";
 import { bindRecoveryImportControls } from "./recovery-import-bind";
 import { bindRecoveryWordAssist } from "./recovery-word-assist";
@@ -174,16 +175,12 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const refreshPassword = (): void => {
     const value = passphraseInput?.value ?? "";
     const confirmation = confirmationInput?.value ?? "";
-    const validLength = isVaultPassphrase(value);
     const matches = value === confirmation && confirmation.length > 0;
-    if (passwordResult) {
-      passwordResult.textContent = !validLength
-        ? "Enter at least 12 characters"
-        : matches
-          ? "Passphrases match"
-          : "Passphrases do not match";
-    }
-    passwordRequirement?.classList.toggle("is-ready", validLength && matches);
+    applyPassphraseMeter(
+      { requirement: passwordRequirement, result: passwordResult },
+      value,
+      confirmation,
+    );
     if (passwordContinue) {
       passwordContinue.disabled = !passwordOk();
     }

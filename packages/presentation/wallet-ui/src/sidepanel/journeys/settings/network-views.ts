@@ -82,11 +82,11 @@ const explorerFallbackForm = (
       type: "url",
       value: explorerApiUrlFor(status, preferences),
     })}
-    <p class="hint">The explorer learns which addresses you hold, and its data cannot be verified against the chain. Turn fallback off to show an RPC error instead.</p>
+    <p class="hint">Activity history comes from this explorer, and it stands in for balances when your RPC is unreachable. It learns which addresses you hold, and its data cannot be verified against the chain. Turned off, history covers only the last few days of chain reads and an unreachable RPC shows an error instead.</p>
     ${checkboxField({
       checked: allowed,
       name: "explorerFallback",
-      text: "Use this explorer when my RPC is unreachable",
+      text: "Use this explorer for activity history and as an RPC fallback",
     })}
     ${button({
       icon: "check",

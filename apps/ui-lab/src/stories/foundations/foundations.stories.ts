@@ -57,10 +57,10 @@ const colors = (args: CatalogArgs): HTMLIFrameElement => {
   const semantics = colorSwatches(entries.filter(([name]) => semanticColorTokens.has(name)));
   return catalogFrame(
     "Colors",
-    `${skin.name} maps monochrome interaction roles and explicit success, degraded-data, and failure semantics to concrete values. Components consume roles only; no production template owns a color literal.`,
+    `${skin.name} maps near-neutral surface roles, the accent, and explicit success, degraded-data, and failure semantics to concrete values. Components consume roles only; no production template owns a color literal.`,
     `${catalogGroup(
-      "Monochrome foundation",
-      "Surfaces, ink, actions, focus, and selection remain achromatic.",
+      "Neutral foundation",
+      "Surfaces and ink stay near-neutral — achromatic in midnight, the kit's tinted ramp in daylight; actions, focus, and selection carry the skin's one accent.",
       `<div class="catalog-grid">${neutrals}</div>`,
     )}
      ${catalogGroup(

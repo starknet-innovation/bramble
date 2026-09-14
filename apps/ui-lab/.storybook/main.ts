@@ -6,7 +6,9 @@ const config: StorybookConfig = {
     name: "@storybook/html-vite",
     options: {},
   },
-  staticDirs: ["../public"],
+  // The onboarding backdrop is served from the extension's own public assets so
+  // the lab renders exactly the file the build ships, without a second copy.
+  staticDirs: ["../public", { from: "../../extension/public/brand", to: "/brand" }],
   stories: ["../src/**/*.stories.ts"],
 };
 

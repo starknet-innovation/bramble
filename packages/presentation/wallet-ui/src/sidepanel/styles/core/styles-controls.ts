@@ -197,6 +197,7 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
     width: 64px;
   }
   .gate-brand .icon { height: 30px; width: 30px; }
+  .gate-brand .brand-glyph { height: 32px; width: 32px; }
   .gate-head { display: grid; gap: 6px; max-width: 34ch; }
   .gate-head h1 { font-size: ${TYPE.headline.size}; font-weight: ${WEIGHT.heavy}; letter-spacing: -0.02em; line-height: ${TYPE.headline.line}; text-wrap: balance; }
   .gate-form { display: flex; flex: 1; flex-direction: column; gap: ${SPACE.md}; text-align: left; width: 100%; }

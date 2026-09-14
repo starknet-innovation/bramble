@@ -59,6 +59,7 @@ import {
   SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
 import type { KeyBoundaryLiveIds } from "./key-boundary-types";
+import { awaitStrk20Job, strk20RunningJobId } from "./strk20-background";
 
 /**
  * The wired handler plus the live identifiers and session controls the scan
@@ -260,6 +261,26 @@ export const makeKeyBoundaryHarness = async (
         ),
         "strk20Preparation",
       );
+    },
+    async strk20PreparationJobId() {
+      const started = await settle(
+        {
+          amount: "1",
+          recipient: KEY_BOUNDARY_RECIPIENT,
+          tokenId: ETH.id,
+          type: "wallet.strk20PrepareDeposit",
+        },
+        extensionSender,
+      );
+      const jobId = strk20RunningJobId(started);
+      if (jobId === null) {
+        throw new Error(`shield did not start a job: ${JSON.stringify(started)}`);
+      }
+      // Settled before the poll under scan runs, so that poll answers with the
+      // job's outcome; the liveness test is what refuses an outcome that is an
+      // error rather than the review.
+      await awaitStrk20Job(settle, started, extensionSender);
+      return jobId;
     },
     async swapPreparationId() {
       return preparationIdOf(

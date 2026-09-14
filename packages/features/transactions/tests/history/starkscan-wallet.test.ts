@@ -5,8 +5,8 @@ import { describe, expect, test } from "bun:test";
 import { resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
 import { createStarkscanClient } from "@bramble/transactions/starkscan";
 import {
+  createExplorerFirstHistory,
   createRpcFirstBalances,
-  createRpcFirstHistory,
   getStarkscanTokenBalances,
   getStarkscanTransactionHistory,
 } from "@bramble/transactions/starkscan-wallet";
@@ -155,10 +155,13 @@ describe("Starkscan wallet adapters", () => {
     ).rejects.toThrow("incomplete");
   });
 
-  // Ordering is pinned in starkscan-rpc-first.test.ts (MCW-V09-129): the
-  // configured RPC answers first and the gateway is the outage fallback. This
-  // case keeps the fallback wiring itself covered — an unreachable gateway must
-  // not turn an RPC outage into a thrown read.
+  // Ordering is pinned in starkscan-rpc-first.test.ts (balances, MCW-V09-129)
+  // and starkscan-history-first.test.ts (history): balances ask the configured
+  // RPC first with the gateway as the outage fallback; history asks the gateway
+  // first with the RPC scan as the fallback. This case keeps the fallback wiring
+  // itself covered in both directions — an unreachable gateway must not turn an
+  // RPC outage into a thrown balance read, nor an RPC-answerable history read
+  // into a thrown one.
   test("preferred wallet reads keep the indexed fallback wired", async () => {
     const input = {
       accountAddress: ACCOUNT,
@@ -223,7 +226,7 @@ describe("Starkscan wallet adapters", () => {
       tokens: [],
     } as const;
     expect(
-      await createRpcFirstHistory({ client: unavailable, readPreferences })(historyInput),
+      await createExplorerFirstHistory({ client: unavailable, readPreferences })(historyInput),
     ).toEqual([]);
   });
 
