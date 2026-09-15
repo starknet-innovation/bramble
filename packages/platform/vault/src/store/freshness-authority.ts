@@ -19,9 +19,14 @@
  *
  * The shadow narrows that window rather than closing it: `storage.session` is
  * cleared when the browser exits, so the first read of each session has nothing
- * to compare against, and a runtime without session storage has no shadow at
- * all. Split out of `../encrypted-store` because deciding who vouches for an
- * envelope is a different job from encrypting one.
+ * to compare against. That read seeds the shadow with the commit it accepted,
+ * so the window is one read and not the stretch until the next write. A
+ * runtime without session storage has no shadow at all. Alongside the
+ * per-lineage records the shadow keeps one store-wide marker naming the last
+ * lineage promoted to current, because a version-2 envelope carries no lineage
+ * and a downgrade to one could otherwise not be caught. Split out of
+ * `../encrypted-store` because deciding who vouches for an envelope is a
+ * different job from encrypting one.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -30,6 +35,7 @@ import type { KeyValueStore } from "@bramble/store/kv";
 import { hasBase64Bytes } from "./envelope-bytes";
 
 const COMMIT_STATE_KEYS = ["current", "pending", "version"] as const;
+const PROMOTED_STATE_KEYS = ["lineage", "version"] as const;
 
 /**
  * The freshness record for one lineage. `pending` is non-null only between the
@@ -42,6 +48,13 @@ type CommitState = {
   readonly version: 1;
 };
 
+/**
+ * The session-only record that a committed lineage has been current for this
+ * store during the browser session. Its presence makes a version-2 envelope a
+ * downgrade rather than a vault that was never migrated.
+ */
+type PromotedState = { readonly lineage: string; readonly version: 1 };
+
 /** Validates a stored commit record. Storage is untrusted; shape is not assumed. */
 const isCommitState = (value: unknown): value is CommitState =>
   isRecord(value) &&
@@ -50,6 +63,13 @@ const isCommitState = (value: unknown): value is CommitState =>
     (typeof value["current"] === "string" && hasBase64Bytes(value["current"], 16))) &&
   (value["pending"] === null ||
     (typeof value["pending"] === "string" && hasBase64Bytes(value["pending"], 16))) &&
+  value["version"] === 1;
+
+const isPromotedState = (value: unknown): value is PromotedState =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, PROMOTED_STATE_KEYS) &&
+  typeof value["lineage"] === "string" &&
+  /^[0-9a-f]{32}$/.test(value["lineage"]) &&
   value["version"] === 1;
 
 /**
@@ -64,14 +84,22 @@ export type FreshnessAuthority = {
   /** Reads the durable record for a lineage, or undefined when there is none. */
   readonly read: (lineage: string) => Promise<CommitState | undefined>;
   /**
+   * Throws when this session has already seen a committed lineage current for
+   * the store: a version-2 envelope read afterwards is a downgrade. Silent when
+   * there is no shadow store.
+   */
+  readonly requireNotPromoted: () => Promise<void>;
+  /**
    * Throws when the session shadow holds a record for this lineage that does
-   * not vouch for the commit. Silent when there is no shadow store, and when
-   * the shadow holds nothing for the lineage — the first read of a session.
+   * not vouch for the commit. When the shadow holds nothing for the lineage —
+   * the first read of a session — the accepted commit is recorded as the
+   * shadow, so only that one read goes unprotected. Silent when there is no
+   * shadow store.
    */
   readonly requireShadow: (lineage: string, commit: string) => Promise<void>;
   /** Removes the record from both authorities. */
   readonly remove: (lineage: string) => Promise<void>;
-  /** Records a transition in both authorities. */
+  /** Records a transition in both authorities, the shadow first. */
   readonly set: (lineage: string, state: CommitState) => Promise<void>;
 };
 
@@ -88,6 +116,7 @@ export const createFreshnessAuthority = (
   sessionFreshnessStore?: KeyValueStore,
 ): FreshnessAuthority => {
   const commitKey = (lineage: string): string => `${key}:commit:${lineage}`;
+  const promotedKey = `${key}:promoted`;
 
   const readFrom = async (
     authority: KeyValueStore,
@@ -103,30 +132,67 @@ export const createFreshnessAuthority = (
     return state;
   };
 
+  const readPromoted = async (): Promise<PromotedState | undefined> => {
+    const state = await sessionFreshnessStore?.get(promotedKey);
+    if (state === undefined) {
+      return undefined;
+    }
+    if (!isPromotedState(state)) {
+      throw new WalletError("Invalid encrypted store commit state");
+    }
+    return state;
+  };
+
+  // The shadow is the higher-integrity authority, so it must never lag the
+  // durable one: a shadow left naming the previous commit as current while
+  // the durable record had already moved on would still vouch for that
+  // commit, and restoring it together with its old durable state would pass
+  // both checks. A shadow that runs ahead is harmless — through `current` it
+  // still vouches for the envelope on disk, and a pending commit only it
+  // names was never written anywhere an attacker could replay it from.
+  const writeShadow = async (lineage: string, state: CommitState): Promise<void> => {
+    if (!sessionFreshnessStore) {
+      return;
+    }
+    await sessionFreshnessStore.set(commitKey(lineage), state);
+    if (state.current !== null) {
+      await sessionFreshnessStore.set(promotedKey, { lineage, version: 1 });
+    }
+  };
+
   return {
     read: (lineage) => readFrom(freshnessStore, lineage),
     async remove(lineage) {
       await freshnessStore.remove(commitKey(lineage));
-      await sessionFreshnessStore?.remove(commitKey(lineage));
+      if (!sessionFreshnessStore) {
+        return;
+      }
+      await sessionFreshnessStore.remove(commitKey(lineage));
+      if ((await readPromoted())?.lineage === lineage) {
+        await sessionFreshnessStore.remove(promotedKey);
+      }
+    },
+    async requireNotPromoted() {
+      if ((await readPromoted()) !== undefined) {
+        throw new WalletError("Encrypted store rollback detected");
+      }
     },
     async requireShadow(lineage, commit) {
       if (!sessionFreshnessStore) {
         return;
       }
       const shadow = await readFrom(sessionFreshnessStore, lineage);
-      if (shadow !== undefined && !vouchesFor(shadow, commit)) {
+      if (shadow === undefined) {
+        await writeShadow(lineage, { current: commit, pending: null, version: 1 });
+        return;
+      }
+      if (!vouchesFor(shadow, commit)) {
         throw new WalletError("Encrypted store rollback detected");
       }
     },
-    // The durable authority is written first for determinism, not for safety:
-    // with this two-field record either order survives an interruption,
-    // because a shadow that has run ahead still vouches for the previous
-    // commit through `current`. Said plainly because the ordering reads like a
-    // protocol invariant and is not one — a mutation that swaps these two
-    // lines breaks no test, and should not be expected to.
     async set(lineage, state) {
+      await writeShadow(lineage, state);
       await freshnessStore.set(commitKey(lineage), state);
-      await sessionFreshnessStore?.set(commitKey(lineage), state);
     },
   };
 };

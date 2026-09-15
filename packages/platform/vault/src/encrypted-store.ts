@@ -268,6 +268,11 @@ export const createEncryptedStore = (
   const recoverLegacyEnvelope = async (
     envelope: Extract<EncryptedEnvelope, { readonly version: 2 }>,
   ): Promise<EncryptedEnvelope> => {
+    // A legacy envelope carries no lineage for the session shadow to check, so
+    // the shadow answers store-wide instead: once a committed lineage has been
+    // current in this session, any version-2 envelope is a downgrade — even one
+    // whose durable legacy marker was deleted along with it.
+    await freshness.requireNotPromoted();
     const legacy = await freshnessStore.get(legacyKey);
     if (legacy === undefined) {
       return envelope;
