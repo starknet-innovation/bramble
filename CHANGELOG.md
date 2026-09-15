@@ -11,6 +11,47 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-09-16
+
+A patch release that lets a single-asset shielded balance pay its own relay
+fee, adds a Firefox build target, and hardens the vault and the v0.10.1
+authorization boundaries.
+
+### Added
+- The STRK20 relay fee can be paid in the token being sent. A converted fee is
+  admitted only under a ceiling derived from an independent reference price,
+  frozen into the reviewed plan and re-checked at submission; the route falls
+  back to STRK when no reference bounds it, when the batch spends several
+  tokens, or when the relay refuses the token.
+- A Firefox build target derived from the Chrome manifest. `bun run build:all`
+  emits both targets from one run of the gates; the wallet panel maps onto
+  `sidebar_action`, pending approvals mark the toolbar button so the click that
+  opens the panel is a real user gesture, and `data_collection_permissions` is
+  declared. The sandboxed collectible renderer and Ledger are not shipped on
+  Firefox, each decided rather than discovered.
+
+### Changed
+- The encrypted vault's commit state is mirrored into `storage.session`, which
+  no content script can reach, and an envelope must be vouched for by both the
+  durable record and the session shadow. The first read of a session seeds the
+  shadow, a version-2 envelope after a committed lineage is refused as a
+  downgrade, and the shadow is written before the durable record.
+- Deferred approval and signing work is bound to the unlock session that
+  authorized it; approvals claimed, grant metadata read, and session restores
+  superseded after a lock or revocation are rejected rather than served.
+- Embedded private-swap calls are validated against the reviewed trade intent,
+  and the paymaster gateway only carries credentials for the configured pool's
+  `apply_actions` call. Private-swap planning stays disabled until an
+  independently reviewed executor deployment is pinned.
+- Only wallet-authored errors reach STRK20 toast copy; SDK, RPC, and service
+  diagnostics collapse to a stable fallback.
+
+### Fixed
+- Analytics failures and consent races no longer affect wallet traffic.
+- Stale direct-provider account and permission responses are suppressed after
+  the session that produced them ends.
+- The website tooling pins a patched `sharp` (GHSA-rgj7-g3m4-5g8c).
+
 ## [0.10.2] - 2026-09-11
 
 A refreshed wallet chrome on the design kit's light palette, explorer-backed
