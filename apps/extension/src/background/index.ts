@@ -39,11 +39,7 @@ import {
 } from "../browser-storage";
 import { resolveExtensionApi } from "../extension-api";
 import { createWalletReader } from "./accounts/wallet-reader";
-import {
-  type DataConsentPermissions,
-  observeTechnicalDataConsent,
-  technicalDataAllowed,
-} from "./analytics/data-consent";
+import { observeTechnicalDataConsent, technicalDataAllowed } from "./analytics/data-consent";
 import {
   analyticsPlatform,
   analyticsReleaseChannel,
@@ -53,7 +49,6 @@ import {
 } from "./analytics/gateway-analytics";
 import { setApprovalNotifier } from "./approvals/approval-notifier";
 import {
-  type ApprovalSurfaceBrowser,
   bindToolbarActivation,
   configureApprovalSurface,
   createApprovalSurfaceOpener,
@@ -61,67 +56,23 @@ import {
 } from "./approvals/approval-surface";
 import { createApprovalQueue } from "./approvals/approvals";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
-import {
-  type OnboardingSurfaceBrowser,
-  openOnboardingOnInstall,
-} from "./onboarding/onboarding-surface";
+import { openOnboardingOnInstall } from "./onboarding/onboarding-surface";
 import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
 import { createMessageHandler } from "./routing/messages";
-import type { RuntimeSender } from "./routing/senders";
+import type { BackgroundBrowser } from "./runtime/background-browser";
 import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
 import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
 import {
   createActiveStateCoordinator,
   reconcileUnlockedActiveAccount,
 } from "./runtime/runtime-state";
-import type { SessionAlarmsApi } from "./runtime/session-expiry-alarm";
 import { createBackgroundUnlockSession } from "./runtime/unlock-session-boot";
 import { createBackgroundPreferences } from "./settings/preferences-adapter";
-import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
-
-type RuntimeApi = {
-  readonly getManifest?: () => { readonly version?: string };
-  readonly getPlatformInfo?: () => Promise<unknown>;
-  readonly getURL?: (path: string) => string;
-  readonly id: string;
-  readonly onInstalled: {
-    readonly addListener: (listener: (details: { readonly reason?: string }) => void) => void;
-  };
-  readonly onMessage: {
-    readonly addListener: (
-      listener: (
-        message: unknown,
-        sender: RuntimeSender,
-        sendResponse: (response: unknown) => void,
-      ) => true,
-    ) => void;
-  };
-  readonly sendMessage?: (message: unknown) => Promise<unknown>;
-};
-
-// Two alarm consumers, one API: recurring reconciliation cadences
-// (./transactions/tx-monitor) and the one-shot unlock deadline
-// (./privacy/session-expiry-alarm).
-type AlarmsGlobal = { readonly alarms?: AlarmsApi & SessionAlarmsApi };
-
-type TabsApi = {
-  readonly query: (
-    queryInfo: Record<string, never>,
-  ) => Promise<readonly { readonly id?: number }[]>;
-  readonly sendMessage: (tabId: number, message: unknown) => Promise<unknown>;
-};
-
-type BackgroundBrowser = ApprovalSurfaceBrowser &
-  OnboardingSurfaceBrowser &
-  AlarmsGlobal & {
-    readonly permissions?: DataConsentPermissions;
-    readonly runtime?: RuntimeApi;
-    readonly tabs?: TabsApi;
-  };
+import { startTransactionMonitor } from "./transactions/tx-monitor";
 
 const extensionApi = resolveExtensionApi<BackgroundBrowser>();
 const runtime = extensionApi?.runtime;
