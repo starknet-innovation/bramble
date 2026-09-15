@@ -11,13 +11,14 @@ import {
   contentSender,
   createWallet,
   extensionSender as sender,
+  testExtension,
   vaultPassphrase,
 } from "../../support/background-wallet-stub";
 import { flushHeld, latestApprovalId } from "../../support/held";
 
 describe("background sender gates", () => {
   test("rejects untrusted senders", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
 
     await expect(handler({ type: "wallet.status" }, { id: "other-extension" })).resolves.toEqual({
       error: "untrusted sender",
@@ -25,7 +26,7 @@ describe("background sender gates", () => {
   });
 
   test("rejects accessor message types before dispatch", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
     const message = {};
     Object.defineProperty(message, "type", {
       enumerable: true,
@@ -38,7 +39,7 @@ describe("background sender gates", () => {
   });
 
   test("rejects privileged commands from content senders", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
 
     // A vault read is the sharpest privileged command: it decrypts the vault
     // and returns key material, so it must never dispatch for a page sender.
@@ -51,7 +52,7 @@ describe("background sender gates", () => {
   });
 
   test("rejects status reads from content senders", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
 
     await expect(handler({ type: "wallet.status" }, contentSender)).resolves.toEqual({
       error: "privileged sender required",
@@ -59,7 +60,7 @@ describe("background sender gates", () => {
   });
 
   test("rejects extension-page URL prefix matches from other senders", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
 
     await expect(
       handler(
@@ -73,7 +74,7 @@ describe("background sender gates", () => {
   });
 
   test("allows content senders to use the provider account request path", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       session: createUnlockSession(),
     });
 
@@ -90,7 +91,7 @@ describe("background sender gates", () => {
   });
 
   test("rejects content senders claiming a different origin", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       session: createUnlockSession(),
     });
 
@@ -100,7 +101,7 @@ describe("background sender gates", () => {
   });
 
   test("rejects explicit passphrases from content senders", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       session: createUnlockSession(),
     });
 
@@ -119,7 +120,7 @@ describe("background sender gates", () => {
   test("rejects granted account reads for a mismatched content origin", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(createWallet(), "extension-id", { session });
+    const handler = createMessageHandler(createWallet(), testExtension, { session });
 
     await expect(
       handler({ origin: "https://evil.example", type: "wallet.getGrantedAccounts" }, contentSender),
@@ -136,7 +137,7 @@ describe("background sender gates", () => {
           throw new Error("vault schema details");
         },
       },
-      "extension-id",
+      testExtension,
       { session },
     );
 
@@ -146,7 +147,7 @@ describe("background sender gates", () => {
   });
 
   test("keeps wallet errors actionable for extension pages", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
 
     await expect(
       handler({ type: "wallet.unlock", vaultPassphrase: "wrong passphrase" }, sender),

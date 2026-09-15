@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../support/background-wallet-stub";
 import {
   fixedInvokePreferences,
   invokeAccount,
@@ -45,7 +46,7 @@ for (const boundary of ["preferences", "vault"] as const) {
             return wallet.signHash();
           },
         },
-        "extension-id",
+        testExtension,
         {
           session,
           preferencesStore: {

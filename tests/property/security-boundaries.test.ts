@@ -25,6 +25,7 @@ import {
   type RuntimeSender,
 } from "../../apps/extension/src/background/routing/senders";
 import { readSwapPrepareInput } from "../../apps/extension/src/background/transactions/swap-inputs";
+import { testExtension } from "../support/background-wallet-stub";
 
 const PROPERTY_OPTIONS = { numRuns: 300, seed: 2_026_08_25 } as const;
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
@@ -101,7 +102,7 @@ describe("background message property boundary", () => {
             origin: `https://${senderHost}`,
             url: `https://${senderHost}/app`,
           };
-          expect(isClaimedSenderOrigin(sender, "extension-id", `https://${claimedHost}`)).toBe(
+          expect(isClaimedSenderOrigin(sender, testExtension, `https://${claimedHost}`)).toBe(
             false,
           );
         },

@@ -37,6 +37,7 @@ import {
   type UnlockSession,
 } from "../../apps/extension/src/background/runtime/session";
 import { isFeeReviewResponse } from "../../packages/presentation/wallet-ui/src/popup/responses/responses";
+import { testExtension } from "./background-wallet-stub";
 import { flushHeld, latestApprovalId, reviewedApprovalFee } from "./held";
 import {
   ETH,
@@ -118,7 +119,7 @@ export const makeKeyBoundaryHarness = async (
   const allowanceStore = memoryAllowanceStore();
   const multisigStore = memoryMultisigStore();
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     allowanceStore,
     approvals,
     ledgerSignQueue,

@@ -17,7 +17,10 @@ import type {
   WalletStatus,
 } from "@bramble/vault/service";
 import type { AccountRef, DerivedAccountRef } from "@bramble/wallet-model/accounts";
-import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import type {
+  ExtensionIdentity,
+  RuntimeSender,
+} from "../../apps/extension/src/background/routing/senders";
 
 /**
  * Single stub account used by the dispatcher suites.
@@ -53,6 +56,21 @@ export const secondAccount: DerivedAccountRef = {
 /**
  * The one origin the stub vault holds a grant for.
  */
+/**
+ * A Chromium extension identity, where the page origin really is derived from
+ * the add-on id. Firefox is the case this shape exists for: there `runtime.id`
+ * and the `moz-extension://<uuid>` page origin are unrelated, so production
+ * must read the origin from the runtime rather than build it. Tests that need
+ * that shape state both values explicitly instead of calling this.
+ */
+export const chromiumExtension = (id: string): ExtensionIdentity => ({
+  id,
+  origin: `chrome-extension://${id}`,
+});
+
+/** The extension identity the shared sender fixtures below belong to. */
+export const testExtension: ExtensionIdentity = chromiumExtension("extension-id");
+
 export const grantedOrigin = "https://example.com";
 
 /**

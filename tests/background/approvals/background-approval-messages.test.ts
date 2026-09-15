@@ -8,6 +8,7 @@ import { createApprovalQueue } from "../../../apps/extension/src/background/appr
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const account: AccountRef = {
   accountContractType: "openzeppelin",
@@ -72,7 +73,7 @@ describe("background approval messages", () => {
   test("denies pending dapp account requests", async () => {
     const approvals = createApprovalQueue();
     const pending = approvals.request("https://example.com");
-    const handler = createMessageHandler(wallet, "extension-id", {
+    const handler = createMessageHandler(wallet, testExtension, {
       approvals,
       session: createUnlockSession(),
     });

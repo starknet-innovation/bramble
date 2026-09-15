@@ -23,6 +23,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeResponse } from "../../../apps/extension/src/background/runtime/runtime-types";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { chromiumExtension } from "../../support/background-wallet-stub";
 import { reviewedApprovalFee, waitForPendingApprovals } from "../../support/held";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
@@ -115,7 +116,7 @@ const makeHarness = () => {
   const session = createUnlockSession();
   session.unlock(PASSPHRASE);
   const state = { broadcast: false };
-  const handler = createMessageHandler(walletStub, "ext", {
+  const handler = createMessageHandler(walletStub, chromiumExtension("ext"), {
     runtimeRpc: makeRuntimeRpc({
       async submitInvokeTransaction(input) {
         // Parks the device sign; only reached past here once it resolves.

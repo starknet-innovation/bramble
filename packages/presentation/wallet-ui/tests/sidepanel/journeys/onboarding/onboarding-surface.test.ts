@@ -56,6 +56,67 @@ describe("full-page onboarding completion", () => {
     );
   });
 
+  test("prefers the chromium side panel when the browser offers both", async () => {
+    const opened: number[] = [];
+    let sidebarOpened = 0;
+    bindOnboardingCompletion(document.querySelector("#app"), {
+      sidePanel: {
+        async open({ windowId }: { windowId: number }) {
+          opened.push(windowId);
+        },
+      },
+      sidebarAction: {
+        async open() {
+          sidebarOpened += 1;
+        },
+      },
+      windows: { WINDOW_ID_CURRENT: -2 },
+    });
+    await tick();
+
+    expect(opened).toEqual([-2]);
+    expect(sidebarOpened).toBe(0);
+  });
+
+  test("hands off through the gecko sidebar when there is no chromium side panel", async () => {
+    // Firefox exposes no `sidePanel` and no window id for it; the handoff has
+    // to reach `sidebarAction`, or a completed setup would strand the user on
+    // the completion page with only the toolbar hint.
+    let opened = 0;
+    let closed = 0;
+    bindOnboardingCompletion(
+      document.querySelector("#app"),
+      {
+        sidebarAction: {
+          async open() {
+            opened += 1;
+          },
+        },
+      },
+      () => {
+        closed += 1;
+      },
+    );
+    await tick();
+
+    expect(opened).toBe(1);
+    expect(closed).toBe(1);
+  });
+
+  test("shows the toolbar hint when the browser offers no panel API at all", async () => {
+    bindOnboardingCompletion(document.querySelector("#app"), {});
+    await tick();
+
+    expect(document.querySelector<HTMLElement>("#onboarding-complete-result")?.textContent).toBe(
+      "",
+    );
+    document.querySelector<HTMLButtonElement>("#onboarding-open-wallet")?.click();
+    await tick();
+    expect(
+      document.querySelector<HTMLElement>("#onboarding-complete-result")?.textContent,
+    ).toContain("toolbar");
+  });
+
   test("closes the compact surface after the setup link opens its tab", () => {
     document.body.innerHTML = `<main id="app">${onboardingLaunch()}</main>`;
     const deferred: Array<() => void> = [];

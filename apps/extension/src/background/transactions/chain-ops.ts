@@ -28,7 +28,11 @@ import {
   readSignTypedDataInput,
   readSwitchChainInput,
 } from "../routing/message-inputs";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import {
   type ActiveStateCoordinator,
   runActiveStateMutation,
@@ -47,7 +51,7 @@ import {
 export type ChainOpsDeps = {
   readonly activeStateCoordinator?: ActiveStateCoordinator;
   readonly approvals: ApprovalQueue;
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
   /**
    * Panel round-trip queue for keyless Ledger accounts. Optional so partial
@@ -148,12 +152,12 @@ type ChainOpsHandler = (
 ) => Promise<RuntimeResponse>;
 
 const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
+  const { approvals, extension, preferencesStore, session, waiters, wallet } = deps;
   const input = readSignTypedDataInput(message);
   if (!input) {
     return { error: "invalid sign typed data request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   // A blocklisted origin gets no signing prompt even if it still holds an old
@@ -214,12 +218,12 @@ const handleGetChainId: ChainOpsHandler = async (deps, message) => {
 };
 
 const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, extensionId, session, waiters, wallet } = deps;
+  const { approvals, extension, session, waiters, wallet } = deps;
   const input = readSwitchChainInput(message);
   if (!input) {
     return { error: "invalid switch chain request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   // Fail closed on a blocklisted origin before surfacing a switch prompt, even

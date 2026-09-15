@@ -9,6 +9,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const account: AccountRef = {
   accountContractType: "openzeppelin",
@@ -88,7 +89,7 @@ const createStatusWallet = (statusAccount: AccountRef = account) => ({
 
 describe("background status messages", () => {
   test("returns public wallet status without account metadata while locked", async () => {
-    const handler = createMessageHandler(createStatusWallet(), "extension-id");
+    const handler = createMessageHandler(createStatusWallet(), testExtension);
 
     await expect(handler({ type: "wallet.status" }, sender)).resolves.toMatchObject({
       accountCount: 0,
@@ -108,7 +109,7 @@ describe("background status messages", () => {
     };
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(createStatusWallet(mainnetAccount), "extension-id", {
+    const handler = createMessageHandler(createStatusWallet(mainnetAccount), testExtension, {
       preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {

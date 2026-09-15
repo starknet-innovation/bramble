@@ -64,6 +64,7 @@ import {
   createSwapPreparationStore,
   type SwapPreparationStore,
 } from "../transactions/swap-preparations";
+import type { ExtensionIdentity } from "./senders";
 
 /**
  * Everything the runtime router hands to a sub-handler.
@@ -74,7 +75,7 @@ export type RouterContext = {
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
   readonly balanceSnapshots: BalanceSnapshotStore;
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue: LedgerSignQueue;
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
@@ -210,7 +211,7 @@ const recoveryDiscoveryFor = (
  */
 export const routerContext = (
   wallet: WalletStatusReader,
-  extensionId: string,
+  extension: ExtensionIdentity,
   options: MessageHandlerOptions,
   session: UnlockSession,
 ): RouterContext => {
@@ -224,7 +225,7 @@ export const routerContext = (
     allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
     approvals,
     balanceSnapshots: balanceSnapshotsFor(options.balanceSnapshots),
-    extensionId,
+    extension,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),
