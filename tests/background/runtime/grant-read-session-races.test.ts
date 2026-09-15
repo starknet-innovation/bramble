@@ -6,7 +6,12 @@ import { resolveOriginAccount } from "../../../apps/extension/src/background/pro
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { handleOriginOps } from "../../../apps/extension/src/background/settings/origins-ops";
-import { account, createWallet, vaultPassphrase } from "../../support/background-wallet-stub";
+import {
+  account,
+  createWallet,
+  testExtension,
+  vaultPassphrase,
+} from "../../support/background-wallet-stub";
 import { fixedInvokePreferences } from "../../support/invoke-approval-harness";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
@@ -88,7 +93,7 @@ for (const type of [
           return [account];
         },
       },
-      "extension-id",
+      testExtension,
       { session },
     );
     const pending = handler(
@@ -122,7 +127,7 @@ for (const replacement of [false, true]) {
           return [account];
         },
       },
-      "extension-id",
+      testExtension,
       {
         session,
         preferencesStore: fixedInvokePreferences({
