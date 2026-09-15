@@ -27,6 +27,7 @@ import type { NostrRelayTransport } from "../../apps/extension/src/background/mu
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "./background-wallet-stub";
 
 const HARNESS_PRIVATE_A = "0x123";
 const HARNESS_PRIVATE_B = "0x456";
@@ -268,7 +269,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
       };
     },
   };
-  const handler = createMessageHandler(wallet, "extension-id", {
+  const handler = createMessageHandler(wallet, testExtension, {
     activity,
     allowanceStore,
     multisigStore,

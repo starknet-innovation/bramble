@@ -1,5 +1,6 @@
 /**
- * Exact runtime files allowed in the packaged MV3 extension.
+ * Exact runtime files allowed in the packaged MV3 extension. Both browser
+ * targets ship this same set; only their manifests differ.
  */
 export const EXPECTED_RUNTIME_FILES = [
   "background/index.js",

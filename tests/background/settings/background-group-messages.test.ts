@@ -12,10 +12,11 @@ import {
   contentSender,
   createWallet,
   extensionSender,
+  testExtension,
 } from "../../support/background-wallet-stub";
 
 const handlerWithGroups = () =>
-  createMessageHandler(createWallet(), "extension-id", {
+  createMessageHandler(createWallet(), testExtension, {
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
   });
 

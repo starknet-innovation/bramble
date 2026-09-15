@@ -13,6 +13,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
@@ -108,7 +109,7 @@ const makeHandler = (
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     preferencesStore,
     prices,
     runtimeRpc: {

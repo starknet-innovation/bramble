@@ -25,6 +25,7 @@ import { readAddTokenInput } from "../../apps/extension/src/background/portfolio
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../support/background-wallet-stub";
 
 // The seeded Mainnet ETH spelling, and the spelling the Add-token field's
 // normalizeFeltInput produces for the very same address.
@@ -84,7 +85,7 @@ const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  const handler = createMessageHandler(walletStub as never, "extension-id", {
+  const handler = createMessageHandler(walletStub as never, testExtension, {
     preferencesStore,
     prices,
     runtimeRpc: {

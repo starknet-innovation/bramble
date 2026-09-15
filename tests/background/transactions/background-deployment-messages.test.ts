@@ -9,6 +9,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const account: AccountRef = {
@@ -80,7 +81,7 @@ const makeHandler = (unlocked: boolean) => {
   if (unlocked) {
     session.unlock(vaultPassphrase);
   }
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     runtimeRpc: makeRuntimeRpc({
       async estimateAccountDeploymentFee() {
         return { overallFee: "7", unit: "FRI" };

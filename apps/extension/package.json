@@ -6,6 +6,8 @@
   "exports": {},
   "scripts": {
     "build": "bun run build.ts",
+    "build:firefox": "bun run build.ts --target=firefox",
+    "build:all": "bun run build.ts --target=all",
     "check": "bun run check:types",
     "check:types": "tsc --noEmit -p tsconfig.json"
   },

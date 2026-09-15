@@ -22,6 +22,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { executeSignApproval } from "../../../apps/extension/src/background/transactions/chain-ops";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const { starkCurve } = ec;
@@ -136,7 +137,7 @@ const handlerWith = (ledgerSignQueue: LedgerSignQueue) => {
   const signHashResults: { publicKey: string; r: string; s: string }[] = [];
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     ledgerSignQueue,
     runtimeRpc: makeRuntimeRpc({
       async submitAccountDeployment(input) {
@@ -194,7 +195,7 @@ describe("Ledger signing flow through the dispatcher", () => {
     session.unlock(vaultPassphrase);
     // A queue whose request never resolves would hang; instead assert the branch
     // still requires a queue by removing it via an override that throws.
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       ledgerSignQueue: {
         pending: () => [],
         reject: () => false,
@@ -264,7 +265,7 @@ describe("privileged Ledger messages", () => {
   test("reads a candidate's deployed status and first non-zero token balance", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       runtimeRpc: makeRuntimeRpc({
         async getDeploymentStatus() {
           return true;
@@ -309,7 +310,7 @@ describe("privileged Ledger messages", () => {
   test("degrades a candidate's status to unavailable when the RPC fails", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       runtimeRpc: makeRuntimeRpc({
         getDeploymentStatus: () => Promise.reject(new Error("rpc down")),
         getTokenBalances: () => Promise.reject(new Error("rpc down")),
@@ -351,7 +352,7 @@ describe("privileged Ledger messages", () => {
     const queue = createLedgerSignQueue();
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       ledgerSignQueue: queue,
       session,
     });

@@ -21,10 +21,25 @@ export type RuntimeSender = {
   readonly url?: string;
 };
 
-const extensionOrigins = (extensionId: string): readonly string[] => [
-  `chrome-extension://${extensionId}`,
-  `moz-extension://${extensionId}`,
-];
+/**
+ * This extension's own identity, as the background sees it.
+ *
+ * Both halves are needed and neither can be derived from the other. `id` is
+ * what the browser stamps on `sender.id`; `origin` is the origin of this
+ * extension's own pages. On Chromium they are trivially related —
+ * `chrome-extension://<id>` — but on Firefox they are unrelated values:
+ * `runtime.id` is the add-on id from `browser_specific_settings` while
+ * extension pages are served from `moz-extension://<per-install uuid>`.
+ * Synthesizing the origin from the id therefore produced a URL that matches
+ * nothing on Firefox, and every privileged message from the sidebar, popup and
+ * onboarding page was refused as an untrusted sender.
+ *
+ * `origin` must come from `runtime.getURL("")`, which is correct on both.
+ */
+export type ExtensionIdentity = {
+  readonly id: string;
+  readonly origin: string;
+};
 
 /**
  * Every browser-supplied origin signal present on a runtime sender
@@ -58,14 +73,19 @@ export const senderUrlOrigin = (sender: RuntimeSender | undefined): string | nul
  */
 export const isExtensionPageSender = (
   sender: RuntimeSender | undefined,
-  extensionId: string,
+  extension: ExtensionIdentity,
 ): boolean => {
   const origins = senderOrigins(sender);
   return (
-    extensionId.length > 0 &&
-    sender?.id === extensionId &&
+    extension.id.length > 0 &&
+    // Redundant against the equality below — `senderOrigins` drops empty
+    // strings, so an unknown extension origin already matches nothing. Kept
+    // because it is the invariant that stops a future looser comparison (a
+    // prefix or `startsWith`) from turning "origin unknown" into "any origin".
+    extension.origin.length > 0 &&
+    sender?.id === extension.id &&
     origins.length > 0 &&
-    origins.every((origin) => extensionOrigins(extensionId).includes(origin))
+    origins.every((origin) => origin === extension.origin)
   );
 };
 
@@ -89,9 +109,9 @@ export const isTrustedSender = (sender: RuntimeSender | undefined, extensionId: 
  */
 export const isClaimedSenderOrigin = (
   sender: RuntimeSender | undefined,
-  extensionId: string,
+  extension: ExtensionIdentity,
   origin: string,
-): boolean => isExtensionPageSender(sender, extensionId) || isSenderOrigin(sender, origin);
+): boolean => isExtensionPageSender(sender, extension) || isSenderOrigin(sender, origin);
 
 /**
  * The only wallet messages a dapp page may reach through the content-script
@@ -141,16 +161,16 @@ const readMessageType = (message: unknown): string | null => {
 export const parseGatedMessage = (
   message: unknown,
   sender: RuntimeSender | undefined,
-  extensionId: string,
+  extension: ExtensionIdentity,
 ): GatedMessage => {
-  if (!isTrustedSender(sender, extensionId)) {
+  if (!isTrustedSender(sender, extension.id)) {
     return { error: "untrusted sender" };
   }
   const messageType = readMessageType(message);
   if (!messageType) {
     return { error: "unsupported message" };
   }
-  if (isPrivilegedMessage(messageType) && !isExtensionPageSender(sender, extensionId)) {
+  if (isPrivilegedMessage(messageType) && !isExtensionPageSender(sender, extension)) {
     return { error: "privileged sender required" };
   }
   return { messageType };

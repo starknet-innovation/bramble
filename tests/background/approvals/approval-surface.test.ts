@@ -3,10 +3,13 @@
  */
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_ORIGIN_GUARD } from "@bramble/permissions/blocklist";
+import type { ApprovalSurfaceBrowser } from "../../../apps/extension/src/background/approvals/approval-surface";
 import {
   type ApprovalSurfaceDeps,
+  bindToolbarActivation,
   configureApprovalSurface,
   createApprovalSurfaceOpener,
+  showPendingApprovals,
 } from "../../../apps/extension/src/background/approvals/approval-surface";
 
 // Every test here drives a single message, so a fixed clock is enough; the
@@ -223,5 +226,209 @@ describe("approval surface", () => {
 
     expect(popups).toEqual(["popup.html", ""]);
     expect(panelBehaviors).toEqual([false, true]);
+  });
+});
+
+// Chromium and Firefox expose the same wallet panel under different APIs:
+// `sidePanel.open({ tabId })` and `sidebarAction.open()`. These cases pin that
+// the wallet reaches the surface on both, and that the toolbar button — which
+// Chromium routes through setPanelBehavior and Firefox does not route at all —
+// is wired up only where it would otherwise be dead.
+describe("panel surface across browsers", () => {
+  const dappMessage = { origin: "https://dapp.example", type: "wallet.requestAccounts" } as const;
+  const dappSender = {
+    id: "extension-id",
+    tab: { id: 42, windowId: 7 },
+    url: "https://dapp.example/app",
+  } as const;
+
+  test("opens the gecko sidebar when no chromium side panel exists", () => {
+    let opened = 0;
+    opener({
+      browser: {
+        sidebarAction: {
+          async open() {
+            opened += 1;
+          },
+        },
+      },
+    })(dappMessage, dappSender);
+
+    expect(opened).toBe(1);
+  });
+
+  // Chromium exposes both once `browser` aliases `chrome`; opening the sidebar
+  // there would move the wallet to the wrong side of the window.
+  test("prefers the chromium side panel when a browser offers both", () => {
+    const opened: { tabId: number }[] = [];
+    let sidebarOpened = 0;
+    opener({
+      browser: {
+        sidePanel: {
+          async open(options) {
+            opened.push(options);
+          },
+        },
+        sidebarAction: {
+          async open() {
+            sidebarOpened += 1;
+          },
+        },
+      },
+    })(dappMessage, dappSender);
+
+    expect(opened).toEqual([{ tabId: 42 }]);
+    expect(sidebarOpened).toBe(0);
+  });
+
+  test("falls back from a refused popup to whichever panel API exists", async () => {
+    let opened = 0;
+    opener({
+      browser: {
+        action: {
+          openPopup: async () => {
+            throw new Error("no active window");
+          },
+        },
+        sidebarAction: {
+          async open() {
+            opened += 1;
+          },
+        },
+      },
+      preference: () => "popup",
+    })(dappMessage, dappSender);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(opened).toBe(1);
+  });
+
+  test("routes the toolbar button to the sidebar only where the browser has one", () => {
+    let opened = 0;
+    const listeners: Array<() => void> = [];
+    bindToolbarActivation(
+      {
+        action: { onClicked: { addListener: (listener) => listeners.push(listener) } },
+        sidebarAction: {
+          async open() {
+            opened += 1;
+          },
+        },
+      },
+      () => "side-panel",
+    );
+    expect(listeners).toHaveLength(1);
+    listeners[0]?.();
+    expect(opened).toBe(1);
+  });
+
+  test("leaves the toolbar button alone on a browser with a side panel", () => {
+    const listeners: Array<() => void> = [];
+    bindToolbarActivation(
+      {
+        action: { onClicked: { addListener: (listener) => listeners.push(listener) } },
+        sidePanel: { open: async () => undefined },
+        sidebarAction: { open: async () => undefined },
+      },
+      () => "side-panel",
+    );
+
+    expect(listeners).toEqual([]);
+  });
+
+  test("does not open the sidebar from the toolbar when the user chose the popup", () => {
+    let opened = 0;
+    const listeners: Array<() => void> = [];
+    bindToolbarActivation(
+      {
+        action: { onClicked: { addListener: (listener) => listeners.push(listener) } },
+        sidebarAction: {
+          async open() {
+            opened += 1;
+          },
+        },
+      },
+      () => "popup",
+    );
+    listeners[0]?.();
+
+    expect(opened).toBe(0);
+  });
+});
+
+// On Firefox this badge is the ONLY signal a dapp is waiting: a
+// `runtime.onMessage` handler is not handling a user action, so neither
+// `sidebarAction.open` nor (before Firefox 149) `action.openPopup` may run
+// from it. Without the badge the user clicks Connect on a dapp and the wallet
+// gives no indication at all until the request times out.
+describe("pending-approval badge", () => {
+  const badge = (): { readonly texts: string[]; readonly browser: ApprovalSurfaceBrowser } => {
+    const texts: string[] = [];
+    return {
+      texts,
+      browser: {
+        action: {
+          setBadgeText: async ({ text }) => {
+            texts.push(text);
+          },
+        },
+      },
+    };
+  };
+
+  test("marks the toolbar with the number waiting", () => {
+    const { texts, browser } = badge();
+    showPendingApprovals(browser, 1);
+    showPendingApprovals(browser, 3);
+
+    expect(texts).toEqual(["1", "3"]);
+  });
+
+  test("clears the mark once nothing is waiting", () => {
+    const { texts, browser } = badge();
+    showPendingApprovals(browser, 0);
+
+    expect(texts).toEqual([""]);
+  });
+
+  test("caps the count so the badge stays legible", () => {
+    const { texts, browser } = badge();
+    showPendingApprovals(browser, 10);
+
+    expect(texts).toEqual(["9+"]);
+  });
+
+  test("does nothing on a runtime with no badge API", () => {
+    expect(() => showPendingApprovals({}, 2)).not.toThrow();
+    expect(() => showPendingApprovals(undefined, 2)).not.toThrow();
+  });
+
+  // The call is fire-and-forget, so a missing `.catch` does not throw into the
+  // caller — it surfaces later as an unhandled rejection, which is what this
+  // watches for. Asserting only "does not throw" passes with no catch at all.
+  test("survives a browser that refuses the badge", async () => {
+    const rejections: unknown[] = [];
+    const observe = (reason: unknown): void => {
+      rejections.push(reason);
+    };
+    process.on("unhandledRejection", observe);
+    try {
+      showPendingApprovals(
+        {
+          action: {
+            setBadgeText: async () => {
+              throw new Error("refused");
+            },
+          },
+        },
+        1,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    } finally {
+      process.off("unhandledRejection", observe);
+    }
+
+    expect(rejections).toEqual([]);
   });
 });

@@ -22,6 +22,7 @@ import {
   executeDeclareApproval,
   handleDeclareOps,
 } from "../../../apps/extension/src/background/transactions/declare-ops";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const origin = "https://dapp.example";
 const passphrase = "correct horse battery staple";
@@ -105,7 +106,7 @@ const opsDeps = (
   }
   return {
     approvals: createApprovalQueue(),
-    extensionId: "extension-id",
+    extension: testExtension,
     preferencesStore: unavailablePreferencesStore,
     runtimeRpc: {} as RuntimeRpc,
     session,

@@ -11,6 +11,7 @@ import type { RuntimeSender } from "../../../apps/extension/src/background/routi
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const BLOCKED = "https://starknet-airdrop.com";
 const blockedSender: RuntimeSender = { id: "extension-id", url: `${BLOCKED}/app` };
@@ -89,7 +90,7 @@ const rpc = {
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  return createMessageHandler(walletStub, "extension-id", {
+  return createMessageHandler(walletStub, testExtension, {
     preferencesStore: unavailablePreferencesStore,
     runtimeRpc: rpc,
     session,
