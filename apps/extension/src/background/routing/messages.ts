@@ -45,6 +45,7 @@ import {
   readUnlockInput,
 } from "./message-inputs";
 import {
+  type ExtensionIdentity,
   isClaimedSenderOrigin,
   isExtensionPageSender,
   parseGatedMessage,
@@ -133,10 +134,10 @@ const handleGetGrantedAccounts: RouterHandler = async (ctx, messageType, message
   if (!input) {
     return { error: "invalid granted accounts request" };
   }
-  if (input.vaultPassphrase && !isExtensionPageSender(sender, ctx.extensionId)) {
+  if (input.vaultPassphrase && !isExtensionPageSender(sender, ctx.extension)) {
     return { error: "privileged sender required" };
   }
-  if (!isClaimedSenderOrigin(sender, ctx.extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, ctx.extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   // A blocklisted origin must see no accounts even if it holds an old grant.
@@ -179,7 +180,7 @@ const handleRequestAccounts: RouterHandler = async (ctx, messageType, message, s
   if (!input) {
     return { error: "invalid request accounts request" };
   }
-  if (!isClaimedSenderOrigin(sender, ctx.extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, ctx.extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   if (ctx.guard.isBlocked(input.origin)) {
@@ -390,7 +391,7 @@ const handleRuntimeMessage = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse> => {
-  const gated = parseGatedMessage(message, sender, ctx.extensionId);
+  const gated = parseGatedMessage(message, sender, ctx.extension);
   if ("error" in gated) {
     return gated;
   }
@@ -408,16 +409,16 @@ const runtimeErrorResponse = (
 /** Creates the trusted background runtime message dispatcher. */
 export const createMessageHandler = (
   wallet: WalletStatusReader,
-  extensionId: string,
+  extension: ExtensionIdentity,
   options: MessageHandlerOptions = {},
 ) => {
   const session = options.session ?? createUnlockSession();
-  const ctx = routerContext(wallet, extensionId, options, session);
+  const ctx = routerContext(wallet, extension, options, session);
   return async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
       return await handleRuntimeMessage(ctx, message, sender);
     } catch (error) {
-      return runtimeErrorResponse(error, isExtensionPageSender(sender, extensionId));
+      return runtimeErrorResponse(error, isExtensionPageSender(sender, extension));
     }
   };
 };

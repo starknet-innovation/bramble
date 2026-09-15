@@ -3,6 +3,7 @@
  */
 import type { Json } from "@bramble/core/json";
 import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@bramble/store/kv";
+import { resolveExtensionApi } from "./extension-api";
 
 type StorageArea = {
   readonly get: (key: string) => Promise<Record<string, unknown>>;
@@ -16,15 +17,15 @@ type RestrictedStorageArea = StorageArea & {
   }) => Promise<void>;
 };
 
-type ExtensionGlobal = typeof globalThis & {
-  readonly chrome?: {
-    readonly storage?: {
-      readonly local?: RestrictedStorageArea;
-      readonly session?: RestrictedStorageArea;
-      readonly sync?: RestrictedStorageArea;
-    };
+type StorageGlobal = {
+  readonly storage?: {
+    readonly local?: RestrictedStorageArea;
+    readonly session?: RestrictedStorageArea;
+    readonly sync?: RestrictedStorageArea;
   };
 };
+
+const storageAreas = (): StorageGlobal["storage"] => resolveExtensionApi<StorageGlobal>()?.storage;
 
 const createAreaStore = (storage: StorageArea): KeyValueStore => ({
   async get(key) {
@@ -46,10 +47,10 @@ const createAreaStore = (storage: StorageArea): KeyValueStore => ({
  * Creates the only production adapter for chrome.storage.local access.
  */
 export const createBrowserLocalStore = (): KeyValueStore => {
-  const storage = (globalThis as ExtensionGlobal).chrome?.storage?.local;
+  const storage = storageAreas()?.local;
 
   if (!storage) {
-    throw new Error("chrome.storage.local is unavailable");
+    throw new Error("browser storage.local is unavailable");
   }
 
   return createAreaStore(storage);
@@ -61,10 +62,10 @@ export const createBrowserLocalStore = (): KeyValueStore => {
  * cleared when the browser exits.
  */
 export const createBrowserSessionStore = (): KeyValueStore => {
-  const storage = (globalThis as ExtensionGlobal).chrome?.storage?.session;
+  const storage = storageAreas()?.session;
 
   if (!storage) {
-    throw new Error("chrome.storage.session is unavailable");
+    throw new Error("browser storage.session is unavailable");
   }
 
   return createAreaStore(storage);
@@ -76,9 +77,9 @@ export const createBrowserSessionStore = (): KeyValueStore => {
  * non-secret lineage and commit capabilities used to reject local rollback.
  */
 export const createBrowserSyncStore = (): KeyValueStore => {
-  const storage = (globalThis as ExtensionGlobal).chrome?.storage?.sync;
+  const storage = storageAreas()?.sync;
   if (!storage) {
-    throw new Error("chrome.storage.sync is unavailable");
+    throw new Error("browser storage.sync is unavailable");
   }
   return createAreaStore(storage);
 };
@@ -99,7 +100,7 @@ const restrictToTrustedContexts = async (
  * every persistence adapter, so content scripts need no direct access.
  */
 export const hardenLocalAccess = async (): Promise<boolean> =>
-  restrictToTrustedContexts((globalThis as ExtensionGlobal).chrome?.storage?.local);
+  restrictToTrustedContexts(storageAreas()?.local);
 
 /**
  * Restricts the in-memory session area to trusted extension contexts
@@ -110,7 +111,7 @@ export const hardenLocalAccess = async (): Promise<boolean> =>
  * to whether the lockdown was applied.
  */
 export const hardenSessionAccess = async (): Promise<boolean> => {
-  const storage = (globalThis as ExtensionGlobal).chrome?.storage?.session;
+  const storage = storageAreas()?.session;
   return restrictToTrustedContexts(storage);
 };
 
@@ -119,21 +120,72 @@ export const hardenSessionAccess = async (): Promise<boolean> => {
  * contexts so content scripts cannot advance or erase commit markers.
  */
 export const hardenSyncAccess = async (): Promise<boolean> =>
-  restrictToTrustedContexts((globalThis as ExtensionGlobal).chrome?.storage?.sync);
+  restrictToTrustedContexts(storageAreas()?.sync);
+
+/**
+ * The build this bundle was produced for, stamped by `apps/extension/build.ts`.
+ * Absent in tests and in any unstamped bundle, where the strict Chromium rule
+ * below is the safe reading.
+ */
+declare const __MC_BUILD_TARGET__: string | undefined;
+
+/**
+ * Whether a failed storage lockdown is fatal.
+ *
+ * Chromium implements `storage.setAccessLevel`, so on that target a lockdown
+ * that does not apply means the browser is not behaving as this wallet's threat
+ * model assumes, and startup must stop.
+ *
+ * Firefox implements no `setAccessLevel` on any area (bugzil.la/1724754), so
+ * there the call cannot be made at all and refusing to start would only mean
+ * refusing to run on Firefox. What survives there is the platform default
+ * rather than an asserted one, and the two halves differ:
+ *
+ * - `storage.session` is unreachable from content scripts by default on every
+ *   browser, so the mirrored unlock capability keeps its guarantee — this call
+ *   was confirming that default, not creating it.
+ * - `storage.local` and `storage.sync` ARE reachable from this extension's own
+ *   content script on Firefox and cannot be closed off. That exposes the
+ *   encrypted vault blob and the freshness markers to a compromised content
+ *   script: ciphertext they still cannot read without the credential that
+ *   unlocks it, and rollback markers they could tamper with. This is a genuinely weaker
+ *   position than the Chromium build holds, it is not reachable from page
+ *   script, and it is the price of a Firefox build existing at all.
+ *
+ * Only the exact target "firefox" relaxes this. Anything else — an unstamped
+ * bundle, a target this predicate has never heard of — keeps the strict rule,
+ * so a build that loses or garbles its stamp fails closed rather than quietly
+ * adopting the weaker posture.
+ */
+export const lockdownIsEnforceable = (target: string | undefined): boolean => target !== "firefox";
+
+const LOCKDOWN_IS_ENFORCEABLE = lockdownIsEnforceable(
+  typeof __MC_BUILD_TARGET__ === "string" ? __MC_BUILD_TARGET__ : undefined,
+);
 
 /**
  * Requires all wallet storage areas to be unavailable to untrusted extension
  * contexts before privileged startup may continue. Local holds ciphertext,
- * session may hold the live unlock capability, and sync owns freshness state;
- * missing support or any failed lockdown is fatal.
+ * session may hold the live unlock capability, and sync owns freshness state.
+ *
+ * The lockdown is always attempted, on every target, so a browser that gains
+ * `setAccessLevel` is used the moment it has it. Whether a failure is fatal is
+ * decided by {@link lockdownIsEnforceable}; on the Chromium build it is.
+ *
+ * `enforceable` defaults to this bundle's own answer and production passes
+ * nothing. It is a parameter at all because the value is inlined by the
+ * bundler, which left the branch that consumes it unreachable from a test —
+ * removing the check entirely broke no test until this existed.
  */
-export const requireTrustedStorageAccess = async (): Promise<void> => {
+export const requireTrustedStorageAccess = async (
+  enforceable: boolean = LOCKDOWN_IS_ENFORCEABLE,
+): Promise<void> => {
   const [localRestricted, sessionRestricted, syncRestricted] = await Promise.all([
     hardenLocalAccess(),
     hardenSessionAccess(),
     hardenSyncAccess(),
   ]);
-  if (!localRestricted || !sessionRestricted || !syncRestricted) {
+  if (enforceable && (!localRestricted || !sessionRestricted || !syncRestricted)) {
     throw new Error("trusted browser storage access is unavailable");
   }
 };

@@ -13,6 +13,7 @@ import type { RuntimeSender } from "../../../apps/extension/src/background/routi
 import { walletEventBroadcasts } from "../../../apps/extension/src/background/runtime/events";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { flushHeld, latestApprovalId } from "../../support/held";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
@@ -113,7 +114,7 @@ const throwingRpc = (): RuntimeRpc => ({
 const makeHandler = (getTokenMetadata: RuntimeRpc["getTokenMetadata"]) => {
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
   const approvals = createApprovalQueue();
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     approvals,
     preferencesStore,
     runtimeRpc: { ...throwingRpc(), getTokenMetadata },

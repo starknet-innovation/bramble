@@ -20,6 +20,7 @@ import { unknownError } from "@bramble/wallet-protocol/rpc-errors";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../support/background-wallet-stub";
 import { flushHeld, waitForPendingApprovals } from "../support/held";
 
 const account: AccountRef = {
@@ -202,7 +203,7 @@ describe("wallet.signTypedData handler", () => {
           };
         },
       },
-      "extension-id",
+      testExtension,
       { session },
     );
   })();

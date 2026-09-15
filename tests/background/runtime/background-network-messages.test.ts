@@ -14,6 +14,7 @@ import {
   unavailablePreferencesStore,
 } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import {
   flushHeld,
   latestApprovalId,
@@ -118,7 +119,7 @@ describe("background network messages", () => {
           return { ...status, accountCount: accounts.length, activeAccountId };
         },
       },
-      "extension-id",
+      testExtension,
       {
         preferencesStore: {
           ...unavailablePreferencesStore,
@@ -217,7 +218,7 @@ describe("background network messages", () => {
           return { ...status, accountCount: accounts.length, activeAccountId };
         },
       },
-      "extension-id",
+      testExtension,
       {
         preferencesStore: {
           ...unavailablePreferencesStore,

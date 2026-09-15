@@ -27,7 +27,11 @@ import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { readRetryApprovalFeeInput } from "../provider/provider-inputs";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -39,7 +43,7 @@ import { FEE_REVIEW_REQUIRED } from "./fee-review";
  */
 export type DeclareOpsDeps = {
   readonly approvals: ApprovalQueue;
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
@@ -277,13 +281,13 @@ export const handleDeclareOps = async (
   if (messageType !== "wallet.addDeclareTransaction") {
     return null;
   }
-  const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
+  const { approvals, extension, preferencesStore, session, waiters, wallet } = deps;
   const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
   const input = readAddDeclareTransactionInput(message);
   if (!input) {
     return { error: "invalid declare request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   if (guard.isBlocked(input.origin)) {

@@ -15,7 +15,11 @@ import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { API_VERSION_PATTERN } from "@bramble/wallet-protocol/results";
 import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@bramble/wallet-protocol/versions";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -31,7 +35,7 @@ export { SUPPORTED_SPECS, SUPPORTED_WALLET_API };
  * Dependencies shared by the read-only discovery operation handlers.
  */
 export type DiscoveryOpsDeps = {
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
@@ -93,12 +97,12 @@ const handleSupportedVersions: DiscoveryOpsHandler = async (_deps, messageType, 
 };
 
 const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, message, sender) => {
-  const { extensionId, preferencesStore, runtimeRpc, session, wallet } = deps;
+  const { extension, preferencesStore, runtimeRpc, session, wallet } = deps;
   const input = readDiscoveryInput(message, "wallet.deploymentData");
   if (!input) {
     return { error: "invalid deployment data request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {

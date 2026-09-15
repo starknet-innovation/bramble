@@ -12,6 +12,7 @@ import {
 } from "@bramble/wallet-protocol/bridge";
 import { addressesFromPayload, isWalletEventMessage } from "@bramble/wallet-protocol/events";
 import { invalidRequestPayload, unknownError } from "@bramble/wallet-protocol/rpc-errors";
+import { resolveExtensionApi } from "../extension-api";
 import { createProviderEventRefresh } from "./provider-event-refresh";
 import { createProviderRequestAdmission } from "./provider-request-admission";
 
@@ -23,13 +24,7 @@ type RuntimeApi = {
   readonly sendMessage: (message: unknown) => Promise<unknown>;
 };
 
-type ExtensionGlobal = typeof globalThis & {
-  readonly chrome?: {
-    readonly runtime?: RuntimeApi;
-  };
-};
-
-const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
+const runtime = resolveExtensionApi<{ readonly runtime?: RuntimeApi }>()?.runtime;
 const pageRequests = createProviderRequestAdmission();
 const eventRefresh = createProviderEventRefresh({
   post: (event) => window.postMessage(event, window.location.origin),

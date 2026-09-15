@@ -21,6 +21,7 @@ import { createMessageHandler } from "../../apps/extension/src/background/routin
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { type AvnuRouteFixture, avnuRouteCalldata } from "./avnu-route-fixture";
+import { testExtension } from "./background-wallet-stub";
 
 const mainnetToken = (symbol: string): string =>
   DEFAULT_TOKENS.find((token) => token.networkId === "SN_MAIN" && token.symbol === symbol)
@@ -186,7 +187,7 @@ export const makeSwapHarness = (build: readonly SwapCall[]) => {
       };
     },
   };
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     activity,
     runtimeRpc: {
       async estimateInvokeFee() {

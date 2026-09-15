@@ -17,7 +17,11 @@ import { isProviderChain, type ProviderChain } from "@bramble/wallet-protocol/ad
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 
 /**
@@ -25,7 +29,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
  */
 export type AddChainOpsDeps = {
   readonly approvals: ApprovalQueue;
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly waiters: SignatureWaiters;
@@ -96,13 +100,13 @@ export const handleAddChainOps = async (
   if (messageType !== "wallet.addStarknetChain") {
     return null;
   }
-  const { approvals, extensionId, preferencesStore, waiters } = deps;
+  const { approvals, extension, preferencesStore, waiters } = deps;
   const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
   const input = readAddStarknetChainInput(message);
   if (!input) {
     return { error: "invalid add chain request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   if (guard.isBlocked(input.origin)) {

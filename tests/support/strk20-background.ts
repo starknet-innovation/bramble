@@ -21,6 +21,7 @@ import {
   contentSender,
   createWallet,
   extensionSender,
+  testExtension,
   vaultPassphrase,
 } from "./background-wallet-stub";
 import { flushHeld, latestApprovalId, reviewedApprovalFee, waitForPendingApprovals } from "./held";
@@ -193,7 +194,7 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
     },
   };
   const strk20: Strk20Service = options.strk20 ?? makeStrk20Service(options);
-  return createMessageHandler(createWallet(), "extension-id", {
+  return createMessageHandler(createWallet(), testExtension, {
     ...(options.activity ? { activity: options.activity } : {}),
     ...(options.now ? { now: options.now } : {}),
     ...(options.strk20Jobs ? { strk20Jobs: options.strk20Jobs } : {}),

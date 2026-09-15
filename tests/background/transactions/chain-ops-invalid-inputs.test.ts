@@ -23,6 +23,7 @@ import {
   executeSignApproval,
   handleChainOps,
 } from "../../../apps/extension/src/background/transactions/chain-ops";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const ORIGIN = "https://dapp.example";
 const PASSPHRASE = "correct horse battery staple";
@@ -60,7 +61,7 @@ const deps = (session: UnlockSession, granted: readonly AccountRef[] = []): Chai
     // session, so a stub without `canAdmit` would fail on the probe rather than
     // on the branch under test.
     approvals: createApprovalQueue(),
-    extensionId: "extension-id",
+    extension: testExtension,
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
     session,
     waiters: {} as ChainOpsDeps["waiters"],

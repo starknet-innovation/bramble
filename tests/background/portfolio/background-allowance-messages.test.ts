@@ -10,6 +10,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { flushHeld, latestApprovalId, reviewedApprovalFee } from "../../support/held";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
@@ -80,7 +81,7 @@ const makeHarness = () => {
   session.unlock(vaultPassphrase);
   const allowanceStore = memoryAllowanceStore();
   const invokeCalls: (readonly unknown[])[] = [];
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     allowanceStore,
     runtimeRpc: makeRuntimeRpc({
       async submitInvokeTransaction(input) {

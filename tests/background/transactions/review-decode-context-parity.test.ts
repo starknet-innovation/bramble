@@ -24,6 +24,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { waitForPendingApprovals } from "../../support/held";
 
 const account: AccountRef = {
@@ -101,7 +102,7 @@ const walletStub = {
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
-  return createMessageHandler(walletStub as never, "extension-id", {
+  return createMessageHandler(walletStub as never, testExtension, {
     activity: memoryActivityLog(),
     approvals: createApprovalQueue(),
     preferencesStore,

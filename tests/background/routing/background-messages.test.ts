@@ -23,6 +23,7 @@ import {
   createWallet,
   secondAccount,
   extensionSender as sender,
+  testExtension,
   vaultPassphrase,
 } from "../../support/background-wallet-stub";
 import { flushHeld, latestApprovalId } from "../../support/held";
@@ -32,7 +33,7 @@ describe("createMessageHandler", () => {
     let captured: CreateVaultAccountInput | null = null;
     const handler = createMessageHandler(
       createWallet({ captureCreate: (input) => (captured = input) }),
-      "extension-id",
+      testExtension,
     );
 
     await expect(
@@ -45,7 +46,7 @@ describe("createMessageHandler", () => {
     const captured: CreateVaultAccountInput[] = [];
     const handler = createMessageHandler(
       createWallet({ captureCreate: (input) => captured.push(input) }),
-      "extension-id",
+      testExtension,
     );
 
     await expect(
@@ -65,7 +66,7 @@ describe("createMessageHandler", () => {
   });
 
   test("generates mnemonics through the wallet service only", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
 
     await expect(handler({ type: "wallet.generateMnemonic" }, sender)).resolves.toEqual({
       mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
@@ -82,7 +83,7 @@ describe("createMessageHandler", () => {
   });
 
   test("previews only public account metadata for extension pages", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
     const message = {
       accountContractType: "openzeppelin",
       mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
@@ -100,7 +101,7 @@ describe("createMessageHandler", () => {
   });
 
   test("validates mnemonics through the wallet service only", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
     const message = {
       mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
       type: "wallet.validateMnemonic",
@@ -118,7 +119,7 @@ describe("createMessageHandler", () => {
   test("handles provider chain id and gates dapp invoke submission", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(createWallet(), "extension-id", { session });
+    const handler = createMessageHandler(createWallet(), testExtension, { session });
 
     await expect(
       handler({ origin: "https://dapp.example", type: "wallet.getChainId" }, contentSender),
@@ -139,7 +140,7 @@ describe("createMessageHandler", () => {
   });
 
   test("reads only origin-granted accounts", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
 
     await expect(
       handler(
@@ -164,7 +165,7 @@ describe("createMessageHandler", () => {
   });
 
   test("reads granted accounts from an unlocked session", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       session: createUnlockSession(),
     });
 
@@ -186,7 +187,7 @@ describe("createMessageHandler", () => {
     const session = createUnlockSession();
     let activeNetworkId: "SN_DEVNET" | "SN_MAIN" | "SN_SEPOLIA" = "SN_MAIN";
     const networkSelections: string[] = [];
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {
@@ -238,7 +239,7 @@ describe("createMessageHandler", () => {
           return input.accountId === mainnetAccount.id ? mainnetAccount : account;
         },
       },
-      "extension-id",
+      testExtension,
       { preferencesStore, session },
     );
     const backup = {
@@ -271,7 +272,7 @@ describe("createMessageHandler", () => {
           return baseWallet.readVault(passphrase);
         },
       },
-      "extension-id",
+      testExtension,
       { session },
     );
 
@@ -309,7 +310,7 @@ describe("createMessageHandler", () => {
     await started.promise;
     const queuedState = coordinator.run(async () => session.isUnlocked());
 
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       activeStateCoordinator: coordinator,
       ledgerSignQueue: queue,
       session,
@@ -327,7 +328,7 @@ describe("createMessageHandler", () => {
   });
 
   test("creates pending approvals for ungranted dapp account requests", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       session: createUnlockSession(),
     });
 
@@ -355,7 +356,7 @@ describe("createMessageHandler", () => {
         accounts: [account, secondAccount],
         activeAccountId: () => activeAccountId,
       }),
-      "extension-id",
+      testExtension,
       { session: createUnlockSession() },
     );
 
@@ -383,7 +384,7 @@ describe("createMessageHandler", () => {
   });
 
   test("returns no accounts without prompting for silent ungranted requests", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       session: createUnlockSession(),
     });
 
@@ -410,7 +411,7 @@ describe("createMessageHandler", () => {
     const session = createUnlockSession();
     const handler = createMessageHandler(
       createWallet({ captureGrant: (input) => captured.push(input) }),
-      "extension-id",
+      testExtension,
       { approvals, session },
     );
     const failingHandler = createMessageHandler(
@@ -420,7 +421,7 @@ describe("createMessageHandler", () => {
           throw new Error("grant failed");
         },
       },
-      "extension-id",
+      testExtension,
       { approvals, session },
     );
 
@@ -467,7 +468,7 @@ describe("createMessageHandler", () => {
           throw new Error("wallet locked");
         },
       },
-      "extension-id",
+      testExtension,
       { approvals, session },
     );
 
@@ -479,17 +480,15 @@ describe("createMessageHandler", () => {
   });
 
   test("rejects malformed approval ids", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
 
     await expect(handler({ id: "not-a-uuid", type: "wallet.denyOrigin" }, sender)).resolves.toEqual(
-      {
-        error: "invalid approval request",
-      },
+      { error: "invalid approval request" },
     );
   });
 
   test("locks the unlock session", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       session: createUnlockSession(),
     });
 

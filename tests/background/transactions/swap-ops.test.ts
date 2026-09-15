@@ -23,6 +23,7 @@ const STRK_TOKEN_ADDRESS = mainnetToken("STRK");
 import { createMemoryStore } from "@bramble/store/kv";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const account: AccountRef = {
   accountContractType: "openzeppelin",
@@ -174,7 +175,7 @@ const makeHarness = (options?: {
       };
     },
   };
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     activity: options?.activityWriteFails
       ? { ...activity, record: () => Promise.reject(new Error("storage quota exceeded")) }
       : activity,

@@ -13,6 +13,7 @@ import {
   contentSender,
   createWallet,
   extensionSender as sender,
+  testExtension,
   vaultPassphrase,
 } from "../../support/background-wallet-stub";
 
@@ -38,7 +39,7 @@ describe("wallet.importSeedAccounts routing", () => {
     const captured: RecoverVaultAccountsInput[] = [];
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(capturingWallet(captured), "extension-id", { session });
+    const handler = createMessageHandler(capturingWallet(captured), testExtension, { session });
 
     await expect(handler(validMessage, sender)).resolves.toEqual({
       accounts: [account],
@@ -56,7 +57,7 @@ describe("wallet.importSeedAccounts routing", () => {
 
   test("fails closed when the wallet is locked", async () => {
     const captured: RecoverVaultAccountsInput[] = [];
-    const handler = createMessageHandler(capturingWallet(captured), "extension-id", {
+    const handler = createMessageHandler(capturingWallet(captured), testExtension, {
       session: createUnlockSession(),
     });
     await expect(handler(validMessage, sender)).resolves.toEqual({ error: "wallet locked" });
@@ -67,7 +68,7 @@ describe("wallet.importSeedAccounts routing", () => {
     const captured: RecoverVaultAccountsInput[] = [];
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(capturingWallet(captured), "extension-id", { session });
+    const handler = createMessageHandler(capturingWallet(captured), testExtension, { session });
     const rejected = [
       // A message-supplied passphrase is refused wholesale: the session owns it.
       { ...validMessage, vaultPassphrase },
@@ -85,7 +86,7 @@ describe("wallet.importSeedAccounts routing", () => {
   });
 
   test("is privileged: content scripts cannot reach it", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
     await expect(handler(validMessage, contentSender)).resolves.toEqual({
       error: "privileged sender required",
     });
@@ -94,7 +95,7 @@ describe("wallet.importSeedAccounts routing", () => {
   test("fails closed when the wallet surface lacks the import", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(createWallet(), "extension-id", { session });
+    const handler = createMessageHandler(createWallet(), testExtension, { session });
     await expect(handler(validMessage, sender)).resolves.toEqual({ error: "wallet unavailable" });
   });
 });

@@ -38,7 +38,11 @@ import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { strk20AccountContext } from "../privacy/strk20-account-context";
 import { readAddInvokeTransactionInput } from "../routing/message-inputs";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -62,7 +66,7 @@ export type ProviderOpsDeps = {
    */
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
   /**
    * Optional panel round-trip queue for keyless Ledger accounts. Production
@@ -204,11 +208,11 @@ const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
 // origin: a claimed-origin mismatch or a blocklisted origin yields the error
 // response, otherwise null so the caller proceeds.
 const gateDappOrigin = (
-  deps: Pick<ProviderOpsDeps, "extensionId" | "guard">,
+  deps: Pick<ProviderOpsDeps, "extension" | "guard">,
   sender: RuntimeSender | undefined,
   origin: string,
 ): { readonly error: string } | null => {
-  if (!isClaimedSenderOrigin(sender, deps.extensionId, origin)) {
+  if (!isClaimedSenderOrigin(sender, deps.extension, origin)) {
     return { error: "sender origin mismatch" };
   }
   if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(origin)) {
@@ -228,7 +232,7 @@ const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) =
   if (!input) {
     return { error: "invalid permissions request" };
   }
-  if (!isClaimedSenderOrigin(sender, deps.extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {

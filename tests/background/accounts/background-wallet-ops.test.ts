@@ -8,6 +8,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension, vaultPassphrase } from "../../support/background-wallet-stub";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const account: AccountRef = {
@@ -24,7 +25,6 @@ const extensionSender: RuntimeSender = {
   id: "extension-id",
   url: "chrome-extension://extension-id/sidepanel.html",
 };
-const vaultPassphrase = "correct horse battery staple";
 const reviewedFee = { overallFee: "2500000000000000", unit: "FRI" } as const;
 const reviewedDeploymentFee = { overallFee: "1000000000000000", unit: "FRI" } as const;
 const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
@@ -99,7 +99,7 @@ const makeHarness = (options?: {
     store: createMemoryStore(),
   });
   const statusRequests: string[][] = [];
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     activity,
     now: () => tick,
     runtimeRpc: {
