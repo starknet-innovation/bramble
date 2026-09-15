@@ -11,6 +11,7 @@ import {
   EXCLUDED_DIRECTORIES,
   EXTENSION_SURFACE_EDGES,
   NON_LITERAL_MODULE_LOADS,
+  SHARED_SURFACE_MODULES,
   STRUCTURED_SOURCE_ROOTS,
 } from "./workspace-architecture-policy";
 
@@ -359,9 +360,13 @@ for (const workspace of workspaces) {
         if (isOutsideRoot(workspace.root, target)) {
           failures.push(`${file} imports across its workspace boundary via ${specifier}`);
         }
+        const sharedSurfaceModule = SHARED_SURFACE_MODULES.has(
+          `${relative(resolve("."), target).split(sep).join("/")}.ts`,
+        );
         if (
           surfaceEdges &&
           extensionSurface &&
+          !sharedSurfaceModule &&
           isOutsideRoot(resolve(extensionRoot, extensionSurface), target)
         ) {
           failures.push(`${file} imports outside its extension surface via ${specifier}`);

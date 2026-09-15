@@ -24,6 +24,7 @@ import { memoryActivityLog } from "@bramble/transactions/activity";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../support/background-wallet-stub";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
 import {
   invokeAccount as account,
@@ -256,7 +257,7 @@ const makeSendHarness = (overrides: Partial<RuntimeRpc> = {}) => {
   session.unlock(vaultPassphrase);
   const transfers: TransferInput[] = [];
   const invoked: InvokeInput[] = [];
-  const handler = createMessageHandler(walletStub([account]), "extension-id", {
+  const handler = createMessageHandler(walletStub([account]), testExtension, {
     activity: memoryActivityLog(),
     preferencesStore: fixedPreferencesStore(preferences),
     runtimeRpc: makeRuntimeRpc({

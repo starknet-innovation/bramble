@@ -14,6 +14,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const tokenId = `SN_MAIN:ETH:${ETH}`;
@@ -111,7 +112,7 @@ const makeHandler = (options?: { locked?: boolean; runtimeRpc?: RuntimeRpc }) =>
   if (!options?.locked) {
     session.unlock(vaultPassphrase);
   }
-  return createMessageHandler(walletStub, "extension-id", {
+  return createMessageHandler(walletStub, testExtension, {
     runtimeRpc: options?.runtimeRpc ?? rpc,
     session,
   });

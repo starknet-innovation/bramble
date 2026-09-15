@@ -10,6 +10,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const origin = "https://dapp.example";
@@ -70,7 +71,7 @@ const wallet = {
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  return createMessageHandler(wallet, "extension-id", {
+  return createMessageHandler(wallet, testExtension, {
     runtimeRpc: makeRuntimeRpc(),
     session,
   });

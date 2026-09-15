@@ -5,9 +5,10 @@
  */
 import { ledgerConnector } from "@bramble/ledger-browser/connector";
 import { startWalletUi } from "@bramble/wallet-ui/start";
+import { resolveExtensionApi } from "../extension-api";
 
-type ExtensionGlobal = typeof globalThis & {
-  readonly chrome?: Parameters<typeof startWalletUi>[1];
-};
-
-await startWalletUi(ledgerConnector, (globalThis as ExtensionGlobal).chrome, () => Date.now());
+await startWalletUi(
+  ledgerConnector,
+  resolveExtensionApi<NonNullable<Parameters<typeof startWalletUi>[1]>>(),
+  () => Date.now(),
+);

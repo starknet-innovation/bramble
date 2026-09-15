@@ -12,6 +12,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const FEED_ONLY = "https://starknet-rewards-2026.com";
 const CLEAN = "https://legit-starknet-dapp.xyz";
@@ -84,7 +85,7 @@ const senderFor = (origin: string): RuntimeSender => ({ id: "extension-id", url:
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  return createMessageHandler(walletStub, "extension-id", {
+  return createMessageHandler(walletStub, testExtension, {
     originGuard: createOriginGuard(() => new Set(["starknet-rewards-2026.com"])),
     preferencesStore: unavailablePreferencesStore,
     session,

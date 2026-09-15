@@ -4,6 +4,7 @@
  * message-shape rejection) without any vault behind it.
  */
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
+import { chromiumExtension } from "./background-wallet-stub";
 
 const unavailableVaultStatus = () => ({
   accountCount: 0,
@@ -53,5 +54,5 @@ export const handleMessage = createMessageHandler(
       return unavailableVaultStatus();
     },
   },
-  "bramble-test",
+  chromiumExtension("bramble-test"),
 );

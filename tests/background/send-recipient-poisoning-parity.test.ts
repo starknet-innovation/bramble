@@ -44,6 +44,7 @@ import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../support/background-wallet-stub";
 import { latestApprovalId, reviewedApprovalFee } from "../support/held";
 import {
   CLEAN_RECIPIENT,
@@ -119,7 +120,7 @@ const makeHandler = async (contactSaved = true) => {
     await preferencesStore.saveAddress({ address: CONTACT, label: "Friend", networkId: "SN_MAIN" });
   }
   const submitted: string[] = [];
-  const handler = createMessageHandler(walletStub as never, "extension-id", {
+  const handler = createMessageHandler(walletStub as never, testExtension, {
     preferencesStore,
     runtimeRpc: {
       async estimateInvokeFee() {

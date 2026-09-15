@@ -21,6 +21,7 @@ import { setApprovalNotifier } from "../../../apps/extension/src/background/appr
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { chromiumExtension } from "../../support/background-wallet-stub";
 import { reviewedApprovalFee, waitForPendingApprovals } from "../../support/held";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
@@ -133,7 +134,7 @@ const driveThrow = async (dappMessage: Record<string, unknown>) => {
   const session = createUnlockSession();
   session.unlock(PASSPHRASE);
   let submitted = false;
-  const handler = createMessageHandler(makeWallet(control), "ext", {
+  const handler = createMessageHandler(makeWallet(control), chromiumExtension("ext"), {
     runtimeRpc: makeRuntimeRpc({
       async submitDeclareTransaction() {
         submitted = true;

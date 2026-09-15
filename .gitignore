@@ -1,5 +1,6 @@
 artifacts/
 dist/
+dist-firefox/
 node_modules/
 playwright-report/
 .playwright-cli/

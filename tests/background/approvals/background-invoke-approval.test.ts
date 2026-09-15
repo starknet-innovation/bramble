@@ -16,6 +16,7 @@ import type { RuntimeSender } from "../../../apps/extension/src/background/routi
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import {
   flushHeld,
   latestApprovalId,
@@ -152,7 +153,7 @@ const makeThrowingSignHarness = () => {
       throw new WalletError("device rejected the transaction");
     },
   };
-  const handler = createMessageHandler(wallet, "extension-id", {
+  const handler = createMessageHandler(wallet, testExtension, {
     activity,
     approvals,
     preferencesStore: unavailablePreferencesStore,

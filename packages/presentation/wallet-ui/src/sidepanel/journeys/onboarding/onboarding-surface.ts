@@ -7,12 +7,21 @@ import { actionLink, button } from "@bramble/ui-kit/controls";
 import { icon } from "../../shared/icons";
 
 /**
- * Minimal Chrome surface used after setup. Opening is user-gesture gated and
+ * Minimal browser surface used after setup. Opening is user-gesture gated and
  * failure leaves the completion page intact with actionable guidance.
+ *
+ * Two panel APIs appear here because the browsers name the same surface
+ * differently: Chromium opens it through `sidePanel` and needs the window to
+ * target, Firefox through `sidebarAction` which always opens in the active
+ * window and takes no argument. Both are optional, and a runtime offering
+ * neither falls back to the toolbar guidance below rather than failing.
  */
 export type OnboardingCompletionBrowser = {
   readonly sidePanel?: {
     readonly open: (options: { readonly windowId: number }) => Promise<void>;
+  };
+  readonly sidebarAction?: {
+    readonly open: () => Promise<void>;
   };
   readonly windows?: {
     readonly WINDOW_ID_CURRENT: number;
@@ -100,7 +109,17 @@ export const bindOnboardingCompletion = (
   const open = (announceFallback: boolean): void => {
     const windowId = browser?.windows?.WINDOW_ID_CURRENT;
     const sidePanel = browser?.sidePanel;
-    if (typeof windowId !== "number" || !sidePanel?.open) {
+    const sidebarAction = browser?.sidebarAction;
+    // Chromium needs a window id to open its side panel; Firefox's sidebar
+    // takes none. Missing either API, or the id Chromium's path requires, is
+    // the toolbar-guidance case rather than an error.
+    const raise =
+      typeof windowId === "number" && sidePanel?.open
+        ? () => sidePanel.open({ windowId })
+        : sidebarAction?.open
+          ? () => sidebarAction.open()
+          : null;
+    if (!raise) {
       if (result && announceFallback) {
         result.textContent = TOOLBAR_FALLBACK;
       }
@@ -110,7 +129,7 @@ export const bindOnboardingCompletion = (
     if (result) {
       result.textContent = "Opening the wallet…";
     }
-    void sidePanel.open({ windowId }).then(closeSurface, () => {
+    void raise().then(closeSurface, () => {
       button.disabled = false;
       if (result) {
         result.textContent = announceFallback ? TOOLBAR_FALLBACK : "";

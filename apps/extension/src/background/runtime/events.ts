@@ -92,3 +92,15 @@ export const walletEventBroadcasts = (
   const factory = BROADCAST_FACTORIES[message["type"]];
   return factory ? factory(response) : [];
 };
+
+/**
+ * Whether a broadcast batch reports that the pending-approval queue changed.
+ *
+ * Approve and deny remove entries through the queue's `claim`, which does not
+ * run the enqueue notifier — their signal reaches surfaces through these
+ * broadcasts instead. Anything mirroring the queue's size, such as the toolbar
+ * badge, has to watch this path too or it keeps showing a count for approvals
+ * the user has already answered.
+ */
+export const announcesApprovalsChange = (events: readonly WalletEventMessage[]): boolean =>
+  events.some((event) => event.event === "approvalsChanged");

@@ -33,6 +33,20 @@ export const EXTENSION_SURFACE_EDGES: Readonly<Record<string, readonly string[]>
 };
 
 /**
+ * Modules an isolated extension surface may import even though surface
+ * isolation otherwise denies every import outside the surface's own folder.
+ *
+ * That isolation exists so one surface cannot pull another's behaviour into its
+ * bundle — a content script must never reach side-panel code. It is not meant
+ * to force each surface to re-derive how the browser API object is found, which
+ * is a single expression with one correct answer per browser; three private
+ * copies is precisely the drift this repository keeps failing on. The entry
+ * below is therefore behaviour-free by construction, and this list stays a
+ * named allowance rather than becoming a shared-utilities folder.
+ */
+export const SHARED_SURFACE_MODULES = new Set(["apps/extension/src/extension-api.ts"]);
+
+/**
  * Audited development-only source that may depend on development packages.
  */
 export const DEVELOPMENT_SOURCE_FILES = new Set(["apps/terminal/src/data/extended/dev-bridge.ts"]);
@@ -61,6 +75,7 @@ export const EXCLUDED_DIRECTORIES = new Set([
   ".playwright-cli",
   "artifacts",
   "dist",
+  "dist-firefox",
   "node_modules",
   "output",
   "playwright-report",
