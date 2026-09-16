@@ -5,6 +5,7 @@
 
 import type { PrivacySdkRuntime } from "@bramble/privacy/official-sdk-service";
 import type { Strk20AccountContext } from "@bramble/privacy/service";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 
 export const STRK20_POOL_ADDRESS = "0x123";
@@ -125,3 +126,17 @@ export const executeResult = (warnings: readonly unknown[] = []) => ({
   },
   warnings,
 });
+
+/** The pool's on-chain per-batch charge used by the relay-route cases: 6 STRK in fri. */
+export const STRK20_POOL_FEE_6_STRK = "0x53444835ec580000";
+
+/** The SDK context with a private relay configured, STRK as the default fee token. */
+export const STRK20_RELAY_CONTEXT = {
+  ...STRK20_SDK_CONTEXT,
+  config: {
+    discoveryUrl: "https://discovery.example",
+    paymaster: { feeToken: STRK_TOKEN_ADDRESS, url: "https://relay.example" },
+    poolAddress: STRK20_POOL_ADDRESS,
+    proverUrl: "https://prover.example",
+  },
+};
