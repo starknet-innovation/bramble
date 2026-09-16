@@ -7,6 +7,7 @@ import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import {
   paymasterCall as call,
   paymasterChainId as chainId,
@@ -17,6 +18,9 @@ import {
 
 // The injected transport shape both paymaster entry points accept.
 type PaymasterHttp = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+// A fee token other than the configured `0x3`: the converted route.
+const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 
 describe("STRK20 paymaster submission boundary", () => {
   test("submits the frozen proof and validates the returned transaction hash", async () => {
@@ -40,6 +44,61 @@ describe("STRK20 paymaster submission boundary", () => {
     });
     expect(result).toEqual({ transactionHash: "0x123" });
     expect(requests[0]?.["method"]).toBe("paymaster_executeTransaction");
+  });
+
+  // #355: the quote may convert the fee into the token being sent, so the
+  // configured default is not the route the user reviewed. The relay must be
+  // told to collect the fee in the plan's token, or its validation checks a
+  // route that was never shown.
+  test("names the plan's fee token in the fee mode, not the configured default", async () => {
+    let feeToken: string | undefined;
+    await submitStrk20PaymasterPlan({
+      accountAddress: "0x1",
+      call,
+      config,
+      http: async (_url, init) => {
+        const body = JSON.parse(String(init?.body)) as {
+          readonly params: {
+            readonly parameters: { readonly fee_mode: { readonly pool_fee_token: string } };
+          };
+        };
+        feeToken = body.params.parameters.fee_mode.pool_fee_token;
+        return response({ transaction_hash: "0x123" });
+      },
+      nowSeconds: 2,
+      plan: {
+        feeAction: { amount: "0x5", recipient: "0x4", token: USDC, type: "withdraw" },
+        feeCeiling: { ceiling: "0x6", reference: "0x5" },
+      },
+      proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+      signTypedData: async () => {
+        throw new Error("no public approval signature expected");
+      },
+    });
+    // The relay receives the canonical felt, so compare numerically.
+    expect(sameFelt(feeToken ?? "", USDC)).toBe(true);
+  });
+
+  test("refuses a plan in another token that carries no ceiling before contacting the relay", async () => {
+    let contacted = false;
+    await expect(
+      submitStrk20PaymasterPlan({
+        accountAddress: "0x1",
+        call,
+        config,
+        http: async () => {
+          contacted = true;
+          return response({ transaction_hash: "0x123" });
+        },
+        nowSeconds: 2,
+        plan: { feeAction: { amount: "0x5", recipient: "0x4", token: USDC, type: "withdraw" } },
+        proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+        signTypedData: async () => {
+          throw new Error("no public approval signature expected");
+        },
+      }),
+    ).rejects.toThrow(STRK20_SUBMISSION_UNAVAILABLE);
+    expect(contacted).toBe(false);
   });
 
   test("signs exactly the frozen typed data for public token approvals", async () => {
