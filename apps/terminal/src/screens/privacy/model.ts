@@ -20,6 +20,7 @@ export type TokenOption = {
 export type SwapReview = {
   readonly actions: readonly unknown[];
   readonly buyAmount: bigint;
+  readonly minBuyAmount: bigint;
   readonly buyToken: TokenOption;
   readonly executor: string;
   readonly fee: PrivateSwapFee;

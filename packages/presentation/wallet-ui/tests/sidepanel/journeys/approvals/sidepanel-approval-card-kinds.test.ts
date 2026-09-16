@@ -78,7 +78,8 @@ describe("approvalCard renders each approval kind", () => {
     const html = approvalCard(approval, status);
 
     expect(html).toContain("Sign request");
-    expect(html).toContain("only sign messages you understand");
+    expect(html).toContain("Signatures can authorize transfers or account access");
+    expect(html).not.toContain("Signing does not move funds");
     // The decoded domain and message fields are rendered.
     expect(html).toContain("MyDapp");
     expect(html).toContain("Hello");

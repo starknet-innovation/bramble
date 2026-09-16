@@ -190,7 +190,7 @@ export const createGatewayAnalytics = ({
       return;
     }
     const id = await readInstallationId();
-    if (id === null) {
+    if (id === null || !(await isEnabled())) {
       return;
     }
     headers.set(INSTALLATION_HEADER, id);
@@ -224,9 +224,14 @@ export const createGatewayAnalytics = ({
       release = resolve;
     });
     await previous;
-    const generated = randomUuid();
-    activeFlowId = validUuid(generated) ? generated : undefined;
     try {
+      try {
+        const generated = randomUuid();
+        activeFlowId = validUuid(generated) ? generated : undefined;
+      } catch {
+        // Optional metadata must neither reject wallet work nor strand the queue.
+        activeFlowId = undefined;
+      }
       return await run();
     } finally {
       activeFlowId = undefined;

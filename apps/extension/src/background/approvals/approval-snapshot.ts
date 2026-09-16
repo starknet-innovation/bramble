@@ -13,6 +13,7 @@
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import type { FeeAffordability } from "@bramble/transactions/fee-funds";
 import type { PendingApproval } from "@bramble/wallet-protocol/extension-responses";
+import type { ProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
 import { type ApprovalPayload, cloneApprovalValue } from "./approval-payload";
 
 /**
@@ -61,6 +62,29 @@ const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> 
     : { requiresDeployment: approval.requiresDeployment }),
 });
 
+const callReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => {
+  if (approval.kind !== "invoke" || approval.calls === undefined) {
+    return {};
+  }
+  const reviews = approval.calls
+    .map((call): ProviderInvokeCall | null => {
+      const calldata: unknown = call.calldata;
+      if (
+        !Array.isArray(calldata) ||
+        !calldata.every((item): item is string => typeof item === "string")
+      ) {
+        return null;
+      }
+      return {
+        calldata: [...calldata],
+        contractAddress: call.contractAddress,
+        entrypoint: call.entrypoint,
+      };
+    })
+    .filter((call): call is ProviderInvokeCall => call !== null);
+  return reviews.length === approval.calls.length ? { callReviews: reviews } : {};
+};
+
 /**
  * Deep-copies the display-only view of a queued approval. Fields are listed
  * explicitly, so any field added to the stored entry stays invisible to callers
@@ -70,6 +94,7 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
   ...(approval.actionReviews === undefined
     ? {}
     : { actionReviews: cloneApprovalValue(approval.actionReviews) }),
+  ...callReviewSnapshot(approval),
   ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
   ...feeReviewSnapshot(approval),
   ...(approval.declaration === undefined

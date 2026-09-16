@@ -26,7 +26,7 @@ import {
   switchActiveNetwork,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { createUnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, createUnlockSession } from "../runtime/session";
 import { handleOriginOps } from "../settings/origins-ops";
 import { handlePreferenceOps } from "../settings/preference-ops";
 import { supportDiagnosticsResponse } from "../support/diagnostics";
@@ -145,14 +145,18 @@ const handleGetGrantedAccounts: RouterHandler = async (ctx, messageType, message
     return { accounts: [], ok: true };
   }
   // Peek, never renew: re-querying grants must not extend the unlock lifetime.
+  const authorized = captureSessionAuthorization(ctx.session);
   const vaultPassphrase = input.vaultPassphrase ?? ctx.session.peekPassphrase();
   if (!vaultPassphrase) {
-    return { error: "wallet locked" };
+    // A passive dapp grant query returns the same empty result while locked as
+    // it does while unlocked-but-unconnected. Extension pages that explicitly
+    // supplied a passphrase still receive authentication failures below, but a
+    // site cannot use `mc_accounts` as a lock-state oracle.
+    return { accounts: [], ok: true };
   }
-  return {
-    accounts: await ctx.wallet.getGrantedAccounts(input.origin, vaultPassphrase),
-    ok: true,
-  };
+  const accounts = await ctx.wallet.getGrantedAccounts(input.origin, vaultPassphrase);
+  if (!input.vaultPassphrase && !authorized.isCurrent()) return { accounts: [], ok: true };
+  return { accounts, ok: true };
 };
 
 const handlePendingApprovals: RouterHandler = async (ctx, messageType, message) => {
@@ -186,14 +190,16 @@ const handleRequestAccounts: RouterHandler = async (ctx, messageType, message, s
   // from any open page and answers without a prompt, so a site could otherwise
   // hold the wallet unlocked forever just by calling it on a timer.
   const passphrase = ctx.session.peekPassphrase();
+  const authorized = captureSessionAuthorization(ctx.session);
   if (passphrase) {
     const accounts = await ctx.wallet.getGrantedAccounts(input.origin, passphrase);
     if (accounts.length > 0) {
       // Record the origin only once it is actually connecting, so the enricher
       // still reports "first time seen" for a new site's approval.
       await ctx.originHistory.record(input.origin);
-      return { accounts, ok: true };
     }
+    if (!authorized.isCurrent()) return { error: "wallet locked" };
+    if (accounts.length > 0) return { accounts, ok: true };
   }
   if (input.silent) {
     return { accounts: [], ok: true };

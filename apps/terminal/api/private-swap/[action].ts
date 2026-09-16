@@ -26,6 +26,8 @@ import {
   serviceUrl,
 } from "../_lib/security.js";
 
+import { PRIVATE_SWAP_EXECUTOR, PRIVATE_SWAP_SLIPPAGE_BPS } from "../../shared/privacy.js";
+
 export const config = { maxDuration: 120 };
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const TIPS = new Set(["fast", "normal", "slow"]);
@@ -37,8 +39,8 @@ const feeModeFrom = (value: unknown): PrivateFeeMode | null => {
     !hasOnlyKeys(value, ["poolFeeToken", "tip"]) ||
     !isNonZeroFelt(value["poolFeeToken"]) ||
     BigInt(value["poolFeeToken"]) !== BigInt(PRIVATE_SWAP_FEE_TOKEN) ||
-    (value["tip"] !== undefined || Object.hasOwn(value, "tip")) &&
-      (typeof value["tip"] !== "string" || !TIPS.has(value["tip"]))
+    ((value["tip"] !== undefined || Object.hasOwn(value, "tip")) &&
+      (typeof value["tip"] !== "string" || !TIPS.has(value["tip"])))
   ) {
     return null;
   }
@@ -90,9 +92,7 @@ const options = (): {
   readonly paymasterBaseUrl: string;
 } | null => {
   const paymasterBaseUrl = serviceUrl("STRK20_PAYMASTER_UPSTREAM", AVNU_PAYMASTER_URL);
-  return paymasterBaseUrl
-    ? { abortSignal: AbortSignal.timeout(110_000), paymasterBaseUrl }
-    : null;
+  return paymasterBaseUrl ? { abortSignal: AbortSignal.timeout(110_000), paymasterBaseUrl } : null;
 };
 
 const sameFelt = (left: string, right: string): boolean => {
@@ -186,6 +186,9 @@ export default async function handler(
   if (action !== "fee" && action !== "plan" && action !== "submit") {
     return reject(response, 404, "route_not_allowed");
   }
+  if (action === "plan" && PRIVATE_SWAP_EXECUTOR === null) {
+    return reject(response, 503, "private_swap_executor_not_verified");
+  }
   const body = readJsonBody<Record<string, unknown>>(request, MAX_BODY_BYTES);
   const feeMode = body ? feeModeFrom(body["feeMode"]) : null;
   const avnuOptions = options();
@@ -260,7 +263,7 @@ export default async function handler(
         return reject(response, 502, "invalid_private_swap_plan");
       }
       const built = await quoteToCalls(
-        { private: true, quoteId: quote.quoteId, slippage: 0.005 },
+        { private: true, quoteId: quote.quoteId, slippage: PRIVATE_SWAP_SLIPPAGE_BPS / 10_000 },
         { abortSignal: AbortSignal.timeout(25_000) },
       );
       const executorCalls = executorCallsFrom(built.calls);
@@ -269,6 +272,8 @@ export default async function handler(
         !/^[\x21-\x7e]{1,128}$/.test(quote.quoteId) ||
         !built.executorAddress ||
         !isNonZeroFelt(built.executorAddress) ||
+        PRIVATE_SWAP_EXECUTOR === null ||
+        !sameFelt(built.executorAddress, PRIVATE_SWAP_EXECUTOR) ||
         !executorCalls ||
         !isMainnetChain(built.chainId)
       ) {

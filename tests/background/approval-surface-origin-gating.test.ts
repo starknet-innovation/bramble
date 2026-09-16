@@ -15,6 +15,29 @@ import {
 // A domain on the bundled baseline blocklist in @bramble/permissions/blocklist.
 const BLOCKED_BASELINE = "https://starknet-airdrop.com";
 const HONEST_ORIGIN = "https://dapp.example";
+const TYPED_DATA = {
+  domain: { chainId: "SN_MAIN", name: "Test", revision: "1", version: "1" },
+  message: { contents: "hi" },
+  primaryType: "Mail",
+  types: {
+    Mail: [{ name: "contents", type: "felt" }],
+    StarknetDomain: [
+      { name: "name", type: "shortstring" },
+      { name: "version", type: "shortstring" },
+      { name: "chainId", type: "shortstring" },
+    ],
+  },
+};
+
+const requestAccounts = (origin = HONEST_ORIGIN) => ({
+  origin,
+  type: "wallet.requestAccounts",
+});
+const signRequest = (origin = HONEST_ORIGIN) => ({
+  origin,
+  type: "wallet.signTypedData",
+  typedData: TYPED_DATA,
+});
 
 const openerWith = (deps: Partial<ApprovalSurfaceDeps>) => {
   const opened: number[] = [];
@@ -61,10 +84,10 @@ describe("approval surface origin gating", () => {
     // Subdomains of a feed entry are blocked by the same guard the message
     // handlers use, so the surface must honour them as well.
     open(
-      { origin: "https://login.drainer.example", type: "wallet.signTypedData" },
+      signRequest("https://login.drainer.example"),
       senderFor("https://login.drainer.example", 2),
     );
-    open({ type: "wallet.signTypedData" }, senderFor(HONEST_ORIGIN, 3));
+    open(signRequest(), senderFor(HONEST_ORIGIN, 3));
 
     expect(opened).toEqual([3]);
   });
@@ -83,7 +106,7 @@ describe("approval surface origin gating", () => {
     const { open, opened } = openerWith({ now: () => now });
 
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      open({ type: "wallet.requestAccounts" }, senderFor(HONEST_ORIGIN, 5));
+      open(requestAccounts(), senderFor(HONEST_ORIGIN, 5));
       now += 25;
     }
 
@@ -94,9 +117,9 @@ describe("approval surface origin gating", () => {
     let now = 10_000;
     const { open, opened } = openerWith({ now: () => now });
 
-    open({ type: "wallet.requestAccounts" }, senderFor(HONEST_ORIGIN, 6));
+    open(requestAccounts(), senderFor(HONEST_ORIGIN, 6));
     now += 1_000;
-    open({ type: "wallet.signTypedData" }, senderFor(HONEST_ORIGIN, 6));
+    open(signRequest(), senderFor(HONEST_ORIGIN, 6));
 
     expect(opened).toEqual([6, 6]);
   });
@@ -105,9 +128,9 @@ describe("approval surface origin gating", () => {
     let now = 10_000;
     const { open, opened } = openerWith({ now: () => now });
 
-    open({ type: "wallet.requestAccounts" }, senderFor(HONEST_ORIGIN, 7));
+    open(requestAccounts(), senderFor(HONEST_ORIGIN, 7));
     now = 500;
-    open({ type: "wallet.requestAccounts" }, senderFor(HONEST_ORIGIN, 7));
+    open(requestAccounts(), senderFor(HONEST_ORIGIN, 7));
 
     expect(opened).toEqual([7, 7]);
   });
@@ -118,11 +141,8 @@ describe("approval surface origin gating", () => {
     // No `origin` and no `url`: there is nothing to check against the
     // blocklist, so the gate must fail closed rather than read the empty list
     // as "no blocked origin found". Same for a `url` that will not parse.
-    open({ type: "wallet.requestAccounts" }, { id: "extension-id", tab: { id: 10 } });
-    open(
-      { type: "wallet.requestAccounts" },
-      { id: "extension-id", tab: { id: 11 }, url: "not-a-url" },
-    );
+    open(requestAccounts(), { id: "extension-id", tab: { id: 10 } });
+    open(requestAccounts(), { id: "extension-id", tab: { id: 11 }, url: "not-a-url" });
 
     expect(opened).toEqual([]);
   });
@@ -134,8 +154,15 @@ describe("approval surface origin gating", () => {
     // first message opens the surface; the second is inside the cooldown and
     // deliberately does not re-open it, because the surface it needs is already
     // up and the queued approval — not this call — is what the user acts on.
-    open({ type: "wallet.strk20PrepareInvoke" }, senderFor(HONEST_ORIGIN, 12));
-    open({ type: "wallet.strk20InvokeTransaction" }, senderFor(HONEST_ORIGIN, 12));
+    const actions = [{ amount: "0x1", recipient: "0x2", token: "0x1", type: "withdraw" }];
+    open(
+      { actions, origin: HONEST_ORIGIN, simulate: false, type: "wallet.strk20PrepareInvoke" },
+      senderFor(HONEST_ORIGIN, 12),
+    );
+    open(
+      { actions, origin: HONEST_ORIGIN, type: "wallet.strk20InvokeTransaction" },
+      senderFor(HONEST_ORIGIN, 12),
+    );
 
     expect(opened).toEqual([12]);
   });
@@ -143,9 +170,9 @@ describe("approval surface origin gating", () => {
   test("one tab's cooldown never suppresses another tab's request", () => {
     const { open, opened } = openerWith({ now: () => 10_000 });
 
-    open({ type: "wallet.requestAccounts" }, senderFor(HONEST_ORIGIN, 8));
-    open({ type: "wallet.requestAccounts" }, senderFor(HONEST_ORIGIN, 8));
-    open({ type: "wallet.requestAccounts" }, senderFor("https://other.example", 9));
+    open(requestAccounts(), senderFor(HONEST_ORIGIN, 8));
+    open(requestAccounts(), senderFor(HONEST_ORIGIN, 8));
+    open(requestAccounts("https://other.example"), senderFor("https://other.example", 9));
 
     expect(opened).toEqual([8, 9]);
   });

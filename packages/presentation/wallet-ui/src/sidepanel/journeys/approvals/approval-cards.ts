@@ -18,7 +18,11 @@ import {
   reviewPanel,
   riskFlagMessages,
 } from "../../shared/review-render";
-import { SIGN_REQUEST_UNCLASSIFIED_WARNING, signRequestView } from "../../shared/sign-request";
+import {
+  SIGN_REQUEST_UNCLASSIFIED_WARNING,
+  signRequestView,
+  signRequestWarnings,
+} from "../../shared/sign-request";
 import { tokenGlyph } from "../portfolio/token-row";
 
 const denyButton = (approval: PendingApproval): string =>
@@ -93,6 +97,25 @@ const exactCalldata = (calldata: readonly string[]): string =>
   calldata.length === 0
     ? "None"
     : `<code>${calldata.map((item) => escapeHtml(item)).join(", ")}</code>`;
+
+const invokeCallReview = (approval: PendingApproval): string => {
+  const calls = approval.callReviews;
+  if (!calls || calls.length === 0) {
+    return "";
+  }
+  return `<details class="disclosure request-technical">
+    <summary>
+      <span class="menu-copy"><strong>Exact call parameters</strong><small>${calls.length} call${calls.length === 1 ? "" : "s"} · full addresses and calldata</small></span>
+      <span class="disclosure-mark">${icon("chevronRight")}</span>
+    </summary>
+    <div class="disclosure-body">${calls
+      .map(
+        (call, index) =>
+          `<section class="strk20-action-call"><strong>Call ${index + 1}</strong><dl class="request-detail"><div><dt>Contract</dt><dd><code>${escapeHtml(call.contractAddress)}</code></dd></div><div><dt>Entrypoint</dt><dd><code>${escapeHtml(call.entrypoint)}</code></dd></div><div><dt>Calldata (${call.calldata.length})</dt><dd>${exactCalldata(call.calldata)}</dd></div></dl></section>`,
+      )
+      .join("")}</div>
+  </details>`;
+};
 
 const strk20ActionParameters = (
   action: NonNullable<PendingApproval["actionReviews"]>[number],
@@ -289,6 +312,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
         "The network fee is unavailable. Approval remains disabled until a fee can be reviewed.",
       )
     }
+    ${invokeCallReview(approval)}
     ${contextDisclosure(approval)}
     ${decisionRow(
       approval,
@@ -311,12 +335,13 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Sign request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Review exactly what this site asks you to sign. Signing does not move funds — only sign messages you understand."}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Signatures can authorize transfers or account access. Only sign requests you understand."}</p>
       ${reviewOutcome("Create a signed authorization over the decoded message shown below and return it to this site.")}
     </div>
     ${view.html}
     ${reviewPanel([
       ...(view.classified ? [] : [SIGN_REQUEST_UNCLASSIFIED_WARNING]),
+      ...signRequestWarnings(approval.typedData),
       ...(approval.insights ?? []),
     ])}
     ${reviewConstraints("No transaction or network fee is submitted. The signed result can still authorize site-specific actions.")}

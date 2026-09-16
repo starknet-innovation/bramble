@@ -3,7 +3,7 @@
  * metadata is authoritative; dapp-provided options are used only as a fallback.
  */
 import { WalletError } from "@bramble/core/errors";
-import { isSafeDecimals, isTokenSymbol } from "@bramble/core/json";
+import { isSafeDecimals, isTokenName, isTokenSymbol } from "@bramble/core/json";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   canonicalAddress,
@@ -170,14 +170,6 @@ export type WatchAssetMetadata = {
   readonly name: string;
   readonly symbol: string;
 };
-
-// Restrict token names to printable ASCII (excluding angle-bracket markup) so a
-// dapp cannot smuggle control characters, RTL overrides, or non-ASCII homoglyphs
-// into a name the wallet later renders next to a balance. Note: the preferences
-// token store (packages/features/settings/src/preferences.ts, not owned here) keeps a looser
-// length-only check; this boundary rejects hostile names before they reach it.
-const isTokenName = (value: string): boolean =>
-  value.length > 0 && value.length <= 64 && /^[\x20-\x7E]+$/.test(value) && !/[<>]/.test(value);
 
 /**
  * Builds a validated watch-asset token from on-chain metadata and dapp options,
