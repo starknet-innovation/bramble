@@ -13,6 +13,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const sender: RuntimeSender = {
@@ -103,7 +104,7 @@ const makeHandler = (unlocked: boolean) => {
   if (unlocked) {
     session.unlock(vaultPassphrase);
   }
-  return createMessageHandler(wallet, "extension-id", {
+  return createMessageHandler(wallet, testExtension, {
     preferencesStore: sepoliaPreferencesStore,
     prices,
     runtimeRpc: makeRuntimeRpc(),

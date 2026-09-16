@@ -13,6 +13,8 @@ bun run vendor:privacy       # required once before check/build (builds pinned o
 bun run check                # types + lint + standards + manifest + vendored pins + tests
 bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI image)
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
+bun run build:firefox        # writes dist-firefox/ (loadable in Firefox via about:debugging)
+bun run build:all            # both targets, from one run of the prerequisite gates
 bun run test:e2e             # Playwright extension E2E (requires dist/; egress blocked)
 bun run package:extension    # writes artifacts/*.zip + .sha256
 bun run dev:session          # headed browser on a kept profile, onboards/unlocks itself
@@ -140,7 +142,13 @@ The VM snapshot already has `bun`, and `bun install --frozen-lockfile` installs 
 Krusty KMS package, so no Rust toolchain or Krusty source checkout is needed by this repository.
 The pinned Argent and Privacy vendor outputs are already present, so `bun run check`,
 `bun run build`, and `bun run package:extension` run out of the box.
-- There is **no dev server / watch mode**: this is a Chrome MV3 extension. To run/verify it,
+- There is **no dev server / watch mode**: this is an MV3 extension. To run/verify it,
   `bun run build` then load the `dist/` folder as an unpacked extension at `chrome://extensions`
   (Developer mode on), and open the side panel from the toolbar action. Re-run `bun run build` and
   reload the extension in Chrome to pick up source changes.
+- Firefox: `bun run build:firefox`, then load `dist-firefox/manifest.json` at
+  `about:debugging#/runtime/this-firefox` → "Load Temporary Add-on" (removed when Firefox closes).
+  `npx web-ext run --source-dir dist-firefox` does the same with auto-reload, and
+  `npx web-ext lint --source-dir dist-firefox` runs Mozilla's own validator — including the API
+  checks implied by `strict_min_version`, which is how the AMO data-consent requirement surfaced.
+  The Gecko manifest is derived, never hand-written: see `apps/extension/firefox-manifest.ts`.

@@ -6,6 +6,7 @@
  * only when this file is the entry point.
  */
 import { readFile } from "node:fs/promises";
+import { toFirefoxManifest } from "../apps/extension/firefox-manifest";
 import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
 
 /**
@@ -465,6 +466,17 @@ if (import.meta.main) {
       ? resourceGroup["resources"]
       : [];
     await requireFile(`${sourceRoot}/${providerPath?.toString().replace(/\.js$/, ".ts")}`);
+  }
+
+  // The Gecko manifest is derived from this one rather than written beside it,
+  // and the transform refuses to guess: a top-level key nobody has classified
+  // for Firefox throws. Deriving it here means that decision is forced when the
+  // Chrome manifest changes — the gate that runs in CI and before every build —
+  // rather than the next time somebody happens to build the Firefox target.
+  try {
+    toFirefoxManifest(manifest);
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : String(error));
   }
 
   if (failures.length > 0) {

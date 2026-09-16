@@ -13,6 +13,7 @@ import { createApprovalQueue } from "../../../apps/extension/src/background/appr
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { flushHeld, latestApprovalId } from "../../support/held";
 
 const account: AccountRef = {
@@ -91,7 +92,7 @@ const makeHarness = () => {
   const session = createUnlockSession();
   const approvals = createApprovalQueue();
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  const handler = createMessageHandler(walletStub(), "extension-id", {
+  const handler = createMessageHandler(walletStub(), testExtension, {
     approvals,
     preferencesStore,
     session,

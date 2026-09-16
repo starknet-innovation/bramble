@@ -17,6 +17,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { isCreateAccountResponse } from "../../../packages/presentation/wallet-ui/src/popup/responses/responses";
 import { isLedgerAccountsResponse } from "../../../packages/presentation/wallet-ui/src/popup/responses/responses-ledger";
+import { testExtension } from "../../support/background-wallet-stub";
 import { viewingKeyDerivations } from "../../support/key-boundary-collaborators";
 import {
   contentSender,
@@ -293,7 +294,7 @@ describe("key boundary", () => {
           };
         },
       },
-      "extension-id",
+      testExtension,
       { session },
     );
     const response = await handler(
