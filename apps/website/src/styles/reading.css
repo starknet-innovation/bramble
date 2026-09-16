@@ -184,3 +184,105 @@
   margin-bottom: 16px;
   font-size: 24px;
 }
+
+/* Privacy policy: dense legal copy, numbered clauses, and wide reference tables. */
+.policy-content h2 {
+  font-size: clamp(24px, 2vw, 32px);
+  line-height: 1;
+}
+.policy-content h3 {
+  margin: 32px 0 8px;
+  font-size: 19px;
+  line-height: 1.15;
+}
+.policy-content section > p,
+.policy-content .policy-clauses p,
+.policy-content li {
+  max-width: 76ch;
+}
+.policy-content section > p {
+  margin-top: 16px;
+}
+.policy-content section > h3 + p {
+  margin-top: 8px;
+}
+.policy-content ul {
+  gap: 8px;
+  margin: 16px 0;
+}
+.policy-meta {
+  margin-top: 20px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.policy-clauses {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.policy-clauses p {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: baseline;
+}
+.policy-clause-number {
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.policy-table-scroll {
+  overflow-x: auto;
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.policy-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: left;
+}
+.policy-table th,
+.policy-table td {
+  padding: 16px 20px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+.policy-table th {
+  font-weight: 500;
+  background: var(--muted);
+}
+.policy-table tr:last-child td {
+  border-bottom: 0;
+}
+.policy-table td span {
+  display: block;
+}
+.policy-footnote {
+  max-width: 76ch;
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.policy-footnote a {
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+}
+.policy-content sup a {
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+}
+.policy-authorities {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+.policy-authorities address {
+  display: grid;
+  gap: 2px;
+  margin-top: 8px;
+  font-style: normal;
+}
