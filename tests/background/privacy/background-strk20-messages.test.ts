@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import type { Strk20Service } from "@bramble/privacy/service";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import type { InvokeInput } from "@bramble/starknet/rpc";
+import { memoryActivityLog } from "@bramble/transactions/activity";
 import { toProviderPayload } from "@bramble/wallet-protocol/bridge";
 import {
   flushHeld,
@@ -38,10 +39,12 @@ const approveHeld = approveHeldStrk20;
 
 describe("background strk20 messages", () => {
   test("registers only after an account, network, pool, and token-bound approval", async () => {
+    const activity = memoryActivityLog();
     const registerCalls = { value: 0 };
     const proveCalls = { value: 0 };
     const preparedSubmissions: Parameters<Strk20Service["submitPrepared"]>[0][] = [];
     const handler = buildHandler({
+      activity,
       preparedSubmissions,
       proveCalls,
       registerCalls,
@@ -62,6 +65,7 @@ describe("background strk20 messages", () => {
     expect(preparedSubmissions).toHaveLength(1);
     expect(preparedSubmissions[0]?.reviewedFee).toEqual({ overallFee: "1", unit: "FRI" });
     expect(preparedSubmissions[0]?.calls).toHaveLength(1);
+    expect((await activity.list())[0]?.summary).toBe("Activate private balances");
     expect(toProviderPayload(result, "mc_strk20Register")).toEqual({
       result: { transaction_hash: `0x${"123".padStart(64, "0")}` },
     });

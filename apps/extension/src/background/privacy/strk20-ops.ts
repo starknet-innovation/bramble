@@ -21,7 +21,11 @@ import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { PassiveUnlockSession } from "../runtime/session";
@@ -35,6 +39,7 @@ import type {
   Strk20DisclosureApprovalKind,
   Strk20DisclosureRequest,
 } from "./strk20-approval-types";
+import { strk20FeeAssetFor } from "./strk20-fee-reference";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
 import {
   readStrk20BalancesMessage,
@@ -51,7 +56,7 @@ import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
 export type Strk20OpsDeps = {
   readonly activity: ActivityLog;
   readonly approvals: ApprovalQueue;
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
@@ -65,7 +70,7 @@ const gateOrigin = (
   origin: string,
   sender: RuntimeSender | undefined,
 ): { readonly error: string } | null => {
-  if (!isClaimedSenderOrigin(sender, deps.extensionId, origin)) {
+  if (!isClaimedSenderOrigin(sender, deps.extension, origin)) {
     return { error: "sender origin mismatch" };
   }
   if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(origin)) {
@@ -303,7 +308,10 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
         ...actionTokenAddresses(input.actions),
         ...("feeAction" in plan ? [plan.feeAction.token] : []),
       ]),
-      summaries: [...input.actions.map(summarizeStrk20Action), summarizeStrk20Plan(plan)],
+      summaries: [
+        ...input.actions.map(summarizeStrk20Action),
+        summarizeStrk20Plan(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
+      ],
     });
     notifyApprovalsChanged();
     return deps.waiters.register(approval.id);

@@ -19,11 +19,12 @@ import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 const SESSION_ID = "00000000-0000-4000-8000-000000000001";
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-type MutableGlobal = { chrome?: unknown };
+type MutableGlobal = { browser?: unknown; chrome?: unknown };
 const globalWithChrome = globalThis as unknown as MutableGlobal;
 
 afterEach(() => {
   globalWithChrome.chrome = undefined;
+  globalWithChrome.browser = undefined;
 });
 
 type FakeTab = { readonly id?: number };
@@ -417,6 +418,32 @@ describe("requestDeviceGrant", () => {
 });
 
 describe("extensionBrowser", () => {
+  const grantSurface = (marker: string): Record<string, unknown> => ({
+    runtime: { getURL: (path: string) => `${marker}:${path}` },
+    tabs: {
+      create: async () => ({}),
+      get: async () => ({}),
+      onRemoved: { addListener: () => undefined, removeListener: () => undefined },
+      remove: async () => undefined,
+    },
+  });
+
+  // Firefox serves the promise-based API as `browser` and keeps `chrome` as a
+  // callback alias whose functions return undefined. Reading `chrome` there
+  // passes the shape check below and then resolves `tabs.create` to nothing,
+  // so the grant tab opens untracked and the user gets an unexpected-device
+  // error instead of the "use a Chromium browser" message that is true.
+  test("binds to the promise-based browser namespace when both are present", () => {
+    globalWithChrome.chrome = grantSurface("chrome");
+    globalWithChrome.browser = grantSurface("browser");
+    expect(extensionBrowser()?.runtime.getURL("x")).toBe("browser:x");
+  });
+
+  test("falls back to chrome where no browser namespace exists", () => {
+    globalWithChrome.chrome = grantSurface("chrome");
+    expect(extensionBrowser()?.runtime.getURL("x")).toBe("chrome:x");
+  });
+
   test("returns null outside an extension context", () => {
     globalWithChrome.chrome = undefined;
     expect(extensionBrowser()).toBeNull();

@@ -120,6 +120,7 @@ export type ApprovalQueue = {
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestInvoke: (input: {
+    readonly activitySummary?: string;
     readonly calls: readonly Call[];
     readonly context: ApprovalContext;
     readonly fee: InvokeFeeReview;
@@ -352,26 +353,26 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         summaries: [...summaries],
       });
     },
-    requestInvoke({ calls, context, fee, flags, origin, proof, reviewAssets = [], summaries }) {
-      if (!isWalletOrigin(origin)) {
+    requestInvoke(input) {
+      if (!isWalletOrigin(input.origin)) {
         throw new WalletError("Invalid origin");
       }
-
       return enqueue({
-        calls: calls.map(cloneApprovalCall),
-        context: { ...context },
-        fee: fee.fee && { ...fee.fee },
-        feeAffordability: fee.feeAffordability,
-        feeEstimateFailed: fee.feeEstimateFailed,
-        feeEstimatePending: fee.feeEstimatePending,
-        flags: flags.map((flag) => ({ ...flag })),
+        ...(input.activitySummary === undefined ? {} : { activitySummary: input.activitySummary }),
+        calls: input.calls.map(cloneApprovalCall),
+        context: { ...input.context },
+        fee: input.fee.fee && { ...input.fee.fee },
+        feeAffordability: input.fee.feeAffordability,
+        feeEstimateFailed: input.fee.feeEstimateFailed,
+        feeEstimatePending: input.fee.feeEstimatePending,
+        flags: input.flags.map((flag) => ({ ...flag })),
         id: crypto.randomUUID(),
         kind: "invoke",
-        origin,
-        ...(proof === undefined ? {} : { proof: cloneApprovalValue(proof) }),
-        ...copyReviewAssets(reviewAssets),
-        requiresDeployment: fee.requiresDeployment,
-        summaries: [...summaries],
+        origin: input.origin,
+        ...(input.proof === undefined ? {} : { proof: cloneApprovalValue(input.proof) }),
+        ...copyReviewAssets(input.reviewAssets ?? []),
+        requiresDeployment: input.fee.requiresDeployment,
+        summaries: [...input.summaries],
       });
     },
     requestSignTypedData({ context, origin, summary, typedData }) {

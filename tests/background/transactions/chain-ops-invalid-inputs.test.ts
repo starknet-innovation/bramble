@@ -23,6 +23,7 @@ import {
   executeSignApproval,
   handleChainOps,
 } from "../../../apps/extension/src/background/transactions/chain-ops";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const ORIGIN = "https://dapp.example";
 const PASSPHRASE = "correct horse battery staple";
@@ -60,7 +61,7 @@ const deps = (session: UnlockSession, granted: readonly AccountRef[] = []): Chai
     // session, so a stub without `canAdmit` would fail on the probe rather than
     // on the branch under test.
     approvals: createApprovalQueue(),
-    extensionId: "extension-id",
+    extension: testExtension,
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
     session,
     waiters: {} as ChainOpsDeps["waiters"],
@@ -127,6 +128,23 @@ describe("handleChainOps guard branches", () => {
       matchingSender,
     );
     expect(response).toEqual({ error: "wallet locked" });
+  });
+
+  test("rejects typed data for a different network", async () => {
+    const response = await handleChainOps(
+      deps(unlocked(), [account]),
+      "wallet.signTypedData",
+      {
+        origin: ORIGIN,
+        type: "wallet.signTypedData",
+        typedData: {
+          ...typedData,
+          domain: { ...typedData.domain, chainId: "SN_SEPOLIA" },
+        },
+      },
+      matchingSender,
+    );
+    expect(response).toEqual({ error: "invalid typed data" });
   });
 
   test("rejects a malformed getChainId message", async () => {

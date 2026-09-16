@@ -186,7 +186,7 @@ type CallDecoder = (
 // otherwise. Without that known-token disambiguation a token transferFrom would
 // be mislabeled "Send NFT #<amount>", hiding the real value moved.
 const decodeTransferFromCall: CallDecoder = (call, calldata, context) => {
-  if (calldata.length < 4) {
+  if (calldata.length !== 4) {
     return null;
   }
   const from = readAddressAt(calldata, 0);
@@ -307,6 +307,9 @@ const decodeErc1155BatchTransferCall: CallDecoder = (call, calldata) => {
 // `approved` hands one address every item the account holds in this collection,
 // now and in future, until it is revoked.
 const decodeOperatorApprovalCall: CallDecoder = (call, calldata) => {
+  if (calldata.length !== 2) {
+    return null;
+  }
   const operator = readAddressAt(calldata, 0);
   const approved = asFelt(calldata[1]);
   if (!operator || approved === null) {
@@ -332,7 +335,7 @@ const decodeOperatorApprovalCall: CallDecoder = (call, calldata) => {
 // collection this wallet watches; without that it would read as "spend N units"
 // of a fungible token that does not exist.
 const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
-  if (calldata.length < 3) {
+  if (calldata.length !== 3) {
     return null;
   }
   const amount = readUint256At(calldata, 1, 2);
@@ -356,6 +359,14 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
       entrypoint: call.entrypoint,
       kind: "nft-approval",
       summary: `Allow ${party} to transfer NFT #${amount} of collection ${shortAddress(canonical(call.contractAddress))}`,
+    };
+  }
+  if (!token) {
+    return {
+      contractAddress: call.contractAddress,
+      entrypoint: call.entrypoint,
+      kind: "approve",
+      summary: `Authorize ${party} for amount or NFT #${amount} on unknown contract ${shortAddress(canonical(call.contractAddress))}`,
     };
   }
   // An increase adds to whatever allowance already stands, and the resulting

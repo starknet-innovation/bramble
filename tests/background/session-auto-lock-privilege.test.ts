@@ -20,6 +20,7 @@ import {
   createWallet,
   extensionSender,
   grantedOrigin,
+  testExtension,
   vaultPassphrase,
 } from "../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
@@ -73,7 +74,7 @@ const makeHarness = async () => {
   const session = createUnlockSession({ now: () => now, ttlMs: TTL_MS });
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
   await preferencesStore.setActiveNetwork("SN_SEPOLIA");
-  const handler = createMessageHandler(createWallet(), "extension-id", {
+  const handler = createMessageHandler(createWallet(), testExtension, {
     preferencesStore,
     runtimeRpc: makeRuntimeRpc({
       async estimateAccountDeploymentFee() {

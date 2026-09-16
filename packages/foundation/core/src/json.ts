@@ -326,6 +326,18 @@ export const isTokenSymbol = (value: unknown): value is string =>
   typeof value === "string" && TOKEN_SYMBOL_PATTERN.test(value);
 
 /**
+ * Checks a token display name is 1..64 printable ASCII characters with no
+ * angle brackets. This keeps control characters, bidi overrides, and Unicode
+ * homoglyphs out of asset identity shown by privileged wallet surfaces.
+ */
+export const isTokenName = (value: unknown): value is string =>
+  typeof value === "string" &&
+  value.length > 0 &&
+  value.length <= 64 &&
+  /^[\x20-\x7E]+$/.test(value) &&
+  !/[<>]/.test(value);
+
+/**
  * Checks a value is a canonical base-units integer string: digits only, no sign,
  * no leading zero, no exponent, so one amount has exactly one spelling, and at
  * most {@link MAX_BASE_UNITS_DIGITS} of them — the width of an on-chain u256,

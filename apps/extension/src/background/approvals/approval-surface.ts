@@ -2,17 +2,28 @@
  * Browser boundary for opening the wallet approval surface from a dapp gesture.
  */
 
-import { isRecord } from "@bramble/core/json";
 import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { ApprovalSurfacePreference } from "@bramble/settings/preferences";
-import { APPROVAL_SURFACE_MESSAGES, type RuntimeSender, senderOrigins } from "../routing/senders";
+import { isSenderOrigin, type RuntimeSender, senderOrigins } from "../routing/senders";
+import { readApprovalSurfaceRequest } from "./approval-surface-request";
 
 /**
- * Minimal Chrome UI boundaries used to configure and open approval UI.
+ * Minimal browser UI boundaries used to configure and open approval UI.
+ *
+ * `sidePanel` and `sidebarAction` are the same surface under two APIs:
+ * Chromium opens its side panel for a named tab, Firefox opens its sidebar for
+ * the active window and takes no argument. Every member is optional so one
+ * shape covers both, and a runtime offering neither panel API degrades to the
+ * toolbar popup rather than throwing — the queued approval, not the opening,
+ * is what the user ultimately acts on.
  */
 export type ApprovalSurfaceBrowser = {
   readonly action?: {
+    readonly onClicked?: {
+      readonly addListener: (listener: () => void) => void;
+    };
     readonly openPopup?: (options?: { readonly windowId?: number }) => Promise<void>;
+    readonly setBadgeText?: (details: { readonly text: string }) => Promise<void>;
     readonly setPopup?: (details: { readonly popup: string }) => Promise<void>;
   };
   readonly sidePanel?: {
@@ -21,6 +32,82 @@ export type ApprovalSurfaceBrowser = {
       readonly openPanelOnActionClick: boolean;
     }) => Promise<void>;
   };
+  readonly sidebarAction?: {
+    readonly open: () => Promise<void>;
+  };
+};
+
+/**
+ * Opens the wallet panel through whichever API this browser provides. Resolves
+ * silently when neither exists, matching the rest of this module: a surface
+ * that will not open is never allowed to become a wallet error.
+ */
+const openPanel = (browser: ApprovalSurfaceBrowser, tabId: number): Promise<void> =>
+  browser.sidePanel?.open({ tabId }) ?? browser.sidebarAction?.open() ?? Promise.resolve();
+
+/**
+ * Largest pending count the toolbar badge shows before going to "9+". A badge
+ * is a handful of pixels; a four-digit number renders as an unreadable smear.
+ */
+const BADGE_LIMIT = 9;
+
+/**
+ * Marks the toolbar button with the number of approvals waiting, or clears it
+ * at zero.
+ *
+ * On Chromium this is a convenience. On Firefox it is what tells the user a
+ * dapp is waiting when their surface is the sidebar: `sidebarAction.open` may
+ * only be called while handling a user action, and a `runtime.onMessage`
+ * handler reacting to a click on a web page does not count as one — Mozilla
+ * documents that case exactly. So a dapp-triggered approval cannot raise the
+ * sidebar itself. It queues, this badge appears, and the user's click on the
+ * toolbar button is the real gesture that opens the panel through
+ * {@link bindToolbarActivation}. The popup surface has no such limit at this
+ * build's minimum Firefox, which is above the 149 that freed
+ * `action.openPopup` from needing a gesture.
+ *
+ * Browser failures are swallowed for the same reason every other call in this
+ * module swallows them: the queued approval, not its announcement, is what the
+ * user ultimately acts on.
+ */
+export const showPendingApprovals = (
+  browser: ApprovalSurfaceBrowser | undefined,
+  pending: number,
+): void => {
+  const setBadgeText = browser?.action?.setBadgeText;
+  if (!setBadgeText) {
+    return;
+  }
+  const text = pending <= 0 ? "" : pending > BADGE_LIMIT ? `${BADGE_LIMIT}+` : `${pending}`;
+  void setBadgeText({ text }).catch(() => undefined);
+};
+
+/**
+ * Opens the Firefox sidebar from a toolbar click.
+ *
+ * Chromium routes the toolbar button to the side panel itself through
+ * `setPanelBehavior`, so nothing is bound there. Firefox has no such behavior:
+ * with no popup set its toolbar button only fires `action.onClicked`, and
+ * without this the button would do nothing in the side-panel preference. The
+ * listener is registered once at startup because `sidebarAction.open` requires
+ * the user gesture the click carries, and it opens nothing when the user has
+ * chosen the popup — in that case a popup is set and this never fires.
+ */
+export const bindToolbarActivation = (
+  browser: ApprovalSurfaceBrowser | undefined,
+  preference: () => ApprovalSurfacePreference,
+): void => {
+  const sidebarAction = browser?.sidebarAction;
+  if (browser?.sidePanel || !sidebarAction?.open) {
+    return;
+  }
+  browser?.action?.onClicked?.addListener(() => {
+    if (preference() !== "popup") {
+      // Called synchronously inside the click handler: awaiting anything first
+      // would lose the user-action status this API requires.
+      void sidebarAction.open().catch(() => undefined);
+    }
+  });
 };
 
 /**
@@ -57,20 +144,20 @@ const SURFACE_COOLDOWN_MS = 1_000;
 /**
  * The tab a surface-opening request belongs to, or null when the message is not
  * one this extension's own content script may relay from a tab on behalf of a
- * user decision. This is a shape check only: it makes no origin or rate
- * judgement, both of which the opener applies separately before opening.
+ * user decision. The message must pass the same exact parser its execution
+ * handler uses, including claimed-origin normalization.
  */
-const surfaceRequestTabId = (
+const surfaceRequest = (
   message: unknown,
   sender: RuntimeSender | undefined,
   extensionId: string,
-): number | null => {
+): { readonly origin: string; readonly tabId: number } | null => {
   const tabId = sender?.id === extensionId ? sender.tab?.id : undefined;
-  if (typeof tabId !== "number" || !isRecord(message) || message["silent"] === true) {
+  const request = readApprovalSurfaceRequest(message);
+  if (typeof tabId !== "number" || !request || request.silent) {
     return null;
   }
-  const type = message["type"];
-  return typeof type === "string" && APPROVAL_SURFACE_MESSAGES.has(type) ? tabId : null;
+  return { origin: request.origin, tabId };
 };
 
 /**
@@ -99,11 +186,11 @@ const raiseSurface = (
     const options = typeof windowId === "number" ? { windowId } : undefined;
     void browser.action
       .openPopup(options)
-      .catch(() => browser.sidePanel?.open({ tabId }))
+      .catch(() => openPanel(browser, tabId))
       .catch(() => undefined);
     return;
   }
-  void browser.sidePanel?.open({ tabId }).catch(() => undefined);
+  void openPanel(browser, tabId).catch(() => undefined);
 };
 
 /**
@@ -161,13 +248,17 @@ export const createApprovalSurfaceOpener = ({
     if (!browser) {
       return;
     }
-    const tabId = surfaceRequestTabId(message, sender, extensionId);
-    if (tabId === null) {
+    const request = surfaceRequest(message, sender, extensionId);
+    if (!request) {
       return;
     }
-    if (isGatedSender(sender, guard) || coolingDown(tabId, now())) {
+    if (
+      !isSenderOrigin(sender, request.origin) ||
+      isGatedSender(sender, guard) ||
+      coolingDown(request.tabId, now())
+    ) {
       return;
     }
-    raiseSurface(browser, preference(), tabId, sender?.tab?.windowId);
+    raiseSurface(browser, preference(), request.tabId, sender?.tab?.windowId);
   };
 };

@@ -32,6 +32,7 @@ import { typedData as snip12 } from "starknet";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
 import {
+  OUTSIDE_EXECUTION_WARNING,
   SIGN_REQUEST_UNCLASSIFIED_WARNING,
   signRequestView,
 } from "../../../../src/sidepanel/shared/sign-request";
@@ -294,6 +295,16 @@ describe("sign card structural refusal", () => {
 
     expect(html).toContain('data-approval-action="approve"');
     expect(html).not.toContain(SIGN_REQUEST_UNCLASSIFIED_WARNING);
+  });
+
+  test("an OutsideExecution capability gets a prominent warning", () => {
+    const payload = enumPayload([{ name: "Approve", type: "()" }], { Approve: [] });
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      throw new Error("typed-data fixture must be an object");
+    }
+    const html = card({ ...payload, primaryType: "OutsideExecution" });
+
+    expect(html).toContain(OUTSIDE_EXECUTION_WARNING);
   });
 
   test("an unclassifiable payload gets no approve control at all", () => {

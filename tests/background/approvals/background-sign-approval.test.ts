@@ -16,6 +16,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { executeSignApproval } from "../../../apps/extension/src/background/transactions/chain-ops";
+import { chromiumExtension } from "../../support/background-wallet-stub";
 import { flushHeld, waitForPendingApprovals } from "../../support/held";
 
 const PASSPHRASE = "correct horse battery staple";
@@ -101,7 +102,7 @@ const makeHandler = () => {
   setApprovalNotifier(() => undefined);
   const session = createUnlockSession();
   session.unlock(PASSPHRASE);
-  return createMessageHandler(wallet, "ext", { session });
+  return createMessageHandler(wallet, chromiumExtension("ext"), { session });
 };
 
 const signMessage = {
@@ -184,7 +185,7 @@ describe("signTypedData approval gate", () => {
     };
     const session = createUnlockSession();
     session.unlock(PASSPHRASE);
-    const handler = createMessageHandler(lonely, "ext", { session });
+    const handler = createMessageHandler(lonely, chromiumExtension("ext"), { session });
     expect(await handler(signMessage, content)).toEqual({ error: "origin not connected" });
   });
 
@@ -233,7 +234,7 @@ describe("signTypedData approval gate", () => {
     setApprovalNotifier(() => undefined);
     const session = createUnlockSession();
     session.unlock(PASSPHRASE);
-    const handler = createMessageHandler(ledgerWallet, "ext", {
+    const handler = createMessageHandler(ledgerWallet, chromiumExtension("ext"), {
       ledgerSignQueue: wrongKeyQueue,
       session,
     });
@@ -258,3 +259,50 @@ describe("signTypedData approval gate", () => {
     expect(decision).toEqual({ error: "Ledger signature verification failed" });
   });
 });
+
+for (const boundary of ["preferences", "grants"] as const) {
+  for (const replacement of [false, true]) {
+    test(`typed-data execution binds the session before ${boundary} (replacement: ${replacement})`, async () => {
+      const session = createUnlockSession();
+      session.unlock(PASSPHRASE);
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const pause = async () => {
+        entered.resolve();
+        await release.promise;
+      };
+      const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+      let signatures = 0;
+      const pending = executeSignApproval(
+        {
+          session,
+          preferencesStore: {
+            ...preferencesStore,
+            async read() {
+              if (boundary === "preferences") await pause();
+              return preferencesStore.read();
+            },
+          },
+          wallet: {
+            ...wallet,
+            async getGrantedAccounts() {
+              if (boundary === "grants") await pause();
+              return [account];
+            },
+            async signHash() {
+              signatures += 1;
+              return wallet.signHash();
+            },
+          },
+        },
+        { origin: "https://dapp.example", typedData: MESSAGE },
+      );
+      await entered.promise;
+      session.lock();
+      if (replacement) session.unlock(PASSPHRASE);
+      release.resolve();
+      await expect(pending).resolves.toEqual({ error: "wallet locked" });
+      expect(signatures).toBe(0);
+    });
+  }
+}

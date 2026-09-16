@@ -1,8 +1,14 @@
 /**
  * Browser extension storage adapter factories: the unavailable-area throw paths
- * for the local and session stores, and the session store's happy path reading,
+ * for the local and session stores, the session store's happy path reading,
  * writing, and removing through an injected area (including the absent-key
- * fallback that returns undefined).
+ * fallback that returns undefined), and the namespace the adapters bind to.
+ *
+ * That last one is load-bearing on Firefox, which serves the promise-based API
+ * as `browser` and keeps `chrome` only as a callback-style alias: an adapter
+ * bound to `chrome` there would await results that never arrive and read an
+ * empty vault, which to the user is indistinguishable from losing their
+ * accounts.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import {
@@ -11,36 +17,65 @@ import {
   createBrowserSyncStore,
 } from "../../apps/extension/src/browser-storage";
 
-type MutableGlobal = { chrome?: unknown };
+type MutableGlobal = { browser?: unknown; chrome?: unknown };
 const globalWithChrome = globalThis as unknown as MutableGlobal;
 
 afterEach(() => {
   globalWithChrome.chrome = undefined;
+  globalWithChrome.browser = undefined;
+});
+
+describe("extension API namespace", () => {
+  test("binds to the promise-based browser namespace when both are present", async () => {
+    const chromeArea = {
+      get: async () => ({ "bramble:namespace": "chrome" }),
+      remove: async () => {},
+      set: async () => {},
+    };
+    const browserArea = {
+      get: async () => ({ "bramble:namespace": "browser" }),
+      remove: async () => {},
+      set: async () => {},
+    };
+    globalWithChrome.chrome = { storage: { local: chromeArea } };
+    globalWithChrome.browser = { storage: { local: browserArea } };
+    expect(await createBrowserLocalStore().get("bramble:namespace")).toBe("browser");
+  });
+
+  test("falls back to chrome where no browser namespace exists", async () => {
+    const chromeArea = {
+      get: async () => ({ "bramble:namespace": "chrome" }),
+      remove: async () => {},
+      set: async () => {},
+    };
+    globalWithChrome.chrome = { storage: { local: chromeArea } };
+    expect(await createBrowserLocalStore().get("bramble:namespace")).toBe("chrome");
+  });
 });
 
 describe("createBrowserSyncStore", () => {
   test("throws when the sync storage area is unavailable", () => {
     globalWithChrome.chrome = { storage: {} };
-    expect(() => createBrowserSyncStore()).toThrow(/chrome\.storage\.sync is unavailable/);
+    expect(() => createBrowserSyncStore()).toThrow(/browser storage\.sync is unavailable/);
   });
 });
 
 describe("createBrowserLocalStore", () => {
   test("throws when the local storage area is unavailable", () => {
     globalWithChrome.chrome = undefined;
-    expect(() => createBrowserLocalStore()).toThrow(/chrome\.storage\.local is unavailable/);
+    expect(() => createBrowserLocalStore()).toThrow(/browser storage\.local is unavailable/);
   });
 
   test("throws when chrome exists but has no local area", () => {
     globalWithChrome.chrome = { storage: {} };
-    expect(() => createBrowserLocalStore()).toThrow(/chrome\.storage\.local is unavailable/);
+    expect(() => createBrowserLocalStore()).toThrow(/browser storage\.local is unavailable/);
   });
 });
 
 describe("createBrowserSessionStore", () => {
   test("throws when the session storage area is unavailable", () => {
     globalWithChrome.chrome = { storage: {} };
-    expect(() => createBrowserSessionStore()).toThrow(/chrome\.storage\.session is unavailable/);
+    expect(() => createBrowserSessionStore()).toThrow(/browser storage\.session is unavailable/);
   });
 
   test("reads, writes, and removes through the injected session area", async () => {

@@ -9,6 +9,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const account: AccountRef = {
   accountContractType: "openzeppelin",
@@ -94,7 +95,7 @@ describe("account lifecycle messages", () => {
     const session = createUnlockSession();
     const handler = createMessageHandler(
       createWallet((input) => captured.push(input)),
-      "extension-id",
+      testExtension,
       { session },
     );
 
@@ -129,7 +130,7 @@ describe("account lifecycle messages", () => {
   test("rejects add-account from content senders and malformed networks", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(createWallet(), "extension-id", { session });
+    const handler = createMessageHandler(createWallet(), testExtension, { session });
 
     await expect(
       handler(
@@ -147,7 +148,7 @@ describe("account lifecycle messages", () => {
   });
 
   test("reveals active account secrets only with a re-entered passphrase", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
 
     await expect(
       handler({ type: "wallet.revealSecrets", vaultPassphrase }, sender),

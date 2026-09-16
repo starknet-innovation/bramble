@@ -42,52 +42,20 @@ import { createNftRuntimeClient } from "../journeys/collectibles/nft-runtime";
 import { createLedgerRuntimeClient } from "../journeys/ledger/runtime-client";
 import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding-runtime";
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
-
-/**
- * Minimal browser runtime API consumed by the side panel.
- */
-export type RuntimeApi = {
-  readonly onMessage?: {
-    readonly addListener: (listener: (message: unknown) => void) => void;
-  };
-  readonly sendMessage: (message: unknown) => Promise<unknown>;
-};
-
-/**
- * Balance loading state rendered by the side panel.
- */
-export type BalanceState =
-  | {
-      readonly asOf?: number | null;
-      readonly balances: readonly TokenBalance[];
-      readonly error?: never;
-      readonly stale?: boolean;
-    }
-  | { readonly balances?: never; readonly error: string };
-/**
- * Successful balances retain the account/network scope proven by the response.
- */
-export type ScopedBalanceState =
-  | {
-      readonly accountId: string;
-      readonly asOf?: number | null;
-      readonly balances: readonly TokenBalance[];
-      readonly error?: never;
-      readonly networkId: string;
-      readonly stale?: boolean;
-    }
-  | {
-      readonly accountId?: never;
-      readonly balances?: never;
-      readonly error: string;
-      readonly networkId?: never;
-    };
+import type { RuntimeApi, ScopedBalanceState } from "./runtime-types";
 
 /**
  * The pre-load placeholder status, re-exported here so the panel keeps one
  * import surface for the runtime client and the statuses it paints.
  */
 export { emptyStatus } from "./runtime-status";
+/** Shared runtime boundary and loading-state types. */
+export type {
+  BalanceState,
+  RuntimeApi,
+  RuntimeMessageSender,
+  ScopedBalanceState,
+} from "./runtime-types";
 
 import { createAccountRuntimeClient } from "./runtime-accounts";
 import { responseError } from "./runtime-errors";

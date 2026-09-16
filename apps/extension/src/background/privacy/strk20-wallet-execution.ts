@@ -37,6 +37,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import type { Strk20WalletExecuteResponse } from "./runtime-strk20-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
+import { STRK20_REGISTRATION_SUMMARY } from "./strk20-activity";
 import {
   type ActivePrivacyContext,
   assertPublicPoolSpendAffordable,
@@ -51,14 +52,10 @@ import {
   strk20WalletPreparationPayload,
 } from "./strk20-wallet-preparations";
 
-/**
- * Activity summary recorded for a pool registration. Exported because the
- * pending-registration derivation in ./strk20-wallet-ops matches on it: that
- * entry is the only durable local record that a registration was broadcast,
- * so the string is load-bearing in two places and must never be duplicated as
- * a literal.
- */
-export const STRK20_REGISTRATION_SUMMARY = "Activate private balances";
+// The registration summary is single-sourced in ./strk20-activity so the
+// dapp-initiated registration path and the pending-registration derivation in
+// ./strk20-wallet-ops match on one value. Re-exported here for existing callers.
+export { STRK20_REGISTRATION_SUMMARY } from "./strk20-activity";
 
 const preparationStillMatches = async (
   preparation: Strk20WalletPreparation,
@@ -158,14 +155,14 @@ const submitPreparedPrivateBatch = async (
     token: context.token.address,
   });
   if (registration !== "registered") {
-    throw new Error("Private registration is no longer active");
+    throw new WalletError("Private registration is no longer active");
   }
   const [privateBalance] = await readStrk20Balances(service, {
     ...context.accountContext,
     tokens: [context.token.address],
   });
   if (BigInt(privateBalance?.balance ?? "0x0") < BigInt(preparation.amountRaw)) {
-    throw new Error(`Not enough private ${preparation.token.symbol}`);
+    throw new WalletError(`Not enough private ${preparation.token.symbol}`);
   }
   return submitStrk20Actions(service, {
     ...context.accountContext,
@@ -188,7 +185,7 @@ const submitPreparedDeposit = async (
   context: ActivePrivacyContext,
 ): Promise<Strk20SubmissionResult> => {
   if (preparation.plan.mode !== "account") {
-    throw new Error("Shielding route changed");
+    throw new WalletError("Shielding route changed");
   }
   context.accountContext.onPhase?.({ phase: "checking the public balance" });
   await assertPublicPoolSpendAffordable(
@@ -203,7 +200,7 @@ const submitPreparedDeposit = async (
     token: context.token.address,
   });
   if (registration !== "registered") {
-    throw new Error("Private registration is no longer active");
+    throw new WalletError("Private registration is no longer active");
   }
   await assertRecipientRegistration(service, preparation.recipient, context);
   await assertCurrentRecipientPolicy(deps, preparation, context);
@@ -228,7 +225,7 @@ const submitPreparedRegistration = async (
     token: context.token.address,
   });
   if (registration === "registered") {
-    throw new Error("Private balances are already active");
+    throw new WalletError("Private balances are already active");
   }
   context.accountContext.onPhase?.({ phase: "checking the public balance" });
   await assertPublicPoolSpendAffordable(deps, context, preparation.poolFeeFri);

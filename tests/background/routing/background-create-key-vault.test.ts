@@ -14,6 +14,7 @@ import {
   contentSender,
   createWallet,
   extensionSender as sender,
+  testExtension,
   vaultPassphrase,
 } from "../../support/background-wallet-stub";
 
@@ -34,7 +35,7 @@ describe("wallet.createKeyVault routing", () => {
     const session = createUnlockSession();
     const handler = createMessageHandler(
       createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
-      "extension-id",
+      testExtension,
       { session },
     );
 
@@ -55,7 +56,7 @@ describe("wallet.createKeyVault routing", () => {
     const session = createUnlockSession();
     const handler = createMessageHandler(
       createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
-      "extension-id",
+      testExtension,
       { session },
     );
     const rejected = [
@@ -83,7 +84,7 @@ describe("wallet.createKeyVault routing", () => {
     const captured: CreateKeyVaultInput[] = [];
     const handler = createMessageHandler(
       createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
-      "extension-id",
+      testExtension,
     );
     await expect(
       handler({ ...validMessage, accountContractType: "argent", deploymentSalt: "0xabc" }, sender),
@@ -92,7 +93,7 @@ describe("wallet.createKeyVault routing", () => {
   });
 
   test("is privileged: content scripts cannot reach it", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
     await expect(handler(validMessage, contentSender)).resolves.toEqual({
       error: "privileged sender required",
     });
@@ -100,7 +101,7 @@ describe("wallet.createKeyVault routing", () => {
 
   test("fails closed when the wallet surface lacks createKeyVault", async () => {
     const { createKeyVault: _omitted, ...withoutCreate } = createWallet();
-    const handler = createMessageHandler(withoutCreate, "extension-id");
+    const handler = createMessageHandler(withoutCreate, testExtension);
     await expect(handler(validMessage, sender)).resolves.toEqual({ error: "wallet unavailable" });
   });
 });

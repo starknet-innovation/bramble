@@ -9,6 +9,7 @@
  * the executable batch. Privileged; never enters the dapp bridge.
  */
 
+import { WalletError } from "@bramble/core/errors";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
 import {
   prepareStrk20AccountActions,
@@ -23,6 +24,7 @@ import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics
 import { createApprovalContext } from "../approvals/approval-context";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
+import { strk20FeeAssetFor } from "./strk20-fee-reference";
 import {
   type ActivePrivacyContext,
   assertPublicPoolSpendAffordable,
@@ -129,7 +131,7 @@ const depositPreparationWork = async (
             recipient,
           );
           if (currentRegistrationError !== null) {
-            throw new Error(currentRegistrationError);
+            throw new WalletError(currentRegistrationError);
           }
         }),
       poolFeeFri: plan.poolFeeFri,
@@ -150,7 +152,10 @@ const depositPreparationWork = async (
         toSelf
           ? `Shield ${input.amount} ${context.token.symbol}`
           : `Shield ${input.amount} ${context.token.symbol} into ${recipient}'s private balance`,
-        summarizeStrk20Plan(plan),
+        summarizeStrk20Plan(
+          plan,
+          strk20FeeAssetFor(context.accountContext.account.networkId, plan),
+        ),
         toSelf
           ? "The deposit is public; the resulting balance can be spent privately"
           : "The deposit is public: your address and the amount are on chain, and only the recipient stays hidden",

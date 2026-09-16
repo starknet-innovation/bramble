@@ -37,7 +37,9 @@ import {
   createBrowserSyncStore,
   requireTrustedStorageAccess,
 } from "../browser-storage";
+import { resolveExtensionApi } from "../extension-api";
 import { createWalletReader } from "./accounts/wallet-reader";
+import { observeTechnicalDataConsent, technicalDataAllowed } from "./analytics/data-consent";
 import {
   analyticsPlatform,
   analyticsReleaseChannel,
@@ -47,75 +49,32 @@ import {
 } from "./analytics/gateway-analytics";
 import { setApprovalNotifier } from "./approvals/approval-notifier";
 import {
-  type ApprovalSurfaceBrowser,
+  bindToolbarActivation,
   configureApprovalSurface,
   createApprovalSurfaceOpener,
+  showPendingApprovals,
 } from "./approvals/approval-surface";
 import { createApprovalQueue } from "./approvals/approvals";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
-import {
-  type OnboardingSurfaceBrowser,
-  openOnboardingOnInstall,
-} from "./onboarding/onboarding-surface";
+import { openOnboardingOnInstall } from "./onboarding/onboarding-surface";
 import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
+import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
 import { createMessageHandler } from "./routing/messages";
-import type { RuntimeSender } from "./routing/senders";
-import { walletEventBroadcasts } from "./runtime/events";
+import type { BackgroundBrowser } from "./runtime/background-browser";
+import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
 import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
 import {
   createActiveStateCoordinator,
   reconcileUnlockedActiveAccount,
 } from "./runtime/runtime-state";
-import type { SessionAlarmsApi } from "./runtime/session-expiry-alarm";
 import { createBackgroundUnlockSession } from "./runtime/unlock-session-boot";
 import { createBackgroundPreferences } from "./settings/preferences-adapter";
-import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
+import { startTransactionMonitor } from "./transactions/tx-monitor";
 
-type RuntimeApi = {
-  readonly getManifest?: () => { readonly version?: string };
-  readonly getPlatformInfo?: () => Promise<unknown>;
-  readonly getURL?: (path: string) => string;
-  readonly id: string;
-  readonly onInstalled: {
-    readonly addListener: (listener: (details: { readonly reason?: string }) => void) => void;
-  };
-  readonly onMessage: {
-    readonly addListener: (
-      listener: (
-        message: unknown,
-        sender: RuntimeSender,
-        sendResponse: (response: unknown) => void,
-      ) => true,
-    ) => void;
-  };
-  readonly sendMessage?: (message: unknown) => Promise<unknown>;
-};
-
-// Two alarm consumers, one API: recurring reconciliation cadences
-// (./transactions/tx-monitor) and the one-shot unlock deadline
-// (./privacy/session-expiry-alarm).
-type AlarmsGlobal = { readonly alarms?: AlarmsApi & SessionAlarmsApi };
-
-type TabsApi = {
-  readonly query: (
-    queryInfo: Record<string, never>,
-  ) => Promise<readonly { readonly id?: number }[]>;
-  readonly sendMessage: (tabId: number, message: unknown) => Promise<unknown>;
-};
-
-type ExtensionGlobal = typeof globalThis & {
-  readonly chrome?: ApprovalSurfaceBrowser &
-    OnboardingSurfaceBrowser &
-    AlarmsGlobal & {
-      readonly runtime?: RuntimeApi;
-      readonly tabs?: TabsApi;
-    };
-};
-
-const extensionApi = (globalThis as ExtensionGlobal).chrome;
+const extensionApi = resolveExtensionApi<BackgroundBrowser>();
 const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
 declare const __MC_BUILD_BRANCH__: string | undefined;
@@ -143,9 +102,22 @@ const vaultStores: { readonly primary: EncryptedStore; readonly staging: Encrypt
     try {
       const store = createBrowserLocalStore();
       const freshnessStore = createBrowserSyncStore();
+      // The vault blob and its freshness records both live in areas a content
+      // script can read and write on Firefox, which cannot restrict them; an
+      // attacker there rolls back the pair together and it stays
+      // self-consistent. `sessionStore` is `storage.session`, closed to content
+      // scripts on every browser, so it carries a second copy of the commit
+      // state that the rolled-back one has to agree with. Absent where the
+      // runtime has no session storage, which leaves the durable record as the
+      // only authority — the behaviour before this shadow existed.
       return {
-        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore),
-        staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY, freshnessStore),
+        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore),
+        staging: createEncryptedStore(
+          store,
+          VAULT_MIGRATION_STORE_KEY,
+          freshnessStore,
+          sessionStore,
+        ),
       };
     } catch {
       return null;
@@ -186,12 +158,26 @@ const preferenceStore = createBackgroundPreferences({
   onReliabilityDiagnostics: setReliabilityDiagnosticsEnabled,
   store: preferences,
 });
+// The browser's own data-collection consent, which outranks the wallet's
+// preference in one direction only: it can withhold analytics the preference
+// enables, never enable analytics the user turned off. Firefox collects this
+// answer at install because the manifest declares `technicalAndInteraction` as
+// optional; honouring it here is what makes that declaration true. Re-read on
+// every permission change so a later revoke takes effect without a restart.
+let technicalDataConsent = true;
+const refreshTechnicalDataConsent = async (): Promise<void> => {
+  technicalDataConsent = await technicalDataAllowed(extensionApi?.permissions);
+};
+observeTechnicalDataConsent(extensionApi?.permissions, () => {
+  void refreshTechnicalDataConsent();
+});
 const preferenceSignalsReady = preferences
   .then(async (store) => {
     const stored = await store?.read();
     updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
     productAnalyticsEnabled = store ? (stored?.productAnalytics ?? true) : false;
     setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
+    await refreshTechnicalDataConsent();
   })
   .catch(() => undefined);
 // The read-only slice of the fail-closed adapter above, handed to collaborators
@@ -206,7 +192,7 @@ const browserNavigator = globalThis.navigator as Navigator & { readonly brave?: 
 const gatewayAnalytics = createGatewayAnalytics({
   enabled: async () => {
     await preferenceSignalsReady;
-    return productAnalyticsEnabled;
+    return productAnalyticsEnabled && technicalDataConsent;
   },
   http: nativeFetch,
   metadata: {
@@ -307,6 +293,7 @@ const runtimeRpc = {
   strk20: strk20MaturityStore
     ? withGatewayAnalyticsFlows(
         createOfficialStrk20Service({
+          feeReference: createStrk20FeeReference(priceService),
           http: gatewayAnalytics.fetch,
           maturityStore: strk20MaturityStore,
           nowSeconds: () => Math.floor(systemClock() / 1_000),
@@ -335,7 +322,23 @@ const strk20Jobs = createStrk20JobRegistry({
     : {}),
   now: systemClock,
 });
-const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
+// This extension's own identity. The origin MUST come from the runtime rather
+// than be built from the id: on Firefox `runtime.id` is the add-on id from
+// `browser_specific_settings` while extension pages are served from
+// `moz-extension://<per-install uuid>`, so a synthesized origin matches nothing
+// and every privileged message from the sidebar, popup and onboarding page is
+// refused. An origin that cannot be read stays empty, which fails the gate
+// closed rather than opening it.
+const extensionOrigin = (): string => {
+  try {
+    const url = runtime?.getURL?.("");
+    return url === undefined ? "" : new URL(url).origin;
+  } catch {
+    return "";
+  }
+};
+const extension = { id: runtime?.id ?? "", origin: extensionOrigin() };
+const handleMessage = createMessageHandler(walletReader, extension, {
   activeStateCoordinator,
   approvals,
   balanceSnapshots,
@@ -394,15 +397,32 @@ const broadcastEvent = (event: WalletEventMessage): void => {
   });
 };
 
+// On Firefox a dapp-triggered approval cannot raise the wallet by itself, so
+// the toolbar mark is the only indication the user gets that something is
+// waiting. It therefore has to track the queue on EVERY path that changes it,
+// not just the one that enqueues: approve and deny remove entries through
+// `claim`, which announces itself through the broadcasts below instead.
+const refreshPendingApprovals = (): void => {
+  showPendingApprovals(extensionApi, approvals.list().length);
+};
+
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {
-  for (const event of walletEventBroadcasts(message, response)) {
+  const events = walletEventBroadcasts(message, response);
+  for (const event of events) {
     broadcastEvent(event);
+  }
+  if (announcesApprovalsChange(events)) {
+    refreshPendingApprovals();
   }
 };
 
 // A held signTypedData request queues an approval and defers its response, so
-// it pushes an approvals-changed signal at queue time via this notifier.
-setApprovalNotifier(() => broadcastEvent({ event: "approvalsChanged", type: "wallet.event" }));
+// it pushes an approvals-changed signal at queue time via this notifier, which
+// also covers the lazy expiry sweep.
+setApprovalNotifier(() => {
+  broadcastEvent({ event: "approvalsChanged", type: "wallet.event" });
+  refreshPendingApprovals();
+});
 
 runtime?.onInstalled.addListener((details) => {
   void openOnboardingOnInstall(extensionApi, details.reason);
@@ -417,6 +437,10 @@ const openApprovalSurface = createApprovalSurfaceOpener({
   now: systemClock,
   preference: () => approvalSurfacePreference,
 });
+// Firefox only: routes its toolbar button to the sidebar, which Chromium does
+// through setPanelBehavior instead. Registered at the top level because the
+// event page is torn down when idle and a listener added later would be lost.
+bindToolbarActivation(extensionApi, () => approvalSurfacePreference);
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
   openApprovalSurface(message, sender);
   void runtimeReady

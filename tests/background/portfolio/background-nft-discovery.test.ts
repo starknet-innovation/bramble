@@ -21,6 +21,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const account: AccountRef = {
@@ -103,7 +104,7 @@ const makeHandler = (options: {
   const multisigStore = memoryMultisigStore();
   let indexerCalls = 0;
   const indexedAddresses: string[] = [];
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     multisigStore,
     ...(options.nftSnapshots ? { nftSnapshots: options.nftSnapshots } : {}),
     ...(options.now ? { now: options.now } : {}),

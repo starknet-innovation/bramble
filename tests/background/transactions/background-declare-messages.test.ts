@@ -16,6 +16,7 @@ import type { RuntimeSender } from "../../../apps/extension/src/background/routi
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
 
 const account: AccountRef = {
@@ -124,7 +125,7 @@ const makeHarness = (
       return { classHash: "0x7ce", transactionHash: "0x7cd" };
     },
   } as unknown as RuntimeRpc;
-  const handler = createMessageHandler(walletStub(connected), "extension-id", {
+  const handler = createMessageHandler(walletStub(connected), testExtension, {
     approvals,
     preferencesStore: unavailablePreferencesStore,
     runtimeRpc: rpc,
@@ -370,7 +371,7 @@ const makeThrowingSignHarness = () => {
       throw new WalletError("device rejected the declare");
     },
   };
-  const handler = createMessageHandler(wallet, "extension-id", {
+  const handler = createMessageHandler(wallet, testExtension, {
     approvals,
     preferencesStore: unavailablePreferencesStore,
     runtimeRpc: rpc,

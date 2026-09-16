@@ -38,7 +38,11 @@ import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { strk20AccountContext } from "../privacy/strk20-account-context";
 import { readAddInvokeTransactionInput } from "../routing/message-inputs";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -62,7 +66,7 @@ export type ProviderOpsDeps = {
    */
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
   /**
    * Optional panel round-trip queue for keyless Ledger accounts. Production
@@ -128,6 +132,8 @@ export const queueInvokeApproval = async (
   >,
   resolved: ResolvedOriginAccount,
   input: {
+    /** Background-authored only; provider message input never supplies it. */
+    readonly activitySummary?: string;
     readonly calls: readonly Call[];
     readonly origin: string;
     readonly proof?: ApprovalPayload["proof"];
@@ -148,8 +154,10 @@ export const queueInvokeApproval = async (
     return refusal;
   }
   const approval = deps.approvals.requestInvoke({
+    ...(input.activitySummary === undefined ? {} : { activitySummary: input.activitySummary }),
     calls: input.calls,
     context: await createApprovalContext(resolved.account, {
+      ...(input.activitySummary === undefined ? {} : { activitySummary: input.activitySummary }),
       calls: input.calls,
       ...(input.proof === undefined ? {} : { proof: input.proof }),
     }),
@@ -200,11 +208,11 @@ const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
 // origin: a claimed-origin mismatch or a blocklisted origin yields the error
 // response, otherwise null so the caller proceeds.
 const gateDappOrigin = (
-  deps: Pick<ProviderOpsDeps, "extensionId" | "guard">,
+  deps: Pick<ProviderOpsDeps, "extension" | "guard">,
   sender: RuntimeSender | undefined,
   origin: string,
 ): { readonly error: string } | null => {
-  if (!isClaimedSenderOrigin(sender, deps.extensionId, origin)) {
+  if (!isClaimedSenderOrigin(sender, deps.extension, origin)) {
     return { error: "sender origin mismatch" };
   }
   if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(origin)) {
@@ -224,7 +232,7 @@ const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) =
   if (!input) {
     return { error: "invalid permissions request" };
   }
-  if (!isClaimedSenderOrigin(sender, deps.extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
@@ -233,7 +241,9 @@ const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) =
   // Peek, never renew: a permission query is a passive read a page can issue on
   // a timer, so it must not extend the unlock lifetime.
   const passphrase = deps.session.peekPassphrase();
+  const authorized = captureSessionAuthorization(deps.session);
   const granted = passphrase ? await deps.wallet.getGrantedAccounts(input.origin, passphrase) : [];
+  if (passphrase && !authorized.isCurrent()) return { error: "wallet locked" };
   return { ok: true, permissions: granted.length > 0 ? ["accounts"] : [] };
 };
 
@@ -436,7 +446,9 @@ export const executeInvokeApproval = async (
       hash: result.transactionHash,
       kind: "invoke",
       networkId: account.networkId,
-      summary: `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
+      summary:
+        approval.payload.activitySummary ??
+        `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
     });
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {

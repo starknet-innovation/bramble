@@ -15,11 +15,15 @@ import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { API_VERSION_PATTERN } from "@bramble/wallet-protocol/results";
 import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@bramble/wallet-protocol/versions";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { PassiveUnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 
 /**
  * Re-exported from the single-source versions module so callers importing them
@@ -31,7 +35,7 @@ export { SUPPORTED_SPECS, SUPPORTED_WALLET_API };
  * Dependencies shared by the read-only discovery operation handlers.
  */
 export type DiscoveryOpsDeps = {
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
@@ -93,12 +97,12 @@ const handleSupportedVersions: DiscoveryOpsHandler = async (_deps, messageType, 
 };
 
 const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, message, sender) => {
-  const { extensionId, preferencesStore, runtimeRpc, session, wallet } = deps;
+  const { extension, preferencesStore, runtimeRpc, session, wallet } = deps;
   const input = readDiscoveryInput(message, "wallet.deploymentData");
   if (!input) {
     return { error: "invalid deployment data request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
@@ -107,12 +111,14 @@ const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, mes
   if (!apiVersionSupported(input.apiVersion)) {
     return { error: "unsupported api version" };
   }
+  const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     return { error: "origin not connected" };
@@ -122,6 +128,7 @@ const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, mes
     accountAddress: account.address,
     rpcUrls: networkRpcUrls(network, preferences),
   });
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   if (deployed) {
     return { error: "account already deployed" };
   }

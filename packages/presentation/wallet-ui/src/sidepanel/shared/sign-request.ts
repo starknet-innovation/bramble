@@ -71,6 +71,21 @@ export const SIGN_REQUEST_STYLES = `
 export const SIGN_REQUEST_UNCLASSIFIED_WARNING =
   "This wallet could not work out which parts of this message would actually be signed, so it will not offer to sign it. Deny this request and ask the site to send a standard SNIP-12 message.";
 
+/** Warning for the SNIP-9 capability shape used to authorize later calls. */
+export const OUTSIDE_EXECUTION_WARNING =
+  "This is an OutsideExecution capability. The site or another authorized caller may submit its signed calls later, without another wallet prompt, until the signed authorization expires.";
+
+/**
+ * Returns capability warnings derived only from explicit typed-data fields.
+ * Unknown payloads receive no guessed classification; `OutsideExecution` is
+ * warned because that standard authorizes later transaction execution rather
+ * than merely proving account ownership.
+ */
+export const signRequestWarnings = (typedData: unknown): readonly string[] =>
+  isRecord(typedData) && typedData["primaryType"] === "OutsideExecution"
+    ? [OUTSIDE_EXECUTION_WARNING]
+    : [];
+
 /**
  * A rendered sign request: the card body, and whether every value in the
  * payload could be placed as covered or not covered by the signed hash. A caller

@@ -8,7 +8,7 @@ import { walletErrorMessage } from "@bramble/core/errors";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
-import { typedDataHash } from "@bramble/starknet/typed-data";
+import { typedDataHashForChain } from "@bramble/starknet/typed-data";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
@@ -28,7 +28,11 @@ import {
   readSignTypedDataInput,
   readSwitchChainInput,
 } from "../routing/message-inputs";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import {
   type ActiveStateCoordinator,
   runActiveStateMutation,
@@ -47,7 +51,7 @@ import {
 export type ChainOpsDeps = {
   readonly activeStateCoordinator?: ActiveStateCoordinator;
   readonly approvals: ApprovalQueue;
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
   /**
    * Panel round-trip queue for keyless Ledger accounts. Optional so partial
@@ -98,6 +102,7 @@ export const executeSignApproval = async (
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, session, wallet } = deps;
   const passphrase = session.peekPassphrase();
+  const authorized = captureSessionAuthorization(session);
   if (!passphrase) {
     return { error: "wallet locked" };
   }
@@ -106,6 +111,7 @@ export const executeSignApproval = async (
     return { error: "approval context changed" };
   }
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   const account = input.context
     ? granted.find(
         (stored) =>
@@ -119,7 +125,11 @@ export const executeSignApproval = async (
   }
   let messageHash: string;
   try {
-    messageHash = typedDataHash(input.typedData, account.address);
+    messageHash = typedDataHashForChain(
+      input.typedData,
+      account.address,
+      STARKNET_NETWORKS[account.networkId].chainId,
+    );
   } catch {
     return { error: "invalid typed data" };
   }
@@ -148,12 +158,12 @@ type ChainOpsHandler = (
 ) => Promise<RuntimeResponse>;
 
 const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
+  const { approvals, extension, preferencesStore, session, waiters, wallet } = deps;
   const input = readSignTypedDataInput(message);
   if (!input) {
     return { error: "invalid sign typed data request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   // A blocklisted origin gets no signing prompt even if it still holds an old
@@ -185,7 +195,11 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
     return { error: "origin not connected" };
   }
   try {
-    typedDataHash(input.typedData, account.address);
+    typedDataHashForChain(
+      input.typedData,
+      account.address,
+      STARKNET_NETWORKS[account.networkId].chainId,
+    );
   } catch {
     return { error: "invalid typed data" };
   }
@@ -214,12 +228,12 @@ const handleGetChainId: ChainOpsHandler = async (deps, message) => {
 };
 
 const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, extensionId, session, waiters, wallet } = deps;
+  const { approvals, extension, session, waiters, wallet } = deps;
   const input = readSwitchChainInput(message);
   if (!input) {
     return { error: "invalid switch chain request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   // Fail closed on a blocklisted origin before surfacing a switch prompt, even
