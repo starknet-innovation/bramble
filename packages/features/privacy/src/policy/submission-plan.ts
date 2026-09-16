@@ -15,6 +15,19 @@ export type Strk20PrivateRelayPlan = {
     readonly token: string;
     readonly type: "withdraw";
   };
+  /**
+   * Independently derived bound the quoted fee was accepted under, frozen here
+   * so submission re-checks the same number the user reviewed rather than
+   * re-deriving one from a price that has since moved.
+   *
+   * Present only on a converted (non-STRK) fee token. The STRK route matches
+   * the quote exactly against the pool's on-chain charge, so it carries no
+   * band and leaves this absent.
+   */
+  readonly feeCeiling?: {
+    readonly ceiling: string;
+    readonly reference: string;
+  };
   readonly mode?: "private-relay";
   readonly typedData?: unknown;
 };

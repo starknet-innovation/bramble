@@ -15,7 +15,12 @@ import {
   createUnlockSession,
   type UnlockSessionMirrorEntry,
 } from "../../apps/extension/src/background/runtime/session";
-import { createWallet, extensionSender, vaultPassphrase } from "../support/background-wallet-stub";
+import {
+  createWallet,
+  extensionSender,
+  testExtension,
+  vaultPassphrase,
+} from "../support/background-wallet-stub";
 
 const TTL_MS = 1_000;
 const NOW = 1_000;
@@ -240,7 +245,7 @@ describe("unlock session mirror clear", () => {
 
 describe("wallet.lock", () => {
   const makeHandler = (session: ReturnType<typeof createUnlockSession>) =>
-    createMessageHandler(createWallet(), "extension-id", { session });
+    createMessageHandler(createWallet(), testExtension, { session });
 
   test("does not report a lock it could not complete", async () => {
     const mirror = brittleMirror({ clearFailures: Number.POSITIVE_INFINITY, saveFails: true });

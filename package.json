@@ -1,6 +1,6 @@
 {
   "name": "bramble",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -11,6 +11,8 @@
   ],
   "scripts": {
     "build": "bun run --filter @bramble/extension build",
+    "build:firefox": "bun run --filter @bramble/extension build:firefox",
+    "build:all": "bun run --filter @bramble/extension build:all",
     "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
     "check:audit": "bun audit --audit-level=high",
     "check:coverage": "bun run scripts/check-coverage.ts",
@@ -30,6 +32,7 @@
     "dev:session": "bun run tests/e2e/dev-session.ts",
     "format": "biome check --write .",
     "package:extension": "bun run scripts/package-extension.ts",
+    "package:extension:firefox": "bun run scripts/package-extension.ts --target=firefox",
     "release:publish": "bun run scripts/publish-chrome-web-store.ts",
     "test": "bun test ./tests",
     "test:e2e": "playwright test",

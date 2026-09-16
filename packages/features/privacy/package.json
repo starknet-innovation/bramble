@@ -6,6 +6,8 @@
   "exports": {
     "./call-set-signer": "./src/policy/call-set-signer.ts",
     "./config": "./src/config.ts",
+    "./fee-bound": "./src/paymaster/fee-bound.ts",
+    "./fee-policy": "./src/policy/fee-policy.ts",
     "./maturity": "./src/policy/maturity.ts",
     "./maturity-store": "./src/policy/maturity-store.ts",
     "./official-sdk-budget": "./src/sdk/official-sdk-budget.ts",

@@ -9,7 +9,10 @@
 
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { walletEventBroadcasts } from "../../../apps/extension/src/background/runtime/events";
+import {
+  announcesApprovalsChange,
+  walletEventBroadcasts,
+} from "../../../apps/extension/src/background/runtime/events";
 
 const MAIN_CHAIN_ID = "0x534e5f4d41494e";
 const accountsChanged = { event: "accountsChanged", type: "wallet.event" } as const;
@@ -189,5 +192,31 @@ describe("walletEventBroadcasts", () => {
     expect(walletEventBroadcasts({ type: "wallet.unlock" }, { hasVault: true })).toEqual([
       accountsChanged,
     ]);
+  });
+});
+
+// The toolbar badge mirrors the queue size, and approve/deny clear entries
+// through `claim` rather than the enqueue notifier — their only signal is this
+// broadcast. Without watching it, denying a request left a badge reading "1"
+// over an empty queue.
+describe("approval queue change announcements", () => {
+  test("reports a queue change for an approval decision", () => {
+    expect(
+      announcesApprovalsChange(
+        walletEventBroadcasts({ id: "a", type: "wallet.approveOrigin" }, { ok: true }),
+      ),
+    ).toBe(true);
+    expect(
+      announcesApprovalsChange(
+        walletEventBroadcasts({ id: "a", type: "wallet.denyOrigin" }, { ok: true }),
+      ),
+    ).toBe(true);
+  });
+
+  test("reports no queue change for an unrelated broadcast", () => {
+    expect(announcesApprovalsChange([])).toBe(false);
+    expect(
+      announcesApprovalsChange([{ chainId: "0x1", event: "networkChanged", type: "wallet.event" }]),
+    ).toBe(false);
   });
 });

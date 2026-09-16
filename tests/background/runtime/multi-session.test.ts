@@ -14,6 +14,7 @@ import {
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const ORIGIN_A = "https://a.test";
 const ORIGIN_B = "https://b.test";
@@ -89,7 +90,7 @@ const wallet = {
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
-  return createMessageHandler(wallet, "extension-id", { session });
+  return createMessageHandler(wallet, testExtension, { session });
 };
 
 describe("multi-session grants", () => {

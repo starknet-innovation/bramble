@@ -13,7 +13,7 @@ import { createMessageHandler } from "../../apps/extension/src/background/routin
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
-
+import { testExtension } from "./background-wallet-stub";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
 
 export const invokeAccount: AccountRef = {
@@ -128,7 +128,7 @@ export const makeInvokeHarness = (
     runtimeRpc: rpc,
     session,
   };
-  const handler = createMessageHandler(invokeWalletStub(connected), "extension-id", options);
+  const handler = createMessageHandler(invokeWalletStub(connected), testExtension, options);
   return { activity, handler, invoked, session };
 };
 

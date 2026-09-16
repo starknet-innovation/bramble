@@ -16,6 +16,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { executeSignApproval } from "../../../apps/extension/src/background/transactions/chain-ops";
+import { chromiumExtension } from "../../support/background-wallet-stub";
 import { flushHeld, waitForPendingApprovals } from "../../support/held";
 
 const PASSPHRASE = "correct horse battery staple";
@@ -101,7 +102,7 @@ const makeHandler = () => {
   setApprovalNotifier(() => undefined);
   const session = createUnlockSession();
   session.unlock(PASSPHRASE);
-  return createMessageHandler(wallet, "ext", { session });
+  return createMessageHandler(wallet, chromiumExtension("ext"), { session });
 };
 
 const signMessage = {
@@ -184,7 +185,7 @@ describe("signTypedData approval gate", () => {
     };
     const session = createUnlockSession();
     session.unlock(PASSPHRASE);
-    const handler = createMessageHandler(lonely, "ext", { session });
+    const handler = createMessageHandler(lonely, chromiumExtension("ext"), { session });
     expect(await handler(signMessage, content)).toEqual({ error: "origin not connected" });
   });
 
@@ -233,7 +234,7 @@ describe("signTypedData approval gate", () => {
     setApprovalNotifier(() => undefined);
     const session = createUnlockSession();
     session.unlock(PASSPHRASE);
-    const handler = createMessageHandler(ledgerWallet, "ext", {
+    const handler = createMessageHandler(ledgerWallet, chromiumExtension("ext"), {
       ledgerSignQueue: wrongKeyQueue,
       session,
     });

@@ -263,7 +263,7 @@ describe("STRK20 paymaster submission boundary", () => {
         approveCalls: [],
         chainId,
         config,
-        expectedFeeAmount: 5n,
+        feeBound: { amount: 5n, kind: "exact" as const },
         http,
         nowSeconds: 2,
         poolAddress: "0x2",
