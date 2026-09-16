@@ -22,6 +22,8 @@ export type { ApprovalKind } from "@bramble/wallet-protocol/extension-responses"
  */
 export type ApprovalPayload = {
   readonly actions?: readonly Strk20Action[];
+  /** Trusted background-authored summary for the submitted activity entry. */
+  readonly activitySummary?: string;
   readonly calls?: readonly Call[];
   readonly chain?: ProviderChain;
   readonly chainId?: string;
@@ -70,6 +72,9 @@ const readInvoke: PayloadReader = (approval) =>
     ? null
     : {
         calls: approval.calls.map(cloneApprovalCall),
+        ...(approval.activitySummary === undefined
+          ? {}
+          : { activitySummary: approval.activitySummary }),
         ...(approval.proof === undefined ? {} : { proof: cloneApprovalValue(approval.proof) }),
       };
 

@@ -39,7 +39,7 @@ export type AddChainOpsDeps = {
  * Parses a `wallet.addStarknetChain` runtime message crossed from the content
  * bridge, re-validating the chain descriptor and normalizing the origin.
  */
-const readAddStarknetChainInput = (
+export const readAddStarknetChainInput = (
   message: unknown,
 ): { readonly chain: ProviderChain; readonly origin: string } | null => {
   if (

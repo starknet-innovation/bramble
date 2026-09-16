@@ -3,9 +3,14 @@
  * mapping, and the origin-gated background signing path.
  */
 import { describe, expect, test } from "bun:test";
-import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
+import {
+  isTypedDataShape,
+  typedDataHash,
+  typedDataHashForChain,
+} from "@bramble/starknet/typed-data";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import {
   readProviderRequestArguments,
   toProviderPayload,
@@ -71,6 +76,33 @@ describe("typed data hashing", () => {
   test("rejects unhashable typed data", () => {
     expect(() => typedDataHash({ ...typedData, types: {} }, account.address)).toThrow();
     expect(() => typedDataHash(null, account.address)).toThrow("Invalid typed data");
+  });
+
+  test("binds dapp signing to the active chain", () => {
+    const mainnetHash = typedDataHashForChain(
+      typedData,
+      account.address,
+      STARKNET_NETWORKS.SN_MAIN.chainId,
+    );
+    expect(mainnetHash).toBe(typedDataHash(typedData, account.address));
+    expect(() =>
+      typedDataHashForChain(typedData, account.address, STARKNET_NETWORKS.SN_SEPOLIA.chainId),
+    ).toThrow("active network");
+  });
+
+  test("refuses a typed-data domain with no signed chain id", () => {
+    const chainless = {
+      ...typedData,
+      domain: { name: "Bramble Test", revision: "1", version: "1" },
+      types: {
+        ...typedData.types,
+        StarknetDomain: typedData.types.StarknetDomain.filter((field) => field.name !== "chainId"),
+      },
+    };
+    expect(isTypedDataShape(chainless)).toBe(true);
+    expect(() =>
+      typedDataHashForChain(chainless, account.address, STARKNET_NETWORKS.SN_MAIN.chainId),
+    ).toThrow("active network");
   });
 });
 

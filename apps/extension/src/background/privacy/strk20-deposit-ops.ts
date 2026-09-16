@@ -9,6 +9,7 @@
  * the executable batch. Privileged; never enters the dapp bridge.
  */
 
+import { WalletError } from "@bramble/core/errors";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
 import {
   prepareStrk20AccountActions,
@@ -130,7 +131,7 @@ const depositPreparationWork = async (
             recipient,
           );
           if (currentRegistrationError !== null) {
-            throw new Error(currentRegistrationError);
+            throw new WalletError(currentRegistrationError);
           }
         }),
       poolFeeFri: plan.poolFeeFri,

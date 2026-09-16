@@ -1,3 +1,5 @@
+import { hash } from "starknet";
+import { PRIVATE_SWAP_FEE_TOKEN, PRIVACY_POOL_ADDRESS } from "../../../shared/privacy";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiRequest, ApiResponse } from "../../../api/_lib/http";
 import { authorizeOrigin, serviceUrl } from "../../../api/_lib/security";
@@ -75,7 +77,9 @@ describe("privacy gateway security configuration", () => {
     const target = response();
     expect(
       authorizeOrigin(
-        { headers: { origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop" } } as ApiRequest,
+        {
+          headers: { origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop" },
+        } as ApiRequest,
         target.value,
         "extension",
       ),
@@ -204,14 +208,15 @@ describe("privacy gateway security configuration", () => {
     process.env.STRK20_DISCOVERY_UPSTREAM = "https://private.example";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        new Response("{}", {
-          headers: {
-            "content-length": String(8 * 1024 * 1024 + 1),
-            "content-type": "application/json",
-          },
-          status: 200,
-        }),
+      vi.fn(
+        async () =>
+          new Response("{}", {
+            headers: {
+              "content-length": String(8 * 1024 * 1024 + 1),
+              "content-type": "application/json",
+            },
+            status: 200,
+          }),
       ),
     );
     const target = response();
@@ -225,5 +230,88 @@ describe("privacy gateway security configuration", () => {
     );
     expect(target.statusCode()).toBe(502);
     expect(target.body()).toEqual({ error: "upstream_response_too_large" });
+  });
+});
+
+describe("paymaster gateway capability", () => {
+  const transaction = () => ({
+    type: "apply_action",
+    apply_action: {
+      apply_actions_call: {
+        to: PRIVACY_POOL_ADDRESS,
+        selector: hash.getSelectorFromName("apply_actions"),
+        calldata: ["0x1"],
+      },
+      proof: "proof",
+      proof_facts: ["0x1"],
+    },
+  });
+  const requestFor = (value: unknown): ApiRequest =>
+    ({
+      headers: {
+        origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+        "content-type": "application/json",
+      },
+      method: "POST",
+      query: { service: "paymaster" },
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "paymaster_executeTransaction",
+            params: {
+              transaction: value,
+              parameters: {
+                version: "0x1",
+                fee_mode: { mode: "sponsored_private", pool_fee_token: PRIVATE_SWAP_FEE_TOKEN },
+              },
+            },
+          }),
+        );
+      },
+    }) as unknown as ApiRequest;
+
+  it.each(["type", "extra call", "selector"])(
+    "rejects a substituted %s before using the upstream credential",
+    async (field) => {
+      process.env.BRAMBLE_EXTENSION_ORIGINS = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+      const valid = transaction();
+      const bad =
+        field === "type"
+          ? { ...valid, type: "invoke_and_apply_action" }
+          : field === "extra call"
+            ? { ...valid, invoke: { calls: [] } }
+            : {
+                ...valid,
+                apply_action: {
+                  ...valid.apply_action,
+                  apply_actions_call: {
+                    ...valid.apply_action.apply_actions_call,
+                    selector: hash.getSelectorFromName("upgrade"),
+                  },
+                },
+              };
+      const fetch = vi.fn(
+        async () => new Response("{}", { headers: { "content-type": "application/json" } }),
+      );
+      vi.stubGlobal("fetch", fetch);
+      const target = response();
+      await gatewayHandler(requestFor(bad), target.value);
+      expect(target.statusCode()).toBe(400);
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it("forwards the SDK's pool apply_actions envelope", async () => {
+    process.env.BRAMBLE_EXTENSION_ORIGINS = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+    const fetch = vi.fn(
+      async () => new Response("{}", { headers: { "content-type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const target = response();
+    await gatewayHandler(requestFor(transaction()), target.value);
+    expect(target.statusCode()).toBe(200);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });

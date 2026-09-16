@@ -7,6 +7,7 @@
  * No SDK private-state operation, protected signing, or proving happens before
  * this boundary.
  */
+
 import { WalletError } from "@bramble/core/errors";
 import type { PreparedStrk20AccountSubmission } from "@bramble/privacy/service";
 import {
@@ -32,6 +33,7 @@ import type { ApprovalQueue } from "../approvals/approvals";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
+import { resolveOriginAccount } from "../provider/provider-grant";
 import { queueInvokeApproval, type ResolvedOriginAccount } from "../provider/provider-ops";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
@@ -39,6 +41,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { PassiveUnlockSession } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { strk20AccountContext, strk20ServiceForRuntime } from "./strk20-account-context";
+import { STRK20_REGISTRATION_SUMMARY } from "./strk20-activity";
 import type { Strk20DisclosureRequest } from "./strk20-approval-types";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
 import {
@@ -90,11 +93,13 @@ const deferPreparedPublicInvoke = async (
         readonly resolved: ResolvedOriginAccount;
       }
     | { readonly error: string },
+  activitySummary?: string,
 ): Promise<
   DeferredStrk20Approval | { readonly status: "reject"; readonly response: RuntimeResponse }
 > => {
   if ("error" in prepared) return { response: prepared, status: "reject" };
   const queued = await queueInvokeApproval(deps, prepared.resolved, {
+    ...(activitySummary === undefined ? {} : { activitySummary }),
     calls: prepared.prepared.calls,
     origin: approval.origin,
     proof: prepared.prepared.proof,
@@ -148,6 +153,7 @@ export const stageApprovedStrk20Registration = async (
       origin: approval.origin,
       request: payload.strk20Request,
     }),
+    STRK20_REGISTRATION_SUMMARY,
   );
 };
 
@@ -316,31 +322,19 @@ export const resolveAccount = async (
   origin: string,
   expected?: ApprovalContext,
 ): Promise<ResolvedAccount | { readonly error: string }> => {
-  const passphrase = deps.session.peekPassphrase();
-  if (!passphrase) {
-    return { error: "wallet locked" };
-  }
-  const preferences = await deps.preferencesStore.read();
-  if (expected && preferences.activeNetworkId !== expected.networkId) {
-    return { error: "approval context changed" };
-  }
-  const granted = await deps.wallet.getGrantedAccounts(origin, passphrase);
-  const account = expected
-    ? granted.find(
-        (stored) =>
-          stored.id === expected.accountId &&
-          stored.networkId === expected.networkId &&
-          stored.networkId === preferences.activeNetworkId,
-      )
-    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
+  const resolved = await resolveOriginAccount(
+    {
+      preferencesStore: deps.preferencesStore,
+      session: deps.session,
+      wallet: deps.wallet,
+    },
+    origin,
+    expected,
+  );
+  if ("error" in resolved) return resolved;
   return {
-    account,
-    passphrase,
-    preferences,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+    ...resolved,
+    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[resolved.account.networkId], resolved.preferences),
   };
 };
 

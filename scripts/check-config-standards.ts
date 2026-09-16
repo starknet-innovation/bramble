@@ -64,6 +64,7 @@ if (
     "devDependencies",
     "license",
     "name",
+    "overrides",
     "packageManager",
     "private",
     "scripts",
@@ -73,6 +74,17 @@ if (
   ])
 ) {
   failures.push("package.json top-level keys must stay explicit");
+}
+
+// Reviewed security pins for transitive dependencies used by build/terminal tooling.
+const overrides = packageJson["overrides"];
+if (
+  !isRecord(overrides) ||
+  !hasOnlyKeys(overrides, ["qs", "sharp"]) ||
+  overrides["qs"] !== "6.16.0" ||
+  overrides["sharp"] !== "0.35.4"
+) {
+  failures.push("package.json must retain the reviewed security overrides");
 }
 
 if (!hasOnlyKeys(tsconfigJson, ["compilerOptions", "include"])) {

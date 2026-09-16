@@ -8,7 +8,7 @@ import { walletErrorMessage } from "@bramble/core/errors";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
-import { typedDataHash } from "@bramble/starknet/typed-data";
+import { typedDataHashForChain } from "@bramble/starknet/typed-data";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
@@ -102,6 +102,7 @@ export const executeSignApproval = async (
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, session, wallet } = deps;
   const passphrase = session.peekPassphrase();
+  const authorized = captureSessionAuthorization(session);
   if (!passphrase) {
     return { error: "wallet locked" };
   }
@@ -110,6 +111,7 @@ export const executeSignApproval = async (
     return { error: "approval context changed" };
   }
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   const account = input.context
     ? granted.find(
         (stored) =>
@@ -123,7 +125,11 @@ export const executeSignApproval = async (
   }
   let messageHash: string;
   try {
-    messageHash = typedDataHash(input.typedData, account.address);
+    messageHash = typedDataHashForChain(
+      input.typedData,
+      account.address,
+      STARKNET_NETWORKS[account.networkId].chainId,
+    );
   } catch {
     return { error: "invalid typed data" };
   }
@@ -189,7 +195,11 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
     return { error: "origin not connected" };
   }
   try {
-    typedDataHash(input.typedData, account.address);
+    typedDataHashForChain(
+      input.typedData,
+      account.address,
+      STARKNET_NETWORKS[account.networkId].chainId,
+    );
   } catch {
     return { error: "invalid typed data" };
   }

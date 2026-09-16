@@ -104,6 +104,22 @@ describe("wallet.addToken spam handling", () => {
     expect(stored?.symbol).toBe("USDC");
   });
 
+  test("falls back to the symbol when metadata carries Unicode spoofing", async () => {
+    const { deps, preferencesStore } = makeDeps({
+      decimals: 6,
+      name: "USD‮⁦Coin",
+      symbol: "usdc",
+    });
+
+    await handleTokenOps(deps, "wallet.addToken", {
+      address: USDC,
+      type: "wallet.addToken",
+    });
+
+    const stored = (await preferencesStore.read()).tokens.find((token) => token.address === USDC);
+    expect(stored?.name).toBe("USDC");
+  });
+
   test("adds a symbol-spoofing token but hides it by default", async () => {
     const { deps, preferencesStore } = makeDeps({
       decimals: 6,

@@ -281,9 +281,11 @@ describe("createApprovalQueue payload discrimination", () => {
     const payload = queue.payload(id);
 
     expect(payload).toEqual({ calls });
+    expect(queue.get(id)?.callReviews).toEqual(calls);
     // The reconstructed calldata is a fresh array, not the caller's reference.
     (payload?.calls?.[0]?.calldata as string[])[0] = "0xdead";
     expect(queue.payload(id)).toEqual({ calls });
+    expect(queue.get(id)?.callReviews).toEqual(calls);
   });
 });
 

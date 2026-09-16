@@ -8,6 +8,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { Strk20Action, Strk20WithdrawAction } from "../privacy/strk20";
 import type { FeeEstimate } from "../transactions/fee-estimate";
+import type { ProviderInvokeCall } from "../transactions/invoke";
 
 /**
  * Every approval kind that may cross the background-to-UI boundary.
@@ -87,6 +88,8 @@ export type ApprovalReviewAsset = {
 export type PendingApproval = {
   readonly actionReviews?: readonly Strk20Action[];
   readonly blocked?: boolean;
+  /** Exact, display-only invoke calls retained beside decoded summaries. */
+  readonly callReviews?: readonly ProviderInvokeCall[];
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
   readonly fee?: FeeEstimate | null;

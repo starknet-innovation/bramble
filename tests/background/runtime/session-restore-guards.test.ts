@@ -196,3 +196,36 @@ describe("unlock session restore after an unprovable erase", () => {
     expect(state as UnlockSessionMirrorEntry | null).toEqual({ revoked: true });
   });
 });
+
+for (const replacement of [false, true]) {
+  test(`a delayed restore cannot replace a newer session boundary (${replacement})`, async () => {
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const store = memoryStore();
+    await store.save({ expiresAt: 100_000, passphrase: PASSPHRASE });
+    let first = true;
+    const session = createUnlockSession({
+      now: () => 1_000,
+      store: {
+        ...store,
+        async load() {
+          const snapshot = await store.load();
+          if (first) {
+            first = false;
+            entered.resolve();
+            await release.promise;
+          }
+          return snapshot;
+        },
+      },
+    });
+    const pending = session.restore();
+    await entered.promise;
+    session.lock();
+    if (replacement) session.unlock("a different secure passphrase");
+    await session.mirrorCleared();
+    release.resolve();
+    await pending;
+    expect(session.peekPassphrase()).toBe(replacement ? "a different secure passphrase" : null);
+  });
+}

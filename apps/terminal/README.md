@@ -38,12 +38,20 @@ holds that request for an explicit review and binds it to the origin, account,
 network, configured pool, tracked token, and payload digest before submitting
 the public one-time transaction.
 
-AVNU private swap is deliberately split:
+AVNU private swaps are currently unavailable pending independent verification of the
+executor deployment. `shared/privacy.ts` holds a null `PRIVATE_SWAP_EXECUTOR` anchor;
+the client and server refuse route planning while it is unset. Enabling this path
+requires a reviewed mainnet address, source/deployment provenance and upgrade-authority
+assessment committed with the pin. A quote response is not an independent source for it.
+Core private balances, shield, withdraw and private transfers are unaffected.
+
+Once a reviewed executor is pinned, the AVNU private-swap flow is split:
 
 1. A same-origin server function asks the pinned AVNU SDK for the exact private
    route and paymaster fee. The browser receives a bounded action plan and
-   independently validates it.
-2. The Terminal shows sell amount, expected buy amount, slippage, executor,
+   independently validates it, including exactly two embedded calls, their spender,
+   amounts, tokens, beneficiary and enforced minimum output.
+2. The Terminal shows sell amount, expected and minimum buy amounts, slippage, executor,
    pool fee, and action count.
 3. Bramble independently validates the actions, checks private balances and
    privacy-leak warnings, asks for approval, and generates the proof.
@@ -71,10 +79,12 @@ Never prefix upstream URLs or the paymaster key with `VITE_`; Vite variables
 are browser-readable. The public gateway URL is visible by design, while the
 upstream discovery/prover URLs stay server-side.
 
-`BRAMBLE_EXTENSION_ORIGINS` accepts only exact Chrome extension origins. This
-blocks other browser origins but is not cryptographic build attestation: a
-standalone HTTP client can spoof an Origin header, and no secret can safely be
-embedded in an extension. Production must additionally apply Vercel Firewall
+`BRAMBLE_EXTENSION_ORIGINS` accepts only exact Chrome extension origins for the
+CORS allowlist. Browser-stamped privileged extension fetches are also accepted,
+including originless GETs, independently of that allowlist. This excludes normal
+website fetches but does not identify a particular extension build: another
+extension can use the privileged shape, and a standalone HTTP client can spoof
+headers. No secret can safely be embedded in an extension. Production must additionally apply Vercel Firewall
 rate limits and abuse controls to `/api/strk20/*` and
 `/api/private-swap/*`. The code intentionally does not pretend an in-memory
 serverless counter is durable protection.
