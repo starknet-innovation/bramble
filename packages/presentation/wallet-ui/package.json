@@ -24,7 +24,7 @@
     "@bramble/ui-kit": "workspace:*",
     "@bramble/wallet-model": "workspace:*",
     "@bramble/wallet-protocol": "workspace:*",
-    "starknet": "10.8.0"
+    "starknet": "10.0.2"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "20.14.3",
