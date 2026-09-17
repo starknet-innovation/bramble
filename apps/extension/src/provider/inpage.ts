@@ -15,6 +15,7 @@ import {
 import { createProviderEventHub, readProviderEvent } from "@bramble/wallet-protocol/events";
 import { isHexChainId } from "@bramble/wallet-protocol/results";
 import { invalidRequestPayload } from "@bramble/wallet-protocol/rpc-errors";
+import { WALLET_ICON } from "./wallet-icon";
 
 type PendingRequest = {
   readonly reject: (error: Error) => void;
@@ -43,11 +44,6 @@ declare global {
     };
   }
 }
-
-// Inline data-URI icon so get-starknet/starknetkit wallet lists can render a
-// mark without any external network request (the CSP blocks remote assets).
-const WALLET_ICON =
-  "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2032%2032'%3E%3Crect%20width%3D'32'%20height%3D'32'%20rx%3D'8'%20fill%3D'%236c5ce7'%2F%3E%3Cpath%20d%3D'M8%2023V9l8%209%208-9v14'%20fill%3D'none'%20stroke%3D'%23f5f6ff'%20stroke-width%3D'2.5'%20stroke-linejoin%3D'round'%20stroke-linecap%3D'round'%2F%3E%3C%2Fsvg%3E";
 
 const pending = new Map<string, PendingRequest>();
 const events = createProviderEventHub();
