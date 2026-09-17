@@ -120,9 +120,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       id: string,
       approved: boolean,
       reviewedFee?: PendingApproval["fee"],
+      reviewedAccountId?: string,
     ): Promise<void> {
       const response = await sendMessage({
         id,
+        ...(approved && reviewedAccountId ? { reviewedAccountId } : {}),
         ...(approved && reviewedFee ? { reviewedFee } : {}),
         type: approved ? "wallet.approveOrigin" : "wallet.denyOrigin",
       });
