@@ -416,6 +416,12 @@ const ciCommands = [
   "bun run build",
   "bun run test:e2e",
   "bun run package:extension",
+  // The Gecko artifact is built, packaged and validated in the same job. Its
+  // linter wraps the validator addons.mozilla.org runs at submission, so an
+  // add-on that would be rejected there fails here instead — which is how the
+  // wrong-browser artifact reached AMO once already.
+  "bun run package:extension:firefox",
+  "bun run check:firefox",
 ];
 const ciLines = ciWorkflow.split("\n").map((line) => line.trim());
 let previousCiCommand = -1;

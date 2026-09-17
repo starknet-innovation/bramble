@@ -269,6 +269,11 @@ jobs:
       - run: bun run build
       - run: bun run test:e2e
       - run: bun run package:extension
+      - run: bun run package:extension:firefox
+      # Mozilla's own validator, the one addons.mozilla.org runs at submission.
+      # Fails on AMO errors; the manifest's warning-class regressions are held
+      # by tests/scripts/firefox-manifest.test.ts, which runs in `check` above.
+      - run: bun run check:firefox
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bramble-extension
