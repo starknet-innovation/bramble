@@ -3,6 +3,8 @@
   "name": "Bramble: Starknet Wallet",
   "version": "0.10.3",
   "description": "Self-custodial Starknet wallet with private balances, Ledger and multisig support.",
+  "author": "Starknet Holdings",
+  "homepage_url": "https://bramble.fi",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
