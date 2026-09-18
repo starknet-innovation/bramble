@@ -235,6 +235,9 @@ export const vaultCreationMethods = ({
     return deriveLedgerAccountRefs(kms, {
       accountContractType: input.accountContractType,
       ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+      ...(input.eip2645application === undefined
+        ? {}
+        : { eip2645application: input.eip2645application }),
       entries: input.entries,
       networkId: input.networkId,
     });

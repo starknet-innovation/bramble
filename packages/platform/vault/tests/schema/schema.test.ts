@@ -18,7 +18,7 @@ import {
   isAccountIdForNetwork,
   isKeylessAccount,
 } from "@bramble/wallet-model/accounts";
-import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { ledgerAccountPath, READY_EIP2645_APPLICATION } from "@bramble/wallet-model/ledger-path";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
 
 const account = {
@@ -183,6 +183,51 @@ describe("mnemonic-less Ledger-only vault", () => {
   test("validates a keyless Ledger vault that stores no recovery phrase", () => {
     expect(isVaultV8(ledgerOnlyVault)).toBe(true);
     expect(isKeylessAccount(ledgerAccount as AccountRef)).toBe(true);
+  });
+
+  test("admits a Ledger account restored at Ready's path when marker and path agree", () => {
+    const readyAccount = {
+      ...ledgerAccount,
+      accountContractType: "argent" as const,
+      classHash: canonicalFelt(ARGENT_ACCOUNT_CONTRACT.classHash) as string,
+      deploymentSalt: ledgerAccount.publicKeyX,
+      derivation: {
+        accountIndex: 12,
+        eip2645application: READY_EIP2645_APPLICATION,
+        kind: "ledger" as const,
+        path: ledgerAccountPath(12, READY_EIP2645_APPLICATION),
+      },
+    };
+    const readyVault = {
+      ...ledgerOnlyVault,
+      accounts: [readyAccount],
+      activeAccountId: readyAccount.id,
+    };
+    expect(isVaultV8(readyVault)).toBe(true);
+    // Bramble's marker over Ready's path, or Ready's marker over Bramble's path,
+    // would sign with a key nobody enumerated: both fail closed.
+    expect(
+      isVaultV8({
+        ...readyVault,
+        accounts: [
+          {
+            ...readyAccount,
+            derivation: { ...readyAccount.derivation, eip2645application: "LedgerW" },
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isVaultV8({
+        ...readyVault,
+        accounts: [
+          {
+            ...readyAccount,
+            derivation: { ...readyAccount.derivation, path: ledgerAccountPath(12) },
+          },
+        ],
+      }),
+    ).toBe(false);
   });
 
   test("still accepts the grandfathered legacy null-phrase seed vault", () => {

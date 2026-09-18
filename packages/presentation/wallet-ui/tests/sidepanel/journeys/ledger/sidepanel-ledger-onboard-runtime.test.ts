@@ -311,10 +311,16 @@ describe("Ledger onboarding runtime (DOM)", () => {
     expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
     expect(h.mount.querySelector('[data-add-kind="multisig"]')).not.toBeNull();
     expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
-    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(4);
+    expect(h.mount.querySelector('[data-add-kind="restore-ready-ledger"]')).not.toBeNull();
+    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(5);
 
     // One click routes: the Ledger tile opens the connect prompt directly.
     click(h.mount, '[data-add-kind="ledger"]');
+    expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
+
+    // So does the Ready restore tile; its connect prompt is the same gesture.
+    h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="restore-ready-ledger"]');
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
     // "Import an existing account" opens the phrase/key chooser; the phrase

@@ -12,9 +12,9 @@ import {
 } from "../networks/networks";
 import {
   isLedgerAccountIndex,
-  isLedgerAccountPath,
-  LEDGER_EIP2645_APPLICATION,
-  ledgerAccountIndexOfPath,
+  isLedgerAccountPathFor,
+  isLedgerEip2645Application,
+  type LedgerEip2645Application,
 } from "./ledger-path";
 
 /**
@@ -62,11 +62,12 @@ export type ImportedKeyDerivation = {
 };
 
 /**
- * Public coordinates needed to ask a Ledger to sign for an account again.
+ * Public coordinates needed to ask a Ledger to sign for an account again; the
+ * marker names the path scheme (`LedgerW` created here, `argentx` from Ready).
  */
 export type LedgerDerivation = {
   readonly accountIndex: number;
-  readonly eip2645application: string;
+  readonly eip2645application: LedgerEip2645Application;
   readonly kind: "ledger";
   readonly path: string;
 };
@@ -177,9 +178,8 @@ const isLedgerDerivation = (value: unknown): value is LedgerDerivation =>
   hasOnlyKnownKeys(value, ["accountIndex", "eip2645application", "kind", "path"]) &&
   value["kind"] === "ledger" &&
   isLedgerAccountIndex(value["accountIndex"]) &&
-  value["eip2645application"] === LEDGER_EIP2645_APPLICATION &&
-  isLedgerAccountPath(value["path"]) &&
-  ledgerAccountIndexOfPath(value["path"]) === value["accountIndex"];
+  isLedgerEip2645Application(value["eip2645application"]) &&
+  isLedgerAccountPathFor(value["path"], value["eip2645application"], value["accountIndex"]);
 
 /**
  * Returns the one minimal-hex spelling of an account id, accepting historical

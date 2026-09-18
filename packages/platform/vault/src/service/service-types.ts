@@ -15,6 +15,7 @@ import type {
   LedgerAccountRef,
   LedgerPubKeyEntry,
 } from "@bramble/wallet-model/accounts";
+import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
 import type { AccountDerivationInput } from "../accounts/accounts";
@@ -146,12 +147,14 @@ export type ImportRawKeyAccountInput = {
 /**
  * Input for storing a keyless Ledger account from a device-provided public key.
  * No key material is accepted or retained; the device signs every transaction.
+ * `eip2645application` names the path scheme the key was enumerated at
+ * (Bramble's `LedgerW` when absent, `argentx` for a Ready Ledger account).
  */
 export type AddLedgerAccountInput = {
   readonly accountContractType: AccountContractType;
   readonly accountIndex: number;
   readonly deploymentSalt?: string;
-  readonly eip2645application?: string;
+  readonly eip2645application?: LedgerEip2645Application;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
   readonly vaultPassphrase: string;
@@ -197,11 +200,14 @@ export type ForgetLedgerStrk20ViewingKeyInput = Omit<
 /**
  * Input for deriving addresses for a batch of enumerated Ledger (index, public
  * key) pairs to build the account picker. A public-key derivation only — it
- * reads no secrets and writes nothing to the vault.
+ * reads no secrets and writes nothing to the vault. `eip2645application` is
+ * the path scheme every entry was enumerated at (Bramble's `LedgerW` when
+ * absent, `argentx` when restoring Ready Ledger accounts).
  */
 export type DeriveLedgerAccountsInput = {
   readonly accountContractType: AccountContractType;
   readonly deploymentSalt?: string;
+  readonly eip2645application?: LedgerEip2645Application;
   readonly entries: readonly LedgerPubKeyEntry[];
   readonly networkId: StarknetNetworkId;
 };

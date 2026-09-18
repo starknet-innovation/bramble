@@ -81,7 +81,8 @@ const isAddKind = (value: string | undefined): value is LedgerOnboardAddKind =>
   value === "import-phrase" ||
   value === "ledger" ||
   value === "multisig" ||
-  value === "regular";
+  value === "regular" ||
+  value === "restore-ready-ledger";
 
 /**
  * Creates the DOM-bound Ledger onboarding runtime. The controller persists
@@ -190,7 +191,7 @@ export const createLedgerOnboardRuntime = (
       return ledgerDevicePicker(view.devices);
     }
     if (view.kind === "picker") {
-      return ledgerAccountPicker(view.candidates, view.selected, view.message);
+      return ledgerAccountPicker(view.candidates, view.selected, view.message, view.application);
     }
     return ledgerOnboardError(view.message);
   };
@@ -211,11 +212,11 @@ export const createLedgerOnboardRuntime = (
     addHd: (accountContractType) => deps.addHd(accountContractType),
     connector,
     create,
-    derive: (entries, accountContractType) =>
-      wallet.deriveLedgerAccounts(networkId(), entries, accountContractType),
+    derive: (entries, accountContractType, application) =>
+      wallet.deriveLedgerAccounts(networkId(), entries, accountContractType, application),
     describe: (account) => describe(account.address, networkId()),
-    enumerate: (client, startIndex, readiness) =>
-      enumerateLedgerPubKeys(client, startIndex, LEDGER_PAGE_SIZE, readiness),
+    enumerate: (client, startIndex, readiness, application) =>
+      enumerateLedgerPubKeys(client, startIndex, LEDGER_PAGE_SIZE, readiness, application),
     existingIds,
     onCancel,
     openImport: () => deps.openImport(),
