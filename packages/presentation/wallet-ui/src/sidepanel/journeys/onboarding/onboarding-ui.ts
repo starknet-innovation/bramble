@@ -19,6 +19,7 @@ import {
   setGeneratedPhraseMasked,
   setRecoveryWordCount,
 } from "./recovery-word-state";
+import { createWeakPassphraseAck } from "./weak-passphrase-ack";
 
 /** Dependencies the onboarding binding closes over. */
 export type OnboardingUiDeps = {
@@ -55,6 +56,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const recoveryResult = form.querySelector<HTMLElement>("#recovery-result");
   const generateResult = form.querySelector<HTMLElement>("#generate-result");
   const result = form.querySelector<HTMLElement>("#form-result");
+  const weakAck = createWeakPassphraseAck(form, "", passphraseInput, () => refreshPassword());
   const ackContainer = form.querySelector<HTMLElement>("#mainnet-ack");
   const ackCheckbox = form.querySelector<HTMLInputElement>('input[name="mainnetAck"]');
   const recoveryContinue = form.querySelector<HTMLButtonElement>("#recovery-continue");
@@ -161,7 +163,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   const passwordOk = (): boolean => {
     const value = passphraseInput?.value ?? "";
-    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "");
+    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "") && weakAck.ok();
   };
 
   const invalidatePreview = (): void => {
@@ -176,6 +178,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     const value = passphraseInput?.value ?? "";
     const confirmation = confirmationInput?.value ?? "";
     const matches = value === confirmation && confirmation.length > 0;
+    weakAck.sync();
     applyPassphraseMeter(
       { requirement: passwordRequirement, result: passwordResult },
       value,

@@ -104,6 +104,22 @@ const backupVerifyInputs = (): string =>
     }),
   ).join("");
 
+/**
+ * Acknowledgement shown only when the typed passphrase clears the length floor
+ * but the meter still bands it weak. Rendered hidden; the binder reveals it and
+ * folds it into the submit gate, so a weak passphrase is never refused and
+ * never accepted without the user saying so.
+ */
+const weakPassphraseAcknowledgement = (prefix: "" | "ledger"): string =>
+  checkboxField({
+    containerAttributes: {
+      hidden: true,
+      id: prefix === "ledger" ? "ledger-weak-passphrase-ack" : "weak-passphrase-ack",
+    },
+    name: prefix === "ledger" ? "ledgerWeakPassphraseAck" : "weakPassphraseAck",
+    text: "This passphrase is weak. I understand it is all that protects this wallet on this device.",
+  });
+
 const passwordFields = (prefix: "" | "ledger" = ""): string => {
   const passphraseName = prefix === "ledger" ? "ledgerVaultPassphrase" : "vaultPassphrase";
   const confirmationName =
@@ -131,7 +147,8 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
   <div class="password-requirement" aria-live="polite">
     <span class="password-requirement-bar"><span></span></span>
     <span data-password-result>Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters</span>
-  </div>`;
+  </div>
+  ${weakPassphraseAcknowledgement(prefix)}`;
 };
 
 const welcomeStep = (ready: boolean): string => `

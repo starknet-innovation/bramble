@@ -11,6 +11,7 @@ import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-
 import { showToast } from "../../shared/dom";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-ack";
 import { applyPassphraseMeter } from "../onboarding/passphrase-meter";
+import { createWeakPassphraseAck } from "../onboarding/weak-passphrase-ack";
 
 /**
  * Dependencies the first-run Ledger setup binding closes over. `startLedgerSetup`
@@ -38,6 +39,7 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
   );
   const passwordResult = form?.querySelector<HTMLElement>("[data-password-result]");
   const passwordRequirement = passwordResult?.closest<HTMLElement>(".password-requirement");
+  const weakAck = createWeakPassphraseAck(form, "ledger", passphraseInput, () => refreshGate());
   const ackCheckbox = form?.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
   const button = form?.querySelector<HTMLButtonElement>("#ledger-setup-button");
   const result = form?.querySelector<HTMLElement>("#ledger-passphrase-result");
@@ -45,12 +47,13 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
 
   const passphraseOk = (): boolean => {
     const value = passphraseInput?.value ?? "";
-    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "");
+    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "") && weakAck.ok();
   };
   const ackOk = (): boolean =>
     mainnetAckSatisfied(MAINNET_NETWORK_ID, ackCheckbox?.checked ?? false);
 
   const refreshGate = (): void => {
+    weakAck.sync();
     if (button) {
       button.disabled = !(initiallyReady && passphraseOk() && ackOk());
     }

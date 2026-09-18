@@ -112,6 +112,51 @@ describe("bindLedgerFirstRun", () => {
     expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
   });
 
+  test("requires an explicit acknowledgement for a weak passphrase, never a refusal", () => {
+    const { app, captured } = mountOnboarding(mainnetStatus);
+    const button = app.querySelector<HTMLButtonElement>("#ledger-setup-button");
+    const weak = "aaaaaaaaaaaa";
+
+    setValue(app, 'input[name="ledgerVaultPassphrase"]', weak);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', weak);
+    const ack = app.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
+    if (ack) {
+      ack.checked = true;
+      ack.dispatchEvent(new window.Event("change", { bubbles: true }));
+    }
+
+    // Long enough to be accepted, weak enough to be asked about: the control is
+    // revealed and setup stays gated until it is ticked.
+    const weakAck = app.querySelector<HTMLInputElement>('input[name="ledgerWeakPassphraseAck"]');
+    expect(app.querySelector<HTMLElement>("#ledger-weak-passphrase-ack")?.hidden).toBe(false);
+    expect(button?.disabled).toBe(true);
+
+    if (weakAck) {
+      weakAck.checked = true;
+      weakAck.dispatchEvent(new window.Event("change", { bubbles: true }));
+    }
+    expect(button?.disabled).toBe(false);
+    click(app, "#ledger-setup-button");
+    expect(captured).toEqual([["SN_MAIN", weak]]);
+  });
+
+  test("hides the weak acknowledgement and drops its tick once the passphrase improves", () => {
+    const { app } = mountOnboarding(mainnetStatus);
+    const weak = "aaaaaaaaaaaa";
+    setValue(app, 'input[name="ledgerVaultPassphrase"]', weak);
+    const weakAck = app.querySelector<HTMLInputElement>('input[name="ledgerWeakPassphraseAck"]');
+    if (weakAck) {
+      weakAck.checked = true;
+      weakAck.dispatchEvent(new window.Event("change", { bubbles: true }));
+    }
+    expect(weakAck?.checked).toBe(true);
+
+    // A tick made for one value must not carry over to another.
+    setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
+    expect(app.querySelector<HTMLElement>("#ledger-weak-passphrase-ack")?.hidden).toBe(true);
+    expect(weakAck?.checked).toBe(false);
+  });
+
   test("shows a passphrase hint for a too-short passphrase", () => {
     const { app } = mountOnboarding(mainnetStatus);
     setValue(app, 'input[name="ledgerVaultPassphrase"]', "short");

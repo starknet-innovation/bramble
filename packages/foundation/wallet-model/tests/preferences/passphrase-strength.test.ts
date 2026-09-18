@@ -10,6 +10,7 @@ import {
   isVaultPassphrase,
   MIN_VAULT_PASSPHRASE_LENGTH,
   RECOMMENDED_VAULT_PASSPHRASE_LENGTH,
+  requiresWeakPassphraseAcknowledgement,
 } from "@bramble/wallet-model/passphrase";
 
 describe("estimatePassphraseStrength", () => {
@@ -67,5 +68,16 @@ describe("estimatePassphraseStrength", () => {
       previous = ratio;
     }
     expect(previous).toBe(1);
+  });
+
+  test("asks for an acknowledgement only for an acceptable but weak passphrase", () => {
+    // The point of lowering the floor is that nothing acceptable is refused, so
+    // the speed bump moves here. A value below the floor is already blocked and
+    // must not also be asked to acknowledge something it cannot use.
+    expect(requiresWeakPassphraseAcknowledgement("aaaaaaaaaaaa")).toBe(true);
+    expect(requiresWeakPassphraseAcknowledgement("short")).toBe(false);
+    expect(requiresWeakPassphraseAcknowledgement("")).toBe(false);
+    expect(requiresWeakPassphraseAcknowledgement("Tr0ub4dor&3")).toBe(false);
+    expect(requiresWeakPassphraseAcknowledgement("correct horse battery staple")).toBe(false);
   });
 });
