@@ -3,6 +3,11 @@
  * fields and its own label, a confirmed passphrase renders the returned recovery
  * phrase and private key and unhides the output, and a rejected reveal surfaces
  * the error in the status line without exposing anything.
+ *
+ * The clipboard copy is covered here too: it reads the live node rather than any
+ * second copy of the secret, refuses when nothing has been revealed, and
+ * schedules the best-effort overwrite that keeps the phrase from sitting on the
+ * clipboard indefinitely.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account } from "@bramble/testkit/sidepanel";
@@ -163,5 +168,73 @@ describe("bindReveal", () => {
     expect(container.querySelector("#reveal-output")?.hasAttribute("hidden")).toBe(true);
     // The error is announced as a toast too.
     expect(document.querySelector(".toast.error")?.textContent).toContain("Wrong passphrase");
+  });
+
+  test("copies the revealed phrase and schedules the clipboard overwrite", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+    const scheduled: Array<() => void> = [];
+    const realSetTimeout = window.setTimeout;
+    Object.defineProperty(window, "setTimeout", {
+      configurable: true,
+      value: (callback: () => void, delay?: number) => {
+        // Only intercept the clear timer; leave the toast's own timers alone.
+        if (delay === 60_000) {
+          scheduled.push(callback);
+          return 0;
+        }
+        return realSetTimeout(callback, delay);
+      },
+    });
+
+    const { container } = mount({
+      resolve: { mnemonic: MNEMONIC, ok: true, privateKey: PRIVATE_KEY },
+    });
+    submit(container);
+    await tick();
+    container.querySelector<HTMLButtonElement>("#reveal-copy-phrase")?.click();
+    await tick();
+
+    expect(copied).toEqual([MNEMONIC]);
+    // The phrase must not linger on the clipboard: the overwrite is scheduled,
+    // and clears it when it runs.
+    expect(scheduled).toHaveLength(1);
+    scheduled[0]?.();
+    await tick();
+    expect(copied).toEqual([MNEMONIC, ""]);
+
+    Object.defineProperty(window, "setTimeout", { configurable: true, value: realSetTimeout });
+  });
+
+  test("refuses to copy before anything has been revealed", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+
+    const { container } = mount({
+      resolve: { mnemonic: MNEMONIC, ok: true, privateKey: PRIVATE_KEY },
+    });
+    container.querySelector<HTMLButtonElement>("#reveal-copy-phrase")?.click();
+    await tick();
+
+    expect(copied).toEqual([]);
+  });
+
+  test("keeps the phrase out of the markup — the control carries no copy of it", () => {
+    // The shared inline copy affordance puts its value in a `data-copy`
+    // attribute. For a recovery phrase that would mint a second copy in the DOM
+    // that outlives the mask, so this control must read the live node instead.
+    const { container } = mount({
+      resolve: { mnemonic: MNEMONIC, ok: true, privateKey: PRIVATE_KEY },
+    });
+    const copyButton = container.querySelector<HTMLButtonElement>("#reveal-copy-phrase");
+    expect(copyButton).not.toBeNull();
+    expect(copyButton?.outerHTML).not.toContain("data-copy");
+    expect(revealFlow(status)).not.toContain("data-copy");
   });
 });

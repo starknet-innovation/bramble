@@ -4,6 +4,14 @@
  * key blurred until tapped. Secrets are injected into the DOM only after a
  * fresh passphrase check, are never written to storage, and are wiped whenever
  * the shell re-renders (leaving the screen).
+ *
+ * The phrase may also be copied to the system clipboard. That is a deliberate
+ * widening of where the secret can live — the clipboard is readable by every
+ * application on the machine and may sync between devices — so the copy is
+ * offered only after the same re-auth that reveals the phrase, the screen says
+ * plainly what the user is accepting, and a best-effort timer overwrites the
+ * clipboard afterwards. Best-effort is the honest word: the panel can be closed
+ * before the timer fires, and a clipboard manager's own history is beyond reach.
  */
 
 import { button } from "@bramble/ui-kit/controls";
@@ -74,6 +82,13 @@ export const revealFlow = (status: WalletStatus): string => {
       <div id="reveal-output" class="reveal-output" hidden>
         <p class="eyebrow">Recovery phrase</p>
         <div class="reveal-value is-masked" id="reveal-phrase"></div>
+        ${button({
+          attributes: { id: "reveal-copy-phrase" },
+          icon: "copy",
+          label: "Copy recovery phrase",
+          variant: "ghost",
+        })}
+        <p class="hint" id="reveal-copy-note">Copying puts the phrase on this device's clipboard, where other apps can read it and it may sync to your other devices. Bramble clears it about a minute after you copy, but cannot clear a clipboard manager's own history.</p>
         <p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
         <code class="reveal-value is-masked" id="reveal-key"></code>
         ${
@@ -94,6 +109,14 @@ export const revealFlow = (status: WalletStatus): string => {
   );
 };
 
+// How long the copied phrase is left on the clipboard before the best-effort
+// overwrite. Long enough to paste into a password manager, short enough that a
+// forgotten clipboard is not a standing exposure. The overwrite is blind — we
+// never read the clipboard, which would need a permission far broader than this
+// feature justifies — so it can clobber something copied in the meantime; the
+// window is kept short partly for that reason.
+const CLIPBOARD_CLEAR_MS = 60_000;
+
 /**
  * Binds the reveal form: confirm the passphrase, then show blurred secrets with
  * a tap-to-toggle mask. Nothing is persisted.
@@ -105,7 +128,32 @@ export const bindReveal = (deps: RevealUiDeps): void => {
   const phraseEl = deps.app?.querySelector<HTMLElement>("#reveal-phrase");
   const keyEl = deps.app?.querySelector<HTMLElement>("#reveal-key");
   const toggle = deps.app?.querySelector<HTMLButtonElement>("#reveal-toggle");
+  const copyPhrase = deps.app?.querySelector<HTMLButtonElement>("#reveal-copy-phrase");
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+  // Reading the live node at click time keeps the phrase in exactly one place in
+  // the DOM. Putting it in a data attribute — as the shared inline copy control
+  // does — would mint a second copy that outlives the mask.
+  copyPhrase?.addEventListener("click", () => {
+    const phrase = phraseEl?.textContent ?? "";
+    const view = copyPhrase.ownerDocument.defaultView;
+    const clipboard = view?.navigator.clipboard;
+    if (phrase.length === 0 || !clipboard) {
+      showToast("Nothing to copy", "error", copyPhrase);
+      return;
+    }
+    void clipboard.writeText(phrase).then(
+      () => {
+        showToast("Copied — the clipboard is cleared in about a minute", "success", copyPhrase);
+        view?.setTimeout(() => {
+          void clipboard.writeText("").catch(() => undefined);
+        }, CLIPBOARD_CLEAR_MS);
+      },
+      () => {
+        showToast("Copy failed", "error", copyPhrase);
+      },
+    );
+  });
 
   toggle?.addEventListener("click", () => {
     const masked = phraseEl?.classList.toggle("is-masked") ?? true;
