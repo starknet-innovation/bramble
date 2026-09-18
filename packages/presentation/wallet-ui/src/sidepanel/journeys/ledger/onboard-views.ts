@@ -173,6 +173,39 @@ export const ledgerDevicePicker = (devices: readonly LedgerDeviceChoice[]): stri
   );
 
 /**
+ * Shown instead of starting a Ledger flow when the wallet is running in the
+ * toolbar popup. Connecting a Ledger opens a focused browser tab, which closes
+ * the popup and strands the flow, so the overlay explains that and offers the
+ * one action that fixes it rather than letting the user start something that
+ * cannot complete.
+ */
+export const ledgerSurfaceNotice = (): string =>
+  onboardHero(
+    icon("lock"),
+    `<h1>Ledger needs the side panel</h1>
+      <p class="hint">Connecting a Ledger opens a browser tab to reach the device, and that closes this popup before the connection finishes. The side panel stays open, so Ledger works there.</p>`,
+    `${button({
+      attributes: { "data-ledger-surface-switch": true },
+      icon: "link",
+      label: "Switch to the side panel",
+    })}
+      ${ledgerOnboardCancel()}`,
+  );
+
+/**
+ * Confirms the surface switch. The popup cannot raise the side panel itself —
+ * that needs a toolbar gesture — so this says what to do next rather than
+ * leaving the user on a dead end.
+ */
+export const ledgerSurfaceSwitched = (): string =>
+  onboardHero(
+    icon("check"),
+    `<h1>Switched to the side panel</h1>
+      <p class="hint">Click the Bramble icon in your browser toolbar to reopen the wallet in the side panel, then connect your Ledger there.</p>`,
+    ledgerOnboardCancel(),
+  );
+
+/**
  * A device error during onboarding, with the catalog message and a retry,
  * centred in the overlay shell.
  */
