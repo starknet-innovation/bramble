@@ -7,7 +7,7 @@ permalink: /wallet-store/
 # Wallet store architecture and update safety
 
 This document is the reviewed persistence contract for Bramble. It covers the store layout at
-the v8 encrypted-vault schema, account identity and scoping, mutation rules, Chrome extension
+the v9 encrypted-vault schema, account identity and scoping, mutation rules, Chrome extension
 updates, and the custody boundary for a future Ledger-derived STRK20 viewing key.
 
 Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implementation tracked by
@@ -43,7 +43,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 
 | Key / state | Area | Sensitivity | Identity and bounds | Failure policy |
 | --- | --- | --- | --- | --- |
-| `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v8; account ids unique; strict cross-references | fail closed |
+| `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v9; account ids unique; strict cross-references | fail closed |
 | `bramble:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
 | `bramble:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
 | `bramble:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |
