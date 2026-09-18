@@ -465,4 +465,12 @@ describe("sidepanel styles", () => {
       /\.onboarding-contract\[aria-pressed="true"\] \.onboarding-contract-copy > span:last-child \{\s*color: var\(--bramble-text\)/,
     );
   });
+  test("the document reserves its scrollbar gutter so an expanding row cannot shift the layout", () => {
+    // `.shell` is min-height: 100vh and nothing between it and the viewport
+    // scrolls, so the document is the scroll container. Expanding a token row
+    // (<details>) summons the document scrollbar, and without a reserved gutter
+    // it takes its width from the content box — every element reflows narrower
+    // and the screen appears to shift sideways. Regression guard for #384.
+    expect(SIDEPANEL_STYLES).toMatch(/html \{[^}]*scrollbar-gutter: stable/s);
+  });
 });
