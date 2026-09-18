@@ -29,18 +29,42 @@ export const isMnemonicPassphrase = (value: unknown): value is string | undefine
   (typeof value === "string" && value.length <= MAX_MNEMONIC_PASSPHRASE_LENGTH);
 
 /**
+ * Shortest accepted vault passphrase. Single-sourced because the same floor is
+ * enforced at the vault boundary, at the KDF, and on every credential field —
+ * including the unlock and reveal re-auth fields, which must never refuse a
+ * passphrase the setup screen allowed a user to choose.
+ *
+ * Eight matches the floor users already meet in other wallets. It is a floor,
+ * not a recommendation: what actually resists an offline attack is the KDF cost
+ * (PBKDF2-SHA-256, 600k iterations) together with how much entropy the value
+ * carries, which {@link estimatePassphraseStrength} reports as the user types.
+ */
+export const MIN_VAULT_PASSPHRASE_LENGTH = 8;
+
+/**
+ * Length at or above which the meter stops advising a longer passphrase.
+ * Advisory only — never a gate. A shorter value with varied characters can
+ * estimate stronger than a longer repetitive one, so the meter bands by
+ * entropy and mentions length only as the cheapest way to add more.
+ */
+export const RECOMMENDED_VAULT_PASSPHRASE_LENGTH = 12;
+
+/**
  * Checks the user-facing bounds for a local vault encryption passphrase.
  * This validates only the value shape; custody and encryption stay in vault.
  */
 export const isVaultPassphrase = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length <= MAX_VAULT_PASSPHRASE_LENGTH &&
-  value.trim().length >= 12;
+  value.trim().length >= MIN_VAULT_PASSPHRASE_LENGTH;
 
 /**
  * Coarse strength band for the passphrase meter shown while a vault
- * passphrase is typed. `"weak"` also covers anything under the 12-character
- * minimum, so the meter never reads as acceptable before the validator does.
+ * passphrase is typed. `"weak"` also covers anything under
+ * {@link MIN_VAULT_PASSPHRASE_LENGTH}, so the meter never reads as acceptable
+ * before the validator does. Above that floor the band follows the entropy
+ * estimate alone — a short varied passphrase is reported as what it is, rather
+ * than being forced to read weak on length.
  */
 export type PassphraseStrengthLevel = "empty" | "weak" | "fair" | "strong";
 
@@ -77,21 +101,34 @@ const classSize = (value: string): number => {
  * or secret handling, and never keeps the value.
  */
 export const estimatePassphraseStrength = (value: string): PassphraseStrength => {
+  const tooShortHint = `Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`;
   if (value.length === 0) {
-    return { hint: "Enter at least 12 characters", level: "empty", ratio: 0 };
+    return { hint: tooShortHint, level: "empty", ratio: 0 };
   }
   const unique = new Set(value).size;
   const repetition = Math.min(1, (unique + 4) / Math.min(value.length, 16));
   const bits = value.length * Math.log2(Math.max(classSize(value), 2)) * repetition;
   const ratio = Math.min(1, Math.max(0.08, bits / STRONG_BITS));
   if (!isVaultPassphrase(value)) {
-    return { hint: "Enter at least 12 characters", level: "weak", ratio: Math.min(ratio, 0.4) };
+    return { hint: tooShortHint, level: "weak", ratio: Math.min(ratio, 0.4) };
   }
+  // Accepted, but shorter than we would advise: say so without blocking. The
+  // band still comes from the entropy estimate, so this never contradicts it.
+  const short = value.trim().length < RECOMMENDED_VAULT_PASSPHRASE_LENGTH;
+  const longerHint = `${RECOMMENDED_VAULT_PASSPHRASE_LENGTH}+ characters is safer`;
   if (bits >= STRONG_BITS) {
-    return { hint: "Strong passphrase", level: "strong", ratio: 1 };
+    return {
+      hint: short ? `Strong — ${longerHint}` : "Strong passphrase",
+      level: "strong",
+      ratio: 1,
+    };
   }
   if (bits >= FAIR_BITS) {
-    return { hint: "Fair — longer, or mix in numbers and symbols", level: "fair", ratio };
+    return {
+      hint: short ? `Fair — ${longerHint}` : "Fair — longer, or mix in numbers and symbols",
+      level: "fair",
+      ratio,
+    };
   }
-  return { hint: "Weak — use more varied characters", level: "weak", ratio };
+  return { hint: "Weak — use more characters, or more varied ones", level: "weak", ratio };
 };

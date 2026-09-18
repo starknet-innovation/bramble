@@ -1,22 +1,53 @@
 /**
  * The setup meter's strength estimate is feedback that tracks the typed text
- * monotonically and never reads as acceptable before the 12-character
- * validator does.
+ * monotonically and never reads as acceptable before the validator does. Above
+ * the length floor it bands on estimated entropy alone, so a short varied
+ * passphrase is reported as what it is instead of being forced to read weak.
  */
 import { describe, expect, test } from "bun:test";
-import { estimatePassphraseStrength, isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import {
+  estimatePassphraseStrength,
+  isVaultPassphrase,
+  MIN_VAULT_PASSPHRASE_LENGTH,
+  RECOMMENDED_VAULT_PASSPHRASE_LENGTH,
+} from "@bramble/wallet-model/passphrase";
 
 describe("estimatePassphraseStrength", () => {
   test("is empty for no input and weak below the minimum length", () => {
     expect(estimatePassphraseStrength("")).toEqual({
-      hint: "Enter at least 12 characters",
+      hint: `Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
       level: "empty",
       ratio: 0,
     });
-    const short = estimatePassphraseStrength("Tr0ub4dor&3");
+    const tooShort = "aB3$".repeat(1);
+    expect(tooShort.length).toBeLessThan(MIN_VAULT_PASSPHRASE_LENGTH);
+    const short = estimatePassphraseStrength(tooShort);
     expect(short.level).toBe("weak");
     expect(short.ratio).toBeLessThanOrEqual(0.4);
-    expect(isVaultPassphrase("Tr0ub4dor&3")).toBe(false);
+    expect(short.hint).toBe(`Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`);
+    expect(isVaultPassphrase(tooShort)).toBe(false);
+  });
+
+  test("does not force a short varied passphrase to read weak on length alone", () => {
+    // The length floor is a worse predictor than the entropy estimate: an
+    // 11-character mixed-class value estimates stronger than a 12-character
+    // run of one letter. The validator accepts both; the meter is what
+    // distinguishes them, and it says so rather than being clamped by length.
+    const short = "Tr0ub4dor&3";
+    expect(short.length).toBeLessThan(RECOMMENDED_VAULT_PASSPHRASE_LENGTH);
+    expect(short.length).toBeGreaterThanOrEqual(MIN_VAULT_PASSPHRASE_LENGTH);
+    expect(isVaultPassphrase(short)).toBe(true);
+    expect(estimatePassphraseStrength(short).level).toBe("strong");
+    expect(estimatePassphraseStrength("aaaaaaaaaaaa").level).toBe("weak");
+  });
+
+  test("advises a longer passphrase below the recommended length without refusing it", () => {
+    // Accepted, so the user is never blocked — but the hint names the cheapest
+    // way to improve it. At or above the recommended length the advice stops.
+    expect(estimatePassphraseStrength("Tr0ub4dor&3").hint).toContain(
+      `${RECOMMENDED_VAULT_PASSPHRASE_LENGTH}+ characters is safer`,
+    );
+    expect(estimatePassphraseStrength("Tr0ub4dor&3xyz9!").hint).toBe("Strong passphrase");
   });
 
   test("bands a valid passphrase by estimated entropy", () => {

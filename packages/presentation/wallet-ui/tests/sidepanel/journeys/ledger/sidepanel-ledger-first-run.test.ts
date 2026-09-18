@@ -8,10 +8,12 @@
  *     adds a keyless account to the already-unlocked wallet.
  * The device is an injected fake connector — no WebHID or background.
  */
+
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
 import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
 import { bindLedgerFirstRun } from "../../../../src/sidepanel/journeys/ledger/first-run";
@@ -114,7 +116,7 @@ describe("bindLedgerFirstRun", () => {
     const { app } = mountOnboarding(mainnetStatus);
     setValue(app, 'input[name="ledgerVaultPassphrase"]', "short");
     expect(app.querySelector("#ledger-passphrase-result")?.textContent).toContain(
-      "at least 12 characters",
+      `at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
     );
   });
 
@@ -146,7 +148,9 @@ describe("bindLedgerFirstRun", () => {
     const { app, captured } = mountOnboarding(mainnetStatus);
     click(app, "#ledger-setup-button");
     expect(captured).toEqual([]);
-    expect(document.querySelector(".toast.error")?.textContent).toContain("at least 12 characters");
+    expect(document.querySelector(".toast.error")?.textContent).toContain(
+      `at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+    );
   });
 });
 

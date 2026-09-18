@@ -286,9 +286,9 @@ describe("createWalletVaultService", () => {
       service.createAccount({
         accountContractType: "openzeppelin",
         mnemonic,
-        vaultPassphrase: "too short",
+        vaultPassphrase: "short",
       }),
-    ).rejects.toThrow("Passphrase must be at least 12 characters");
+    ).rejects.toThrow("Passphrase must be at least 8 characters");
     expect(derived).toBe(false);
   });
 

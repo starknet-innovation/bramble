@@ -7,7 +7,7 @@
  * passphrase; this module never touches the device or the vault directly.
  */
 
-import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { showToast } from "../../shared/dom";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-ack";
 import { applyPassphraseMeter } from "../onboarding/passphrase-meter";
@@ -61,7 +61,7 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
       const passphraseValid = isVaultPassphrase(value);
       result.textContent = !passphraseValid
         ? valueLength > 0
-          ? "Passphrase must be at least 12 characters."
+          ? `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters.`
           : ""
         : confirmation.length > 0 && value !== confirmation
           ? "Enter the same passphrase in both fields."
@@ -81,7 +81,11 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
 
   button?.addEventListener("click", () => {
     if (!passphraseOk()) {
-      showToast("Passphrase must be at least 12 characters", "error", form);
+      showToast(
+        `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+        "error",
+        form,
+      );
       return;
     }
     if (!ackOk()) {

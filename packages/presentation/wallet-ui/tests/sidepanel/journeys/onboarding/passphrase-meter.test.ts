@@ -3,7 +3,9 @@
  * come from the strength estimate, its line reports the hint until the
  * confirmation agrees, and it never reads as ready before a valid match.
  */
+
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { applyPassphraseMeter } from "../../../../src/sidepanel/journeys/onboarding/passphrase-meter";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
@@ -25,7 +27,9 @@ describe("applyPassphraseMeter", () => {
     const meter = meterFixture();
     applyPassphraseMeter(meter, "short", "");
     expect(meter.requirement.dataset["strength"]).toBe("weak");
-    expect(meter.result.textContent).toBe("Enter at least 12 characters");
+    expect(meter.result.textContent).toBe(
+      `Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+    );
 
     applyPassphraseMeter(meter, "correcthorse", "");
     expect(meter.requirement.dataset["strength"]).toBe("fair");
