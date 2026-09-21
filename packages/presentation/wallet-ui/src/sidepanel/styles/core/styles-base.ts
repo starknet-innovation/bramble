@@ -60,6 +60,13 @@ export const BASE_STYLES = `
     --bramble-avatar-3: hsl(0 0% 72%);
   }
   * { box-sizing: border-box; }
+  /* The document is the scroll container — .shell is min-height: 100vh and
+     nothing between it and the viewport scrolls — so any row that grows past
+     the viewport summons the document scrollbar. Without a reserved gutter the
+     scrollbar takes its width from the content box and every element on the
+     screen reflows narrower, which reads as the whole UI shifting sideways.
+     The token rows are <details> elements: expanding one is exactly that case. */
+  html { scrollbar-gutter: stable; }
   html, body, #app {
     max-width: 100%;
     min-height: 100%;
