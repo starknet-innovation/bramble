@@ -192,6 +192,26 @@ export type AccountAddressCandidate = {
 };
 
 /**
+ * The address a signer public key owns under one specific class, using that
+ * class's own constructor convention. The convention belongs to the class, not
+ * the family: pairing a correct class with another version's calldata yields a
+ * well-formed address that belongs to nobody.
+ *
+ * The salt defaults to the public key, which is what every wallet in the table
+ * uses for accounts it deploys counterfactually.
+ */
+export const familyAccountAddress = (
+  entry: AccountClassEntry,
+  publicKey: string,
+  salt: string = publicKey,
+): string =>
+  contractAddress(
+    salt,
+    entry.classHash,
+    accountConstructorCalldata(entry.constructorShape, publicKey),
+  );
+
+/**
  * Every address one signer public key could own, one per class an account can
  * be deployed with. Callers resolve which is real by asking the chain, because
  * nothing local can distinguish them.
@@ -207,11 +227,7 @@ export const accountAddressCandidates = (
   family?: AccountFamily,
 ): readonly AccountAddressCandidate[] =>
   deploymentClasses(family).map((entry) => ({
-    address: contractAddress(
-      publicKey,
-      entry.classHash,
-      accountConstructorCalldata(entry.constructorShape, publicKey),
-    ),
+    address: familyAccountAddress(entry, publicKey),
     entry,
   }));
 

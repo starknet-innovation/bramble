@@ -2,9 +2,14 @@
  * Account derivation checks prove wallet metadata comes from Krusty KMS.
  */
 import { describe, expect, test } from "bun:test";
-import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet/account-contracts";
+import {
+  ARGENT_ACCOUNT_CONTRACT,
+  argentAccountAddress,
+  familyAccountAddress,
+} from "@bramble/starknet/account-contracts";
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { deriveAccountRef } from "@bramble/vault/accounts";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
@@ -320,5 +325,30 @@ describe("deriveAccountRef", () => {
       ),
     ).rejects.toThrow("Krusty KMS returned invalid account key material");
     expect(addressDerived).toBe(false);
+  });
+
+  test("derives an Argent account at any release it could have been deployed with", async () => {
+    // A Ready account deployed at 0.3.x keeps that address forever, whatever it
+    // upgrades to afterwards. Deriving only at the class this wallet creates is
+    // why such an account could never be found.
+    const entry = deploymentClasses("argent").find(
+      (candidate) => candidate.label === "argent 0.3.0",
+    );
+    if (!entry) {
+      throw new Error("argent 0.3.0 missing from the class table");
+    }
+    const account = await deriveAccountRef(fakeKms(), {
+      accountContractType: "argent",
+      classHash: entry.classHash,
+      mnemonic,
+      networkId: "SN_MAIN",
+    });
+
+    expect(sameFelt(account.classHash, entry.classHash)).toBe(true);
+    expect(sameFelt(account.address, familyAccountAddress(entry, account.publicKeyX))).toBe(true);
+    // The class alone does not determine the address: 0.3.x and 0.4.0 use
+    // different constructor calldata, so the same key lands elsewhere. Deriving
+    // with the wrong shape is the mistake this asserts against.
+    expect(sameFelt(account.address, argentAccountAddress(account.publicKeyX))).toBe(false);
   });
 });
