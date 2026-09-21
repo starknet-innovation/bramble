@@ -2,7 +2,8 @@
 
 import { WalletError } from "@bramble/core/errors";
 import { isRecord } from "@bramble/core/json";
-import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet/account-contracts";
+import { ARGENT_ACCOUNT_CONTRACT, familyAccountAddress } from "@bramble/starknet/account-contracts";
+import { accountClassEntry, deploymentClasses } from "@bramble/wallet-model/account-families";
 import type { AccountContractType } from "@bramble/wallet-model/accounts";
 import { isAccountContractType } from "@bramble/wallet-model/accounts";
 import {
@@ -85,13 +86,20 @@ export const resolveAccountClassHash = async (
     throw new WalletError("Invalid account contract type");
   }
   if (input.accountContractType === "argent") {
-    if (
-      input.classHash !== undefined &&
-      !sameFelt(input.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)
-    ) {
+    if (input.classHash === undefined) {
+      return ARGENT_ACCOUNT_CONTRACT.classHash;
+    }
+    // Any Argent release an account can be DEPLOYED with is derivable, not only
+    // the one this wallet creates: a Ready account deployed at 0.3.x keeps that
+    // address forever, whatever it upgrades to. Whether the account can then be
+    // acted for is a separate decision, made against its live class.
+    const known = deploymentClasses("argent").some((entry) =>
+      sameFelt(entry.classHash, input.classHash as string),
+    );
+    if (!known) {
       throw new WalletError("Invalid Argent account class hash");
     }
-    return ARGENT_ACCOUNT_CONTRACT.classHash;
+    return input.classHash;
   }
   return input.classHash ?? getOzAccountClassHash(kms, networkId);
 };
@@ -149,10 +157,13 @@ export const deriveAccountContractAddress = async (
     input.deploymentSalt,
     publicKeyX,
   );
-  const addressInput =
-    input.accountContractType === "argent"
-      ? argentAccountAddress(publicKeyX, deploymentSalt)
-      : await kms.deriveOzAccountAddress(publicKeyX, classHash, "0x0");
+  const argentEntry = input.accountContractType === "argent" ? accountClassEntry(classHash) : null;
+  if (input.accountContractType === "argent" && argentEntry === null) {
+    throw new WalletError("Invalid Argent account class hash");
+  }
+  const addressInput = argentEntry
+    ? familyAccountAddress(argentEntry, publicKeyX, deploymentSalt)
+    : await kms.deriveOzAccountAddress(publicKeyX, classHash, "0x0");
   if (!isNonZeroStarkFieldElement(addressInput)) {
     throw new WalletError(
       input.accountContractType === "argent"

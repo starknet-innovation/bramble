@@ -176,7 +176,7 @@ test("Argent invoke estimate and submission reject a different live class before
     () => estimateInvokeFee(input, () => makeProvider("0x456").provider),
     () => submitInvokeTransaction(input, () => makeProvider("0x456").provider),
   ]) {
-    await expect(operation()).rejects.toThrow("class does not match the pinned release");
+    await expect(operation()).rejects.toThrow("is not a release this wallet recognizes");
   }
   expect(privatelySigned).toBe(0);
 });

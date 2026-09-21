@@ -9,9 +9,14 @@ import {
 } from "@bramble/starknet/account-contracts";
 import {
   estimateAccountDeploymentFee,
+  isCompatibleAccountDeployed,
   submitAccountDeployment,
 } from "@bramble/starknet/deployment";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
+
+// Argent 0.3.0: recognized by the catalog, but it expects a bare (r, s).
+const ARGENT_0_3_0 = "0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003";
+
 import type { Account, RpcProvider } from "starknet";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -177,7 +182,37 @@ test("Argent deployment estimate and submission reject a different live class", 
     () => estimateAccountDeploymentFee(input, () => makeQueryProvider("0x456").provider),
     () => submitAccountDeployment(input, () => makeQueryProvider("0x456").provider),
   ]) {
-    await expect(operation()).rejects.toThrow("class does not match the pinned release");
+    await expect(operation()).rejects.toThrow("is not a release this wallet recognizes");
   }
   expect(signed).toBe(0);
+});
+
+// A provider reporting `liveClassHash` at the address, whose signer state
+// matches this wallet: owner is our key, plain Starknet signer, no guardian.
+const deployedAs = (liveClassHash: string): RpcProvider =>
+  ({
+    callContract: async ({ entrypoint }: { readonly entrypoint: string }) =>
+      entrypoint === "get_owner" ? [PUBLIC_KEY] : ["0x0"],
+    getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 100 }),
+    getClassHashAt: async () => liveClassHash,
+  }) as unknown as RpcProvider;
+
+test("accepts an account that upgraded to a class it can authorize for", async () => {
+  // The address is fixed by the class the account was DEPLOYED with; the class
+  // it runs can change, and Ready moved its users through exactly that upgrade.
+  // Requiring equality with the stored class refused accounts that work.
+  const upgraded = { ...account, classHash: ARGENT_0_3_0 };
+  expect(
+    await isCompatibleAccountDeployed(deployedAs(ARGENT_ACCOUNT_CONTRACT.classHash), upgraded),
+  ).toBe(true);
+});
+
+test("refuses a recognized class whose authorization format it cannot produce", async () => {
+  // Recognition is not enough. This wallet emits Argent 0.4's signer-array
+  // encoding; 0.3.x expects a bare (r, s), so acting for one would build a
+  // transaction the account rejects. The refusal names that reason rather than
+  // reporting an unknown class.
+  await expect(isCompatibleAccountDeployed(deployedAs(ARGENT_0_3_0), account)).rejects.toThrow(
+    "expects an authorization format this wallet does not produce",
+  );
 });

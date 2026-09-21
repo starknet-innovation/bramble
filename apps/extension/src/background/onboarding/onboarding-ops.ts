@@ -6,6 +6,8 @@ import {
   type TokenConfig,
   type WalletPreferencesStore,
 } from "@bramble/settings/preferences";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
 import { type DerivedAccountRef, isDerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
@@ -69,6 +71,22 @@ const discoveryFingerprint = (
     networkId: input.networkId,
   });
 
+// One derivation per class an account could have been deployed with, not one
+// per family. A Ready account deployed at Argent 0.3.x keeps that address
+// forever, whatever it upgraded to, so scanning only the release this wallet
+// creates finds nobody who arrived from Ready. The wallet's own OpenZeppelin
+// class stays resolved per network by Krusty rather than listed here.
+const recoveryScanShapes = (): readonly {
+  readonly accountContractType: AccountContractType;
+  readonly classHash?: string;
+}[] => [
+  { accountContractType: "openzeppelin" },
+  ...deploymentClasses("argent").map((entry) => ({
+    accountContractType: "argent" as const,
+    classHash: entry.classHash,
+  })),
+];
+
 const scanRecoveryIndex = async (
   deps: OnboardingOpsDeps,
   input: { readonly mnemonic: string; readonly networkId: StarknetNetworkId },
@@ -77,10 +95,11 @@ const scanRecoveryIndex = async (
   rpcUrls: readonly string[],
 ): Promise<readonly RecoveryAccountCandidate[]> =>
   Promise.all(
-    (["openzeppelin", "argent"] as const).map(async (accountContractType) => {
+    recoveryScanShapes().map(async (shape) => {
       const account = await deps.wallet.previewAccount?.({
-        accountContractType,
+        accountContractType: shape.accountContractType,
         accountIndex,
+        ...(shape.classHash === undefined ? {} : { classHash: shape.classHash }),
         mnemonic: input.mnemonic,
         networkId: input.networkId,
       });

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./account-families": "./src/accounts/account-families.ts",
     "./accounts": "./src/accounts/accounts.ts",
     "./avnu-route": "./src/swap/avnu-route.ts",
     "./custom-network": "./src/networks/custom-network.ts",
