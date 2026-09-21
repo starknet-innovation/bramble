@@ -167,6 +167,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "callReviews",
       "context",
       "declaration",
+      "existingGrant",
       "fee",
       "feeAffordability",
       "feeEstimateFailed",
@@ -188,6 +189,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     typeof value["origin"] !== "string" ||
     !isWalletOrigin(value["origin"]) ||
     (value["typedData"] !== undefined && !isJson(value["typedData"])) ||
+    (value["existingGrant"] !== undefined && typeof value["existingGrant"] !== "boolean") ||
     (value["kind"] !== "add-chain" &&
       value["kind"] !== "connect" &&
       value["kind"] !== "declare" &&

@@ -12,10 +12,20 @@ import {
 } from "../networks/networks";
 import {
   isLedgerAccountIndex,
-  isLedgerAccountPath,
+  isLedgerAccountPathFor,
+  isLedgerEip2645Application,
   LEDGER_EIP2645_APPLICATION,
-  ledgerAccountIndexOfPath,
+  type LedgerEip2645Application,
+  READY_EIP2645_APPLICATION,
 } from "./ledger-path";
+
+// Path schemes a Ledger derivation may name: both at the current vault schema,
+// Bramble's alone before v9 (all those vaults could ever have stored).
+const CURRENT_LEDGER_APPLICATIONS: readonly LedgerEip2645Application[] = [
+  LEDGER_EIP2645_APPLICATION,
+  READY_EIP2645_APPLICATION,
+];
+const LEDGERW_ONLY: readonly LedgerEip2645Application[] = [LEDGER_EIP2645_APPLICATION];
 
 /**
  * Supported contract families for accounts controlled by one wallet signer.
@@ -62,11 +72,12 @@ export type ImportedKeyDerivation = {
 };
 
 /**
- * Public coordinates needed to ask a Ledger to sign for an account again.
+ * Public coordinates needed to ask a Ledger to sign for an account again; the
+ * marker names the path scheme (`LedgerW` created here, `argentx` from Ready).
  */
 export type LedgerDerivation = {
   readonly accountIndex: number;
-  readonly eip2645application: string;
+  readonly eip2645application: LedgerEip2645Application;
   readonly kind: "ledger";
   readonly path: string;
 };
@@ -172,14 +183,17 @@ const isBip44Derivation = (value: unknown): value is Bip44Derivation =>
 const isImportedKeyDerivation = (value: unknown): value is ImportedKeyDerivation =>
   isRecord(value) && hasOnlyKnownKeys(value, ["kind"]) && value["kind"] === "imported-raw-key";
 
-const isLedgerDerivation = (value: unknown): value is LedgerDerivation =>
+const isLedgerDerivation = (
+  value: unknown,
+  applications: readonly LedgerEip2645Application[],
+): value is LedgerDerivation =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountIndex", "eip2645application", "kind", "path"]) &&
   value["kind"] === "ledger" &&
   isLedgerAccountIndex(value["accountIndex"]) &&
-  value["eip2645application"] === LEDGER_EIP2645_APPLICATION &&
-  isLedgerAccountPath(value["path"]) &&
-  ledgerAccountIndexOfPath(value["path"]) === value["accountIndex"];
+  isLedgerEip2645Application(value["eip2645application"]) &&
+  applications.includes(value["eip2645application"]) &&
+  isLedgerAccountPathFor(value["path"], value["eip2645application"], value["accountIndex"]);
 
 /**
  * Returns the one minimal-hex spelling of an account id, accepting historical
@@ -201,8 +215,10 @@ export const canonicalAccountId = (value: unknown): string | null => {
 
 /**
  * Validates the canonical account id spelling and its supported-network scope.
+ * Non-strings canonicalise to null and must never compare equal to it.
  */
-export const isAccountId = (value: unknown): value is string => canonicalAccountId(value) === value;
+export const isAccountId = (value: unknown): value is string =>
+  typeof value === "string" && canonicalAccountId(value) === value;
 
 /**
  * Checks that an account id is structurally valid for the claimed network.
@@ -275,7 +291,6 @@ const KEYLESS_ACCOUNT_KEYS = [
   "networkId",
   "publicKeyX",
 ] as const;
-const DERIVED_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "publicKeyY"] as const;
 const LEGACY_V6_KEYLESS_ACCOUNT_KEYS = [
   "accountContractType",
   "address",
@@ -285,7 +300,6 @@ const LEGACY_V6_KEYLESS_ACCOUNT_KEYS = [
   "networkId",
   "publicKeyX",
 ] as const;
-const LEGACY_V6_DERIVED_ACCOUNT_KEYS = [...LEGACY_V6_KEYLESS_ACCOUNT_KEYS, "publicKeyY"] as const;
 const LEGACY_KEYLESS_ACCOUNT_KEYS = [
   "address",
   "classHash",
@@ -294,82 +308,56 @@ const LEGACY_KEYLESS_ACCOUNT_KEYS = [
   "networkId",
   "publicKeyX",
 ] as const;
-const LEGACY_DERIVED_ACCOUNT_KEYS = [...LEGACY_KEYLESS_ACCOUNT_KEYS, "publicKeyY"] as const;
-/**
- * Validates public account metadata. Imported and Ledger accounts omit
- * `publicKeyY`; an HD-derived account must include it.
- */
-const isAccountRefShape = (value: unknown, requireCanonical: boolean): value is AccountRef => {
-  if (!isRecord(value)) {
-    return false;
-  }
+
+// Shared body of every account shape: imported and Ledger accounts carry the
+// keyless key set and omit `publicKeyY`; an HD-derived account adds it and must
+// include it. `ledgerApplications` is the set of path schemes a Ledger
+// derivation may name at the schema being validated.
+const hasValidSignerShape = (
+  value: Record<string, unknown>,
+  keylessKeys: readonly string[],
+  requireCanonical: boolean,
+  ledgerApplications: readonly LedgerEip2645Application[],
+): boolean => {
   const derivation = value["derivation"];
-  if (!hasValidContractMetadata(value, requireCanonical, true)) {
-    return false;
-  }
-  if (isImportedKeyDerivation(derivation) || isLedgerDerivation(derivation)) {
+  if (isImportedKeyDerivation(derivation) || isLedgerDerivation(derivation, ledgerApplications)) {
     return (
-      hasOnlyKnownKeys(value, KEYLESS_ACCOUNT_KEYS) &&
-      hasValidSingleSignerCore(value, requireCanonical)
+      hasOnlyKnownKeys(value, keylessKeys) && hasValidSingleSignerCore(value, requireCanonical)
     );
   }
   return (
-    hasOnlyKnownKeys(value, DERIVED_ACCOUNT_KEYS) &&
+    hasOnlyKnownKeys(value, [...keylessKeys, "publicKeyY"]) &&
     isBip44Derivation(derivation) &&
     isNonZeroFelt(value["publicKeyY"]) &&
     (!requireCanonical || canonicalFelt(value["publicKeyY"]) === value["publicKeyY"]) &&
     hasValidSingleSignerCore(value, requireCanonical)
   );
 };
+
+const isAccountRefShape = (
+  value: unknown,
+  requireCanonical: boolean,
+  ledgerApplications: readonly LedgerEip2645Application[] = CURRENT_LEDGER_APPLICATIONS,
+): value is AccountRef =>
+  isRecord(value) &&
+  hasValidContractMetadata(value, requireCanonical, true) &&
+  hasValidSignerShape(value, KEYLESS_ACCOUNT_KEYS, requireCanonical, ledgerApplications);
 
 const isLegacyV6AccountRefShape = (
   value: unknown,
   requireCanonical: boolean,
-): value is LegacyV6AccountRef => {
-  if (!isRecord(value) || !hasValidContractMetadata(value, requireCanonical, false)) {
-    return false;
-  }
-  if (value["deploymentSalt"] !== undefined) {
-    return false;
-  }
-  const derivation = value["derivation"];
-  if (isImportedKeyDerivation(derivation) || isLedgerDerivation(derivation)) {
-    return (
-      hasOnlyKnownKeys(value, LEGACY_V6_KEYLESS_ACCOUNT_KEYS) &&
-      hasValidSingleSignerCore(value, requireCanonical)
-    );
-  }
-  return (
-    hasOnlyKnownKeys(value, LEGACY_V6_DERIVED_ACCOUNT_KEYS) &&
-    isBip44Derivation(derivation) &&
-    isNonZeroFelt(value["publicKeyY"]) &&
-    (!requireCanonical || canonicalFelt(value["publicKeyY"]) === value["publicKeyY"]) &&
-    hasValidSingleSignerCore(value, requireCanonical)
-  );
-};
+): value is LegacyV6AccountRef =>
+  isRecord(value) &&
+  hasValidContractMetadata(value, requireCanonical, false) &&
+  value["deploymentSalt"] === undefined &&
+  hasValidSignerShape(value, LEGACY_V6_KEYLESS_ACCOUNT_KEYS, requireCanonical, LEDGERW_ONLY);
 
 const isLegacyAccountRefShape = (
   value: unknown,
   requireCanonical: boolean,
-): value is LegacyAccountRef => {
-  if (!isRecord(value)) {
-    return false;
-  }
-  const derivation = value["derivation"];
-  if (isImportedKeyDerivation(derivation) || isLedgerDerivation(derivation)) {
-    return (
-      hasOnlyKnownKeys(value, LEGACY_KEYLESS_ACCOUNT_KEYS) &&
-      hasValidSingleSignerCore(value, requireCanonical)
-    );
-  }
-  return (
-    hasOnlyKnownKeys(value, LEGACY_DERIVED_ACCOUNT_KEYS) &&
-    isBip44Derivation(derivation) &&
-    isNonZeroFelt(value["publicKeyY"]) &&
-    (!requireCanonical || canonicalFelt(value["publicKeyY"]) === value["publicKeyY"]) &&
-    hasValidSingleSignerCore(value, requireCanonical)
-  );
-};
+): value is LegacyAccountRef =>
+  isRecord(value) &&
+  hasValidSignerShape(value, LEGACY_KEYLESS_ACCOUNT_KEYS, requireCanonical, LEDGERW_ONLY);
 
 /**
  * Validates public account metadata in its single canonical felt spelling.
@@ -379,6 +367,14 @@ export const isAccountRef = (value: unknown): value is AccountRef => isAccountRe
 /** Validates phrase-derived account metadata at runtime boundaries. */
 export const isDerivedAccountRef = (value: unknown): value is DerivedAccountRef =>
   isAccountRef(value) && value.derivation.kind === "starknet-bip44";
+
+/**
+ * Validates canonical schema-v7/v8 account metadata: the current shape, but a
+ * Ledger derivation may only follow Bramble's `LedgerW` scheme (Ready's
+ * `argentx` is admitted from schema v9). Legacy vault validators only.
+ */
+export const isLegacyV8AccountRef = (value: unknown): value is AccountRef =>
+  isAccountRefShape(value, true, LEDGERW_ONLY);
 
 /**
  * Validates canonical schema-v6 account metadata for its one-step migration.

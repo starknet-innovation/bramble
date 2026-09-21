@@ -124,11 +124,10 @@ a networked host and expect the same result.
 
 ## Ledger Hardware Accounts
 
-Ledger accounts can use either supported single-signer account class, but the vault stores only
-public account metadata: the contract type, account address, public-key x-coordinate, account index,
-and canonical EIP-2645 path `m/2645'/1195502025'/734980059'/0'/<index>'/0`. No Ledger mnemonic or
-signing key enters Bramble. A Ledger-only vault therefore has `mnemonic: null` and no `signingKeys`
-entry for its accounts; a mixed vault may contain both software and Ledger account records.
+The vault stores only public Ledger account metadata: contract type (either supported single-signer
+class), address, public-key x-coordinate, account index, EIP-2645 application marker (`LedgerW` for
+accounts created here, `argentx` for accounts restored from Ready; [Wallet store](WALLET_STORE.md)
+has both path schemes), and canonical path. No Ledger mnemonic or signing key enters Bramble. A Ledger-only vault has `mnemonic: null` and no `signingKeys` entry; a mixed vault holds both kinds.
 
 The hardware signing path is split across two mutually checking contexts:
 
@@ -183,6 +182,7 @@ Recovery boundaries are deliberately explicit:
   it does not restore Ledger accounts.
 - Restore Ledger accounts with the Ledger device and its Ledger recovery phrase, then enumerate
   and add the same account indices again.
+- "Restore a Ready Ledger account" re-adds a Ledger account created in Ready by reading the device at Ready's path scheme (details in [Wallet store](WALLET_STORE.md)).
 
 ## Migration Workflow
 
@@ -192,12 +192,11 @@ Recovery boundaries are deliberately explicit:
 4. Exercise `readMigratedVault` staging, verification, restart recovery, and idempotence tests.
 5. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-The vault schema is currently at **v4**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"`
-derivation whose path, index, and `LedgerW` marker must agree and which has no `signingKeys` entry.
-v4 adds encrypted `accountSecrets`; public `AccountRef` records cannot contain optional secrets.
-Ledger STRK20 viewing keys retain exact account, chain, pool, and scheme provenance. Vaults migrated
-from v1 carry `mnemonic: null`; they cannot add software accounts or reveal a phrase until re-created,
-but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → v2 → v3 → v4`).
+The vault schema is at **v9**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation whose path, index, and scheme marker must agree and which has no `signingKeys` entry;
+v4 adds encrypted `accountSecrets` (public `AccountRef` records cannot contain optional secrets; Ledger STRK20 viewing keys retain exact account, chain, pool, and scheme provenance);
+v5 canonicalizes account ids; v6 records the account-contract type; v7 retains the Argent deployment salt; v8 retains imported seeds; v9 admits Ready's `argentx` Ledger path scheme.
+The v3–v8 validators stay pinned to `LedgerW`, so the v9 step rewrites nothing but the version stamp. Vaults migrated from v1 carry `mnemonic: null`; they cannot add software
+accounts or reveal a phrase until re-created, but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → … → v9`).
 
 Chrome preserves `storage.local` across an update but clears `storage.session`. `runtime.onInstalled`
 therefore cannot migrate an encrypted vault: it has no passphrase. The first authenticated read runs
