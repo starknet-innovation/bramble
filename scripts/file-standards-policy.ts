@@ -25,6 +25,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Keeps the unlocked vault credential inside the privileged worker while
   // coordinating fail-closed network/vault commits; never persists or emits it.
   "apps/extension/src/background/runtime/active-network-mutation.ts",
+  // Claim validation split out of approval-decisions: reads the session's
+  // vault credential only to re-check a claimed approval's granted account
+  // against the vault at decision time; never logs, persists, or returns it.
+  "apps/extension/src/background/approvals/approval-claim-context.ts",
   "apps/extension/src/background/provider/add-chain-ops.ts",
   "apps/extension/src/background/approvals/approval-decisions.ts",
   "apps/extension/src/background/transactions/chain-ops.ts",
