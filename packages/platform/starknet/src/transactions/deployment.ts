@@ -6,7 +6,6 @@
 import { WalletError } from "@bramble/core/errors";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
-  canonicalFelt,
   isNonZeroStarkFieldElement,
   STARKNET_NETWORKS,
   sameFelt,
@@ -38,6 +37,11 @@ import {
   withRpcFallback,
   withRpcWrite,
 } from "../rpc/provider";
+import {
+  acceptedBlockIdentifier,
+  requireAuthorizableArgentClass,
+  requireCompatibleArgentSigner,
+} from "./account-compatibility";
 
 /**
  * DEPLOY_ACCOUNT parameters for a counterfactual wallet account.
@@ -143,39 +147,6 @@ export const isAccountDeployed = async (
   }
 };
 
-const requireCompatibleArgentSigner = async (
-  provider: RpcProvider,
-  account: Extract<DeployableAccount, { readonly accountContractType: "argent" }>,
-  blockIdentifier: string,
-): Promise<void> => {
-  const readSignerState = (entrypoint: "get_guardian" | "get_owner" | "get_owner_type") =>
-    provider.callContract(
-      { calldata: [], contractAddress: account.address, entrypoint },
-      blockIdentifier,
-    );
-  const [owner, ownerType] = await Promise.all([
-    readSignerState("get_owner"),
-    readSignerState("get_owner_type"),
-  ]);
-  const [ownerPublicKey] = owner;
-  if (
-    owner.length !== 1 ||
-    typeof ownerPublicKey !== "string" ||
-    !isNonZeroStarkFieldElement(ownerPublicKey) ||
-    !sameFelt(ownerPublicKey, account.publicKeyX)
-  ) {
-    throw new WalletError("Deployed Argent account owner does not match the wallet signer");
-  }
-  if (ownerType.length !== 1 || !sameFelt(ownerType[0], "0x0")) {
-    throw new WalletError("Deployed Argent account owner type is not supported by this wallet");
-  }
-
-  const guardian = await readSignerState("get_guardian");
-  if (guardian.length !== 1 || !sameFelt(guardian[0], "0x0")) {
-    throw new WalletError("Deployed Argent account guardian is not supported by this wallet");
-  }
-};
-
 /**
  * Verifies pinned Argent class and supported signer state at one accepted block.
  * Rejects malformed/incompatible state before signing or broadcast; OZ is existence-only.
@@ -185,15 +156,8 @@ export const isCompatibleAccountDeployed = async (
   account: DeployableAccount,
 ): Promise<boolean> => {
   let classHash: string;
-  let blockIdentifier = "latest";
-  if (account.accountContractType === "argent") {
-    const latest = await provider.getBlockLatestAccepted();
-    const blockHash = canonicalFelt(latest.block_hash);
-    if (blockHash === null || !isNonZeroStarkFieldElement(blockHash)) {
-      throw new WalletError("RPC returned an invalid accepted Starknet block hash");
-    }
-    blockIdentifier = blockHash;
-  }
+  const blockIdentifier =
+    account.accountContractType === "argent" ? await acceptedBlockIdentifier(provider) : "latest";
   try {
     classHash = await provider.getClassHashAt(account.address, blockIdentifier);
   } catch (error) {
@@ -211,12 +175,16 @@ export const isCompatibleAccountDeployed = async (
   if (!isNonZeroStarkFieldElement(classHash)) {
     throw new WalletError("RPC returned an invalid Argent account class hash");
   }
-  if (!sameFelt(classHash, account.classHash)) {
-    throw new WalletError("Deployed Argent account class does not match the pinned release");
+  if (account.accountContractType === "argent-multisig") {
+    // A multisig's configuration is bound to its exact class, so equality is
+    // the right test there and stays as it was.
+    if (!sameFelt(classHash, account.classHash)) {
+      throw new WalletError("Deployed Argent multisig class does not match the pinned release");
+    }
+    return true;
   }
-  if (account.accountContractType === "argent") {
-    await requireCompatibleArgentSigner(provider, account, blockIdentifier);
-  }
+  requireAuthorizableArgentClass(classHash);
+  await requireCompatibleArgentSigner(provider, account, blockIdentifier);
   return true;
 };
 

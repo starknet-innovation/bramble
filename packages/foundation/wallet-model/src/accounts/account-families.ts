@@ -59,8 +59,19 @@ export type AccountConstructorShape =
   | "public-key"
   | "signer-owner-guardian-option";
 
+/**
+ * How a class expects a transaction to be authorised, which also differs by
+ * version rather than by family.
+ *
+ * `stark-pair` is a bare `(r, s)`. `argent-signer-array` is Argent 0.4's array-of-signers encoding. Producing one where the other is expected yields a
+ * transaction the account rejects, so a class whose shape this wallet does not
+ * produce must not be treated as usable, however well we can find it.
+ */
+export type AccountAuthorizationShape = "argent-signer-array" | "stark-pair";
+
 /** One known class, with everything needed to derive or accept an account. */
 export type AccountClassEntry = {
+  readonly authorizationShape: AccountAuthorizationShape;
   readonly classHash: string;
   readonly constructorShape: AccountConstructorShape;
   readonly family: AccountFamily;
@@ -84,6 +95,7 @@ export const BRAAVOS_BASE_CLASS_HASH =
  */
 export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
   {
+    authorizationShape: "stark-pair",
     classHash: "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
     constructorShape: "public-key",
     family: "braavos",
@@ -91,6 +103,7 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
     roles: ["deployment", "implementation"],
   },
   {
+    authorizationShape: "stark-pair",
     classHash: BRAAVOS_BASE_CLASS_HASH,
     constructorShape: "public-key",
     family: "braavos",
@@ -98,6 +111,7 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
     roles: ["deployment"],
   },
   {
+    authorizationShape: "stark-pair",
     classHash: "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
     constructorShape: "public-key",
     family: "braavos",
@@ -105,6 +119,7 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
     roles: ["implementation"],
   },
   {
+    authorizationShape: "stark-pair",
     classHash: "0x00816dd0297efc55dc1e7559020a3a825e81ef734b558f03c83325d4da7e6253",
     constructorShape: "public-key",
     family: "braavos",
@@ -112,6 +127,7 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
     roles: ["implementation"],
   },
   {
+    authorizationShape: "stark-pair",
     classHash: "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b",
     constructorShape: "owner-guardian",
     family: "argent",
@@ -119,6 +135,7 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
     roles: ["deployment", "implementation"],
   },
   {
+    authorizationShape: "stark-pair",
     classHash: "0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003",
     constructorShape: "owner-guardian",
     family: "argent",
@@ -126,6 +143,7 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
     roles: ["deployment", "implementation"],
   },
   {
+    authorizationShape: "argent-signer-array",
     classHash: ARGENT_ACCOUNT_CLASS_HASH,
     constructorShape: "signer-owner-guardian-option",
     family: "argent",
@@ -161,6 +179,19 @@ export const deploymentClasses = (family?: AccountFamily): readonly AccountClass
     (entry) =>
       entry.roles.includes("deployment") && (family === undefined || entry.family === family),
   );
+
+/**
+ * The catalog entry for a deployed class hash, or null when it is not one this
+ * wallet recognises.
+ */
+export const accountClassEntry = (classHash: string): AccountClassEntry | null => {
+  const target = classHash.toLowerCase().replace(/^0x0*/, "");
+  return (
+    ACCOUNT_CLASSES.find(
+      (entry) => entry.classHash.toLowerCase().replace(/^0x0*/, "") === target,
+    ) ?? null
+  );
+};
 
 /**
  * Whether a class found deployed on chain is one this wallet recognises. Used
