@@ -29,7 +29,8 @@ export const darkSkin: Skin = {
     "--bramble-account-avatar-ink": "#171717",
     "--bramble-account-avatar-paper": "#fafafa",
     "--bramble-bg": "#0a0a0a",
-    "--bramble-border": "#2b2b2b",
+    // Field edge (see default-skin): >= 3:1 against every surface tier, tested.
+    "--bramble-border": "#767676",
     "--bramble-danger": "#ff7474",
     "--bramble-elevated": "#242424",
     "--bramble-muted": "#a3a3a3",

@@ -8,7 +8,7 @@ import {
   isStarkFieldElement,
   isStarkPrivateKey,
 } from "@bramble/wallet-model/networks";
-import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import {
   LEDGER_STRK20_VIEWING_KEY_SCHEME,
   ledgerStrk20ScopeFor,
@@ -82,7 +82,9 @@ export const createWalletVaultService = ({
   assertStoreAccess("vault", actor);
   const readVaultSnapshot = async (vaultPassphrase: string): Promise<Vault> => {
     if (!isVaultPassphrase(vaultPassphrase)) {
-      throw new WalletError("Passphrase must be at least 12 characters");
+      throw new WalletError(
+        `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+      );
     }
     return readMigratedVault({ primary: encryptedStore, staging: migrationStore }, vaultPassphrase);
   };
