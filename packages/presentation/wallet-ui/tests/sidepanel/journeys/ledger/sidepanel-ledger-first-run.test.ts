@@ -8,10 +8,12 @@
  *     adds a keyless account to the already-unlocked wallet.
  * The device is an injected fake connector — no WebHID or background.
  */
+
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
 import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
 import { bindLedgerFirstRun } from "../../../../src/sidepanel/journeys/ledger/first-run";
@@ -110,11 +112,56 @@ describe("bindLedgerFirstRun", () => {
     expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
   });
 
+  test("requires an explicit acknowledgement for a weak passphrase, never a refusal", () => {
+    const { app, captured } = mountOnboarding(mainnetStatus);
+    const button = app.querySelector<HTMLButtonElement>("#ledger-setup-button");
+    const weak = "aaaaaaaaaaaa";
+
+    setValue(app, 'input[name="ledgerVaultPassphrase"]', weak);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', weak);
+    const ack = app.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
+    if (ack) {
+      ack.checked = true;
+      ack.dispatchEvent(new window.Event("change", { bubbles: true }));
+    }
+
+    // Long enough to be accepted, weak enough to be asked about: the control is
+    // revealed and setup stays gated until it is ticked.
+    const weakAck = app.querySelector<HTMLInputElement>('input[name="ledgerWeakPassphraseAck"]');
+    expect(app.querySelector<HTMLElement>("#ledger-weak-passphrase-ack")?.hidden).toBe(false);
+    expect(button?.disabled).toBe(true);
+
+    if (weakAck) {
+      weakAck.checked = true;
+      weakAck.dispatchEvent(new window.Event("change", { bubbles: true }));
+    }
+    expect(button?.disabled).toBe(false);
+    click(app, "#ledger-setup-button");
+    expect(captured).toEqual([["SN_MAIN", weak]]);
+  });
+
+  test("hides the weak acknowledgement and drops its tick once the passphrase improves", () => {
+    const { app } = mountOnboarding(mainnetStatus);
+    const weak = "aaaaaaaaaaaa";
+    setValue(app, 'input[name="ledgerVaultPassphrase"]', weak);
+    const weakAck = app.querySelector<HTMLInputElement>('input[name="ledgerWeakPassphraseAck"]');
+    if (weakAck) {
+      weakAck.checked = true;
+      weakAck.dispatchEvent(new window.Event("change", { bubbles: true }));
+    }
+    expect(weakAck?.checked).toBe(true);
+
+    // A tick made for one value must not carry over to another.
+    setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
+    expect(app.querySelector<HTMLElement>("#ledger-weak-passphrase-ack")?.hidden).toBe(true);
+    expect(weakAck?.checked).toBe(false);
+  });
+
   test("shows a passphrase hint for a too-short passphrase", () => {
     const { app } = mountOnboarding(mainnetStatus);
     setValue(app, 'input[name="ledgerVaultPassphrase"]', "short");
     expect(app.querySelector("#ledger-passphrase-result")?.textContent).toContain(
-      "at least 12 characters",
+      `at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
     );
   });
 
@@ -146,7 +193,9 @@ describe("bindLedgerFirstRun", () => {
     const { app, captured } = mountOnboarding(mainnetStatus);
     click(app, "#ledger-setup-button");
     expect(captured).toEqual([]);
-    expect(document.querySelector(".toast.error")?.textContent).toContain("at least 12 characters");
+    expect(document.querySelector(".toast.error")?.textContent).toContain(
+      `at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+    );
   });
 });
 

@@ -315,3 +315,17 @@ export const hiddenOverlayMount = (className: string): HTMLDivElement => {
   document.body.append(mount);
   return mount;
 };
+
+/**
+ * Whether this UI is running in the toolbar popup rather than the side panel or
+ * the full-page onboarding surface. `popup.html` is the only entry that sets
+ * `body.popup-surface`, so the surface is readable without a message, a stored
+ * preference, or any new plumbing.
+ *
+ * Load-bearing for hardware flows rather than cosmetic: a Chrome action popup
+ * closes the moment it loses focus, and every Ledger operation opens a focused
+ * browser tab to reach Chrome's device chooser — which Chrome exposes only from
+ * an ordinary tab. A Ledger flow begun in the popup therefore cannot finish.
+ */
+export const isPopupSurface = (reference: Element | null | undefined): boolean =>
+  reference?.ownerDocument.body.classList.contains("popup-surface") ?? false;

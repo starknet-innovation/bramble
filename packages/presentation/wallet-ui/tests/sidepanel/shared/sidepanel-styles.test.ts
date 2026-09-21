@@ -40,6 +40,12 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(/border:[^;]*solid/);
     expect(SIDEPANEL_STYLES).not.toMatch(/border:\s*\d*[1-9]/);
     expect(SIDEPANEL_STYLES).not.toMatch(/\[aria-selected="true"\][^}]*transform/s);
+    // Fields are the one control whose fill cannot identify it (elevated sits
+    // within 1.1:1 of the panel), so they carry a per-side edge — a bottom
+    // stroke in the tested field-edge token — never a ring (spec item 25).
+    expect(SIDEPANEL_STYLES).toMatch(
+      /input, select, textarea \{[^}]*border-bottom: 1px solid var\(--bramble-border\)/s,
+    );
   });
 
   test("the visual layer is flat — no gradients, no glass, no aurora residue", () => {

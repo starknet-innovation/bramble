@@ -7,10 +7,11 @@
  * passphrase; this module never touches the device or the vault directly.
  */
 
-import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { showToast } from "../../shared/dom";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-ack";
 import { applyPassphraseMeter } from "../onboarding/passphrase-meter";
+import { createWeakPassphraseAck } from "../onboarding/weak-passphrase-ack";
 
 /**
  * Dependencies the first-run Ledger setup binding closes over. `startLedgerSetup`
@@ -38,6 +39,7 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
   );
   const passwordResult = form?.querySelector<HTMLElement>("[data-password-result]");
   const passwordRequirement = passwordResult?.closest<HTMLElement>(".password-requirement");
+  const weakAck = createWeakPassphraseAck(form, "ledger", passphraseInput, () => refreshGate());
   const ackCheckbox = form?.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
   const button = form?.querySelector<HTMLButtonElement>("#ledger-setup-button");
   const result = form?.querySelector<HTMLElement>("#ledger-passphrase-result");
@@ -45,12 +47,13 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
 
   const passphraseOk = (): boolean => {
     const value = passphraseInput?.value ?? "";
-    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "");
+    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "") && weakAck.ok();
   };
   const ackOk = (): boolean =>
     mainnetAckSatisfied(MAINNET_NETWORK_ID, ackCheckbox?.checked ?? false);
 
   const refreshGate = (): void => {
+    weakAck.sync();
     if (button) {
       button.disabled = !(initiallyReady && passphraseOk() && ackOk());
     }
@@ -61,7 +64,7 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
       const passphraseValid = isVaultPassphrase(value);
       result.textContent = !passphraseValid
         ? valueLength > 0
-          ? "Passphrase must be at least 12 characters."
+          ? `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters.`
           : ""
         : confirmation.length > 0 && value !== confirmation
           ? "Enter the same passphrase in both fields."
@@ -81,7 +84,11 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
 
   button?.addEventListener("click", () => {
     if (!passphraseOk()) {
-      showToast("Passphrase must be at least 12 characters", "error", form);
+      showToast(
+        `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+        "error",
+        form,
+      );
       return;
     }
     if (!ackOk()) {

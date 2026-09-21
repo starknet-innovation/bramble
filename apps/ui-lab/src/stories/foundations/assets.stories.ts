@@ -35,7 +35,24 @@ export const Receive: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
-    await expect(body?.querySelector(".receive-address-line")).not.toBeInTheDocument();
+    // Address first: the plain address is shown whole and is the default QR;
+    // the contact card is the second, switchable payload (spec item 3).
+    await expect(body?.querySelector(".receive-address-line code")).toHaveTextContent(
+      /^0x[0-9a-f]+$/,
+    );
+    await expect(body?.querySelector("[data-receive-qr]")).toHaveAttribute(
+      "data-qr-payload",
+      "address",
+    );
+    await expect(body?.querySelector("[data-receive-qr] svg")).toHaveAttribute(
+      "aria-label",
+      "QR code for your Starknet address",
+    );
+    await expect(body?.querySelector('[data-receive-payload="address"]')).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(body?.querySelector('[data-receive-payload="card"]')).toBeEnabled();
     await expect(body?.querySelector(".receive-identity")).not.toHaveAttribute("open");
     await expect(body?.querySelector(".receive-public-key")).toBeInTheDocument();
     await expect(body?.querySelector(".receive-public-key [data-copy]")).toHaveAttribute(
@@ -67,9 +84,13 @@ export const ReceivePreparing: LabStory = {
       "preparing",
     );
     await expect(body?.querySelector("[data-wallet-card-copy]")).toBeDisabled();
-    await expect(body?.querySelector("[data-receive-qr]")).toHaveTextContent(
-      "Preparing complete wallet card",
+    // Preparing the card never blocks the address: its QR is already painted
+    // and only the card option waits.
+    await expect(body?.querySelector("[data-receive-qr] svg")).toHaveAttribute(
+      "aria-label",
+      "QR code for your Starknet address",
     );
+    await expect(body?.querySelector('[data-receive-payload="card"]')).toBeDisabled();
   },
 };
 export const ReceiveAddressOnly: LabStory = {
@@ -84,6 +105,11 @@ export const ReceiveAddressOnly: LabStory = {
       "unavailable",
     );
     await expect(body?.querySelector("[data-wallet-card-copy]")).not.toBeVisible();
+    await expect(body?.querySelector("[data-receive-payload-switch]")).not.toBeVisible();
+    await expect(body?.querySelector("[data-receive-qr] svg")).toHaveAttribute(
+      "aria-label",
+      "QR code for your Starknet address",
+    );
     await expect(body?.querySelector("[data-nostr-key-status]")).toHaveTextContent(
       "Share the account address instead",
     );
