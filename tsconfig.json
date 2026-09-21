@@ -15,6 +15,14 @@
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "paths": {
+      "@starknet-io/get-starknet-wallet-standard/features": [
+        "./packages/platform/starknet/src/wallet-standard-features.d.ts"
+      ],
+      "@starknet-io/get-starknet-wallet-standard-v6/features": [
+        "./packages/platform/starknet/src/wallet-standard-features.d.ts"
+      ]
+    },
     "skipLibCheck": false,
     "strict": true,
     "target": "ES2022",

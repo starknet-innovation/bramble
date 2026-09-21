@@ -336,9 +336,6 @@
       },
     },
   },
-  "patchedDependencies": {
-    "starknet@10.8.0": "patches/starknet@10.8.0.patch",
-  },
   "overrides": {
     "qs": "6.16.0",
     "sharp": "0.35.4",

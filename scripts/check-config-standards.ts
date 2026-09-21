@@ -66,7 +66,6 @@ if (
     "name",
     "overrides",
     "packageManager",
-    "patchedDependencies",
     "private",
     "scripts",
     "type",
@@ -86,18 +85,6 @@ if (
   overrides["sharp"] !== "0.35.4"
 ) {
   failures.push("package.json must retain the reviewed security overrides");
-}
-
-// starknet@10.8.0 ships WalletAccountV6 extending WalletAccountV5 with
-// incompatible static connect types (get-starknet v5 vs v6). The reviewed
-// patch widens V6's connect parameter so skipLibCheck can stay false.
-const patchedDependencies = packageJson["patchedDependencies"];
-if (
-  !isRecord(patchedDependencies) ||
-  !hasOnlyKeys(patchedDependencies, ["starknet@10.8.0"]) ||
-  patchedDependencies["starknet@10.8.0"] !== "patches/starknet@10.8.0.patch"
-) {
-  failures.push("package.json must retain the reviewed starknet@10.8.0 type patch");
 }
 
 if (!hasOnlyKeys(tsconfigJson, ["compilerOptions", "include"])) {
@@ -303,6 +290,7 @@ if (!compilerOptions) {
       "lib",
       "module",
       "moduleResolution",
+      "paths",
       "target",
       "types",
     ])
@@ -326,6 +314,25 @@ if (!compilerOptions) {
   }
   if (!hasStringList(compilerOptions["types"], ["bun"])) {
     failures.push("tsconfig.json compilerOptions.types must stay Bun-only");
+  }
+  const paths = compilerOptions["paths"];
+  const walletStandardFeatures = "packages/platform/starknet/src/wallet-standard-features.d.ts";
+  if (
+    !isRecord(paths) ||
+    !hasOnlyKeys(paths, [
+      "@starknet-io/get-starknet-wallet-standard/features",
+      "@starknet-io/get-starknet-wallet-standard-v6/features",
+    ]) ||
+    !hasStringList(paths["@starknet-io/get-starknet-wallet-standard/features"], [
+      `./${walletStandardFeatures}`,
+    ]) ||
+    !hasStringList(paths["@starknet-io/get-starknet-wallet-standard-v6/features"], [
+      `./${walletStandardFeatures}`,
+    ])
+  ) {
+    failures.push(
+      "tsconfig.json paths must unify get-starknet v5 and v6 feature types for starknet@10.8.0",
+    );
   }
 }
 if (
