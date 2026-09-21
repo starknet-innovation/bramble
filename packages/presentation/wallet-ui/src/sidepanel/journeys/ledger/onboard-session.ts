@@ -5,12 +5,16 @@
  * {@link LedgerDeviceClient}), so this runs without hardware. It reads no
  * secrets and derives no key material — it only reads public keys the device
  * already holds and rebuilds each EIP-2645 path deterministically from its
- * index (one source of truth with sign-time), so a stored path always matches
- * the one used to enumerate and sign.
+ * index and path scheme (one source of truth with sign-time), so a stored path
+ * always matches the one used to enumerate and sign.
  * Enumeration is paginated: each device round reads one PAGE of indices and the
  * controller accumulates pages, exposing `loadMore` to fetch the next page
- * (append, never refetch). The account-contract-aware routes let this one
- * controller back the complete add-account entry.
+ * (append, never refetch). The route picks the path scheme: the Ledger route
+ * reads Bramble's own `LedgerW` scheme and derives both contract families from
+ * those keys; the Ready-restore route reads Ready's `argentx` scheme — a
+ * different device key per index — and derives only the Argent family, since
+ * that is the only contract Ready deploys for a Ledger. The account-contract-
+ * aware routes let this one controller back the complete add-account entry.
  */
 
 import {
@@ -29,7 +33,13 @@ import type {
   LedgerAccountRef,
   LedgerPubKeyEntry,
 } from "@bramble/wallet-model/accounts";
-import { ledgerAccountPath, MAX_LEDGER_ACCOUNT_BATCH } from "@bramble/wallet-model/ledger-path";
+import {
+  LEDGER_EIP2645_APPLICATION,
+  type LedgerEip2645Application,
+  ledgerAccountPath,
+  MAX_LEDGER_ACCOUNT_BATCH,
+  READY_EIP2645_APPLICATION,
+} from "@bramble/wallet-model/ledger-path";
 import {
   type LedgerCandidate,
   type LedgerCandidateState,
@@ -62,9 +72,10 @@ export const LEDGER_PAGE_SIZE = MAX_LEDGER_ACCOUNT_BATCH;
  * session was already verified by the grant broker, then reads the public-key
  * x-coordinate for one page of account indices — `startIndex … startIndex +
  * count - 1` — SILENTLY and one round-trip at a time (the browser transport is
- * a serial pipe). Returns the enumerated `(index, publicKeyX)` pairs for
- * {@link LedgerOnboardController} to derive into candidates. Any
- * device/transport failure propagates as a typed
+ * a serial pipe), at the given EIP-2645 path scheme (Bramble's `LedgerW` unless
+ * told otherwise; Ready's `argentx` yields a different key per index). Returns
+ * the enumerated `(index, publicKeyX)` pairs for {@link LedgerOnboardController}
+ * to derive into candidates. Any device/transport failure propagates as a typed
  * {@link LedgerRejection} so the caller aborts cleanly.
  */
 export const enumerateLedgerPubKeys = async (
@@ -72,6 +83,7 @@ export const enumerateLedgerPubKeys = async (
   startIndex = 0,
   count: number = LEDGER_PAGE_SIZE,
   readiness?: LedgerDeviceSession["readiness"],
+  application: LedgerEip2645Application = LEDGER_EIP2645_APPLICATION,
 ): Promise<readonly LedgerPubKeyEntry[]> => {
   if (readiness !== "verified") {
     await assertLedgerDeviceReady(client);
@@ -79,7 +91,7 @@ export const enumerateLedgerPubKeys = async (
   const entries: LedgerPubKeyEntry[] = [];
   for (let offset = 0; offset < count; offset += 1) {
     const accountIndex = startIndex + offset;
-    const publicKeyX = await ledgerPublicKeyX(client, ledgerAccountPath(accountIndex));
+    const publicKeyX = await ledgerPublicKeyX(client, ledgerAccountPath(accountIndex, application));
     entries.push({ accountIndex, publicKeyX });
   }
   return entries;
@@ -99,7 +111,9 @@ const EMPTY_STATE: LedgerCandidateState = { balance: null, deployed: null, funde
  * a later batch failure leaves only the uncreated selection retryable instead
  * of wedging duplicate detection. Cancellation invalidates late async results.
  * Every device/transport failure maps to the typed rejection catalog and shows
- * an actionable retry.
+ * an actionable retry. The chosen route fixes the path scheme for the whole
+ * flow (every page, every derived candidate, every created account), so a
+ * picker never mixes keys read under two schemes.
  */
 export const createLedgerOnboardController = (
   deps: LedgerOnboardControllerDeps,
@@ -108,6 +122,10 @@ export const createLedgerOnboardController = (
   const createdIds = new Set<string>();
   let devices: readonly LedgerDeviceChoice[] = [];
   let selectedDeviceId: string | null = null;
+  // Set by the route that opens the connect prompt, deliberately outside
+  // resetState so a reconnect or a "Show more" page keeps reading the scheme
+  // the user chose.
+  let application: LedgerEip2645Application = LEDGER_EIP2645_APPLICATION;
 
   const selected = new Set<string>();
   let nextIndex = 0;
@@ -141,6 +159,7 @@ export const createLedgerOnboardController = (
 
   const renderPicker = (message?: string): void => {
     deps.render({
+      application,
       candidates,
       kind: "picker",
       ...(message ? { message } : {}),
@@ -201,16 +220,27 @@ export const createLedgerOnboardController = (
     let session: LedgerDeviceSession | null = null;
     try {
       session = await obtain();
-      const entries = await deps.enumerate(session.client, startIndex, session.readiness);
+      const entries = await deps.enumerate(
+        session.client,
+        startIndex,
+        session.readiness,
+        application,
+      );
       await closeLedgerSessionQuietly(session);
       session = null;
-      // Both contract families derive from the same device keys, so the picker
-      // can group existing Bramble and Ready accounts side by side.
-      const [bramble, ready] = await Promise.all([
-        deps.derive(entries, "openzeppelin"),
-        deps.derive(entries, "argent"),
-      ]);
-      const accounts = [...bramble, ...ready];
+      // Ready deploys only Argent accounts for a Ledger, so a key read at its
+      // scheme derives that one family. Under Bramble's scheme both families
+      // derive from the same device key, so the picker can group Bramble and
+      // Argent-model accounts side by side.
+      const accounts =
+        application === READY_EIP2645_APPLICATION
+          ? await deps.derive(entries, "argent", application)
+          : (
+              await Promise.all([
+                deps.derive(entries, "openzeppelin", application),
+                deps.derive(entries, "argent", application),
+              ])
+            ).flat();
       if (epoch !== flowEpoch) {
         return;
       }
@@ -369,12 +399,21 @@ export const createLedgerOnboardController = (
     }
   };
 
+  const openConnect = (scheme: LedgerEip2645Application): void => {
+    resetState();
+    application = scheme;
+    deps.render({ kind: "connect" });
+  };
+
   const choose = (kind: LedgerOnboardAddKind): void => {
     if (kind === "ledger") {
       // The Ledger route serves creation and import alike: the picker lists
       // what the device key derives, existing accounts included.
-      resetState();
-      deps.render({ kind: "connect" });
+      openConnect(LEDGER_EIP2645_APPLICATION);
+    } else if (kind === "restore-ready-ledger") {
+      // Ready reads the same device at its own path, so its accounts are
+      // invisible under Bramble's scheme; this route reads Ready's instead.
+      openConnect(READY_EIP2645_APPLICATION);
     } else if (kind === "regular") {
       void runChooseHd("openzeppelin");
     } else if (kind === "import") {
@@ -413,8 +452,8 @@ export const createLedgerOnboardController = (
       deps.render({ kind: "chooser" });
     },
     start() {
-      resetState();
-      deps.render({ kind: "connect" });
+      // First-run "Set up with a Ledger" creates Bramble accounts.
+      openConnect(LEDGER_EIP2645_APPLICATION);
     },
     toggle(accountId) {
       runToggle(accountId);

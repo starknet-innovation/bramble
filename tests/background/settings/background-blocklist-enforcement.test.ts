@@ -57,7 +57,7 @@ const walletStub = {
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin: BLOCKED }],
-      schemaVersion: 8 as const,
+      schemaVersion: 9 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

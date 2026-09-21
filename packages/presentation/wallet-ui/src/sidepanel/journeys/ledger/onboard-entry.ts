@@ -93,15 +93,20 @@ export const createLedgerOnboardEntry = (deps: {
         account.publicKeyX,
         setup.vaultPassphrase,
         account.accountContractType,
+        account.derivation.eip2645application,
       );
       ledgerSetup = null;
       return;
     }
+    // The path scheme travels with the candidate so a Ready account is stored
+    // at the path it was enumerated (and will be signed) at, never re-derived
+    // under Bramble's default scheme.
     await wallet.addLedgerAccount(
       account.networkId,
       account.derivation.accountIndex,
       account.publicKeyX,
       account.accountContractType,
+      account.derivation.eip2645application,
     );
   };
 

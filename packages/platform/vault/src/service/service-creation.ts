@@ -16,7 +16,7 @@ import {
 } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV8, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV9, type Vault } from "../schema/schema";
 import type { WalletVaultService } from "./service-types";
 
 /**
@@ -29,7 +29,7 @@ export const writeVault = async (
   vault: Vault,
   vaultPassphrase: string,
 ): Promise<void> => {
-  if (!isVaultV8(vault)) {
+  if (!isVaultV9(vault)) {
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase);
@@ -235,6 +235,9 @@ export const vaultCreationMethods = ({
     return deriveLedgerAccountRefs(kms, {
       accountContractType: input.accountContractType,
       ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+      ...(input.eip2645application === undefined
+        ? {}
+        : { eip2645application: input.eip2645application }),
       entries: input.entries,
       networkId: input.networkId,
     });
