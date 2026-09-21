@@ -113,7 +113,7 @@ export const LEDGER_GRANT_STYLES = `
     position: relative;
   }
   .ledger-cable {
-    background: var(--bramble-border);
+    background: var(--bramble-hairline);
     border-radius: ${RADIUS.full};
     height: 6px;
     left: 0;

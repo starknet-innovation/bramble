@@ -36,7 +36,11 @@ export const defaultSkin: Skin = {
     "--bramble-account-avatar-ink": "#0e0f16",
     "--bramble-account-avatar-paper": "#ffffff",
     "--bramble-bg": "#f8f9fb",
-    "--bramble-border": "#c9cad9",
+    // Field edge: the boundary that identifies an input. Non-text contrast of at
+    // least 3:1 against every surface tier a field sits on (spec item 25), pinned
+    // by the skin contrast test. Hairlines and dividers use the derived
+    // --bramble-hairline instead, so this stays a control edge, not a divider.
+    "--bramble-border": "#767a94",
     "--bramble-danger": "#a32f2f",
     "--bramble-elevated": "#f2f3f7",
     "--bramble-muted": "#50536d",
