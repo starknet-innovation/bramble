@@ -66,6 +66,7 @@ if (
     "name",
     "overrides",
     "packageManager",
+    "patchedDependencies",
     "private",
     "scripts",
     "type",
@@ -85,6 +86,18 @@ if (
   overrides["sharp"] !== "0.35.4"
 ) {
   failures.push("package.json must retain the reviewed security overrides");
+}
+
+// starknet@10.8.0 ships WalletAccountV6 extending WalletAccountV5 with
+// incompatible static connect types (get-starknet v5 vs v6). The reviewed
+// patch widens V6's connect parameter so skipLibCheck can stay false.
+const patchedDependencies = packageJson["patchedDependencies"];
+if (
+  !isRecord(patchedDependencies) ||
+  !hasOnlyKeys(patchedDependencies, ["starknet@10.8.0"]) ||
+  patchedDependencies["starknet@10.8.0"] !== "patches/starknet@10.8.0.patch"
+) {
+  failures.push("package.json must retain the reviewed starknet@10.8.0 type patch");
 }
 
 if (!hasOnlyKeys(tsconfigJson, ["compilerOptions", "include"])) {
