@@ -14,6 +14,7 @@ import {
   isImportedSeedId,
   isLegacyAccountRef,
   isLegacyV6AccountRef,
+  isLegacyV8AccountRef,
   type LegacyAccountRef,
   type LegacyV6AccountRef,
 } from "@bramble/wallet-model/accounts";
@@ -33,13 +34,15 @@ import {
 /**
  * Current vault schema version accepted by validators and writers.
  *
- * Version 8 retains imported seeds, each HD account bound to the phrase that
- * derived it. Version 7 retains the exact Argent deployment salt. Version 6
- * records account-contract semantics explicitly. Version 5 canonicalized
- * account identities. Version 4 introduced optional account secrets separated
- * from public {@link AccountRef} metadata.
+ * Version 9 admits Ready's `argentx` Ledger path scheme beside Bramble's
+ * `LedgerW`; every earlier version stays pinned to `LedgerW`. Version 8 retains
+ * imported seeds, each HD account bound to the phrase that derived it. Version
+ * 7 retains the exact Argent deployment salt. Version 6 records
+ * account-contract semantics explicitly. Version 5 canonicalized account
+ * identities. Version 4 introduced optional account secrets separated from
+ * public {@link AccountRef} metadata.
  */
-export const CURRENT_SCHEMA_VERSION = 8;
+export const CURRENT_SCHEMA_VERSION = 9;
 
 /**
  * Current encrypted vault schema. Optional account secrets are deliberately
@@ -92,8 +95,9 @@ export type ImportedSeedRef = {
 };
 
 /**
- * Current encrypted vault schema. Version 8 retains imported seeds so accounts
- * recovered from another wallet's phrase stay re-derivable and revealable.
+ * Legacy encrypted vault schema. Version 8 retains imported seeds so accounts
+ * recovered from another wallet's phrase stay re-derivable and revealable; its
+ * Ledger derivations may only follow Bramble's `LedgerW` scheme.
  */
 export type VaultV8 = Omit<VaultV7, "schemaVersion"> & {
   readonly importedSeeds: readonly ImportedSeedRef[];
@@ -101,9 +105,16 @@ export type VaultV8 = Omit<VaultV7, "schemaVersion"> & {
 };
 
 /**
+ * Current encrypted vault schema. Version 9 admits a Ledger derivation under
+ * Ready's `argentx` path scheme (an account restored from Ready) beside
+ * Bramble's `LedgerW`; the record shape is unchanged.
+ */
+export type VaultV9 = Omit<VaultV8, "schemaVersion"> & { readonly schemaVersion: 9 };
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV8;
+export type Vault = VaultV9;
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -132,7 +143,7 @@ const isOriginGrant = (value: unknown, canonical: boolean): value is OriginGrant
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV8 => ({
+export const emptyVault = (): VaultV9 => ({
   accounts: [],
   accountSecrets: [],
   activeAccountId: null,
@@ -162,32 +173,40 @@ const hasValidKeyBindings = (
       (account.derivation.kind !== "ledger"),
   );
 
+// Which account validator a vault version's records must satisfy. Every shape
+// before "current" pins Ledger derivations to Bramble's `LedgerW` scheme, the
+// only one those vaults could ever have stored.
+type VaultAccountShape = "current" | "v7v8" | "v6" | "v1v5";
+
 type VaultReferenceOptions = {
+  readonly accounts: VaultAccountShape;
   readonly canonical: boolean;
-  readonly currentAccounts: boolean;
-  readonly legacyV6Accounts?: boolean;
   readonly ledgerAllowed: boolean;
+};
+
+const isVaultAccountShape = (
+  account: unknown,
+  shape: VaultAccountShape,
+  canonical: boolean,
+): account is AccountRef | LegacyAccountRef | LegacyV6AccountRef => {
+  switch (shape) {
+    case "current":
+      return canonical ? isAccountRef(account) : canonicalAccountRef(account) !== null;
+    case "v7v8":
+      return isLegacyV8AccountRef(account);
+    case "v6":
+      return isLegacyV6AccountRef(account);
+    default:
+      return canonical ? isLegacyAccountRef(account) : canonicalLegacyAccountRef(account) !== null;
+  }
 };
 
 const isVaultAccount = (
   account: unknown,
   options: VaultReferenceOptions,
-): account is AccountRef | LegacyAccountRef | LegacyV6AccountRef => {
-  const valid = options.currentAccounts
-    ? options.canonical
-      ? isAccountRef(account)
-      : canonicalAccountRef(account) !== null
-    : options.legacyV6Accounts
-      ? isLegacyV6AccountRef(account)
-      : options.canonical
-        ? isLegacyAccountRef(account)
-        : canonicalLegacyAccountRef(account) !== null;
-  if (!valid) {
-    return false;
-  }
-  const parsed = account as AccountRef | LegacyAccountRef | LegacyV6AccountRef;
-  return options.ledgerAllowed || parsed.derivation.kind !== "ledger";
-};
+): account is AccountRef | LegacyAccountRef | LegacyV6AccountRef =>
+  isVaultAccountShape(account, options.accounts, options.canonical) &&
+  (options.ledgerAllowed || account.derivation.kind !== "ledger");
 
 const hasValidVaultReferences = (
   value: Record<string, unknown>,
@@ -228,11 +247,7 @@ const hasValidVaultReferences = (
 
 const hasValidCurrentVaultReferences = (
   value: Record<string, unknown>,
-  options: {
-    readonly canonical: boolean;
-    readonly currentAccounts: boolean;
-    readonly legacyV6Accounts?: boolean;
-  },
+  options: Omit<VaultReferenceOptions, "ledgerAllowed">,
 ): boolean =>
   Array.isArray(value["accounts"]) &&
   Array.isArray(value["accountSecrets"]) &&
@@ -241,13 +256,7 @@ const hasValidCurrentVaultReferences = (
   hasValidAccountSecretBindings(
     value["accounts"].filter(
       (account): account is AccountRef | LegacyAccountRef | LegacyV6AccountRef =>
-        options.currentAccounts
-          ? options.canonical
-            ? isAccountRef(account)
-            : canonicalAccountRef(account) !== null
-          : options.legacyV6Accounts
-            ? isLegacyV6AccountRef(account)
-            : canonicalLegacyAccountRef(account) !== null,
+        isVaultAccountShape(account, options.accounts, options.canonical),
     ),
     value["accountSecrets"],
   );
@@ -276,11 +285,7 @@ export const isVaultV1 = (value: unknown): value is VaultV1 =>
     "signingKeys",
   ]) &&
   value["schemaVersion"] === 1 &&
-  hasValidVaultReferences(value, {
-    canonical: false,
-    currentAccounts: false,
-    ledgerAllowed: false,
-  });
+  hasValidVaultReferences(value, { accounts: "v1v5", canonical: false, ledgerAllowed: false });
 
 const V2_V3_KEYS = [
   "accounts",
@@ -302,11 +307,7 @@ export const isVaultV2 = (value: unknown): value is VaultV2 =>
   hasOnlyKnownKeys(value, V2_V3_KEYS) &&
   value["schemaVersion"] === 2 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: false,
-    currentAccounts: false,
-    ledgerAllowed: false,
-  });
+  hasValidVaultReferences(value, { accounts: "v1v5", canonical: false, ledgerAllowed: false });
 
 /**
  * Validates the current vault schema and internal references, admitting the
@@ -318,11 +319,7 @@ export const isVaultV3 = (value: unknown): value is VaultV3 =>
   hasOnlyKnownKeys(value, V2_V3_KEYS) &&
   value["schemaVersion"] === 3 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: false,
-    currentAccounts: false,
-    ledgerAllowed: true,
-  });
+  hasValidVaultReferences(value, { accounts: "v1v5", canonical: false, ledgerAllowed: true });
 
 const V4_KEYS = [...V2_V3_KEYS, "accountSecrets"] as const;
 
@@ -336,12 +333,8 @@ export const isVaultV4 = (value: unknown): value is VaultV4 =>
   hasOnlyKnownKeys(value, V4_KEYS) &&
   value["schemaVersion"] === 4 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: false,
-    currentAccounts: false,
-    ledgerAllowed: true,
-  }) &&
-  hasValidCurrentVaultReferences(value, { canonical: false, currentAccounts: false });
+  hasValidVaultReferences(value, { accounts: "v1v5", canonical: false, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v1v5", canonical: false });
 
 /**
  * Validates the current canonical vault schema and all internal references.
@@ -352,12 +345,8 @@ export const isVaultV5 = (value: unknown): value is VaultV5 =>
   hasOnlyKnownKeys(value, V4_KEYS) &&
   value["schemaVersion"] === 5 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: true,
-    currentAccounts: false,
-    ledgerAllowed: true,
-  }) &&
-  hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: false });
+  hasValidVaultReferences(value, { accounts: "v1v5", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v1v5", canonical: true });
 
 /**
  * Validates legacy schema-v6 vaults for the adjacent v7 migration.
@@ -368,20 +357,12 @@ export const isVaultV6 = (value: unknown): value is VaultV6 =>
   hasOnlyKnownKeys(value, V4_KEYS) &&
   value["schemaVersion"] === 6 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: true,
-    currentAccounts: false,
-    legacyV6Accounts: true,
-    ledgerAllowed: true,
-  }) &&
-  hasValidCurrentVaultReferences(value, {
-    canonical: true,
-    currentAccounts: false,
-    legacyV6Accounts: true,
-  });
+  hasValidVaultReferences(value, { accounts: "v6", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v6", canonical: true });
 
 /**
- * Validates legacy schema-v7 vaults for the adjacent v8 migration.
+ * Validates legacy schema-v7 vaults for the adjacent v8 migration. Ledger
+ * derivations are pinned to Bramble's `LedgerW` scheme.
  */
 export const isVaultV7 = (value: unknown): value is VaultV7 =>
   isRecord(value) &&
@@ -389,13 +370,9 @@ export const isVaultV7 = (value: unknown): value is VaultV7 =>
   hasOnlyKnownKeys(value, V4_KEYS) &&
   value["schemaVersion"] === 7 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: true,
-    currentAccounts: true,
-    ledgerAllowed: true,
-  }) &&
+  hasValidVaultReferences(value, { accounts: "v7v8", canonical: true, ledgerAllowed: true }) &&
   hasValidAccountContractBindings(value) &&
-  hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: true });
+  hasValidCurrentVaultReferences(value, { accounts: "v7v8", canonical: true });
 
 const V8_KEYS = [...V4_KEYS, "importedSeeds"] as const;
 
@@ -430,19 +407,32 @@ const hasValidSeedBindings = (value: Record<string, unknown>): boolean => {
 };
 
 /**
- * Validates the current schema-v8 vault and all internal references.
+ * Validates legacy schema-v8 vaults for the adjacent v9 migration. Ledger
+ * derivations are pinned to Bramble's `LedgerW` scheme; a v8 record naming
+ * Ready's `argentx` scheme is refused, as no v8 writer ever produced one.
  */
 export const isVaultV8 = (value: unknown): value is VaultV8 =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, V8_KEYS) &&
+  value["schemaVersion"] === 8 &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, { accounts: "v7v8", canonical: true, ledgerAllowed: true }) &&
+  hasValidAccountContractBindings(value) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v7v8", canonical: true }) &&
+  hasValidSeedBindings(value);
+
+/**
+ * Validates the current schema-v9 vault and all internal references, admitting
+ * Ledger derivations under either supported path scheme.
+ */
+export const isVaultV9 = (value: unknown): value is VaultV9 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V8_KEYS) &&
   value["schemaVersion"] === CURRENT_SCHEMA_VERSION &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: true,
-    currentAccounts: true,
-    ledgerAllowed: true,
-  }) &&
+  hasValidVaultReferences(value, { accounts: "current", canonical: true, ledgerAllowed: true }) &&
   hasValidAccountContractBindings(value) &&
-  hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "current", canonical: true }) &&
   hasValidSeedBindings(value);
