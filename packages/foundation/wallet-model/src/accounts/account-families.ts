@@ -27,7 +27,13 @@
  * from Krusty rather than restated**, so there is one source of truth again.
  */
 
-import { ARGENT_ACCOUNT_CLASS_HASH } from "./accounts";
+/**
+ * The Argent Account 0.4 class this wallet deploys when it creates an Argent
+ * account. Defined here, beside the rest of the class table, so the account
+ * validators can consult the table without a dependency cycle.
+ */
+export const ARGENT_ACCOUNT_CLASS_HASH =
+  "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f";
 
 /**
  * Wallet families whose accounts this wallet can derive addresses for. OpenZeppelin
