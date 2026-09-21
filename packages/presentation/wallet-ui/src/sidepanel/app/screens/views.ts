@@ -76,6 +76,7 @@ import { backupFlow, simpleFlowScreen } from "./flows";
 export { isWalletView, WALLET_VIEWS, type WalletView };
 
 type JourneyContext = {
+  readonly deployment: boolean | null;
   readonly account: AccountRef | null;
   readonly chart: readonly number[];
   readonly currency: DisplayCurrency;
@@ -249,6 +250,7 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     price,
     context.currency,
     context.privacy,
+    context.deployment,
   );
 };
 
@@ -306,6 +308,7 @@ export const dashboard = (
       ? multisigBalances
       : { error: "Shared balances are loading." };
   const journeyContext: JourneyContext = {
+    deployment,
     account,
     chart,
     currency,

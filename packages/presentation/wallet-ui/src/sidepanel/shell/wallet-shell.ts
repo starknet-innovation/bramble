@@ -180,16 +180,23 @@ export const explorerTile = (url: string | null): string => {
  * no token to name — no account, or a network with none tracked — following the
  * explorer tile in staying put rather than reflowing the row.
  */
-export const shieldTile = (tokenId: string | null, ready: boolean): string => {
+export const shieldTile = (
+  tokenId: string | null,
+  ready: boolean,
+  deployment: boolean | null = null,
+): string => {
   const body = `<span class="tile-icon">${icon("shield")}</span>
-      <span class="tile-label">Shield</span>`;
+      <span class="tile-label">${deployment === false ? "Deploy and enable" : "Shield"}</span>`;
   if (tokenId === null) {
     return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable until a token is tracked">${body}</button>`;
   }
-  const attribute = ready ? "data-send-shield" : "data-privacy-open";
-  const label = ready
-    ? "Shield public value into your private balance"
-    : "Activate private balances";
+  const attribute = ready && deployment !== false ? "data-send-shield" : "data-privacy-open";
+  const label =
+    deployment === false
+      ? "Deploy and enable"
+      : ready
+        ? "Shield public value into your private balance"
+        : "Activate private balances";
   return `<button class="action-tile" ${attribute}="${escapeHtml(tokenId)}" type="button" aria-label="${label}">${body}</button>`;
 };
 

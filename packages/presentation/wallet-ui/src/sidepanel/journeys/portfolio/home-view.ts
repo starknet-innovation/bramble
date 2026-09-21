@@ -93,9 +93,9 @@ export const homeScreen = (
         ${actionTile("send", "Send", "send", account !== null)}
         ${actionTile("swap", "Swap", "shuffle", account !== null)}
         ${actionTile("receive", "Receive", "qrCode", account !== null)}
-        ${shieldTile(strkTokenId, privateReady)}
+        ${shieldTile(strkTokenId, privateReady, deployment)}
       </div>
     </section>
-    ${homeTabs(balances, preferences, prices, changes, currency, privacy)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, privacy, deployment)}`,
   );
 };

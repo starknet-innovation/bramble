@@ -9,6 +9,7 @@
  * this, and three private copies of a two-line helper is how the fallback
  * wording, and then the narrowing, quietly drift apart.
  */
+import { readPrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
 import { isErrorResponse } from "../../popup/responses/responses";
 
 /**
@@ -17,4 +18,5 @@ import { isErrorResponse } from "../../popup/responses/responses";
  * shape the caller's guard refused.
  */
 export const responseError = (response: unknown, fallback: string): Error =>
+  readPrivacyBlockerError(response) ??
   new Error(isErrorResponse(response) ? response.error : fallback);

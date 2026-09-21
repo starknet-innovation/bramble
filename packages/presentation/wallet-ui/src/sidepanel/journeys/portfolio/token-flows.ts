@@ -187,6 +187,27 @@ const sparkline = (points: readonly number[]): string => {
   return `<svg class="sparkline sparkline-${sparklineTrend(points)}" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${path}" /></svg>`;
 };
 
+const privacyActions = (
+  tokenId: string,
+  privacy: PrivacyDisclosureState,
+  deployment: boolean | null,
+): string => {
+  if (deployment === false)
+    return button({
+      attributes: { "data-privacy-open": tokenId },
+      icon: "shield",
+      label: "Deploy and enable",
+    });
+  if (privacy.error) return "";
+  if (privacy.value?.registration === "registered")
+    return `<div class="token-privacy-actions">${button({ attributes: { "data-send-shield": tokenId }, icon: "shield", label: "Shield" })}${button({ attributes: { "data-send-unshield": tokenId }, label: "Unshield", variant: "secondary" })}</div>`;
+  return button({
+    attributes: { "data-privacy-open": tokenId },
+    icon: "shield",
+    label: privacy.value?.registration === "pending" ? "Registration pending" : "Go private",
+  });
+};
+
 /**
  * Token detail flow: current price, a 7-day sparkline, holdings, and the
  * contract facts. `chart` holds the recent price series; `price` is the
@@ -204,14 +225,15 @@ export const tokenDetailFlow = (
     loading: false,
     value: null,
   },
+  deployment: boolean | null = null,
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
   const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);
   const privateFiat = privateBalance
     ? tokenFiatValue(privateBalance.formatted, price ?? undefined)
     : null;
-  const registered = privacy.value?.registration === "registered";
-  const registrationPending = privacy.value?.registration === "pending";
+  const registered = deployment !== false && privacy.value?.registration === "registered";
+  const registrationPending = deployment !== false && privacy.value?.registration === "pending";
   return (
     flowHeader(token.symbol, status, token.name) +
     flowScreen(
@@ -229,7 +251,7 @@ export const tokenDetailFlow = (
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
         ${
-          privacy.error
+          privacy.error && deployment !== false
             ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-fiat">Try again</span>
@@ -249,25 +271,7 @@ export const tokenDetailFlow = (
               </div>`
                 : ""
         }
-        ${
-          privacy.error
-            ? ""
-            : registered
-              ? `<div class="token-privacy-actions">${button({
-                  attributes: { "data-send-shield": token.id },
-                  icon: "shield",
-                  label: "Shield",
-                })}${button({
-                  attributes: { "data-send-unshield": token.id },
-                  label: "Unshield",
-                  variant: "secondary",
-                })}</div>`
-              : button({
-                  attributes: { "data-privacy-open": token.id },
-                  icon: "shield",
-                  label: registrationPending ? "Registration pending" : "Go private",
-                })
-        }
+        ${privacyActions(token.id, privacy, deployment)}
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>

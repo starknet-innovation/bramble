@@ -3,6 +3,7 @@
  * registration/shielding journey.
  */
 
+import { PRIVACY_DEPLOY_REQUIRED } from "@bramble/wallet-protocol/privacy-blocker";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { accountDisplayName } from "../../shared/parts";
 import type { SendIntent } from "../send/send-model";
@@ -20,7 +21,6 @@ import {
   emptyPrivacyDisclosure,
   type PrivacyBlocker,
   type PrivacyJourneyState,
-  privacyBlockerFor,
 } from "./privacy-model";
 import { createPendingRegistrationPoll } from "./privacy-pending-poll";
 import type { PreparationProgress } from "./privacy-preparation-job";
@@ -87,6 +87,41 @@ const openBucketSend = (
 // the preparing screen, never behind a busy button: the tile dimming for a
 // minute while a proof ran is exactly what was reported as "nothing happens".
 const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void> => {
+  const before = deps.journey();
+  let deployment = deps.deployment?.();
+  if (deployment === null) {
+    const scope = captureScope(deps);
+    showPreparing(deps, tokenId, "discovering");
+    try {
+      const result = await deps.wallet.loadDeploymentStatus();
+      if (!scopeMatches(deps, scope) || deps.journey().stage !== "preparing") return;
+      if (!result || result.accountId !== scope.accountId) {
+        block(deps, tokenId, {
+          kind: "service",
+          message: "Account deployment could not be checked. Try again.",
+        });
+        return;
+      }
+      deployment = result.deployed;
+    } catch {
+      if (scopeMatches(deps, scope) && deps.journey().stage === "preparing") {
+        block(deps, tokenId, {
+          kind: "service",
+          message: "Account deployment could not be checked. Try again.",
+        });
+      }
+      return;
+    }
+  }
+  if (deployment === false) {
+    block(deps, tokenId, { kind: "deploy", message: PRIVACY_DEPLOY_REQUIRED }, before);
+    return;
+  }
+  await continueJourney(deps, tokenId);
+};
+
+// Also entered after deployment has been confirmed on-chain, before the render cache refreshes.
+const continueJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void> => {
   const scope = captureScope(deps);
   const before = deps.journey();
   if (!disclosureIsCurrent(deps)) {
@@ -112,12 +147,14 @@ const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void>
     block(
       deps,
       tokenId,
-      privacyBlockerFor(
-        disclosure.error ??
+      {
+        kind: disclosure.blockerKind ?? "service",
+        message:
+          disclosure.error ??
           (disclosure.loading
             ? "Private balances are still being discovered. Try again in a moment."
             : "Private balances unavailable"),
-      ),
+      },
       before,
     );
     return;
@@ -204,7 +241,7 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
     startRegistration: () => {
       const tokenId = defaultTokenId(deps);
       if (tokenId) {
-        void startJourney(deps, tokenId);
+        void continueJourney(deps, tokenId);
       }
     },
     wallet: deps.wallet,

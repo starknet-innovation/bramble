@@ -391,6 +391,7 @@ export const startWalletUi = async (
   };
   privacy = createPrivacyController({
     app,
+    deployment: () => cache.deployment,
     balances: () => cache.balances,
     navigate: (view) => navigate(view),
     openSend: (intent) => {

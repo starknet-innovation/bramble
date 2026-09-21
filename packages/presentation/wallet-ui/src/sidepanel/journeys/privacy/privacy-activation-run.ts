@@ -17,7 +17,6 @@
  * outcome; the job keeps its slot until it settles, so coming back rejoins it.
  */
 
-import { errorMessage } from "../../shared/dom";
 import { captureScope, type PrivacyUiDeps, scopeKey, scopeMatches } from "./privacy-disclosure";
 import {
   type PrivacyBlocker,
@@ -119,7 +118,7 @@ export const runActivation = (
     (error: unknown) => {
       const watched = settled();
       if (watched === null) return;
-      onBlocked(watched, privacyBlockerFor(errorMessage(error, "Private journey unavailable")));
+      onBlocked(watched, privacyBlockerFor(error));
     },
   );
 };

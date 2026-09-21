@@ -111,7 +111,10 @@ describe("activation route through the job", () => {
       { type: "wallet.strk20PrepareRegistration" },
       STRK20_EXTENSION_SENDER,
     );
-    expect(refused).toEqual({ error: "Private balances are not configured for this network" });
+    expect(refused).toEqual({
+      error: "Private balances are not configured for this network",
+      privacyBlocker: "network",
+    });
     expect(strk20RunningJobId(refused)).toBeNull();
 
     // Already registered: decided by the service inside the job, so the start
