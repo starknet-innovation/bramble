@@ -3,12 +3,13 @@ import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { AccountDerivationInput } from "@bramble/vault/accounts";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   type DerivedAccountRef,
   OPENZEPPELIN_ACCOUNT_CLASS_HASH,
 } from "@bramble/wallet-model/accounts";
-import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
 import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import { handleOnboardingOps } from "../../../apps/extension/src/background/onboarding/onboarding-ops";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
@@ -125,5 +126,53 @@ describe("recovery discovery", () => {
           .concat(["openzeppelin:42", "argent:42"]),
       ),
     );
+  });
+
+  test("previews every Argent release an account could have been deployed with", async () => {
+    // A Ready account deployed at Argent 0.3.x keeps that address forever,
+    // whatever it upgrades to. Scanning only the release this wallet creates
+    // finds nobody who arrived from Ready, which is the whole of #377.
+    const argentClasses: Array<string | undefined> = [];
+    const deps = {
+      activeStateCoordinator: createActiveStateCoordinator(),
+      preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+      recoveryDiscovery: createRecoveryDiscoveryCache(),
+      runtimeRpc: {
+        ...defaultRuntimeRpc,
+        async getDeploymentStatus() {
+          return false;
+        },
+        async getTokenBalances({
+          tokens,
+        }: Parameters<typeof defaultRuntimeRpc.getTokenBalances>[0]) {
+          return tokens.map((token) => ({ ...token, balance: "0", formatted: "0" }));
+        },
+      },
+      session: createUnlockSession(),
+      wallet: {
+        ...walletStub,
+        async previewAccount(input: AccountDerivationInput) {
+          if (input.accountContractType === "argent") {
+            argentClasses.push(input.classHash);
+          }
+          return accountFor(input);
+        },
+      },
+    };
+
+    await handleOnboardingOps(deps, "wallet.discoverRecoveryAccounts", {
+      manualIndex: 0,
+      mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+      networkId: "SN_MAIN",
+      type: "wallet.discoverRecoveryAccounts",
+    });
+
+    const expected = deploymentClasses("argent");
+    expect(expected.length).toBeGreaterThan(1);
+    for (const entry of expected) {
+      expect(
+        argentClasses.some((seen) => seen !== undefined && sameFelt(seen, entry.classHash)),
+      ).toBe(true);
+    }
   });
 });
