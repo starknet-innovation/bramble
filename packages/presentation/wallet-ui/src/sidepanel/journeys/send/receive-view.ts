@@ -59,17 +59,36 @@ export const privacyPoolNotice = (
 };
 
 /**
- * Renders the canonical Receive card. Its QR carries a versioned public wallet
- * card; the address and optional signer keys remain separately copyable.
+ * Accessible names of the two QR payloads Receive can show. Shared with the
+ * shell binding that swaps between them, so the label and the payload cannot
+ * drift apart.
+ */
+export const RECEIVE_QR_LABELS = {
+  address: "QR code for your Starknet address",
+  card: "QR code for wallet contact card",
+} as const;
+
+// The contact card is a public document; saying so keeps the signer and
+// coordination keys from reading as secrets when they appear beside it.
+const CARD_EXPLAINER =
+  "The contact card is public: this address, the signer public key, and the coordination public key. It holds nothing secret.";
+
+/**
+ * Renders the canonical Receive card. The QR carries the plain Starknet
+ * address by default — the payload every other wallet can read — and the
+ * address is shown in full beside it. An account with a signer key can switch
+ * the QR to the versioned Bramble contact card once that card is complete;
+ * preparing or failing to prepare it never blocks the address.
  */
 type ReceiveAddressViewOptions = {
   readonly address: string;
   readonly copyLabel: string;
   readonly hint: string;
   readonly networkId: StarknetNetworkId;
+  /** Display name of the network, shown beside the address when provided. */
+  readonly networkName?: string;
   readonly nostrPublicKey?: string;
   readonly publicKeyX?: string;
-  readonly qrLabel?: string;
 };
 
 /**
@@ -81,9 +100,9 @@ export const receiveAddressView = ({
   copyLabel,
   hint,
   networkId,
+  networkName,
   nostrPublicKey,
   publicKeyX,
-  qrLabel,
 }: ReceiveAddressViewOptions): string => {
   const walletCardReady = !publicKeyX || !!nostrPublicKey;
   const contactCard = walletContactCard({
@@ -92,13 +111,27 @@ export const receiveAddressView = ({
     ...(nostrPublicKey ? { nostrPublicKey } : {}),
     ...(publicKeyX ? { publicKeyX } : {}),
   });
+  const rootData = publicKeyX
+    ? ` data-receive-wallet-card data-receive-address="${escapeHtml(address)}" data-receive-network="${escapeHtml(networkId)}" data-receive-signer-key="${escapeHtml(publicKeyX)}" data-wallet-card-state="${walletCardReady ? "ready" : "preparing"}"${walletCardReady ? ` data-receive-card="${escapeHtml(contactCard)}"` : ""}`
+    : "";
   return `
-  <div class="stack receive-address-view"${publicKeyX ? ` data-receive-wallet-card data-receive-address="${escapeHtml(address)}" data-receive-network="${escapeHtml(networkId)}" data-receive-signer-key="${escapeHtml(publicKeyX)}" data-wallet-card-state="${walletCardReady ? "ready" : "preparing"}"` : ""}>
-    <div class="qr-card" data-receive-qr${walletCardReady ? "" : ' aria-busy="true"'}>${walletCardReady ? qrSvg(contactCard, qrLabel ?? "QR code for wallet contact card") : '<p class="receive-card-pending" role="status">Preparing complete wallet card…</p>'}</div>
+  <div class="stack receive-address-view"${rootData}>
+    <div class="qr-card" data-receive-qr data-qr-payload="address">${qrSvg(address, RECEIVE_QR_LABELS.address)}</div>
     <div class="receive-intro">
       <h2>Your Starknet address</h2>
+      <p class="receive-address-line"><code data-receive-address-text>${escapeHtml(address)}</code></p>
+      ${networkName ? `<p class="receive-network">Network: <strong>${escapeHtml(networkName)}</strong></p>` : ""}
       <p>${escapeHtml(hint)}</p>
     </div>
+    ${
+      publicKeyX
+        ? `<div class="seg receive-payload-switch" role="group" aria-label="QR code contents" data-receive-payload-switch>
+        <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">Address</button>
+        <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Bramble contact card</button>
+      </div>
+      <p class="hint receive-card-explainer" data-receive-card-explainer>${escapeHtml(CARD_EXPLAINER)}</p>`
+        : ""
+    }
     <div class="receive-actions">
       ${button({ attributes: { "data-copy": address }, icon: "copy", label: copyLabel })}
       ${

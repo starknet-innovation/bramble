@@ -6,8 +6,9 @@
  * live transport while the side panel performs the current read or sign.
  *
  * The channel name contains an unguessable per-tab capability and both ends
- * validate every message. Only canonical Bramble Ledger paths and Stark field
- * hashes may reach the device. Responses carry public app/key data or a raw
+ * validate every message. Only canonical Ledger paths (Bramble's `LedgerW`
+ * scheme or Ready's `argentx` scheme, as the shared path parser defines them)
+ * and Stark field hashes may reach the device. Responses carry public app/key data or a raw
  * signature over the caller-supplied hash; no seed, private key, vault secret,
  * raw transport error, or device identifier crosses the channel.
  */

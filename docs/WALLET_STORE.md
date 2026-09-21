@@ -7,7 +7,7 @@ permalink: /wallet-store/
 # Wallet store architecture and update safety
 
 This document is the reviewed persistence contract for Bramble. It covers the store layout at
-the v8 encrypted-vault schema, account identity and scoping, mutation rules, Chrome extension
+the v9 encrypted-vault schema, account identity and scoping, mutation rules, Chrome extension
 updates, and the custody boundary for a future Ledger-derived STRK20 viewing key.
 
 Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implementation tracked by
@@ -43,7 +43,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 
 | Key / state | Area | Sensitivity | Identity and bounds | Failure policy |
 | --- | --- | --- | --- | --- |
-| `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v8; account ids unique; strict cross-references | fail closed |
+| `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v9; account ids unique; strict cross-references | fail closed |
 | `bramble:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
 | `bramble:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
 | `bramble:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |
@@ -68,8 +68,19 @@ until extension removal, while session data is cleared when an extension is upda
 
 - `starknet-bip44`: HD coordinates and full public point; one encrypted signing-key reference.
 - `imported-raw-key`: public x-coordinate and one encrypted signing-key reference.
-- `ledger`: EIP-2645 account index/path, `LedgerW` application marker, and public x-coordinate; no
-  signing-key reference.
+- `ledger`: EIP-2645 account index/path, application marker (`LedgerW` for accounts created here,
+  `argentx` for accounts restored from Ready), and public x-coordinate; no signing-key reference.
+
+A Ledger derives a different key per EIP-2645 application, so the marker names which of two path
+schemes the stored path follows, and the validator rejects any record whose marker, path, and index
+disagree. Bramble's own `LedgerW` scheme is `m/2645'/1195502025'/734980059'/0'/<index>'/0`
+(byte-identical to starknet.js `getLedgerPathBuffer221`). Ready's `argentx` scheme is
+`m/2645'/1195502025'/1148870696'/0'/0'/<index>`, Ready's `STANDARD_LEDGER_DERIVATION_PATH`
+(`1148870696` is the low 31 bits of sha256("argentx")). The "Restore a Ready Ledger account" route
+enumerates the device at Ready's scheme, derives the Argent 0.4.0 address Ready itself computes
+(salt = public key, no guardian), lists only accounts with on-chain activity as selectable, and
+stores that path so signing asks the device for the same key Ready did. Ready numbers a new Ledger
+account after every account already in that wallet, so a restored account may sit several pages in.
 
 All three carry an explicit `argent` or `openzeppelin` account-contract type and use
 `networkId:address` as the stable account id. Network projection intentionally creates a new
