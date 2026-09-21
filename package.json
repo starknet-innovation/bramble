@@ -20,6 +20,7 @@
     "check:deadcode": "knip",
     "check:extension": "bun run scripts/check-extension-manifest.ts",
     "check:files": "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
+    "check:firefox": "web-ext lint --source-dir dist-firefox",
     "check:imports": "bun run scripts/check-workspace-architecture.ts",
     "check:krusty": "bun run scripts/check-krusty-adapter.ts",
     "check:lint": "biome check .",
@@ -51,7 +52,8 @@
     "fast-check": "4.10.0",
     "knip": "6.35.1",
     "madge": "8.0.0",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "web-ext": "10.6.0"
   },
   "dependencies": {
     "@bramble/core": "workspace:*",
