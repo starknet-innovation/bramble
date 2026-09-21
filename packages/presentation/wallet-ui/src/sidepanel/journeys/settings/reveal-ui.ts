@@ -16,6 +16,7 @@
 
 import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
@@ -71,7 +72,7 @@ export const revealFlow = (status: WalletStatus): string => {
           autocomplete: "current-password",
           hint: "Re-enter it to reveal. An unlocked session alone is not enough.",
           label: "Confirm vault passphrase",
-          minlength: 12,
+          minlength: MIN_VAULT_PASSPHRASE_LENGTH,
           name: "vaultPassphrase",
           required: true,
           type: "password",

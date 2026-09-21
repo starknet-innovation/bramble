@@ -14,6 +14,7 @@ import type {
   LedgerAccountRef,
   LedgerPubKeyEntry,
 } from "@bramble/wallet-model/accounts";
+import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
 
 /**
  * One enumerated candidate for the picker: the derived keyless account plus its
@@ -30,7 +31,9 @@ export type LedgerCandidate = {
 };
 
 /**
- * Account-contract-aware routes dispatched by the add-account chooser.
+ * Routes dispatched by the add-account chooser. `ledger` reads the device at
+ * Bramble's own path scheme; `restore-ready-ledger` reads it at Ready's, which
+ * is the only way an account created in Ready (Argent X) can be found.
  */
 export type LedgerOnboardAddKind =
   | "import"
@@ -38,12 +41,14 @@ export type LedgerOnboardAddKind =
   | "import-phrase"
   | "ledger"
   | "multisig"
-  | "regular";
+  | "regular"
+  | "restore-ready-ledger";
 
 /**
  * The onboarding device-prompt view the binder renders: the add-account
  * chooser, the connect gesture, the silent read, the multi-select account
- * picker (with the currently-selected indices), or a typed error.
+ * picker (with the currently-selected ids and the path scheme it was read at),
+ * or a typed error.
  */
 export type LedgerOnboardView =
   | { readonly kind: "chooser" }
@@ -53,6 +58,7 @@ export type LedgerOnboardView =
   | { readonly kind: "reading" }
   | {
       readonly kind: "picker";
+      readonly application: LedgerEip2645Application;
       readonly candidates: readonly LedgerCandidate[];
       readonly message?: string;
       readonly selected: readonly string[];
@@ -71,7 +77,9 @@ export type LedgerCandidateState = {
 /**
  * Injected collaborators keep chooser, enumeration, contract-aware derivation,
  * creation, refresh, and cancellation testable without hardware or a live
- * background.
+ * background. `enumerate` and `derive` receive the path scheme the current
+ * route reads the device at, so a derived account's stored path is the one the
+ * device was actually asked for.
  */
 export type LedgerOnboardControllerDeps = {
   readonly addHd: (accountContractType: AccountContractType) => Promise<void>;
@@ -80,12 +88,14 @@ export type LedgerOnboardControllerDeps = {
   readonly derive: (
     entries: readonly LedgerPubKeyEntry[],
     accountContractType: AccountContractType,
+    application: LedgerEip2645Application,
   ) => Promise<readonly LedgerAccountRef[]>;
   readonly describe: (account: LedgerAccountRef) => Promise<LedgerCandidateState>;
   readonly enumerate: (
     client: LedgerDeviceClient,
     startIndex: number,
     readiness: LedgerDeviceSession["readiness"],
+    application: LedgerEip2645Application,
   ) => Promise<readonly LedgerPubKeyEntry[]>;
   readonly existingIds: () => ReadonlySet<string>;
   readonly onCancel: () => void;

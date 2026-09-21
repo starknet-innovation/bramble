@@ -15,7 +15,10 @@
 import { notifyApprovalsChanged } from "./approval-notifier";
 
 type ReconnectApprovalQueue = {
-  readonly request: (origin: string) => { readonly id: string };
+  readonly request: (
+    origin: string,
+    options?: { readonly existingGrant?: boolean },
+  ) => { readonly id: string };
 };
 
 /**
@@ -31,6 +34,6 @@ export const promptReconnectForStaleGrant = (
   if (granted.length === 0) {
     return;
   }
-  approvals.request(origin);
+  approvals.request(origin, { existingGrant: true });
   notifyApprovalsChanged();
 };

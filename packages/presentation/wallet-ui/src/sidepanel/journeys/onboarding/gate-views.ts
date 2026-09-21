@@ -8,6 +8,7 @@ import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
 import { callout } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { onboardingWizard } from "./onboarding-views";
 
@@ -46,7 +47,7 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
         autocomplete: "current-password",
         label: "Vault passphrase",
         labelHidden: true,
-        minlength: 12,
+        minlength: MIN_VAULT_PASSPHRASE_LENGTH,
         name: "vaultPassphrase",
         placeholder: "Enter your passphrase",
         required: true,

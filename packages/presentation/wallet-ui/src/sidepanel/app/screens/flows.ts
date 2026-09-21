@@ -89,6 +89,7 @@ const receiveFlow = (
               copyLabel: "Copy address",
               hint: `Only send ${status.network} assets to this address.`,
               networkId: status.networkId,
+              networkName: status.network,
               publicKeyX: account.publicKeyX,
             })
           : noAccountEmpty(status)
@@ -469,7 +470,7 @@ export const simpleFlowScreen = (
     case "connected-sites":
       return connectedSitesFlow(ctx.status, ctx.connectedSites);
     case "allowances":
-      return allowancesFlow(ctx.status, ctx.account, ctx.allowances);
+      return allowancesFlow(ctx.status, ctx.account, ctx.allowances, ctx.preferences);
     case "appearance":
       return appearanceFlow(ctx.status, ctx.preferences);
     case "request-settings":

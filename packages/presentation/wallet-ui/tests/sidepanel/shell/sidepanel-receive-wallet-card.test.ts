@@ -1,4 +1,10 @@
-/** Complete Receive cards never expose a partial coordination identity. */
+/**
+ * Receive shows the plain Starknet address first — as a visible string and as
+ * the default QR payload — and offers the Bramble contact card as a second
+ * choice only once it is complete. A slow or failed coordination-key
+ * derivation therefore never blocks receiving, and a partial card is never
+ * offered (spec item 3).
+ */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { account } from "@bramble/testkit/sidepanel";
@@ -20,6 +26,7 @@ const render = (): HTMLElement => {
         copyLabel: "Copy account address",
         hint: "Share this account.",
         networkId: account.networkId,
+        networkName: "Starknet Sepolia",
         publicKeyX: account.publicKeyX,
       }),
     ),
@@ -30,18 +37,35 @@ const render = (): HTMLElement => {
 
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe("Receive wallet card coordination", () => {
-  test("holds the share action until the complete card is ready", async () => {
-    const nostrPublicKey = "11".repeat(32);
+const qrLabel = (app: HTMLElement): string | null =>
+  app.querySelector("[data-receive-qr] svg")?.getAttribute("aria-label") ?? null;
+
+const option = (app: HTMLElement, payload: "address" | "card"): HTMLButtonElement => {
+  const found = app.querySelector<HTMLButtonElement>(`[data-receive-payload="${payload}"]`);
+  if (!found) {
+    throw new Error(`missing ${payload} option`);
+  }
+  return found;
+};
+
+describe("Receive address and wallet card", () => {
+  test("paints the address QR, the full address, and the network before any derivation", () => {
     const app = render();
-    const card = app.querySelector<HTMLElement>("[data-receive-wallet-card]");
-    const copy = app.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
 
-    expect(card?.dataset["walletCardState"]).toBe("preparing");
-    expect(copy?.disabled).toBe(true);
-    expect(app.querySelector("[data-receive-qr] svg")).toBeNull();
-    expect(app.querySelector(".receive-address-line")).toBeNull();
+    expect(qrLabel(app)).toBe("QR code for your Starknet address");
+    expect(app.querySelector<HTMLElement>("[data-receive-qr]")?.dataset["qrPayload"]).toBe(
+      "address",
+    );
+    expect(app.querySelector("[data-receive-address-text]")?.textContent).toBe(account.address);
+    expect(app.querySelector(".receive-network")?.textContent).toContain("Starknet Sepolia");
+    expect(option(app, "address").getAttribute("aria-pressed")).toBe("true");
+    expect(option(app, "card").disabled).toBe(true);
+    expect(app.querySelector<HTMLButtonElement>("[data-wallet-card-copy]")?.disabled).toBe(true);
+  });
 
+  test("offers the contact card as a switchable second payload once it is complete", async () => {
+    const app = render();
+    const nostrPublicKey = "11".repeat(32);
     bindReceiveWalletCard({
       app,
       render: async () => undefined,
@@ -49,15 +73,29 @@ describe("Receive wallet card coordination", () => {
     });
     await settle();
 
+    const card = app.querySelector<HTMLElement>("[data-receive-wallet-card]");
+    const copy = app.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
     expect(card?.dataset["walletCardState"]).toBe("ready");
     expect(copy?.disabled).toBe(false);
     expect(copy?.dataset["copy"]).toContain(nostrPublicKey);
-    expect(app.querySelector("[data-receive-qr] svg")).not.toBeNull();
+    // Becoming ready does not hijack the QR the user is already looking at.
+    expect(qrLabel(app)).toBe("QR code for your Starknet address");
+    expect(option(app, "card").disabled).toBe(false);
+
+    option(app, "card").click();
+    expect(qrLabel(app)).toBe("QR code for wallet contact card");
+    expect(app.querySelector<HTMLElement>("[data-receive-qr]")?.dataset["qrPayload"]).toBe("card");
+    expect(option(app, "card").getAttribute("aria-pressed")).toBe("true");
+    expect(option(app, "address").getAttribute("aria-pressed")).toBe("false");
+
+    option(app, "address").click();
+    expect(qrLabel(app)).toBe("QR code for your Starknet address");
+    expect(option(app, "address").getAttribute("aria-pressed")).toBe("true");
     expect(app.querySelector("[data-nostr-key-value]")?.hasAttribute("hidden")).toBe(false);
     expect(app.querySelector("[data-nostr-key-status]")?.hasAttribute("hidden")).toBe(true);
   });
 
-  test("falls back explicitly to an address-only QR when derivation is unavailable", async () => {
+  test("keeps the address QR and withdraws the card choice when derivation is unavailable", async () => {
     const app = render();
     bindReceiveWalletCard({
       app,
@@ -71,12 +109,27 @@ describe("Receive wallet card coordination", () => {
     expect(
       app.querySelector<HTMLElement>("[data-receive-wallet-card]")?.dataset["walletCardState"],
     ).toBe("unavailable");
+    expect(qrLabel(app)).toBe("QR code for your Starknet address");
+    expect(app.querySelector<HTMLElement>("[data-receive-payload-switch]")?.hidden).toBe(true);
     expect(app.querySelector<HTMLButtonElement>("[data-wallet-card-copy]")?.hidden).toBe(true);
-    expect(app.querySelector("[data-receive-qr] svg")).not.toBeNull();
     expect(app.querySelector("[data-nostr-key-status]")?.textContent).toContain(
       "Share the account address instead",
     );
     expect(app.querySelector("[data-nostr-key-status]")?.hasAttribute("hidden")).toBe(false);
     expect(app.querySelector("[data-nostr-key-value]")?.hasAttribute("hidden")).toBe(true);
+  });
+
+  test("renders an address-only card with no switch for accounts without a signer key", () => {
+    document.body.replaceChildren();
+    const html = receiveAddressView({
+      address: account.address,
+      copyLabel: "Copy address",
+      hint: "Multisig.",
+      networkId: account.networkId,
+      networkName: "Starknet Sepolia",
+    });
+    expect(html).toContain("QR code for your Starknet address");
+    expect(html).not.toContain("data-receive-payload-switch");
+    expect(html).toContain(account.address);
   });
 });
