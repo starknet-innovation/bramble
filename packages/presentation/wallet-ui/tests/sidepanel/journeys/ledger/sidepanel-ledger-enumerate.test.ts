@@ -6,6 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import { ledgerAccountPath, READY_EIP2645_APPLICATION } from "@bramble/wallet-model/ledger-path";
 import { enumerateLedgerPubKeys } from "../../../../src/sidepanel/journeys/ledger/onboard-session";
 
 const version = (major: number) => ({
@@ -43,6 +44,27 @@ describe("enumerateLedgerPubKeys", () => {
   test("a later page reads the next slice of indices (5-9)", async () => {
     const entries = await enumerateLedgerPubKeys(enumerateClient(2), 5, 5);
     expect(entries.map((entry) => entry.accountIndex)).toEqual([5, 6, 7, 8, 9]);
+  });
+
+  test("asks the device for Bramble's path by default and Ready's when restoring", async () => {
+    const paths: string[] = [];
+    const base = enumerateClient(2);
+    const client: LedgerDeviceClient = {
+      ...base,
+      getPubKey: (path: string, show?: boolean) => {
+        paths.push(path);
+        return base.getPubKey(path, show);
+      },
+    };
+    await enumerateLedgerPubKeys(client, 10, 2, "verified");
+    expect(paths).toEqual([ledgerAccountPath(10), ledgerAccountPath(11)]);
+    paths.length = 0;
+    await enumerateLedgerPubKeys(client, 10, 2, "verified", READY_EIP2645_APPLICATION);
+    // Ready's scheme: application sha256("argentx"), plain (non-hardened) leaf index.
+    expect(paths).toEqual([
+      "m/2645'/1195502025'/1148870696'/0'/0'/10",
+      "m/2645'/1195502025'/1148870696'/0'/0'/11",
+    ]);
   });
 
   test("rejects a below-minimum app before reading any key", async () => {

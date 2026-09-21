@@ -108,6 +108,7 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
           fee: approval.declaration.fee && { ...approval.declaration.fee },
         },
       }),
+  ...(approval.existingGrant === undefined ? {} : { existingGrant: approval.existingGrant }),
   id: approval.id,
   kind: approval.kind,
   origin: approval.origin,

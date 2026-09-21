@@ -11,7 +11,7 @@ import {
   encryptJson,
   isEncryptedEnvelope,
 } from "@bramble/vault/encrypted-store";
-import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 
 const vaultKey = "bramble:vault";
 const preferencesKey = "bramble:preferences";
@@ -20,15 +20,22 @@ describe("createEncryptedStore", () => {
   test("validates vault passphrase length", () => {
     expect(isVaultPassphrase("correct horse battery staple")).toBe(true);
     expect(isVaultPassphrase("            ")).toBe(false);
-    expect(isVaultPassphrase("too short")).toBe(false);
+    expect(isVaultPassphrase("short")).toBe(false);
   });
 
-  test("gates the onboarding submit at the 12-character boundary", () => {
+  test("gates the onboarding submit at the minimum-length boundary", () => {
     // The create-wallet form gates on this predicate so the backend invariant
-    // never throws with an unsurfaced error; 11 chars is rejected, 12 accepted.
-    expect(isVaultPassphrase("a".repeat(11))).toBe(false);
-    expect(isVaultPassphrase("a".repeat(12))).toBe(true);
-    expect(isVaultPassphrase(`  ${"a".repeat(10)}  `)).toBe(false);
+    // never throws with an unsurfaced error. The floor is the shared constant,
+    // so the form, the vault service, and the KDF cannot disagree about it —
+    // the unlock and reveal fields read the same value, and a passphrase the
+    // setup screen accepted must never be refused when unlocking.
+    expect(isVaultPassphrase("a".repeat(MIN_VAULT_PASSPHRASE_LENGTH - 1))).toBe(false);
+    expect(isVaultPassphrase("a".repeat(MIN_VAULT_PASSPHRASE_LENGTH))).toBe(true);
+    // Below the recommended 12 but at or above the floor: accepted, and the
+    // meter warns rather than the validator refusing.
+    expect(isVaultPassphrase("Tr0ub4dor&3")).toBe(true);
+    // Padding does not buy length — the floor applies to the trimmed value.
+    expect(isVaultPassphrase(`  ${"a".repeat(MIN_VAULT_PASSPHRASE_LENGTH - 1)}  `)).toBe(false);
     expect(isVaultPassphrase(42)).toBe(false);
     expect(isVaultPassphrase(undefined)).toBe(false);
     expect(isVaultPassphrase("a".repeat(1_025))).toBe(false);
