@@ -18,7 +18,7 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@ledgerhq/devices": "8.17.0",
+    "@ledgerhq/devices": "8.18.0",
     "@ledgerhq/hw-app-starknet": "3.0.2",
     "@ledgerhq/hw-transport-web-ble": "6.35.0",
     "@ledgerhq/hw-transport-webhid": "6.36.0",
