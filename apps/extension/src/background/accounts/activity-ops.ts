@@ -44,11 +44,31 @@ const historyRefreshDue = (sync: ActivityHistoryState | null, now: number): bool
   sync.syncedAt > now ||
   now - sync.syncedAt >= (sync.unavailable ? HISTORY_RETRY_MS : HISTORY_FRESH_MS);
 
+// A transaction recorded since the last scan means the chain moved because of
+// something this wallet did, so the cached scan is stale no matter how recently
+// it ran. Without this, a user who acts and then opens Activity sees the feed as
+// it was before their own transaction until the freshness window expires or they
+// press refresh — which is exactly the case they notice.
+//
+// Entries dated after `now` are ignored rather than trusted: a scan stamps
+// `syncedAt` with the same clock, so a future-dated row would otherwise stay
+// "newer than the last scan" forever and rescan on every read.
+const recordedSinceSync = (
+  local: readonly ActivityEntry[],
+  sync: ActivityHistoryState | null,
+  now: number,
+): boolean =>
+  sync !== null &&
+  local.some((entry) => entry.submittedAt > sync.syncedAt && entry.submittedAt <= now);
+
 const shouldScanHistory = (
   input: { readonly forceHistory: boolean; readonly refreshHistory: boolean },
   sync: ActivityHistoryState | null,
   now: number,
-): boolean => input.refreshHistory && (input.forceHistory || historyRefreshDue(sync, now));
+  local: readonly ActivityEntry[],
+): boolean =>
+  input.refreshHistory &&
+  (input.forceHistory || historyRefreshDue(sync, now) || recordedSinceSync(local, sync, now));
 
 const activityTarget = async (
   deps: ActivityOpsDeps,
@@ -128,7 +148,7 @@ export const handleActivity = async (
   // History discovery is intentionally screen-driven. Ambient Home refreshes
   // reconcile only transactions still under observation; entering Activity or
   // pressing its refresh control opts into the larger event scan explicitly.
-  const scanHistory = shouldScanHistory(input, previousSync ?? null, now);
+  const scanHistory = shouldScanHistory(input, previousSync ?? null, now, local);
   const history = scanHistory
     ? await accountHistory(deps, target)
     : { onChain: [], unavailable: previousSync?.unavailable ?? false };
