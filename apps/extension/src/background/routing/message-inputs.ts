@@ -1,5 +1,4 @@
 /** Pure parsers for untrusted background runtime messages. */
-import { isUuid } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@bramble/core/json";
 import { normalizeWalletOrigin } from "@bramble/core/origin";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
@@ -185,36 +184,7 @@ export const readGetGrantedAccountsInput = (
   };
 };
 
-/**
- * Parses popup approval decisions by pending approval id, plus the optional fee
- * the deciding surface was displaying when the user clicked.
- *
- * The echo is what binds a fee-bearing approval to the figure that was actually
- * on screen: the queue's own copy can be replaced by a re-estimate from another
- * open surface between the paint and the click, so an approval that submitted
- * under whatever the queue held at claim time would enforce a ceiling nobody
- * read. Untrusted input like any other field — a malformed echo refuses the
- * whole message rather than being dropped, because a silently dropped ceiling is
- * an unbound submission wearing the appearance of a bound one.
- */
-export const readApprovalIdInput = (
-  message: unknown,
-): { readonly id: string; readonly reviewedFee?: FeeEstimate } | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["id", "reviewedFee", "type"]) ||
-    (message["type"] !== "wallet.approveOrigin" && message["type"] !== "wallet.denyOrigin") ||
-    typeof message["id"] !== "string" ||
-    !isUuid(message["id"]) ||
-    (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"]))
-  ) {
-    return null;
-  }
-  return {
-    id: message["id"],
-    ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
-  };
-};
+export { readApprovalIdInput } from "./approval-decision-inputs";
 
 /**
  * Parses an origin-bearing dapp message of a given type (`{ origin, type }`)

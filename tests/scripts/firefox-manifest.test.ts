@@ -42,6 +42,8 @@ describe("firefox manifest derivation", () => {
       "description",
       "icons",
       "action",
+      "author",
+      "homepage_url",
       "content_scripts",
       "host_permissions",
       "optional_host_permissions",
@@ -158,6 +160,29 @@ describe("firefox manifest derivation", () => {
         data_collection_permissions: FIREFOX_DATA_COLLECTION_PERMISSIONS,
       },
     });
+  });
+
+  // A package that names no publisher, next to a listing and a website that
+  // do, is the shape a store reviewer reads as impersonation. The Gecko block
+  // is DERIVED from the shared keys so the three can never disagree.
+  test("publishes under one identity, derived rather than restated", async () => {
+    const chrome = await chromeManifest();
+    const manifest = await firefoxManifest();
+    expect(chrome["author"]).toBe("Starknet Holdings");
+    expect(chrome["homepage_url"]).toBe("https://bramble.fi");
+    expect(manifest["author"]).toBe(chrome["author"]);
+    expect(manifest["homepage_url"]).toBe(chrome["homepage_url"]);
+    expect(manifest["developer"]).toEqual({
+      name: chrome["author"],
+      url: chrome["homepage_url"],
+    });
+  });
+
+  test("refuses a manifest that names no publisher", async () => {
+    const chrome = await chromeManifest();
+    const { author, ...withoutAuthor } = chrome;
+    expect(author).toBeDefined();
+    expect(() => toFirefoxManifest(withoutAuthor)).toThrow(/author and homepage_url/);
   });
 
   test("refuses a name addons.mozilla.org would reject", async () => {

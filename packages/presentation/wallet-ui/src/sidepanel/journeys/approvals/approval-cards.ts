@@ -5,11 +5,10 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import { sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountIdAddress, accountLabel, formatFri, inlineCopyButton } from "../../shared/parts";
+import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
 import {
   reviewCallsList,
   reviewConstraints,
@@ -24,6 +23,12 @@ import {
   signRequestWarnings,
 } from "../../shared/sign-request";
 import { tokenGlyph } from "../portfolio/token-row";
+import {
+  declarationDetails,
+  declarationFeeUnavailable,
+  declarationReviewedFee,
+  declarationWarnings,
+} from "./approval-declaration-review";
 
 const denyButton = (approval: PendingApproval): string =>
   button({
@@ -41,13 +46,17 @@ const denyButton = (approval: PendingApproval): string =>
 // binds the submission to that echo and refuses if its own copy has moved
 // since, which is how a card left open behind a re-estimate on another wallet
 // surface cannot approve a ceiling the user never read.
+// Deny leads Approve in DOM and reading order: the safe choice is reached
+// first by keyboard and eye, and a gesture begun on the previous screen lands
+// on it rather than on consent (spec item 15).
 const decisionRow = (
   approval: PendingApproval,
   label: string,
   locked: boolean,
   reviewedFee?: PendingApproval["fee"],
+  reviewed: Readonly<Record<string, string>> = {},
 ): string =>
-  `<div class="button-row">${button({
+  `<div class="button-row">${denyButton(approval)}${button({
     attributes: {
       "data-approval-action": "approve",
       ...(reviewedFee
@@ -57,11 +66,12 @@ const decisionRow = (
           }
         : {}),
       "data-approval-id": approval.id,
+      ...reviewed,
     },
     disabled: locked || approval.blocked === true,
     icon: "check",
     label,
-  })}${denyButton(approval)}</div>`;
+  })}</div>`;
 
 // Used when the card cannot describe what approving would commit to: the
 // approve control is absent rather than merely disabled, so a partial view can
@@ -173,71 +183,6 @@ const strk20LinkageWarnings = (approval: PendingApproval): readonly string[] => 
     : [];
 };
 
-const declarationReviewedFee = (approval: PendingApproval): PendingApproval["fee"] => {
-  const declaration = approval.declaration;
-  if (!declaration?.fee || declaration.accountDeployment === "unknown") return null;
-  return declaration.accountDeployment === "undeployed"
-    ? declaration.deploymentFee && sumFeeEstimates(declaration.fee, declaration.deploymentFee)
-    : declaration.fee;
-};
-
-const declarationDetails = (approval: PendingApproval): string => {
-  const declaration = approval.declaration;
-  if (!declaration) {
-    return "";
-  }
-  const formatFee = (fee: NonNullable<typeof declaration.fee>): string =>
-    fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
-  const fee = declaration.fee ? formatFee(declaration.fee) : "Unavailable";
-  const deploymentFee = declaration.deploymentFee
-    ? formatFee(declaration.deploymentFee)
-    : "Unavailable";
-  const reviewedFee = declarationReviewedFee(approval);
-  const estimatedTotal = reviewedFee ? formatFee(reviewedFee) : null;
-  const deployment =
-    declaration.accountDeployment === "undeployed"
-      ? "Required before declaration"
-      : declaration.accountDeployment === "deployed"
-        ? "Already deployed"
-        : "Could not verify";
-  return `<dl class="request-detail declaration-detail"><div><dt>Action</dt><dd>Register Cairo 1 contract code</dd></div><div><dt>Declaration fee</dt><dd><strong>${escapeHtml(fee)}</strong></dd></div>${declaration.accountDeployment === "undeployed" ? `<div><dt>Account deployment fee</dt><dd><strong>${escapeHtml(deploymentFee)}</strong></dd></div>` : ""}${estimatedTotal === null ? "" : `<div><dt>Estimated total</dt><dd><strong>${escapeHtml(estimatedTotal)}</strong></dd></div>`}<div><dt>Fee token</dt><dd>${declaration.fee?.unit === "FRI" ? "STRK" : escapeHtml(declaration.fee?.unit ?? "Unavailable")}</dd></div><div><dt>Account deployment</dt><dd>${deployment}</dd></div>${declaration.classHash === undefined ? "" : `<div><dt>Class hash</dt><dd><code>${escapeHtml(declaration.classHash)}</code></dd></div>`}<div><dt>Compiled hash</dt><dd><code>${escapeHtml(declaration.compiledClassHash)}</code></dd></div><div><dt>Contract shape</dt><dd>${declaration.sierraProgramLength.toLocaleString()} Sierra words · ${declaration.abiEntryCount.toLocaleString()} ABI entries · ${declaration.entryPointCount.toLocaleString()} entry points</dd></div></dl>`;
-};
-
-const declarationWarnings = (approval: PendingApproval): readonly string[] => {
-  const declaration = approval.declaration;
-  if (!declaration) {
-    return [];
-  }
-  return [
-    "A declaration registers immutable contract code on this network. It does not deploy the collection or transfer assets.",
-    ...(declaration.accountDeployment === "undeployed"
-      ? [
-          "This account is not deployed yet. Approval first submits account deployment, which has an additional STRK fee not included in the declaration estimate.",
-        ]
-      : []),
-    ...(declaration.deploymentFeeEstimateFailed
-      ? [
-          "The account deployment fee could not be estimated. Fund the account with STRK and retry if deployment fails.",
-        ]
-      : []),
-    ...(declaration.accountDeployment === "unknown"
-      ? [
-          "The wallet could not verify whether this account needs deployment. An additional STRK fee may apply.",
-        ]
-      : []),
-    ...(declaration.feeEstimateFailed
-      ? [
-          "The declaration fee could not be estimated. Check the RPC connection and the account's STRK balance before approving.",
-        ]
-      : []),
-  ];
-};
-
-const declarationFeeUnavailable = (approval: PendingApproval): boolean =>
-  declarationReviewedFee(approval) === null ||
-  approval.declaration?.feeEstimateFailed === true ||
-  approval.declaration?.deploymentFeeEstimateFailed === true;
-
 const requestIdentity = (origin: string, kind: string): string => {
   let host = origin;
   try {
@@ -252,16 +197,39 @@ const requestIdentity = (origin: string, kind: string): string => {
 const approvalCalls = (approval: PendingApproval): string =>
   reviewCallsList(approval.summaries ?? [], approval.reviewAssets ?? []);
 
+// The account that approving will share is the active one, named on the card
+// face — not behind a disclosure — and echoed back with the decision so the
+// background can refuse if it moved. The grant delta is stated only when the
+// queue knows a grant already exists; otherwise the plain first-share copy.
+const connectIdentity = (status: WalletStatus): string => {
+  const account = status.accounts.find((candidate) => candidate.id === status.activeAccountId);
+  if (!account) {
+    return `<p class="hint">${status.locked ? "Unlock the wallet to see which account will be shared." : "Select an account on this network to share it."}</p>`;
+  }
+  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`;
+};
+
 const connectCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Connection request")}
       ${status.locked ? '<p class="hint">Unlock the wallet to approve this site.</p>' : ""}
-      ${reviewOutcome("Share the granted account addresses with this site until you disconnect it.")}
+      ${connectIdentity(status)}
+      ${reviewOutcome(
+        approval.existingGrant
+          ? "Adds this account to the accounts already shared with this site."
+          : "Shares this account's address with this site until you disconnect it.",
+      )}
     </div>
     ${reviewPanel(approval.insights ?? [])}
     ${reviewConstraints("No transaction is signed and no network fee is charged.")}
-    ${decisionRow(approval, "Approve", status.locked)}
+    ${decisionRow(
+      approval,
+      "Approve",
+      status.locked || status.activeAccountId === null,
+      undefined,
+      status.activeAccountId === null ? {} : { "data-approval-account": status.activeAccountId },
+    )}
   </li>`;
 
 const watchAssetCard = (approval: PendingApproval): string => {

@@ -16,7 +16,7 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@ledgerhq/devices": "8.17.0",
+    "@ledgerhq/devices": "8.18.0",
     "@bramble/core": "workspace:*",
     "@bramble/wallet-model": "workspace:*"
   },

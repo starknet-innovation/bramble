@@ -92,6 +92,12 @@ export type PendingApproval = {
   readonly callReviews?: readonly ProviderInvokeCall[];
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
+  /**
+   * Connect only: the site already holds a grant, so approving adds the
+   * reviewed account to it rather than sharing a first one. Absent when the
+   * queue could not tell (a locked wallet at request time).
+   */
+  readonly existingGrant?: boolean;
   readonly fee?: FeeEstimate | null;
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
