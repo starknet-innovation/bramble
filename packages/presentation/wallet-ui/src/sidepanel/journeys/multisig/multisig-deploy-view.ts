@@ -15,6 +15,7 @@ import { icon } from "../../shared/icons";
 import {
   accountAvatar,
   accountDisplayName,
+  accountFamilyName,
   accountLabel,
   flowHeader,
   flowScreen,
@@ -69,7 +70,7 @@ const deploymentSignerCopy = (
   preferences: WalletPreferences | null,
 ): string => `<span class="option-name"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>${hardwareBadge(account)}</span>
     <code>${escapeHtml(accountLabel(account.address))}</code>
-    <span class="option-sub">${account.accountContractType === "argent" ? "Ready" : "Bramble"} · Key matches</span>`;
+    <span class="option-sub">${accountFamilyName(account.accountContractType)} · Key matches</span>`;
 
 const deploymentSignerIdentity = (
   account: AccountRef,
@@ -100,7 +101,7 @@ const signerKeySources = (
       address: candidate.address,
       label: accountDisplayName(candidate, preferences),
       publicKeyX: candidate.publicKeyX,
-      source: `${candidate.accountContractType === "argent" ? "Ready" : "Bramble"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""} account`,
+      source: `${accountFamilyName(candidate.accountContractType)}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""} account`,
     })),
     ...(preferences?.addressBook
       .filter((entry) => entry.publicKeyX !== undefined)
@@ -221,7 +222,7 @@ export const multisigDeployFlow = (
                   label: "Fund from",
                   name: "fundingAccountId",
                   options: accounts.map((candidate) => ({
-                    label: `${accountDisplayName(candidate, preferences)} · ${candidate.accountContractType === "argent" ? "Ready" : "Bramble"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
+                    label: `${accountDisplayName(candidate, preferences)} · ${accountFamilyName(candidate.accountContractType)}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
                     value: candidate.id,
                   })),
                   selected: account.id,

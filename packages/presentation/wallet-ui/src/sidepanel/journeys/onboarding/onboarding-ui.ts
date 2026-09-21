@@ -1,6 +1,6 @@
 /** First-run recovery, account preview, and persistence bindings. */
 
-import { type AccountContractType, isAccountContractType } from "@bramble/wallet-model/accounts";
+import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -82,8 +82,8 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   let previewMatchesInput = false;
   let previewGeneration = 0;
   let mnemonicGeneration = 0;
-  const accountContractType = (): AccountContractType | null =>
-    isAccountContractType(accountContractInput?.value) ? accountContractInput.value : null;
+  const accountContractType = () =>
+    isCreatableAccountContractType(accountContractInput?.value) ? accountContractInput.value : null;
 
   const stepFor = (id: string): HTMLElement | undefined =>
     steps.find((step) => step.dataset["onboardingStep"] === id);

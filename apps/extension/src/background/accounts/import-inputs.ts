@@ -7,7 +7,10 @@
  * passphrase because no session exists yet.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import { type AccountContractType, isAccountContractType } from "@bramble/wallet-model/accounts";
+import {
+  type AccountContractType,
+  isCreatableAccountContractType,
+} from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -40,7 +43,7 @@ type RawKeyAccountFields = {
 
 const readRawKeyAccountFields = (message: Record<string, unknown>): RawKeyAccountFields | null => {
   if (
-    !isAccountContractType(message["accountContractType"]) ||
+    !isCreatableAccountContractType(message["accountContractType"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     typeof message["privateKey"] !== "string"
   ) {

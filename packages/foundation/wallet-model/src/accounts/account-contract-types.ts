@@ -20,19 +20,24 @@ import { ARGENT_ACCOUNT_CLASS_HASH, deploymentClasses } from "./account-families
 export type AccountContractType = "argent" | "braavos" | "openzeppelin";
 
 /**
- * Families a hardware-derived account can belong to. Braavos is excluded
- * deliberately: this wallet derives only its own OpenZeppelin accounts and the
- * Ready accounts it detects on a device, and never a Braavos one.
+ * The contract fields of one account record: its family and, for every family
+ * whose address derives from a deployment salt, that exact salt. The address
+ * is a function of the salt and of the class the account was deployed with,
+ * and neither can be read back from the account afterwards, so a record that
+ * lost either could no longer re-derive the address it holds.
  */
-export type LedgerAccountContractType = Exclude<AccountContractType, "braavos">;
+export type AccountContractMetadata =
+  | { readonly accountContractType: "argent" | "braavos"; readonly deploymentSalt: string }
+  | { readonly accountContractType: "openzeppelin"; readonly deploymentSalt?: never };
 
 /**
- * Validates the closed set of families a hardware-derived account may claim, at
- * an untrusted message boundary. Narrower than {@link isAccountContractType} on
- * purpose: a device request naming Braavos is malformed, not merely unsupported.
+ * Families this wallet itself brings accounts into existence in: its own
+ * OpenZeppelin accounts and Argent at the release it deploys. A hardware account
+ * always belongs to one of these too — this wallet creates its own on a device
+ * and detects Ready's there — so the same set bounds every Ledger request.
+ * Braavos is excluded: it is only ever imported.
  */
-export const isLedgerAccountContractType = (value: unknown): value is LedgerAccountContractType =>
-  value === "argent" || value === "openzeppelin";
+export type CreatableAccountContractType = Exclude<AccountContractType, "braavos">;
 
 /**
  * Validates the closed set of single-signer account contracts this wallet can
@@ -44,14 +49,15 @@ export const isAccountContractType = (value: unknown): value is AccountContractT
   value === "argent" || value === "braavos" || value === "openzeppelin";
 
 /**
- * Validates the families this wallet will CREATE an account in. Narrower than
- * {@link isAccountContractType} on purpose: a Braavos account can be imported
- * and recognised, but this wallet never deploys one, so a request to create one
- * is malformed rather than merely unsupported.
+ * Validates, at an untrusted message boundary, a family this wallet may create
+ * an account in or ask a hardware device about. Narrower than
+ * {@link isAccountContractType} on purpose: a Braavos account can be imported and
+ * recognised, but a request to create one, or to derive one on a device, is
+ * malformed rather than merely unsupported.
  */
 export const isCreatableAccountContractType = (
   value: unknown,
-): value is LedgerAccountContractType => value === "argent" || value === "openzeppelin";
+): value is CreatableAccountContractType => value === "argent" || value === "openzeppelin";
 
 /**
  * Which account records a schema era could have written.
@@ -118,4 +124,21 @@ export const hasValidContractMetadata = (
     canonicalFelt(deploymentSalt) !== null &&
     (!requireCanonical || canonicalFelt(deploymentSalt) === deploymentSalt)
   );
+};
+
+/**
+ * Builds the contract fields a record stores for one family, keeping the salt
+ * for every family whose address derives from one. Returns null when such a
+ * family has no salt, and never attaches one to OpenZeppelin, so no writer can
+ * produce a record {@link hasValidContractMetadata} would reject — the way a
+ * Braavos record once lost its salt to a branch that knew only Argent.
+ */
+export const accountContractFields = (
+  accountContractType: AccountContractType,
+  deploymentSalt: string | undefined,
+): AccountContractMetadata | null => {
+  if (accountContractType === "openzeppelin") {
+    return { accountContractType };
+  }
+  return deploymentSalt === undefined ? null : { accountContractType, deploymentSalt };
 };

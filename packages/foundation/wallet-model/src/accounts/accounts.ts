@@ -9,7 +9,12 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "../networks/networks";
-import { type AccountRecordEra, hasValidContractMetadata } from "./account-contract-types";
+import {
+  type AccountContractMetadata,
+  type AccountRecordEra,
+  accountContractFields,
+  hasValidContractMetadata,
+} from "./account-contract-types";
 import {
   isLedgerAccountIndex,
   isLedgerAccountPathFor,
@@ -20,11 +25,12 @@ import {
 } from "./ledger-path";
 
 export {
+  type AccountContractMetadata,
   type AccountContractType,
+  accountContractFields,
+  type CreatableAccountContractType,
   isAccountContractType,
   isCreatableAccountContractType,
-  isLedgerAccountContractType,
-  type LedgerAccountContractType,
 } from "./account-contract-types";
 
 // Path schemes a Ledger derivation may name: both at the current vault schema,
@@ -90,27 +96,6 @@ type AccountRefIdentity = {
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
 };
-
-type AccountContractMetadata =
-  | {
-      readonly accountContractType: "argent";
-      /** Exact DEPLOY_ACCOUNT salt used to derive this Argent address. */
-      readonly deploymentSalt: string;
-    }
-  | {
-      readonly accountContractType: "braavos";
-      /**
-       * Exact DEPLOY_ACCOUNT salt this Braavos address derives from. Retained
-       * for the same reason as Argent's: the address is a function of the salt
-       * and the class used at deployment, neither of which can be recovered
-       * from the account afterwards.
-       */
-      readonly deploymentSalt: string;
-    }
-  | {
-      readonly accountContractType: "openzeppelin";
-      readonly deploymentSalt?: never;
-    };
 
 type AccountRefCore = AccountRefIdentity & AccountContractMetadata;
 
@@ -403,16 +388,14 @@ export const canonicalAccountRef = (value: unknown): AccountRef | null => {
   const id = `${value.networkId}:${address}`;
   const publicKeyX = canonicalFelt(value.publicKeyX);
   const deploymentSalt =
-    value.accountContractType === "argent" && typeof value.deploymentSalt === "string"
-      ? canonicalFelt(value.deploymentSalt)
-      : undefined;
-  if (publicKeyX === null || deploymentSalt === null) {
+    typeof value.deploymentSalt === "string" ? canonicalFelt(value.deploymentSalt) : undefined;
+  const contract =
+    deploymentSalt === null
+      ? null
+      : accountContractFields(value.accountContractType, deploymentSalt);
+  if (publicKeyX === null || contract === null) {
     return null;
   }
-  const contract: AccountContractMetadata =
-    value.accountContractType === "argent"
-      ? { accountContractType: "argent", deploymentSalt: deploymentSalt as string }
-      : { accountContractType: "openzeppelin" };
   if (value.derivation.kind === "starknet-bip44") {
     const derived = value as DerivedAccountRef;
     const publicKeyY = canonicalFelt(derived.publicKeyY);

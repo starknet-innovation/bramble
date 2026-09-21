@@ -5,6 +5,7 @@ import {
   isRecoveryAccountSelection,
   RECOVERY_SCAN_LIMITS,
   type RecoveryAccountSelection,
+  recoverySelectionKey,
 } from "@bramble/wallet-model/recovery";
 import { deriveAccount } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
@@ -58,9 +59,7 @@ const requireRecoverySelections = (selections: RecoverVaultAccountsInput["select
   ) {
     throw new WalletError("Invalid recovery account selection");
   }
-  const coordinates = selections.map(
-    ({ accountContractType, accountIndex }) => `${accountContractType}:${accountIndex}`,
-  );
+  const coordinates = selections.map(recoverySelectionKey);
   if (new Set(coordinates).size !== coordinates.length) {
     throw new WalletError("Duplicate recovery account selection");
   }

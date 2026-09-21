@@ -16,6 +16,7 @@ import {
   ARGENT_MULTISIG_CONTRACT,
   argentAccountConstructorCalldata,
   argentMultisigConstructorCalldata,
+  requireAuthorizableFamily,
 } from "../accounts/account-contracts";
 import {
   authorizedSpendFor,
@@ -79,13 +80,15 @@ const signerOptions = (account: DeployableAccount): AccountSignerOptions =>
       }
     : {};
 
-/**
- * Reconstructs pinned DEPLOY_ACCOUNT inputs only when they reproduce the stored address.
- * Throws on invalid class/configuration or an address-commitment mismatch.
- */
-export const accountDeployment = (account: DeployableAccount): AccountDeployment => {
-  let constructorCalldata: readonly string[];
-  let addressSalts: readonly string[];
+// The constructor arguments and candidate salts one family deploys with. Split
+// from accountDeployment so each family's rule reads on its own, and so a family
+// this wallet never deploys fails here rather than reaching the address check.
+const deploymentInputs = (
+  account: DeployableAccount,
+): {
+  readonly addressSalts: readonly string[];
+  readonly constructorCalldata: readonly string[];
+} => {
   if (account.accountContractType === "argent-multisig") {
     if (!sameFelt(account.classHash, ARGENT_MULTISIG_CONTRACT.classHash)) {
       throw new WalletError("Argent multisig class hash does not match the pinned release");
@@ -94,21 +97,43 @@ export const accountDeployment = (account: DeployableAccount): AccountDeployment
     if (!deployment) {
       throw new WalletError("Imported Argent multisig has no counterfactual deployment parameters");
     }
-    constructorCalldata = argentMultisigConstructorCalldata({
-      signerPublicKeys: deployment.signerPublicKeys,
-      threshold: deployment.threshold,
-    });
-    addressSalts = [deployment.salt];
-  } else if (account.accountContractType === "argent") {
+    return {
+      addressSalts: [deployment.salt],
+      constructorCalldata: argentMultisigConstructorCalldata({
+        signerPublicKeys: deployment.signerPublicKeys,
+        threshold: deployment.threshold,
+      }),
+    };
+  }
+  if (account.accountContractType === "argent") {
     if (!sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)) {
       throw new WalletError("Argent account class hash does not match the pinned release");
     }
-    constructorCalldata = argentAccountConstructorCalldata(account.publicKeyX);
-    addressSalts = [account.deploymentSalt];
-  } else {
-    constructorCalldata = CallData.compile([account.publicKeyX]);
-    addressSalts = ["0x0", account.publicKeyX];
+    return {
+      addressSalts: [account.deploymentSalt],
+      constructorCalldata: argentAccountConstructorCalldata(account.publicKeyX),
+    };
   }
+  if (account.accountContractType === "openzeppelin") {
+    return {
+      addressSalts: ["0x0", account.publicKeyX],
+      constructorCalldata: CallData.compile([account.publicKeyX]),
+    };
+  }
+  // This wallet imports Braavos accounts; it never creates one. Falling through
+  // to the OpenZeppelin rule would be worse than an error: Braavos also deploys
+  // with the public key as salt and sole constructor argument, so the address
+  // check would pass and a Braavos account would be deployed at a class whose
+  // authorization this wallet does not produce.
+  throw new WalletError("This wallet does not deploy Braavos accounts");
+};
+
+/**
+ * Reconstructs pinned DEPLOY_ACCOUNT inputs only when they reproduce the stored address.
+ * Throws on invalid class/configuration or an address-commitment mismatch.
+ */
+export const accountDeployment = (account: DeployableAccount): AccountDeployment => {
+  const { addressSalts, constructorCalldata } = deploymentInputs(account);
   for (const addressSalt of addressSalts) {
     const computed = hash.calculateContractAddressFromHash(
       addressSalt,
@@ -169,6 +194,7 @@ export const isCompatibleAccountDeployed = async (
   if (account.accountContractType === "openzeppelin") {
     return true;
   }
+  requireAuthorizableFamily(account.accountContractType);
   if (sameFelt(classHash, "0x0")) {
     return false;
   }

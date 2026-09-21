@@ -1,10 +1,20 @@
-/** Bounded OZ/Argent account discovery and confirmation for phrase recovery. */
+/** Bounded account discovery and confirmation for phrase recovery, per family. */
 
+import { accountClassEntry } from "@bramble/wallet-model/account-families";
+import {
+  type AccountContractType,
+  ARGENT_ACCOUNT_CLASS_HASH,
+} from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type {
   RecoveryAccountCandidate,
   RecoveryAccountSelection,
 } from "@bramble/wallet-model/recovery";
-import { isRecoveryAccountIndex, RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
+import {
+  isRecoveryAccountIndex,
+  RECOVERY_SCAN_LIMITS,
+  recoverySelectionKey,
+} from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
@@ -32,35 +42,63 @@ export type RecoveryAccountUi = {
   readonly start: () => void;
 };
 
-const selectionKey = (selection: RecoveryAccountSelection): string =>
-  `${selection.accountContractType}:${selection.accountIndex}`;
+const selectionKey = recoverySelectionKey;
 
+// The candidate's class travels with the pick; without it the vault re-derives
+// at the family default and restores a different account than the one shown.
 const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelection => ({
   accountContractType: candidate.account.accountContractType,
   accountIndex: candidate.account.derivation.accountIndex,
+  ...(candidate.account.accountContractType === "openzeppelin"
+    ? {}
+    : { classHash: candidate.account.classHash }),
 });
 
-const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string =>
-  duplicate
-    ? "Already in this wallet"
-    : candidate.deployed
-      ? "Deployed on Starknet"
-      : candidate.funded
-        ? "Funded and ready to deploy"
-        : candidate.account.accountContractType === "argent"
-          ? "No on-chain activity found — Bramble only imports existing Ready accounts"
-          : "No on-chain activity found";
+const activityState = (candidate: RecoveryAccountCandidate): string =>
+  candidate.deployed
+    ? "Deployed on Starknet"
+    : candidate.funded
+      ? "Funded and ready to deploy"
+      : candidate.account.accountContractType === "argent"
+        ? "No on-chain activity found — Bramble only imports existing Ready accounts"
+        : "No on-chain activity found";
 
-// Bramble creates only Bramble accounts: a Ready candidate with no on-chain
-// history would be a brand-new Ready deployment, so it is listed but not
-// selectable. Deployed or funded (counterfactual) Ready accounts stay
-// importable.
+// A Braavos account is restored to be seen, not yet used: say so before the
+// user picks it, rather than after a send fails. It is never offered for
+// deployment either, since Bramble does not deploy Braavos accounts.
+const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string => {
+  if (duplicate) return "Already in this wallet";
+  if (candidate.account.accountContractType !== "braavos") return activityState(candidate);
+  return `${candidate.deployed ? "Deployed on Starknet" : "Funded, not deployed"} · view only for now`;
+};
+
+// Two Argent releases at one index are two accounts. Name the release on any
+// but the one Bramble creates, so rows that share an index can be told apart.
+const candidateTitle = (candidate: RecoveryAccountCandidate): string => {
+  const { account } = candidate;
+  const title = `Account ${account.derivation.accountIndex}`;
+  if (
+    account.accountContractType !== "argent" ||
+    sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)
+  ) {
+    return title;
+  }
+  const release = accountClassEntry(account.classHash)?.label.replace(/^argent /, "");
+  return release ? `${title} · Argent ${release}` : title;
+};
+
+// Bramble creates only Bramble accounts: any other candidate with no on-chain
+// history would be a brand-new deployment in a family Bramble does not create,
+// so it is listed but not selectable. Deployed or funded (counterfactual)
+// accounts in those families stay importable.
 const selectable = (candidate: RecoveryAccountCandidate): boolean =>
-  candidate.account.accountContractType !== "argent" || candidate.deployed || candidate.funded;
+  candidate.account.accountContractType === "openzeppelin" ||
+  candidate.deployed ||
+  candidate.funded;
 
 /** Binds and runs the recovery account picker without retaining the phrase. */
 export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAccountUi => {
-  const groupFor = (contractType: "argent" | "openzeppelin"): HTMLDetailsElement | null =>
+  const groupFor = (contractType: AccountContractType): HTMLDetailsElement | null =>
     deps.form.querySelector<HTMLDetailsElement>(`[data-recovery-group="${contractType}"]`);
   const status = deps.form.querySelector<HTMLElement>("#recovery-scan-status");
   const result = deps.form.querySelector<HTMLElement>("#recovery-accounts-result");
@@ -103,7 +141,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     const copy = deps.form.ownerDocument.createElement("span");
     copy.className = "allowance-copy";
     const title = deps.form.ownerDocument.createElement("strong");
-    title.textContent = `Account ${candidate.account.derivation.accountIndex}`;
+    title.textContent = candidateTitle(candidate);
     const address = deps.form.ownerDocument.createElement("code");
     address.textContent = accountLabel(candidate.account.address);
     address.title = candidate.account.address;
@@ -121,7 +159,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   // opens itself the first time detected activity appears in it.
   const autoOpened = new Set<string>();
   const renderCandidates = (): void => {
-    for (const contractType of ["openzeppelin", "argent"] as const) {
+    for (const contractType of ["openzeppelin", "argent", "braavos"] as const) {
       const group = groupFor(contractType);
       const listElement = group?.querySelector("ul");
       if (!group || !listElement) continue;
@@ -160,7 +198,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     renderCandidates();
     if (status) {
       status.textContent = complete
-        ? `Search complete. Checked ${next.nextIndex} indices across both account types.`
+        ? `Search complete. Checked ${next.nextIndex} indices across every account type.`
         : `Checked ${next.nextIndex} of ${RECOVERY_SCAN_LIMITS.defaultCount} indices…`;
     }
   };

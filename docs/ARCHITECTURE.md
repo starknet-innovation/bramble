@@ -192,11 +192,12 @@ Recovery boundaries are deliberately explicit:
 4. Exercise `readMigratedVault` staging, verification, restart recovery, and idempotence tests.
 5. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-The vault schema is at **v9**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation whose path, index, and scheme marker must agree and which has no `signingKeys` entry;
+The vault schema is at **v10**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation whose path, index, and scheme marker must agree and which has no `signingKeys` entry;
 v4 adds encrypted `accountSecrets` (public `AccountRef` records cannot contain optional secrets; Ledger STRK20 viewing keys retain exact account, chain, pool, and scheme provenance);
-v5 canonicalizes account ids; v6 records the account-contract type; v7 retains the Argent deployment salt; v8 retains imported seeds; v9 admits Ready's `argentx` Ledger path scheme.
-The v3–v8 validators stay pinned to `LedgerW`, so the v9 step rewrites nothing but the version stamp. Vaults migrated from v1 carry `mnemonic: null`; they cannot add software
-accounts or reveal a phrase until re-created, but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → … → v9`).
+v5 canonicalizes account ids; v6 records the account-contract type; v7 retains the Argent deployment salt; v8 retains imported seeds; v9 admits Ready's `argentx` Ledger path scheme;
+v10 admits Braavos accounts (with their deployment salt) and an Argent account at any release it could have been deployed with, not only the one Bramble creates.
+The v3–v8 validators stay pinned to `LedgerW`, so the v9 step rewrites nothing but the version stamp; likewise the v9 validator stays pinned to Argent 0.4 and no Braavos, so the v10 step rewrites nothing but the version stamp. Vaults migrated from v1 carry `mnemonic: null`; they cannot add software
+accounts or reveal a phrase until re-created, but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → … → v10`).
 
 Chrome preserves `storage.local` across an update but clears `storage.session`. `runtime.onInstalled`
 therefore cannot migrate an encrypted vault: it has no passphrase. The first authenticated read runs

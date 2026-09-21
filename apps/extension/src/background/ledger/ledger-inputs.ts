@@ -8,8 +8,8 @@
 
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
-  isLedgerAccountContractType,
-  type LedgerAccountContractType,
+  type CreatableAccountContractType,
+  isCreatableAccountContractType,
   type LedgerPubKeyEntry,
 } from "@bramble/wallet-model/accounts";
 import {
@@ -49,7 +49,7 @@ const optionalApplication = (
  * means Bramble's own `LedgerW` scheme.
  */
 export type AddLedgerAccountRequest = {
-  readonly accountContractType: LedgerAccountContractType;
+  readonly accountContractType: CreatableAccountContractType;
   readonly accountIndex: number;
   readonly eip2645application?: LedgerEip2645Application;
   readonly networkId: StarknetNetworkId;
@@ -71,7 +71,7 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
       "type",
     ]) ||
     message["type"] !== "wallet.addLedgerAccount" ||
-    !isLedgerAccountContractType(message["accountContractType"]) ||
+    !isCreatableAccountContractType(message["accountContractType"]) ||
     !isLedgerAccountIndex(message["accountIndex"]) ||
     !isOptionalApplication(message["eip2645application"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
@@ -95,7 +95,7 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
  * is generated.
  */
 export type CreateLedgerVaultRequest = {
-  readonly accountContractType: LedgerAccountContractType;
+  readonly accountContractType: CreatableAccountContractType;
   readonly accountIndex: number;
   readonly eip2645application?: LedgerEip2645Application;
   readonly networkId: StarknetNetworkId;
@@ -119,7 +119,7 @@ export const readCreateLedgerVaultInput = (message: unknown): CreateLedgerVaultR
       "vaultPassphrase",
     ]) ||
     message["type"] !== "wallet.createLedgerVault" ||
-    !isLedgerAccountContractType(message["accountContractType"]) ||
+    !isCreatableAccountContractType(message["accountContractType"]) ||
     !isLedgerAccountIndex(message["accountIndex"]) ||
     !isOptionalApplication(message["eip2645application"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
@@ -177,7 +177,7 @@ const isPubKeyEntry = (value: unknown): value is LedgerPubKeyEntry =>
  * all read at one path scheme (`eip2645application`; absent means `LedgerW`).
  */
 export type DeriveLedgerAccountsRequest = {
-  readonly accountContractType: LedgerAccountContractType;
+  readonly accountContractType: CreatableAccountContractType;
   readonly eip2645application?: LedgerEip2645Application;
   readonly entries: readonly LedgerPubKeyEntry[];
   readonly networkId: StarknetNetworkId;
@@ -199,7 +199,7 @@ export const readDeriveLedgerAccountsInput = (
       "type",
     ]) ||
     message["type"] !== "wallet.deriveLedgerAccounts" ||
-    !isLedgerAccountContractType(message["accountContractType"]) ||
+    !isCreatableAccountContractType(message["accountContractType"]) ||
     !isOptionalApplication(message["eip2645application"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !Array.isArray(message["entries"]) ||
