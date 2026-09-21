@@ -38,16 +38,49 @@ const ID = "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";
 const ORIGIN = "https://dapp.example";
 
 describe("approvalCard renders each approval kind", () => {
-  test("connection request shows the connect copy and enabled Approve", () => {
+  // Spec item 15: the account a connection will share is named on the card
+  // face, echoed back with the decision, and Deny precedes Approve in DOM order.
+  test("connection request names the reviewed account and network on the card face", () => {
     const approval: PendingApproval = { id: ID, kind: "connect", origin: ORIGIN };
     const html = approvalCard(approval, status);
+    const active = status.accounts.find((entry) => entry.id === status.activeAccountId);
 
     expect(html).toContain("Connection request");
     expect(html).toContain(ORIGIN);
-    expect(html).toContain("Share the granted account addresses with this site");
-    expect(html).toContain(`data-approval-action="approve" data-approval-id="${ID}"`);
+    expect(html).toContain("Shares this account&#39;s address with this site");
+    expect(html).not.toContain("accounts already shared");
+    // The identity is on the face, not inside the technical disclosure.
+    expect(html.indexOf("<dt>Account</dt>")).toBeGreaterThan(-1);
+    expect(html).not.toContain("request-technical");
+    expect(html).toContain(`title="${active?.address}"`);
+    expect(html).toContain(`<dt>Network</dt><dd>${status.network}</dd>`);
+    expect(html).toContain(`data-approval-account="${status.activeAccountId}"`);
+    expect(html).toContain(`data-approval-action="approve"`);
     // Not locked, not blocked: the approve button is enabled.
     expect(html).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
+    // Deny is reached first by keyboard and eye.
+    expect(html.indexOf('data-approval-action="deny"')).toBeLessThan(
+      html.indexOf('data-approval-action="approve"'),
+    );
+  });
+
+  test("connection request states the grant delta only when a grant already exists", () => {
+    const html = approvalCard(
+      { existingGrant: true, id: ID, kind: "connect", origin: ORIGIN },
+      status,
+    );
+    expect(html).toContain("Adds this account to the accounts already shared with this site.");
+    expect(html).not.toContain("Shares this account&#39;s address");
+  });
+
+  test("a locked connection request withholds the account echo and Approve", () => {
+    const html = approvalCard(
+      { id: ID, kind: "connect", origin: ORIGIN },
+      { ...status, activeAccountId: null, locked: true },
+    );
+    expect(html).toContain("Unlock the wallet to see which account will be shared.");
+    expect(html).not.toContain("data-approval-account=");
+    expect(html).toContain("disabled");
   });
 
   test("sign-typed-data request decodes the SNIP-12 payload", () => {

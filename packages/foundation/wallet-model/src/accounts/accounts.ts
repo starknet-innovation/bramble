@@ -201,8 +201,10 @@ export const canonicalAccountId = (value: unknown): string | null => {
 
 /**
  * Validates the canonical account id spelling and its supported-network scope.
+ * Non-strings canonicalise to null and must never compare equal to it.
  */
-export const isAccountId = (value: unknown): value is string => canonicalAccountId(value) === value;
+export const isAccountId = (value: unknown): value is string =>
+  typeof value === "string" && canonicalAccountId(value) === value;
 
 /**
  * Checks that an account id is structurally valid for the claimed network.

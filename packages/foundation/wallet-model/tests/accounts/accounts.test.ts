@@ -46,6 +46,10 @@ test("account identity, network scope, and Ledger provenance fail closed", () =>
 
   expect(isAccountRef(derived)).toBe(true);
   expect(isAccountId(derived.id)).toBe(true);
+  // Non-strings canonicalise to null and must never compare equal to it.
+  for (const notAnId of [null, undefined, 42, {}, [], derived.id.toUpperCase()]) {
+    expect(isAccountId(notAnId), String(notAnId)).toBe(false);
+  }
   expect(isAccountIdForNetwork(derived.id, derived.networkId)).toBe(true);
   expect(isAccountIdForNetwork(derived.id, "SN_SEPOLIA")).toBe(false);
   expect(isAccountId("SN_MAIN:0x0123")).toBe(false);
