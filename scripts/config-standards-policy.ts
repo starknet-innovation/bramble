@@ -23,6 +23,11 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   knip: "6.35.1",
   madge: "8.0.0",
   typescript: "6.0.3",
+  // Mozilla's own add-on tooling. `web-ext lint` wraps the exact validator
+  // addons.mozilla.org runs at submission, so the Gecko artifact is judged by
+  // the same rules before a human uploads it; the same tool later signs and
+  // submits. Pinned exact and never shipped — it is a build-time gate only.
+  "web-ext": "10.6.0",
 };
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
@@ -126,6 +131,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:cycles": "madge --circular --extensions ts apps/extension/src packages",
   "check:deadcode": "knip",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
+  "check:firefox": "web-ext lint --source-dir dist-firefox",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
   "check:imports": "bun run scripts/check-workspace-architecture.ts",

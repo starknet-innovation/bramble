@@ -16,6 +16,7 @@ bun run build                # writes dist/ (loadable as an unpacked Chrome exte
 bun run build:firefox        # writes dist-firefox/ (loadable in Firefox via about:debugging)
 bun run build:all            # both targets, from one run of the prerequisite gates
 bun run test:e2e             # Playwright extension E2E (requires dist/; egress blocked)
+bun run check:firefox        # Mozilla's validator over dist-firefox/ (needs build:firefox first)
 bun run package:extension    # writes artifacts/*.zip + .sha256
 bun run dev:session          # headed browser on a kept profile, onboards/unlocks itself
 ```
@@ -37,8 +38,14 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
   `bun run check:lint`, `bun run test:e2e:build` (build + extension E2E). Always finish with the
   full `bun run check`.
 - `bun run format` (Biome) fixes formatting/lint; Biome owns style, don't hand-format.
-- CI (`.github/workflows/ci.yml`) runs exactly the gates above plus `test:e2e` and
-  `package:extension`. Do not merge around a failing gate.
+- CI (`.github/workflows/ci.yml`) runs exactly the gates above plus `test:e2e`,
+  `package:extension`, and the Gecko pair `package:extension:firefox` + `check:firefox`.
+  Do not merge around a failing gate.
+- The two Firefox gates cover different halves and neither replaces the other. `check:firefox`
+  wraps the validator addons.mozilla.org runs at submission, so it fails on anything AMO calls an
+  ERROR — but AMO warnings (a missing `data_collection_permissions`, a stray `sidePanel`
+  permission) exit zero there. Those are held at source level by
+  `tests/scripts/firefox-manifest.test.ts`, which runs inside `bun run check`.
 
 ## Layout
 

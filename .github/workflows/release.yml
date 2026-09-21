@@ -149,14 +149,19 @@ jobs:
       - name: Verify downloaded checksum
         working-directory: artifacts
         run: sha256sum -c ./*.zip.sha256
+      # Selects the CHROMIUM artifact by name rather than taking whatever single
+      # zip happens to be present. `bramble-firefox-<version>.zip` is a sibling
+      # in the same directory, and a Gecko package must never be what gets
+      # uploaded to the Chrome Web Store — the version-digit prefix is what
+      # separates them.
       - name: Resolve packaged zip path
         id: zip
         run: |
           set -euo pipefail
           shopt -s nullglob
-          zips=(artifacts/*.zip)
+          zips=(artifacts/bramble-[0-9]*.zip)
           if [ "${#zips[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one packaged zip, found ${#zips[@]}."
+            echo "::error::Expected exactly one Chromium zip (artifacts/bramble-<version>.zip), found ${#zips[@]}."
             exit 1
           fi
           echo "path=${zips[0]}" >> "$GITHUB_OUTPUT"
