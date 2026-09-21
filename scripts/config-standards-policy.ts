@@ -15,12 +15,12 @@ export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/testkit": "workspace:*",
-  "@biomejs/biome": "2.5.11",
-  "@playwright/test": "1.62.1",
-  "@types/bun": "1.4.0",
-  "@types/node": "26.4.0",
-  "fast-check": "4.9.0",
-  knip: "6.32.3",
+  "@biomejs/biome": "2.5.13",
+  "@playwright/test": "1.63.0",
+  "@types/bun": "1.4.2",
+  "@types/node": "26.5.1",
+  "fast-check": "4.10.0",
+  knip: "6.35.1",
   madge: "8.0.0",
   typescript: "6.0.3",
   // Mozilla's own add-on tooling. `web-ext lint` wraps the exact validator
@@ -47,8 +47,8 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/wallet-ui": "workspace:*",
   "@bramble/wallet-model": "workspace:*",
   "@bramble/wallet-protocol": "workspace:*",
-  "@starknetfoundation/krusty-kms-wasm": "0.10.0",
-  starknet: "10.0.2",
+  "@starknetfoundation/krusty-kms-wasm": "0.11.0",
+  starknet: "10.8.0",
 };
 
 export const PINNED_RUNTIME_FILES = [
