@@ -8,6 +8,7 @@ import { isStarknetNetworkId } from "@bramble/wallet-model/networks";
 import { parseWalletContactCard, walletContactCard } from "@bramble/wallet-model/preferences";
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
+import { RECEIVE_QR_LABELS } from "../journeys/send/receive-view";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
@@ -97,27 +98,56 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
   });
 };
 
-/** Saturates the account's public wallet card without putting Nostr derivation in polling. */
+/**
+ * Binds the Receive card's QR switch and saturates the account's public wallet
+ * card without putting Nostr derivation in polling. The address QR is painted
+ * by the view and never waits: the card is an additional choice that becomes
+ * selectable once its coordination key is derived, and disappears if it cannot be.
+ */
 export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => {
   const root = app?.querySelector<HTMLElement>("[data-receive-wallet-card]");
   const address = root?.dataset["receiveAddress"];
   const networkId = root?.dataset["receiveNetwork"];
   const publicKeyX = root?.dataset["receiveSignerKey"];
   if (!root || !address || !isStarknetNetworkId(networkId) || !publicKeyX) return;
+  const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
+  const options = [...root.querySelectorAll<HTMLButtonElement>("[data-receive-payload]")];
+  const showPayload = (payload: "address" | "card"): void => {
+    const card = root.dataset["receiveCard"];
+    if (payload === "card" && !card) return;
+    if (qr) {
+      renderFragment(
+        qr,
+        payload === "card" && card
+          ? qrSvg(card, RECEIVE_QR_LABELS.card)
+          : qrSvg(address, RECEIVE_QR_LABELS.address),
+      );
+      qr.dataset["qrPayload"] = payload;
+    }
+    for (const option of options) {
+      option.setAttribute("aria-pressed", String(option.dataset["receivePayload"] === payload));
+    }
+  };
+  for (const option of options) {
+    option.addEventListener("click", () => {
+      const payload = option.dataset["receivePayload"];
+      if (payload === "address" || payload === "card") showPayload(payload);
+    });
+  }
   void wallet.loadNostrPublicKey().then(
     (nostrPublicKey) => {
       if (!root.isConnected) return;
       const card = walletContactCard({ address, networkId, nostrPublicKey, publicKeyX });
-      const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
+      const cardOption = options.find((option) => option.dataset["receivePayload"] === "card");
       const cardCopy = root.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
       const keyRow = root.querySelector<HTMLElement>("[data-nostr-key-row]");
       const keyStatus = keyRow?.querySelector<HTMLElement>("[data-nostr-key-status]");
       const keyValue = keyRow?.querySelector<HTMLElement>("[data-nostr-key-value]");
       const key = root.querySelector<HTMLElement>("[data-nostr-key]");
       const keyCopy = keyRow?.querySelector<HTMLButtonElement>("[data-copy]");
-      if (qr) renderFragment(qr, qrSvg(card, "QR code for wallet contact card"));
-      if (qr) qr.removeAttribute("aria-busy");
+      root.dataset["receiveCard"] = card;
       root.dataset["walletCardState"] = "ready";
+      if (cardOption) cardOption.disabled = false;
       if (cardCopy) {
         cardCopy.dataset["copy"] = card;
         cardCopy.disabled = false;
@@ -133,15 +163,14 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
     },
     () => {
       if (!root.isConnected) return;
-      const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
+      const payloadSwitch = root.querySelector<HTMLElement>("[data-receive-payload-switch]");
+      const explainer = root.querySelector<HTMLElement>("[data-receive-card-explainer]");
       const cardCopy = root.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
       const keyStatus = root.querySelector<HTMLElement>("[data-nostr-key-status]");
       const keyValue = root.querySelector<HTMLElement>("[data-nostr-key-value]");
-      if (qr) {
-        renderFragment(qr, qrSvg(address, "QR code for account address"));
-        qr.removeAttribute("aria-busy");
-      }
       root.dataset["walletCardState"] = "unavailable";
+      if (payloadSwitch) payloadSwitch.hidden = true;
+      if (explainer) explainer.hidden = true;
       if (cardCopy) cardCopy.hidden = true;
       if (keyStatus) {
         keyStatus.textContent = "Coordination is unavailable. Share the account address instead.";
@@ -205,7 +234,10 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
       const unit = button.dataset["approvalFeeUnit"];
       const reviewedFee =
         overallFee !== undefined && unit !== undefined ? { overallFee, unit } : undefined;
-      void wallet.decideApproval(id, action === "approve", reviewedFee).then(
+      // Likewise the account a connection card named: read off the clicked
+      // control, so the account the user saw is the one the decision reports.
+      const reviewedAccountId = button.dataset["approvalAccount"];
+      void wallet.decideApproval(id, action === "approve", reviewedFee, reviewedAccountId).then(
         async () => {
           showToast(
             action === "approve" ? "Request approved" : "Request denied",

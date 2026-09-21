@@ -100,11 +100,17 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
     font-weight: ${WEIGHT.semibold};
   }
   .eyebrow { letter-spacing: 0.02em; text-transform: uppercase; font-size: ${TYPE.caption.size}; }
+  /* A field's fill sits within 1.1:1 of the panel behind it, so the fill alone
+     cannot identify the control. Clean Mono draws no rings around surfaces —
+     per-side dividers are the only strokes it allows — so the edge that
+     identifies a field is a bottom stroke, the filled-field convention, in the
+     tested field-edge token (>= 3:1 against every surface tier). */
   input, select, textarea {
     appearance: none;
     -webkit-appearance: none;
     background: var(--bramble-elevated);
     border: 0;
+    border-bottom: 1px solid var(--bramble-border);
     border-radius: ${RADIUS.md};
     color: var(--bramble-text);
     font: inherit;

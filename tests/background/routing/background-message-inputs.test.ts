@@ -1,7 +1,9 @@
 /**
  * Background message parser checks reject ambiguous runtime command shapes.
  */
+
 import { describe, expect, test } from "bun:test";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import {
   readDiscoverRecoveryAccountsInput,
   readPreviewAccountInput,
@@ -255,7 +257,7 @@ describe("background message parsers", () => {
   });
 
   test("reject short vault passphrases before service calls", () => {
-    const shortPassphrase = "too short";
+    const shortPassphrase = "a".repeat(MIN_VAULT_PASSPHRASE_LENGTH - 1);
 
     expect(
       readCreateAccountInput({
@@ -458,7 +460,10 @@ describe("background message parsers", () => {
       vaultPassphrase,
     });
     expect(
-      readRevealSecretsInput({ type: "wallet.revealSecrets", vaultPassphrase: "too short" }),
+      readRevealSecretsInput({
+        type: "wallet.revealSecrets",
+        vaultPassphrase: "a".repeat(MIN_VAULT_PASSPHRASE_LENGTH - 1),
+      }),
     ).toBeNull();
     expect(readRevealSecretsInput({ type: "wallet.revealSecrets" })).toBeNull();
     expect(readRevealSecretsInput({ type: "wallet.unlock", vaultPassphrase })).toBeNull();

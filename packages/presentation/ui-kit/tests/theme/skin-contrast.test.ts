@@ -17,6 +17,8 @@ import { darkSkin } from "@bramble/ui-kit/dark-skin";
 import { defaultSkin } from "@bramble/ui-kit/default-skin";
 import type { Skin, SkinToken } from "@bramble/ui-kit/skin";
 
+// WCAG 1.4.11: user-interface component boundaries.
+const NON_TEXT_CONTRAST = 3;
 const AA_NORMAL_TEXT = 4.5;
 
 type Rgb = readonly [number, number, number];
@@ -107,6 +109,19 @@ describe.each([
           `${ink} on ${ground} is ${ratio.toFixed(2)}:1 (needs ${AA_NORMAL_TEXT}:1)`,
         ).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
       }
+    }
+  });
+
+  // The field edge identifies a control (WCAG 1.4.11), so it needs non-text
+  // contrast against every surface a field can sit on — not only the fill it is
+  // drawn on, since a field's edge is read against the panel around it too.
+  test("the field edge meets 3:1 non-text contrast on every surface tier", () => {
+    for (const ground of GROUNDS) {
+      const ratio = contrast(token(skin, "--bramble-border"), token(skin, ground));
+      expect(
+        ratio,
+        `--bramble-border on ${ground} is ${ratio.toFixed(2)}:1 (needs ${NON_TEXT_CONTRAST}:1)`,
+      ).toBeGreaterThanOrEqual(NON_TEXT_CONTRAST);
     }
   });
 

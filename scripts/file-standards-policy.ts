@@ -25,6 +25,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Keeps the unlocked vault credential inside the privileged worker while
   // coordinating fail-closed network/vault commits; never persists or emits it.
   "apps/extension/src/background/runtime/active-network-mutation.ts",
+  // Claim validation split out of approval-decisions: reads the session's
+  // vault credential only to re-check a claimed approval's granted account
+  // against the vault at decision time; never logs, persists, or returns it.
+  "apps/extension/src/background/approvals/approval-claim-context.ts",
   "apps/extension/src/background/provider/add-chain-ops.ts",
   "apps/extension/src/background/approvals/approval-decisions.ts",
   "apps/extension/src/background/transactions/chain-ops.ts",
@@ -96,6 +100,11 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Setup strength meter: reads the typed vault credential only to score and
   // describe it; nothing is stored, logged, or sent.
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/passphrase-meter.ts",
+  // Weak-credential acknowledgement shared by the software and Ledger setup
+  // flows: reads the typed vault credential only to decide whether to reveal a
+  // checkbox and whether the step may proceed. It holds no reference to the
+  // value, stores nothing, and sends nothing.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/weak-passphrase-ack.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
   // Recovery discovery keeps the phrase and vault credential only in the
   // first-run DOM closure and forwards them to the privileged background.

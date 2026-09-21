@@ -122,6 +122,8 @@ const SHARED_KEYS = [
   "name",
   "version",
   "description",
+  "author",
+  "homepage_url",
   "icons",
   "action",
   "content_scripts",
@@ -212,6 +214,25 @@ const background = (chrome: Manifest): Record<string, unknown> => {
   return { scripts: [BACKGROUND_SCRIPT], type: declared["type"] };
 };
 
+/**
+ * The Gecko-only developer block, which Firefox renders as a linked publisher
+ * name on the add-on listing. Chrome has no equivalent key, so it is added here
+ * rather than shared.
+ *
+ * Derived from `author` and `homepage_url` rather than restating them: an
+ * extension whose package, listing and website disagree about who publishes it
+ * is exactly what a store reviewer reads as impersonation, and two copies of a
+ * publisher name is how that disagreement starts.
+ */
+const developer = (chrome: Manifest): Record<string, unknown> => {
+  const name = chrome["author"];
+  const url = chrome["homepage_url"];
+  if (typeof name !== "string" || typeof url !== "string") {
+    throw new Error("chrome manifest author and homepage_url must be strings");
+  }
+  return { name, url };
+};
+
 /** Drops Chrome-only permissions; an unknown permission blocks install on Firefox. */
 const permissions = (chrome: Manifest): readonly string[] =>
   requireStringArray(chrome["permissions"], "permissions").filter(
@@ -242,6 +263,7 @@ export const toFirefoxManifest = (chrome: Manifest): Record<string, unknown> => 
     background: background(chrome),
     permissions: permissions(chrome),
     sidebar_action: sidebarAction(chrome),
+    developer: developer(chrome),
     browser_specific_settings: {
       gecko: {
         id: FIREFOX_EXTENSION_ID,
