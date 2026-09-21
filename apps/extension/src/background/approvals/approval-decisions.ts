@@ -17,7 +17,6 @@ import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { type FeeEstimate, sameFeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
@@ -41,7 +40,7 @@ import { captureSessionAuthorization, type UnlockSession } from "../runtime/sess
 import { executeSignApproval, executeSwitchChainApproval } from "../transactions/chain-ops";
 import { executeDeclareApproval } from "../transactions/declare-ops";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
-import { approvalPayloadMatchesContext } from "./approval-context";
+import { settleClaimError, validateClaimContext } from "./approval-claim-context";
 import { pendingFeeRefusal } from "./approval-fee-refusal";
 import { approvalSession } from "./approval-session";
 import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
@@ -67,6 +66,8 @@ export type ApprovalDecisionDeps = {
 };
 
 const NOT_FOUND: RuntimeResponse = { error: "approval not found" };
+// What a connection whose active account moved between paint and click is refused with.
+const ACCOUNT_CHANGED_REFUSAL = "the account changed since this request was reviewed";
 /**
  * Outcome of applying an already-claimed approve decision.
  */
@@ -84,7 +85,10 @@ type ApplyResult =
  * decided. Only the fee travels today; it is separate from the claimed approval
  * because it describes the CARD, not the queue entry.
  */
-type ApproveDecision = { readonly reviewedFee?: FeeEstimate };
+type ApproveDecision = {
+  readonly reviewedAccountId?: string;
+  readonly reviewedFee?: FeeEstimate;
+};
 
 type ApproveApplier = (
   deps: ApprovalDecisionDeps,
@@ -307,16 +311,33 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }, decisio
   return settleExecutor(result);
 };
 
-const applyConnect: ApproveApplier = async (deps, { approval }) => {
+const applyConnect: ApproveApplier = async (deps, { approval }, decision) => {
   return deps.activeStateCoordinator.run(async () => {
     const passphrase = deps.session.getPassphrase();
     const authorized = captureSessionAuthorization(deps.session);
     if (!passphrase || !authorized.isCurrent()) {
       return reject({ error: "wallet locked" });
     }
+    // The grant goes to the account the card named, never to whichever account
+    // happens to be active when the click lands: the user can switch accounts
+    // in the panel while a prompt is open, and a grant that followed the switch
+    // would share an account nobody reviewed. The card's echo is compared to the
+    // vault's active account and a mismatch is refused, mirroring the fee echo;
+    // the id is then pinned into the grant so the write cannot drift either.
+    const activeAccountId = (await deps.wallet.readVault(passphrase)).activeAccountId;
+    if (!authorized.isCurrent()) {
+      return reject({ error: "wallet locked" });
+    }
+    if (
+      decision.reviewedAccountId !== undefined &&
+      decision.reviewedAccountId !== activeAccountId
+    ) {
+      return reject({ error: ACCOUNT_CHANGED_REFUSAL });
+    }
     // Explicit lock shares this coordinator; alarm expiry is checked across
     // the durable write by the vault's isAuthorized hook.
     const accounts = await deps.wallet.grantOrigin({
+      ...(activeAccountId ? { accountId: activeAccountId } : {}),
       isAuthorized: authorized.isCurrent,
       origin: approval.origin,
       vaultPassphrase: passphrase,
@@ -347,47 +368,6 @@ const APPROVE_APPLIERS: Record<ApprovalKind, ApproveApplier> = {
   "strk20-subaccount": applyStrk20Disclosure,
   "switch-chain": applySwitchChain,
   "watch-asset": applyWatchAsset,
-};
-
-const validateClaimContext = async (
-  deps: ApprovalDecisionDeps,
-  claim: ApprovalClaim,
-): Promise<RuntimeResponse | null> => {
-  const { context } = claim.approval;
-  if (!context) {
-    return null;
-  }
-  const passphrase = deps.session.getPassphrase();
-  if (!passphrase) {
-    return { error: "wallet locked" };
-  }
-  const preferences = await deps.preferencesStore.read();
-  if (
-    preferences.activeNetworkId !== context.networkId ||
-    STARKNET_NETWORKS[context.networkId].chainId !== context.chainId
-  ) {
-    return { error: "approval context changed" };
-  }
-  const granted = await deps.wallet.getGrantedAccounts(claim.approval.origin, passphrase);
-  if (
-    !granted.some(
-      (account) => account.id === context.accountId && account.networkId === context.networkId,
-    )
-  ) {
-    return { error: "approval context changed" };
-  }
-  return claim.payload && (await approvalPayloadMatchesContext(context, claim.payload))
-    ? null
-    : { error: "approval payload changed" };
-};
-
-const settleClaimError = (
-  deps: ApprovalDecisionDeps,
-  id: string,
-  response: RuntimeResponse,
-): RuntimeResponse => {
-  deps.waiters.settle(id, response);
-  return response;
 };
 
 const applyApproveDecision = async (
@@ -423,25 +403,26 @@ const applyApproveDecision = async (
   if (!heldSession.isCurrent() || contextError) {
     return settleClaimError(deps, input.id, contextError ?? { error: "wallet locked" });
   }
+  // Everything the deciding surface echoed about its own render travels as the
+  // decision; the reader already admits only the known, validated keys.
+  const { id, ...decision } = input;
   let result: ApplyResult;
   try {
     result = await APPROVE_APPLIERS[claim.approval.kind](
       { ...deps, session: heldSession.session },
       claim,
-      {
-        ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
-      },
+      decision,
     );
   } catch {
-    return settleClaimError(deps, input.id, { error: "approval execution failed" });
+    return settleClaimError(deps, id, { error: "approval execution failed" });
   }
   if (result.status === "reject") {
-    return settleClaimError(deps, input.id, result.response);
+    return settleClaimError(deps, id, result.response);
   }
   if (result.status === "defer") {
     return result.respond(() => deps.approvals.list());
   }
-  deps.waiters.settle(input.id, result.settle);
+  deps.waiters.settle(id, result.settle);
   return result.respond(() => deps.approvals.list());
 };
 

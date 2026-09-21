@@ -27,6 +27,18 @@ export const SEND_STYLES = `
     line-height: ${TYPE.caption.line};
     margin: 0;
   }
+  /* The address is shown whole and wraps by CSS only, so what is selected and
+     copied is the exact canonical string — never an ellipsised one. */
+  .receive-intro .receive-address-line { color: var(--bramble-text); }
+  .receive-address-line code {
+    display: block;
+    line-height: ${TYPE.caption.line};
+    overflow-wrap: anywhere;
+    user-select: all;
+    word-break: break-all;
+  }
+  .receive-payload-switch { width: 100%; }
+  .receive-card-explainer { margin: 0; text-align: center; }
   .receive-actions {
     display: grid;
     gap: ${SPACE.sm};
