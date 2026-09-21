@@ -316,7 +316,8 @@ if (!compilerOptions) {
     failures.push("tsconfig.json compilerOptions.types must stay Bun-only");
   }
   const paths = compilerOptions["paths"];
-  const walletStandardFeatures = "packages/platform/starknet/src/wallet-standard-features.d.ts";
+  const walletStandardFeatures =
+    "packages/platform/starknet/src/wallet/wallet-standard-features.d.ts";
   if (
     !isRecord(paths) ||
     !hasOnlyKeys(paths, [
