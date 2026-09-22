@@ -14,6 +14,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { inputControl } from "@bramble/ui-kit/fields";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
 import { rankTokenQueryMatch } from "./token-search";
 
@@ -172,6 +173,23 @@ const options = (panel: Element): readonly HTMLButtonElement[] =>
 
 // Address-only hits sort after every symbol or name hit. Ties keep catalog order.
 const ADDRESS_MATCH_RANK = 4;
+// "0x" plus four hex digits. A shorter fragment is a ticker letter (`e`) that
+// sits inside nearly every contract, so it is not an address search.
+const ADDRESS_PREFIX_MIN_LENGTH = 6;
+
+const addressMatches = (address: string, query: string): boolean => {
+  // A pasted contract matches however it was padded. Numeric equality, not a
+  // string compare, so 0x00def and 0xdef are the same token.
+  if (sameFelt(address, query)) {
+    return true;
+  }
+  // Only a 0x prefix is an address search, and only against the start of the
+  // contract. A letter inside the hex (`e`) would otherwise keep the catalog.
+  if (!query.startsWith("0x") || query.length < ADDRESS_PREFIX_MIN_LENGTH) {
+    return false;
+  }
+  return address.toLowerCase().startsWith(query);
+};
 
 const matchRank = (option: HTMLElement, query: string): number | null => {
   if (query.length === 0) {
@@ -183,8 +201,8 @@ const matchRank = (option: HTMLElement, query: string): number | null => {
   if (ranked !== null) {
     return ranked;
   }
-  const address = (option.dataset["tokenAddress"] ?? "").toLowerCase();
-  return address.includes(query) ? ADDRESS_MATCH_RANK : null;
+  const address = option.dataset["tokenAddress"] ?? "";
+  return addressMatches(address, query) ? ADDRESS_MATCH_RANK : null;
 };
 
 // Filters one group's options against its own field, ranked so the best match
