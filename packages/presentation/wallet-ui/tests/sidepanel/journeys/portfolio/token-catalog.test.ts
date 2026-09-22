@@ -1,6 +1,6 @@
 /**
- * The AVNU catalog screen: what it lists, what each row offers, and what it says
- * on a network AVNU publishes no catalog for.
+ * The avnu catalog screen: what it lists, what each row offers, and what it says
+ * on a network avnu publishes no catalog for.
  *
  * The list is a directory. Adding from it goes through the wallet's add-token
  * path, which reads the token's facts from the contract, so these tests assert
@@ -125,7 +125,7 @@ const rows = (app: HTMLElement): readonly string[] =>
     (row.textContent ?? "").replace(/\s+/g, " ").trim(),
   );
 
-describe("AVNU catalog screen", () => {
+describe("avnu catalog screen", () => {
   beforeEach(() => {
     resetTokenCatalogForTests();
     document.body.replaceChildren();
@@ -136,7 +136,7 @@ describe("AVNU catalog screen", () => {
 
     expect(rows(app)).toEqual(["USDC USD Coin Hide", "DAI Dai Stablecoin Add"]);
     expect(app.querySelector("#token-catalog-result")?.textContent).toBe(
-      "2 tokens verified by AVNU.",
+      "2 tokens verified by avnu.",
     );
   });
 
@@ -179,12 +179,12 @@ describe("AVNU catalog screen", () => {
     expect(rows(app)).toEqual(["USDC USD Coin Hide"]);
   });
 
-  test("says AVNU lists nothing here rather than showing an empty screen", async () => {
+  test("says avnu lists nothing here rather than showing an empty screen", async () => {
     const { app } = await mount([], [], "SN_SEPOLIA");
 
     expect(rows(app)).toEqual([]);
     expect(app.querySelector("#token-catalog-result")?.textContent).toContain(
-      "AVNU lists no tokens for this network",
+      "avnu lists no tokens for this network",
     );
   });
 

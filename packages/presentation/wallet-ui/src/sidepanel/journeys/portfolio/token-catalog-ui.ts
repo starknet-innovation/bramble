@@ -1,5 +1,5 @@
 /**
- * Bindings for the AVNU catalog screen: fetch the verified list for the active
+ * Bindings for the avnu catalog screen: fetch the verified list for the active
  * network, search it, and act on one entry.
  *
  * The catalog is a directory. Adding an entry calls the same `wallet.addToken`
@@ -128,7 +128,7 @@ const rankedEntries = (
   if (query.length === 0) {
     return matching;
   }
-  // Ties keep the catalog's own order, which AVNU returns by volume.
+  // Ties keep the catalog's own order, which avnu returns by volume.
   return [...matching].sort(
     (left, right) =>
       (rankTokenQueryMatch(left, query) ?? 4) - (rankTokenQueryMatch(right, query) ?? 4),
@@ -178,7 +178,7 @@ const statusText = (shown: number, total: number): string => {
     return CATALOG_EMPTY_TEXT;
   }
   return shown === total
-    ? `${total} token${total === 1 ? "" : "s"} verified by AVNU.`
+    ? `${total} token${total === 1 ? "" : "s"} verified by avnu.`
     : `${shown} of ${total} shown.`;
 };
 
@@ -232,7 +232,7 @@ const bindToggle = (deps: TokenCatalogUiDeps, container: Element): void => {
 };
 
 /**
- * Binds the AVNU catalog screen when the current render shows it. Returns
+ * Binds the avnu catalog screen when the current render shows it. Returns
  * without side effects on every other screen, so the list is fetched only once
  * a user opens it.
  */

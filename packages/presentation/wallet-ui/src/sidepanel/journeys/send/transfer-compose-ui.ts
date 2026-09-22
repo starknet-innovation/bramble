@@ -151,6 +151,11 @@ const isUnlistedRecipient = (form: HTMLFormElement, address: string): boolean =>
     sameFelt(row.dataset["sendRecipient"] ?? "", address),
   );
 
+// True when the row sits in a folder the user has minimized. The archive starts
+// that way; every other folder starts open.
+const inCollapsedFolder = (row: HTMLElement): boolean =>
+  row.closest<HTMLElement>("[data-send-folder]")?.dataset["collapsed"] === "true";
+
 const bindRecipientControls = (
   form: HTMLFormElement,
   goTo: (stage: TransferStage) => void,
@@ -165,8 +170,22 @@ const bindRecipientControls = (
     let visible = 0;
     form.querySelectorAll<HTMLElement>("[data-send-recipient]").forEach((row) => {
       const matches = query.length === 0 || (row.dataset["sendSearch"] ?? "").includes(query);
-      row.toggleAttribute("hidden", !matches);
+      // A search reaches into a minimized folder: a recipient the user is
+      // looking for must be findable wherever it is filed. With no query the
+      // folder decides, so the archive stays out of the way.
+      const folded = query.length === 0 && inCollapsedFolder(row);
+      row.toggleAttribute("hidden", !matches || folded);
       if (matches) visible += 1;
+    });
+    // A folder with nothing to show during a search drops out rather than
+    // leaving a heading over an empty space.
+    form.querySelectorAll<HTMLElement>("[data-send-folder]").forEach((folder) => {
+      const rows = [...folder.querySelectorAll<HTMLElement>("[data-send-recipient]")];
+      const shown = rows.filter((row) => !row.hasAttribute("hidden")).length;
+      folder.toggleAttribute("hidden", query.length > 0 && shown === 0);
+      folder
+        .querySelector("[data-send-folder-empty]")
+        ?.toggleAttribute("hidden", rows.length > 0 || query.length > 0);
     });
     form.querySelector("#send-recipient-empty")?.toggleAttribute("hidden", visible > 0);
     const typed = search?.value ?? "";
@@ -178,6 +197,21 @@ const bindRecipientControls = (
     saveRow?.toggleAttribute("hidden", !(navigate && valid && isUnlistedRecipient(form, typed)));
   };
   search?.addEventListener("input", updateSearch);
+  // Folder state is DOM-local: the recipient stage is toggled rather than
+  // re-rendered, so a collapse survives without threading state through the
+  // entrypoint the way the drawer does.
+  form.querySelectorAll<HTMLButtonElement>("[data-send-folder-toggle]").forEach((head) => {
+    head.addEventListener("click", () => {
+      const folder = head.closest<HTMLElement>("[data-send-folder]");
+      if (!folder) {
+        return;
+      }
+      const collapsed = folder.dataset["collapsed"] !== "true";
+      folder.dataset["collapsed"] = String(collapsed);
+      head.setAttribute("aria-expanded", String(!collapsed));
+      updateSearch();
+    });
+  });
   form.querySelector("#send-recipient-save")?.addEventListener("click", () => {
     const typed = search?.value.trim() ?? "";
     if (recipientFieldError(typed) === null) {

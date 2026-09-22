@@ -159,7 +159,7 @@ describe("sidepanel views", () => {
   test("swap flow renders the AVNU screen skeleton with staged sections", () => {
     const html = dashboard("swap", status, [], preferences, { balances: [] });
 
-    expect(html).toContain("Best route via AVNU");
+    expect(html).toContain("Best route via avnu");
     expect(html).toContain('id="swap-sell-amount"');
     expect(html).toContain('id="swap-flip"');
     expect(html).toContain('id="swap-review"');
