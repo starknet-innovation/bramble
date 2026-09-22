@@ -96,6 +96,30 @@ const mount = async (
   return { added, app, toggled };
 };
 
+// A screen whose list is still on its way: the caller resolves it when it wants.
+const mountPending = (
+  networkId = "SN_MAIN",
+): { app: HTMLElement; resolve: (tokens: readonly SwapCatalogTokenView[]) => void } => {
+  const scoped = { ...status, networkId } as WalletStatus;
+  let resolve: (tokens: readonly SwapCatalogTokenView[]) => void = () => undefined;
+  const pending = new Promise<readonly SwapCatalogTokenView[]>((done) => {
+    resolve = done;
+  });
+  const app = document.createElement("div");
+  app.innerHTML = tokenCatalogFlow(scoped);
+  document.body.append(app);
+  bindTokenCatalog({
+    app,
+    catalog: () => pending,
+    preferences: () => preferences(),
+    refresh: async () => scoped,
+    render: async () => undefined,
+    status: () => scoped,
+    wallet: {} as unknown as SidepanelWallet,
+  });
+  return { app, resolve };
+};
+
 const rows = (app: HTMLElement): readonly string[] =>
   [...app.querySelectorAll<HTMLElement>(".token-row")].map((row) =>
     (row.textContent ?? "").replace(/\s+/g, " ").trim(),
@@ -162,6 +186,44 @@ describe("AVNU catalog screen", () => {
     expect(app.querySelector("#token-catalog-result")?.textContent).toContain(
       "AVNU lists no tokens for this network",
     );
+  });
+
+  test("shows no search miss while the list is still loading", async () => {
+    const { app } = mountPending();
+    await flush();
+
+    expect(app.querySelector("#token-catalog-results")?.textContent).toBe("");
+    expect(app.textContent).not.toContain("No token matches that search.");
+  });
+
+  test("paints the screen that is live when the list arrives, not the first", async () => {
+    // A shell refresh while the fetch is in flight rebuilds the results element;
+    // the first screen's paint would write into the one that was thrown away.
+    const first = mountPending();
+    first.app.remove();
+    const second = mountPending();
+
+    first.resolve(CATALOG);
+    await flush();
+
+    expect(rows(first.app)).toEqual([]);
+    expect(rows(second.app)).toEqual(["USDC USD Coin Hide", "DAI Dai Stablecoin Add"]);
+  });
+
+  test("drops a list that arrives for the network the user left", async () => {
+    const mainnet = mountPending("SN_MAIN");
+    mainnet.app.remove();
+    const sepolia = mountPending("SN_SEPOLIA");
+
+    mainnet.resolve(CATALOG);
+    await flush();
+
+    // Mainnet's answer must not be pinned to the Sepolia screen, which is still
+    // waiting on its own fetch.
+    expect(rows(sepolia.app)).toEqual([]);
+    sepolia.resolve([CATALOG[1] as SwapCatalogTokenView]);
+    await flush();
+    expect(rows(sepolia.app)).toEqual(["DAI Dai Stablecoin Add"]);
   });
 
   test("reports a catalog it could not read", async () => {

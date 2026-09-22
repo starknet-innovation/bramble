@@ -130,6 +130,39 @@ describe("token dropdown", () => {
     expect(visible(root)).toEqual(["STRK", "ETH", "USDT"]);
   });
 
+  test("keeps one outside-click listener per panel across rebuilt screens", () => {
+    // Swap rebuilds its panels on every shell paint and binds again each time;
+    // the listeners of the panels it threw away must not pile up on the
+    // document, and a listener whose panel has gone must let go of itself.
+    const live = new Set<EventListenerOrEventListenerObject>();
+    const add = document.addEventListener.bind(document);
+    const remove = document.removeEventListener.bind(document);
+    document.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject) => {
+      if (type === "click") live.add(listener);
+      add(type, listener);
+    }) as typeof document.addEventListener;
+    document.removeEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+    ) => {
+      if (type === "click") live.delete(listener);
+      remove(type, listener);
+    }) as typeof document.removeEventListener;
+    try {
+      mount();
+      mount();
+      const { root } = mount();
+      expect(live.size).toBe(1);
+
+      root.remove();
+      document.body.dispatchEvent(new window.Event("click", { bubbles: true }));
+      expect(live.size).toBe(0);
+    } finally {
+      document.addEventListener = add;
+      document.removeEventListener = remove;
+    }
+  });
+
   test("ends with a way out for a token it does not list", () => {
     const view = mount();
     view.root.querySelector<HTMLButtonElement>("#trigger")?.click();

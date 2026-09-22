@@ -126,9 +126,14 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
   // private, and left Max's fallback reading the wrong pot — so every pick is
   // re-measured against the source bucket here, and the state re-read, before
   // the gate runs. The row's own handler runs first (the click bubbles up), so
-  // by the time this fires the picked token is already in the form.
+  // by the time this fires the picked token is already in the form. The pick
+  // arrives as a dropdown option; the hidden fact rows are matched too so a
+  // surface that still renders them as buttons keeps the same behaviour.
   const followAsset = (event: Event): void => {
-    if (!(event.target instanceof Element) || event.target.closest("[data-send-asset]") === null) {
+    if (
+      !(event.target instanceof Element) ||
+      event.target.closest("[data-send-asset], [data-token-option]") === null
+    ) {
       return;
     }
     showBalance();
