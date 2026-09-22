@@ -22,6 +22,7 @@ const DETAIL_VIEWS: readonly WalletView[] = [
   "backup-restore",
   "token-detail",
   "token-add",
+  "token-catalog",
   "token-discover",
   "nft-detail",
   "nft-hidden",

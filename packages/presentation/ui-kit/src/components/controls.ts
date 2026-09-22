@@ -62,6 +62,36 @@ export const button = ({
   `<button${controlClasses(className, variant, size, tone)}${uiAttributes(attributes)} type="${type}"${disabled ? " disabled" : ""}>${iconName && iconPosition === "before" ? icon(iconName) : ""}${escapeHtml(label)}${iconName && iconPosition === "after" ? icon(iconName) : ""}</button>`;
 
 /**
+ * Shared switch configuration. A switch names what it turns ON and reports its
+ * state through `aria-checked`, rather than renaming itself to the state it is
+ * already in — a self-renaming toggle reads as static text.
+ */
+export type SwitchProps = {
+  readonly attributes?: UiAttributes;
+  readonly checked?: boolean;
+  readonly className?: string;
+  readonly disabled?: boolean;
+  readonly icon?: IconName;
+  /** What turning it on does, e.g. "Private"; also its accessible name. */
+  readonly label: string;
+};
+
+/**
+ * Renders an on/off switch: a label beside a track whose knob sits left while
+ * off and right while on. Callers flip it by setting `aria-checked` and the
+ * `data-checked` attribute the stylesheet reads; the markup never changes.
+ */
+export const switchControl = ({
+  attributes,
+  checked = false,
+  className,
+  disabled = false,
+  icon: iconName,
+  label,
+}: SwitchProps): string =>
+  `<button class="${uiClassNames(className ? `switch-control ${className}` : "switch-control")}"${uiAttributes(attributes)} type="button" role="switch" aria-checked="${String(checked)}" data-checked="${String(checked)}"${disabled ? " disabled" : ""}><span class="switch-copy">${iconName ? icon(iconName) : ""}<span>${escapeHtml(label)}</span></span><span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span></button>`;
+
+/**
  * Shared icon-button configuration. The visible glyph is decorative; the
  * escaped label is applied to both `aria-label` and `title`.
  */
