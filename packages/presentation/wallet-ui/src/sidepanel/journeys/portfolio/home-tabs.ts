@@ -266,11 +266,11 @@ const privateBreakdownFor = (
   privacy: PrivacyDisclosureState,
   tokenId: string,
   deployment: boolean | null,
-  fundedForFees: boolean,
+  fundedForFees: boolean | null,
 ): PrivateBreakdown => {
   if (privacyIneligibleKind(privacy)) return { kind: "unavailable" };
   if (deploymentKnownFromPrivacy(deployment, privacy) === false) {
-    return { kind: fundedForFees ? "undeployed" : "needs-funds" };
+    return { kind: fundedForFees === false ? "needs-funds" : "undeployed" };
   }
   if (privacy.error) {
     return { kind: "unavailable" };
@@ -300,7 +300,7 @@ const tokensPanel = (
   currency: DisplayCurrency,
   privacy: PrivacyDisclosureState,
   deployment: boolean | null,
-  fundedForFees = true,
+  fundedForFees: boolean | null = true,
 ): string => {
   const visible = visibleHomeBalances(state, preferences);
   const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
@@ -366,7 +366,7 @@ export const homeTabs = (
     value: null,
   },
   deployment: boolean | null = null,
-  fundedForFees = true,
+  fundedForFees: boolean | null = true,
 ): string => `
   <section class="home-tabs" aria-label="Portfolio">
     <div class="tab-bar">

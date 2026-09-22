@@ -133,8 +133,35 @@ const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void>
     }
   }
   if (deploymentKnownFromPrivacy(deployment ?? null, deps.disclosure()) === false) {
-    block(deps, tokenId, { kind: "deploy", message: PRIVACY_DEPLOY_REQUIRED }, before);
-    return;
+    const current = deps.disclosure();
+    if (current.loading || (current.value === null && current.error === null)) {
+      const scope = captureScope(deps);
+      showPreparing(deps, tokenId, "discovering");
+      await loadPrivacyDisclosure(deps, { silent: true });
+      const journey = deps.journey();
+      if (
+        !scopeMatches(deps, scope) ||
+        journey.stage !== "preparing" ||
+        journey.step !== "discovering"
+      ) {
+        return;
+      }
+    }
+    const settled = deps.disclosure();
+    const settledKind = privacyIneligibleKind(settled);
+    if (settledKind) {
+      block(
+        deps,
+        tokenId,
+        { kind: settledKind, message: settled.error ?? "Private balances unavailable" },
+        before,
+      );
+      return;
+    }
+    if (deploymentKnownFromPrivacy(deployment ?? null, settled) === false) {
+      block(deps, tokenId, { kind: "deploy", message: PRIVACY_DEPLOY_REQUIRED }, before);
+      return;
+    }
   }
   await continueJourney(deps, tokenId);
 };

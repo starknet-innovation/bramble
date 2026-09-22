@@ -195,11 +195,11 @@ const privacyActions = (
   tokenId: string,
   privacy: PrivacyDisclosureState,
   deployment: boolean | null,
-  fundedForFees = true,
+  fundedForFees: boolean | null = true,
 ): string => {
   const seen = deploymentKnownFromPrivacy(deployment, privacy);
   if (privacyIneligibleKind(privacy)) return "";
-  if (seen === false && !fundedForFees)
+  if (seen === false && fundedForFees === false)
     return button({
       attributes: { "data-view": "receive" },
       icon: "qrCode",
@@ -239,7 +239,7 @@ export const tokenDetailFlow = (
     value: null,
   },
   deployment: boolean | null = null,
-  fundedForFees = true,
+  fundedForFees: boolean | null = true,
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
   const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);

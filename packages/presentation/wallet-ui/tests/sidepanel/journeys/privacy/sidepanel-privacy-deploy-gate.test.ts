@@ -6,8 +6,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
+import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
+import { strkAvailableForFees } from "../../../../src/sidepanel/journeys/portfolio/home-view";
 import { tokenDetailFlow } from "../../../../src/sidepanel/journeys/portfolio/token-flows";
 import type {
   PrivacyDisclosureState,
@@ -113,6 +115,56 @@ describe("privacy deployment gate", () => {
     const html = tokenDetailFlow(status, token, balance, [], null, "usd", pending, false);
     expect(html).toContain("Registration pending");
     expect(html).not.toContain("Deploy and enable");
+  });
+
+  test("waits for an in-flight disclosure before offering deployment", async () => {
+    let disclosure: PrivacyDisclosureState = { error: null, loading: true, value: null };
+    const journeys: PrivacyJourneyState[] = [];
+    const app = document.createElement("main");
+    app.innerHTML = `<button data-privacy-open="token">Shield</button>`;
+    document.body.append(app);
+    bindPrivacy({
+      app,
+      balances: () => [],
+      deployment: () => false,
+      disclosure: () => disclosure,
+      generation: () => 0,
+      journey: () => journeys.at(-1) ?? { stage: "idle" },
+      navigate: () => undefined,
+      paint: () => undefined,
+      preferences: () => preferences,
+      setDisclosure: (state) => {
+        disclosure = state;
+      },
+      setJourney: (journey) => {
+        journeys.push(journey);
+      },
+      status: () => status,
+      wallet: {
+        loadPrivacyState: async () => {
+          throw new PrivacyBlockerError(
+            "ledger",
+            "Private balances are not available for Ledger accounts",
+          );
+        },
+      } as unknown as SidepanelWallet,
+    });
+    app.querySelector<HTMLButtonElement>("[data-privacy-open]")?.click();
+    await tick();
+    const last = journeys.at(-1);
+    expect(last?.stage === "blocked" ? last.blocker.kind : null).toBe("ledger");
+  });
+
+  test("does not treat a failed balance load as an empty STRK balance", () => {
+    expect(strkAvailableForFees({ error: "fetch failed" })).toBeNull();
+    const html = shieldTile(
+      token.id,
+      false,
+      false,
+      strkAvailableForFees({ error: "fetch failed" }),
+    );
+    expect(html).toContain("Deploy and enable");
+    expect(html).not.toContain("Fund with STRK");
   });
 
   test("does not ask the chain when privacy is already unavailable", async () => {

@@ -16,7 +16,6 @@ import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify"
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type {
   ConnectedSite,
@@ -48,7 +47,7 @@ import {
   multisigsFlow,
 } from "../../journeys/multisig/multisig-views";
 import { activityScreen, requestsFlow } from "../../journeys/portfolio/activity-views";
-import { homeScreen } from "../../journeys/portfolio/home-view";
+import { homeScreen, strkAvailableForFees } from "../../journeys/portfolio/home-view";
 import {
   DEFAULT_CURRENCY,
   tokenAddFlow,
@@ -88,6 +87,7 @@ type JourneyContext = {
   readonly multisigs: readonly ArgentMultisigView[];
   readonly multisigsError: boolean;
   readonly preferences: WalletPreferences | null;
+  readonly fundedForFees: boolean | null;
   readonly prices: Readonly<Record<string, number>>;
   readonly privacy: PrivacyDisclosureState;
   readonly privacyJourney: PrivacyJourneyState;
@@ -243,9 +243,6 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.chart.length > 0
       ? (context.chart[context.chart.length - 1] ?? null)
       : (context.prices[token.address] ?? null);
-  const fundedForFees = context.trackedBalances.some(
-    (balance) => sameFelt(balance.address, STRK_TOKEN_ADDRESS) && BigInt(balance.balance) > 0n,
-  );
   return tokenDetailFlow(
     context.status,
     token,
@@ -255,7 +252,7 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.currency,
     context.privacy,
     context.deployment,
-    fundedForFees,
+    context.fundedForFees,
   );
 };
 
@@ -308,6 +305,7 @@ export const dashboard = (
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
   const trackedBalances = "balances" in balances ? balances.balances : [];
+  const fundedForFees = strkAvailableForFees(balances);
   const selectedPortfolioBalances =
     selectedMultisigId !== null && multisigBalanceId === selectedMultisigId
       ? multisigBalances
@@ -317,6 +315,7 @@ export const dashboard = (
     account,
     chart,
     currency,
+    fundedForFees,
     discoveredNfts,
     multisigClassDeclared,
     multisigPortfolio: {

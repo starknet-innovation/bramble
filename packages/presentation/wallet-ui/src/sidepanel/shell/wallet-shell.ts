@@ -184,10 +184,10 @@ export const shieldTile = (
   tokenId: string | null,
   ready: boolean,
   deployment: boolean | null = null,
-  fundedForFees = true,
+  fundedForFees: boolean | null = true,
 ): string => {
   const needsDeploy = deployment === false;
-  const needsFunds = needsDeploy && !fundedForFees;
+  const needsFunds = needsDeploy && fundedForFees === false;
   const tileLabel = needsFunds ? "Fund with STRK" : needsDeploy ? "Deploy and enable" : "Shield";
   const body = `<span class="tile-icon">${icon("shield")}</span>
       <span class="tile-label">${tileLabel}</span>`;
@@ -214,21 +214,22 @@ export const shieldTile = (
 export const deployNotice = (
   account: AccountRef | null,
   deployment: boolean | null,
-  fundedForFees = true,
+  fundedForFees: boolean | null = true,
 ): string =>
   account === null || deployment !== false
     ? ""
     : `<div class="deploy-notice">
         ${button({
           attributes: {
-            "data-view": fundedForFees ? "deploy-account" : "receive",
-            title: fundedForFees
-              ? "This account contract is not on-chain yet. Deploying it enables transactions."
-              : "Deploying costs a network fee. Receive STRK into this account first.",
+            "data-view": fundedForFees === false ? "receive" : "deploy-account",
+            title:
+              fundedForFees === false
+                ? "Deploying costs a network fee. Receive STRK into this account first."
+                : "This account contract is not on-chain yet. Deploying it enables transactions.",
           },
           className: "deploy-chip",
           icon: "alert",
-          label: fundedForFees ? "Deploy account" : "Fund with STRK",
+          label: fundedForFees === false ? "Fund with STRK" : "Deploy account",
           size: "small",
           variant: "secondary",
         })}
