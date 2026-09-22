@@ -42,9 +42,7 @@ describe("swap value delta", () => {
 
 describe("token search ranking", () => {
   test("exact symbol beats prefix beats name beats substring", async () => {
-    const { rankTokenQueryMatch } = await import(
-      "../../../../src/sidepanel/journeys/swap/swap-picker"
-    );
+    const { rankTokenQueryMatch } = await import("../../../../src/sidepanel/shared/token-search");
     expect(rankTokenQueryMatch({ name: "USDC", symbol: "USDC" }, "usdc")).toBe(0);
     expect(rankTokenQueryMatch({ name: "Bridged USDC", symbol: "USDC.e" }, "usdc")).toBe(1);
     expect(rankTokenQueryMatch({ name: "USDC yield", symbol: "fyU" }, "usdc")).toBe(2);

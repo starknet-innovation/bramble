@@ -167,7 +167,6 @@ export const applyTransferUi = (
   currentForm.dataset["stage"] = state.stage;
   currentForm.toggleAttribute("aria-busy", working);
   const stageIds: Readonly<Record<string, TransferStage>> = {
-    "send-asset-stage": "asset",
     "send-details": "details",
     "send-failure": "failed",
     "send-pending": "pending",
