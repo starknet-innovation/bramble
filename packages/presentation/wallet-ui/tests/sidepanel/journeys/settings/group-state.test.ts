@@ -28,6 +28,21 @@ describe("healTransientGroupState", () => {
     );
   });
 
+  test("drops collapsed folders that were deleted and keeps the ones that remain", () => {
+    expect(
+      healTransientGroupState(
+        { collapsedFolderIds: ["savings", "gone", "work"], expandedGroupId: null },
+        groups,
+      ).collapsedFolderIds,
+    ).toEqual(["savings", "work"]);
+  });
+
+  test("leaves collapsed folders untouched when the caller did not pass them", () => {
+    expect(healTransientGroupState({ expandedGroupId: "savings" }, groups).collapsedFolderIds).toBe(
+      undefined,
+    );
+  });
+
   test("keeps the Create a group panel sentinel (not a group id) across a heal", () => {
     // The sentinel is a UI mode, not a deleted-group id, so it must survive.
     expect(
