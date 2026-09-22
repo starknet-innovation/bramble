@@ -34,7 +34,7 @@ describe("onboarding step transition", () => {
     next.hidden = true;
     document.body.append(current, next);
     let skipped = false;
-    const owner = document as Document & {
+    const owner = document as unknown as {
       startViewTransition: (callback: () => void) => {
         readonly finished: Promise<void>;
         readonly skipTransition: () => void;
