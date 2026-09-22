@@ -18,6 +18,7 @@ const REPAINT_DRAFT_NAMES = new Set([
   "discoveryUrl",
   "entrypoint",
   "feeToken",
+  "folderName",
   "indexerUrl",
   "intentPackage",
   "label",

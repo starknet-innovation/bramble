@@ -93,10 +93,17 @@ const bindDrawerDrag = (root: HTMLElement, isOpen: () => boolean, close: () => v
     backdrop.style.opacity = dismiss ? "0" : "1";
   };
 
+  // Account rows are HTML5 drag sources. A gesture that starts on one is the
+  // filing drag, so the sheet-dismiss gesture leaves that pointer alone.
+  const startsOnAccountRow = (event: PointerEvent): boolean => {
+    const target = event.target;
+    return target instanceof Element && target.closest("[data-drag-account]") !== null;
+  };
+
   drawer.addEventListener("pointerdown", (event: PointerEvent) => {
     // Ignore extra touch points once a gesture is in progress so a second
     // finger cannot reset the origin and jump the sheet mid-drag.
-    if (!isOpen() || event.button !== 0 || armed) {
+    if (!isOpen() || event.button !== 0 || armed || startsOnAccountRow(event)) {
       return;
     }
     armed = true;

@@ -185,6 +185,33 @@ describe("account drawer folders", () => {
     expect(harness.container.querySelector("#drawer-add-folder")).not.toBeNull();
   });
 
+  test("a repaint keeps a half-typed folder name, and leaves Cancel focused", async () => {
+    const harness = mount([], "drawer");
+
+    click(harness.container.querySelector("#drawer-add-folder"));
+    await harness.tick();
+    const name = harness.container.querySelector<HTMLInputElement>("#drawer-folder-name");
+    if (!name) {
+      throw new Error("folder name missing");
+    }
+    // Opening the field focuses it once, so typing can start immediately.
+    expect(document.activeElement).toBe(name);
+    name.value = "Trading";
+    name.setSelectionRange(4, 4);
+
+    harness.repaint();
+    const kept = harness.container.querySelector<HTMLInputElement>("#drawer-folder-name");
+    expect(document.activeElement).toBe(kept);
+    expect(kept?.value).toBe("Trading");
+    expect(kept?.selectionStart).toBe(4);
+
+    // After the user tabs to Cancel, the next balance repaint must not pull
+    // the caret back to the name field.
+    harness.container.querySelector<HTMLButtonElement>("#drawer-folder-cancel")?.focus();
+    harness.repaint();
+    expect(document.activeElement).toBe(harness.container.querySelector("#drawer-folder-cancel"));
+  });
+
   test("a failed move leaves the account where it was and says so", async () => {
     const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "drawer", {
       rejects: true,
@@ -257,6 +284,22 @@ describe("drawer folder view state", () => {
     expect(state.collapsedFolders()).toEqual(["work"]);
     expect(state.addFolderOpen()).toBe(true);
   });
+
+  test("focuses the name only for the bind that follows opening the field", () => {
+    const state = createDrawerFolderState();
+
+    expect(state.takeFolderNameFocus()).toBe(false);
+    state.setAddFolderOpen(true);
+    state.requestFolderNameFocus();
+    expect(state.takeFolderNameFocus()).toBe(true);
+    // The request is one-shot: a later bind must not steal focus.
+    expect(state.takeFolderNameFocus()).toBe(false);
+
+    state.requestFolderNameFocus();
+    state.setAddFolderOpen(false);
+    expect(state.addFolderOpen()).toBe(false);
+    expect(state.takeFolderNameFocus()).toBe(false);
+  });
 });
 
 describe("bindDrawerFolders without a drawer", () => {
@@ -274,8 +317,10 @@ describe("bindDrawerFolders without a drawer", () => {
         app,
         collapsedFolders: () => [],
         render: async () => undefined,
+        requestFolderNameFocus: () => undefined,
         setAddFolderOpen: () => undefined,
         setCollapsedFolders: () => undefined,
+        takeFolderNameFocus: () => false,
         wallet: {} as never,
       }),
     ).not.toThrow();
