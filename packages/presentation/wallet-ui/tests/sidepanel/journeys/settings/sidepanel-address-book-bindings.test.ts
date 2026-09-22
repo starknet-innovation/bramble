@@ -8,12 +8,19 @@ import { walletContactCard } from "@bramble/wallet-model/preferences";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { addressBookFlow } from "../../../../src/sidepanel/app/screens/support-flows";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
+import {
+  clearAddressBookDraft,
+  setAddressBookDraft,
+} from "../../../../src/sidepanel/shell/address-draft";
 import { bindAddressBook } from "../../../../src/sidepanel/shell/dashboard-bindings";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
-beforeEach(() => document.body.replaceChildren());
+beforeEach(() => {
+  document.body.replaceChildren();
+  clearAddressBookDraft();
+});
 
 const status: WalletStatus = {
   accountCount: 0,
@@ -180,5 +187,133 @@ describe("bindAddressBook", () => {
     expect(saved[0]?.[1]).toBe(
       canonicalAddress("0x04f2f1e2d3c4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddee"),
     );
+  });
+
+  const emptyForm = (): HTMLElement => {
+    const app = document.createElement("div");
+    app.innerHTML = `<form id="address-form">
+      <input name="label" />
+      <input name="address" />
+      <input name="networkId" value="SN_MAIN" />
+      <button type="submit">Save</button>
+    </form><p id="address-result"></p>`;
+    document.body.append(app);
+    return app;
+  };
+
+  test("keeps a Send handoff, including a typed label, across a rebuilt form", () => {
+    setAddressBookDraft("0xabc");
+    const app = emptyForm();
+    const markup = app.innerHTML;
+    const bind = (): void => {
+      bindAddressBook({
+        app,
+        render: async () => undefined,
+        wallet: {} as unknown as SidepanelWallet,
+      });
+    };
+    bind();
+    const address = (): HTMLInputElement | null =>
+      app.querySelector<HTMLInputElement>('[name="address"]');
+    const label = (): HTMLInputElement | null =>
+      app.querySelector<HTMLInputElement>('[name="label"]');
+    expect(address()?.value).toBe("0xabc");
+    expect(document.activeElement).toBe(label());
+    const labelField = label();
+    const addressField = address();
+    if (!labelField || !addressField) throw new Error("fields unavailable");
+    labelField.value = "Ada";
+    labelField.dispatchEvent(new Event("input", { bubbles: true }));
+    addressField.focus();
+
+    app.innerHTML = markup;
+    bind();
+
+    expect(address()?.value).toBe("0xabc");
+    expect(label()?.value).toBe("Ada");
+    expect(document.activeElement).not.toBe(label());
+  });
+
+  test("drops the handoff when the screen no longer has the form", () => {
+    setAddressBookDraft("0xabc");
+    const app = emptyForm();
+    bindAddressBook({
+      app,
+      render: async () => undefined,
+      wallet: {} as unknown as SidepanelWallet,
+    });
+    const home = document.createElement("div");
+    document.body.append(home);
+    bindAddressBook({
+      app: home,
+      render: async () => undefined,
+      wallet: {} as unknown as SidepanelWallet,
+    });
+
+    const again = emptyForm();
+    bindAddressBook({
+      app: again,
+      render: async () => undefined,
+      wallet: {} as unknown as SidepanelWallet,
+    });
+    expect(again.querySelector<HTMLInputElement>('[name="address"]')?.value).toBe("");
+  });
+
+  test("drops the handoff after a successful save, and keeps it when save fails", async () => {
+    setAddressBookDraft("0xabc");
+    const failed = emptyForm();
+    bindAddressBook({
+      app: failed,
+      render: async () => undefined,
+      wallet: {
+        saveAddress: async () => {
+          throw new Error("Address service unavailable");
+        },
+      } as unknown as SidepanelWallet,
+    });
+    const failedLabel = failed.querySelector<HTMLInputElement>('[name="label"]');
+    if (!failedLabel) throw new Error("label unavailable");
+    failedLabel.value = "Ada";
+    failedLabel.dispatchEvent(new Event("input", { bubbles: true }));
+    failed.querySelector<HTMLFormElement>("form")?.requestSubmit();
+    await tick();
+    const failedMarkup = `<form id="address-form">
+      <input name="label" />
+      <input name="address" />
+      <input name="networkId" value="SN_MAIN" />
+      <button type="submit">Save</button>
+    </form><p id="address-result"></p>`;
+    failed.innerHTML = failedMarkup;
+    bindAddressBook({
+      app: failed,
+      render: async () => undefined,
+      wallet: {} as unknown as SidepanelWallet,
+    });
+    expect(failed.querySelector<HTMLInputElement>('[name="address"]')?.value).toBe("0xabc");
+    expect(failed.querySelector<HTMLInputElement>('[name="label"]')?.value).toBe("Ada");
+
+    setAddressBookDraft("0xdef");
+    const saved = emptyForm();
+    bindAddressBook({
+      app: saved,
+      render: async () => {
+        saved.innerHTML = failedMarkup;
+        bindAddressBook({
+          app: saved,
+          render: async () => undefined,
+          wallet: {
+            loadStatus: async () => status,
+            saveAddress: async () => undefined,
+          } as unknown as SidepanelWallet,
+        });
+      },
+      wallet: {
+        loadStatus: async () => status,
+        saveAddress: async () => undefined,
+      } as unknown as SidepanelWallet,
+    });
+    saved.querySelector<HTMLFormElement>("form")?.requestSubmit();
+    await tick();
+    expect(saved.querySelector<HTMLInputElement>('[name="address"]')?.value).toBe("");
   });
 });
