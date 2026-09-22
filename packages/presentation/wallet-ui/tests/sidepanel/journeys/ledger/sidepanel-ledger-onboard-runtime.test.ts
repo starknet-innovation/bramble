@@ -314,15 +314,17 @@ describe("Ledger onboarding runtime (DOM)", () => {
     expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
     expect(h.mount.querySelector('[data-add-kind="multisig"]')).not.toBeNull();
     expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="restore-ready-ledger"]')).not.toBeNull();
-    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(5);
+    // Restoring a Ready Ledger account is an import, so it lives one level in.
+    expect(h.mount.querySelector('[data-add-kind="restore-ready-ledger"]')).toBeNull();
+    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(4);
 
     // One click routes: the Ledger tile opens the connect prompt directly.
     click(h.mount, '[data-add-kind="ledger"]');
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
-    // So does the Ready restore tile; its connect prompt is the same gesture.
+    // The Ready restore reaches the same connect gesture from inside Import.
     h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="import"]');
     click(h.mount, '[data-add-kind="restore-ready-ledger"]');
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
