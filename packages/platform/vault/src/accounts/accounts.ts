@@ -4,13 +4,15 @@
 
 import { WalletError } from "@bramble/core/errors";
 import { verifyStarkSignature } from "@bramble/starknet/signature-verify";
-import type {
-  AccountContractType,
-  AccountRef,
-  DerivedAccountRef,
-  ImportedAccountRef,
-  LedgerAccountRef,
-  LedgerPubKeyEntry,
+import {
+  type AccountContractMetadata,
+  type AccountContractType,
+  type AccountRef,
+  accountContractFields,
+  type DerivedAccountRef,
+  type ImportedAccountRef,
+  type LedgerAccountRef,
+  type LedgerPubKeyEntry,
 } from "@bramble/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
@@ -85,6 +87,19 @@ export type ImportedAccountResult = {
   readonly privateKey: string;
 };
 
+// Fails closed rather than writing a record the vault schema would refuse: a
+// salted family whose derivation returned no salt has no re-derivable address.
+const recordContract = (
+  accountContractType: AccountContractType,
+  deploymentSalt: string | undefined,
+): AccountContractMetadata => {
+  const contract = accountContractFields(accountContractType, deploymentSalt);
+  if (contract === null) {
+    throw new WalletError("Invalid account deployment salt");
+  }
+  return contract;
+};
+
 const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
 
 const requireDerivationInput = (input: AccountDerivationInput): void => {
@@ -155,10 +170,7 @@ export const deriveAccount = async (
     networkId,
     publicKeyX,
   });
-  const contract =
-    accountContractType === "argent"
-      ? { accountContractType, deploymentSalt: deploymentSalt as string }
-      : { accountContractType };
+  const contract = recordContract(accountContractType, deploymentSalt);
 
   return {
     account: {
@@ -258,10 +270,7 @@ export const deriveLedgerAccount = async (
     networkId,
     publicKeyX,
   });
-  const contract =
-    accountContractType === "argent"
-      ? { accountContractType, deploymentSalt: deploymentSalt as string }
-      : { accountContractType };
+  const contract = recordContract(accountContractType, deploymentSalt);
 
   return {
     ...contract,
@@ -428,10 +437,7 @@ export const deriveImportedAccount = async (
     networkId,
     publicKeyX,
   });
-  const contract =
-    accountContractType === "argent"
-      ? { accountContractType, deploymentSalt: deploymentSalt as string }
-      : { accountContractType };
+  const contract = recordContract(accountContractType, deploymentSalt);
 
   return {
     account: {

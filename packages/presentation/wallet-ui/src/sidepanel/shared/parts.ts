@@ -9,7 +9,7 @@ import { emptyState, pill } from "@bramble/ui-kit/content";
 import { iconButton } from "@bramble/ui-kit/controls";
 import { type IconName, icon } from "@bramble/ui-kit/icons";
 import { menuRow } from "@bramble/ui-kit/navigation";
-import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { AccountContractType, AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { networkDisplayName } from "./network-label";
 
@@ -280,6 +280,20 @@ export const accountDisplayName = (
   account: AccountRef,
   preferences: WalletPreferences | null,
 ): string => preferences?.accountLabels?.[account.id] ?? friendlyAccountName(account.address);
+
+const ACCOUNT_FAMILY_NAMES: Readonly<Record<AccountContractType, string>> = {
+  argent: "Ready",
+  braavos: "Braavos",
+  openzeppelin: "Bramble",
+};
+
+/**
+ * The wallet an account's contract family comes from, for the short label shown
+ * beside an account. Keyed on every family, so a new one cannot silently borrow
+ * another's name. Presentational only.
+ */
+export const accountFamilyName = (accountContractType: AccountContractType): string =>
+  ACCOUNT_FAMILY_NAMES[accountContractType];
 
 /**
  * Resolves the active account for the current network.

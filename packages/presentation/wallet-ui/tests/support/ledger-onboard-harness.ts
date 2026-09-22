@@ -5,7 +5,7 @@
  * address), and the capturing controller-deps factory. Test-only.
  */
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
-import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import { ledgerAccountIndexOfPath, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type {
   LedgerOnboardControllerDeps,
@@ -41,13 +41,15 @@ export const enumerateClient = (appMajor: number): LedgerDeviceClient => ({
 
 export const candidateAccount = (
   index: number,
-  accountContractType: "argent" | "openzeppelin" = "openzeppelin",
+  accountContractType: AccountContractType = "openzeppelin",
 ): LedgerAccountRef => {
   const address = `0x${accountContractType === "argent" ? "e" : ""}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`;
   return {
+    // A device account is never Braavos; anything not Argent is this wallet's
+    // own OpenZeppelin account, which carries no deployment salt.
     ...(accountContractType === "argent"
       ? ({ accountContractType, deploymentSalt: "0x1" } as const)
-      : ({ accountContractType } as const)),
+      : ({ accountContractType: "openzeppelin" } as const)),
     address,
     classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     derivation: {

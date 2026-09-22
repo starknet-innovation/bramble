@@ -6,10 +6,17 @@ import {
   type TokenConfig,
   type WalletPreferencesStore,
 } from "@bramble/settings/preferences";
-import { deploymentClasses } from "@bramble/wallet-model/account-families";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
 import type { AccountContractType } from "@bramble/wallet-model/accounts";
 import { type DerivedAccountRef, isDerivedAccountRef } from "@bramble/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import {
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import {
   RECOVERY_SCAN_LIMITS,
   type RecoveryAccountCandidate,
@@ -81,11 +88,24 @@ const recoveryScanShapes = (): readonly {
   readonly classHash?: string;
 }[] => [
   { accountContractType: "openzeppelin" },
-  ...deploymentClasses("argent").map((entry) => ({
-    accountContractType: "argent" as const,
-    classHash: entry.classHash,
-  })),
+  ...(["argent", "braavos"] as const).flatMap((family) =>
+    deploymentClasses(family).map((entry) => ({
+      accountContractType: family,
+      classHash: entry.classHash,
+    })),
+  ),
 ];
+
+// Whether this wallet would itself create an account at this candidate's class:
+// its own OpenZeppelin account, or Argent at the release it deploys. Only those
+// are worth showing before they exist on chain — index zero is where a new
+// wallet's first account lives. A Braavos account, or Argent at any other
+// release, is only ever found; undeployed and unfunded, it is an address that
+// belongs to nobody, and offering it would import an account that does not exist.
+const isCreatableCandidate = (account: DerivedAccountRef): boolean =>
+  account.accountContractType === "openzeppelin" ||
+  (account.accountContractType === "argent" &&
+    sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH));
 
 const scanRecoveryIndex = async (
   deps: OnboardingOpsDeps,
@@ -145,7 +165,9 @@ const discoverRecoveryAccounts = async (
     discovered.push(
       ...candidates.filter(
         (candidate) =>
-          candidate.deployed || candidate.funded || accountIndex === 0 || manual !== undefined,
+          candidate.deployed ||
+          candidate.funded ||
+          (isCreatableCandidate(candidate.account) && (accountIndex === 0 || manual !== undefined)),
       ),
     );
   }

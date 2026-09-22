@@ -1,8 +1,10 @@
 /** Public account model validation tests. */
 import { expect, test } from "bun:test";
+import { BRAAVOS_BASE_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import {
   type AccountRef,
   ARGENT_ACCOUNT_CLASS_HASH,
+  accountContractFields,
   canonicalAccountId,
   canonicalAccountRef,
   canonicalLegacyAccountRef,
@@ -124,4 +126,43 @@ test("ordinary account contract semantics are explicit", () => {
   expect(isAccountRef({ ...derived, accountContractType: "argent-multisig" })).toBe(false);
   const { accountContractType: _, ...legacy } = derived;
   expect(canonicalLegacyAccountRef(legacy)).toEqual(legacy);
+});
+
+test("a Braavos record keeps its family and salt through canonicalization", () => {
+  // A branch that knew only Argent once turned every other salted family into
+  // OpenZeppelin here, dropping the salt the address derives from.
+  const braavos = {
+    ...derived,
+    accountContractType: "braavos" as const,
+    classHash: BRAAVOS_BASE_CLASS_HASH,
+    deploymentSalt: "0x0456",
+  };
+  expect(canonicalAccountRef(braavos)).toMatchObject({
+    accountContractType: "braavos",
+    deploymentSalt: "0x456",
+  });
+  // Stored records are canonical: the padded salt is refused, the canonical one kept.
+  expect(isAccountRef(braavos)).toBe(false);
+  expect(isAccountRef({ ...braavos, deploymentSalt: "0x456" })).toBe(true);
+  const { deploymentSalt: _salt, ...unsalted } = braavos;
+  expect(canonicalAccountRef(unsalted)).toBeNull();
+});
+
+test("record contract fields keep a salt for every family whose address uses one", () => {
+  expect(accountContractFields("openzeppelin", undefined)).toEqual({
+    accountContractType: "openzeppelin",
+  });
+  expect(accountContractFields("openzeppelin", "0x1")).toEqual({
+    accountContractType: "openzeppelin",
+  });
+  expect(accountContractFields("argent", "0x1")).toEqual({
+    accountContractType: "argent",
+    deploymentSalt: "0x1",
+  });
+  expect(accountContractFields("braavos", "0x1")).toEqual({
+    accountContractType: "braavos",
+    deploymentSalt: "0x1",
+  });
+  expect(accountContractFields("argent", undefined)).toBeNull();
+  expect(accountContractFields("braavos", undefined)).toBeNull();
 });

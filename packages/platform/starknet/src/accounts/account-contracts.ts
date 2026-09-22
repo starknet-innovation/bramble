@@ -261,12 +261,33 @@ export const serializeArgentAccountSignature = (signature: StarkSignature): read
 ];
 
 /**
+ * Refuses a family this wallet can find and display but not yet act for.
+ *
+ * Braavos accounts are imported and shown, but the authorization encoding a
+ * Braavos account expects has not been established, and guessing builds
+ * transactions the account rejects. Called both where a submission first
+ * checks its account and by {@link serializeAccountSignature}, which every
+ * signature — transaction, typed data, relayed — passes through, so no route
+ * can produce a Braavos signature even if it skips the earlier check.
+ */
+export const requireAuthorizableFamily = (accountContractType: string): void => {
+  if (accountContractType === "braavos") {
+    throw new WalletError(
+      "Braavos accounts can be viewed in this wallet, but it cannot yet authorize transactions for them",
+    );
+  }
+};
+
+/**
  * Serializes one signer result for the selected single-signer account contract.
+ * Throws for a family this wallet cannot yet authorize for (see
+ * {@link requireAuthorizableFamily}) rather than guessing its encoding.
  */
 export const serializeAccountSignature = (
   accountContractType: AccountContractType,
   signature: StarkSignature,
 ): readonly string[] => {
+  requireAuthorizableFamily(accountContractType);
   if (accountContractType === "argent") {
     return serializeArgentAccountSignature(signature);
   }

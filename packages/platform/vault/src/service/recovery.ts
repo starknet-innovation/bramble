@@ -5,11 +5,12 @@ import {
   isRecoveryAccountSelection,
   RECOVERY_SCAN_LIMITS,
   type RecoveryAccountSelection,
+  recoverySelectionKey,
 } from "@bramble/wallet-model/recovery";
 import { deriveAccount } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { isVaultV9, type Vault } from "../schema/schema";
+import { isVaultV10, type Vault } from "../schema/schema";
 
 /** Privileged recovery input; the phrase and unlock credential never leave this boundary. */
 export type RecoverVaultAccountsInput = {
@@ -58,9 +59,7 @@ const requireRecoverySelections = (selections: RecoverVaultAccountsInput["select
   ) {
     throw new WalletError("Invalid recovery account selection");
   }
-  const coordinates = selections.map(
-    ({ accountContractType, accountIndex }) => `${accountContractType}:${accountIndex}`,
-  );
+  const coordinates = selections.map(recoverySelectionKey);
   if (new Set(coordinates).size !== coordinates.length) {
     throw new WalletError("Duplicate recovery account selection");
   }
@@ -103,7 +102,7 @@ export const recoverVaultAccounts = async (
     mnemonic: input.mnemonic,
     signingKeys: derived.map(({ account, privateKey }) => ({ accountId: account.id, privateKey })),
   };
-  if (!isVaultV9(next)) throw new WalletError("Invalid recovered vault");
+  if (!isVaultV10(next)) throw new WalletError("Invalid recovered vault");
   await encryptedStore.write(next, input.vaultPassphrase);
   return next.accounts;
 };
@@ -149,7 +148,7 @@ export const importSeedVaultAccounts = async (
       ...derived.map(({ account, privateKey }) => ({ accountId: account.id, privateKey })),
     ],
   };
-  if (!isVaultV9(next)) throw new WalletError("Invalid imported-seed vault");
+  if (!isVaultV10(next)) throw new WalletError("Invalid imported-seed vault");
   await encryptedStore.write(next, input.vaultPassphrase);
   return derived.map(({ account }) => account);
 };

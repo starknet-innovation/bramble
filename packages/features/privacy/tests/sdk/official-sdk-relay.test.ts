@@ -6,6 +6,10 @@ import { describe, expect, test } from "bun:test";
 import { STRK20_FEE_CEILING_MULTIPLIER } from "@bramble/privacy/fee-policy";
 import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { OutsideExecutionVersion, outsideExecution } from "starknet";
@@ -151,7 +155,10 @@ describe("relay quote approvals", () => {
     const service = createOfficialStrk20Service({
       http,
       nowSeconds: () => 1_000,
-      providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
+      providerFor: strk20ProviderFor({
+        classHash: ARGENT_ACCOUNT_CLASS_HASH,
+        poolFee: POOL_FEE_6_STRK,
+      }),
       sdk: runtime(() => ({
         build: () => builder(executeResult()),
         discoverNotes: async () => ({ notes: new Map() }),
@@ -176,6 +183,77 @@ describe("relay quote approvals", () => {
       sameFelt(submitted.allowanceGrants?.[0]?.contractAddress ?? "", STRK_TOKEN_ADDRESS),
     ).toBe(true);
     expect(submittedSignature).toEqual(["1", "0", "0x1", "0x2", "0x3"]);
+  });
+
+  test("refuses a private relay signature for an unupgraded Argent 0.3.x account", async () => {
+    const earlier = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
+    if (!earlier) throw new Error("argent 0.3.0 missing from the class table");
+    let signed = 0;
+    const typedData = outsideExecution.getTypedData(
+      "0x534e5f5345504f4c4941",
+      { caller: "0x99", execute_after: "0x3e7", execute_before: "0x7d0" },
+      "0x5",
+      [depositApproval],
+      OutsideExecutionVersion.V2,
+    );
+    const http = async (): Promise<Response> =>
+      Response.json({
+        id: "bramble-strk20",
+        jsonrpc: "2.0",
+        result: {
+          fee: {
+            estimated_fee_in_strk: "0x1",
+            gas_token_price_in_strk: "0x1",
+            suggested_max_fee_in_strk: "0x1",
+          },
+          fee_action: {
+            amount: POOL_FEE_6_STRK,
+            recipient: "0x99",
+            token: STRK_TOKEN_ADDRESS,
+            type: "withdraw",
+          },
+          parameters: {
+            fee_mode: {
+              mode: "sponsored_private",
+              pool_fee_token: STRK_TOKEN_ADDRESS,
+              tip: "normal",
+            },
+            time_bounds: null,
+            version: "0x1",
+          },
+          type: "invoke_and_apply_action",
+          typed_data: typedData,
+        },
+      });
+    const service = createOfficialStrk20Service({
+      http,
+      nowSeconds: () => 1_000,
+      providerFor: strk20ProviderFor({ classHash: earlier.classHash, poolFee: POOL_FEE_6_STRK }),
+      sdk: runtime(() => ({
+        build: () => builder(executeResult()),
+        discoverNotes: async () => ({ notes: new Map() }),
+        executeWithInvocation: async () => executeResult(),
+      })),
+    });
+    const actions = [{ amount: "0x64", token: STRK_TOKEN_ADDRESS, type: "deposit" as const }];
+    const argentContext = {
+      ...relayContext,
+      account: {
+        ...relayContext.account,
+        accountContractType: "argent" as const,
+        classHash: earlier.classHash,
+        deploymentSalt: relayContext.account.publicKeyX,
+      },
+      signHash: async () => {
+        signed += 1;
+        return { publicKey: "0x1", r: "0x2", s: "0x3" };
+      },
+    };
+    const plan = await service.quoteActions({ ...argentContext, actions });
+    await expect(service.submitActions({ ...argentContext, actions, plan })).rejects.toThrow(
+      "expects an authorization format this wallet does not produce",
+    );
+    expect(signed).toBe(0);
   });
 
   test("rejects an unpriceable non-STRK relay fee before contacting the paymaster", async () => {

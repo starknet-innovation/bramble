@@ -4,8 +4,8 @@ import { normalizeWalletOrigin } from "@bramble/core/origin";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import {
   type AccountContractType,
-  isAccountContractType,
   isAccountId,
+  isCreatableAccountContractType,
 } from "@bramble/wallet-model/accounts";
 import {
   isHexChainId,
@@ -293,7 +293,7 @@ export const readAddAccountInput = (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["accountContractType", "networkId", "type"]) ||
     message["type"] !== "wallet.addAccount" ||
-    !isAccountContractType(message["accountContractType"]) ||
+    !isCreatableAccountContractType(message["accountContractType"]) ||
     !isStarknetNetworkId(message["networkId"])
   ) {
     return null;

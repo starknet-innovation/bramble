@@ -5,7 +5,6 @@ import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/c
 import { isWalletOrigin } from "@bramble/core/origin";
 import {
   type AccountRef,
-  ARGENT_ACCOUNT_CLASS_HASH,
   canonicalAccountId,
   canonicalAccountRef,
   canonicalLegacyAccountRef,
@@ -15,10 +14,11 @@ import {
   isLegacyAccountRef,
   isLegacyV6AccountRef,
   isLegacyV8AccountRef,
+  isLegacyV9AccountRef,
   type LegacyAccountRef,
   type LegacyV6AccountRef,
 } from "@bramble/wallet-model/accounts";
-import { canonicalFelt, isStarkPrivateKey, sameFelt } from "@bramble/wallet-model/networks";
+import { canonicalFelt, isStarkPrivateKey } from "@bramble/wallet-model/networks";
 import { isMnemonicText } from "@bramble/wallet-model/passphrase";
 import type { OriginGrant, SigningKeyRef, VaultV1, VaultV2, VaultV3 } from "./schema-types";
 
@@ -34,6 +34,9 @@ import {
 /**
  * Current vault schema version accepted by validators and writers.
  *
+ * Version 10 admits Braavos accounts, and Argent accounts at any release they
+ * could have been deployed with rather than only the one this wallet creates;
+ * every earlier version stays pinned to that release and holds no Braavos.
  * Version 9 admits Ready's `argentx` Ledger path scheme beside Bramble's
  * `LedgerW`; every earlier version stays pinned to `LedgerW`. Version 8 retains
  * imported seeds, each HD account bound to the phrase that derived it. Version
@@ -42,7 +45,7 @@ import {
  * identities. Version 4 introduced optional account secrets separated from
  * public {@link AccountRef} metadata.
  */
-export const CURRENT_SCHEMA_VERSION = 9;
+export const CURRENT_SCHEMA_VERSION = 10;
 
 /**
  * Current encrypted vault schema. Optional account secrets are deliberately
@@ -105,16 +108,23 @@ export type VaultV8 = Omit<VaultV7, "schemaVersion"> & {
 };
 
 /**
- * Current encrypted vault schema. Version 9 admits a Ledger derivation under
- * Ready's `argentx` path scheme (an account restored from Ready) beside
- * Bramble's `LedgerW`; the record shape is unchanged.
+ * Schema-v9 vault, accepted only by the adjacent v10 migration. Admits a Ledger
+ * derivation under Ready's `argentx` path scheme beside Bramble's `LedgerW`; the
+ * record shape is unchanged from v8.
  */
 export type VaultV9 = Omit<VaultV8, "schemaVersion"> & { readonly schemaVersion: 9 };
 
 /**
+ * Current encrypted vault schema. Version 10 admits Braavos accounts, and Argent
+ * accounts at any release they could have been deployed with; the record shape
+ * is unchanged, only the values a record may hold have widened.
+ */
+export type VaultV10 = Omit<VaultV9, "schemaVersion"> & { readonly schemaVersion: 10 };
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV9;
+export type Vault = VaultV10;
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -143,7 +153,7 @@ const isOriginGrant = (value: unknown, canonical: boolean): value is OriginGrant
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV9 => ({
+export const emptyVault = (): VaultV10 => ({
   accounts: [],
   accountSecrets: [],
   activeAccountId: null,
@@ -174,9 +184,10 @@ const hasValidKeyBindings = (
   );
 
 // Which account validator a vault version's records must satisfy. Every shape
-// before "current" pins Ledger derivations to Bramble's `LedgerW` scheme, the
-// only one those vaults could ever have stored.
-type VaultAccountShape = "current" | "v7v8" | "v6" | "v1v5";
+// before "current" holds no Braavos and pins Argent to the release this wallet
+// creates; every shape before "v9" also pins Ledger derivations to Bramble's
+// `LedgerW` scheme. Those are the only records such vaults could have stored.
+type VaultAccountShape = "current" | "v9" | "v7v8" | "v6" | "v1v5";
 
 type VaultReferenceOptions = {
   readonly accounts: VaultAccountShape;
@@ -192,6 +203,8 @@ const isVaultAccountShape = (
   switch (shape) {
     case "current":
       return canonical ? isAccountRef(account) : canonicalAccountRef(account) !== null;
+    case "v9":
+      return isLegacyV9AccountRef(account);
     case "v7v8":
       return isLegacyV8AccountRef(account);
     case "v6":
@@ -259,15 +272,6 @@ const hasValidCurrentVaultReferences = (
         isVaultAccountShape(account, options.accounts, options.canonical),
     ),
     value["accountSecrets"],
-  );
-
-const hasValidAccountContractBindings = (value: Record<string, unknown>): boolean =>
-  Array.isArray(value["accounts"]) &&
-  value["accounts"].every(
-    (account) =>
-      isAccountRef(account) &&
-      (account.accountContractType !== "argent" ||
-        sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)),
   );
 
 /**
@@ -371,7 +375,6 @@ export const isVaultV7 = (value: unknown): value is VaultV7 =>
   value["schemaVersion"] === 7 &&
   isRetainedMnemonic(value["mnemonic"]) &&
   hasValidVaultReferences(value, { accounts: "v7v8", canonical: true, ledgerAllowed: true }) &&
-  hasValidAccountContractBindings(value) &&
   hasValidCurrentVaultReferences(value, { accounts: "v7v8", canonical: true });
 
 const V8_KEYS = [...V4_KEYS, "importedSeeds"] as const;
@@ -418,21 +421,34 @@ export const isVaultV8 = (value: unknown): value is VaultV8 =>
   value["schemaVersion"] === 8 &&
   isRetainedMnemonic(value["mnemonic"]) &&
   hasValidVaultReferences(value, { accounts: "v7v8", canonical: true, ledgerAllowed: true }) &&
-  hasValidAccountContractBindings(value) &&
   hasValidCurrentVaultReferences(value, { accounts: "v7v8", canonical: true }) &&
   hasValidSeedBindings(value);
 
 /**
- * Validates the current schema-v9 vault and all internal references, admitting
- * Ledger derivations under either supported path scheme.
+ * Validates legacy schema-v9 vaults for the adjacent v10 migration. Records hold
+ * no Braavos account and Argent only at the release this wallet creates, as no
+ * v9 writer ever produced anything else.
  */
 export const isVaultV9 = (value: unknown): value is VaultV9 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V8_KEYS) &&
+  value["schemaVersion"] === 9 &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, { accounts: "v9", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v9", canonical: true }) &&
+  hasValidSeedBindings(value);
+
+/**
+ * Validates the current schema-v10 vault and all internal references, admitting
+ * Braavos accounts and Argent accounts at any deployable release.
+ */
+export const isVaultV10 = (value: unknown): value is VaultV10 =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, V8_KEYS) &&
   value["schemaVersion"] === CURRENT_SCHEMA_VERSION &&
   isRetainedMnemonic(value["mnemonic"]) &&
   hasValidVaultReferences(value, { accounts: "current", canonical: true, ledgerAllowed: true }) &&
-  hasValidAccountContractBindings(value) &&
   hasValidCurrentVaultReferences(value, { accounts: "current", canonical: true }) &&
   hasValidSeedBindings(value);

@@ -10,6 +10,7 @@ import {
 import {
   estimateAccountDeploymentFee,
   isCompatibleAccountDeployed,
+  requireLiveAuthorizableClass,
   submitAccountDeployment,
 } from "@bramble/starknet/deployment";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
@@ -205,6 +206,58 @@ test("accepts an account that upgraded to a class it can authorize for", async (
   expect(
     await isCompatibleAccountDeployed(deployedAs(ARGENT_ACCOUNT_CONTRACT.classHash), upgraded),
   ).toBe(true);
+});
+
+test("refuses a signature for an Argent account that still runs 0.3.x", async () => {
+  await expect(requireLiveAuthorizableClass(deployedAs(ARGENT_0_3_0), account)).rejects.toThrow(
+    "expects an authorization format this wallet does not produce",
+  );
+});
+
+test("re-pins the class read when the answering node has not seen the block", async () => {
+  let classReads = 0;
+  const provider = {
+    getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 100 }),
+    getClassHashAt: async () => {
+      classReads += 1;
+      if (classReads === 1) throw new Error("Block not found");
+      return ARGENT_ACCOUNT_CONTRACT.classHash;
+    },
+  } as unknown as RpcProvider;
+  await expect(requireLiveAuthorizableClass(provider, account)).resolves.toBeUndefined();
+  expect(classReads).toBe(2);
+});
+
+test("stops re-pinning a class read after three misses", async () => {
+  let classReads = 0;
+  const provider = {
+    getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 100 }),
+    getClassHashAt: async () => {
+      classReads += 1;
+      throw new Error("Block not found");
+    },
+  } as unknown as RpcProvider;
+  await expect(requireLiveAuthorizableClass(provider, account)).rejects.toThrow("Block not found");
+  expect(classReads).toBe(3);
+});
+
+test("accepts a signature for an Argent account that upgraded to a class it can encode", async () => {
+  const deployedAt030 = { ...account, classHash: ARGENT_0_3_0 };
+  await expect(
+    requireLiveAuthorizableClass(deployedAs(ARGENT_ACCOUNT_CONTRACT.classHash), deployedAt030),
+  ).resolves.toBeUndefined();
+});
+
+test("refuses a signature for an undeployed historical Argent class", async () => {
+  const undeployed = {
+    getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 100 }),
+    getClassHashAt: async () => {
+      throw new Error("Contract not found");
+    },
+  } as unknown as RpcProvider;
+  await expect(
+    requireLiveAuthorizableClass(undeployed, { ...account, classHash: ARGENT_0_3_0 }),
+  ).rejects.toThrow("expects an authorization format this wallet does not produce");
 });
 
 test("refuses a recognized class whose authorization format it cannot produce", async () => {

@@ -85,23 +85,32 @@ export const resolveAccountClassHash = async (
   if (!isAccountContractType(input.accountContractType)) {
     throw new WalletError("Invalid account contract type");
   }
-  if (input.accountContractType === "argent") {
-    if (input.classHash === undefined) {
+  if (input.accountContractType === "openzeppelin") {
+    return input.classHash ?? getOzAccountClassHash(kms, networkId);
+  }
+  const family = input.accountContractType;
+  if (input.classHash === undefined) {
+    // Argent defaults to the release this wallet creates. Braavos has no
+    // default because this wallet never creates one: a Braavos account is only
+    // ever derived to find one that already exists, at the class it names.
+    if (family === "argent") {
       return ARGENT_ACCOUNT_CONTRACT.classHash;
     }
-    // Any Argent release an account can be DEPLOYED with is derivable, not only
-    // the one this wallet creates: a Ready account deployed at 0.3.x keeps that
-    // address forever, whatever it upgrades to. Whether the account can then be
-    // acted for is a separate decision, made against its live class.
-    const known = deploymentClasses("argent").some((entry) =>
-      sameFelt(entry.classHash, input.classHash as string),
-    );
-    if (!known) {
-      throw new WalletError("Invalid Argent account class hash");
-    }
-    return input.classHash;
+    throw new WalletError("A Braavos account must name the class it was deployed with");
   }
-  return input.classHash ?? getOzAccountClassHash(kms, networkId);
+  // Any class an account of this family can be DEPLOYED with is derivable, not
+  // only the one this wallet creates: an account keeps the address its deploy
+  // class fixed, whatever it upgrades to. Whether it can then be acted for is a
+  // separate decision, made against its live class.
+  const known = deploymentClasses(family).some((entry) =>
+    sameFelt(entry.classHash, input.classHash as string),
+  );
+  if (!known) {
+    throw new WalletError(
+      `Invalid ${family === "argent" ? "Argent" : "Braavos"} account class hash`,
+    );
+  }
+  return input.classHash;
 };
 
 const resolvedDeploymentSalt = (
@@ -111,13 +120,13 @@ const resolvedDeploymentSalt = (
 ): string | undefined => {
   if (accountContractType === "openzeppelin") {
     if (value !== undefined) {
-      throw new WalletError("OpenZeppelin accounts do not accept an Argent deployment salt");
+      throw new WalletError("OpenZeppelin accounts do not accept a deployment salt");
     }
     return undefined;
   }
   const salt = value ?? publicKeyX;
   if (!isStarkFieldElement(salt)) {
-    throw new WalletError("Invalid Argent deployment salt");
+    throw new WalletError("Invalid account deployment salt");
   }
   return canonicalFelt(salt) as string;
 };
@@ -157,18 +166,25 @@ export const deriveAccountContractAddress = async (
     input.deploymentSalt,
     publicKeyX,
   );
-  const argentEntry = input.accountContractType === "argent" ? accountClassEntry(classHash) : null;
-  if (input.accountContractType === "argent" && argentEntry === null) {
-    throw new WalletError("Invalid Argent account class hash");
+  // Argent and Braavos addresses come from the class table, with the constructor
+  // convention that belongs to the class; OpenZeppelin stays with Krusty's own
+  // derivation, as it always has.
+  const familyEntry =
+    input.accountContractType === "openzeppelin" ? null : accountClassEntry(classHash);
+  if (
+    input.accountContractType !== "openzeppelin" &&
+    (familyEntry === null || familyEntry.family !== input.accountContractType)
+  ) {
+    throw new WalletError("Account class hash does not belong to its account family");
   }
-  const addressInput = argentEntry
-    ? familyAccountAddress(argentEntry, publicKeyX, deploymentSalt)
+  const addressInput = familyEntry
+    ? familyAccountAddress(familyEntry, publicKeyX, deploymentSalt)
     : await kms.deriveOzAccountAddress(publicKeyX, classHash, "0x0");
   if (!isNonZeroStarkFieldElement(addressInput)) {
     throw new WalletError(
-      input.accountContractType === "argent"
-        ? "Invalid Argent account address"
-        : "Krusty KMS returned invalid account address",
+      input.accountContractType === "openzeppelin"
+        ? "Krusty KMS returned invalid account address"
+        : "Invalid account address",
     );
   }
   return {

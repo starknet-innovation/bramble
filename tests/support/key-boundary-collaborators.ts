@@ -53,7 +53,7 @@ const vault = {
   importedSeeds: [],
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 9,
+  schemaVersion: 10,
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
 

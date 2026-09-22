@@ -20,6 +20,7 @@ import {
   isVaultV7,
   isVaultV8,
   isVaultV9,
+  isVaultV10,
   type Vault,
   type VaultV4,
   type VaultV5,
@@ -164,6 +165,21 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     },
     toVersion: 9,
   },
+  {
+    fromVersion: 9,
+    // v10 admits Braavos accounts, and Argent accounts at any release they could
+    // have been deployed with. No v9 writer ever produced either and the v9
+    // validator refuses both, so this rewrites nothing but the version stamp —
+    // what the bump buys is that an older build meeting a v10 vault refuses it
+    // instead of misreading records it cannot validate.
+    migrate(value) {
+      if (!isVaultV9(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, schemaVersion: 10 };
+    },
+    toVersion: 10,
+  },
 ];
 
 const requiredAccountId = (value: string): string => {
@@ -247,7 +263,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV9(value)) {
+  if (isVaultV10(value)) {
     return value;
   }
 
@@ -265,7 +281,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV9(migrated)) {
+  if (!isVaultV10(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 
