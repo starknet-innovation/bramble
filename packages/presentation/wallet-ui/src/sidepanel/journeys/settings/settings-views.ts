@@ -46,6 +46,7 @@ export const settingsScreen = (
     <section class="section">
       <p class="eyebrow">Access & permissions</p>
       <div class="menu-list" role="group" aria-label="Access and permissions">
+        ${walletMenuRow("security", "Security & permissions", "lock")}
         ${walletMenuRow("connected-sites", "Connected sites", "link")}
         ${walletMenuRow("allowances", "Token allowances", "coins")}
         ${walletMenuRow(
