@@ -313,10 +313,18 @@ export const mount = (
     // Mirror the entrypoint's paint(): heal the stale expanded group against the
     // current store before rendering, so a deleted group's editor can never
     // silently re-apply and tests exercise the real self-heal path.
-    state.expandedGroupId = healTransientGroupState(
-      { expandedGroupId: state.expandedGroupId },
+    const healed = healTransientGroupState(
+      {
+        collapsedFolderIds: folders.collapsedFolders(),
+        expandedGroupId: state.expandedGroupId,
+      },
       withDefaultGroups(groups),
-    ).expandedGroupId;
+    );
+    state.expandedGroupId = healed.expandedGroupId;
+    const collapsed = healed.collapsedFolderIds ?? [];
+    if (collapsed.length !== folders.collapsedFolders().length) {
+      folders.setCollapsedFolders(collapsed);
+    }
     if (view === "drawer") {
       const focus = captureRepaintFocus(container);
       const trigger = '<button id="account-trigger" aria-haspopup="dialog"></button>';

@@ -25,21 +25,37 @@ export const CREATE_GROUP_PANEL = "__create__";
  * still exists.
  */
 export type TransientGroupState = {
+  /**
+   * Drawer folders the user has collapsed. Ids of deleted folders are dropped,
+   * so a later folder that reuses the same slug does not open already closed.
+   */
+  readonly collapsedFolderIds?: readonly string[];
   readonly expandedGroupId: string | null;
 };
 
 /**
- * Returns a copy of `state` with the expanded group dropped when its group id is
- * gone. A selection that still resolves passes through unchanged. The
+ * Returns a copy of `state` with selections whose groups are gone removed.
+ * A selection that still resolves passes through unchanged. The
  * {@link CREATE_GROUP_PANEL} sentinel is not a group id, so it is kept as-is
- * rather than healed away.
+ * rather than healed away. Collapsed folder ids are returned only when the
+ * caller passed them, and only the ids that still name a group.
  */
 export const healTransientGroupState = (
   state: TransientGroupState,
   groups: AccountGroups,
 ): TransientGroupState => {
+  const known = new Set(groups.map((group) => group.id));
   const keep =
     state.expandedGroupId === CREATE_GROUP_PANEL ||
-    groups.some((group) => group.id === state.expandedGroupId);
-  return { expandedGroupId: keep ? state.expandedGroupId : null };
+    (state.expandedGroupId !== null && known.has(state.expandedGroupId));
+  const healed: TransientGroupState = {
+    expandedGroupId: keep ? state.expandedGroupId : null,
+  };
+  if (state.collapsedFolderIds === undefined) {
+    return healed;
+  }
+  return {
+    ...healed,
+    collapsedFolderIds: state.collapsedFolderIds.filter((id) => known.has(id)),
+  };
 };

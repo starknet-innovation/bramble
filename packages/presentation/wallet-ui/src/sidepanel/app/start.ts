@@ -294,10 +294,16 @@ export const startWalletUi = async (
       activeView,
     );
     forcedDirection = null;
-    expandedGroupId = healTransientGroupState(
-      { expandedGroupId },
-      withDefaultGroups(cache.preferences?.groups ?? []),
-    ).expandedGroupId;
+    const groups = withDefaultGroups(cache.preferences?.groups ?? []);
+    const healed = healTransientGroupState(
+      { collapsedFolderIds: drawerFolders.collapsedFolders(), expandedGroupId },
+      groups,
+    );
+    expandedGroupId = healed.expandedGroupId;
+    const collapsed = healed.collapsedFolderIds ?? [];
+    if (collapsed.length !== drawerFolders.collapsedFolders().length) {
+      drawerFolders.setCollapsedFolders(collapsed);
+    }
     const classHashVerification = verificationForAccount(
       cache.classHashVerification,
       status.activeAccountId,
