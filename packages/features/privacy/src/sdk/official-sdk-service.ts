@@ -370,7 +370,7 @@ export const createOfficialStrk20Service = ({
                 value as unknown as TypedData,
                 input.account.address,
               );
-              if (input.account.accountContractType === "argent") {
+              if (input.account.accountContractType !== "openzeppelin") {
                 await withRpcFallback(
                   input.rpcUrls,
                   (provider) => requireLiveAuthorizableClass(provider, input.account),

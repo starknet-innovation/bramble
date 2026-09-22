@@ -337,7 +337,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       selected.clear();
       seen.clear();
       if (acknowledgement) acknowledgement.checked = false;
-      if (status) status.textContent = "Searching both account types…";
+      if (status) status.textContent = "Searching every account type…";
       if (result) result.textContent = "";
       renderCandidates();
       if (scanning) restartOnIdle = true;

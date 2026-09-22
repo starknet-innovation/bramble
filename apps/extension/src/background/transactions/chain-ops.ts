@@ -148,11 +148,11 @@ export const executeSignApproval = async (
   // settles the held dapp request with the real reason instead of leaving it to
   // hang on an unhandled throw. Fails closed — no signature returned on error.
   try {
-    // Argent 0.4's signer-array is the only Argent encoding this wallet emits.
-    // Check the class the account runs now, before the key is used, so an
-    // unupgraded 0.3.x account is refused instead of given a signature it
-    // cannot verify.
-    if (account.accountContractType === "argent") {
+    // OpenZeppelin is the only family whose encoding does not depend on a live
+    // class. Every other family is checked before the key is used: Braavos is
+    // view-only, and an unupgraded Argent 0.3.x account cannot verify the 0.4
+    // encoding this wallet emits.
+    if (account.accountContractType !== "openzeppelin") {
       await withRpcFallback(
         networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
         (provider) => requireLiveAuthorizableClass(provider, account),

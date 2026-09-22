@@ -77,19 +77,22 @@ const mount = (
     { account: brambleAccount, deployed: true, funded: false },
     { account: readyIdleAccount, deployed: false, funded: false },
   ],
+  discover?: SidepanelWallet["discoverRecoveryAccounts"],
 ) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
   const wallet = {
-    discoverRecoveryAccounts: () =>
-      Promise.resolve({
-        candidates,
-        complete: true,
-        nextIndex: 20,
-        ok: true as const,
-      }),
+    discoverRecoveryAccounts:
+      discover ??
+      (() =>
+        Promise.resolve({
+          candidates,
+          complete: true,
+          nextIndex: 20,
+          ok: true as const,
+        })),
     loadStatus: () => Promise.resolve(status),
     validateMnemonic: () => Promise.resolve(true),
   } as unknown as SidepanelWallet;
@@ -117,6 +120,25 @@ const rowsIn =
 describe("recovery scan Ready gate", () => {
   beforeEach(() => {
     document.body.replaceChildren();
+  });
+
+  test("says it is searching every account type while the scan is still running", async () => {
+    let finish: (value: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>) => void =
+      () => undefined;
+    const app = mount(
+      [],
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await reachPicker(app);
+
+    expect(app.querySelector("#recovery-scan-status")?.textContent).toBe(
+      "Searching every account type…",
+    );
+    finish({ candidates: [], complete: true, nextIndex: 20, ok: true });
+    await tick();
   });
 
   test("lists an inactive Ready candidate but refuses to select it", async () => {

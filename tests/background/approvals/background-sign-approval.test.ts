@@ -194,6 +194,52 @@ describe("signTypedData approval gate", () => {
     expect(signed).toBe(0);
   });
 
+  test("refuses typed data for a Braavos account before using the key", async () => {
+    let signed = 0;
+    let classReads = 0;
+    const session = createUnlockSession();
+    session.unlock(PASSPHRASE);
+    const response = await executeSignApproval(
+      {
+        preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+        rpcProviderFor: () =>
+          ({
+            getBlockLatestAccepted: async () => {
+              classReads += 1;
+              return { block_hash: "0x9", block_number: 1 };
+            },
+            getClassHashAt: async () => {
+              classReads += 1;
+              return ARGENT_ACCOUNT_CLASS_HASH;
+            },
+          }) as RpcProvider,
+        session,
+        wallet: {
+          ...wallet,
+          async getGrantedAccounts() {
+            return [
+              {
+                ...account,
+                accountContractType: "braavos" as const,
+                deploymentSalt: account.publicKeyX,
+              },
+            ];
+          },
+          async signHash() {
+            signed += 1;
+            return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+          },
+        },
+      },
+      { origin: "https://dapp.example", typedData: MESSAGE },
+    );
+    expect(response).toEqual({
+      error: expect.stringContaining("cannot yet authorize transactions"),
+    });
+    expect(signed).toBe(0);
+    expect(classReads).toBe(0);
+  });
+
   test("valid request never auto-signs — it queues and holds until approval", async () => {
     const handler = makeHandler();
     let settled = false;
