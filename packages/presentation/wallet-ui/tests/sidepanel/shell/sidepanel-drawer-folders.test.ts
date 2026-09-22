@@ -62,6 +62,26 @@ describe("account drawer folders", () => {
     ).toBe("false");
   });
 
+  test("keeps the drop highlight while the pointer is still inside the folder", () => {
+    const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "drawer");
+    const folder = harness.container.querySelector<HTMLElement>('[data-folder="work"]');
+    const row = folder?.querySelector("[data-drag-account]");
+    if (!folder || !row) throw new Error("folder missing");
+    const leave = (related: EventTarget | null): DragEvent => {
+      const event = new window.DragEvent("dragleave", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "relatedTarget", { value: related });
+      return event;
+    };
+
+    folder.dispatchEvent(new window.DragEvent("dragover", { bubbles: true, cancelable: true }));
+    expect(folder.dataset["dropTarget"]).toBe("true");
+    // Moving onto a row inside the section must not clear the highlight.
+    folder.dispatchEvent(leave(row));
+    expect(folder.dataset["dropTarget"]).toBe("true");
+    folder.dispatchEvent(leave(document.body));
+    expect(folder.dataset["dropTarget"]).toBeUndefined();
+  });
+
   test("dragging an account onto another folder files it there exclusively", async () => {
     const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "drawer");
     expect(folderOf(harness.container, acctA.id)).toBe("work");

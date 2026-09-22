@@ -99,7 +99,14 @@ const bindDropTargets = (root: Element, deps: DrawerFolderDeps): void => {
       }
       folder.dataset["dropTarget"] = "true";
     });
-    folder.addEventListener("dragleave", () => {
+    folder.addEventListener("dragleave", (event) => {
+      // Entering a heading or row inside this section fires dragleave on the
+      // section itself. The pointer is still over the folder, so the highlight
+      // stays until the drag actually leaves it.
+      const next = (event as DragEvent).relatedTarget;
+      if (next instanceof Node && folder.contains(next)) {
+        return;
+      }
       delete folder.dataset["dropTarget"];
     });
     folder.addEventListener("drop", (event) => {
