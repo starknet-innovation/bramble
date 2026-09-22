@@ -1,4 +1,4 @@
-import { expect } from "storybook/test";
+import { expect, userEvent } from "storybook/test";
 import {
   assertCheckpointReady,
   checkpointStory,
@@ -122,6 +122,7 @@ export const DiscoverTokens = checkpointStory(
   "assets",
   "token-discover",
 );
+export const TokenCatalog = checkpointStory("Assets · AVNU token list", "assets", "token-catalog");
 export const TokensEmpty = checkpointStory("Assets · tokens empty", "assets", "tokens-empty");
 export const TokenDetail = checkpointStory("Assets · token detail", "assets", "token-detail");
 export const TokenOffline = checkpointStory("Assets · token offline", "assets", "token-offline");
@@ -132,6 +133,13 @@ export const AddressBook: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    // Label and address are the whole form; the wallet card and the keys wait
+    // behind Pro, so saving a contact never reads as a five-field task.
+    const pro = body?.querySelector<HTMLButtonElement>("#address-pro");
+    if (!pro) throw new Error("Missing address book Pro switch");
+    await expect(body?.querySelector('input[name="address"]')).toBeVisible();
+    await expect(body?.querySelector('textarea[name="walletCard"]')).not.toBeVisible();
+    await userEvent.click(pro);
     await expect(body?.querySelector('textarea[name="walletCard"]')).toBeVisible();
     await expect(body?.querySelector('input[name="nostrPublicKey"]')).toBeVisible();
     await expect(body?.querySelector(".address-book")).toHaveTextContent(

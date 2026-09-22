@@ -118,7 +118,9 @@ const prepareSwap =
       context.app.querySelector<HTMLButtonElement>("#swap-sell-token")?.click();
       await nextTurn();
       context.app
-        .querySelector<HTMLButtonElement>(`[data-swap-pick-address="${ETH_TOKEN.address}"]`)
+        .querySelector<HTMLButtonElement>(
+          `#swap-sell-options [data-token-option="${ETH_TOKEN.id}"]`,
+        )
         ?.click();
       await nextTurn();
     }
@@ -172,7 +174,7 @@ export const swapScenario: WalletScenario = {
     checkpoint(
       "picker",
       "Token picker",
-      "Tracked and verified catalog tokens share one searchable sheet.",
+      "Tracked and verified catalog tokens share one searchable dropdown.",
     ),
     checkpoint(
       "loading",

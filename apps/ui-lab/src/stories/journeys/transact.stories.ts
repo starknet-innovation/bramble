@@ -40,14 +40,21 @@ export const SwapPickerKeyboard: LabStory = {
     await assertCheckpointReady(canvasElement);
     const frame = canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]");
     const body = frame?.contentDocument?.body;
-    const sheet = body?.querySelector<HTMLElement>("#swap-picker");
-    const search = body?.querySelector<HTMLInputElement>("#swap-picker-search");
-    if (!body || !sheet || !search) throw new Error("Missing swap picker fixture");
-    await expect(search).toHaveFocus();
-    await step("Escape closes the modal sheet and returns focus", async () => {
-      await userEvent.type(search, "{Escape}");
-      await waitFor(() => expect(sheet).not.toBeVisible());
-      await waitFor(() => expect(body.querySelector("#swap-buy-token")).toHaveFocus());
+    const trigger = body?.querySelector<HTMLButtonElement>("#swap-buy-token");
+    const panel = body?.querySelector<HTMLElement>("#swap-buy-options");
+    if (!body || !trigger || !panel) throw new Error("Missing swap dropdown fixture");
+    await expect(panel).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    // Opening moves focus into the panel: onto the catalog search when the list
+    // has one, otherwise onto the first option.
+    const focused = body.ownerDocument.activeElement;
+    if (!focused || !panel.contains(focused)) throw new Error("Focus did not enter the dropdown");
+    await step("Escape closes the dropdown and returns focus to its trigger", async () => {
+      // Typed at the focused element itself: the key has to reach the frame's
+      // document, and a click first would pick whatever option holds focus.
+      await userEvent.type(focused as HTMLElement, "{Escape}", { skipClick: true });
+      await waitFor(() => expect(panel).not.toBeVisible());
+      await waitFor(() => expect(trigger).toHaveFocus());
     });
   },
 };
