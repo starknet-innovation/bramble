@@ -103,13 +103,17 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
     // understates what leaves the account, and quoting two figures asks the
     // user to add them up.
     const total = sumFeeEstimates(state.fee, state.deploymentFee);
-    return reviewBoundary(
-      `<div class="review-fee"><p>Estimated fee: ${escapeHtml(
-        formatFeeEstimate(total ?? state.fee),
-      )}</p><p class="review-fee-part">Creating this account on Starknet is ${escapeHtml(
-        formatFeeEstimate(state.deploymentFee),
-      )} of that${state.signsTwice === true ? ", and your Ledger asks to sign both" : ""}.</p></div>${shortfallHtml(state)}`,
-    );
+    // Unlike units or a malformed estimate fail closed: quoting one component
+    // as the total would understate the cost the same way a missing half does.
+    if (total) {
+      return reviewBoundary(
+        `<div class="review-fee"><p>Estimated fee: ${escapeHtml(
+          formatFeeEstimate(total),
+        )}</p><p class="review-fee-part">Creating this account on Starknet is ${escapeHtml(
+          formatFeeEstimate(state.deploymentFee),
+        )} of that${state.signsTwice === true ? ", and your Ledger asks to sign both" : ""}.</p></div>${shortfallHtml(state)}`,
+      );
+    }
   }
   if (
     state.requiresDeployment === true &&
