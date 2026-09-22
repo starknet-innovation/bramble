@@ -70,6 +70,19 @@ describe("undeployed-account fee review", () => {
     expect(html).toContain("0.031929 STRK");
   });
 
+  test("withholds a total when the two estimates cannot be added", () => {
+    const html = render({
+      deploymentFee: { overallFee: "1500", unit: "WEI" },
+      fee: fee("2000"),
+      feeEstimateFailed: false,
+      requiresDeployment: true,
+    });
+
+    expect(html).toContain("Couldn't estimate");
+    expect(html).not.toContain("Estimated fee:");
+    expect(html).not.toContain("of that");
+  });
+
   test("names a missing component instead of quoting a partial total", () => {
     const html = render({
       deploymentFee: null,
