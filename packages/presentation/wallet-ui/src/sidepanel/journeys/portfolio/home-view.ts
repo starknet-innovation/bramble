@@ -26,7 +26,7 @@ export const strkAvailableForFees = (balances: BalanceState): boolean | null =>
 import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { dockScreen, noAccountEmpty } from "../../shared/parts";
-import { actionTile, deployNotice, pendingCallout, shieldTile } from "../../shell/wallet-shell";
+import { actionTile, pendingCallout, shieldTile } from "../../shell/wallet-shell";
 import { deploymentKnownFromPrivacy, type PrivacyDisclosureState } from "../privacy/privacy-model";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
 
@@ -95,7 +95,6 @@ export const homeScreen = (
       ${showTotal ? heroDelta(unified, prices, changes, currency) : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
       ${account ? "" : noAccountEmpty(status)}
-      ${deployNotice(account, deployment, fundedForFees)}
     </section>
     <section class="home-actions" aria-label="Wallet actions">
       <div class="action-row">

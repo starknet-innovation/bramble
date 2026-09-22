@@ -42,18 +42,6 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     justify-content: center;
     width: 34px;
   }
-  .deploy-notice { display: grid; gap: 2px; justify-items: start; }
-  /* An account that is not on chain yet is a normal state, not a fault: the
-     first send creates it. The chip offers the shortcut in the neutral voice
-     rather than flagging an error the user cannot have caused. */
-  button.deploy-chip { color: var(--bramble-muted); }
-  @media (hover: hover) and (pointer: fine) {
-    button.deploy-chip:not(:disabled):hover {
-      background: var(--bramble-hover);
-      color: var(--bramble-text);
-    }
-  }
-  button.deploy-chip:not(:disabled):active { background: var(--bramble-soft-press); }
   .callout-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .callout-copy strong { font-size: ${TYPE.body.size}; }
   .callout-copy p { font-size: ${TYPE.caption.size}; }
