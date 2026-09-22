@@ -350,6 +350,12 @@ export const recoveryScanFields = (restoreLabel: string): string => `
           <ul class="allowance-list" aria-label="Recovered Ready accounts"></ul>
         </div>
       </details>
+      <details class="disclosure account-group" data-recovery-group="braavos">
+        <summary>Braavos accounts<span data-detected></span></summary>
+        <div class="disclosure-body">
+          <ul class="allowance-list" aria-label="Recovered Braavos accounts"></ul>
+        </div>
+      </details>
       <details class="disclosure">
         <summary>Advanced manual index</summary>
         <div class="disclosure-body onboarding-fields">
@@ -367,7 +373,7 @@ export const recoveryScanFields = (restoreLabel: string): string => `
 const recoveryAccountsStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
     ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for both Bramble and Ready accounts. Accounts with on-chain activity are selected automatically.")}
+    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for Bramble, Ready, and Braavos accounts. Accounts with on-chain activity are selected automatically.")}
     <div class="onboarding-fields">
 ${recoveryScanFields("restore the selected accounts")}
     </div>

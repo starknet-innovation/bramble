@@ -7,9 +7,10 @@
  * dismisses the overlay, and the add-account chooser routes each option to its
  * flow. No WebHID or background is touched.
  */
+
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
-import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import {
   createLedgerOnboardRuntime,
@@ -48,13 +49,15 @@ const enumerateClient: LedgerDeviceClient = {
 
 const candidate = (
   index: number,
-  accountContractType: "argent" | "openzeppelin" = "openzeppelin",
+  accountContractType: AccountContractType = "openzeppelin",
 ): LedgerAccountRef => {
   const address = `0x${accountContractType === "argent" ? "e" : ""}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`;
   return {
+    // A device account is never Braavos; anything not Argent is this wallet's
+    // own OpenZeppelin account, which carries no deployment salt.
     ...(accountContractType === "argent"
       ? ({ accountContractType, deploymentSalt: "0x1" } as const)
-      : ({ accountContractType } as const)),
+      : ({ accountContractType: "openzeppelin" } as const)),
     address,
     classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     derivation: {

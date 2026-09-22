@@ -9,8 +9,9 @@ import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
 } from "@bramble/starknet/account-contracts";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
 import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
-import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
 
 /**
  * Normalises a felt-encoded hash to its canonical `0x` hex form so hashes that
@@ -23,6 +24,19 @@ const buildRegistry = (): ReadonlyMap<string, string> => {
     [OPENZEPPELIN_ACCOUNT_CLASS_HASH, "Bramble Account (OpenZeppelin AccountUpgradeable)"],
     [ARGENT_ACCOUNT_CONTRACT.classHash, "Ready Account (Argent)"],
     [ARGENT_MULTISIG_CONTRACT.classHash, "Ready Multisig (Argent)"],
+    // Every other class an account can be deployed with, from the class table:
+    // a restored account stores the class that fixed its address.
+    ...deploymentClasses()
+      .filter((entry) => !sameFelt(entry.classHash, ARGENT_ACCOUNT_CONTRACT.classHash))
+      .map(
+        (entry) =>
+          [
+            entry.classHash,
+            entry.family === "argent"
+              ? `Ready Account (Argent ${entry.label.replace(/^argent /, "")})`
+              : "Braavos Account",
+          ] as const,
+      ),
   ];
   const registry = new Map<string, string>();
   for (const [hash, label] of entries) {

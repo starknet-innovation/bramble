@@ -1,6 +1,7 @@
 /** Contract-aware starknet.js signer adapters for wallet account families. */
 
 import { WalletError } from "@bramble/core/errors";
+import { accountClassEntry } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { isStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
@@ -12,12 +13,11 @@ import {
   Signer,
 } from "starknet";
 import {
-  ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
   type ArgentMultisigConfig,
   normalizeArgentMultisigConfig,
+  requireAuthorizableFamily,
   serializeAccountSignature,
-  serializeArgentAccountSignature,
   serializeArgentMultisigDeploySignature,
   serializeArgentMultisigSignature,
 } from "../accounts/account-contracts";
@@ -111,9 +111,9 @@ class FixedContractStarknetSigner extends Signer {
     if (!sameFelt(signature.publicKey, this.signerPublicKey)) {
       throw new WalletError("Signature public key does not match the account");
     }
-    return this.contractKind === "argent"
-      ? [...serializeArgentAccountSignature(signature)]
-      : [...serializeAccountSignature("openzeppelin", signature)];
+    // The account's own family, never a stand-in: naming OpenZeppelin here once
+    // meant any other family was signed as if it were one.
+    return [...serializeAccountSignature(this.contractKind, signature)];
   }
 }
 
@@ -150,11 +150,15 @@ const signerInputs = (
   readonly publicKey: string;
 } => {
   if (account.accountContractType !== "argent-multisig") {
+    requireAuthorizableFamily(account.accountContractType);
+    // The stored class is the one the address was deployed with, which may be
+    // any Argent release; what the account runs now, and so which encoding it
+    // accepts, is checked against the chain before anything is submitted.
     if (
       account.accountContractType === "argent" &&
-      !sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)
+      accountClassEntry(account.classHash)?.family !== "argent"
     ) {
-      throw new WalletError("Argent account class hash does not match the pinned release");
+      throw new WalletError("Argent account class hash is not a release this wallet recognizes");
     }
     return { kind: account.accountContractType, multisig: null, publicKey: account.publicKeyX };
   }

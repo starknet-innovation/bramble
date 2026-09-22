@@ -8,8 +8,10 @@ import { describe, expect, test } from "bun:test";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
+  serializeAccountSignature,
 } from "@bramble/starknet/account-contracts";
 import { argentQueryAccount, krustyAccount } from "@bramble/starknet/provider";
+import { BRAAVOS_BASE_CLASS_HASH, deploymentClasses } from "@bramble/wallet-model/account-families";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
 import { EDataAvailabilityMode, ETransactionVersion3, RpcProvider, type Signature } from "starknet";
@@ -104,7 +106,53 @@ describe("krustyAccount signer", () => {
         },
         recordingSignHash().signHash,
       ),
-    ).toThrow("class hash does not match");
+    ).toThrow("not a release this wallet recognizes");
+  });
+
+  test("signs for an Argent account stored at the release it was deployed with", async () => {
+    // The stored class fixes the address, not the encoding: a Ready account
+    // deployed at 0.3.0 and since upgraded is signed for like any other, and the
+    // live class is what submission checks before anything is sent.
+    const release = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
+    if (!release) throw new Error("argent 0.3.0 missing from the class table");
+    const { signHash } = recordingSignHash();
+    const signer = krustyAccount(
+      provider,
+      {
+        ...account,
+        accountContractType: "argent",
+        classHash: release.classHash,
+        deploymentSalt: PUBLIC_KEY,
+      },
+      signHash,
+    ).signer as unknown as RawSigner;
+
+    await expect(signer.signRaw("0xabc")).resolves.toEqual(["1", "0", PUBLIC_KEY, "0x1", "0x2"]);
+  });
+
+  test("never builds a signer for a Braavos account", () => {
+    const { signHash, signed } = recordingSignHash();
+    expect(() =>
+      krustyAccount(
+        provider,
+        {
+          ...account,
+          accountContractType: "braavos",
+          classHash: BRAAVOS_BASE_CLASS_HASH,
+          deploymentSalt: PUBLIC_KEY,
+        },
+        signHash,
+      ),
+    ).toThrow("cannot yet authorize transactions");
+    expect(signed).toEqual([]);
+  });
+
+  test("never serializes a Braavos signature, whichever path asks", () => {
+    // Typed-data and relayed signing reach this serializer without building a
+    // transaction signer, so the refusal has to live here too.
+    expect(() =>
+      serializeAccountSignature("braavos", { publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+    ).toThrow("cannot yet authorize transactions");
   });
 
   test("emits exact GUID-sorted Argent multisig aggregates", async () => {

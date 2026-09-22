@@ -32,12 +32,24 @@ export const findNetworkAccount = (
   vault.accounts.find(
     (stored) =>
       stored.networkId === networkId &&
-      stored.accountContractType === source.accountContractType &&
-      (source.accountContractType !== "argent" ||
-        (stored.accountContractType === "argent" &&
-          sameFelt(stored.deploymentSalt, source.deploymentSalt))) &&
+      sameAccountContract(stored, source) &&
       sameWalletKey(stored, source),
   );
+
+// OpenZeppelin's class is chosen per network, so it cannot tell two projections
+// apart. Every other family's address is fixed by the class it was deployed
+// with and its salt, which is the same account on every network: one key at two
+// Argent releases is two accounts, and must not match as one.
+const sameAccountContract = (stored: AccountRef, source: AccountRef): boolean =>
+  stored.accountContractType === source.accountContractType &&
+  (source.accountContractType === "openzeppelin" ||
+    (sameFelt(stored.classHash, source.classHash) &&
+      sameFelt(stored.deploymentSalt, source.deploymentSalt)));
+
+// The deploy class travels with the account for the same reason; left out, it
+// would fall back to the release this wallet creates, which is another address.
+const deployClass = (source: AccountRef): { readonly classHash?: string } =>
+  source.accountContractType === "openzeppelin" ? {} : { classHash: source.classHash };
 
 /**
  * Projects a wallet key onto one network. Ledger accounts retain only public
@@ -54,6 +66,7 @@ export const deriveNetworkAccount = async (
     const account = await deriveLedgerAccount(kms, {
       accountContractType: source.accountContractType,
       accountIndex: source.derivation.accountIndex,
+      ...deployClass(source),
       ...(source.deploymentSalt === undefined ? {} : { deploymentSalt: source.deploymentSalt }),
       eip2645application: source.derivation.eip2645application,
       networkId,
@@ -67,6 +80,7 @@ export const deriveNetworkAccount = async (
   }
   const projection = await deriveAccountContractAddress(kms, {
     accountContractType: source.accountContractType,
+    ...deployClass(source),
     ...(source.deploymentSalt === undefined ? {} : { deploymentSalt: source.deploymentSalt }),
     networkId,
     publicKeyX: source.publicKeyX,
