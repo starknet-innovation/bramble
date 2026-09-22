@@ -161,6 +161,13 @@ export const multisigDeployFlow = (
     return flowHeader(flowTitle, status) + flowScreen("multisig-deploy", noAccountEmpty(status));
   }
   const accounts = status.accounts.filter((candidate) => candidate.networkId === status.networkId);
+  // Braavos is restored view-only. A transfer from it is refused before
+  // submission, so it cannot be a funding source for this deployment.
+  const fundingAccounts = accounts.filter(
+    (candidate) => candidate.accountContractType !== "braavos",
+  );
+  const fundingAccount =
+    fundingAccounts.find((candidate) => candidate.id === account.id) ?? fundingAccounts[0];
   const savedDeployment =
     selectedMultisig?.deployed === false ? selectedMultisig.record.deployment : undefined;
   const initialStage = savedDeployment ? "approval" : "participants";
@@ -218,18 +225,18 @@ export const multisigDeployFlow = (
             <template data-multisig-funding-controls>
               <div class="multisig-funding-local">
                 ${selectField({
-                  disabled: accounts.length === 0,
+                  disabled: fundingAccounts.length === 0,
                   label: "Fund from",
                   name: "fundingAccountId",
-                  options: accounts.map((candidate) => ({
+                  options: fundingAccounts.map((candidate) => ({
                     label: `${accountDisplayName(candidate, preferences)} · ${accountFamilyName(candidate.accountContractType)}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
                     value: candidate.id,
                   })),
-                  selected: account.id,
+                  ...(fundingAccount ? { selected: fundingAccount.id } : {}),
                 })}
                 ${button({
                   attributes: { "data-multisig-fund-local": true },
-                  disabled: !strkToken || accounts.length === 0,
+                  disabled: !strkToken || fundingAccounts.length === 0,
                   icon: "send",
                   label: "Fund from this wallet",
                 })}

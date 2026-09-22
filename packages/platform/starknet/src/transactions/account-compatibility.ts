@@ -16,7 +16,7 @@ import {
 } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import { requireAuthorizableFamily } from "../accounts/account-contracts";
-import { isContractNotFoundError } from "../rpc/rpc-not-found";
+import { isBlockNotFoundError, isContractNotFoundError } from "../rpc/rpc-not-found";
 
 /** The account fields the signer check reads. */
 export type ArgentSignerSubject = {
@@ -48,6 +48,10 @@ export type AuthorizableAccount = {
   readonly classHash: string;
 };
 
+// A pinned block hash misses about one read in eight on a load-balanced
+// endpoint. Three re-pins cover that skew; a persistent miss fails closed.
+const LIVE_CLASS_READ_ATTEMPTS = 3;
+
 /**
  * Refuses an account whose live class this wallet cannot encode an authorization for.
  *
@@ -57,6 +61,10 @@ export type AuthorizableAccount = {
  * Transaction submission already checks the class the account runs now; these
  * routes must do the same. When nothing is deployed, the stored class is the
  * one a deployment would use, so it is checked instead.
+ *
+ * The block pin and the class read can land on different nodes behind one
+ * load-balanced endpoint. A sibling that has not seen the pin answers with
+ * JSON-RPC 24. That is skew, not a missing account, so the read is re-pinned.
  */
 export const requireLiveAuthorizableClass = async (
   provider: RpcProvider,
@@ -66,16 +74,25 @@ export const requireLiveAuthorizableClass = async (
   if (account.accountContractType !== "argent") {
     return;
   }
-  const blockIdentifier = await acceptedBlockIdentifier(provider);
-  try {
-    const liveClassHash = await provider.getClassHashAt(account.address, blockIdentifier);
-    requireAuthorizableArgentClass(liveClassHash);
-  } catch (error) {
-    if (!isContractNotFoundError(error)) {
-      throw error;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < LIVE_CLASS_READ_ATTEMPTS; attempt += 1) {
+    const blockIdentifier = await acceptedBlockIdentifier(provider);
+    try {
+      const liveClassHash = await provider.getClassHashAt(account.address, blockIdentifier);
+      requireAuthorizableArgentClass(liveClassHash);
+      return;
+    } catch (error) {
+      if (isContractNotFoundError(error)) {
+        requireAuthorizableArgentClass(account.classHash);
+        return;
+      }
+      if (!isBlockNotFoundError(error)) {
+        throw error;
+      }
+      lastError = error;
     }
-    requireAuthorizableArgentClass(account.classHash);
   }
+  throw lastError;
 };
 
 /**
