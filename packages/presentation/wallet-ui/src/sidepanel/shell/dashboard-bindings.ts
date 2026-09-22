@@ -167,6 +167,17 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
   const networkId = root?.dataset["receiveNetwork"];
   const publicKeyX = root?.dataset["receiveSignerKey"];
   if (!root || !address || !isStarknetNetworkId(networkId) || !publicKeyX) return;
+  // Everything past the QR and the address is opt-in: receiving needs one
+  // address, and the contact card and keys are for multisig coordination.
+  const pro = root.querySelector<HTMLButtonElement>("#receive-pro");
+  const proFields = root.querySelector<HTMLElement>("#receive-pro-fields");
+  pro?.addEventListener("click", () => {
+    const open = pro.getAttribute("aria-checked") !== "true";
+    pro.setAttribute("aria-checked", String(open));
+    pro.dataset["checked"] = String(open);
+    proFields?.toggleAttribute("hidden", !open);
+  });
+
   const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
   const options = [...root.querySelectorAll<HTMLButtonElement>("[data-receive-payload]")];
   const showPayload = (payload: "address" | "card"): void => {

@@ -1,6 +1,6 @@
 /** Shared account-address surface used by single-owner and multisig Receive. */
 import { escapeHtml } from "@bramble/core/html";
-import { button } from "@bramble/ui-kit/controls";
+import { button, switchControl } from "@bramble/ui-kit/controls";
 import { icon } from "@bramble/ui-kit/icons";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { walletContactCard } from "@bramble/wallet-model/preferences";
@@ -119,62 +119,56 @@ export const receiveAddressView = ({
     <div class="qr-card" data-receive-qr data-qr-payload="address">${qrSvg(address, RECEIVE_QR_LABELS.address)}</div>
     <div class="receive-intro">
       <h2>Your Starknet address</h2>
-      <p class="receive-address-line"><code data-receive-address-text>${escapeHtml(address)}</code></p>
+      <button class="receive-address-copy" type="button" data-copy="${escapeHtml(address)}" aria-label="${escapeHtml(copyLabel)}" title="${escapeHtml(copyLabel)}">
+        <code data-receive-address-text>${escapeHtml(address)}</code>
+        <span class="receive-address-copy-mark" aria-hidden="true">${icon("copy")}</span>
+      </button>
       ${networkName ? `<p class="receive-network">Network: <strong>${escapeHtml(networkName)}</strong></p>` : ""}
-      <p>${escapeHtml(hint)}</p>
     </div>
     ${
       publicKeyX
-        ? `<div class="seg receive-payload-switch" role="group" aria-label="QR code contents" data-receive-payload-switch>
-        <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">Address</button>
-        <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Bramble contact card</button>
-      </div>
-      <p class="hint receive-card-explainer" data-receive-card-explainer>${escapeHtml(CARD_EXPLAINER)}</p>`
-        : ""
-    }
-    <div class="receive-actions">
-      ${button({ attributes: { "data-copy": address }, icon: "copy", label: copyLabel })}
-      ${
-        publicKeyX
-          ? button({
-              attributes: {
-                "data-copy": walletCardReady ? contactCard : "",
-                "data-wallet-card-copy": true,
-              },
-              disabled: !walletCardReady,
-              icon: "copy",
-              label: walletCardReady ? "Copy wallet card" : "Preparing card…",
-              variant: "secondary",
-            })
-          : ""
-      }
-    </div>
-    ${
-      publicKeyX
-        ? `<details class="disclosure receive-identity" data-disclosure="receive-identity">
-            <summary>
-              <span class="menu-copy"><strong>Wallet identity</strong><small>Signer and coordination keys</small></span>
-              <span class="disclosure-mark">${icon("chevronRight")}</span>
-            </summary>
-            <div class="disclosure-body receive-public-key">
-              <div class="receive-key-row">
-                <strong>Signer public key</strong>
-                <span class="receive-key-value">
-                  <code title="${escapeHtml(publicKeyX)}">${escapeHtml(accountLabel(publicKeyX))}</code>
-                  ${copyButton(publicKeyX, "Copy signer public key")}
-                </span>
-              </div>
-              <div class="receive-key-row" data-nostr-key-row>
-                <strong>Coordination public key</strong>
-                <span data-nostr-key-status role="status" aria-live="polite"${nostrPublicKey ? " hidden" : ""}>Preparing secure coordination…</span>
-                <span class="receive-key-value" data-nostr-key-value${nostrPublicKey ? "" : " hidden"}>
-                  <code data-nostr-key title="${escapeHtml(nostrPublicKey ?? "")}">${nostrPublicKey ? escapeHtml(accountLabel(nostrPublicKey)) : ""}</code>
-                  ${copyButton(nostrPublicKey ?? "", "Copy coordination public key")}
-                </span>
-              </div>
-            </div>
-          </details>`
-        : ""
+        ? `${switchControl({
+            attributes: { id: "receive-pro" },
+            label: "Pro",
+          })}
+      <div class="receive-pro-fields" id="receive-pro-fields" hidden>
+        <p class="hint">${escapeHtml(hint)}</p>
+        <div class="seg receive-payload-switch" role="group" aria-label="QR code contents" data-receive-payload-switch>
+          <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">Address</button>
+          <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Bramble contact card</button>
+        </div>
+        <p class="hint receive-card-explainer" data-receive-card-explainer>${escapeHtml(CARD_EXPLAINER)}</p>
+        <div class="receive-actions">
+          ${button({
+            attributes: {
+              "data-copy": walletCardReady ? contactCard : "",
+              "data-wallet-card-copy": true,
+            },
+            disabled: !walletCardReady,
+            icon: "copy",
+            label: walletCardReady ? "Copy wallet card" : "Preparing card…",
+            variant: "secondary",
+          })}
+        </div>
+        <div class="receive-public-key">
+          <div class="receive-key-row">
+            <strong>Signer public key</strong>
+            <span class="receive-key-value">
+              <code title="${escapeHtml(publicKeyX)}">${escapeHtml(accountLabel(publicKeyX))}</code>
+              ${copyButton(publicKeyX, "Copy signer public key")}
+            </span>
+          </div>
+          <div class="receive-key-row" data-nostr-key-row>
+            <strong>Coordination public key</strong>
+            <span data-nostr-key-status role="status" aria-live="polite"${nostrPublicKey ? " hidden" : ""}>Preparing secure coordination…</span>
+            <span class="receive-key-value" data-nostr-key-value${nostrPublicKey ? "" : " hidden"}>
+              <code data-nostr-key title="${escapeHtml(nostrPublicKey ?? "")}">${nostrPublicKey ? escapeHtml(accountLabel(nostrPublicKey)) : ""}</code>
+              ${copyButton(nostrPublicKey ?? "", "Copy coordination public key")}
+            </span>
+          </div>
+        </div>
+      </div>`
+        : `<p class="hint">${escapeHtml(hint)}</p>`
     }
   </div>`;
 };
