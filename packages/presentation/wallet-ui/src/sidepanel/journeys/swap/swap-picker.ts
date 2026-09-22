@@ -122,6 +122,7 @@ const dropdownGroups = (deps: SwapPickerDeps): readonly TokenDropdownGroup[] => 
   const mine = tracked.map((token) => ({
     address: token.address,
     id: token.id,
+    name: token.name,
     symbol: token.symbol,
   }));
   const rest = (catalog ?? [])
@@ -131,6 +132,7 @@ const dropdownGroups = (deps: SwapPickerDeps): readonly TokenDropdownGroup[] => 
       // Untracked tokens have no wallet id yet; the address stands in and is
       // resolved to a tracked id when the pick is applied.
       id: `address:${entry.address}`,
+      name: entry.name,
       symbol: entry.symbol,
     }));
   return [
