@@ -281,8 +281,11 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(reviewText(app)).toContain("not deployed yet");
-    expect(feeText(app)).toContain("Estimated transaction fee");
-    expect(feeText(app)).toContain("Estimated account deployment fee");
+    // One action, one figure: the total leads and the deployment share is named
+    // under it, rather than two amounts the user has to add up.
+    expect(feeText(app)).toContain("Estimated fee");
+    expect(feeText(app)).toContain("Creating this account on Starknet is");
+    expect(feeText(app)).not.toContain("Estimated transaction fee");
 
     submit(app);
     await flush();
