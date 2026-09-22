@@ -9,6 +9,7 @@ import {
   type AccountGroups,
   accountGroup,
   createGroup,
+  DEFAULT_GROUP_IDS,
   GROUP_ICONS,
   isAccountGroup,
   isAccountGroupIcon,
@@ -174,17 +175,68 @@ describe("normalizeAccountGroups", () => {
       { accountIds: [accountA], icon: "user", id: "personal", name: "Personal" },
     ];
     const normalized = normalizeAccountGroups(legacy);
+    // The read also seeds the two default folders, so the user's own groups sit
+    // between them: home, Work, Personal, archive.
+    const work = normalized.find((group) => group.id === "work");
+    const personal = normalized.find((group) => group.id === "personal");
     // accountA is kept only in the FIRST group; accountB (single) is untouched.
-    expect(normalized[0]?.accountIds).toEqual([accountA, accountB]);
-    expect(normalized[1]?.accountIds).toEqual([]);
+    expect(work?.accountIds).toEqual([accountA, accountB]);
+    expect(personal?.accountIds).toEqual([]);
   });
 
-  test("returns the input unchanged when membership is already exclusive", () => {
+  test("ensures both default folders, home first and the archive last", () => {
+    const seeded = normalizeAccountGroups([
+      { accountIds: [], icon: "briefcase", id: "work", name: "Work" },
+    ]);
+
+    expect(seeded.map((group) => group.id)).toEqual([
+      DEFAULT_GROUP_IDS.home,
+      "work",
+      DEFAULT_GROUP_IDS.archived,
+    ]);
+    expect(seeded[0]?.name).toBe("My accounts");
+    expect(seeded.at(-1)?.name).toBe("Archived accounts");
+    // A wallet that has never seen folders reads the same as a fresh one.
+    expect(normalizeAccountGroups([]).map((group) => group.id)).toEqual([
+      DEFAULT_GROUP_IDS.home,
+      DEFAULT_GROUP_IDS.archived,
+    ]);
+  });
+
+  test("keeps a renamed default in place rather than re-seeding it", () => {
+    const renamed = normalizeAccountGroups([
+      { accountIds: [accountA], icon: "star", id: DEFAULT_GROUP_IDS.home, name: "Daily" },
+      { accountIds: [], icon: "folder", id: DEFAULT_GROUP_IDS.archived, name: "Old" },
+    ]);
+
+    expect(renamed[0]).toMatchObject({ name: "Daily", accountIds: [accountA] });
+    expect(renamed.at(-1)).toMatchObject({ name: "Old" });
+  });
+
+  test("returns the input unchanged when it is already exclusive and seeded", () => {
     const clean: AccountGroups = [
+      { accountIds: [], icon: "wallet", id: DEFAULT_GROUP_IDS.home, name: "My accounts" },
       { accountIds: [accountA], icon: "briefcase", id: "work", name: "Work" },
       { accountIds: [accountB], icon: "user", id: "personal", name: "Personal" },
+      { accountIds: [], icon: "folder", id: DEFAULT_GROUP_IDS.archived, name: "Archived accounts" },
     ];
     expect(normalizeAccountGroups(clean)).toBe(clean);
+  });
+});
+
+describe("default folders", () => {
+  test("refuses to remove either default, and removes anything else", () => {
+    // The drawer files every unassigned account into the home folder and offers
+    // the archive as the place to put one away, so neither can be deleted.
+    const groups = normalizeAccountGroups(createGroup([], "Work", "briefcase"));
+
+    expect(removeGroup(groups, DEFAULT_GROUP_IDS.home).map((group) => group.id)).toContain(
+      DEFAULT_GROUP_IDS.home,
+    );
+    expect(removeGroup(groups, DEFAULT_GROUP_IDS.archived).map((group) => group.id)).toContain(
+      DEFAULT_GROUP_IDS.archived,
+    );
+    expect(removeGroup(groups, "work").map((group) => group.id)).not.toContain("work");
   });
 });
 

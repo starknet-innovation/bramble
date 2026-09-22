@@ -35,15 +35,15 @@ import {
   withAddressBookId,
   withTokenId,
 } from "@bramble/wallet-model/preferences";
-import {
-  createGroup as createGroupPure,
-  normalizeAccountGroups,
-  removeGroup as removeGroupPure,
-  renameGroup as renameGroupPure,
-  setAccountInGroup as setAccountInGroupPure,
-  setGroupIcon as setGroupIconPure,
-} from "./groups";
+import { normalizeAccountGroups } from "./groups";
 import { withExplorerSettings } from "./preferences-explorer";
+import {
+  withAccountInGroup,
+  withCreatedGroup,
+  withGroupIcon,
+  withoutGroup,
+  withRenamedGroup,
+} from "./preferences-groups";
 import { withNostrRelayUrl } from "./preferences-nostr";
 import {
   isWalletPreferences,
@@ -239,11 +239,7 @@ export const createPreferencesStore = ({
         return next;
       },
       async createGroup({ icon, name }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: createGroupPure(preferences.groups ?? [], name, icon),
-        };
+        const next = withCreatedGroup(await read(), name, icon);
         await writePreferences(store, next);
         return next;
       },
@@ -258,7 +254,14 @@ export const createPreferencesStore = ({
         // organisational fields; every trust-bearing setting the review layer
         // reads — including the contacts the address-poisoning guard compares
         // against — keeps its stored value (see `pickImportablePreferences`).
-        const next = { ...(await readImportBase()), ...pickImportablePreferences(backup) };
+        const merged = { ...(await readImportBase()), ...pickImportablePreferences(backup) };
+        // Stored exactly as a read would return it, so the record the caller is
+        // told was applied is the record that comes back: the group repair
+        // (single membership, both default folders) is part of that shape.
+        const next =
+          merged.groups === undefined
+            ? merged
+            : { ...merged, groups: normalizeAccountGroups(merged.groups) };
         await writePreferences(store, next);
         return next;
       },
@@ -276,8 +279,7 @@ export const createPreferencesStore = ({
         return next;
       },
       async removeGroup({ id }) {
-        const preferences = await read();
-        const next = { ...preferences, groups: removeGroupPure(preferences.groups ?? [], id) };
+        const next = withoutGroup(await read(), id);
         await writePreferences(store, next);
         return next;
       },
@@ -294,20 +296,12 @@ export const createPreferencesStore = ({
         return next;
       },
       async renameGroup({ id, name }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: renameGroupPure(preferences.groups ?? [], id, name),
-        };
+        const next = withRenamedGroup(await read(), id, name);
         await writePreferences(store, next);
         return next;
       },
       async setAccountInGroup({ accountId, groupId, member }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: setAccountInGroupPure(preferences.groups ?? [], groupId, accountId, member),
-        };
+        const next = withAccountInGroup(await read(), { accountId, groupId, member });
         await writePreferences(store, next);
         return next;
       },
@@ -317,11 +311,7 @@ export const createPreferencesStore = ({
         return next;
       },
       async setGroupIcon({ icon, id }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: setGroupIconPure(preferences.groups ?? [], id, icon),
-        };
+        const next = withGroupIcon(await read(), id, icon);
         await writePreferences(store, next);
         return next;
       },

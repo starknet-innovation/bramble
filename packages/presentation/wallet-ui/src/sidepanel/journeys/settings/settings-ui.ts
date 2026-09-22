@@ -18,11 +18,9 @@ export type SettingsUiDeps = {
   readonly existingAccountIds?: () => ReadonlySet<string>;
   readonly expandedGroup: () => string | null;
   readonly networkId: () => string;
-  readonly openAssign: () => string | null;
   readonly refresh: () => Promise<WalletStatus>;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly setExpandedGroup: (id: string | null) => void;
-  readonly setOpenAssign: (id: string | null) => void;
   readonly startAddAccount: () => void;
   readonly wallet: SidepanelWallet;
 };
@@ -75,17 +73,14 @@ export const bindAddAccount = (deps: SettingsUiDeps): void => {
 };
 
 /**
- * Binds the account-groups controls wherever they appear in the panel — the
- * manage-accounts "Groups" section, the per-account assignment panels, and the
- * left drawer's assignment panels — so both entry points share one wiring.
+ * Binds the account-groups controls wherever they appear in the panel — today
+ * the manage-accounts "Groups" section — through one wiring.
  */
 export const bindGroups = (deps: SettingsUiDeps): void => {
   bindGroupControls(deps.app, {
     expandedGroup: deps.expandedGroup,
-    openAssign: deps.openAssign,
     rerender: () => rerender(deps),
     setExpandedGroup: deps.setExpandedGroup,
-    setOpenAssign: deps.setOpenAssign,
     wallet: deps.wallet,
   });
 };

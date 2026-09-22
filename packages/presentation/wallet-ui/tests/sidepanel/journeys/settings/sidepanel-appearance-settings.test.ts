@@ -32,11 +32,9 @@ describe("appearance settings", () => {
       app,
       expandedGroup: () => null,
       networkId: () => "SN_MAIN",
-      openAssign: () => null,
       refresh: async () => emptyStatus(),
       render: async () => undefined,
       setExpandedGroup: () => undefined,
-      setOpenAssign: () => undefined,
       startAddAccount: () => undefined,
       wallet,
     } satisfies SettingsUiDeps);
