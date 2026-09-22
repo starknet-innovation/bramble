@@ -9,7 +9,21 @@
  */
 import { describe, expect, test } from "bun:test";
 import { reviewFeeSection } from "@bramble/wallet-ui/lab";
-import { deployNotice } from "../../../src/sidepanel/shell/wallet-shell";
+import type { WalletStatus } from "../../../src/popup/responses/responses";
+import { homeScreen } from "../../../src/sidepanel/journeys/portfolio/home-view";
+import { securityFlow } from "../../../src/sidepanel/journeys/settings/settings-views";
+
+const status = {
+  accountCount: 1,
+  accounts: [],
+  activeAccountId: null,
+  hasVault: true,
+  locked: false,
+  network: "Starknet Mainnet",
+  networkId: "SN_MAIN",
+  networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
+  ready: true,
+} as unknown as WalletStatus;
 
 const fee = (overallFee: string) => ({ overallFee, unit: "FRI" as const });
 
@@ -69,18 +83,29 @@ describe("undeployed-account fee review", () => {
     expect(html).not.toContain("Estimated fee:");
   });
 
-  test("home offers deployment in the neutral voice, not as a fault", () => {
-    // An account that is not on chain yet is normal: the first send creates it,
-    // and the review quotes both halves. A danger-coloured alert chip said the
-    // user had done something wrong.
-    const notice = deployNotice(
-      { address: "0x1", derivation: { kind: "imported-raw-key" } } as never,
-      false,
-    );
+  test("deploying is a setting, not a flag on Home", () => {
+    // Home used to carry a danger-coloured "Deploy account" chip. An account
+    // that is not on chain yet is normal — the first send creates it and the
+    // review quotes both halves — so the shortcut moved to Security &
+    // permissions, where a user who wants to deploy first can find it.
+    const settings = securityFlow(status);
 
-    expect(notice).toContain("Deploy account");
-    expect(notice).toContain("Your first send creates this account on Starknet");
-    expect(notice).not.toContain('icon="alert"');
-    expect(notice).toContain("deploy-chip");
+    expect(settings).toContain('data-view="deploy-account"');
+    expect(settings).toContain("Deploy account");
+    expect(settings).toContain("created on Starknet by its first send");
+    const home = homeScreen(
+      status,
+      { address: "0x1", derivation: { kind: "imported-raw-key" } } as never,
+      { balances: [] } as never,
+      0,
+      false,
+      null,
+      {},
+      {},
+      "usd",
+      { error: null, loading: false, value: null },
+    );
+    expect(home).not.toContain("deploy-chip");
+    expect(home).not.toContain("Deploy account");
   });
 });

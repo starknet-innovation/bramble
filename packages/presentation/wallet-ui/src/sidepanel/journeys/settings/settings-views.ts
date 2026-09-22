@@ -164,6 +164,13 @@ export const securityFlow = (status: WalletStatus): string =>
       </div>
     </section>
     <section class="section">
+      <p class="eyebrow">This account</p>
+      <div class="menu-list" role="group" aria-label="This account">
+        ${walletMenuRow("deploy-account", "Deploy account", "rocket")}
+      </div>
+      <p class="hint">An account is created on Starknet by its first send, which quotes both fees together. Deploy it here to do that first instead.</p>
+    </section>
+    <section class="section">
       <p class="eyebrow">Recovery</p>
       <div class="menu-list" role="group" aria-label="Recovery">
         ${walletMenuRow("backup", "Backup & restore", "shield")}
