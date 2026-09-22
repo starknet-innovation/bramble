@@ -100,6 +100,11 @@ const HTML_SINK_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/tokens-ui.ts",
+  // AVNU catalog rows, written into the tokens screen's list region as the
+  // fetched list arrives: symbol and name pass through escapeHtml, the address
+  // through tokenGlyph, and the actions through the ui-kit button helper — the
+  // same profile as the detected-token rows in tokens-ui.ts.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/token-catalog-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-ui.ts",
   // Send-screen rendering split out of transfer-ui.ts; the review panels it
   // writes come from the same escaped markup helpers that file used.

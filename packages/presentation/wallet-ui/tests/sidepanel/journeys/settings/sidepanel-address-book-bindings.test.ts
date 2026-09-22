@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { canonicalAddress } from "@bramble/wallet-model/networks";
 import { walletContactCard } from "@bramble/wallet-model/preferences";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import { addressBookFlow } from "../../../../src/sidepanel/app/screens/support-flows";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { bindAddressBook } from "../../../../src/sidepanel/shell/dashboard-bindings";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -44,7 +45,7 @@ const form = (): HTMLElement => {
 };
 
 describe("bindAddressBook", () => {
-  test("normalizes the address and rerenders after a successful save", async () => {
+  test("canonicalizes the address and rerenders after a successful save", async () => {
     const app = form();
     const saved: unknown[][] = [];
     let renders = 0;
@@ -65,7 +66,9 @@ describe("bindAddressBook", () => {
     app.querySelector<HTMLFormElement>("form")?.requestSubmit();
     await tick();
 
-    expect(saved).toEqual([["Treasury", "0x123", "SN_MAIN", undefined, undefined]]);
+    expect(saved).toEqual([
+      ["Treasury", canonicalAddress("0x123"), "SN_MAIN", undefined, undefined],
+    ]);
     expect(app.querySelector("#address-result")?.textContent).toBe("Address saved");
     expect(renders).toBe(1);
   });
@@ -118,5 +121,64 @@ describe("bindAddressBook", () => {
 
     expect(app.querySelector("#address-result")?.textContent).toBe("Address service unavailable");
     expect(submit?.disabled).toBe(false);
+  });
+
+  test("keeps everything past label and address behind the Pro switch", () => {
+    // The form asked for five fields to record a name and an address; the rest
+    // are for multisig contacts and appear only when asked for.
+    const app = document.createElement("div");
+    app.innerHTML = addressBookFlow(status, null);
+    document.body.append(app);
+    bindAddressBook({
+      app,
+      render: async () => undefined,
+      wallet: {} as unknown as SidepanelWallet,
+    });
+
+    const pro = app.querySelector<HTMLButtonElement>("#address-pro");
+    const fields = app.querySelector<HTMLElement>("#address-pro-fields");
+    expect(app.querySelector('[name="label"]')).not.toBeNull();
+    expect(app.querySelector('[name="address"]')).not.toBeNull();
+    expect(pro?.getAttribute("aria-checked")).toBe("false");
+    expect(fields?.hasAttribute("hidden")).toBe(true);
+    // The advanced fields exist in the DOM, so a pasted wallet card still fills them.
+    for (const name of ["walletCard", "nostrPublicKey", "publicKeyX"]) {
+      expect(fields?.querySelector(`[name="${name}"]`)).not.toBeNull();
+    }
+
+    pro?.click();
+    expect(pro?.getAttribute("aria-checked")).toBe("true");
+    expect(pro?.dataset["checked"]).toBe("true");
+    expect(fields?.hasAttribute("hidden")).toBe(false);
+
+    pro?.click();
+    expect(fields?.hasAttribute("hidden")).toBe(true);
+  });
+
+  test("saves an address pasted in uppercase, as Send already accepted it", () => {
+    // Reported as "invalid address book request": the field sent what was typed
+    // and the background takes lowercase hex only, so an address copied in
+    // mixed case was refused here after Send had accepted the same text.
+    const app = form();
+    const saved: unknown[][] = [];
+    bindAddressBook({
+      app,
+      render: async () => undefined,
+      wallet: {
+        loadStatus: async () => status,
+        saveAddress: async (...values: unknown[]) => {
+          saved.push(values);
+        },
+      } as unknown as SidepanelWallet,
+    });
+    const address = app.querySelector<HTMLInputElement>('[name="address"]');
+    if (!address) throw new Error("address field unavailable");
+    address.value = "0x04F2F1E2D3C4B5A69788796A5B4C3D2E1F00112233445566778899AABBCCDDEE";
+
+    app.querySelector<HTMLFormElement>("form")?.requestSubmit();
+
+    expect(saved[0]?.[1]).toBe(
+      canonicalAddress("0x04f2f1e2d3c4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddee"),
+    );
   });
 });

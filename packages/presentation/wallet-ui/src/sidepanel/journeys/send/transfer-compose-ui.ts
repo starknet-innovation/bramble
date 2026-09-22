@@ -6,6 +6,8 @@
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { formatFiat } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
+import { bindTokenDropdown } from "../../shared/token-dropdown";
+import { setAddressBookDraft } from "../../shell/address-draft";
 import {
   balanceShortcut,
   fiatInputToken,
@@ -15,6 +17,7 @@ import {
 } from "./send-model";
 import {
   recipientFieldError,
+  type TransferExitView,
   type TransferFields,
   type TransferStage,
   transferFields,
@@ -140,37 +143,47 @@ const applySelectedAsset = (form: HTMLFormElement, row: HTMLElement): void => {
   setSendFormValue(form, "fiatEstimate", "");
 };
 
+// True when the typed address matches no row on the screen: not one of the
+// user's own accounts, and not a saved contact. Compared as felts, so a padded
+// or differently cased spelling of a known address is still known.
+const isUnlistedRecipient = (form: HTMLFormElement, address: string): boolean =>
+  ![...form.querySelectorAll<HTMLElement>("[data-send-recipient]")].some((row) =>
+    sameFelt(row.dataset["sendRecipient"] ?? "", address),
+  );
+
 const bindRecipientControls = (
   form: HTMLFormElement,
   goTo: (stage: TransferStage) => void,
   onFields: (fields: TransferFields) => void,
+  navigate?: (view: TransferExitView) => void,
 ): void => {
   const search = form.querySelector<HTMLInputElement>("#send-recipient-search");
   const continueButton = form.querySelector<HTMLButtonElement>("#send-recipient-continue");
+  const saveRow = form.querySelector<HTMLElement>("#send-recipient-save-row");
   const updateSearch = (): void => {
     const query = search?.value.trim().toLowerCase() ?? "";
     let visible = 0;
-    const panel = form.querySelector<HTMLElement>("[data-send-recipient-panel]:not([hidden])");
-    panel?.querySelectorAll<HTMLElement>("[data-send-recipient]").forEach((row) => {
+    form.querySelectorAll<HTMLElement>("[data-send-recipient]").forEach((row) => {
       const matches = query.length === 0 || (row.dataset["sendSearch"] ?? "").includes(query);
       row.toggleAttribute("hidden", !matches);
       if (matches) visible += 1;
     });
     form.querySelector("#send-recipient-empty")?.toggleAttribute("hidden", visible > 0);
-    if (continueButton) continueButton.disabled = recipientFieldError(search?.value ?? "") !== null;
+    const typed = search?.value ?? "";
+    const valid = recipientFieldError(typed) === null;
+    if (continueButton) continueButton.disabled = !valid;
+    // Offered only for an address that is both usable and not already known,
+    // so saving is a deliberate act on a new recipient rather than a way to
+    // duplicate a contact under a second name.
+    saveRow?.toggleAttribute("hidden", !(navigate && valid && isUnlistedRecipient(form, typed)));
   };
   search?.addEventListener("input", updateSearch);
-  form.querySelectorAll<HTMLElement>("[data-send-recipient-tab]").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      const id = tab.dataset["sendRecipientTab"];
-      form.querySelectorAll<HTMLElement>("[data-send-recipient-tab]").forEach((candidate) => {
-        candidate.setAttribute("aria-selected", String(candidate === tab));
-      });
-      form.querySelectorAll<HTMLElement>("[data-send-recipient-panel]").forEach((panel) => {
-        panel.toggleAttribute("hidden", panel.dataset["sendRecipientPanel"] !== id);
-      });
-      updateSearch();
-    });
+  form.querySelector("#send-recipient-save")?.addEventListener("click", () => {
+    const typed = search?.value.trim() ?? "";
+    if (recipientFieldError(typed) === null) {
+      setAddressBookDraft(typed);
+      navigate?.("address-book");
+    }
   });
   const choose = (address: string, label: string): void => {
     setSendFormValue(form, "recipient", address);
@@ -196,27 +209,24 @@ const bindRecipientControls = (
 
 const bindAssetControls = (
   form: HTMLFormElement,
-  goTo: (stage: TransferStage) => void,
   onFields: (fields: TransferFields) => void,
+  navigate?: (view: TransferExitView) => void,
 ): void => {
-  form.querySelector("#send-token-trigger")?.addEventListener("click", () => goTo("asset"));
-  const search = form.querySelector<HTMLInputElement>("#send-asset-search");
-  search?.addEventListener("input", () => {
-    const query = search.value.trim().toLowerCase();
-    let visible = 0;
-    form.querySelectorAll<HTMLElement>("[data-send-asset]").forEach((row) => {
-      const matches = query.length === 0 || (row.dataset["sendSearch"] ?? "").includes(query);
-      row.toggleAttribute("hidden", !matches);
-      if (matches) visible += 1;
-    });
-    form.querySelector("#send-asset-empty")?.toggleAttribute("hidden", visible > 0);
-  });
-  form.querySelectorAll<HTMLElement>("[data-send-asset]").forEach((row) => {
-    row.addEventListener("click", () => {
-      applySelectedAsset(form, row);
+  bindTokenDropdown({
+    onAction: () => navigate?.("tokens"),
+    onSelect: (tokenId) => {
+      // The dropdown returns an id; the token's numbers come from the hidden
+      // carrier the view rendered for it, so composing reads one source.
+      const facts = form.querySelector<HTMLElement>(`[data-send-asset="${CSS.escape(tokenId)}"]`);
+      if (!facts) {
+        return;
+      }
+      applySelectedAsset(form, facts);
       onFields(transferFields(form));
-      goTo("details");
-    });
+    },
+    panelId: "send-token-options",
+    root: form.querySelector("#send-token-trigger")?.closest(".token-dropdown") ?? null,
+    triggerId: "send-token-trigger",
   });
   // Open on STRK rather than "Select": it pays every fee on Starknet, so it is
   // the asset a send most often means. Only applied when nothing is chosen yet,
@@ -291,16 +301,19 @@ const bindAmountControls = (
 export const bindTransferCompose = ({
   form,
   goTo,
+  navigate,
   onFields,
   spendable,
 }: {
   readonly form: HTMLFormElement;
   readonly goTo: (stage: TransferStage) => void;
   readonly onFields: (fields: TransferFields) => void;
+  /** Leaves Send for another screen: the address book, or token management. */
+  readonly navigate?: (view: TransferExitView) => void;
   /** Raw spendable units for the composed route; `null` withholds Max/Half. */
   readonly spendable?: () => bigint | null;
 }): void => {
-  bindRecipientControls(form, goTo, onFields);
-  bindAssetControls(form, goTo, onFields);
+  bindRecipientControls(form, goTo, onFields, navigate);
+  bindAssetControls(form, onFields, navigate);
   bindAmountControls(form, onFields, spendable);
 };

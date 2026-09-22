@@ -35,13 +35,8 @@ export type TransferBucketsDeps = {
   readonly route: () => SendRouteResolution;
 };
 
-const LABELS: Readonly<Record<ValueBucket, string>> = {
-  private: "Private",
-  public: "Public",
-};
-
-// The button states which balance is in use; its title states what pressing it
-// does, since a self-labelling toggle cannot show both at once.
+// The switch is labelled "Private" and carries its state in aria-checked, so
+// its title only has to say what pressing it does.
 const HINTS: Readonly<Record<ValueBucket, string>> = {
   private: "Switch to the public balance",
   public: "Switch to the private balance",
@@ -92,8 +87,9 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
     const blocked = incomplete ? undefined : view.blocked;
     for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
       const bucket = readBucket(form, legOf(button));
-      button.textContent = LABELS[bucket];
       button.dataset["bucket"] = bucket;
+      button.setAttribute("aria-checked", String(bucket === "private"));
+      button.dataset["checked"] = String(bucket === "private");
       button.title = HINTS[bucket];
     }
     container?.classList.toggle("muted", blocked !== undefined);

@@ -40,6 +40,7 @@ export * from "./sidepanel/runtime/runtime";
 export { showToast } from "./sidepanel/shared/dom";
 export * from "./sidepanel/shared/parts";
 export * from "./sidepanel/shared/review-render";
+export * from "./sidepanel/shared/token-dropdown";
 export * from "./sidepanel/shell/account-types";
 export * from "./sidepanel/shell/dashboard-bindings";
 export * from "./sidepanel/styles/index";

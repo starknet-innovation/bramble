@@ -134,7 +134,8 @@ describe("sidepanel home", () => {
     expect(html).toContain('id="portfolio-menu" role="menu"');
     expect(html).toContain('data-view="tokens" role="menuitem"');
     expect(html).not.toContain('data-view="nfts"');
-    expect(html).toContain('data-view="settings" role="menuitem"');
+    // Settings has its own dock button, so the menu does not repeat it.
+    expect(html).not.toContain('data-view="settings" role="menuitem"');
     expect(html).toContain('id="refresh-button" role="menuitem"');
   });
 

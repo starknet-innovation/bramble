@@ -4,7 +4,11 @@
  * from the side panel entrypoint to keep it within the size budget.
  */
 
-import { isStarknetNetworkId } from "@bramble/wallet-model/networks";
+import {
+  canonicalAddress,
+  isStarknetNetworkId,
+  normalizeFeltInput,
+} from "@bramble/wallet-model/networks";
 import { parseWalletContactCard, walletContactCard } from "@bramble/wallet-model/preferences";
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
@@ -13,6 +17,7 @@ import type { SidepanelWallet } from "../runtime/runtime";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
+import { takeAddressBookDraft } from "./address-draft";
 
 /**
  * Shared context: the app root, the runtime client, and a full re-render.
@@ -33,6 +38,26 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
   const form = app?.querySelector<HTMLFormElement>("#address-form");
   const result = app?.querySelector<HTMLElement>("#address-result");
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+  // Arriving from Send's "Save address": the address is already known, so the
+  // form opens on it with only the label left to fill.
+  const draft = form ? takeAddressBookDraft() : "";
+  const addressField = form?.querySelector<HTMLInputElement>('[name="address"]');
+  if (draft && addressField) {
+    addressField.value = draft;
+    form?.querySelector<HTMLInputElement>('[name="label"]')?.focus();
+  }
+
+  // Everything past label and address is opt-in: the form asked for five fields
+  // to record a name and an address, which is why it read as complex.
+  const pro = form?.querySelector<HTMLButtonElement>("#address-pro");
+  const proFields = form?.querySelector<HTMLElement>("#address-pro-fields");
+  pro?.addEventListener("click", () => {
+    const open = pro.getAttribute("aria-checked") !== "true";
+    pro.setAttribute("aria-checked", String(open));
+    pro.dataset["checked"] = String(open);
+    proFields?.toggleAttribute("hidden", !open);
+  });
 
   const walletCardField = form?.querySelector<HTMLTextAreaElement>('[name="walletCard"]');
   if (form && walletCardField)
@@ -71,12 +96,19 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
     event.preventDefault();
     const data = new FormData(form);
     buttonBusy(submitButton, true);
+    // Canonicalised here, the way the wallet-card path already was: the
+    // background takes lowercase hex only, so an address pasted as 0x04F2…
+    // was refused as a malformed request even though Send had just accepted
+    // that exact text. An unparseable value is passed through untouched so the
+    // background still reports it rather than this quietly sending "null".
+    const typed = String(data.get("address") ?? "");
+    const publicKeyX = normalizeFeltInput(String(data.get("publicKeyX") ?? ""));
     void wallet
       .saveAddress(
         String(data.get("label") ?? ""),
-        String(data.get("address") ?? "").trim(),
+        canonicalAddress(typed) ?? typed.trim(),
         String(data.get("networkId") ?? ""),
-        String(data.get("publicKeyX") ?? "").trim() || undefined,
+        publicKeyX || undefined,
         String(data.get("nostrPublicKey") ?? "").trim() || undefined,
       )
       .then(

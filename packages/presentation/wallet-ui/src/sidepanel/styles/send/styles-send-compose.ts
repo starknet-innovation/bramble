@@ -116,39 +116,6 @@ export const SEND_COMPOSE_STYLES = `
     .send-search-control input:not(:disabled):hover,
     .send-amount-field input:not(:disabled):hover { background: transparent; }
   }
-  .send-recipient-tabs {
-    border-bottom: 1px solid var(--bramble-hairline);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-  .send-recipient-tabs button {
-    background: transparent;
-    border-radius: ${RADIUS.sm} ${RADIUS.sm} 0 0;
-    color: var(--bramble-muted);
-    min-height: ${CONTROL.hit};
-    padding: 0 ${SPACE.sm};
-    position: relative;
-  }
-  .send-recipient-tabs button[aria-selected="true"] { color: var(--bramble-text); }
-  .send-recipient-tabs button[aria-selected="true"]::after {
-    background: var(--bramble-text);
-    border-radius: ${RADIUS.full};
-    bottom: -1px;
-    content: "";
-    height: 2px;
-    inset-inline: ${SPACE.sm};
-    position: absolute;
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .send-recipient-tabs button:not(:disabled):hover {
-      background: transparent;
-      color: var(--bramble-text);
-    }
-  }
-  .send-recipient-tabs button:not(:disabled):active {
-    background: transparent;
-    color: var(--bramble-text);
-  }
   .send-recipient-list, .send-asset-list { display: grid; gap: ${SPACE.sm}; }
   .send-list-heading {
     align-items: center;

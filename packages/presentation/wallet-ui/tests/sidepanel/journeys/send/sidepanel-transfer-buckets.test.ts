@@ -81,8 +81,8 @@ const mountForm = (recipient = RECIPIENT): HTMLFormElement => {
     <input name="tokenId" type="hidden" value="${TOKEN_ID}" />
     <input name="tokenSymbol" type="hidden" value="STRK" />
     <div id="send-route-controls">
-      <button class="send-route-toggle" data-send-bucket="source" data-bucket="public" type="button">Public</button>
-      <button class="send-route-toggle" data-send-bucket="destination" data-bucket="public" type="button">Public</button>
+      <button class="send-route-toggle" data-send-bucket="source" data-bucket="public" type="button" role="switch" aria-checked="false"><span class="send-route-copy"><span>Private</span></span><span class="send-route-track"><span class="send-route-knob"></span></span></button>
+      <button class="send-route-toggle" data-send-bucket="destination" data-bucket="public" type="button" role="switch" aria-checked="false"><span class="send-route-copy"><span>Private</span></span><span class="send-route-track"><span class="send-route-knob"></span></span></button>
     </div>
     <span id="send-route-reason" hidden></span>
     <button id="send-route-retry" type="button" hidden>Retry</button>
@@ -178,16 +178,21 @@ describe("bucket controls", () => {
     expect(form.querySelector<HTMLInputElement>('[name="tokenBalance"]')?.value).toBe("");
   });
 
-  test("names the balance in use on the toggle itself", () => {
+  test("reports each leg's balance as the switch's own checked state", () => {
     const form = mountForm();
     bind(form);
     pick(form, "source", "private");
 
     const state = [...form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")].map(
       (button) =>
-        `${button.dataset["sendBucket"]}:${button.textContent}:${button.dataset["bucket"]}`,
+        `${button.dataset["sendBucket"]}:${button.getAttribute("aria-checked")}:${button.dataset["bucket"]}`,
     );
-    expect(state).toEqual(["source:Private:private", "destination:Public:public"]);
+    expect(state).toEqual(["source:true:private", "destination:false:public"]);
+    // The label names what the switch turns on, so it never renames itself.
+    for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
+      expect(button.textContent).toContain("Private");
+      expect(button.querySelector(".send-route-track")).not.toBeNull();
+    }
   });
 
   test("toggles back to public on a second press", () => {
@@ -198,7 +203,7 @@ describe("bucket controls", () => {
     expect(transferFields(form).source).toBe("private");
     button?.click();
     expect(transferFields(form).source).toBe("public");
-    expect(button?.textContent).toBe("Public");
+    expect(button?.getAttribute("aria-checked")).toBe("false");
   });
 
   test("says what pressing it will do, since it cannot show both states", () => {

@@ -118,9 +118,14 @@ export const SEND_STYLES = `
     min-width: 0;
     view-transition-name: send-stage;
   }
+  /* Columns come from the steps themselves: a pinned count left an empty
+     column behind when the rail lost a step, which read as the whole rail
+     sitting off to the left. */
   .send-progress {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    justify-content: center;
     list-style: none;
     margin: 0;
     padding: 0;
