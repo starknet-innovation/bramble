@@ -154,4 +154,90 @@ describe("swap token dropdowns", () => {
     expect(added).toEqual([EKUBO]);
     expect(picks).toEqual([["buy", "SN_DEVNET:EKUBO"]]);
   });
+
+  test("a catalog that lands after a repaint fills the panel on screen", async () => {
+    // The first bind's root is thrown away when the shell repaints. The reply
+    // has to paint the panel that is still in the document.
+    let resolveCatalog: (tokens: readonly SwapCatalogTokenView[]) => void = () => undefined;
+    const pending = new Promise<readonly SwapCatalogTokenView[]>((resolve) => {
+      resolveCatalog = resolve;
+    });
+    const calls: string[] = [];
+    const depsFor = () =>
+      ({
+        balances: () => ({ balances: [] }),
+        preferences: () => ({ tokens: [trackedOn("SN_MAIN")] }) as unknown as WalletPreferences,
+        render: async () => undefined,
+        status: () => status("SN_MAIN"),
+        swap: {
+          tokens: () => {
+            calls.push("fetch");
+            return pending;
+          },
+        },
+        wallet: {} as unknown as SidepanelWallet,
+      }) as unknown as Parameters<typeof bindSwapTokenDropdowns>[0];
+
+    const stale = document.createElement("div");
+    stale.innerHTML = `<div class="token-dropdown"><button id="swap-sell-token" type="button">Select</button>${tokenDropdownShell(
+      "swap-sell-options",
+      "Tokens",
+    )}</div>`;
+    document.body.append(stale);
+    bindSwapTokenDropdowns(depsFor(), stale, () => undefined);
+
+    stale.remove();
+    const live = document.createElement("div");
+    live.innerHTML = stale.innerHTML;
+    document.body.append(live);
+    bindSwapTokenDropdowns(depsFor(), live, () => undefined);
+    resolveCatalog(CATALOG);
+    await flush();
+
+    expect(calls).toEqual(["fetch"]);
+    expect(labels(stale, "sell")).toEqual(["Your tokens", "STRK"]);
+    expect(labels(live, "sell")).toEqual(["Your tokens", "STRK", "More tokens", "EKUBO"]);
+  });
+
+  test("drops a catalog reply that belongs to the previous network", async () => {
+    let resolveMain: (tokens: readonly SwapCatalogTokenView[]) => void = () => undefined;
+    let resolveSepolia: (tokens: readonly SwapCatalogTokenView[]) => void = () => undefined;
+    const main = new Promise<readonly SwapCatalogTokenView[]>((resolve) => {
+      resolveMain = resolve;
+    });
+    const sepolia = new Promise<readonly SwapCatalogTokenView[]>((resolve) => {
+      resolveSepolia = resolve;
+    });
+    const mountNetwork = (networkId: string, tokens: Promise<readonly SwapCatalogTokenView[]>) => {
+      const root = document.createElement("div");
+      root.innerHTML = `<div class="token-dropdown"><button id="swap-sell-token" type="button">Select</button>${tokenDropdownShell(
+        "swap-sell-options",
+        "Tokens",
+      )}</div>`;
+      document.body.replaceChildren(root);
+      bindSwapTokenDropdowns(
+        {
+          balances: () => ({ balances: [] }),
+          preferences: () => ({ tokens: [trackedOn(networkId)] }) as unknown as WalletPreferences,
+          render: async () => undefined,
+          status: () => status(networkId),
+          swap: { tokens: () => tokens },
+          wallet: {} as unknown as SidepanelWallet,
+        } as unknown as Parameters<typeof bindSwapTokenDropdowns>[0],
+        root,
+        () => undefined,
+      );
+      return root;
+    };
+
+    mountNetwork("SN_MAIN", main);
+    const live = mountNetwork("SN_SEPOLIA", sepolia);
+    resolveMain([{ address: EKUBO, decimals: 18, name: "Ekubo Protocol", symbol: "EKUBO" }]);
+    await flush();
+    expect(labels(live, "sell")).toEqual(["Your tokens", "STRK"]);
+
+    resolveSepolia([{ address: EKUBO, decimals: 18, name: "USD Coin", symbol: "USDC" }]);
+    await flush();
+    expect(labels(live, "sell")).toEqual(["Your tokens", "STRK", "More tokens", "USDC"]);
+  });
 });

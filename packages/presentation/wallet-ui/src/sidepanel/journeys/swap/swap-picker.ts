@@ -45,19 +45,25 @@ const SIDES: readonly PickerSide[] = ["sell", "buy"];
 let catalog: readonly SwapCatalogTokenView[] | null = null;
 let catalogNetworkId: string | null = null;
 let catalogLoading = false;
+// The fetch in flight, and the paint of whichever screen is live when it lands.
+let catalogRequest = 0;
+let repaintLatest: (() => void) | null = null;
 // A selected token that first needs tracking; resolved to a token id on the
 // bind that follows the add-token render.
 let pendingAdd: { readonly address: string; readonly side: PickerSide } | null = null;
 
 /**
  * Clears the panel-local catalog between isolated tests. Production code keeps
- * it so opening the dropdown twice does not fetch the list twice.
+ * it so opening the dropdown twice does not fetch the list twice. Bumping the
+ * request drops a reply still in flight, so it cannot land in the next case.
  */
 export const resetSwapCatalogForTests = (): void => {
   catalog = null;
   catalogNetworkId = null;
   catalogLoading = false;
   pendingAdd = null;
+  catalogRequest += 1;
+  repaintLatest = null;
 };
 
 const trackedTokens = (deps: SwapPickerDeps): readonly TokenConfig[] =>
@@ -66,28 +72,42 @@ const trackedTokens = (deps: SwapPickerDeps): readonly TokenConfig[] =>
 const trackedByAddress = (deps: SwapPickerDeps, address: string): TokenConfig | undefined =>
   trackedTokens(deps).find((token) => sameFelt(token.address, address));
 
-const ensureCatalog = (deps: SwapPickerDeps, repaint: () => void): void => {
+const ensureCatalog = (deps: SwapPickerDeps, root: Element): void => {
   const networkId = deps.status().networkId;
   if (catalogNetworkId !== networkId) {
     catalog = null;
     catalogNetworkId = networkId;
+    // The fetch still in flight belonged to the previous network. It is no
+    // longer loading this one, and its answer is discarded when it lands.
+    catalogLoading = false;
   }
+  // Always the live screen. A shell refresh while the list is loading rebuilds
+  // the panel, and the paint captured by the first bind would write into the
+  // one that was thrown away.
+  repaintLatest = () => {
+    if (root.isConnected) fillPanels(deps, root);
+  };
   if (catalog !== null || catalogLoading) {
     return;
   }
   catalogLoading = true;
+  const request = ++catalogRequest;
+  const settle = (tokens: readonly SwapCatalogTokenView[]): void => {
+    // A later fetch, or a network switch, has already replaced this request;
+    // pinning its list here would show another network's tokens.
+    if (request !== catalogRequest || catalogNetworkId !== networkId) {
+      return;
+    }
+    catalogLoading = false;
+    catalog = tokens;
+    repaintLatest?.();
+  };
   deps.swap.tokens().then(
-    (tokens) => {
-      catalogLoading = false;
-      catalog = tokens;
-      repaint();
-    },
+    (tokens) => settle(tokens),
     () => {
       // A catalog this wallet cannot reach leaves the tracked tokens, which are
       // enough to swap between; nothing here is worth interrupting the screen.
-      catalogLoading = false;
-      catalog = [];
-      repaint();
+      settle([]);
     },
   );
 };
@@ -172,7 +192,7 @@ export const bindSwapTokenDropdowns = (
   root: Element,
   onSelect: (side: PickerSide, tokenId: string) => void,
 ): void => {
-  ensureCatalog(deps, () => fillPanels(deps, root));
+  ensureCatalog(deps, root);
   fillPanels(deps, root);
 
   // Deliver a selection that was waiting on the add-token render.
