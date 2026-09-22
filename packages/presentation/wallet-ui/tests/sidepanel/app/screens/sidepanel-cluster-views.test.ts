@@ -87,7 +87,7 @@ const dashboardWithNft = (
     [],
     null,
     null,
-    null,
+    [],
     null,
     false,
     null,

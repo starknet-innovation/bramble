@@ -1,10 +1,9 @@
 /**
  * Pure templates for the account-groups ("folders") UI, shared across the left
  * account drawer and the manage-accounts flow so every surface renders the same
- * controls from one source: an icon picker, the shared "New group" form, the
- * drawer filter chips, an account's folder icon line, and the per-account
- * single-select folder picker. The group-centric bulk members editor and its "Groups"
- * section wrapper live in ./group-members.ts, which reuses the picker and form
+ * controls from one source: an icon picker, the shared "New group" form, and an
+ * account's folder icon line. The group-centric bulk members editor and its
+ * "Groups" section wrapper live in ./group-members.ts, which reuses the form
  * templates here — the canonical place to rename, re-icon, or delete a group.
  * Behaviour lives in ./group-ui.ts; styles in ./styles-home.ts.
  */
@@ -17,7 +16,7 @@ import {
 } from "@bramble/settings/groups";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
-import type { AccountRef } from "@bramble/wallet-model/accounts";
+
 import { icon } from "../../shared/icons";
 
 /**
@@ -88,26 +87,6 @@ export const editGroupForm = (group: AccountGroup): string => `
   </form>`;
 
 /**
- * Renders the drawer's folder filter chips: an "All" chip plus one per group,
- * each showing the group's chosen icon. `activeFilter` is the selected group id,
- * or null for "All". Selecting a chip narrows the listed accounts to that
- * group's members; renaming, re-iconing, or deleting a group lives on the
- * manage-accounts "Groups" section rather than the cramped drawer chip row.
- * Returns "" when there are no groups — the drawer offers "New group" instead.
- */
-export const groupFilterChips = (groups: AccountGroups, activeFilter: string | null): string => {
-  if (groups.length === 0) {
-    return "";
-  }
-  const chip = (id: string | null, label: string, glyph: string): string =>
-    `<button class="group-chip" type="button" data-group-filter="${escapeHtml(id ?? "all")}" aria-pressed="${(id ?? null) === activeFilter}">${glyph}<span>${escapeHtml(label)}</span></button>`;
-  return `<div class="group-chips" role="group" aria-label="Filter by group">
-    ${chip(null, "All", icon("wallet"))}
-    ${groups.map((group) => chip(group.id, group.name, icon(group.icon))).join("")}
-  </div>`;
-};
-
-/**
  * Renders the icon line shown on an account row for the groups it belongs to,
  * so every surface reflects real membership (and each group's chosen icon)
  * consistently. `memberGroups` is the subset of groups containing the account;
@@ -119,56 +98,3 @@ export const accountGroupsLine = (memberGroups: AccountGroups): string =>
     : `<span class="account-groups-line" aria-label="Groups: ${escapeHtml(
         memberGroups.map((group) => group.name).join(", "),
       )}">${memberGroups.map((group) => icon(group.icon)).join("")}</span>`;
-
-// One option in the single-select folder picker. `pick` is the group id, or
-// "none" for the ungrouped choice; `selected` marks the account's current
-// folder. Reuses the .group-toggle styling as the rest of the picker.
-const groupPickOption = (
-  accountId: string,
-  pick: string,
-  name: string,
-  glyph: string,
-  selected: boolean,
-): string =>
-  `<button class="group-toggle" type="button" data-group-pick="${escapeHtml(pick)}" data-account="${escapeHtml(accountId)}" aria-pressed="${selected}">
-    <span class="group-toggle-icon">${glyph}</span>
-    <span class="group-toggle-name">${escapeHtml(name)}</span>
-    ${selected ? `<span class="group-toggle-mark">${icon("check")}</span>` : ""}
-  </button>`;
-
-/**
- * Renders the per-account folder picker: a single-select list of the groups
- * plus a "None" (ungrouped) option, with the account's current folder marked.
- * Choosing an option files the account into exactly that folder (or clears it),
- * so an account is only ever in one group. `open` keeps the picker expanded
- * across re-renders (the open account id is held in the entrypoint), and
- * `currentGroupId` is the account's current folder (null = ungrouped). Creating
- * a group happens on the "Manage accounts & groups" view, not here.
- */
-export const groupPickerPanel = (
-  account: AccountRef,
-  groups: AccountGroups,
-  currentGroupId: string | null,
-  open: boolean,
-): string => `
-  <div class="group-assign" data-group-assign="${escapeHtml(account.id)}"${open ? "" : " hidden"}>
-    <p class="eyebrow">Folder</p>
-    ${
-      groups.length === 0
-        ? '<p class="hint">No groups yet. Use "Manage accounts &amp; groups" to create one.</p>'
-        : `<div class="group-toggle-list">
-            ${groupPickOption(account.id, "none", "None", icon("x"), currentGroupId === null)}
-            ${groups
-              .map((group) =>
-                groupPickOption(
-                  account.id,
-                  group.id,
-                  group.name,
-                  icon(group.icon),
-                  currentGroupId === group.id,
-                ),
-              )
-              .join("")}
-          </div>`
-    }
-  </div>`;

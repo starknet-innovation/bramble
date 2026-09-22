@@ -76,7 +76,54 @@ export const HOME_STYLES = `
   .drawer-head { align-items: center; display: flex; gap: ${SPACE.sm}; justify-content: space-between; }
   .drawer-title { display: grid; gap: 1px; min-width: 0; }
   .drawer-title p { font-size: ${TYPE.caption.size}; }
-  .drawer-list { align-content: start; display: grid; flex: 1; gap: 6px; overflow-y: auto; }
+  .drawer-list { align-content: start; display: grid; gap: 6px; }
+  /* The folders are the drawer's one scroll region, so the head stays put and
+     "Add account" stays reachable however many folders there are. */
+  .drawer-folders { display: grid; align-content: start; flex: 1; gap: 6px; overflow-y: auto; }
+  /* Folders: a heading that collapses its own list, and a section that is the
+     drop target — an account can be dropped onto an empty folder, not only
+     between rows. */
+  .drawer-folder { display: grid; gap: 6px; }
+  .drawer-folder + .drawer-folder { margin-block-start: ${SPACE.sm}; }
+  button.drawer-folder-head {
+    align-items: center;
+    background: transparent;
+    border-radius: ${RADIUS.sm};
+    color: var(--bramble-muted);
+    display: flex;
+    gap: ${SPACE.sm};
+    justify-content: flex-start;
+    min-height: 32px;
+    padding: 0 ${SPACE.xs};
+    text-align: start;
+    width: 100%;
+  }
+  .drawer-folder-copy { display: flex; flex: 1; gap: ${SPACE.xs}; min-width: 0; }
+  .drawer-folder-copy strong { color: var(--bramble-text); font-size: ${TYPE.label.size}; }
+  .drawer-folder-copy small { font-size: ${TYPE.micro.size}; }
+  .drawer-folder-icon, .drawer-folder-mark { display: inline-flex; flex: none; }
+  .drawer-folder-icon .icon, .drawer-folder-mark .icon { height: 14px; width: 14px; }
+  .drawer-folder-empty {
+    border-radius: ${RADIUS.md};
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    padding: ${SPACE.sm};
+    text-align: center;
+  }
+  .drawer-folder[data-drop-target="true"] {
+    background: var(--bramble-hover);
+    border-radius: ${RADIUS.md};
+  }
+  .drawer-account-item[data-dragging="true"] { opacity: 0.5; }
+  .drawer-add-folder { display: grid; gap: ${SPACE.xs}; justify-items: start; }
+  .drawer-folder-form { display: flex; gap: ${SPACE.xs}; width: 100%; }
+  .drawer-folder-form input { flex: 1; min-width: 0; }
+  .drawer-folder-error:empty { display: none; }
+  .drawer-folder-error {
+    color: var(--bramble-danger);
+    font-size: ${TYPE.caption.size};
+    margin: 0;
+  }
   button.drawer-account {
     align-items: center;
     background: transparent;

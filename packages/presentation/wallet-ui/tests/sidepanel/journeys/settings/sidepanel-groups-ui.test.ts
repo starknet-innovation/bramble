@@ -2,14 +2,15 @@
  * Core UI-interaction coverage for the account-groups ("folders") binding chain:
  * it drives the real drawer and manage-accounts templates via the shared happy-dom
  * harness so each test asserts BOTH that the correct store method is called AND
- * that the UI re-derives from the mutated store. Covers the lean drawer (filter,
- * empty state, and the assertion that NO group-CRUD controls render there) and the
- * manage-accounts create / rename / change-icon / delete / bucket flows plus the
- * accordion. The drawer's single-group folder picker and Add-account-joins-the-
- * -folder live in ./sidepanel-groups-drawer-picker.test.ts; edge cases (self-heal,
- * duplicates, cross-surface, focus) in ./sidepanel-groups-edge.test.ts.
+ * that the UI re-derives from the mutated store. Covers the lean drawer (folder
+ * sections, the seeded defaults, and the assertion that NO group-CRUD controls
+ * render there) and the manage-accounts create / rename / change-icon / delete /
+ * bucket flows plus the accordion. The drawer's drag-to-move and inline
+ * add-folder live in ../../shell/sidepanel-drawer-folders.test.ts; edge cases
+ * (self-heal, duplicates, cross-surface, focus) in ./sidepanel-groups-edge.test.ts.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { DEFAULT_GROUP_IDS } from "@bramble/settings/groups";
 import { icon } from "../../../../src/sidepanel/shared/icons";
 import {
   acctA,
@@ -50,37 +51,41 @@ describe("account drawer group interactions", () => {
     const entry = harness.container.querySelector('.drawer-foot [data-view="account"]');
     expect(entry).not.toBeNull();
     expect(entry?.textContent).toContain("Manage accounts");
-    // The lean quick-assign picker (not "management") stays on each row.
-    expect(harness.container.querySelector(`[data-assign-toggle="${acctA.id}"]`)).not.toBeNull();
+    // What the drawer does carry is the inline "Add folder" control.
+    expect(harness.container.querySelector("#drawer-add-folder")).not.toBeNull();
   });
 
-  test("filters the account list by group", async () => {
+  test("lists each account under its own folder, and an unfiled one under My accounts", () => {
     const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "drawer");
 
-    // All accounts visible before filtering.
+    // Every account is listed exactly once, no filter needed.
     expect(harness.container.querySelectorAll(".drawer-account-item").length).toBe(2);
+    const work = harness.container.querySelector('[data-folder="work"]');
+    expect(work?.querySelector(`[data-switch-account="${acctA.id}"]`)).not.toBeNull();
+    expect(work?.querySelector(`[data-switch-account="${acctB.id}"]`)).toBeNull();
 
-    click(harness.container.querySelector('[data-group-filter="work"]'));
-    await harness.tick();
-
-    const rows = harness.container.querySelectorAll(".drawer-account-item");
-    expect(rows.length).toBe(1);
-    expect(harness.container.querySelector(`[data-switch-account="${acctA.id}"]`)).not.toBeNull();
-    expect(harness.container.querySelector(`[data-switch-account="${acctB.id}"]`)).toBeNull();
+    // acctB is in no folder, so it falls to the home folder rather than vanishing.
+    const home = harness.container.querySelector(`[data-folder="${DEFAULT_GROUP_IDS.home}"]`);
+    expect(home?.querySelector(`[data-switch-account="${acctB.id}"]`)).not.toBeNull();
   });
 
-  test("shows an empty state with no chips and a Manage accounts & groups entry when there are no groups", () => {
+  test("seeds My accounts and Archived accounts when the store holds no folders", () => {
     const harness = mount([], "drawer");
 
-    expect(harness.container.querySelector(".group-chips")).toBeNull();
     // No inline create surface; management is reached through the entry row.
     expect(harness.container.querySelector(".new-group-form")).toBeNull();
     expect(harness.container.querySelector('.drawer-foot [data-view="account"]')).not.toBeNull();
 
-    click(harness.container.querySelector(`[data-assign-toggle="${acctA.id}"]`));
-    const panel = harness.container.querySelector(`[data-group-assign="${acctA.id}"]`);
-    expect(panel?.textContent).toContain("No groups yet");
-    expect(panel?.textContent).toContain("Manage accounts");
+    const folders = [...harness.container.querySelectorAll("[data-folder]")].map((section) =>
+      section.getAttribute("data-folder"),
+    );
+    expect(folders).toEqual([DEFAULT_GROUP_IDS.home, DEFAULT_GROUP_IDS.archived]);
+    // Both accounts land in the home folder; the archive starts empty.
+    const archived = harness.container.querySelector(
+      `[data-folder="${DEFAULT_GROUP_IDS.archived}"]`,
+    );
+    expect(archived?.querySelectorAll(".drawer-account-item").length).toBe(0);
+    expect(archived?.textContent).toContain("Drag an account here.");
   });
 });
 
@@ -135,7 +140,7 @@ describe("manage-accounts group management", () => {
     await harness.tick();
 
     expect(harness.calls.renameGroup).toEqual([["work", "Payroll"]]);
-    expect(harness.groups()[0]?.name).toBe("Payroll");
+    expect(harness.groupById("work")?.name).toBe("Payroll");
     expect(harness.container.querySelector('[data-group-expand="work"]')?.textContent).toContain(
       "Payroll",
     );
@@ -157,7 +162,7 @@ describe("manage-accounts group management", () => {
     await harness.tick();
 
     expect(harness.calls.setGroupIcon).toEqual([["work", "star"]]);
-    expect(harness.groups()[0]?.icon).toBe("star");
+    expect(harness.groupById("work")?.icon).toBe("star");
     // The group's header now renders the star glyph, not the old folder glyph
     // (compared normalized through the DOM so serialization differences vanish).
     const header = harness.container.querySelector('[data-group-expand="work"]');
@@ -186,7 +191,7 @@ describe("manage-accounts group management", () => {
     click(removeButton);
     await harness.tick();
     expect(harness.calls.removeGroup).toEqual(["work"]);
-    expect(harness.groups().length).toBe(0);
+    expect(harness.groupById("work")).toBeUndefined();
     expect(harness.container.querySelector('[data-group-expand="work"]')).toBeNull();
   });
 
@@ -202,7 +207,7 @@ describe("manage-accounts group management", () => {
     await harness.tick();
 
     expect(harness.calls.setAccountInGroup).toEqual([[acctA.id, "work", true]]);
-    expect(harness.groups()[0]?.accountIds).toContain(acctA.id);
+    expect(harness.groupById("work")?.accountIds).toContain(acctA.id);
   });
 
   test("accordion: opening group B collapses the already-open group A", async () => {
