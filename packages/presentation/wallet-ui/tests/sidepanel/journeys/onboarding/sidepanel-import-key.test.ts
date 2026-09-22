@@ -79,7 +79,6 @@ const mount = (
       document.createRange().createContextualFragment(importKeyFlow(status)),
     );
     const deps: SettingsUiDeps = {
-      activeAccountId: () => account.id,
       app: container,
       expandedGroup: () => null,
       networkId: () => "SN_MAIN",
