@@ -193,9 +193,13 @@ describe("sidepanel views", () => {
     expect(undeployed).not.toContain('data-view="deploy-account"');
     // The Shield tile's own "Fund with STRK" is a different control and stays:
     // shielding really does need STRK, whatever the account's deploy state.
-    // The dedicated deployment flow is still reachable by its own route.
+    // The dedicated deployment flow is still reachable by its own route, and
+    // that route has a way in: the Settings hub links to Security & permissions.
     expect(dashboard("security", status, [], preferences, { balances: [] }, false)).toContain(
       'data-view="deploy-account"',
+    );
+    expect(dashboard("settings", status, [], preferences, { balances: [] }, false)).toContain(
+      'data-view="security"',
     );
   });
 
