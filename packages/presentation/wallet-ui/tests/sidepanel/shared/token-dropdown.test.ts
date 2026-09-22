@@ -103,6 +103,45 @@ describe("token dropdown", () => {
     expect(visible(root)).toEqual(["STRK", "ETH", "USDC", "USDT", "DAI"]);
   });
 
+  test("matches a name or a pasted address, and leads with the exact symbol", () => {
+    document.body.replaceChildren();
+    const root = document.createElement("div");
+    root.className = "token-dropdown";
+    const groups = [
+      {
+        label: "More tokens",
+        options: [
+          { address: "0xabc111", id: "bridged", name: "Bridged USDC", symbol: "USDC.e" },
+          { address: "0xdef222", id: "usdc", name: "USD Coin", symbol: "USDC" },
+          { address: "0x111333", id: "wbtc", name: "Wrapped Bitcoin", symbol: "WBTC" },
+        ],
+        search: true,
+      },
+    ];
+    root.innerHTML = `<button id="trigger" type="button">Select</button>${tokenDropdown({
+      groups,
+      label: "Tokens",
+      panelId: "options",
+    })}`;
+    document.body.append(root);
+    bindTokenDropdown({
+      onSelect: () => undefined,
+      panelId: "options",
+      root,
+      triggerId: "trigger",
+    });
+    root.querySelector<HTMLButtonElement>("#trigger")?.click();
+
+    type(root, "usdc");
+    expect(visible(root)).toEqual(["USDC", "USDC.e"]);
+    type(root, "wrap");
+    expect(visible(root)).toEqual(["WBTC"]);
+    type(root, "0xDEF222");
+    expect(visible(root)).toEqual(["USDC"]);
+    type(root, "");
+    expect(visible(root)).toEqual(["USDC.e", "USDC", "WBTC"]);
+  });
+
   test("says when nothing matches instead of showing an empty group", () => {
     const { root } = mount();
     root.querySelector<HTMLButtonElement>("#trigger")?.click();

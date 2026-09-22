@@ -121,6 +121,25 @@ describe("swap token dropdowns", () => {
     document.body.replaceChildren();
   });
 
+  test("search matches the catalog name and the contract address", async () => {
+    const { root } = await mount("SN_MAIN");
+    const field = root.querySelector<HTMLInputElement>("#swap-sell-options [data-token-search]");
+    const ekubo = root.querySelector<HTMLElement>('#swap-sell-options [data-token-symbol="EKUBO"]');
+    if (!field || !ekubo) throw new Error("catalog option unavailable");
+    const type = (text: string): void => {
+      field.value = text;
+      field.dispatchEvent(new window.Event("input", { bubbles: true }));
+    };
+
+    expect(ekubo.dataset["tokenName"]).toBe("Ekubo Protocol");
+    type("protocol");
+    expect(ekubo.hasAttribute("hidden")).toBe(false);
+    type("zzzz");
+    expect(ekubo.hasAttribute("hidden")).toBe(true);
+    type(EKUBO.slice(0, 8).toUpperCase());
+    expect(ekubo.hasAttribute("hidden")).toBe(false);
+  });
+
   test("lists what the account holds, then the rest of the catalog", async () => {
     const { root } = await mount("SN_MAIN");
 
