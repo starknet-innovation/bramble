@@ -15,8 +15,8 @@ import { escapeHtml } from "@bramble/core/html";
 import {
   type AccountGroup,
   type AccountGroups,
-  accountGroup,
   DEFAULT_GROUP_IDS,
+  displayedAccountGroup,
 } from "@bramble/settings/groups";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
@@ -45,16 +45,13 @@ export type FolderSection = {
 export const folderSections = (
   groups: AccountGroups,
   accounts: readonly AccountRef[],
-): readonly FolderSection[] => {
-  const home = groups.find((group) => group.id === DEFAULT_GROUP_IDS.home);
-  return groups.map((group) => ({
-    accounts: accounts.filter((stored) => {
-      const folder = accountGroup(groups, stored.id);
-      return folder ? folder.id === group.id : group.id === home?.id;
-    }),
+): readonly FolderSection[] =>
+  groups.map((group) => ({
+    accounts: accounts.filter(
+      (stored) => displayedAccountGroup(groups, stored.id)?.id === group.id,
+    ),
     group,
   }));
-};
 
 const folderCount = (count: number): string =>
   count === 0 ? "Empty" : `${count} account${count === 1 ? "" : "s"}`;

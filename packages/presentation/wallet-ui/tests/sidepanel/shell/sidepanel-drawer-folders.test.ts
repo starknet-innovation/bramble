@@ -74,6 +74,31 @@ describe("account drawer folders", () => {
     expect(harness.calls.setAccountInGroup).toEqual([[acctA.id, DEFAULT_GROUP_IDS.archived, true]]);
     expect(harness.groupById("work")?.accountIds).not.toContain(acctA.id);
     expect(harness.groupById(DEFAULT_GROUP_IDS.archived)?.accountIds).toContain(acctA.id);
+    // The archive starts collapsed. A drop opens it, so the account is visible.
+    const archived = harness.container.querySelector(
+      `[data-folder="${DEFAULT_GROUP_IDS.archived}"]`,
+    );
+    expect(archived?.getAttribute("data-collapsed")).toBe("false");
+    expect(archived?.querySelector(".drawer-list")?.hasAttribute("hidden")).toBe(false);
+    expect(folderOf(harness.container, acctA.id)).toBe(DEFAULT_GROUP_IDS.archived);
+  });
+
+  test("dropping onto a collapsed folder opens it", async () => {
+    const harness = mount([group("briefcase", "work", "Work")], "drawer");
+    click(harness.container.querySelector('[data-folder-toggle="work"]'));
+    await harness.tick();
+    expect(
+      harness.container.querySelector('[data-folder="work"]')?.getAttribute("data-collapsed"),
+    ).toBe("true");
+
+    dragAccountToFolder(harness.container, acctB.id, "work");
+    await harness.tick();
+
+    expect(harness.calls.setAccountInGroup).toEqual([[acctB.id, "work", true]]);
+    expect(
+      harness.container.querySelector('[data-folder="work"]')?.getAttribute("data-collapsed"),
+    ).toBe("false");
+    expect(folderOf(harness.container, acctB.id)).toBe("work");
   });
 
   test("dropping an account onto the folder it is already in writes nothing", async () => {
@@ -222,6 +247,12 @@ describe("account drawer folders", () => {
 
     expect(document.querySelector(".toast.error")).not.toBeNull();
     expect(folderOf(harness.container, acctA.id)).toBe("work");
+    // A failed drop leaves the destination as it was, still collapsed.
+    expect(
+      harness.container
+        .querySelector(`[data-folder="${DEFAULT_GROUP_IDS.archived}"]`)
+        ?.getAttribute("data-collapsed"),
+    ).toBe("true");
   });
 
   test("a failed create keeps the field open with the reason in place", async () => {

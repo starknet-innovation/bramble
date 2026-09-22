@@ -263,6 +263,21 @@ export const isDefaultGroup = (id: string): boolean =>
   id === DEFAULT_GROUP_IDS.home || id === DEFAULT_GROUP_IDS.archived;
 
 /**
+ * The folder an account is shown in. An account filed into a group is shown
+ * there; one in no group is shown in the home folder, so a new account appears
+ * without a write. Returns null when `groups` has no home folder — callers
+ * that seed defaults always have one, and an unseeded list has nowhere to
+ * show an unfiled account.
+ */
+export const displayedAccountGroup = (
+  groups: AccountGroups,
+  accountId: string,
+): AccountGroup | null =>
+  accountGroup(groups, accountId) ??
+  groups.find((group) => group.id === DEFAULT_GROUP_IDS.home) ??
+  null;
+
+/**
  * Returns the groups in display order with both defaults present: the home
  * folder first, then the user's own in their existing order, then the archive
  * last. Missing defaults are added, so a wallet that predates them — or one

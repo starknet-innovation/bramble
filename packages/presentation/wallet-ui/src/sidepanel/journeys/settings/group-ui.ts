@@ -5,7 +5,7 @@
  * membership toggles, so the left drawer and the manage-accounts flow drive
  * identical group behaviour without duplication.
  */
-import { isAccountGroupIcon } from "@bramble/settings/groups";
+import { DEFAULT_GROUP_IDS, isAccountGroupIcon } from "@bramble/settings/groups";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 
@@ -145,6 +145,11 @@ const bindAssignToggles = (root: Element, deps: GroupControlDeps): void => {
         return;
       }
       const member = button.getAttribute("aria-pressed") === "true";
+      // My accounts shows every unfiled account. Clearing that membership
+      // leaves the account in the same folder, so the click is not a write.
+      if (member && groupId === DEFAULT_GROUP_IDS.home) {
+        return;
+      }
       buttonBusy(button, true);
       void deps.wallet.setAccountInGroup(accountId, groupId, !member).then(
         async () => {
