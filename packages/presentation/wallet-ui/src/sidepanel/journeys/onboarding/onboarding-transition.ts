@@ -76,7 +76,6 @@ export const createOnboardingStepTransition = (
 
     activeTransition?.skipTransition?.();
     const generation = ++transitionGeneration;
-    const view = ownerDocument.defaultView;
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
     const finish = (): void => {
       if (generation !== transitionGeneration) {
@@ -85,7 +84,7 @@ export const createOnboardingStepTransition = (
       transitionGeneration += 1;
       activeTransition = null;
       if (settleTimer !== undefined) {
-        view?.clearTimeout(settleTimer);
+        clearTimeout(settleTimer);
         settleTimer = undefined;
       }
       delete root.dataset["onboardingDirection"];
@@ -95,7 +94,7 @@ export const createOnboardingStepTransition = (
     // Arm the watchdog before the transition starts. A stuck snapshot can
     // defer timers scheduled while it is active, which would leave the
     // watchdog waiting on the very transition it is supposed to end.
-    settleTimer = view?.setTimeout(() => {
+    settleTimer = setTimeout(() => {
       if (generation !== transitionGeneration) {
         return;
       }
