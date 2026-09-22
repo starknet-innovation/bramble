@@ -260,6 +260,36 @@ describe("home drawer dismiss gesture", () => {
     expect(h.state.open).toBe(true);
   });
 
+  test("a horizontal drag that starts on an account row does not dismiss the drawer", () => {
+    const h = mount();
+    el<HTMLButtonElement>(h.app, "#account-trigger").click();
+    const drawer = el<HTMLElement>(h.app, ".account-drawer");
+    // The press starts on the switch control inside the drag row, which is
+    // where a filing drag actually begins.
+    const row = el(h.app, "[data-drag-account] [data-switch-account]");
+
+    row.dispatchEvent(pointer("pointerdown", 200, 0));
+    row.dispatchEvent(pointer("pointermove", 180, 16));
+    row.dispatchEvent(pointer("pointermove", 60, 32));
+    row.dispatchEvent(pointer("pointerup", 40, 48));
+
+    expect(h.state.open).toBe(true);
+    expect(drawer.style.transform).toBe("");
+  });
+
+  test("a leftward drag from a folder heading still dismisses the drawer", () => {
+    const h = mount();
+    el<HTMLButtonElement>(h.app, "#account-trigger").click();
+    const head = el(h.app, ".drawer-folder-head");
+
+    head.dispatchEvent(pointer("pointerdown", 200, 0));
+    head.dispatchEvent(pointer("pointermove", 180, 16));
+    head.dispatchEvent(pointer("pointermove", 60, 32));
+    head.dispatchEvent(pointer("pointerup", 40, 48));
+
+    expect(h.state.open).toBe(false);
+  });
+
   test("with motion enabled, the release animates and the transitionend closes it", () => {
     const original = window.matchMedia;
     // Motion enabled: settle takes the animated (transition) path instead of the cut.

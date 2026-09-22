@@ -309,4 +309,24 @@ describe("group control focus restoration", () => {
     restoreRepaintFocus(app, secretFocus);
     expect(app.querySelector<HTMLInputElement>('[name="vaultPassphrase"]')?.value).toBe("");
   });
+
+  test("keeps a half-typed drawer folder name across a repaint", () => {
+    const app = paintApp('<input id="drawer-folder-name" name="folderName" value="">');
+    const input = app.querySelector<HTMLInputElement>('[name="folderName"]');
+    if (!input) {
+      throw new Error("folder name missing");
+    }
+    input.focus();
+    input.value = "Trading";
+    input.setSelectionRange(4, 4);
+    const focus = captureRepaintFocus();
+
+    paintApp('<input id="drawer-folder-name" name="folderName" value="">');
+    restoreRepaintFocus(app, focus);
+
+    const after = app.querySelector<HTMLInputElement>('[name="folderName"]');
+    expect(document.activeElement).toBe(after);
+    expect(after?.value).toBe("Trading");
+    expect(after?.selectionStart).toBe(4);
+  });
 });
