@@ -33,13 +33,14 @@ export type DashboardOptions = {
   readonly connectedSites?: readonly ConnectedSite[];
   readonly deployment?: boolean | null;
   readonly discoveredNfts?: readonly DiscoveredNft[];
+  readonly addFolderOpen?: boolean;
+  readonly collapsedFolders?: readonly string[];
   readonly expandedGroupId?: string | null;
   readonly historyUnavailable?: boolean;
   readonly multisigClassDeclared?: boolean | "error" | null;
   readonly multisigIntents?: readonly ArgentMultisigSigningIntent[];
   readonly multisigs?: readonly ArgentMultisigView[];
   readonly multisigsError?: boolean;
-  readonly openAssignId?: string | null;
   readonly pending?: readonly PendingApproval[];
   readonly preferences?: WalletPreferences | null;
   readonly priceAsOf?: number | null;
@@ -98,12 +99,12 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     options.multisigIntents ?? [],
     options.selectedMultisigId ?? null,
     options.multisigClassDeclared ?? null,
-    null,
+    options.collapsedFolders,
     options.expandedGroupId ?? null,
     options.priceStale ?? false,
     options.priceAsOf ?? null,
     options.discoveredNfts ?? [discoveredNft],
-    options.openAssignId ?? null,
+    options.addFolderOpen ?? false,
     options.classHashVerification ?? null,
     options.historyUnavailable ?? false,
     options.snoozed ?? [],

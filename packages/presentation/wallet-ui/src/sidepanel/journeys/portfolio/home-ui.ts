@@ -20,8 +20,6 @@ export type HomeUiDeps = {
   readonly app: Element | null;
   readonly drawerOpen: () => boolean;
   readonly setDrawerOpen: (open: boolean) => void;
-  readonly drawerGroupFilter: () => string | null;
-  readonly setDrawerGroupFilter: (filter: string | null) => void;
   readonly networkId: () => string;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly selectPortfolio?: (multisigId: string | null) => void;
@@ -262,21 +260,6 @@ const bindDrawer = (deps: HomeUiDeps): void => {
       }
       setOpen(false, false);
       deps.selectPortfolio?.(id);
-      void deps.wallet.loadStatus().then(deps.render);
-    });
-  });
-
-  // Folder filter chips narrow the listed accounts to a group's members; the
-  // selection persists across re-renders via the entrypoint module var, so the
-  // drawer reopens showing the same folder.
-  root.querySelectorAll<HTMLButtonElement>("[data-group-filter]").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      const value = chip.dataset["groupFilter"];
-      const next = !value || value === "all" ? null : value;
-      if (next === deps.drawerGroupFilter()) {
-        return;
-      }
-      deps.setDrawerGroupFilter(next);
       void deps.wallet.loadStatus().then(deps.render);
     });
   });

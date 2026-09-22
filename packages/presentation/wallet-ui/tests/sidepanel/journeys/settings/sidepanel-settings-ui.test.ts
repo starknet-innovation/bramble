@@ -36,13 +36,11 @@ const mount = (
     app,
     expandedGroup: () => null,
     networkId: () => "SN_MAIN",
-    openAssign: () => null,
     refresh: async () => emptyStatus(),
     render: async () => {
       calls.render += 1;
     },
     setExpandedGroup: () => undefined,
-    setOpenAssign: () => undefined,
     startAddAccount: () => {
       calls.add += 1;
     },

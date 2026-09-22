@@ -25,11 +25,9 @@ const mount = (): HTMLElement => {
   document.body.append(app);
   bindHomeUi({
     app,
-    drawerGroupFilter: () => null,
     drawerOpen: () => false,
     networkId: () => "SN_MAIN",
     render: async () => undefined,
-    setDrawerGroupFilter: () => undefined,
     setDrawerOpen: () => undefined,
     wallet: {} as HomeUiDeps["wallet"],
   });

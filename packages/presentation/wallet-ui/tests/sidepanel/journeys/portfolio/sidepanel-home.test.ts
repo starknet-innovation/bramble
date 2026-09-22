@@ -217,7 +217,7 @@ describe("sidepanel home", () => {
       [],
       null,
       null,
-      null,
+      [],
       null,
       priceStale,
       priceAsOf,

@@ -40,7 +40,6 @@ const showAddressOnlyReceiveCard = async (context: FrameContext): Promise<void> 
 
 const bindFixtureHome = (context: FrameContext): void => {
   let drawerOpen = context.app.querySelector(".drawer-root")?.getAttribute("data-open") === "true";
-  let drawerGroupFilter: string | null = null;
   const wallet = {
     addAccount: async () => softwareAccount.id,
     loadStatus: async () => statusFor(),
@@ -49,13 +48,9 @@ const bindFixtureHome = (context: FrameContext): void => {
   } as unknown as SidepanelWallet;
   bindHomeUi({
     app: context.app,
-    drawerGroupFilter: () => drawerGroupFilter,
     drawerOpen: () => drawerOpen,
     networkId: () => "SN_MAIN",
     render: async () => undefined,
-    setDrawerGroupFilter: (value) => {
-      drawerGroupFilter = value;
-    },
     setDrawerOpen: (value) => {
       drawerOpen = value;
     },
