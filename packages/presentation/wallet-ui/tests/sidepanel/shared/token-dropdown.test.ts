@@ -138,6 +138,14 @@ describe("token dropdown", () => {
     expect(visible(root)).toEqual(["WBTC"]);
     type(root, "0xDEF222");
     expect(visible(root)).toEqual(["USDC"]);
+    // A digit that appears inside a contract is not an address search, and a
+    // padded paste of the same contract still is.
+    type(root, "1");
+    expect(visible(root)).toEqual([]);
+    type(root, "0x000000def222");
+    expect(visible(root)).toEqual(["USDC"]);
+    type(root, "0xdef2");
+    expect(visible(root)).toEqual(["USDC"]);
     type(root, "");
     expect(visible(root)).toEqual(["USDC.e", "USDC", "WBTC"]);
   });
