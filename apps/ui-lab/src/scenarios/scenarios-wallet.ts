@@ -1,5 +1,5 @@
 import type { SidepanelWallet } from "@bramble/wallet-ui/lab";
-import { bindHomeUi, bindReceiveWalletCard } from "@bramble/wallet-ui/lab";
+import { bindAddressBook, bindHomeUi, bindReceiveWalletCard } from "@bramble/wallet-ui/lab";
 import { softwareAccount, statusFor } from "../fixtures/fixtures";
 import {
   allowances,
@@ -70,6 +70,16 @@ const openDrawer = (context: FrameContext): void => {
     throw new Error("Missing production account drawer");
   }
   trigger.click();
+};
+
+// The Pro switch that reveals the wallet card and the keys is production
+// behaviour, so the checkpoint binds the real form; saving is out of scope here.
+const bindFixtureAddressBook = (context: FrameContext): void => {
+  bindAddressBook({
+    app: context.app,
+    render: async () => undefined,
+    wallet: {} as unknown as SidepanelWallet,
+  });
 };
 
 const openPortfolioMenu = (context: FrameContext): void => {
@@ -306,6 +316,14 @@ export const assetsScenario: WalletScenario = {
       state: { source: "curated registry", view: "token-discover" },
     },
     {
+      content: () => walletDashboard({ preferences: journeyPreferences, view: "token-catalog" }),
+      id: "token-catalog",
+      label: "AVNU token list",
+      narrative:
+        "AVNU's verified list is a directory: adding from it reads the contract on chain, never the catalog's own claims.",
+      state: { source: "AVNU catalog", view: "token-catalog" },
+    },
+    {
       content: () =>
         walletDashboard({
           balanceState: { balances: [] },
@@ -352,7 +370,8 @@ export const assetsScenario: WalletScenario = {
       id: "address-book",
       label: "Address book",
       narrative:
-        "A shared wallet card fills the network-scoped address, signer key, and authenticated coordination identity together; manual fields remain available.",
+        "Label and address are the whole form; a shared wallet card and the manual key fields wait behind Pro.",
+      prepare: bindFixtureAddressBook,
       state: { coordination: "ready", import: "wallet card", saved: 1 },
     },
     {
@@ -385,6 +404,7 @@ export const assetsScenario: WalletScenario = {
     "receive",
     "tokens",
     "token-add",
+    "token-catalog",
     "token-discover",
     "token-detail",
     "address-book",
