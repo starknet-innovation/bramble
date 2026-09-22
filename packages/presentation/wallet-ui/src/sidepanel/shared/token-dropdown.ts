@@ -149,6 +149,12 @@ export type TokenDropdownDeps = {
   readonly triggerId: string;
 };
 
+// The outside-click listener each bound dropdown keeps on its document, by
+// panel id. A caller that rebuilds its screen on every paint (Swap) binds again
+// each time; without this the listeners of every panel it threw away would pile
+// up on the document for the life of the page.
+const outsideClickListeners = new WeakMap<Document, Map<string, (event: Event) => void>>();
+
 const options = (panel: Element): readonly HTMLButtonElement[] =>
   [...panel.querySelectorAll<HTMLButtonElement>("[data-token-option]")].filter(
     (option) => !option.hasAttribute("hidden"),
@@ -261,11 +267,29 @@ export const bindTokenDropdown = (deps: TokenDropdownDeps): void => {
 
   // A click anywhere else dismisses it. Listening on the document covers the
   // rest of the panel surface, which a blur handler would miss while focus
-  // moves between the options themselves.
-  panel.ownerDocument.addEventListener("click", (event) => {
+  // moves between the options themselves. The listener of a previous binding
+  // for this panel id is dropped first, and a listener whose panel has left the
+  // document removes itself, so a rebuilt screen never accumulates them.
+  const ownerDocument = panel.ownerDocument;
+  const listeners = outsideClickListeners.get(ownerDocument) ?? new Map();
+  outsideClickListeners.set(ownerDocument, listeners);
+  const previous = listeners.get(deps.panelId);
+  if (previous) {
+    ownerDocument.removeEventListener("click", previous);
+  }
+  const onOutsideClick = (event: Event): void => {
+    if (!panel.isConnected) {
+      ownerDocument.removeEventListener("click", onOutsideClick);
+      if (listeners.get(deps.panelId) === onOutsideClick) {
+        listeners.delete(deps.panelId);
+      }
+      return;
+    }
     const target = event.target as Node | null;
     if (!panel.hasAttribute("hidden") && target && !root.contains(target)) {
       close(false);
     }
-  });
+  };
+  listeners.set(deps.panelId, onOutsideClick);
+  ownerDocument.addEventListener("click", onOutsideClick);
 };
