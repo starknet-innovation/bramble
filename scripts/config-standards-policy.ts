@@ -27,7 +27,7 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   // addons.mozilla.org runs at submission, so the Gecko artifact is judged by
   // the same rules before a human uploads it; the same tool later signs and
   // submits. Pinned exact and never shipped — it is a build-time gate only.
-  "web-ext": "10.6.0",
+  "web-ext": "10.7.0",
 };
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
