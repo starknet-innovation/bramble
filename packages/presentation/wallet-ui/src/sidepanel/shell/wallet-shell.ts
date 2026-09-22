@@ -225,10 +225,10 @@ export const deployNotice = (
             title:
               fundedForFees === false
                 ? "Deploying costs a network fee. Receive STRK into this account first."
-                : "This account contract is not on-chain yet. Deploying it enables transactions.",
+                : "Your first send creates this account on Starknet and quotes the fee for both. Deploy it now if you would rather do that first.",
           },
           className: "deploy-chip",
-          icon: "alert",
+          icon: "info",
           label: fundedForFees === false ? "Fund with STRK" : "Deploy account",
           size: "small",
           variant: "secondary",
