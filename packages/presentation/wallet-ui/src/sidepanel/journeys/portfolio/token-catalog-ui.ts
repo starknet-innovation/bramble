@@ -44,6 +44,9 @@ let catalogNetworkId: string | null = null;
 let catalogLoading = false;
 let catalogError: string | null = null;
 let searchText = "";
+// The fetch in flight, and the paint of whichever screen is live when it lands.
+let catalogRequest = 0;
+let repaintLatest: (() => void) | null = null;
 
 /**
  * Clears the panel-local catalog and search between isolated tests. Production
@@ -55,35 +58,49 @@ export const resetTokenCatalogForTests = (): void => {
   catalogLoading = false;
   catalogError = null;
   searchText = "";
+  repaintLatest = null;
 };
 
-/** Drops the cached list when the active network changes. */
+/**
+ * Drops the cached list when the active network changes. A fetch still in
+ * flight belonged to the old network: it is no longer "loading" this one, and
+ * its answer is discarded when it lands.
+ */
 const resetForNetwork = (networkId: string): void => {
   if (catalogNetworkId !== networkId) {
     catalog = null;
     catalogError = null;
+    catalogLoading = false;
     catalogNetworkId = networkId;
   }
 };
 
 const ensureCatalog = (deps: TokenCatalogUiDeps, repaint: () => void): void => {
-  resetForNetwork(deps.status().networkId);
+  const networkId = deps.status().networkId;
+  resetForNetwork(networkId);
+  // Always the live screen's paint. A shell refresh while the list is loading
+  // rebuilds the results element, and the paint captured by the first bind
+  // would write into the one that was thrown away.
+  repaintLatest = repaint;
   if (catalog !== null || catalogLoading) {
     return;
   }
   catalogLoading = true;
+  const request = ++catalogRequest;
+  const settle = (tokens: readonly SwapCatalogTokenView[], error: string | null): void => {
+    // A later fetch, or a network switch, has already replaced this request;
+    // pinning its list here would show another network's tokens.
+    if (request !== catalogRequest || catalogNetworkId !== networkId) {
+      return;
+    }
+    catalogLoading = false;
+    catalog = tokens;
+    catalogError = error;
+    repaintLatest?.();
+  };
   deps.catalog().then(
-    (tokens) => {
-      catalogLoading = false;
-      catalog = tokens;
-      repaint();
-    },
-    (error: unknown) => {
-      catalogLoading = false;
-      catalog = [];
-      catalogError = errorMessage(error, "Token list unavailable");
-      repaint();
-    },
+    (tokens) => settle(tokens, null),
+    (error: unknown) => settle([], errorMessage(error, "Token list unavailable")),
   );
 };
 
@@ -230,9 +247,12 @@ export const bindTokenCatalog = (deps: TokenCatalogUiDeps): void => {
   const paint = (): void => {
     const entries = catalog ?? [];
     const shown = rankedEntries(entries, searchText.trim().toLowerCase());
+    // No entries at all means the list is loading or failed; the status line
+    // says which, so the results region stays empty rather than reporting a
+    // search that matched nothing.
     results.innerHTML =
       shown.length === 0
-        ? entries.length === 0 && !catalogLoading
+        ? entries.length === 0
           ? ""
           : emptyState("No token matches that search.")
         : `<ul class="token-list">${shown.map((entry) => entryRow(deps, entry)).join("")}</ul>`;

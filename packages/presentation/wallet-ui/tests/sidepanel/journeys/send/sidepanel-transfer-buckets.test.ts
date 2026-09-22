@@ -335,6 +335,31 @@ describe("bucket controls", () => {
     expect(counter.changes).toBe(2);
   });
 
+  test("re-measures the balance after a pick from the token dropdown", () => {
+    // The dropdown reports a pick from its option, not from the hidden fact
+    // row; both must re-measure, or a private send keeps the public figure the
+    // compose binding just wrote after the asset changes.
+    const form = mountForm();
+    form.insertAdjacentHTML(
+      "beforeend",
+      `<button type="button" data-token-option="${TOKEN_ID}" data-token-symbol="STRK">STRK</button>`,
+    );
+    const counter = bind(form);
+    pick(form, "source", "private");
+
+    const balance = form.querySelector<HTMLInputElement>('[name="tokenBalance"]');
+    const formatted = form.querySelector<HTMLInputElement>('[name="tokenFormatted"]');
+    if (balance) balance.value = "100000000000000000000";
+    if (formatted) formatted.value = "100";
+    form
+      .querySelector<HTMLButtonElement>("[data-token-option]")
+      ?.dispatchEvent(new Event("click", { bubbles: true }));
+
+    expect(form.querySelector("#send-balance-label")?.textContent).toBe("Private balance 20 STRK");
+    expect(balance?.value).toBe("20000000000000000000");
+    expect(counter.changes).toBe(2);
+  });
+
   test("clears the reason once the route resolves", () => {
     const form = mountForm();
     bind(form);
