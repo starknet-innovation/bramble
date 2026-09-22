@@ -266,8 +266,8 @@ export const isDefaultGroup = (id: string): boolean =>
  * The folder an account is shown in. An account filed into a group is shown
  * there; one in no group is shown in the home folder, so a new account appears
  * without a write. Returns null when `groups` has no home folder — callers
- * that seed defaults always have one, and an unseeded list has nowhere to
- * show an unfiled account.
+ * that install the default groups always have one, and a list without them has
+ * nowhere to show an unfiled account.
  */
 export const displayedAccountGroup = (
   groups: AccountGroups,
