@@ -39,6 +39,33 @@ export type PrivacyBlocker = {
   readonly message: string;
 };
 
+/**
+ * A network without a pool, or a Ledger account, cannot register. Those
+ * answers stay ahead of a deployment offer: paying to deploy would not make
+ * privacy available.
+ */
+export const privacyIneligibleKind = (
+  privacy: PrivacyDisclosureState,
+): "ledger" | "network" | null =>
+  privacy.blockerKind === "ledger" || privacy.blockerKind === "network"
+    ? privacy.blockerKind
+    : null;
+
+/**
+ * Registration that has already been broadcast or indexed only happens for an
+ * account that exists on chain. A stale "undeployed" cache must not hide that.
+ */
+export const deploymentKnownFromPrivacy = (
+  deployment: boolean | null,
+  privacy: PrivacyDisclosureState,
+): boolean | null => {
+  const registration = privacy.value?.registration;
+  if (registration === "pending" || registration === "registered") {
+    return true;
+  }
+  return deployment;
+};
+
 /** Reads a validated typed refusal; unclassified errors always offer a service retry. */
 export const privacyBlockerFor = (error: unknown): PrivacyBlocker => ({
   kind: error instanceof PrivacyBlockerError ? error.kind : "service",

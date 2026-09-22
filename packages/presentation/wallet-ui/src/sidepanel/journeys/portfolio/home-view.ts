@@ -14,7 +14,7 @@ import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { dockScreen, noAccountEmpty } from "../../shared/parts";
 import { actionTile, deployNotice, pendingCallout, shieldTile } from "../../shell/wallet-shell";
-import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import { deploymentKnownFromPrivacy, type PrivacyDisclosureState } from "../privacy/privacy-model";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
 
 const heroDelta = (
@@ -93,7 +93,12 @@ export const homeScreen = (
         ${actionTile("send", "Send", "send", account !== null)}
         ${actionTile("swap", "Swap", "shuffle", account !== null)}
         ${actionTile("receive", "Receive", "qrCode", account !== null)}
-        ${shieldTile(strkTokenId, privateReady, deployment)}
+        ${shieldTile(
+          strkTokenId,
+          privateReady,
+          deploymentKnownFromPrivacy(deployment, privacy),
+          fundedForFees,
+        )}
       </div>
     </section>
     ${homeTabs(balances, preferences, prices, changes, currency, privacy, deployment)}`,

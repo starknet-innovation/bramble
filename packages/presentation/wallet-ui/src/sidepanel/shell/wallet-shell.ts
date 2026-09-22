@@ -184,19 +184,25 @@ export const shieldTile = (
   tokenId: string | null,
   ready: boolean,
   deployment: boolean | null = null,
+  fundedForFees = true,
 ): string => {
+  const needsDeploy = deployment === false;
+  const needsFunds = needsDeploy && !fundedForFees;
+  const tileLabel = needsFunds ? "Fund with STRK" : needsDeploy ? "Deploy and enable" : "Shield";
   const body = `<span class="tile-icon">${icon("shield")}</span>
-      <span class="tile-label">${deployment === false ? "Deploy and enable" : "Shield"}</span>`;
+      <span class="tile-label">${tileLabel}</span>`;
   if (tokenId === null) {
     return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable until a token is tracked">${body}</button>`;
   }
-  const attribute = ready && deployment !== false ? "data-send-shield" : "data-privacy-open";
-  const label =
-    deployment === false
-      ? "Deploy and enable"
-      : ready
-        ? "Shield public value into your private balance"
-        : "Activate private balances";
+  if (needsFunds) {
+    return `<button class="action-tile" data-view="receive" type="button" aria-label="Receive STRK before deploying this account">${body}</button>`;
+  }
+  const attribute = ready && !needsDeploy ? "data-send-shield" : "data-privacy-open";
+  const label = needsDeploy
+    ? "Deploy and enable"
+    : ready
+      ? "Shield public value into your private balance"
+      : "Activate private balances";
   return `<button class="action-tile" ${attribute}="${escapeHtml(tokenId)}" type="button" aria-label="${label}">${body}</button>`;
 };
 

@@ -18,9 +18,11 @@ import {
   scopeMatches,
 } from "./privacy-disclosure";
 import {
+  deploymentKnownFromPrivacy,
   emptyPrivacyDisclosure,
   type PrivacyBlocker,
   type PrivacyJourneyState,
+  privacyIneligibleKind,
 } from "./privacy-model";
 import { createPendingRegistrationPoll } from "./privacy-pending-poll";
 import type { PreparationProgress } from "./privacy-preparation-job";
@@ -113,7 +115,21 @@ const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void>
       return;
     }
   }
-  if (deployment === false) {
+  const disclosure = deps.disclosure();
+  const ineligible = privacyIneligibleKind(disclosure);
+  if (ineligible) {
+    block(
+      deps,
+      tokenId,
+      {
+        kind: ineligible,
+        message: disclosure.error ?? "Private balances unavailable",
+      },
+      before,
+    );
+    return;
+  }
+  if (deploymentKnownFromPrivacy(deployment ?? null, disclosure) === false) {
     block(deps, tokenId, { kind: "deploy", message: PRIVACY_DEPLOY_REQUIRED }, before);
     return;
   }
@@ -238,6 +254,7 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
             stillCurrent: () => scopeMatches(deps, scope),
           };
     },
+    noteDeployed: deps.noteDeployed,
     startRegistration: () => {
       const tokenId = defaultTokenId(deps);
       if (tokenId) {

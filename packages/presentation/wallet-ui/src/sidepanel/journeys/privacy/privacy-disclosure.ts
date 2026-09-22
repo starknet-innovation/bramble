@@ -23,6 +23,8 @@ export type PrivacyUiDeps = {
   readonly generation: () => number;
   readonly journey: () => PrivacyJourneyState;
   readonly navigate: (view: "activity" | "home" | "privacy" | "token-detail") => void;
+  /** Records that the active account's deployment has been observed on chain. */
+  readonly noteDeployed?: () => void;
   /** Opens Send pre-configured for a shield or unshield shortcut. */
   readonly openSend?: (intent: SendIntent) => void;
   readonly paint: () => void;

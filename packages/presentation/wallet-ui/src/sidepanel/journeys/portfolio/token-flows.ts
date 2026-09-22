@@ -21,7 +21,11 @@ import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
 import { accountLabel, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
-import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import {
+  deploymentKnownFromPrivacy,
+  type PrivacyDisclosureState,
+  privacyIneligibleKind,
+} from "../privacy/privacy-model";
 import { sparklinePath, sparklineTrend } from "./sparkline";
 import { compactAmount, tokenGlyph } from "./token-row";
 
@@ -192,7 +196,9 @@ const privacyActions = (
   privacy: PrivacyDisclosureState,
   deployment: boolean | null,
 ): string => {
-  if (deployment === false)
+  const seen = deploymentKnownFromPrivacy(deployment, privacy);
+  if (privacyIneligibleKind(privacy)) return "";
+  if (seen === false)
     return button({
       attributes: { "data-privacy-open": tokenId },
       icon: "shield",
@@ -232,8 +238,9 @@ export const tokenDetailFlow = (
   const privateFiat = privateBalance
     ? tokenFiatValue(privateBalance.formatted, price ?? undefined)
     : null;
-  const registered = deployment !== false && privacy.value?.registration === "registered";
-  const registrationPending = deployment !== false && privacy.value?.registration === "pending";
+  const seen = deploymentKnownFromPrivacy(deployment, privacy);
+  const registered = seen !== false && privacy.value?.registration === "registered";
+  const registrationPending = seen !== false && privacy.value?.registration === "pending";
   return (
     flowHeader(token.symbol, status, token.name) +
     flowScreen(

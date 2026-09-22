@@ -1,0 +1,152 @@
+/**
+ * Deployment is offered only when privacy is otherwise available, a confirmed
+ * registration outranks a stale undeployed cache, and transport failures stay
+ * in the wallet's usual wording.
+ */
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences } from "@bramble/testkit/sidepanel";
+import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import { tokenDetailFlow } from "../../../../src/sidepanel/journeys/portfolio/token-flows";
+import type {
+  PrivacyDisclosureState,
+  PrivacyJourneyState,
+} from "../../../../src/sidepanel/journeys/privacy/privacy-model";
+import { bindPrivacy } from "../../../../src/sidepanel/journeys/privacy/privacy-ui";
+import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
+import { shieldTile } from "../../../../src/sidepanel/shell/wallet-shell";
+import { registerDom, unregisterDom } from "../../../support/groups-harness";
+
+beforeAll(registerDom);
+afterAll(unregisterDom);
+beforeEach(() => document.body.replaceChildren());
+
+const status: WalletStatus = {
+  accountCount: 1,
+  accounts: [account],
+  activeAccountId: account.id,
+  hasVault: true,
+  locked: false,
+  network: "Starknet Mainnet",
+  networkId: "SN_MAIN",
+  networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
+  ready: true,
+};
+
+const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+const open = (
+  initial: PrivacyDisclosureState,
+  wallet: Partial<Record<keyof SidepanelWallet, unknown>>,
+  deployment: () => boolean | null,
+): PrivacyJourneyState[] => {
+  const journeys: PrivacyJourneyState[] = [];
+  const app = document.createElement("main");
+  app.innerHTML = `<button data-privacy-open="token">Shield</button>`;
+  document.body.append(app);
+  bindPrivacy({
+    app,
+    balances: () => [],
+    deployment,
+    disclosure: () => initial,
+    generation: () => 0,
+    journey: () => journeys.at(-1) ?? { stage: "idle" },
+    navigate: () => undefined,
+    paint: () => undefined,
+    preferences: () => preferences,
+    setDisclosure: () => undefined,
+    setJourney: (journey) => {
+      journeys.push(journey);
+    },
+    status: () => status,
+    wallet: wallet as unknown as SidepanelWallet,
+  });
+  app.querySelector<HTMLButtonElement>("[data-privacy-open]")?.click();
+  return journeys;
+};
+
+describe("privacy deployment gate", () => {
+  const prefs = defaultWalletPreferences();
+  const token = prefs.tokens.find(
+    (entry) => entry.networkId === "SN_MAIN" && entry.symbol === "STRK",
+  );
+  if (!token) throw new Error("STRK fixture missing");
+  const balance = { ...token, balance: "1000000000000000000", formatted: "1" };
+
+  test("keeps a Ledger refusal ahead of a deployment offer", async () => {
+    const ledger: PrivacyDisclosureState = {
+      blockerKind: "ledger",
+      error: "Private balances are not available for Ledger accounts",
+      loading: false,
+      value: null,
+    };
+    const html = tokenDetailFlow(status, token, balance, [], null, "usd", ledger, false);
+    expect(html).not.toContain("Deploy and enable");
+    const journeys = open(
+      ledger,
+      {
+        preparePrivacyRegistration: async () => {
+          throw new Error("must not prove");
+        },
+      },
+      () => false,
+    );
+    await tick();
+    const last = journeys.at(-1);
+    expect(last?.stage === "blocked" ? last.blocker.kind : null).toBe("ledger");
+  });
+
+  test("treats a pending registration as deployed despite a stale undeployed cache", () => {
+    const pending: PrivacyDisclosureState = {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
+        registration: "pending",
+      },
+    };
+    const html = tokenDetailFlow(status, token, balance, [], null, "usd", pending, false);
+    expect(html).toContain("Registration pending");
+    expect(html).not.toContain("Deploy and enable");
+  });
+
+  test("sends an unfunded undeployed account to receive instead of deployment", () => {
+    const tile = shieldTile(token.id, false, false, false);
+    expect(tile).toContain("Fund with STRK");
+    expect(tile).toContain('data-view="receive"');
+    expect(tile).not.toContain("Deploy and enable");
+  });
+
+  test("keeps a transport failure friendly without dropping its blocker kind", async () => {
+    const journeys = open(
+      {
+        error: null,
+        loading: false,
+        value: {
+          accountId: account.id,
+          balances: [],
+          networkId: "SN_MAIN",
+          poolFeeFri: "0x1",
+          relayConfigured: true,
+          registration: "unregistered",
+        },
+      },
+      {
+        preparePrivacyRegistration: async () => {
+          throw new Error("Failed to fetch");
+        },
+      },
+      () => true,
+    );
+    await tick();
+    const last = journeys.at(-1);
+    expect(last?.stage === "blocked" ? last.blocker : null).toEqual({
+      kind: "service",
+      message: "Couldn't reach the network. Check your connection or RPC endpoint.",
+    });
+  });
+});

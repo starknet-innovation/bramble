@@ -25,7 +25,11 @@ import type { BalanceState } from "../../runtime/runtime";
 import { icon } from "../../shared/icons";
 import { inlineCopyButton } from "../../shared/parts";
 import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
-import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import {
+  deploymentKnownFromPrivacy,
+  type PrivacyDisclosureState,
+  privacyIneligibleKind,
+} from "../privacy/privacy-model";
 import {
   type ActivityPricing,
   activityRowModel,
@@ -263,7 +267,8 @@ const privateBreakdownFor = (
   tokenId: string,
   deployment: boolean | null,
 ): PrivateBreakdown => {
-  if (deployment === false) return { kind: "undeployed" };
+  if (privacyIneligibleKind(privacy)) return { kind: "unavailable" };
+  if (deploymentKnownFromPrivacy(deployment, privacy) === false) return { kind: "undeployed" };
   if (privacy.error) {
     return { kind: "unavailable" };
   }
