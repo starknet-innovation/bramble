@@ -101,6 +101,6 @@ export const homeScreen = (
         )}
       </div>
     </section>
-    ${homeTabs(balances, preferences, prices, changes, currency, privacy, deployment)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, privacy, deployment, fundedForFees)}`,
   );
 };

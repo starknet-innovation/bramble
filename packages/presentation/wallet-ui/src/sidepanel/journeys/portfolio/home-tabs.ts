@@ -266,9 +266,12 @@ const privateBreakdownFor = (
   privacy: PrivacyDisclosureState,
   tokenId: string,
   deployment: boolean | null,
+  fundedForFees: boolean,
 ): PrivateBreakdown => {
   if (privacyIneligibleKind(privacy)) return { kind: "unavailable" };
-  if (deploymentKnownFromPrivacy(deployment, privacy) === false) return { kind: "undeployed" };
+  if (deploymentKnownFromPrivacy(deployment, privacy) === false) {
+    return { kind: fundedForFees ? "undeployed" : "needs-funds" };
+  }
   if (privacy.error) {
     return { kind: "unavailable" };
   }
@@ -297,6 +300,7 @@ const tokensPanel = (
   currency: DisplayCurrency,
   privacy: PrivacyDisclosureState,
   deployment: boolean | null,
+  fundedForFees = true,
 ): string => {
   const visible = visibleHomeBalances(state, preferences);
   const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
@@ -310,7 +314,7 @@ const tokensPanel = (
         : `<ul class="token-list">${unified
             .map((token) =>
               unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
-                private: privateBreakdownFor(privacy, token.id, deployment),
+                private: privateBreakdownFor(privacy, token.id, deployment, fundedForFees),
                 publicFormatted: publicById.get(token.id)?.formatted ?? "0",
               }),
             )
@@ -362,6 +366,7 @@ export const homeTabs = (
     value: null,
   },
   deployment: boolean | null = null,
+  fundedForFees = true,
 ): string => `
   <section class="home-tabs" aria-label="Portfolio">
     <div class="tab-bar">
@@ -411,5 +416,5 @@ export const homeTabs = (
         </div>
       </div>
     </div>
-    ${tokensPanel(state, preferences, prices, changes, currency, privacy, deployment)}
+    ${tokensPanel(state, preferences, prices, changes, currency, privacy, deployment, fundedForFees)}
   </section>`;

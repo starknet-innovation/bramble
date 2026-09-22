@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
 import { tokenDetailFlow } from "../../../../src/sidepanel/journeys/portfolio/token-flows";
 import type {
   PrivacyDisclosureState,
@@ -111,6 +112,22 @@ describe("privacy deployment gate", () => {
     };
     const html = tokenDetailFlow(status, token, balance, [], null, "usd", pending, false);
     expect(html).toContain("Registration pending");
+    expect(html).not.toContain("Deploy and enable");
+  });
+
+  test("sends an unfunded token row to receive instead of deployment", () => {
+    const html = homeTabs(
+      { balances: [balance] },
+      prefs,
+      {},
+      {},
+      "usd",
+      { error: null, loading: false, value: null },
+      false,
+      false,
+    );
+    expect(html).toContain("Fund with STRK");
+    expect(html).toContain('data-view="receive"');
     expect(html).not.toContain("Deploy and enable");
   });
 
