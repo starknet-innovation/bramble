@@ -37,9 +37,9 @@ export const Receive: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     // Address first: the plain address is shown whole and is the default QR;
     // the contact card is the second, switchable payload (spec item 3).
-    await expect(body?.querySelector(".receive-address-line code")).toHaveTextContent(
-      /^0x[0-9a-f]+$/,
-    );
+    await expect(
+      body?.querySelector(".receive-address-copy [data-receive-address-text]"),
+    ).toHaveTextContent(/^0x[0-9a-f]+$/);
     await expect(body?.querySelector("[data-receive-qr]")).toHaveAttribute(
       "data-qr-payload",
       "address",
@@ -53,8 +53,14 @@ export const Receive: LabStory = {
       "true",
     );
     await expect(body?.querySelector('[data-receive-payload="card"]')).toBeEnabled();
-    await expect(body?.querySelector(".receive-identity")).not.toHaveAttribute("open");
-    await expect(body?.querySelector(".receive-public-key")).toBeInTheDocument();
+    // The contact card, the keys, and the payload switch wait behind Pro; the
+    // QR stays on the address until the user asks for the card.
+    const pro = body?.querySelector<HTMLButtonElement>("#receive-pro");
+    if (!pro) throw new Error("Missing receive Pro switch");
+    await expect(pro).toHaveAttribute("aria-checked", "false");
+    await expect(body?.querySelector("#receive-pro-fields")).not.toBeVisible();
+    await userEvent.click(pro);
+    await expect(body?.querySelector("#receive-pro-fields")).toBeVisible();
     await expect(body?.querySelector(".receive-public-key [data-copy]")).toHaveAttribute(
       "data-copy",
     );
