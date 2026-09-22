@@ -256,6 +256,12 @@ describe("Receive carries the account's contract identifiers", () => {
     const alert = app.querySelector(".verify-status.mismatch");
     expect(alert?.getAttribute("role")).toBe("alert");
     expect(alert?.textContent).toContain("On-chain mismatch");
+    // The expected class is named in the alert, so comparing it does not depend
+    // on opening Pro, where that hash also sits.
+    expect(alert?.textContent).toContain(account.classHash);
+    expect(alert?.textContent).toContain(
+      "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    );
     // Pro renders collapsed, so "do not trust this account" cannot live inside
     // it — and it renders once, not once in each place.
     expect(app.querySelector("#receive-pro-fields")?.contains(alert ?? null)).toBe(false);
