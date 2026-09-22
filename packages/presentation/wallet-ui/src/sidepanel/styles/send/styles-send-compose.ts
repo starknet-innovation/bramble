@@ -141,8 +141,11 @@ export const SEND_COMPOSE_STYLES = `
     font-size: ${TYPE.micro.size};
     font-variant-numeric: tabular-nums;
   }
+  /* The mark is chevronRight. An open folder rotates it to point down, the
+     same way a disclosure mark does, so the glyph follows data-collapsed. */
   .send-folder-mark { display: inline-flex; }
   .send-folder-mark .icon { height: 14px; width: 14px; }
+  .send-recipient-folder[data-collapsed="false"] .send-folder-mark { transform: rotate(90deg); }
   .send-folder-empty { margin: 0; }
   .send-recipient-row, .send-asset-row {
     background: var(--bramble-panel);

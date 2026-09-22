@@ -10,9 +10,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { DEFAULT_GROUP_IDS } from "@bramble/settings/groups";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account, secondAccount } from "@bramble/testkit/sidepanel";
+import { icon } from "@bramble/ui-kit/icons";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { bindTransferCompose } from "../../../../src/sidepanel/journeys/send/transfer-compose-ui";
+import { SEND_COMPOSE_STYLES } from "../../../../src/sidepanel/styles/send/styles-send-compose";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import { paint } from "../../../support/transfer-ui-harness";
 
@@ -79,6 +81,12 @@ const rowFor = (form: HTMLFormElement, address: string): HTMLElement => {
   return found;
 };
 
+const iconPath = (name: "chevronDown" | "chevronRight"): string => {
+  const holder = document.createElement("div");
+  holder.innerHTML = icon(name);
+  return holder.querySelector("path")?.getAttribute("d") ?? "";
+};
+
 const search = (form: HTMLFormElement, value: string): void => {
   const field = form.querySelector<HTMLInputElement>("#send-recipient-search");
   if (!field) {
@@ -130,6 +138,56 @@ describe("Send recipient folders", () => {
 
     head?.dispatchEvent(new Event("click", { bubbles: true }));
     expect(rowFor(form, secondAccount.address).hasAttribute("hidden")).toBe(true);
+  });
+
+  test("the folder mark stays a right chevron and the open state rotates it", () => {
+    const form = mount();
+    const archived = folder(form, DEFAULT_GROUP_IDS.archived);
+    const path = archived.querySelector(".send-folder-mark path")?.getAttribute("d");
+    const right = iconPath("chevronRight");
+
+    expect(path).toBe(right);
+    expect(path).not.toBe(iconPath("chevronDown"));
+    archived
+      .querySelector("[data-send-folder-toggle]")
+      ?.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(archived.dataset["collapsed"]).toBe("false");
+    // The glyph is not swapped on toggle. Open folders rotate this same mark.
+    expect(archived.querySelector(".send-folder-mark path")?.getAttribute("d")).toBe(right);
+    expect(SEND_COMPOSE_STYLES).toContain(
+      '.send-recipient-folder[data-collapsed="false"] .send-folder-mark { transform: rotate(90deg); }',
+    );
+  });
+
+  test("a minimized empty folder does not show its empty hint", () => {
+    const app = document.createElement("div");
+    app.id = "app";
+    const emptyArchive: WalletPreferences = {
+      ...preferences,
+      groups: [{ accountIds: [], icon: "briefcase", id: "work", name: "Work" }],
+    };
+    paint(app, sendFlow(status, account, emptyArchive, [], {}, {}, "usd", [], null));
+    document.body.append(app);
+    const form = app.querySelector<HTMLFormElement>("#transfer-form");
+    if (!form) {
+      throw new Error("transfer form missing");
+    }
+    bindTransferCompose({ form, goTo: () => undefined, onFields: () => undefined });
+
+    const archived = folder(form, DEFAULT_GROUP_IDS.archived);
+    const hint = archived.querySelector("[data-send-folder-empty]");
+    expect(archived.dataset["collapsed"]).toBe("true");
+    expect(hint?.hasAttribute("hidden")).toBe(true);
+
+    archived
+      .querySelector("[data-send-folder-toggle]")
+      ?.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(hint?.hasAttribute("hidden")).toBe(false);
+
+    archived
+      .querySelector("[data-send-folder-toggle]")
+      ?.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(hint?.hasAttribute("hidden")).toBe(true);
   });
 
   test("a search finds an account inside the minimized archive", () => {
