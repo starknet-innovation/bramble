@@ -212,7 +212,7 @@ describe("signTypedData approval gate", () => {
               classReads += 1;
               return ARGENT_ACCOUNT_CLASS_HASH;
             },
-          }) as RpcProvider,
+          }) as unknown as RpcProvider,
         session,
         wallet: {
           ...wallet,

@@ -12,7 +12,7 @@ import {
 } from "@bramble/wallet-model/account-families";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
-import { OutsideExecutionVersion, outsideExecution } from "starknet";
+import { OutsideExecutionVersion, outsideExecution, type RpcProvider } from "starknet";
 import {
   officialBuilder as builder,
   STRK20_SDK_CONTEXT as context,
@@ -299,8 +299,8 @@ describe("relay quote approvals", () => {
     const service = createOfficialStrk20Service({
       http,
       nowSeconds: () => 1_000,
-      providerFor: (nodeUrl) => {
-        const provider = base(nodeUrl);
+      providerFor: () => {
+        const provider = base();
         return {
           ...provider,
           getBlockLatestAccepted: async () => {
@@ -311,7 +311,7 @@ describe("relay quote approvals", () => {
             classReads += 1;
             return "0xdef";
           },
-        } as unknown as ReturnType<typeof base>;
+        } as unknown as RpcProvider;
       },
       sdk: runtime(() => ({
         build: () => builder(executeResult()),
