@@ -123,10 +123,6 @@ export const settingsScenario: WalletScenario = {
     {
       content: () =>
         walletDashboard({
-          classHashVerification: {
-            onChainClassHash: softwareAccount.classHash,
-            status: "verified",
-          },
           expandedGroupId: "operations",
           preferences: journeyPreferences,
           view: "account",
@@ -134,8 +130,8 @@ export const settingsScenario: WalletScenario = {
       id: "accounts",
       label: "Accounts and groups",
       narrative:
-        "Switching, folders, naming, and on-chain identity stay together; account creation branches from one chooser.",
-      state: { classHash: "verified", group: "operations" },
+        "Naming and filing stay together: every account is renameable in place, folders bucket them, and account creation branches from one chooser. Switching accounts is the drawer's job; the identifiers are Receive's.",
+      state: { group: "operations" },
     },
     {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "import-key" }),
@@ -162,12 +158,12 @@ export const settingsScenario: WalletScenario = {
             status: "mismatch",
           },
           preferences: journeyPreferences,
-          view: "account",
+          view: "receive",
         }),
       id: "class-mismatch",
       label: "Account class mismatch",
       narrative:
-        "A contract identity mismatch is assertive and never presented as a benign loading error.",
+        "A contract identity mismatch is assertive, never a benign loading error, and it leads the Receive card rather than hiding behind Pro with the rest of the identifiers.",
       state: { classHash: "mismatch", trust: "blocked" },
     },
     {

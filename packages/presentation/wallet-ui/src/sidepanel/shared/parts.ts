@@ -260,9 +260,12 @@ const NAME_ANIMALS = [
 /**
  * Deterministic two-word account nickname (adjective + animal) derived from the
  * address, so an account without a user label still reads as a friendly name
- * rather than a raw hex string.
+ * rather than a raw hex string. Exported so a rename field can show the name an
+ * account falls back to when its label is empty — the same string
+ * {@link accountDisplayName} resolves to — instead of inventing a second
+ * fallback. Presentational only: it never identifies an account.
  */
-const friendlyAccountName = (address: string): string => {
+export const friendlyAccountName = (address: string): string => {
   let bits: bigint;
   try {
     bits = BigInt(address);
