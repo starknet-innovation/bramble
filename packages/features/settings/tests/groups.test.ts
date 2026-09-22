@@ -10,6 +10,7 @@ import {
   accountGroup,
   createGroup,
   DEFAULT_GROUP_IDS,
+  displayedAccountGroup,
   GROUP_ICONS,
   isAccountGroup,
   isAccountGroupIcon,
@@ -19,6 +20,7 @@ import {
   renameGroup,
   setAccountInGroup,
   setGroupIcon,
+  withDefaultGroups,
 } from "@bramble/settings/groups";
 
 const accountA = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
@@ -164,6 +166,28 @@ describe("accountGroup", () => {
     // Exclusive assignment moves it, so exactly one folder ever resolves.
     groups = setAccountInGroup(groups, work, accountA, true);
     expect(accountGroup(groups, accountA)?.id).toBe(work);
+  });
+});
+
+describe("displayedAccountGroup", () => {
+  test("shows an unfiled account in the home folder", () => {
+    const groups = withDefaultGroups([]);
+    expect(displayedAccountGroup(groups, accountA)?.id).toBe(DEFAULT_GROUP_IDS.home);
+  });
+
+  test("shows a filed account in that folder", () => {
+    const groups = setAccountInGroup(
+      withDefaultGroups(createGroup([], "Work", "briefcase")),
+      "work",
+      accountA,
+      true,
+    );
+    expect(displayedAccountGroup(groups, accountA)?.id).toBe("work");
+    expect(displayedAccountGroup(groups, accountB)?.id).toBe(DEFAULT_GROUP_IDS.home);
+  });
+
+  test("returns null for an unfiled account when the home folder is absent", () => {
+    expect(displayedAccountGroup([], accountA)).toBeNull();
   });
 });
 
