@@ -39,8 +39,8 @@ export const acceptedBlockIdentifier = async (provider: RpcProvider): Promise<st
 };
 
 /**
- * The account fields needed to decide whether this wallet can encode a
- * signature the account will accept.
+ * The account fields needed to decide whether this wallet can encode an
+ * authorization the account will accept.
  */
 export type AuthorizableAccount = {
   readonly accountContractType: string;
@@ -49,11 +49,11 @@ export type AuthorizableAccount = {
 };
 
 /**
- * Refuses an account whose live class this wallet cannot encode a signature for.
+ * Refuses an account whose live class this wallet cannot encode an authorization for.
  *
  * Typed data and the privacy relay otherwise serialize from the family alone,
  * and every Argent family emits the 0.4 signer-array encoding. An account that
- * was deployed at 0.3.x and has not upgraded cannot verify that signature.
+ * was deployed at 0.3.x and has not upgraded cannot verify that authorization.
  * Transaction submission already checks the class the account runs now; these
  * routes must do the same. When nothing is deployed, the stored class is the
  * one a deployment would use, so it is checked instead.
