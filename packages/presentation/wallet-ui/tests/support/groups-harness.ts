@@ -26,6 +26,10 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../src/popup/responses/responses";
+import {
+  captureRepaintFocus,
+  restoreRepaintFocus,
+} from "../../src/sidepanel/app/rendering/focus-memo";
 import { accountFlow } from "../../src/sidepanel/app/screens/flows";
 import type { HomeUiDeps } from "../../src/sidepanel/journeys/portfolio/home-ui";
 import { bindHomeUi } from "../../src/sidepanel/journeys/portfolio/home-ui";
@@ -33,8 +37,10 @@ import { healTransientGroupState } from "../../src/sidepanel/journeys/settings/g
 import type { GroupControlDeps } from "../../src/sidepanel/journeys/settings/group-ui";
 import { bindGroupControls } from "../../src/sidepanel/journeys/settings/group-ui";
 import { accountDrawer } from "../../src/sidepanel/shell/account-drawer";
-import { INITIAL_COLLAPSED_FOLDERS } from "../../src/sidepanel/shell/drawer-folders";
-import { bindDrawerFolders } from "../../src/sidepanel/shell/drawer-folders-ui";
+import {
+  bindDrawerFolders,
+  createDrawerFolderState,
+} from "../../src/sidepanel/shell/drawer-folders-ui";
 
 // Minimal WAAPI + matchMedia so the toast/motion helpers run under happy-dom
 // (which ships neither): reduced motion routes through a no-op cut-to-final.
@@ -167,6 +173,8 @@ export type Harness = {
    * fixture group.
    */
   readonly groupById: (id: string) => AccountGroup | undefined;
+  /** Repaints the mounted view the way a balance update does, keeping focus. */
+  readonly repaint: () => void;
   readonly tick: () => Promise<void>;
 };
 
@@ -229,8 +237,6 @@ const buildWallet = (
 
 // Shared transient UI state, mirroring the entrypoint module vars.
 type UiState = {
-  collapsed: readonly string[];
-  addFolderOpen: boolean;
   expandedGroupId: string | null;
 };
 
@@ -264,9 +270,8 @@ export const mount = (
     setAccountInGroup: [],
     startAddAccount: 0,
   };
+  const folders = createDrawerFolderState();
   const state: UiState = {
-    addFolderOpen: false,
-    collapsed: INITIAL_COLLAPSED_FOLDERS,
     expandedGroupId: null,
   };
   const wallet = buildWallet(
@@ -313,25 +318,27 @@ export const mount = (
       withDefaultGroups(groups),
     ).expandedGroupId;
     if (view === "drawer") {
+      const focus = captureRepaintFocus(container);
       const trigger = '<button id="account-trigger" aria-haspopup="dialog"></button>';
       paint(
         container,
-        trigger + accountDrawer(status, acctA, prefs(), state.collapsed, state.addFolderOpen),
+        trigger +
+          accountDrawer(
+            status,
+            acctA,
+            prefs(),
+            folders.collapsedFolders(),
+            folders.addFolderOpen(),
+          ),
       );
+      restoreRepaintFocus(container, focus);
       bindGroupControls(container, groupDeps);
       bindHomeUi(homeDeps);
       bindDrawerFolders({
-        addFolderOpen: () => state.addFolderOpen,
+        ...folders,
         app: container,
-        collapsedFolders: () => state.collapsed,
         render: async () => {
           render();
-        },
-        setAddFolderOpen: (open) => {
-          state.addFolderOpen = open;
-        },
-        setCollapsedFolders: (ids) => {
-          state.collapsed = ids;
         },
         wallet,
       });
@@ -347,6 +354,9 @@ export const mount = (
     container,
     groupById: (id) => groups.find((group) => group.id === id),
     groups: () => groups,
+    repaint: () => {
+      render();
+    },
     tick,
   };
 };

@@ -26,8 +26,18 @@ export type DrawerFolderDeps = {
   readonly collapsedFolders: () => readonly string[];
   /** Repaints the shell with fresh status after a write. */
   readonly render: (status: Awaited<ReturnType<SidepanelWallet["loadStatus"]>>) => Promise<void>;
+  /**
+   * Arms focus of the create field for the next bind that paints it. Only the
+   * control that opens the field calls this; a later balance repaint must not.
+   */
+  readonly requestFolderNameFocus: () => void;
   readonly setAddFolderOpen: (open: boolean) => void;
   readonly setCollapsedFolders: (ids: readonly string[]) => void;
+  /**
+   * Consumes the one-shot focus request. False once the field is already open,
+   * so binding again leaves focus on Add or Cancel.
+   */
+  readonly takeFolderNameFocus: () => boolean;
   readonly wallet: Pick<SidepanelWallet, "createGroup" | "loadStatus" | "setAccountInGroup">;
 };
 
@@ -119,6 +129,7 @@ const bindDropTargets = (root: Element, deps: DrawerFolderDeps): void => {
 const bindAddFolder = (root: Element, deps: DrawerFolderDeps): void => {
   root.querySelector<HTMLButtonElement>("#drawer-add-folder")?.addEventListener("click", () => {
     deps.setAddFolderOpen(true);
+    deps.requestFolderNameFocus();
     void repaint(deps);
   });
   root.querySelector<HTMLButtonElement>("#drawer-folder-cancel")?.addEventListener("click", () => {
@@ -149,7 +160,9 @@ const bindAddFolder = (root: Element, deps: DrawerFolderDeps): void => {
       },
     );
   });
-  if (form) {
+  // Focus the name only on the bind that follows opening the field. Later
+  // binds leave the restored focus — the field, Add, or Cancel — where it is.
+  if (form && deps.takeFolderNameFocus()) {
     root.querySelector<HTMLInputElement>("#drawer-folder-name")?.focus();
   }
 };
@@ -170,14 +183,20 @@ export const bindDrawerFolders = (deps: DrawerFolderDeps): void => {
 };
 
 /**
- * The drawer's own view state: which folders are collapsed, and whether the
- * inline create field is showing. Held here rather than in the entrypoint so
- * the entrypoint carries one handle instead of two variables and four
- * accessors, and so both survive the repaint that follows every write.
+ * The drawer's own view state: which folders are collapsed, whether the
+ * inline create field is showing, and the one-shot request to focus that
+ * field when it opens. Held here rather than in the entrypoint so the
+ * entrypoint carries one handle, and so the open field survives the repaint
+ * that follows every write.
  */
 export type DrawerFolderState = Pick<
   DrawerFolderDeps,
-  "addFolderOpen" | "collapsedFolders" | "setAddFolderOpen" | "setCollapsedFolders"
+  | "addFolderOpen"
+  | "collapsedFolders"
+  | "requestFolderNameFocus"
+  | "setAddFolderOpen"
+  | "setCollapsedFolders"
+  | "takeFolderNameFocus"
 >;
 
 /**
@@ -185,15 +204,27 @@ export type DrawerFolderState = Pick<
  */
 export const createDrawerFolderState = (): DrawerFolderState => {
   let collapsed = INITIAL_COLLAPSED_FOLDERS;
+  let focusName = false;
   let open = false;
   return {
     addFolderOpen: () => open,
     collapsedFolders: () => collapsed,
+    requestFolderNameFocus: () => {
+      focusName = true;
+    },
     setAddFolderOpen: (next) => {
       open = next;
+      if (!next) {
+        focusName = false;
+      }
     },
     setCollapsedFolders: (ids) => {
       collapsed = ids;
+    },
+    takeFolderNameFocus: () => {
+      const pending = focusName;
+      focusName = false;
+      return pending;
     },
   };
 };
