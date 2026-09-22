@@ -40,18 +40,18 @@ const groupIconPicker = (selected: AccountGroupIcon = "folder"): string => `
 export const newGroupForm = (): string => `
   <form class="new-group-form">
     ${inputControl({
-      ariaLabel: "New group name",
+      ariaLabel: "New folder name",
       attributes: { "data-group-name": true },
       autocomplete: "off",
       className: "group-name-input",
       maxlength: 64,
-      placeholder: "New group name",
+      placeholder: "Folder name",
     })}
     ${groupIconPicker()}
     ${button({
       attributes: { "data-create-group": true },
       icon: "plus",
-      label: "Create group",
+      label: "Create folder",
       size: "small",
       type: "submit",
       variant: "secondary",
@@ -68,7 +68,7 @@ export const newGroupForm = (): string => `
 export const editGroupForm = (group: AccountGroup): string => `
   <form class="edit-group-form" data-edit-group="${escapeHtml(group.id)}">
     ${inputControl({
-      ariaLabel: "Group name",
+      ariaLabel: "Folder name",
       attributes: { "data-group-name": true },
       autocomplete: "off",
       className: "group-name-input",

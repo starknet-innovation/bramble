@@ -53,7 +53,7 @@ export const revealFlow = (status: WalletStatus): string => {
         "reveal",
         `<section class="section" role="note">
           <p class="eyebrow">Recovery</p>
-          <p class="hint">This account lives on your Ledger. Its keys never leave the device, so there is no recovery phrase or private key to reveal here. Recover this account from your Ledger device itself, using the recovery phrase you set up with Ledger — not this wallet.</p>
+          <p class="hint">This account lives on your Ledger. Its keys never leave the device, so there is no recovery phrase or private key to reveal here. Recover it from the Ledger itself, using the recovery phrase you set up with Ledger — not this wallet.</p>
         </section>`,
       )
     );
@@ -89,7 +89,7 @@ export const revealFlow = (status: WalletStatus): string => {
           label: "Copy recovery phrase",
           variant: "ghost",
         })}
-        <p class="hint" id="reveal-copy-note">Copying puts the phrase on this device's clipboard, where other apps can read it and it may sync to your other devices. Bramble clears it about a minute after you copy, but cannot clear a clipboard manager's own history.</p>
+        <p class="hint" id="reveal-copy-note">Copying puts the phrase on this device's clipboard, where other apps can read it and it may sync to your other devices. Bramble clears it about a minute later, but cannot clear a clipboard manager's own history.</p>
         <p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
         <code class="reveal-value is-masked" id="reveal-key"></code>
         ${
@@ -100,7 +100,7 @@ export const revealFlow = (status: WalletStatus): string => {
         ${button({
           attributes: { id: "reveal-toggle" },
           icon: "check",
-          label: "Tap to show",
+          label: "Show",
           variant: "secondary",
         })}
         <p class="hint">Write them down offline. Leaving this screen hides them again.</p>
@@ -159,7 +159,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
   toggle?.addEventListener("click", () => {
     const masked = phraseEl?.classList.toggle("is-masked") ?? true;
     keyEl?.classList.toggle("is-masked", masked);
-    toggle.lastChild?.replaceWith(masked ? "Tap to show" : "Tap to hide");
+    toggle.lastChild?.replaceWith(masked ? "Show" : "Hide");
   });
 
   form?.addEventListener("submit", (event) => {
@@ -177,7 +177,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
         }
         output?.removeAttribute("hidden");
         if (result) {
-          result.textContent = "Revealed. Tap to show, then write it down offline.";
+          result.textContent = "Revealed. Write it down offline.";
         }
         form.reset();
         buttonBusy(submitButton, false);

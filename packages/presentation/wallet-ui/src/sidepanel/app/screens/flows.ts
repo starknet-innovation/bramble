@@ -271,12 +271,12 @@ export const classHashVerificationBadge = (verification: ClassHashVerification |
 };
 
 /**
- * Manage accounts & groups flow: the single management surface reached from the
- * drawer's "Manage accounts & groups" entry and the Settings menu. Switch the
+ * Manage accounts & folders flow: the single management surface reached from the
+ * drawer's "Manage accounts & folders" entry and the Settings menu. Switch the
  * active account, add one, manage groups (create/rename/change-icon/delete plus
  * bulk assignment) in the Groups accordion, name the account, and inspect
  * identifiers. `expandedGroupId` selects the one open Groups panel — a group's
- * bulk members editor or the "Create a group" panel (null = all collapsed).
+ * bulk members editor or the "Create a folder" panel (null = all collapsed).
  * Both default folders are shown even when the wallet has never stored a
  * group, matching the drawer, so they can be renamed here.
  */

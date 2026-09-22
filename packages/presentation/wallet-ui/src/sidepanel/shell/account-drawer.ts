@@ -2,7 +2,7 @@
  * Left slide-in account drawer opened from the header avatar. Kept lean: it
  * lists this network's single-signer and multisig accounts with identicons and
  * names, grouped under the folder each belongs to, marks the selected one,
- * offers "Add account", and links to the dedicated "Manage accounts & groups"
+ * offers "Add account", and links to the dedicated "Manage accounts & folders"
  * view. Accounts move between folders by dragging, and a folder is created
  * inline at the bottom; the rest of group management (rename, change icon,
  * delete, bulk assignment) lives on the manage view, not here. No per-row
@@ -175,7 +175,7 @@ export const accountDrawer = (
         ${menuRow({
           attributes: { "data-view": "account" },
           icon: "settings",
-          label: "Manage accounts & groups",
+          label: "Manage accounts & folders",
         })}
       </div>
     </aside>

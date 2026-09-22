@@ -96,7 +96,7 @@ describe("manage-accounts group edge cases", () => {
   test("creates distinct ids for duplicate group names", async () => {
     const harness = mount([group("briefcase", "work", "Work")], "account");
 
-    // Open the "Create a group" accordion panel, then create a second "Work".
+    // Open the "Create a folder" accordion panel, then create a second "Work".
     click(harness.container.querySelector('[data-group-expand="__create__"]'));
     await harness.tick();
 

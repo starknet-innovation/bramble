@@ -43,7 +43,7 @@ const REPAINT_DRAFT_NAMES = new Set([
 const attrSelector = (name: string, value: string): string =>
   `[${name}="${value.replace(/["\\]/g, "\\$&")}"]`;
 
-// Any group editor's expander EXCEPT the "Create a group" accordion panel, so a
+// Any group editor's expander EXCEPT the "Create a folder" accordion panel, so a
 // focus fallback after a deletion lands on a remaining group rather than the
 // create affordance (which sits first in the Groups accordion).
 const REAL_GROUP_EXPAND = `[data-group-expand]:not(${attrSelector("data-group-expand", CREATE_GROUP_PANEL)})`;

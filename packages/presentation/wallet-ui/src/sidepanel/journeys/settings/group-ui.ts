@@ -166,7 +166,7 @@ const bindAssignToggles = (root: Element, deps: GroupControlDeps): void => {
 };
 
 // Expand/collapse one panel in the manage-accounts Groups accordion: a group's
-// bulk members editor or the "Create a group" panel (whose id is the
+// bulk members editor or the "Create a folder" panel (whose id is the
 // CREATE_GROUP_PANEL sentinel). The single open id is held in a module var so it
 // survives full re-renders; setting it to a new panel collapses the last, and
 // clicking the open panel's header collapses it. A re-render repaints the

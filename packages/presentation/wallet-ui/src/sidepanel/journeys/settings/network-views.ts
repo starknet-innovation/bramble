@@ -74,7 +74,7 @@ const explorerFallbackForm = (
     ${textField({
       autocomplete: "off",
       className: "mono",
-      hint: "Starkscan-compatible data API used only after every RPC fails. Leave empty for the wallet default.",
+      hint: "Starkscan-compatible data API, used only after every RPC fails. Leave empty for the default.",
       label: `Explorer data API for ${status.network}`,
       name: "apiUrl",
       placeholder: "https://…/v1",
@@ -82,7 +82,7 @@ const explorerFallbackForm = (
       type: "url",
       value: explorerApiUrlFor(status, preferences),
     })}
-    <p class="hint">Activity history comes from this explorer, and it stands in for balances when your RPC is unreachable. It learns which addresses you hold, and its data cannot be verified against the chain. Turned off, history covers only the last few days of chain reads and an unreachable RPC shows an error instead.</p>
+    <p class="hint">Activity history comes from this explorer, which also covers balances when your RPC is unreachable. It learns which addresses you hold, and its data cannot be verified on-chain. Off, history reaches back only a few days and an unreachable RPC shows an error.</p>
     ${checkboxField({
       checked: allowed,
       name: "explorerFallback",
@@ -186,7 +186,7 @@ export const advancedNetworkFlow = (
             ${textField({
               autocomplete: "off",
               className: "mono",
-              hint: "Used as the default when set. Leave empty to use the built-in endpoint.",
+              hint: "Used as the default when set. Leave empty for the built-in endpoint.",
               label: `Custom endpoint for ${status.network}`,
               name: "rpcUrl",
               placeholder: "https://…",
@@ -223,7 +223,7 @@ export const advancedNetworkFlow = (
             ${textField({
               autocomplete: "off",
               className: "mono",
-              hint: "Used across networks for encrypted intent handoffs. Every co-signer must select the same relay. Leave empty for the reviewed defaults.",
+              hint: "Used across networks for encrypted intent handoffs. Every co-signer must pick the same relay. Leave empty for the reviewed defaults.",
               label: "Custom Nostr relay",
               name: "relayUrl",
               placeholder: "wss://relay.example",
@@ -250,7 +250,7 @@ export const advancedNetworkFlow = (
             name: "productAnalytics",
             text: "Share pseudonymous gateway usage (on by default; turn off anytime)",
           })}
-          <p class="hint">Helps us understand feature usage and failures. Sends a random installation ID, app version, browser family, release channel, and temporary workflow ID only to wallet.nodes.starknet.org. No addresses, sites, balances, transaction data, or request contents are included.</p>`,
+          <p class="hint">Helps Bramble understand feature usage and failures. Sends a random installation ID, app version, browser family, release channel, and temporary workflow ID to wallet.nodes.starknet.org only. No addresses, sites, balances, transaction data, or request contents.</p>`,
         )}
         ${endpointDisclosure(
           "reliability-diagnostics",
