@@ -22,6 +22,8 @@ type TokenDropdownOption = {
   readonly address: string;
   /** Returned to the caller on selection; unique within the dropdown. */
   readonly id: string;
+  /** Display name. Search matches it; a missing name matches on the symbol. */
+  readonly name?: string;
   readonly symbol: string;
 };
 
@@ -37,10 +39,18 @@ export type TokenDropdownGroup = {
   readonly search?: boolean;
 };
 
-const optionRow = (option: TokenDropdownOption, selectedId: string | null): string => `
+const optionRow = (
+  option: TokenDropdownOption,
+  selectedId: string | null,
+  order: number,
+): string => `
   <button class="token-dropdown-option" type="button" role="option"
     aria-selected="${String(option.id === selectedId)}"
-    data-token-option="${escapeHtml(option.id)}" data-token-symbol="${escapeHtml(option.symbol)}">
+    data-token-option="${escapeHtml(option.id)}"
+    data-token-symbol="${escapeHtml(option.symbol)}"
+    data-token-name="${escapeHtml(option.name ?? "")}"
+    data-token-address="${escapeHtml(option.address)}"
+    data-token-order="${String(order)}">
     ${tokenGlyph(option.address, option.symbol)}
     <strong>${escapeHtml(option.symbol)}</strong>
   </button>`;
@@ -71,7 +81,7 @@ const groupMarkup = (
     <p class="eyebrow token-dropdown-label" id="${escapeHtml(labelId)}">${escapeHtml(group.label)}</p>
     ${group.search ? searchField(group.label) : ""}
     <div class="token-dropdown-options" role="listbox" aria-labelledby="${escapeHtml(labelId)}">
-      ${group.options.map((option) => optionRow(option, selectedId)).join("")}
+      ${group.options.map((option, index) => optionRow(option, selectedId, index)).join("")}
     </div>
     ${group.search ? '<p class="token-dropdown-empty" data-token-search-empty hidden>No token matches that search.</p>' : ""}
   </div>`;
@@ -160,18 +170,49 @@ const options = (panel: Element): readonly HTMLButtonElement[] =>
     (option) => !option.hasAttribute("hidden"),
   );
 
+// Address-only hits sort after every symbol or name hit. Ties keep catalog order.
+const ADDRESS_MATCH_RANK = 4;
+
+const matchRank = (option: HTMLElement, query: string): number | null => {
+  if (query.length === 0) {
+    return 0;
+  }
+  const symbol = option.dataset["tokenSymbol"] ?? "";
+  const name = option.dataset["tokenName"] ?? "";
+  const ranked = rankTokenQueryMatch({ name, symbol }, query);
+  if (ranked !== null) {
+    return ranked;
+  }
+  const address = (option.dataset["tokenAddress"] ?? "").toLowerCase();
+  return address.includes(query) ? ADDRESS_MATCH_RANK : null;
+};
+
 // Filters one group's options against its own field, ranked so the best match
 // leads, and says so when nothing matches rather than showing an empty group.
 const filterGroup = (search: HTMLInputElement): void => {
   const group = search.closest(".token-dropdown-group");
+  const list = group?.querySelector<HTMLElement>(".token-dropdown-options");
   const query = search.value.trim().toLowerCase();
+  const ranked = [...(list?.querySelectorAll<HTMLElement>("[data-token-option]") ?? [])].map(
+    (option, index) => ({
+      option,
+      order: Number(option.dataset["tokenOrder"] ?? index),
+      rank: matchRank(option, query),
+    }),
+  );
+  ranked.sort((left, right) => {
+    if (query.length === 0) {
+      return left.order - right.order;
+    }
+    const byRank = (left.rank ?? ADDRESS_MATCH_RANK + 1) - (right.rank ?? ADDRESS_MATCH_RANK + 1);
+    return byRank !== 0 ? byRank : left.order - right.order;
+  });
   let shown = 0;
-  for (const option of group?.querySelectorAll<HTMLElement>("[data-token-option]") ?? []) {
-    const symbol = option.dataset["tokenSymbol"] ?? "";
-    const matches =
-      query.length === 0 || rankTokenQueryMatch({ name: symbol, symbol }, query) !== null;
-    option.toggleAttribute("hidden", !matches);
+  for (const row of ranked) {
+    const matches = row.rank !== null;
+    row.option.toggleAttribute("hidden", !matches);
     if (matches) shown += 1;
+    list?.append(row.option);
   }
   group?.querySelector("[data-token-search-empty]")?.toggleAttribute("hidden", shown > 0);
 };
