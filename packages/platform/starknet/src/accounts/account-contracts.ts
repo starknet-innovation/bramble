@@ -3,6 +3,12 @@
 import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@bramble/core/json";
 import {
+  type AccountClassEntry,
+  type AccountFamily,
+  accountConstructorCalldata,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
+import {
   type AccountContractType,
   ARGENT_ACCOUNT_CLASS_HASH,
 } from "@bramble/wallet-model/accounts";
@@ -178,6 +184,54 @@ export const argentAccountAddress = (publicKey: string, salt = publicKey): strin
   );
 
 /**
+ * One address a signer public key could own under a particular deployment class.
+ */
+export type AccountAddressCandidate = {
+  readonly address: string;
+  readonly entry: AccountClassEntry;
+};
+
+/**
+ * The address a signer public key owns under one specific class, using that
+ * class's own constructor convention. The convention belongs to the class, not
+ * the family: pairing a correct class with another version's calldata yields a
+ * well-formed address that belongs to nobody.
+ *
+ * The salt defaults to the public key, which is what every wallet in the table
+ * uses for accounts it deploys counterfactually.
+ */
+export const familyAccountAddress = (
+  entry: AccountClassEntry,
+  publicKey: string,
+  salt: string = publicKey,
+): string =>
+  contractAddress(
+    salt,
+    entry.classHash,
+    accountConstructorCalldata(entry.constructorShape, publicKey),
+  );
+
+/**
+ * Every address one signer public key could own, one per class an account can
+ * be deployed with. Callers resolve which is real by asking the chain, because
+ * nothing local can distinguish them.
+ *
+ * The salt is the public key, which is what every wallet in this table used for
+ * the accounts it deploys counterfactually. An account deployed with any other
+ * salt — or with a constructor input the phrase does not contain, such as an
+ * Argent guardian — is not in this list and cannot be, since its address is not
+ * a function of the phrase. Those are found by supplying the address instead.
+ */
+export const accountAddressCandidates = (
+  publicKey: string,
+  family?: AccountFamily,
+): readonly AccountAddressCandidate[] =>
+  deploymentClasses(family).map((entry) => ({
+    address: familyAccountAddress(entry, publicKey),
+    entry,
+  }));
+
+/**
  * Computes a deterministic Argent Multisig 0.2 address.
  */
 export const argentMultisigAddress = (config: ArgentMultisigConfig, salt: string): string =>
@@ -207,12 +261,33 @@ export const serializeArgentAccountSignature = (signature: StarkSignature): read
 ];
 
 /**
+ * Refuses a family this wallet can find and display but not yet act for.
+ *
+ * Braavos accounts are imported and shown, but the authorization encoding a
+ * Braavos account expects has not been established, and guessing builds
+ * transactions the account rejects. Called both where a submission first
+ * checks its account and by {@link serializeAccountSignature}, which every
+ * signature — transaction, typed data, relayed — passes through, so no route
+ * can produce a Braavos signature even if it skips the earlier check.
+ */
+export const requireAuthorizableFamily = (accountContractType: string): void => {
+  if (accountContractType === "braavos") {
+    throw new WalletError(
+      "Braavos accounts can be viewed in this wallet, but it cannot yet authorize transactions for them",
+    );
+  }
+};
+
+/**
  * Serializes one signer result for the selected single-signer account contract.
+ * Throws for a family this wallet cannot yet authorize for (see
+ * {@link requireAuthorizableFamily}) rather than guessing its encoding.
  */
 export const serializeAccountSignature = (
   accountContractType: AccountContractType,
   signature: StarkSignature,
 ): readonly string[] => {
+  requireAuthorizableFamily(accountContractType);
   if (accountContractType === "argent") {
     return serializeArgentAccountSignature(signature);
   }

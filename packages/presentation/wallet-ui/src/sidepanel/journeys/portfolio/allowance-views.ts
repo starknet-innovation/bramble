@@ -7,6 +7,8 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
 import {
   type AllowanceView,
   isUnlimitedAllowance,
@@ -14,6 +16,7 @@ import {
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import {
   accountLabel,
@@ -24,20 +27,42 @@ import {
 } from "../../shared/parts";
 import { compactAmount } from "./token-row";
 
+// An allowance is stored in the token's base units — the second felt of the
+// approve call, exactly as it went on chain — and carries no decimals of its
+// own. The network-scoped token list is what turns it into an amount a person
+// can read: 1,000 USDC is 1,000,000,000 base units, and printing the latter
+// once shipped as a thousand-fold overstatement. Matched on the canonical felt,
+// so a zero-padded contract address still finds its token.
+const tokenFor = (
+  allowance: AllowanceView,
+  preferences: WalletPreferences | null,
+): TokenConfig | null =>
+  preferences?.tokens.find(
+    (token) => token.networkId === allowance.networkId && sameFelt(token.address, allowance.token),
+  ) ?? null;
+
+// A token the wallet does not track has no known scale. Its amount is shown in
+// raw base units and says so, rather than under a guessed decimal count that
+// would misstate it silently in either direction.
+const displayAmount = (amount: string, token: TokenConfig | null): string =>
+  token && /^\d+$/.test(amount)
+    ? `${compactAmount(formatTokenAmount(BigInt(amount), token.decimals))} ${token.symbol}`
+    : `${compactAmount(amount)} base units`;
+
 // A record the wallet can only bound from below (an increase applied on top of
 // a grant it never saw) is labelled as such rather than printed as if it were
 // the standing allowance — the understatement is the one direction that hides a
 // drainer. An unlimited lower bound is still unlimited, so that label wins, and
 // a bound of zero bounds nothing at all: the pair is approved for an amount
 // this wallet cannot state, which "at least 0" would read as harmless.
-const amountLabel = (allowance: AllowanceView): string =>
+const amountLabel = (allowance: AllowanceView, token: TokenConfig | null): string =>
   isUnlimitedAllowance(allowance.amount)
     ? "Unlimited"
     : !allowance.lowerBound
-      ? compactAmount(allowance.amount)
+      ? displayAmount(allowance.amount, token)
       : allowance.amount === "0"
         ? "an unknown amount"
-        : `at least ${compactAmount(allowance.amount)}`;
+        : `at least ${displayAmount(allowance.amount, token)}`;
 
 // A contract the wallet cannot call a token: an ERC721 `approve(to, item_id)`
 // is the same three felts as an ERC20 `approve(spender, amount)`, so the figure
@@ -62,11 +87,11 @@ const SOURCE_LABELS: Readonly<Record<AllowanceView["source"], string>> = {
 // multisig intent and threshold authorization, so offering the button here would be an
 // affordance that can only fail. An unconfirmed contract is withheld the
 // control for the opposite reason: the call would not fail, it would grant.
-const allowanceRow = (allowance: AllowanceView): string => `
+const allowanceRow = (allowance: AllowanceView, token: TokenConfig | null): string => `
   <li class="allowance-row">
     <div class="allowance-copy">
       <span class="allowance-spender"><code title="${escapeHtml(allowance.spender)}">${escapeHtml(accountLabel(allowance.spender))}</code>${inlineCopyButton(allowance.spender, "Copy spender address")}</span>
-      <p class="hint">${escapeHtml(amountLabel(allowance))} of <span title="${escapeHtml(allowance.token)}">${escapeHtml(accountLabel(allowance.token))}</span> · ${escapeHtml(SOURCE_LABELS[allowance.source])}</p>
+      <p class="hint"><span class="allowance-amount" title="${escapeHtml(allowance.token)}">${escapeHtml(amountLabel(allowance, token))}</span>${token ? "" : ` of <span title="${escapeHtml(allowance.token)}">${escapeHtml(accountLabel(allowance.token))}</span>`} · ${escapeHtml(SOURCE_LABELS[allowance.source])}${inlineCopyButton(allowance.token, "Copy token contract address")}</p>
       ${allowance.unconfirmedToken ? `<p class="hint">${escapeHtml(UNCONFIRMED_TOKEN_NOTE)}</p>` : ""}
       <p class="allowance-review" data-allowance-review-for="${escapeHtml(allowance.id)}" role="status" hidden></p>
     </div>
@@ -91,6 +116,7 @@ export const allowancesFlow = (
   status: WalletStatus,
   account: AccountRef | null,
   allowances: readonly AllowanceView[],
+  preferences: WalletPreferences | null,
 ): string => {
   // Defence in depth behind the background's own scoping: an entry must be on
   // the displayed network and either belong to the active account or be one the
@@ -121,7 +147,7 @@ export const allowancesFlow = (
               ? emptyState(
                   "No outstanding allowances found for this account. Approvals on tokens you don't track are not scanned.",
                 )
-              : `<ul class="allowance-list">${scoped.map(allowanceRow).join("")}</ul>`
+              : `<ul class="allowance-list">${scoped.map((allowance) => allowanceRow(allowance, tokenFor(allowance, preferences))).join("")}</ul>`
         }
         <p id="allowance-result" role="status"></p>
       </section>`,

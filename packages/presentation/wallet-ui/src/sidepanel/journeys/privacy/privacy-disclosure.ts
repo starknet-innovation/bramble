@@ -10,6 +10,7 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import { errorMessage, showToast } from "../../shared/dom";
 import type { SendIntent } from "../send/send-model";
 import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-model";
+import { privacyBlockerFor } from "./privacy-model";
 
 /**
  * Current render state and callbacks consumed by privacy bindings.
@@ -17,10 +18,13 @@ import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-mode
 export type PrivacyUiDeps = {
   readonly app: Element | null;
   readonly balances: () => readonly TokenBalance[];
+  readonly deployment?: () => boolean | null;
   readonly disclosure: () => PrivacyDisclosureState;
   readonly generation: () => number;
   readonly journey: () => PrivacyJourneyState;
   readonly navigate: (view: "activity" | "home" | "privacy" | "token-detail") => void;
+  /** Records that the active account's deployment has been observed on chain. */
+  readonly noteDeployed?: () => void;
   /** Opens Send pre-configured for a shield or unshield shortcut. */
   readonly openSend?: (intent: SendIntent) => void;
   readonly paint: () => void;
@@ -137,6 +141,7 @@ export const loadPrivacyDisclosure = (
         const message = errorMessage(error, "Private balances unavailable");
         deps.setDisclosure({
           error: message,
+          blockerKind: privacyBlockerFor(error).kind,
           loading: false,
           value: null,
         });

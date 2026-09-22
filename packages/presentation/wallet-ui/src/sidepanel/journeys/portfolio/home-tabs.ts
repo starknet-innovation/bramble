@@ -25,7 +25,11 @@ import type { BalanceState } from "../../runtime/runtime";
 import { icon } from "../../shared/icons";
 import { inlineCopyButton } from "../../shared/parts";
 import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
-import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import {
+  deploymentKnownFromPrivacy,
+  type PrivacyDisclosureState,
+  privacyIneligibleKind,
+} from "../privacy/privacy-model";
 import {
   type ActivityPricing,
   activityRowModel,
@@ -261,7 +265,13 @@ const tokensErrorPanel = (error: string): string => `
 const privateBreakdownFor = (
   privacy: PrivacyDisclosureState,
   tokenId: string,
+  deployment: boolean | null,
+  fundedForFees: boolean | null,
 ): PrivateBreakdown => {
+  if (privacyIneligibleKind(privacy)) return { kind: "unavailable" };
+  if (deploymentKnownFromPrivacy(deployment, privacy) === false) {
+    return { kind: fundedForFees === false ? "needs-funds" : "undeployed" };
+  }
   if (privacy.error) {
     return { kind: "unavailable" };
   }
@@ -289,6 +299,8 @@ const tokensPanel = (
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
   privacy: PrivacyDisclosureState,
+  deployment: boolean | null,
+  fundedForFees: boolean | null = true,
 ): string => {
   const visible = visibleHomeBalances(state, preferences);
   const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
@@ -302,7 +314,7 @@ const tokensPanel = (
         : `<ul class="token-list">${unified
             .map((token) =>
               unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
-                private: privateBreakdownFor(privacy, token.id),
+                private: privateBreakdownFor(privacy, token.id, deployment, fundedForFees),
                 publicFormatted: publicById.get(token.id)?.formatted ?? "0",
               }),
             )
@@ -353,6 +365,8 @@ export const homeTabs = (
     loading: false,
     value: null,
   },
+  deployment: boolean | null = null,
+  fundedForFees: boolean | null = true,
 ): string => `
   <section class="home-tabs" aria-label="Portfolio">
     <div class="tab-bar">
@@ -402,5 +416,5 @@ export const homeTabs = (
         </div>
       </div>
     </div>
-    ${tokensPanel(state, preferences, prices, changes, currency, privacy)}
+    ${tokensPanel(state, preferences, prices, changes, currency, privacy, deployment, fundedForFees)}
   </section>`;

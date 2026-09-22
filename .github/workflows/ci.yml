@@ -23,6 +23,12 @@ name: CI
 # pr-guards + fast-checks; they do not pay for the heavy pipeline.
 on:
   pull_request:
+    # `edited` is listed so the guards below re-evaluate when a PR's BASE
+    # changes. Without it a retarget keeps reporting against the old base:
+    # a PR moved off an integrated release branch stayed red until it was
+    # closed and reopened. Naming any type replaces the default set, so the
+    # other three are spelled out rather than inherited.
+    types: [opened, synchronize, reopened, edited]
     branches: [main, "release/**"]
   push:
     branches: [main]
@@ -196,6 +202,11 @@ jobs:
   # aggregate `bun run check` is intentionally NOT used here because it chains
   # check:argent/check:privacy, which require the vendored artifacts.)
   fast-checks:
+    # `edited` also fires for title and body edits, and this job checks the head
+    # commit, which no edit of any kind changes. Skipping it keeps a typo fix in
+    # a description from re-running the whole suite. `github.event.action` is
+    # absent on push, so that path is unaffected.
+    if: github.event.action != 'edited'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -269,6 +280,11 @@ jobs:
       - run: bun run build
       - run: bun run test:e2e
       - run: bun run package:extension
+      - run: bun run package:extension:firefox
+      # Mozilla's own validator, the one addons.mozilla.org runs at submission.
+      # Fails on AMO errors; the manifest's warning-class regressions are held
+      # by tests/scripts/firefox-manifest.test.ts, which runs in `check` above.
+      - run: bun run check:firefox
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bramble-extension

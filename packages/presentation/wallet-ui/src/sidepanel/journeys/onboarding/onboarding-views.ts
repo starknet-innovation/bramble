@@ -13,6 +13,10 @@ import {
   textareaField,
   textField,
 } from "@bramble/ui-kit/fields";
+import {
+  MIN_VAULT_PASSPHRASE_LENGTH,
+  RECOMMENDED_VAULT_PASSPHRASE_LENGTH,
+} from "@bramble/wallet-model/passphrase";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -100,6 +104,22 @@ const backupVerifyInputs = (): string =>
     }),
   ).join("");
 
+/**
+ * Acknowledgement shown only when the typed passphrase clears the length floor
+ * but the meter still bands it weak. Rendered hidden; the binder reveals it and
+ * folds it into the submit gate, so a weak passphrase is never refused and
+ * never accepted without the user saying so.
+ */
+const weakPassphraseAcknowledgement = (prefix: "" | "ledger"): string =>
+  checkboxField({
+    containerAttributes: {
+      hidden: true,
+      id: prefix === "ledger" ? "ledger-weak-passphrase-ack" : "weak-passphrase-ack",
+    },
+    name: prefix === "ledger" ? "ledgerWeakPassphraseAck" : "weakPassphraseAck",
+    text: "This passphrase is weak. I understand it is all that protects this wallet on this device.",
+  });
+
 const passwordFields = (prefix: "" | "ledger" = ""): string => {
   const passphraseName = prefix === "ledger" ? "ledgerVaultPassphrase" : "vaultPassphrase";
   const confirmationName =
@@ -107,18 +127,18 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
   return `
   ${textField({
     autocomplete: "new-password",
-    hint: "Use at least 12 characters. This unlocks the encrypted vault on this device.",
+    hint: `Use at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters; ${RECOMMENDED_VAULT_PASSPHRASE_LENGTH} or more is safer. This unlocks the encrypted vault on this device.`,
     label: "Vault passphrase",
-    minlength: 12,
+    minlength: MIN_VAULT_PASSPHRASE_LENGTH,
     name: passphraseName,
-    placeholder: "At least 12 characters",
+    placeholder: `At least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
     required: true,
     type: "password",
   })}
   ${textField({
     autocomplete: "new-password",
     label: "Confirm passphrase",
-    minlength: 12,
+    minlength: MIN_VAULT_PASSPHRASE_LENGTH,
     name: confirmationName,
     placeholder: "Enter it again",
     required: true,
@@ -126,8 +146,9 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
   })}
   <div class="password-requirement" aria-live="polite">
     <span class="password-requirement-bar"><span></span></span>
-    <span data-password-result>Enter at least 12 characters</span>
-  </div>`;
+    <span data-password-result>Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters</span>
+  </div>
+  ${weakPassphraseAcknowledgement(prefix)}`;
 };
 
 const welcomeStep = (ready: boolean): string => `
@@ -329,6 +350,12 @@ export const recoveryScanFields = (restoreLabel: string): string => `
           <ul class="allowance-list" aria-label="Recovered Ready accounts"></ul>
         </div>
       </details>
+      <details class="disclosure account-group" data-recovery-group="braavos">
+        <summary>Braavos accounts<span data-detected></span></summary>
+        <div class="disclosure-body">
+          <ul class="allowance-list" aria-label="Recovered Braavos accounts"></ul>
+        </div>
+      </details>
       <details class="disclosure">
         <summary>Advanced manual index</summary>
         <div class="disclosure-body onboarding-fields">
@@ -346,7 +373,7 @@ export const recoveryScanFields = (restoreLabel: string): string => `
 const recoveryAccountsStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
     ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for both Bramble and Ready accounts. Accounts with on-chain activity are selected automatically.")}
+    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for Bramble, Ready, and Braavos accounts. Accounts with on-chain activity are selected automatically.")}
     <div class="onboarding-fields">
 ${recoveryScanFields("restore the selected accounts")}
     </div>

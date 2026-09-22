@@ -3,6 +3,7 @@
  * becomes render state.
  */
 import { describe, expect, test } from "bun:test";
+import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
 import { createPrivacyRuntimeClient } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 
 const digest = `sha256:${"a".repeat(64)}`;
@@ -38,6 +39,33 @@ const registration = {
 };
 
 describe("privacy runtime client", () => {
+  test("preserves typed blockers through both immediate and polled refusals", async () => {
+    for (const polled of [false, true]) {
+      let calls = 0;
+      const client = createPrivacyRuntimeClient(
+        async () => {
+          calls += 1;
+          if (polled && calls === 1)
+            return {
+              ok: true,
+              strk20Job: { id: "strk20job-1a2b3c-7", state: "running", elapsedMs: 0 },
+            };
+          return { error: "Reworded deployment prerequisite", privacyBlocker: "deploy" };
+        },
+        { pause: async () => undefined },
+      );
+      await expect(client.preparePrivacyRegistration()).rejects.toMatchObject({
+        kind: "deploy",
+        message: "Reworded deployment prerequisite",
+      });
+      expect(calls).toBe(polled ? 2 : 1);
+    }
+    const client = createPrivacyRuntimeClient(async () => ({
+      error: "No pool",
+      privacyBlocker: "network",
+    }));
+    await expect(client.loadPrivacyState()).rejects.toBeInstanceOf(PrivacyBlockerError);
+  });
   test("sends the four privileged request shapes and accepts validated responses", async () => {
     const seen: unknown[] = [];
     const client = createPrivacyRuntimeClient(async (message) => {

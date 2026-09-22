@@ -391,16 +391,20 @@ export const startWalletUi = async (
   };
   privacy = createPrivacyController({
     app,
+    deployment: () => cache.deployment,
     balances: () => cache.balances,
     navigate: (view) => navigate(view),
     openSend: (intent) => {
       sendIntent = intent;
       selectedTokenId = intent.tokenId;
-      // Send's Back returns to where the entry was pressed, not to its wait screen.
       if (activeView === "privacy")
         ({ history: viewHistory, view: activeView } = popView(viewHistory));
       navigate("send");
     },
+    noteDeployed: () =>
+      cache.status.activeAccountId
+        ? deployment.noteDeployed(cache.status.networkId, cache.status.activeAccountId)
+        : undefined,
     paint,
     preferences: () => cache.preferences,
     status: () => cache.status,
@@ -489,7 +493,6 @@ export const startWalletUi = async (
     paint();
     void wallet.loadStatus().then(render);
   };
-
   applyTheme();
   startRefreshLifecycle({ mutationRuntime, render, runtime, wallet });
   void render(await wallet.loadStatus());

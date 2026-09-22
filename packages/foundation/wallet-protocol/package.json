@@ -18,6 +18,7 @@
     "./results": "./src/provider/results.ts",
     "./rpc-errors": "./src/provider/rpc-errors.ts",
     "./runtime-message": "./src/provider/runtime-message.ts",
+    "./privacy-blocker": "./src/privacy/privacy-blocker.ts",
     "./strk20": "./src/privacy/strk20.ts",
     "./strk20-bridge": "./src/privacy/strk20-bridge.ts",
     "./watch-asset": "./src/transactions/watch-asset.ts",

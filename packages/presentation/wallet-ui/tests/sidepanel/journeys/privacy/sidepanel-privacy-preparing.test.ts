@@ -13,6 +13,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account, preferences } from "@bramble/testkit/sidepanel";
+import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import type {
   PrivacyDisclosureState,
@@ -291,7 +292,7 @@ describe("the preparing screen", () => {
     await flush();
     app.querySelector<HTMLButtonElement>("#privacy-cancel")?.dispatchEvent(new Event("click"));
 
-    registration.reject(new Error("Not enough STRK for the pool fee"));
+    registration.reject(new PrivacyBlockerError("fund", "Not enough STRK for the pool fee"));
     await flush();
 
     expect(journey()).toEqual({ stage: "idle" });
@@ -305,7 +306,7 @@ describe("the preparing screen", () => {
     press(app);
     await flush();
 
-    registration.reject(new Error("Not enough STRK for the pool fee"));
+    registration.reject(new PrivacyBlockerError("fund", "Not enough STRK for the pool fee"));
     await flush();
 
     const current = journey();

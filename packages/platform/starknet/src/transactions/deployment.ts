@@ -6,7 +6,6 @@
 import { WalletError } from "@bramble/core/errors";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
-  canonicalFelt,
   isNonZeroStarkFieldElement,
   STARKNET_NETWORKS,
   sameFelt,
@@ -17,6 +16,7 @@ import {
   ARGENT_MULTISIG_CONTRACT,
   argentAccountConstructorCalldata,
   argentMultisigConstructorCalldata,
+  requireAuthorizableFamily,
 } from "../accounts/account-contracts";
 import {
   authorizedSpendFor,
@@ -38,6 +38,13 @@ import {
   withRpcFallback,
   withRpcWrite,
 } from "../rpc/provider";
+import {
+  acceptedBlockIdentifier,
+  requireAuthorizableArgentClass,
+  requireCompatibleArgentSigner,
+} from "./account-compatibility";
+
+export { requireLiveAuthorizableClass } from "./account-compatibility";
 
 /**
  * DEPLOY_ACCOUNT parameters for a counterfactual wallet account.
@@ -75,13 +82,15 @@ const signerOptions = (account: DeployableAccount): AccountSignerOptions =>
       }
     : {};
 
-/**
- * Reconstructs pinned DEPLOY_ACCOUNT inputs only when they reproduce the stored address.
- * Throws on invalid class/configuration or an address-commitment mismatch.
- */
-export const accountDeployment = (account: DeployableAccount): AccountDeployment => {
-  let constructorCalldata: readonly string[];
-  let addressSalts: readonly string[];
+// The constructor arguments and candidate salts one family deploys with. Split
+// from accountDeployment so each family's rule reads on its own, and so a family
+// this wallet never deploys fails here rather than reaching the address check.
+const deploymentInputs = (
+  account: DeployableAccount,
+): {
+  readonly addressSalts: readonly string[];
+  readonly constructorCalldata: readonly string[];
+} => {
   if (account.accountContractType === "argent-multisig") {
     if (!sameFelt(account.classHash, ARGENT_MULTISIG_CONTRACT.classHash)) {
       throw new WalletError("Argent multisig class hash does not match the pinned release");
@@ -90,21 +99,43 @@ export const accountDeployment = (account: DeployableAccount): AccountDeployment
     if (!deployment) {
       throw new WalletError("Imported Argent multisig has no counterfactual deployment parameters");
     }
-    constructorCalldata = argentMultisigConstructorCalldata({
-      signerPublicKeys: deployment.signerPublicKeys,
-      threshold: deployment.threshold,
-    });
-    addressSalts = [deployment.salt];
-  } else if (account.accountContractType === "argent") {
+    return {
+      addressSalts: [deployment.salt],
+      constructorCalldata: argentMultisigConstructorCalldata({
+        signerPublicKeys: deployment.signerPublicKeys,
+        threshold: deployment.threshold,
+      }),
+    };
+  }
+  if (account.accountContractType === "argent") {
     if (!sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)) {
       throw new WalletError("Argent account class hash does not match the pinned release");
     }
-    constructorCalldata = argentAccountConstructorCalldata(account.publicKeyX);
-    addressSalts = [account.deploymentSalt];
-  } else {
-    constructorCalldata = CallData.compile([account.publicKeyX]);
-    addressSalts = ["0x0", account.publicKeyX];
+    return {
+      addressSalts: [account.deploymentSalt],
+      constructorCalldata: argentAccountConstructorCalldata(account.publicKeyX),
+    };
   }
+  if (account.accountContractType === "openzeppelin") {
+    return {
+      addressSalts: ["0x0", account.publicKeyX],
+      constructorCalldata: CallData.compile([account.publicKeyX]),
+    };
+  }
+  // This wallet imports Braavos accounts; it never creates one. Falling through
+  // to the OpenZeppelin rule would be worse than an error: Braavos also deploys
+  // with the public key as salt and sole constructor argument, so the address
+  // check would pass and a Braavos account would be deployed at a class whose
+  // authorization this wallet does not produce.
+  throw new WalletError("This wallet does not deploy Braavos accounts");
+};
+
+/**
+ * Reconstructs pinned DEPLOY_ACCOUNT inputs only when they reproduce the stored address.
+ * Throws on invalid class/configuration or an address-commitment mismatch.
+ */
+export const accountDeployment = (account: DeployableAccount): AccountDeployment => {
+  const { addressSalts, constructorCalldata } = deploymentInputs(account);
   for (const addressSalt of addressSalts) {
     const computed = hash.calculateContractAddressFromHash(
       addressSalt,
@@ -143,57 +174,20 @@ export const isAccountDeployed = async (
   }
 };
 
-const requireCompatibleArgentSigner = async (
-  provider: RpcProvider,
-  account: Extract<DeployableAccount, { readonly accountContractType: "argent" }>,
-  blockIdentifier: string,
-): Promise<void> => {
-  const readSignerState = (entrypoint: "get_guardian" | "get_owner" | "get_owner_type") =>
-    provider.callContract(
-      { calldata: [], contractAddress: account.address, entrypoint },
-      blockIdentifier,
-    );
-  const [owner, ownerType] = await Promise.all([
-    readSignerState("get_owner"),
-    readSignerState("get_owner_type"),
-  ]);
-  const [ownerPublicKey] = owner;
-  if (
-    owner.length !== 1 ||
-    typeof ownerPublicKey !== "string" ||
-    !isNonZeroStarkFieldElement(ownerPublicKey) ||
-    !sameFelt(ownerPublicKey, account.publicKeyX)
-  ) {
-    throw new WalletError("Deployed Argent account owner does not match the wallet signer");
-  }
-  if (ownerType.length !== 1 || !sameFelt(ownerType[0], "0x0")) {
-    throw new WalletError("Deployed Argent account owner type is not supported by this wallet");
-  }
-
-  const guardian = await readSignerState("get_guardian");
-  if (guardian.length !== 1 || !sameFelt(guardian[0], "0x0")) {
-    throw new WalletError("Deployed Argent account guardian is not supported by this wallet");
-  }
-};
-
 /**
  * Verifies pinned Argent class and supported signer state at one accepted block.
  * Rejects malformed/incompatible state before signing or broadcast; OZ is existence-only.
+ * A family this wallet cannot authorize for is refused before any RPC, so it is
+ * never reported as merely undeployed.
  */
 export const isCompatibleAccountDeployed = async (
   provider: RpcProvider,
   account: DeployableAccount,
 ): Promise<boolean> => {
+  requireAuthorizableFamily(account.accountContractType);
   let classHash: string;
-  let blockIdentifier = "latest";
-  if (account.accountContractType === "argent") {
-    const latest = await provider.getBlockLatestAccepted();
-    const blockHash = canonicalFelt(latest.block_hash);
-    if (blockHash === null || !isNonZeroStarkFieldElement(blockHash)) {
-      throw new WalletError("RPC returned an invalid accepted Starknet block hash");
-    }
-    blockIdentifier = blockHash;
-  }
+  const blockIdentifier =
+    account.accountContractType === "argent" ? await acceptedBlockIdentifier(provider) : "latest";
   try {
     classHash = await provider.getClassHashAt(account.address, blockIdentifier);
   } catch (error) {
@@ -211,12 +205,16 @@ export const isCompatibleAccountDeployed = async (
   if (!isNonZeroStarkFieldElement(classHash)) {
     throw new WalletError("RPC returned an invalid Argent account class hash");
   }
-  if (!sameFelt(classHash, account.classHash)) {
-    throw new WalletError("Deployed Argent account class does not match the pinned release");
+  if (account.accountContractType === "argent-multisig") {
+    // A multisig's configuration is bound to its exact class, so equality is
+    // the right test there and stays as it was.
+    if (!sameFelt(classHash, account.classHash)) {
+      throw new WalletError("Deployed Argent multisig class does not match the pinned release");
+    }
+    return true;
   }
-  if (account.accountContractType === "argent") {
-    await requireCompatibleArgentSigner(provider, account, blockIdentifier);
-  }
+  requireAuthorizableArgentClass(classHash);
+  await requireCompatibleArgentSigner(provider, account, blockIdentifier);
   return true;
 };
 

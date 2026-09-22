@@ -1,10 +1,10 @@
 /**
  * Pure templates for the Ledger onboarding subflow: the add-account chooser
- * (HD / import / Connect Ledger), the connect and reading device states, the
- * onboarding error state, and the multi-index account picker showing each
- * candidate's address, on-chain deployed status, and balance. Logic-free string
- * builders; all dynamic text is escaped and all bindings live in the onboarding
- * UI binder.
+ * (HD / import / Connect Ledger / Restore a Ready Ledger account), the connect
+ * and reading device states, the onboarding error state, and the multi-index
+ * account picker showing each candidate's address, on-chain deployed status,
+ * and balance. Logic-free string builders; all dynamic text is escaped and all
+ * bindings live in the onboarding UI binder.
  *
  * The chooser and the connect/reading/error states share one vertically-centred
  * overlay shell (`onboard-hero`) so they read as deliberate, evenly-spaced
@@ -16,6 +16,11 @@ import { escapeHtml } from "@bramble/core/html";
 import { emptyState, pill } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
+import {
+  LEDGER_EIP2645_APPLICATION,
+  type LedgerEip2645Application,
+  READY_EIP2645_APPLICATION,
+} from "@bramble/wallet-model/ledger-path";
 import { icon } from "../../shared/icons";
 import { accountLabel, accountsDetectedText } from "../../shared/parts";
 import type { LedgerOnboardAddKind } from "./onboard-session";
@@ -81,6 +86,7 @@ export const addAccountChooser = (): string => {
     <div class="add-account-chooser" role="group" aria-label="Add an account">
       ${chooserOption("regular", "wallet", "Regular account", "Create the next account from this wallet’s recovery phrase.")}
       ${chooserOption("ledger", "shield", "Ledger account", "Connect a Ledger and pick its accounts, new or existing.")}
+      ${chooserOption("restore-ready-ledger", "shield", "Restore a Ready Ledger account", "Bring over a Ledger account created in Ready (Argent X). Reads your device at Ready’s derivation path.")}
       ${chooserOption("multisig", "users", "Multisig account", "Create or add a shared account controlled by multiple signers.")}
       ${chooserOption("import", "link", "Import an existing account", "Bring accounts you already own: a recovery phrase or a private key.")}
     </div>
@@ -173,6 +179,39 @@ export const ledgerDevicePicker = (devices: readonly LedgerDeviceChoice[]): stri
   );
 
 /**
+ * Shown instead of starting a Ledger flow when the wallet is running in the
+ * toolbar popup. Connecting a Ledger opens a focused browser tab, which closes
+ * the popup and strands the flow, so the overlay explains that and offers the
+ * one action that fixes it rather than letting the user start something that
+ * cannot complete.
+ */
+export const ledgerSurfaceNotice = (): string =>
+  onboardHero(
+    icon("lock"),
+    `<h1>Ledger needs the side panel</h1>
+      <p class="hint">Connecting a Ledger opens a browser tab to reach the device, and that closes this popup before the connection finishes. The side panel stays open, so Ledger works there.</p>`,
+    `${button({
+      attributes: { "data-ledger-surface-switch": true },
+      icon: "link",
+      label: "Switch to the side panel",
+    })}
+      ${ledgerOnboardCancel()}`,
+  );
+
+/**
+ * Confirms the surface switch. The popup cannot raise the side panel itself —
+ * that needs a toolbar gesture — so this says what to do next rather than
+ * leaving the user on a dead end.
+ */
+export const ledgerSurfaceSwitched = (): string =>
+  onboardHero(
+    icon("check"),
+    `<h1>Switched to the side panel</h1>
+      <p class="hint">Click the Bramble icon in your browser toolbar to reopen the wallet in the side panel, then connect your Ledger there.</p>`,
+    ledgerOnboardCancel(),
+  );
+
+/**
  * A device error during onboarding, with the catalog message and a retry,
  * centred in the overlay shell.
  */
@@ -232,9 +271,20 @@ const candidateRow = (candidate: LedgerCandidate, selected: readonly string[]): 
   </li>`;
 };
 
-// One contract-family group: a native disclosure whose summary carries the
-// family name and a light detected-count. The runtime preserves each group's
-// open/closed state across repaints and opens a group when activity appears.
+const candidateRows = (
+  candidates: readonly LedgerCandidate[],
+  selected: readonly string[],
+): string =>
+  candidates.length === 0
+    ? emptyState("No accounts read from the device yet.")
+    : `<ul class="allowance-list">${candidates.map((candidate) => candidateRow(candidate, selected)).join("")}</ul>`;
+
+// One contract-family group under Bramble's path scheme: a native disclosure
+// whose summary carries the family name and a light detected-count. The runtime
+// preserves each group's open/closed state across repaints and opens a group
+// when activity appears. The Argent group holds accounts an earlier Bramble
+// release created with the Argent contract at Bramble's own path — never a
+// Ready account, which lives at a different path (see the restore route).
 const candidateGroup = (
   contractType: "argent" | "openzeppelin",
   candidates: readonly LedgerCandidate[],
@@ -244,17 +294,44 @@ const candidateGroup = (
     (candidate) => candidate.account.accountContractType === contractType,
   );
   const detected = rows.filter(ledgerCandidateActive).length;
-  const label = contractType === "argent" ? "Ready accounts" : "Bramble accounts";
-  const body =
-    rows.length === 0
-      ? emptyState("No accounts read from the device yet.")
-      : `<ul class="allowance-list">${rows.map((candidate) => candidateRow(candidate, selected)).join("")}</ul>`;
+  const label = contractType === "argent" ? "Argent accounts" : "Bramble accounts";
   return `
   <details class="disclosure account-group" data-account-group="${contractType}">
     <summary>${label}${detected === 0 ? "" : `<span class="hint">${accountsDetectedText(detected)}</span>`}</summary>
-    <div class="disclosure-body">${body}</div>
+    <div class="disclosure-body">${candidateRows(rows, selected)}</div>
   </details>`;
 };
+
+// The Ready-restore picker is one flat list — every candidate was read at
+// Ready's path and derived to the Argent contract Ready deploys — with the
+// detected count inline. Not a disclosure (no `data-account-group`), so the
+// runtime's open/closed bookkeeping leaves it alone. Ready numbers a new Ledger
+// account after every account already in that wallet, so a restored account
+// often sits past the first page.
+const readyCandidates = (
+  candidates: readonly LedgerCandidate[],
+  selected: readonly string[],
+): string => {
+  const detected = candidates.filter(ledgerCandidateActive).length;
+  return `
+  <div class="account-group" data-ready-accounts>
+    <p class="hint">Ready accounts${detected === 0 ? "" : ` · ${accountsDetectedText(detected)}`}</p>
+    ${candidateRows(candidates, selected)}
+  </div>`;
+};
+
+const pickerCopy = (
+  application: LedgerEip2645Application,
+): { readonly heading: string; readonly lede: string } =>
+  application === READY_EIP2645_APPLICATION
+    ? {
+        heading: "Select Ready accounts",
+        lede: "Each address is read from your device at Ready’s derivation path; Ready accounts with on-chain activity are preselected. Ready numbers Ledger accounts after the accounts already in that wallet, so yours may be a few pages in — use Show more.",
+      }
+    : {
+        heading: "Select accounts",
+        lede: "Each address is read from your device; accounts with on-chain activity are preselected.",
+      };
 
 /**
  * The multi-select account picker: one row per enumerated candidate with its
@@ -263,21 +340,28 @@ const candidateGroup = (
  * of indices from the device; "Add selected" adds every checked index at once
  * and reflects a running selected-count. Callers stream candidates in as they
  * resolve. A Cancel control is always rendered so the picker stage can be
- * dismissed without adding anything.
+ * dismissed without adding anything. `application` is the path scheme the
+ * candidates were read at: Bramble's groups them by contract family, Ready's
+ * shows the single flat list of Ready accounts.
  */
 export const ledgerAccountPicker = (
   candidates: readonly LedgerCandidate[],
   selected: readonly string[] = [],
   message?: string,
+  application: LedgerEip2645Application = LEDGER_EIP2645_APPLICATION,
 ): string => {
-  const list = `${candidateGroup("openzeppelin", candidates, selected)}${candidateGroup("argent", candidates, selected)}`;
+  const list =
+    application === READY_EIP2645_APPLICATION
+      ? readyCandidates(candidates, selected)
+      : `${candidateGroup("openzeppelin", candidates, selected)}${candidateGroup("argent", candidates, selected)}`;
+  const copy = pickerCopy(application);
   const count = selected.length;
   const addLabel = count > 0 ? `Add selected (${count})` : "Add selected";
   return `
   <div class="onboard-picker">
     <div class="gate-head">
-      <h1>Select accounts</h1>
-      <p class="lede">Each address is read from your device; accounts with on-chain activity are preselected.</p>
+      <h1>${copy.heading}</h1>
+      <p class="lede">${copy.lede}</p>
     </div>
     ${message ? `<p class="review-flag" role="alert">${escapeHtml(message)}</p>` : ""}
     ${list}

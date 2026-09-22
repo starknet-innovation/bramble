@@ -5,8 +5,8 @@
  * address), and the capturing controller-deps factory. Test-only.
  */
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
-import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
-import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountIndexOfPath, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type {
   LedgerOnboardControllerDeps,
   LedgerOnboardView,
@@ -21,13 +21,15 @@ const version = (major: number) => ({
   returnCode: 0x9000,
 });
 
-// A device whose pubkey per index is deterministic (0x1, 0x2, …), so the test
-// can assert the enumerated entries and that paths track their index.
+// A device whose pubkey per index is deterministic (0x1, 0x2, …) under either
+// path scheme, so the test can assert the enumerated entries and that paths
+// track their index. A path neither scheme built reads as index 0 — the shared
+// parser is the same one production validates with.
 export const enumerateClient = (appMajor: number): LedgerDeviceClient => ({
   getOsVersion: () => Promise.resolve({ targetId: 0x33000004, version: "2.7.1" }),
   getAppVersion: () => Promise.resolve(version(appMajor)),
   getPubKey: (path: string) => {
-    const index = Number(path.split("/").at(-1)?.replace(/'.*$/, "") ?? "0");
+    const index = ledgerAccountIndexOfPath(path) ?? 0;
     return Promise.resolve({
       errorMessage: "No errors",
       publicKey: new Uint8Array([...new Array(31).fill(0), index + 1, ...new Array(32).fill(0)]),
@@ -39,13 +41,15 @@ export const enumerateClient = (appMajor: number): LedgerDeviceClient => ({
 
 export const candidateAccount = (
   index: number,
-  accountContractType: "argent" | "openzeppelin" = "openzeppelin",
+  accountContractType: AccountContractType = "openzeppelin",
 ): LedgerAccountRef => {
   const address = `0x${accountContractType === "argent" ? "e" : ""}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`;
   return {
+    // A device account is never Braavos; anything not Argent is this wallet's
+    // own OpenZeppelin account, which carries no deployment salt.
     ...(accountContractType === "argent"
       ? ({ accountContractType, deploymentSalt: "0x1" } as const)
-      : ({ accountContractType } as const)),
+      : ({ accountContractType: "openzeppelin" } as const)),
     address,
     classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     derivation: {

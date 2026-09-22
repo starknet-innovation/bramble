@@ -1,6 +1,7 @@
 /** Argent multisig management screens expose guided, bounded account controls. */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { multisigAccountOptions } from "../../../../src/sidepanel/journeys/multisig/multisig-account-options";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import {
@@ -73,6 +74,46 @@ describe("Argent multisig management views", () => {
     });
     expect(saved).toContain('data-deployment-stage="approval"');
     expect(saved).toContain('data-stage="approval" data-state="active" aria-current="step"');
+  });
+
+  test("does not offer a view-only Braavos account as a funding source", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const fundable = fixture.status.accounts[0];
+    if (!fundable) throw new Error("fixture account missing");
+    const braavos: AccountRef = {
+      ...fundable,
+      accountContractType: "braavos",
+      address: "0xabc",
+      deploymentSalt: fundable.publicKeyX,
+      id: "SN_MAIN:0xabc",
+    };
+    const preferences = defaultWalletPreferences();
+    const withBoth = multisigDeployFlow(
+      { ...fixture.status, accounts: [braavos, fundable] },
+      braavos,
+      true,
+      preferences,
+    );
+    const funding = withBoth.slice(
+      withBoth.indexOf('name="fundingAccountId"'),
+      withBoth.indexOf("data-multisig-fund-local"),
+    );
+    expect(funding).toContain(`value="${fundable.id}"`);
+    expect(funding).not.toContain(braavos.id);
+    expect(funding).toContain("selected");
+
+    const onlyBraavos = multisigDeployFlow(
+      { ...fixture.status, accounts: [braavos] },
+      braavos,
+      true,
+      preferences,
+    );
+    const emptyFunding = onlyBraavos.slice(
+      onlyBraavos.indexOf('name="fundingAccountId"'),
+      onlyBraavos.indexOf("data-multisig-fund-local"),
+    );
+    expect(emptyFunding).not.toContain(braavos.id);
+    expect(onlyBraavos).toContain('data-multisig-fund-local type="button" disabled');
   });
 
   test("renders setup, live authority, receive, import, and account-picker states", async () => {

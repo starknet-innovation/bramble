@@ -15,14 +15,19 @@ export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/testkit": "workspace:*",
-  "@biomejs/biome": "2.5.11",
-  "@playwright/test": "1.62.1",
-  "@types/bun": "1.4.0",
-  "@types/node": "26.4.0",
-  "fast-check": "4.9.0",
-  knip: "6.32.3",
+  "@biomejs/biome": "2.5.13",
+  "@playwright/test": "1.63.0",
+  "@types/bun": "1.4.2",
+  "@types/node": "26.5.1",
+  "fast-check": "4.10.0",
+  knip: "6.35.1",
   madge: "8.0.0",
   typescript: "6.0.3",
+  // Mozilla's own add-on tooling. `web-ext lint` wraps the exact validator
+  // addons.mozilla.org runs at submission, so the Gecko artifact is judged by
+  // the same rules before a human uploads it; the same tool later signs and
+  // submits. Pinned exact and never shipped — it is a build-time gate only.
+  "web-ext": "10.7.0",
 };
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
@@ -42,8 +47,8 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/wallet-ui": "workspace:*",
   "@bramble/wallet-model": "workspace:*",
   "@bramble/wallet-protocol": "workspace:*",
-  "@starknetfoundation/krusty-kms-wasm": "0.10.0",
-  starknet: "10.0.2",
+  "@starknetfoundation/krusty-kms-wasm": "0.11.0",
+  starknet: "10.8.0",
 };
 
 export const PINNED_RUNTIME_FILES = [
@@ -126,6 +131,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:cycles": "madge --circular --extensions ts apps/extension/src packages",
   "check:deadcode": "knip",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
+  "check:firefox": "web-ext lint --source-dir dist-firefox",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
   "check:imports": "bun run scripts/check-workspace-architecture.ts",

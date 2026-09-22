@@ -10,11 +10,24 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
+
+/**
+ * Whether the loaded public balances can pay a deployment fee.
+ * `null` means the balance read has not succeeded, which is not the same as
+ * a successful read that found no STRK.
+ */
+export const strkAvailableForFees = (balances: BalanceState): boolean | null =>
+  "balances" in balances
+    ? balances.balances.some(
+        (token) => sameFelt(token.address, STRK_TOKEN_ADDRESS) && BigInt(token.balance) > 0n,
+      )
+    : null;
+
 import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { dockScreen, noAccountEmpty } from "../../shared/parts";
 import { actionTile, deployNotice, pendingCallout, shieldTile } from "../../shell/wallet-shell";
-import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import { deploymentKnownFromPrivacy, type PrivacyDisclosureState } from "../privacy/privacy-model";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
 
 const heroDelta = (
@@ -53,11 +66,7 @@ export const homeScreen = (
   const shieldedIncluded = visiblePrivateHomeBalances(privacy, preferences).some(
     (token) => BigInt(token.balance) > 0n,
   );
-  // Fees are paid in STRK, and only a public balance can pay them: an
-  // undeployed account cannot have shielded anything anyway.
-  const fundedForFees = ("balances" in balances ? balances.balances : []).some(
-    (token) => sameFelt(token.address, STRK_TOKEN_ADDRESS) && BigInt(token.balance) > 0n,
-  );
+  const fundedForFees = strkAvailableForFees(balances);
   // STRK by choice: it is seeded on every network, so the tile has something to
   // name unless the user untracked it, and Send's asset picker stays enabled for
   // anything else. `privateReady` is the same gate
@@ -93,9 +102,14 @@ export const homeScreen = (
         ${actionTile("send", "Send", "send", account !== null)}
         ${actionTile("swap", "Swap", "shuffle", account !== null)}
         ${actionTile("receive", "Receive", "qrCode", account !== null)}
-        ${shieldTile(strkTokenId, privateReady)}
+        ${shieldTile(
+          strkTokenId,
+          privateReady,
+          deploymentKnownFromPrivacy(deployment, privacy),
+          fundedForFees,
+        )}
       </div>
     </section>
-    ${homeTabs(balances, preferences, prices, changes, currency, privacy)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, privacy, deployment, fundedForFees)}`,
   );
 };

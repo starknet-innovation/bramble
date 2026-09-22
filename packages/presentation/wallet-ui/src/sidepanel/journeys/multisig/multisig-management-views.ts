@@ -13,6 +13,7 @@ import { icon } from "../../shared/icons";
 import {
   accountAvatar,
   accountDisplayName,
+  accountFamilyName,
   accountLabel,
   flowHeader,
   flowScreen,
@@ -61,7 +62,7 @@ const signerIdentities = (
   publicKeys.map((publicKey) => {
     const account = status.accounts.find((candidate) => sameFelt(candidate.publicKeyX, publicKey));
     if (account) {
-      const contract = account.accountContractType === "argent" ? "Ready" : "Bramble";
+      const contract = accountFamilyName(account.accountContractType);
       return {
         address: account.address,
         detail: `${contract}${account.derivation.kind === "ledger" ? " · Ledger" : ""} · Key ${accountLabel(publicKey)}`,
@@ -100,7 +101,7 @@ const availableSignerParticipants = (
     )
     .map((account) => ({
       address: account.address,
-      label: `${accountDisplayName(account, preferences)} · ${account.accountContractType === "argent" ? "Ready" : "Bramble"}${account.derivation.kind === "ledger" ? " · Ledger" : ""}`,
+      label: `${accountDisplayName(account, preferences)} · ${accountFamilyName(account.accountContractType)}${account.derivation.kind === "ledger" ? " · Ledger" : ""}`,
       publicKeyX: account.publicKeyX,
       source: "Wallet account",
     })),
@@ -432,6 +433,7 @@ export const multisigReceiveFlow = (
         copyLabel: "Copy address",
         hint: `Send only Starknet assets on ${status.network}.`,
         networkId: status.networkId,
+        networkName: status.network,
       }),
     )
   );

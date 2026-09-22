@@ -6,8 +6,17 @@ import {
   type TokenConfig,
   type WalletPreferencesStore,
 } from "@bramble/settings/preferences";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
 import { type DerivedAccountRef, isDerivedAccountRef } from "@bramble/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import {
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import {
   RECOVERY_SCAN_LIMITS,
   type RecoveryAccountCandidate,
@@ -69,6 +78,35 @@ const discoveryFingerprint = (
     networkId: input.networkId,
   });
 
+// One derivation per class an account could have been deployed with, not one
+// per family. A Ready account deployed at Argent 0.3.x keeps that address
+// forever, whatever it upgraded to, so scanning only the release this wallet
+// creates finds nobody who arrived from Ready. The wallet's own OpenZeppelin
+// class stays resolved per network by Krusty rather than listed here.
+const recoveryScanShapes = (): readonly {
+  readonly accountContractType: AccountContractType;
+  readonly classHash?: string;
+}[] => [
+  { accountContractType: "openzeppelin" },
+  ...(["argent", "braavos"] as const).flatMap((family) =>
+    deploymentClasses(family).map((entry) => ({
+      accountContractType: family,
+      classHash: entry.classHash,
+    })),
+  ),
+];
+
+// Whether this wallet would itself create an account at this candidate's class:
+// its own OpenZeppelin account, or Argent at the release it deploys. Only those
+// are worth showing before they exist on chain — index zero is where a new
+// wallet's first account lives. A Braavos account, or Argent at any other
+// release, is only ever found; undeployed and unfunded, it is an address that
+// belongs to nobody, and offering it would import an account that does not exist.
+const isCreatableCandidate = (account: DerivedAccountRef): boolean =>
+  account.accountContractType === "openzeppelin" ||
+  (account.accountContractType === "argent" &&
+    sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH));
+
 const scanRecoveryIndex = async (
   deps: OnboardingOpsDeps,
   input: { readonly mnemonic: string; readonly networkId: StarknetNetworkId },
@@ -77,10 +115,11 @@ const scanRecoveryIndex = async (
   rpcUrls: readonly string[],
 ): Promise<readonly RecoveryAccountCandidate[]> =>
   Promise.all(
-    (["openzeppelin", "argent"] as const).map(async (accountContractType) => {
+    recoveryScanShapes().map(async (shape) => {
       const account = await deps.wallet.previewAccount?.({
-        accountContractType,
+        accountContractType: shape.accountContractType,
         accountIndex,
+        ...(shape.classHash === undefined ? {} : { classHash: shape.classHash }),
         mnemonic: input.mnemonic,
         networkId: input.networkId,
       });
@@ -126,7 +165,9 @@ const discoverRecoveryAccounts = async (
     discovered.push(
       ...candidates.filter(
         (candidate) =>
-          candidate.deployed || candidate.funded || accountIndex === 0 || manual !== undefined,
+          candidate.deployed ||
+          candidate.funded ||
+          (isCreatableCandidate(candidate.account) && (accountIndex === 0 || manual !== undefined)),
       ),
     );
   }

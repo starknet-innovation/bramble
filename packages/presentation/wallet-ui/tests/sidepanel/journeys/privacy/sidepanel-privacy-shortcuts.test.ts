@@ -16,8 +16,12 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
+import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
+import { tokenDetailFlow } from "../../../../src/sidepanel/journeys/portfolio/token-flows";
 import type {
   PrivacyDisclosureState,
   PrivacyJourneyState,
@@ -25,6 +29,7 @@ import type {
 import { bindPrivacy } from "../../../../src/sidepanel/journeys/privacy/privacy-ui";
 import type { SendIntent } from "../../../../src/sidepanel/journeys/send/send-model";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
+import { shieldTile } from "../../../../src/sidepanel/shell/wallet-shell";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
@@ -151,17 +156,23 @@ type Activation = {
 const bindActivation = (
   initial: PrivacyDisclosureState,
   wallet: Partial<Record<keyof SidepanelWallet, unknown>>,
+  options: {
+    deployment?: () => boolean | null;
+    html?: string;
+    preferences?: WalletPreferences;
+  } = {},
 ): Activation => {
   let disclosure = initial;
   const intents: SendIntent[] = [];
   const journeys: PrivacyJourneyState[] = [];
   const views: string[] = [];
   const app = document.createElement("main");
-  app.innerHTML = `<button data-privacy-open="${TOKEN_ID}">Shield</button>`;
+  app.innerHTML = options.html ?? `<button data-privacy-open="${TOKEN_ID}">Shield</button>`;
   document.body.append(app);
   bindPrivacy({
     app,
     balances: () => [],
+    ...(options.deployment ? { deployment: options.deployment } : {}),
     disclosure: () => disclosure,
     generation: () => 0,
     // The journey is read back by the entry's own continuations, so it is real
@@ -174,7 +185,7 @@ const bindActivation = (
       intents.push(intent);
     },
     paint: () => undefined,
-    preferences: () => preferences,
+    preferences: () => options.preferences ?? preferences,
     setDisclosure: (state) => {
       disclosure = state;
     },
@@ -212,7 +223,7 @@ describe("the activation entry", () => {
     // two-second toast and stayed on Home, which read as a dead button.
     const { app, journeys, views } = bindActivation(settled("unregistered"), {
       preparePrivacyRegistration: async () => {
-        throw new Error("Not enough STRK for the pool fee");
+        throw new PrivacyBlockerError("fund", "Not enough STRK for the pool fee");
       },
     });
 
@@ -227,7 +238,10 @@ describe("the activation entry", () => {
   test("lands on the deployment step when the account contract is missing", async () => {
     const { app, journeys } = bindActivation(settled("unregistered"), {
       preparePrivacyRegistration: async () => {
-        throw new Error("Deploy this account before using public privacy transactions");
+        throw new PrivacyBlockerError(
+          "deploy",
+          "Deploy this account before using public privacy transactions",
+        );
       },
     });
 
@@ -243,7 +257,10 @@ describe("the activation entry", () => {
       { error: null, loading: false, value: null },
       {
         loadPrivacyState: async () => {
-          throw new Error("Private balances are not configured for this network");
+          throw new PrivacyBlockerError(
+            "network",
+            "Private balances are not configured for this network",
+          );
         },
         preparePrivacyRegistration: async () => {
           throw new Error("must not be reached");
@@ -326,5 +343,120 @@ describe("the activation entry", () => {
       kind: "service",
       message: "prover unavailable",
     });
+  });
+});
+
+describe("undeployed privacy entry points", () => {
+  const prefs = defaultWalletPreferences();
+  const token = prefs.tokens.find(
+    (entry) => entry.networkId === "SN_MAIN" && entry.symbol === "STRK",
+  );
+  if (!token) throw new Error("STRK fixture missing");
+  const failed: PrivacyDisclosureState = {
+    error: "Discovery offline",
+    loading: false,
+    value: null,
+  };
+  const balance = { ...token, balance: "1000000000000000000", formatted: "1" };
+
+  for (const [name, render] of [
+    ["token detail", () => tokenDetailFlow(status, token, balance, [], null, "usd", failed, false)],
+    [
+      "home token row",
+      () => homeTabs({ balances: [balance] }, prefs, {}, {}, "usd", failed, false),
+    ],
+    ["Shield tile", () => shieldTile(token.id, false, false)],
+  ] as const) {
+    test(`${name} offers deployment and bypasses failed discovery and preparation`, async () => {
+      let work = 0;
+      const { app, journeys } = bindActivation(
+        failed,
+        {
+          loadPrivacyState: async () => {
+            work += 1;
+            throw new Error("offline");
+          },
+          preparePrivacyRegistration: async () => {
+            work += 1;
+            throw new Error("must not prove");
+          },
+        },
+        { deployment: () => false, html: render() },
+      );
+      const entry = app.querySelector<HTMLButtonElement>(
+        "[data-privacy-open], [data-privacy-register]",
+      );
+      expect(entry?.textContent).toContain("Deploy and enable");
+      entry?.click();
+      await tick();
+      expect(blockerOf(journeys)).toBe("deploy");
+      expect(work).toBe(0);
+    });
+  }
+
+  test("checks unknown deployment before attempting failed discovery", async () => {
+    const calls: string[] = [];
+    const { app, journeys } = bindActivation(
+      failed,
+      {
+        loadDeploymentStatus: async () => {
+          calls.push("deployment");
+          return { ok: true, accountId: account.id, deployed: false };
+        },
+        loadPrivacyState: async () => {
+          calls.push("discovery");
+          throw new Error("offline");
+        },
+        preparePrivacyRegistration: async () => {
+          calls.push("proof");
+          throw new Error("must not prove");
+        },
+      },
+      { deployment: () => null },
+    );
+    click(app, "[data-privacy-open]");
+    await tick();
+    expect(blockerOf(journeys)).toBe("deploy");
+    expect(calls).toEqual(["deployment"]);
+  });
+
+  test("continues after confirmed deployment even before the cached status refreshes", async () => {
+    const calls: string[] = [];
+    const preparation = { id: "prep", kind: "register", summaries: [], symbol: "STRK" };
+    const { app, journeys } = bindActivation(
+      settled("unregistered"),
+      {
+        deployAccount: async () => {
+          calls.push("deploy");
+          return "0x123";
+        },
+        loadDeploymentStatus: async () => {
+          calls.push("confirmed");
+          return { ok: true, accountId: account.id, deployed: true };
+        },
+        preparePrivacyRegistration: async () => {
+          calls.push("prepare");
+          return preparation;
+        },
+      },
+      {
+        deployment: () => false,
+        preferences: prefs,
+        html: "<button data-privacy-deploy-register>Deploy and enable</button>",
+      },
+    );
+    const originalSetTimeout = globalThis.setTimeout;
+    try {
+      (globalThis as { setTimeout: unknown }).setTimeout = (fn: () => void) => {
+        fn();
+        return 0;
+      };
+      click(app, "[data-privacy-deploy-register]");
+      await new Promise<void>((resolve) => originalSetTimeout(resolve, 0));
+      expect(calls).toEqual(["deploy", "confirmed", "prepare"]);
+      expect(journeys.at(-1)?.stage).toBe("activate-review");
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
   });
 });

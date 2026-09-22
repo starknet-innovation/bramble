@@ -15,6 +15,7 @@ import { icon } from "../../shared/icons";
 import {
   accountAvatar,
   accountDisplayName,
+  accountFamilyName,
   accountLabel,
   flowHeader,
   flowScreen,
@@ -69,7 +70,7 @@ const deploymentSignerCopy = (
   preferences: WalletPreferences | null,
 ): string => `<span class="option-name"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>${hardwareBadge(account)}</span>
     <code>${escapeHtml(accountLabel(account.address))}</code>
-    <span class="option-sub">${account.accountContractType === "argent" ? "Ready" : "Bramble"} · Key matches</span>`;
+    <span class="option-sub">${accountFamilyName(account.accountContractType)} · Key matches</span>`;
 
 const deploymentSignerIdentity = (
   account: AccountRef,
@@ -100,7 +101,7 @@ const signerKeySources = (
       address: candidate.address,
       label: accountDisplayName(candidate, preferences),
       publicKeyX: candidate.publicKeyX,
-      source: `${candidate.accountContractType === "argent" ? "Ready" : "Bramble"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""} account`,
+      source: `${accountFamilyName(candidate.accountContractType)}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""} account`,
     })),
     ...(preferences?.addressBook
       .filter((entry) => entry.publicKeyX !== undefined)
@@ -160,6 +161,13 @@ export const multisigDeployFlow = (
     return flowHeader(flowTitle, status) + flowScreen("multisig-deploy", noAccountEmpty(status));
   }
   const accounts = status.accounts.filter((candidate) => candidate.networkId === status.networkId);
+  // Braavos is restored view-only. A transfer from it is refused before
+  // submission, so it cannot be a funding source for this deployment.
+  const fundingAccounts = accounts.filter(
+    (candidate) => candidate.accountContractType !== "braavos",
+  );
+  const fundingAccount =
+    fundingAccounts.find((candidate) => candidate.id === account.id) ?? fundingAccounts[0];
   const savedDeployment =
     selectedMultisig?.deployed === false ? selectedMultisig.record.deployment : undefined;
   const initialStage = savedDeployment ? "approval" : "participants";
@@ -217,18 +225,18 @@ export const multisigDeployFlow = (
             <template data-multisig-funding-controls>
               <div class="multisig-funding-local">
                 ${selectField({
-                  disabled: accounts.length === 0,
+                  disabled: fundingAccounts.length === 0,
                   label: "Fund from",
                   name: "fundingAccountId",
-                  options: accounts.map((candidate) => ({
-                    label: `${accountDisplayName(candidate, preferences)} · ${candidate.accountContractType === "argent" ? "Ready" : "Bramble"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
+                  options: fundingAccounts.map((candidate) => ({
+                    label: `${accountDisplayName(candidate, preferences)} · ${accountFamilyName(candidate.accountContractType)}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
                     value: candidate.id,
                   })),
-                  selected: account.id,
+                  ...(fundingAccount ? { selected: fundingAccount.id } : {}),
                 })}
                 ${button({
                   attributes: { "data-multisig-fund-local": true },
-                  disabled: !strkToken || accounts.length === 0,
+                  disabled: !strkToken || fundingAccounts.length === 0,
                   icon: "send",
                   label: "Fund from this wallet",
                 })}

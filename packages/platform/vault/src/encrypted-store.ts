@@ -4,7 +4,7 @@
 import { invariant, WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord, type Json } from "@bramble/core/json";
 import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@bramble/store/kv";
-import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { base64ToBytes, bytesToBase64, bytesToHex, hasBase64Bytes } from "./store/envelope-bytes";
 import { createFreshnessAuthority } from "./store/freshness-authority";
 
@@ -99,7 +99,10 @@ export type KeyResolver = (
 ) => Promise<CryptoKey>;
 
 const deriveKey: KeyResolver = async (passphrase, salt, iterations) => {
-  invariant(isVaultPassphrase(passphrase), "Passphrase must be at least 12 characters");
+  invariant(
+    isVaultPassphrase(passphrase),
+    `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+  );
 
   const baseKey = await crypto.subtle.importKey(
     "raw",

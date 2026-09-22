@@ -26,6 +26,7 @@ const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
 export type DeployAndRegisterDeps = {
   readonly app: Element | null;
   readonly deploymentScope: () => DeploymentPollScope | null;
+  readonly noteDeployed?: () => void;
   readonly startRegistration: () => void;
   readonly wallet: Pick<SidepanelWallet, "deployAccount" | "loadDeploymentStatus">;
 };
@@ -78,6 +79,7 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
           );
           return;
         }
+        deps.noteDeployed?.();
         deps.startRegistration();
       },
       (error: unknown) => {

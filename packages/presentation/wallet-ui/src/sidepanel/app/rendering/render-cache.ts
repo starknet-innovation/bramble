@@ -81,6 +81,7 @@ export const updateRenderScope = (
           balances: { error: "balances unavailable" },
           multisigBalanceId: null,
           multisigBalances: { error: "multisig balances unavailable" },
+          deployment: null,
           multisigClassDeclared: null,
           multisigsError: false,
           ...(networkChanged ? { multisigsNetworkId: null } : {}),

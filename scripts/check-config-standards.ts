@@ -290,6 +290,7 @@ if (!compilerOptions) {
       "lib",
       "module",
       "moduleResolution",
+      "paths",
       "target",
       "types",
     ])
@@ -313,6 +314,26 @@ if (!compilerOptions) {
   }
   if (!hasStringList(compilerOptions["types"], ["bun"])) {
     failures.push("tsconfig.json compilerOptions.types must stay Bun-only");
+  }
+  const paths = compilerOptions["paths"];
+  const walletStandardFeatures =
+    "packages/platform/starknet/src/wallet/wallet-standard-features.d.ts";
+  if (
+    !isRecord(paths) ||
+    !hasOnlyKeys(paths, [
+      "@starknet-io/get-starknet-wallet-standard/features",
+      "@starknet-io/get-starknet-wallet-standard-v6/features",
+    ]) ||
+    !hasStringList(paths["@starknet-io/get-starknet-wallet-standard/features"], [
+      `./${walletStandardFeatures}`,
+    ]) ||
+    !hasStringList(paths["@starknet-io/get-starknet-wallet-standard-v6/features"], [
+      `./${walletStandardFeatures}`,
+    ])
+  ) {
+    failures.push(
+      "tsconfig.json paths must unify get-starknet v5 and v6 feature types for starknet@10.8.0",
+    );
   }
 }
 if (
@@ -416,6 +437,12 @@ const ciCommands = [
   "bun run build",
   "bun run test:e2e",
   "bun run package:extension",
+  // The Gecko artifact is built, packaged and validated in the same job. Its
+  // linter wraps the validator addons.mozilla.org runs at submission, so an
+  // add-on that would be rejected there fails here instead — which is how the
+  // wrong-browser artifact reached AMO once already.
+  "bun run package:extension:firefox",
+  "bun run check:firefox",
 ];
 const ciLines = ciWorkflow.split("\n").map((line) => line.trim());
 let previousCiCommand = -1;

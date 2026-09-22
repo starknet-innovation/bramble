@@ -20,8 +20,10 @@ import { bindPrivacy } from "./privacy-ui";
  */
 export type PrivacyControllerOptions = {
   readonly app: Element | null;
+  readonly deployment?: () => boolean | null;
   readonly balances: () => BalanceState;
   readonly navigate: (view: "activity" | "home" | "privacy" | "token-detail") => void;
+  readonly noteDeployed?: () => void;
   /** Opens Send pre-configured for a shield or unshield shortcut. */
   readonly openSend?: (intent: SendIntent) => void;
   readonly paint: () => void;

@@ -5,7 +5,7 @@
  * logs, stores, or echoes it, and failures surface as toast + status text.
  */
 
-import { isAccountContractType } from "@bramble/wallet-model/accounts";
+import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
@@ -77,7 +77,7 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
 
   const runCreate = async (): Promise<void> => {
     const contract = contractSelect?.value;
-    if (!isAccountContractType(contract)) {
+    if (!isCreatableAccountContractType(contract)) {
       showToast("Choose a supported account contract", "error", form);
       return;
     }

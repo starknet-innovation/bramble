@@ -40,6 +40,12 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(/border:[^;]*solid/);
     expect(SIDEPANEL_STYLES).not.toMatch(/border:\s*\d*[1-9]/);
     expect(SIDEPANEL_STYLES).not.toMatch(/\[aria-selected="true"\][^}]*transform/s);
+    // Fields are the one control whose fill cannot identify it (elevated sits
+    // within 1.1:1 of the panel), so they carry a per-side edge — a bottom
+    // stroke in the tested field-edge token — never a ring (spec item 25).
+    expect(SIDEPANEL_STYLES).toMatch(
+      /input, select, textarea \{[^}]*border-bottom: 1px solid var\(--bramble-border\)/s,
+    );
   });
 
   test("the visual layer is flat — no gradients, no glass, no aurora residue", () => {
@@ -464,5 +470,13 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /\.onboarding-contract\[aria-pressed="true"\] \.onboarding-contract-copy > span:last-child \{\s*color: var\(--bramble-text\)/,
     );
+  });
+  test("the document reserves its scrollbar gutter so an expanding row cannot shift the layout", () => {
+    // `.shell` is min-height: 100vh and nothing between it and the viewport
+    // scrolls, so the document is the scroll container. Expanding a token row
+    // (<details>) summons the document scrollbar, and without a reserved gutter
+    // it takes its width from the content box — every element reflows narrower
+    // and the screen appears to shift sideways. Regression guard for #384.
+    expect(SIDEPANEL_STYLES).toMatch(/html \{[^}]*scrollbar-gutter: stable/s);
   });
 });

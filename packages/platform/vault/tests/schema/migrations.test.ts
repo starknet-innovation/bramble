@@ -4,7 +4,16 @@
 import { describe, expect, test } from "bun:test";
 import { ARGENT_ACCOUNT_CONTRACT } from "@bramble/starknet/account-contracts";
 import { CURRENT_SCHEMA_VERSION, migrateVault, VAULT_MIGRATIONS } from "@bramble/vault/migrations";
-import { isVaultV1, isVaultV6, isVaultV7, isVaultV8 } from "@bramble/vault/schema";
+import {
+  isVaultV1,
+  isVaultV6,
+  isVaultV7,
+  isVaultV8,
+  isVaultV9,
+  isVaultV10,
+} from "@bramble/vault/schema";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
 
 const legacyVault = {
@@ -55,7 +64,11 @@ const legacyV7 = {
   accounts: legacyV6.accounts,
   schemaVersion: 7 as const,
 };
-const currentVault = { ...legacyV7, importedSeeds: [], schemaVersion: CURRENT_SCHEMA_VERSION as 8 };
+const currentVault = {
+  ...legacyV7,
+  importedSeeds: [],
+  schemaVersion: CURRENT_SCHEMA_VERSION as 10,
+};
 
 describe("migrateVault", () => {
   test("declares contiguous migration steps to the current schema", () => {
@@ -87,7 +100,7 @@ describe("migrateVault", () => {
     expect(isVaultV1(legacyVault)).toBe(true);
     const migrated = migrateVault(legacyVault);
 
-    expect(isVaultV8(migrated)).toBe(true);
+    expect(isVaultV10(migrated)).toBe(true);
     expect(migrated).toEqual({
       ...legacyVault,
       accounts: legacyVault.accounts.map((account) => ({
@@ -116,7 +129,7 @@ describe("migrateVault", () => {
       currentVault,
     ]) {
       const migrated = migrateVault(source);
-      expect(isVaultV8(migrated)).toBe(true);
+      expect(isVaultV10(migrated)).toBe(true);
       expect(migrateVault(migrated)).toBe(migrated);
     }
   });
@@ -140,7 +153,7 @@ describe("migrateVault", () => {
       signingKeys: [{ accountId: aliasedId, privateKey: "0x0456" }],
     });
 
-    expect(isVaultV8(migrated)).toBe(true);
+    expect(isVaultV10(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({
       accountContractType: "openzeppelin",
       address: "0x123",
@@ -170,15 +183,84 @@ describe("migrateVault", () => {
     });
 
     expect(isVaultV6({ ...legacyV6, accounts: [argent] })).toBe(true);
-    expect(isVaultV8(migrated)).toBe(true);
+    expect(isVaultV10(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({ deploymentSalt: argent.publicKeyX });
 
     // The adjacent v7→v8 step retains the founding phrase and every account,
-    // adding only the empty imported-seeds collection.
+    // adding only the empty imported-seeds collection; v8→v9 then re-stamps.
     const fromV7 = migrateVault(legacyV7);
     expect(isVaultV7(legacyV7)).toBe(true);
-    expect(isVaultV8(fromV7)).toBe(true);
-    expect(fromV7).toEqual({ ...legacyV7, importedSeeds: [], schemaVersion: 8 });
+    expect(isVaultV10(fromV7)).toBe(true);
+    expect(fromV7).toEqual({ ...legacyV7, importedSeeds: [], schemaVersion: 10 });
+  });
+
+  test("refuses a schema-v6 vault that claims an Argent class that era never wrote", () => {
+    // v6 writers only stored the pinned Argent class. A 0.3.x class is a
+    // current-era record; accepting it here would migrate a vault v6 could
+    // not have written.
+    const earlier = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
+    if (!earlier) throw new Error("argent 0.3.0 missing from the class table");
+    const historical = {
+      ...legacyV6.accounts[0],
+      accountContractType: "argent" as const,
+      classHash: canonicalFelt(earlier.classHash),
+    };
+    const claimed = { ...legacyV6, accounts: [historical], activeAccountId: historical.id };
+    expect(isVaultV6(claimed)).toBe(false);
+    expect(() => migrateVault(claimed)).toThrow("Unsupported vault schema");
+  });
+
+  test("v9 admits Ready's Ledger path scheme; v8 and earlier stay pinned to LedgerW", () => {
+    const ledgerAt = (index: number, application: "LedgerW" | "argentx") => {
+      const address = "0xdef123";
+      return {
+        accountContractType: "openzeppelin" as const,
+        address,
+        classHash: "0x111111",
+        derivation: {
+          accountIndex: index,
+          eip2645application: application,
+          kind: "ledger" as const,
+          path: ledgerAccountPath(index, application),
+        },
+        id: `SN_MAIN:${address}`,
+        networkId: "SN_MAIN" as const,
+        publicKeyX: "0xabc",
+      };
+    };
+    const ledgerVaultV8 = (application: "LedgerW" | "argentx") => {
+      const account = ledgerAt(12, application);
+      return {
+        accounts: [account],
+        accountSecrets: [],
+        activeAccountId: account.id,
+        importedSeeds: [],
+        mnemonic: null,
+        originGrants: [],
+        schemaVersion: 8 as const,
+        signingKeys: [],
+      };
+    };
+
+    // The v8→v9 and v9→v10 steps each rewrite nothing but the version stamp.
+    const bramble = ledgerVaultV8("LedgerW");
+    expect(isVaultV8(bramble)).toBe(true);
+    expect(migrateVault(bramble)).toEqual({ ...bramble, schemaVersion: 10 });
+    expect(isVaultV9({ ...bramble, schemaVersion: 9 })).toBe(true);
+
+    // A v8 payload could never have held a Ready-path account: the legacy
+    // validators refuse it, so the migration fails closed instead of admitting
+    // a representation those schemas never defined. The same record is valid
+    // once stamped v9.
+    const ready = ledgerVaultV8("argentx");
+    expect(isVaultV8(ready)).toBe(false);
+    expect(() => migrateVault(ready)).toThrow("Unsupported vault schema");
+    const { importedSeeds: _, ...readyV7 } = { ...ready, schemaVersion: 7 as const };
+    expect(isVaultV7(readyV7)).toBe(false);
+    expect(isVaultV9({ ...ready, schemaVersion: 9 })).toBe(true);
+    expect(isVaultV9({ ...bramble, schemaVersion: 9 })).toBe(true);
+    // Stamping a Ready-path record with any earlier version is still refused.
+    expect(() => migrateVault({ ...ready, schemaVersion: 3 })).toThrow("Unsupported vault schema");
   });
 
   test("ignores inherited schema versions for legacy empty vaults", () => {

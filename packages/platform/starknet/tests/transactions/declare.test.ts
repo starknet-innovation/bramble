@@ -293,7 +293,7 @@ describe("submitDeclareTransaction", () => {
       () => estimateDeclareFee(input, makeProvider, makeAccount),
       () => submitDeclareTransaction(input, makeProvider, makeAccount),
     ]) {
-      await expect(operation()).rejects.toThrow("class does not match the pinned release");
+      await expect(operation()).rejects.toThrow("is not a release this wallet recognizes");
     }
     expect(signed).toBe(0);
     expect(declareCalls).toHaveLength(0);

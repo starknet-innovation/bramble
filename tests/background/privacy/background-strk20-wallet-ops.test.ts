@@ -260,6 +260,7 @@ describe("background wallet STRK20 operations", () => {
 
     await expect(prepareStrk20Registration(handler)).resolves.toEqual({
       error: "A registration is already on its way for this account",
+      privacyBlocker: "pending",
     });
     expect(capture.registrations.value).toBe(0);
   });

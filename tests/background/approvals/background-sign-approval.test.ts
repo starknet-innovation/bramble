@@ -7,8 +7,14 @@ import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { Vault } from "@bramble/vault/schema";
-import type { AccountRef, LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
+import {
+  type AccountRef,
+  ARGENT_ACCOUNT_CLASS_HASH,
+  type LedgerAccountRef,
+} from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import type { RpcProvider } from "starknet";
 import { ec } from "starknet";
 import { setApprovalNotifier } from "../../../apps/extension/src/background/approvals/approval-notifier";
 import type { LedgerSignQueue } from "../../../apps/extension/src/background/ledger/ledger-sign-queue";
@@ -37,7 +43,7 @@ const vault = {
   importedSeeds: [],
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 8,
+  schemaVersion: 10,
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 
@@ -105,6 +111,15 @@ const makeHandler = () => {
   return createMessageHandler(wallet, chromiumExtension("ext"), { session });
 };
 
+const liveClass = (classHash: string): RpcProvider =>
+  ({
+    getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 1 }),
+    getClassHashAt: async () => classHash,
+  }) as unknown as RpcProvider;
+
+const argent030 = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
+if (!argent030) throw new Error("argent 0.3.0 missing from the class table");
+
 const signMessage = {
   origin: "https://dapp.example",
   type: "wallet.signTypedData",
@@ -125,6 +140,7 @@ describe("signTypedData approval gate", () => {
       executeSignApproval(
         {
           preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+          rpcProviderFor: () => liveClass(ARGENT_ACCOUNT_CLASS_HASH),
           session,
           wallet: {
             ...wallet,
@@ -139,6 +155,89 @@ describe("signTypedData approval gate", () => {
       ok: true,
       signature: ["1", "0", account.publicKeyX, "0x1", "0x2"],
     });
+  });
+
+  test("refuses typed data for an Argent account that still runs 0.3.x", async () => {
+    let signed = 0;
+    const session = createUnlockSession();
+    session.unlock(PASSPHRASE);
+    const response = await executeSignApproval(
+      {
+        preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+        rpcProviderFor: () => liveClass(argent030.classHash),
+        session,
+        wallet: {
+          ...wallet,
+          async getGrantedAccounts() {
+            return [
+              {
+                ...account,
+                accountContractType: "argent" as const,
+                classHash: argent030.classHash,
+                deploymentSalt: account.publicKeyX,
+              },
+            ];
+          },
+          async signHash() {
+            signed += 1;
+            return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+          },
+        },
+      },
+      { origin: "https://dapp.example", typedData: MESSAGE },
+    );
+    expect(response).toEqual({
+      error: expect.stringContaining(
+        "expects an authorization format this wallet does not produce",
+      ),
+    });
+    expect(signed).toBe(0);
+  });
+
+  test("refuses typed data for a Braavos account before using the key", async () => {
+    let signed = 0;
+    let classReads = 0;
+    const session = createUnlockSession();
+    session.unlock(PASSPHRASE);
+    const response = await executeSignApproval(
+      {
+        preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+        rpcProviderFor: () =>
+          ({
+            getBlockLatestAccepted: async () => {
+              classReads += 1;
+              return { block_hash: "0x9", block_number: 1 };
+            },
+            getClassHashAt: async () => {
+              classReads += 1;
+              return ARGENT_ACCOUNT_CLASS_HASH;
+            },
+          }) as unknown as RpcProvider,
+        session,
+        wallet: {
+          ...wallet,
+          async getGrantedAccounts() {
+            return [
+              {
+                ...account,
+                accountContractType: "braavos" as const,
+                deploymentSalt: account.publicKeyX,
+              },
+            ];
+          },
+          async signHash() {
+            signed += 1;
+            return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+          },
+        },
+      },
+      { origin: "https://dapp.example", typedData: MESSAGE },
+    );
+    expect(response).toEqual({
+      error: expect.stringContaining("cannot yet authorize transactions"),
+    });
+    expect(signed).toBe(0);
+    expect(classReads).toBe(0);
   });
 
   test("valid request never auto-signs — it queues and holds until approval", async () => {

@@ -4,17 +4,21 @@
 
 import { WalletError } from "@bramble/core/errors";
 import { verifyStarkSignature } from "@bramble/starknet/signature-verify";
-import type {
-  AccountContractType,
-  AccountRef,
-  DerivedAccountRef,
-  ImportedAccountRef,
-  LedgerAccountRef,
-  LedgerPubKeyEntry,
+import {
+  type AccountContractMetadata,
+  type AccountContractType,
+  type AccountRef,
+  accountContractFields,
+  type DerivedAccountRef,
+  type ImportedAccountRef,
+  type LedgerAccountRef,
+  type LedgerPubKeyEntry,
 } from "@bramble/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
+  isLedgerEip2645Application,
   LEDGER_EIP2645_APPLICATION,
+  type LedgerEip2645Application,
   ledgerAccountPath,
 } from "@bramble/wallet-model/ledger-path";
 import {
@@ -81,6 +85,19 @@ export type ImportedAccountInput = {
 export type ImportedAccountResult = {
   readonly account: ImportedAccountRef;
   readonly privateKey: string;
+};
+
+// Fails closed rather than writing a record the vault schema would refuse: a
+// salted family whose derivation returned no salt has no re-derivable address.
+const recordContract = (
+  accountContractType: AccountContractType,
+  deploymentSalt: string | undefined,
+): AccountContractMetadata => {
+  const contract = accountContractFields(accountContractType, deploymentSalt);
+  if (contract === null) {
+    throw new WalletError("Invalid account deployment salt");
+  }
+  return contract;
 };
 
 const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
@@ -153,10 +170,7 @@ export const deriveAccount = async (
     networkId,
     publicKeyX,
   });
-  const contract =
-    accountContractType === "argent"
-      ? { accountContractType, deploymentSalt: deploymentSalt as string }
-      : { accountContractType };
+  const contract = recordContract(accountContractType, deploymentSalt);
 
   return {
     account: {
@@ -181,14 +195,16 @@ export const deriveAccount = async (
 /**
  * Ledger account creation input. The public key and its account index come from
  * the device; the derivation path is rebuilt deterministically from the index
- * (one source of truth with the device client), so a stored path always matches
- * the one used to enumerate and sign.
+ * and the path scheme (`eip2645application`, Bramble's `LedgerW` unless the
+ * key was enumerated at Ready's `argentx` path) — one source of truth with the
+ * device client, so a stored path always matches the one used to enumerate and
+ * sign.
  */
 export type LedgerAccountInput = LedgerPubKeyEntry & {
   readonly accountContractType: AccountContractType;
   readonly classHash?: string;
   readonly deploymentSalt?: string;
-  readonly eip2645application?: string;
+  readonly eip2645application?: LedgerEip2645Application;
   readonly networkId?: StarknetNetworkId;
 };
 
@@ -229,6 +245,10 @@ export const deriveLedgerAccount = async (
   if (!isNonZeroStarkFieldElement(input.publicKeyX)) {
     throw new WalletError("Invalid Ledger public key");
   }
+  const application = input.eip2645application ?? LEDGER_EIP2645_APPLICATION;
+  if (!isLedgerEip2645Application(application)) {
+    throw new WalletError("Invalid Ledger path application");
+  }
 
   const networkId = input.networkId ?? DEFAULT_NETWORK.id;
   if (!isStarknetNetworkId(networkId)) {
@@ -250,10 +270,7 @@ export const deriveLedgerAccount = async (
     networkId,
     publicKeyX,
   });
-  const contract =
-    accountContractType === "argent"
-      ? { accountContractType, deploymentSalt: deploymentSalt as string }
-      : { accountContractType };
+  const contract = recordContract(accountContractType, deploymentSalt);
 
   return {
     ...contract,
@@ -261,9 +278,9 @@ export const deriveLedgerAccount = async (
     classHash,
     derivation: {
       accountIndex: input.accountIndex,
-      eip2645application: input.eip2645application ?? LEDGER_EIP2645_APPLICATION,
+      eip2645application: application,
       kind: "ledger",
-      path: ledgerAccountPath(input.accountIndex),
+      path: ledgerAccountPath(input.accountIndex, application),
     },
     id: `${networkId}:${address}`,
     networkId,
@@ -274,7 +291,9 @@ export const deriveLedgerAccount = async (
 /**
  * Derives account metadata for a batch of enumerated Ledger (index, public key)
  * pairs on one network, resolving the class hash once and deriving addresses in
- * parallel. Backs the multi-index account picker. Throws if any entry is invalid.
+ * parallel. Every entry shares one path scheme — the one the device was
+ * enumerated at. Backs the multi-index account picker. Throws if any entry is
+ * invalid.
  */
 export const deriveLedgerAccountRefs = async (
   kms: KmsPort,
@@ -282,6 +301,7 @@ export const deriveLedgerAccountRefs = async (
     readonly accountContractType: AccountContractType;
     readonly classHash?: string;
     readonly deploymentSalt?: string;
+    readonly eip2645application?: LedgerEip2645Application;
     readonly entries: readonly LedgerPubKeyEntry[];
     readonly networkId?: StarknetNetworkId;
   },
@@ -304,6 +324,9 @@ export const deriveLedgerAccountRefs = async (
         accountIndex: entry.accountIndex,
         classHash,
         ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+        ...(input.eip2645application === undefined
+          ? {}
+          : { eip2645application: input.eip2645application }),
         networkId,
         publicKeyX: entry.publicKeyX,
       }),
@@ -414,10 +437,7 @@ export const deriveImportedAccount = async (
     networkId,
     publicKeyX,
   });
-  const contract =
-    accountContractType === "argent"
-      ? { accountContractType, deploymentSalt: deploymentSalt as string }
-      : { accountContractType };
+  const contract = recordContract(accountContractType, deploymentSalt);
 
   return {
     account: {

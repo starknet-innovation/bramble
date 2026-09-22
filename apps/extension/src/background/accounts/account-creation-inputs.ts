@@ -7,7 +7,7 @@ import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type { AccountDerivationInput } from "@bramble/vault/accounts";
 import type { CreateVaultAccountInput } from "@bramble/vault/service";
 import type { RecoverVaultAccountsInput } from "@bramble/vault/service-types";
-import { isAccountContractType } from "@bramble/wallet-model/accounts";
+import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -58,7 +58,7 @@ const readDerivationFields = (
     return null;
   }
   const accountContractType = message["accountContractType"];
-  if (!isAccountContractType(accountContractType)) {
+  if (!isCreatableAccountContractType(accountContractType)) {
     return null;
   }
   const deploymentSalt = readDeploymentSalt(message["deploymentSalt"], accountContractType);

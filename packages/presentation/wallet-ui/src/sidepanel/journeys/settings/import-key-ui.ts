@@ -4,7 +4,7 @@
  * straight to the privileged background import request (which routes it to the
  * encrypted vault) and is never logged, echoed, or stored in preferences.
  */
-import { isAccountContractType } from "@bramble/wallet-model/accounts";
+import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import type { SettingsUiDeps } from "./settings-ui";
 
@@ -37,7 +37,7 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     const data = new FormData(form);
     const privateKey = String(data.get("rawKey") ?? "").trim();
     const accountContractType = data.get("accountContractType");
-    if (!privateKey || !isAccountContractType(accountContractType)) {
+    if (!privateKey || !isCreatableAccountContractType(accountContractType)) {
       if (result) {
         result.textContent = privateKey
           ? "Choose a supported account contract"
