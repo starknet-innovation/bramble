@@ -119,8 +119,8 @@ export const receiveAddressView = ({
     <div class="qr-card" data-receive-qr data-qr-payload="address">${qrSvg(address, RECEIVE_QR_LABELS.address)}</div>
     <div class="receive-intro">
       <h2>Your Starknet address</h2>
-      <button class="receive-address-copy" type="button" data-copy="${escapeHtml(address)}" aria-label="${escapeHtml(copyLabel)}" title="${escapeHtml(copyLabel)}">
-        <code data-receive-address-text>${escapeHtml(address)}</code>
+      <button class="receive-address-copy" type="button" data-copy="${escapeHtml(address)}" aria-label="${escapeHtml(copyLabel)}" aria-describedby="receive-address-text" title="${escapeHtml(copyLabel)}">
+        <code id="receive-address-text" data-receive-address-text>${escapeHtml(address)}</code>
         <span class="receive-address-copy-mark" aria-hidden="true">${icon("copy")}</span>
       </button>
       ${networkName ? `<p class="receive-network">Network: <strong>${escapeHtml(networkName)}</strong></p>` : ""}
