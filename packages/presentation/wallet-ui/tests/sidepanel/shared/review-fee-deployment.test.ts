@@ -105,7 +105,7 @@ describe("undeployed-account fee review", () => {
 
     expect(settings).toContain('data-view="deploy-account"');
     expect(settings).toContain("Deploy account");
-    expect(settings).toContain("created on Starknet by its first send");
+    expect(settings).toContain("Deploy your account manually");
     const home = homeScreen(
       status,
       { address: "0x1", derivation: { kind: "imported-raw-key" } } as never,

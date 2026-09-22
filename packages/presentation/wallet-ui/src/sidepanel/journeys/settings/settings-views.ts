@@ -113,7 +113,6 @@ export const appearanceFlow = (
       <p class="eyebrow">Values</p>
       ${selectField({
         attributes: { id: "currency-select" },
-        hint: "Prices and portfolio totals use this currency. Token balances are unchanged.",
         label: "Display currency",
         name: "displayCurrency",
         options: (["usd", "eur", "gbp"] as const).map((currency) => ({
@@ -169,7 +168,7 @@ export const securityFlow = (status: WalletStatus): string =>
       <div class="menu-list" role="group" aria-label="This account">
         ${walletMenuRow("deploy-account", "Deploy account", "rocket")}
       </div>
-      <p class="hint">An account is created on Starknet by its first send, which quotes both fees together. Deploy here to do it separately.</p>
+      <p class="hint">Deploy your account manually</p>
     </section>
     <section class="section">
       <p class="eyebrow">Recovery</p>
@@ -194,7 +193,6 @@ export const backupHubFlow = (status: WalletStatus): string => {
           ${walletMenuRow("backup-export", "Download wallet backup", "receive")}
           ${walletMenuRow("backup-restore", "Restore from a backup", "refresh")}
         </div>
-        <p class="hint">Backup files include wallet preferences for reference. Restore applies only organization and display choices; saved contacts, tracked assets, and trust settings stay unchanged.</p>
         ${
           hasLedgerAccount
             ? '<p class="review-flag" role="note">Ledger accounts are not restored by this backup or by Bramble’s recovery phrase. Recover them with the Ledger device and its Ledger recovery phrase.</p>'
@@ -231,7 +229,6 @@ export const backupRestoreFlow = (status: WalletStatus): string =>
   flowScreen(
     "backup-restore",
     `<section class="section">
-      <p class="review-flag" role="note">Restore applies the backup's active network, account labels, folders, hidden-token choices, display currency, and theme. Contacts and tracked assets, network, service, and approval settings, accounts, and signing keys stay unchanged.</p>
       ${textField({
         accept: "application/json",
         attributes: { id: "backup-file" },

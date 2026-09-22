@@ -53,7 +53,7 @@ export const revealFlow = (status: WalletStatus): string => {
         "reveal",
         `<section class="section" role="note">
           <p class="eyebrow">Recovery</p>
-          <p class="hint">This account lives on your Ledger. Its keys never leave the device, so there is no recovery phrase or private key to reveal here. Recover it from the Ledger itself, using the recovery phrase you set up with Ledger — not this wallet.</p>
+          <p class="hint">Account private key secured by your ledger device</p>
         </section>`,
       )
     );
@@ -89,7 +89,7 @@ export const revealFlow = (status: WalletStatus): string => {
           label: "Copy recovery phrase",
           variant: "ghost",
         })}
-        <p class="hint" id="reveal-copy-note">Copying puts the phrase on this device's clipboard, where other apps can read it and it may sync to your other devices. Bramble clears it about a minute later, but cannot clear a clipboard manager's own history.</p>
+        <p class="hint" id="reveal-copy-note">Copy at your own risk</p>
         <p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
         <code class="reveal-value is-masked" id="reveal-key"></code>
         ${
@@ -177,7 +177,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
         }
         output?.removeAttribute("hidden");
         if (result) {
-          result.textContent = "Revealed. Write it down offline.";
+          result.textContent = "Write it down offline.";
         }
         form.reset();
         buttonBusy(submitButton, false);

@@ -114,7 +114,9 @@ describe("bindReveal", () => {
     expect(container.querySelector("#reveal-phrase")?.textContent).toBe(MNEMONIC);
     expect(container.querySelector("#reveal-key")?.textContent).toBe(PRIVATE_KEY);
     expect(container.querySelector("#reveal-output")?.hasAttribute("hidden")).toBe(false);
-    expect(container.querySelector("#reveal-result")?.textContent).toContain("Revealed");
+    expect(container.querySelector("#reveal-result")?.textContent).toContain(
+      "Write it down offline",
+    );
   });
 
   test("a wallet with no recovery phrase shows the fallback line, still revealing the key", async () => {
@@ -151,8 +153,7 @@ describe("bindReveal", () => {
     };
     const html = revealFlow(ledgerStatus);
 
-    expect(html).toContain("lives on your Ledger");
-    expect(html).toContain("Recover it from the Ledger itself");
+    expect(html).toContain("secured by your ledger device");
     // No reveal form or secret output region is emitted for a hardware account.
     expect(html).not.toContain('id="reveal-form"');
     expect(html).not.toContain('id="reveal-output"');
