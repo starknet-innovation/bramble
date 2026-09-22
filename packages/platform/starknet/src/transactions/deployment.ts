@@ -175,11 +175,14 @@ export const isAccountDeployed = async (
 /**
  * Verifies pinned Argent class and supported signer state at one accepted block.
  * Rejects malformed/incompatible state before signing or broadcast; OZ is existence-only.
+ * A family this wallet cannot authorize for is refused before any RPC, so it is
+ * never reported as merely undeployed.
  */
 export const isCompatibleAccountDeployed = async (
   provider: RpcProvider,
   account: DeployableAccount,
 ): Promise<boolean> => {
+  requireAuthorizableFamily(account.accountContractType);
   let classHash: string;
   const blockIdentifier =
     account.accountContractType === "argent" ? await acceptedBlockIdentifier(provider) : "latest";
@@ -194,7 +197,6 @@ export const isCompatibleAccountDeployed = async (
   if (account.accountContractType === "openzeppelin") {
     return true;
   }
-  requireAuthorizableFamily(account.accountContractType);
   if (sameFelt(classHash, "0x0")) {
     return false;
   }

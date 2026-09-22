@@ -12,6 +12,7 @@ import {
   isVaultV9,
   isVaultV10,
 } from "@bramble/vault/schema";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
 
@@ -191,6 +192,22 @@ describe("migrateVault", () => {
     expect(isVaultV7(legacyV7)).toBe(true);
     expect(isVaultV10(fromV7)).toBe(true);
     expect(fromV7).toEqual({ ...legacyV7, importedSeeds: [], schemaVersion: 10 });
+  });
+
+  test("refuses a schema-v6 vault that claims an Argent class that era never wrote", () => {
+    // v6 writers only stored the pinned Argent class. A 0.3.x class is a
+    // current-era record; accepting it here would migrate a vault v6 could
+    // not have written.
+    const earlier = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
+    if (!earlier) throw new Error("argent 0.3.0 missing from the class table");
+    const historical = {
+      ...legacyV6.accounts[0],
+      accountContractType: "argent" as const,
+      classHash: canonicalFelt(earlier.classHash),
+    };
+    const claimed = { ...legacyV6, accounts: [historical], activeAccountId: historical.id };
+    expect(isVaultV6(claimed)).toBe(false);
+    expect(() => migrateVault(claimed)).toThrow("Unsupported vault schema");
   });
 
   test("v9 admits Ready's Ledger path scheme; v8 and earlier stay pinned to LedgerW", () => {

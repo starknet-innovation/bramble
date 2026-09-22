@@ -8,6 +8,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { BRAAVOS_BASE_CLASS_HASH, deploymentClasses } from "@bramble/wallet-model/account-families";
 import { ARGENT_ACCOUNT_CLASS_HASH, type DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
@@ -207,5 +208,78 @@ describe("recovery scan Ready gate", () => {
       (row) => row.querySelector<HTMLInputElement>("input.select-check")?.checked,
     );
     expect(checked.length).toBe(2);
+  });
+
+  test("does not call a funded historical Argent class ready to deploy", async () => {
+    const earlier = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
+    if (!earlier) throw new Error("argent 0.3.0 missing from the class table");
+    const current: DerivedAccountRef = {
+      ...brambleAccount,
+      accountContractType: "argent",
+      address: "0xa04",
+      classHash: ARGENT_ACCOUNT_CLASS_HASH,
+      deploymentSalt: "0x2",
+      id: "SN_MAIN:0xa04",
+    };
+    const historical: DerivedAccountRef = {
+      ...current,
+      address: "0xa03",
+      classHash: earlier.classHash,
+      id: "SN_MAIN:0xa03",
+    };
+    const app = mount([
+      { account: current, deployed: false, funded: true },
+      { account: historical, deployed: false, funded: true },
+    ]);
+    await reachPicker(app);
+
+    const rows = rowsIn(app)("argent");
+    const currentRow = rows.find((row) => row.querySelector("strong")?.textContent === "Account 0");
+    const historicalRow = rows.find((row) =>
+      row.querySelector("strong")?.textContent?.includes("0.3.0"),
+    );
+    expect(currentRow?.textContent).toContain("Funded and ready to deploy");
+    expect(historicalRow?.textContent).toContain("Bramble cannot deploy this Argent release");
+    expect(historicalRow?.textContent).not.toContain("ready to deploy");
+    expect(historicalRow?.querySelector<HTMLInputElement>("input.select-check")?.disabled).toBe(
+      false,
+    );
+  });
+
+  test("stops auto-selecting once a restore would reject the selection", async () => {
+    const accounts = Array.from({ length: RECOVERY_SCAN_LIMITS.maxSelections + 1 }, (_, index) => {
+      const address = `0x${(index + 1).toString(16)}`;
+      const account: DerivedAccountRef = {
+        ...brambleAccount,
+        address,
+        derivation: { accountIndex: index, addressIndex: 0, kind: "starknet-bip44" },
+        id: `SN_MAIN:${address}`,
+      };
+      return { account, deployed: true, funded: false };
+    });
+    const app = mount(accounts);
+    await reachPicker(app);
+
+    const boxes = rowsIn(app)("openzeppelin").map(
+      (row) => row.querySelector<HTMLInputElement>("input.select-check") ?? null,
+    );
+    const checked = boxes.filter((box) => box?.checked);
+    const unchecked = boxes.find((box) => box && !box.checked);
+    expect(checked.length).toBe(RECOVERY_SCAN_LIMITS.maxSelections);
+    expect(unchecked).toBeTruthy();
+    expect(app.querySelector("#recovery-scan-status")?.textContent).toContain(
+      `At most ${RECOVERY_SCAN_LIMITS.maxSelections} accounts`,
+    );
+
+    unchecked?.click();
+    expect(unchecked?.checked).toBe(false);
+    expect(document.body.textContent).toContain(
+      `Choose at most ${RECOVERY_SCAN_LIMITS.maxSelections} accounts`,
+    );
+
+    checked[0]?.click();
+    unchecked?.click();
+    expect(unchecked?.checked).toBe(true);
+    expect(boxes.filter((box) => box?.checked).length).toBe(RECOVERY_SCAN_LIMITS.maxSelections);
   });
 });

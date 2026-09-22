@@ -320,7 +320,10 @@ const isLegacyV6AccountRefShape = (
   requireCanonical: boolean,
 ): value is LegacyV6AccountRef =>
   isRecord(value) &&
-  hasValidContractMetadata(value, requireCanonical, false) &&
+  // v6 writers emitted only the pinned Argent class. Leaving the era at its
+  // "current" default would accept an Argent 0.3.x class and migrate a record
+  // no v6 vault could have stored.
+  hasValidContractMetadata(value, requireCanonical, false, "pre-braavos") &&
   value["deploymentSalt"] === undefined &&
   hasValidSignerShape(value, LEGACY_V6_KEYLESS_ACCOUNT_KEYS, requireCanonical, LEDGERW_ONLY);
 

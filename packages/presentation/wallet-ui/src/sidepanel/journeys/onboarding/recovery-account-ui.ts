@@ -54,14 +54,26 @@ const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelec
     : { classHash: candidate.account.classHash }),
 });
 
-const activityState = (candidate: RecoveryAccountCandidate): string =>
-  candidate.deployed
-    ? "Deployed on Starknet"
-    : candidate.funded
+// Only the class this wallet itself deploys can be brought on chain from here.
+// A funded Argent 0.3.x address is a real counterfactual account, but deployment
+// accepts only the pinned Argent release, so "ready to deploy" would promise a
+// transaction that is refused.
+const deployableHere = (candidate: RecoveryAccountCandidate): boolean =>
+  candidate.account.accountContractType === "openzeppelin" ||
+  (candidate.account.accountContractType === "argent" &&
+    sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH));
+
+const activityState = (candidate: RecoveryAccountCandidate): string => {
+  if (candidate.deployed) return "Deployed on Starknet";
+  if (candidate.funded) {
+    return deployableHere(candidate)
       ? "Funded and ready to deploy"
-      : candidate.account.accountContractType === "argent"
-        ? "No on-chain activity found — Bramble only imports existing Ready accounts"
-        : "No on-chain activity found";
+      : "Funded on Starknet — Bramble cannot deploy this Argent release";
+  }
+  return candidate.account.accountContractType === "argent"
+    ? "No on-chain activity found — Bramble only imports existing Ready accounts"
+    : "No on-chain activity found";
+};
 
 // A Braavos account is restored to be seen, not yet used: say so before the
 // user picks it, rather than after a send fails. It is never offered for
@@ -111,11 +123,35 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   );
   let candidates: readonly RecoveryAccountCandidate[] = [];
   let complete = false;
+  let scanStatus = "";
   let generation = 0;
   let restartOnIdle = false;
   let scanning = false;
   const selected = new Set<string>();
   const seen = new Set<string>();
+  // Discovery can surface more active accounts than one restore accepts (six
+  // classes per index, twenty indices). Auto-select and manual checks both
+  // stop at that bound so a valid scan cannot submit an invalid restore.
+  const trySelect = (key: string): boolean => {
+    if (selected.has(key)) return true;
+    if (selected.size >= RECOVERY_SCAN_LIMITS.maxSelections) return false;
+    selected.add(key);
+    return true;
+  };
+  const selectionNote = (): string => {
+    if (selected.size < RECOVERY_SCAN_LIMITS.maxSelections) return "";
+    const waiting = candidates.some((candidate) => {
+      if (!candidate.deployed && !candidate.funded) return false;
+      if (deps.existingIds?.().has(candidate.account.id)) return false;
+      return !selected.has(selectionKey(selectionFor(candidate)));
+    });
+    return waiting
+      ? ` At most ${RECOVERY_SCAN_LIMITS.maxSelections} accounts can be restored at once. Uncheck one to choose another.`
+      : "";
+  };
+  const renderStatus = (): void => {
+    if (status) status.textContent = `${scanStatus}${selectionNote()}`;
+  };
 
   const refreshGate = (): void => {
     if (restore) restore.disabled = selected.size === 0 || !acknowledgement?.checked;
@@ -134,9 +170,19 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     checkbox.disabled = duplicate || !selectable(candidate);
     checkbox.checked = !duplicate && selected.has(key);
     checkbox.addEventListener("change", () => {
-      if (checkbox.checked) selected.add(key);
-      else selected.delete(key);
+      if (checkbox.checked) {
+        if (!trySelect(key)) {
+          checkbox.checked = false;
+          showToast(
+            `Choose at most ${RECOVERY_SCAN_LIMITS.maxSelections} accounts. Uncheck one to add another.`,
+            "error",
+            checkbox,
+          );
+          return;
+        }
+      } else selected.delete(key);
       refreshGate();
+      renderStatus();
     });
     const copy = deps.form.ownerDocument.createElement("span");
     copy.className = "allowance-copy";
@@ -189,18 +235,17 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       const key = selectionKey(selectionFor(candidate));
       const duplicate = deps.existingIds?.().has(candidate.account.id) ?? false;
       if (!seen.has(key) && !duplicate && (candidate.deployed || candidate.funded)) {
-        selected.add(key);
+        trySelect(key);
       }
       seen.add(key);
     }
     candidates = next.candidates;
     complete = next.complete;
     renderCandidates();
-    if (status) {
-      status.textContent = complete
-        ? `Search complete. Checked ${next.nextIndex} indices across every account type.`
-        : `Checked ${next.nextIndex} of ${RECOVERY_SCAN_LIMITS.defaultCount} indices…`;
-    }
+    scanStatus = complete
+      ? `Search complete. Checked ${next.nextIndex} indices across every account type.`
+      : `Checked ${next.nextIndex} of ${RECOVERY_SCAN_LIMITS.defaultCount} indices…`;
+    renderStatus();
   };
 
   const scan = async (manualIndex?: number): Promise<void> => {
