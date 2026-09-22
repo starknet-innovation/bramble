@@ -182,10 +182,14 @@ const bindRecipientControls = (
     form.querySelectorAll<HTMLElement>("[data-send-folder]").forEach((folder) => {
       const rows = [...folder.querySelectorAll<HTMLElement>("[data-send-recipient]")];
       const shown = rows.filter((row) => !row.hasAttribute("hidden")).length;
+      const collapsed = folder.dataset["collapsed"] === "true";
       folder.toggleAttribute("hidden", query.length > 0 && shown === 0);
+      // An empty folder says so only while it is open and nothing is being
+      // searched. A minimized folder is just its heading, so an empty archive
+      // does not keep "No accounts in this folder." under a closed heading.
       folder
         .querySelector("[data-send-folder-empty]")
-        ?.toggleAttribute("hidden", rows.length > 0 || query.length > 0);
+        ?.toggleAttribute("hidden", rows.length > 0 || query.length > 0 || collapsed);
     });
     form.querySelector("#send-recipient-empty")?.toggleAttribute("hidden", visible > 0);
     const typed = search?.value ?? "";

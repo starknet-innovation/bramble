@@ -52,6 +52,9 @@ const recipientAccountRow = (
 // recipient sits under the same folder on both screens. The archive starts
 // minimized; a search still reaches into it (see ../send/transfer-compose-ui.ts),
 // because a recipient the user typed must be findable wherever it is filed.
+// The mark is always chevronRight. The stylesheet rotates it while the folder
+// is open, so the glyph follows data-collapsed instead of a glyph baked in at
+// render. An empty hint is omitted while the folder is minimized.
 const recipientFolder = (section: FolderSection, rows: string): string => {
   const collapsed = INITIAL_COLLAPSED_FOLDERS.includes(section.group.id);
   return `<div class="send-recipient-folder" data-send-folder="${escapeHtml(section.group.id)}"
@@ -60,10 +63,10 @@ const recipientFolder = (section: FolderSection, rows: string): string => {
       data-send-folder-toggle="${escapeHtml(section.group.id)}" aria-expanded="${String(!collapsed)}">
       ${icon(section.group.icon)}<strong>${escapeHtml(section.group.name)}</strong>
       <span class="send-folder-count">${section.accounts.length}</span>
-      <span class="send-folder-mark">${icon(collapsed ? "chevronRight" : "chevronDown")}</span>
+      <span class="send-folder-mark">${icon("chevronRight")}</span>
     </button>
     ${rows}
-    <p class="send-folder-empty hint" data-send-folder-empty${rows === "" ? "" : " hidden"}>No accounts in this folder.</p>
+    <p class="send-folder-empty hint" data-send-folder-empty${rows === "" && !collapsed ? "" : " hidden"}>No accounts in this folder.</p>
   </div>`;
 };
 
