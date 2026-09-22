@@ -146,6 +146,7 @@ describe("updateRenderScope", () => {
     };
     Object.assign(cache, {
       balances: { accountId: ACCOUNT_ID, balances: [], networkId: "SN_MAIN" },
+      deployment: false,
       historyUnavailable: true,
       multisigClassDeclared: true,
       status: { ...cache.status, activeAccountId: ACCOUNT_ID, networkId: "SN_MAIN" as const },
@@ -153,6 +154,7 @@ describe("updateRenderScope", () => {
     });
 
     expect(updateRenderScope(cache, { ...cache.status })).toBeNull();
+    expect(cache.deployment).toBe(false);
     expect(cache.transactions).toEqual([transaction]);
     expect(cache.historyUnavailable).toBe(true);
     expect(cache.multisigClassDeclared).toBe(true);
@@ -163,6 +165,7 @@ describe("updateRenderScope", () => {
     expect(cache.transactions).toEqual([]);
     expect(cache.historyUnavailable).toBe(false);
     expect(cache.multisigClassDeclared).toBeNull();
+    expect(cache.deployment).toBeNull();
     expect(cache.balances).toEqual({ error: "balances unavailable" });
 
     expect(updateRenderScope(cache, { ...cache.status, networkId: "SN_SEPOLIA" })).toBe("network");

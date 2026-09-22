@@ -254,7 +254,7 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
             stillCurrent: () => scopeMatches(deps, scope),
           };
     },
-    noteDeployed: deps.noteDeployed,
+    ...(deps.noteDeployed ? { noteDeployed: deps.noteDeployed } : {}),
     startRegistration: () => {
       const tokenId = defaultTokenId(deps);
       if (tokenId) {
