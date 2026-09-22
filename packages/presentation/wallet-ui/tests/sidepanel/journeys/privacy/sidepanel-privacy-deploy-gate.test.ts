@@ -115,6 +115,46 @@ describe("privacy deployment gate", () => {
     expect(html).not.toContain("Deploy and enable");
   });
 
+  test("does not ask the chain when privacy is already unavailable", async () => {
+    let deploymentReads = 0;
+    const journeys = open(
+      {
+        blockerKind: "network",
+        error: "Private balances are not configured for this network",
+        loading: false,
+        value: null,
+      },
+      {
+        loadDeploymentStatus: async () => {
+          deploymentReads += 1;
+          throw new Error("rpc down");
+        },
+      },
+      () => null,
+    );
+    await tick();
+    const last = journeys.at(-1);
+    expect(last?.stage === "blocked" ? last.blocker.kind : null).toBe("network");
+    expect(deploymentReads).toBe(0);
+  });
+
+  test("offers receive on an unfunded undeployed token screen", () => {
+    const html = tokenDetailFlow(
+      status,
+      token,
+      { ...balance, balance: "0x0", formatted: "0" },
+      [],
+      null,
+      "usd",
+      { error: null, loading: false, value: null },
+      false,
+      false,
+    );
+    expect(html).toContain("Fund with STRK");
+    expect(html).toContain('data-view="receive"');
+    expect(html).not.toContain("Deploy and enable");
+  });
+
   test("sends an unfunded token row to receive instead of deployment", () => {
     const html = homeTabs(
       { balances: [balance] },

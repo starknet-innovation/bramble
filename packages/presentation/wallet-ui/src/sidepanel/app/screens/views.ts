@@ -16,6 +16,7 @@ import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify"
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type {
   ConnectedSite,
@@ -242,6 +243,9 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.chart.length > 0
       ? (context.chart[context.chart.length - 1] ?? null)
       : (context.prices[token.address] ?? null);
+  const fundedForFees = context.trackedBalances.some(
+    (balance) => sameFelt(balance.address, STRK_TOKEN_ADDRESS) && BigInt(balance.balance) > 0n,
+  );
   return tokenDetailFlow(
     context.status,
     token,
@@ -251,6 +255,7 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.currency,
     context.privacy,
     context.deployment,
+    fundedForFees,
   );
 };
 

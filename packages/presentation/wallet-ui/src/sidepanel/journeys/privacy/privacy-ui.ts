@@ -90,6 +90,23 @@ const openBucketSend = (
 // minute while a proof ran is exactly what was reported as "nothing happens".
 const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void> => {
   const before = deps.journey();
+  const disclosure = deps.disclosure();
+  const ineligible = privacyIneligibleKind(disclosure);
+  // A Ledger account or a network without a pool cannot become eligible by
+  // deploying. Read that answer before any deployment request, so a failed or
+  // hung status check cannot replace a refusal the wallet already has.
+  if (ineligible) {
+    block(
+      deps,
+      tokenId,
+      {
+        kind: ineligible,
+        message: disclosure.error ?? "Private balances unavailable",
+      },
+      before,
+    );
+    return;
+  }
   let deployment = deps.deployment?.();
   if (deployment === null) {
     const scope = captureScope(deps);
@@ -115,21 +132,7 @@ const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void>
       return;
     }
   }
-  const disclosure = deps.disclosure();
-  const ineligible = privacyIneligibleKind(disclosure);
-  if (ineligible) {
-    block(
-      deps,
-      tokenId,
-      {
-        kind: ineligible,
-        message: disclosure.error ?? "Private balances unavailable",
-      },
-      before,
-    );
-    return;
-  }
-  if (deploymentKnownFromPrivacy(deployment ?? null, disclosure) === false) {
+  if (deploymentKnownFromPrivacy(deployment ?? null, deps.disclosure()) === false) {
     block(deps, tokenId, { kind: "deploy", message: PRIVACY_DEPLOY_REQUIRED }, before);
     return;
   }

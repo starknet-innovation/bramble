@@ -195,9 +195,16 @@ const privacyActions = (
   tokenId: string,
   privacy: PrivacyDisclosureState,
   deployment: boolean | null,
+  fundedForFees = true,
 ): string => {
   const seen = deploymentKnownFromPrivacy(deployment, privacy);
   if (privacyIneligibleKind(privacy)) return "";
+  if (seen === false && !fundedForFees)
+    return button({
+      attributes: { "data-view": "receive" },
+      icon: "qrCode",
+      label: "Fund with STRK",
+    });
   if (seen === false)
     return button({
       attributes: { "data-privacy-open": tokenId },
@@ -232,6 +239,7 @@ export const tokenDetailFlow = (
     value: null,
   },
   deployment: boolean | null = null,
+  fundedForFees = true,
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
   const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);
@@ -278,7 +286,7 @@ export const tokenDetailFlow = (
               </div>`
                 : ""
         }
-        ${privacyActions(token.id, privacy, deployment)}
+        ${privacyActions(token.id, privacy, deployment, fundedForFees)}
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>
