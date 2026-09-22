@@ -9,6 +9,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { reviewFeeSection } from "@bramble/wallet-ui/lab";
+import { deployNotice } from "../../../src/sidepanel/shell/wallet-shell";
 
 const fee = (overallFee: string) => ({ overallFee, unit: "FRI" as const });
 
@@ -66,5 +67,20 @@ describe("undeployed-account fee review", () => {
 
     expect(html).toContain("Couldn't estimate");
     expect(html).not.toContain("Estimated fee:");
+  });
+
+  test("home offers deployment in the neutral voice, not as a fault", () => {
+    // An account that is not on chain yet is normal: the first send creates it,
+    // and the review quotes both halves. A danger-coloured alert chip said the
+    // user had done something wrong.
+    const notice = deployNotice(
+      { address: "0x1", derivation: { kind: "imported-raw-key" } } as never,
+      false,
+    );
+
+    expect(notice).toContain("Deploy account");
+    expect(notice).toContain("Your first send creates this account on Starknet");
+    expect(notice).not.toContain('icon="alert"');
+    expect(notice).toContain("deploy-chip");
   });
 });
