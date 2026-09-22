@@ -1,6 +1,7 @@
 /** Focused side-panel task screens opened from the wallet dock. */
 
 import { escapeHtml } from "@bramble/core/html";
+import { withDefaultGroups } from "@bramble/settings/groups";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
@@ -276,6 +277,8 @@ export const classHashVerificationBadge = (verification: ClassHashVerification |
  * bulk assignment) in the Groups accordion, name the account, and inspect
  * identifiers. `expandedGroupId` selects the one open Groups panel — a group's
  * bulk members editor or the "Create a group" panel (null = all collapsed).
+ * Both default folders are shown even when the wallet has never stored a
+ * group, matching the drawer, so they can be renamed here.
  */
 export const accountFlow = (
   status: WalletStatus,
@@ -291,7 +294,7 @@ export const accountFlow = (
     (stored) => stored.record.networkId === status.networkId,
   );
   const accountType = account ? knownAccountType(account.classHash) : null;
-  const groups = preferences?.groups ?? [];
+  const groups = withDefaultGroups(preferences?.groups ?? []);
   // One grouped picker owns the whole "which account" task: every account row,
   // then "Add account" as the group's terminal action — not a separate boxed
   // section. Each row is the select control, so its address copy sits beside

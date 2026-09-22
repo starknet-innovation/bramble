@@ -114,8 +114,8 @@ describe("manage-accounts group edge cases", () => {
     expect(harness.groups().map((entry) => entry.id)).toEqual([
       DEFAULT_GROUP_IDS.home,
       "work",
-      DEFAULT_GROUP_IDS.archived,
       "work-2",
+      DEFAULT_GROUP_IDS.archived,
     ]);
     expect(harness.groupById("work-2")?.name).toBe("Work");
   });
@@ -223,11 +223,14 @@ describe("group control focus restoration", () => {
     const memo = focusMemo();
 
     // The group is deleted, so neither its remove button nor its expander exist
-    // on the repaint; focus falls through to the next group's expander.
+    // on the repaint. Focus falls through to the first remaining folder, which
+    // is My accounts — it is always on this screen, ahead of any user folder.
     const remaining = [group("piggyBank", "savings", "Savings")];
     paintApp(manage(remaining, null));
     restoreFocus(app, memo);
-    expect(document.activeElement).toBe(app.querySelector('[data-group-expand="savings"]'));
+    expect(document.activeElement).toBe(
+      app.querySelector(`[data-group-expand="${DEFAULT_GROUP_IDS.home}"]`),
+    );
   });
 
   test("does not move focus when no tracked control was focused", () => {

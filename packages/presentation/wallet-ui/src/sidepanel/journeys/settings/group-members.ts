@@ -16,7 +16,7 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import type { AccountGroup, AccountGroups } from "@bramble/settings/groups";
+import { type AccountGroup, type AccountGroups, isDefaultGroup } from "@bramble/settings/groups";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { iconButton } from "@bramble/ui-kit/controls";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -92,12 +92,16 @@ const groupMembersEditor = (
     <div class="group-members" id="group-editor-${escapeHtml(group.id)}"${expanded ? "" : " hidden"}>
       <div class="group-members-head">
         <p class="eyebrow">${count} member${plural}</p>
-        ${iconButton({
-          attributes: { "data-remove-group": group.id },
-          icon: "x",
-          label: `Delete ${group.name}`,
-          tone: "danger",
-        })}
+        ${
+          isDefaultGroup(group.id)
+            ? ""
+            : iconButton({
+                attributes: { "data-remove-group": group.id },
+                icon: "x",
+                label: `Delete ${group.name}`,
+                tone: "danger",
+              })
+        }
       </div>
       ${editGroupForm(group)}
       ${
@@ -115,7 +119,8 @@ const groupMembersEditor = (
 
 /**
  * Renders the manage-accounts "Groups" section: the one home for group
- * management — creating a group, renaming/re-iconing/deleting each, and bucketing
+ * management — creating a group, renaming/re-iconing each, deleting a folder
+ * the user made (the two default folders have no delete control), and bucketing
  * accounts into it — as a single accordion. A "Create a group" panel leads, then
  * one row per group; each group expands into a members checklist listing every
  * wallet account (across networks) with the group's rename/icon/delete controls

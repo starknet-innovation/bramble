@@ -1,5 +1,6 @@
 /** Primary side-panel UI and its scene-preserving paint loop. */
 import type { LedgerConnector } from "@bramble/ledger-protocol/session";
+import { withDefaultGroups } from "@bramble/settings/groups";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { actionableApprovals } from "../journeys/approvals/approval-screen";
 import { bindLedgerFirstRun } from "../journeys/ledger/first-run";
@@ -295,7 +296,7 @@ export const startWalletUi = async (
     forcedDirection = null;
     expandedGroupId = healTransientGroupState(
       { expandedGroupId },
-      cache.preferences?.groups ?? [],
+      withDefaultGroups(cache.preferences?.groups ?? []),
     ).expandedGroupId;
     const classHashVerification = verificationForAccount(
       cache.classHashVerification,

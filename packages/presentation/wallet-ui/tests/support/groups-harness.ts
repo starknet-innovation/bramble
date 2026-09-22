@@ -15,6 +15,7 @@ import {
   type AccountGroupIcon,
   type AccountGroups,
   createGroup,
+  isDefaultGroup,
   removeGroup,
   renameGroup,
   setAccountInGroup,
@@ -189,9 +190,10 @@ const buildWallet = (
       if (rejects) {
         return fail();
       }
-      const next = createGroup(getGroups(), name, groupIcon);
+      const next = withDefaultGroups(createGroup(getGroups(), name, groupIcon));
       setGroups(next);
-      return Promise.resolve(next[next.length - 1]?.id ?? "");
+      const created = [...next].reverse().find((entry) => !isDefaultGroup(entry.id));
+      return Promise.resolve(created?.id ?? "");
     },
     renameGroup: (id: string, name: string): Promise<void> => {
       calls.renameGroup.push([id, name]);
@@ -308,7 +310,7 @@ export const mount = (
     // silently re-apply and tests exercise the real self-heal path.
     state.expandedGroupId = healTransientGroupState(
       { expandedGroupId: state.expandedGroupId },
-      groups,
+      withDefaultGroups(groups),
     ).expandedGroupId;
     if (view === "drawer") {
       const trigger = '<button id="account-trigger" aria-haspopup="dialog"></button>';

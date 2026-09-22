@@ -94,11 +94,32 @@ describe("manage-accounts group management", () => {
     document.body.replaceChildren();
   });
 
+  test("lists the default folders on an empty wallet, and they cannot be deleted", () => {
+    const harness = mount([], "account");
+
+    const rows = [...harness.container.querySelectorAll("[data-group-expand]")].map((row) =>
+      row.getAttribute("data-group-expand"),
+    );
+    expect(rows).toEqual(["__create__", DEFAULT_GROUP_IDS.home, DEFAULT_GROUP_IDS.archived]);
+    expect(
+      harness.container.querySelector(`[data-remove-group="${DEFAULT_GROUP_IDS.home}"]`),
+    ).toBeNull();
+    expect(
+      harness.container.querySelector(`[data-remove-group="${DEFAULT_GROUP_IDS.archived}"]`),
+    ).toBeNull();
+    // Nothing stored yet, so the create panel stays closed beside the defaults.
+    expect(harness.container.querySelector("#group-create-panel")?.hasAttribute("hidden")).toBe(
+      true,
+    );
+  });
+
   test("creates a group from the manage view's Create a group panel", async () => {
     const harness = mount([], "account");
 
-    // With no groups yet the create panel starts open, so its single form is the
-    // one creation surface (never duplicated per account row).
+    // Defaults are always listed, so the create panel starts closed. Opening it
+    // is the one creation surface (never duplicated per account row).
+    click(harness.container.querySelector('[data-group-expand="__create__"]'));
+    await harness.tick();
     expect(harness.container.querySelectorAll(".new-group-form").length).toBe(1);
     expect(harness.container.querySelector("#group-create-panel")?.hasAttribute("hidden")).toBe(
       false,
