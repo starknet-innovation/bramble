@@ -8,7 +8,7 @@ import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
 import { callout } from "@bramble/ui-kit/content";
-import { button, iconButton, iconLink } from "@bramble/ui-kit/controls";
+import { iconButton, iconLink } from "@bramble/ui-kit/controls";
 import { dockNavigation } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { explorerAccountUrl } from "@bramble/wallet-model/networks";
@@ -205,32 +205,3 @@ export const shieldTile = (
       : "Activate private balances";
   return `<button class="action-tile" ${attribute}="${escapeHtml(tokenId)}" type="button" aria-label="${label}">${body}</button>`;
 };
-
-/**
- * Renders the counterfactual-account status when chain state is conclusively
- * undeployed. Home only directs the user to the next task; fee review and
- * submission stay in their dedicated transaction journeys.
- */
-export const deployNotice = (
-  account: AccountRef | null,
-  deployment: boolean | null,
-  fundedForFees: boolean | null = true,
-): string =>
-  account === null || deployment !== false
-    ? ""
-    : `<div class="deploy-notice">
-        ${button({
-          attributes: {
-            "data-view": fundedForFees === false ? "receive" : "deploy-account",
-            title:
-              fundedForFees === false
-                ? "Deploying costs a network fee. Receive STRK into this account first."
-                : "Your first send creates this account on Starknet and quotes the fee for both. Deploy it now if you would rather do that first.",
-          },
-          className: "deploy-chip",
-          icon: "info",
-          label: fundedForFees === false ? "Fund with STRK" : "Deploy account",
-          size: "small",
-          variant: "secondary",
-        })}
-      </div>`;
