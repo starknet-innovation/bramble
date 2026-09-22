@@ -3,7 +3,8 @@
  * the default QR payload — and offers the Bramble contact card as a second
  * choice only once it is complete. A slow or failed coordination-key
  * derivation therefore never blocks receiving, and a partial card is never
- * offered (spec item 3).
+ * offered (spec item 3). Receive also carries the account's contract
+ * identifiers, which live here rather than on the manage-accounts screen.
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -27,6 +28,33 @@ const render = (): HTMLElement => {
         hint: "Share this account.",
         networkId: account.networkId,
         networkName: "Starknet Sepolia",
+        publicKeyX: account.publicKeyX,
+      }),
+    ),
+  );
+  document.body.append(app);
+  return app;
+};
+
+// The contract identifiers, rendered with an explicit class hash and verdict.
+const renderWithClassHash = (
+  // Taken from the view's own option so the fixture cannot drift from the shape
+  // it accepts; `null` is the still-verifying state the view also renders.
+  verification: NonNullable<
+    Parameters<typeof receiveAddressView>[0]["classHashVerification"]
+  > | null,
+): HTMLElement => {
+  document.body.replaceChildren();
+  const app = document.createElement("div");
+  app.append(
+    document.createRange().createContextualFragment(
+      receiveAddressView({
+        address: account.address,
+        classHash: account.classHash,
+        classHashVerification: verification,
+        copyLabel: "Copy account address",
+        hint: "Share this account.",
+        networkId: account.networkId,
         publicKeyX: account.publicKeyX,
       }),
     ),
@@ -202,5 +230,51 @@ describe("Receive address and wallet card", () => {
 
     pro?.click();
     expect(fields?.hasAttribute("hidden")).toBe(true);
+  });
+});
+
+describe("Receive carries the account's contract identifiers", () => {
+  test("shows the class hash with its copy control inside Pro, beside the keys", () => {
+    const app = renderWithClassHash(null);
+
+    const pro = app.querySelector("#receive-pro-fields");
+    expect(pro?.textContent).toContain("Class hash");
+    expect(pro?.querySelector(`[data-copy="${account.classHash}"]`)).not.toBeNull();
+    // The verdict is honest while it is still being checked: pending, never a
+    // silent "verified".
+    expect(pro?.querySelector(".verify-status.pending")).not.toBeNull();
+    expect(pro?.textContent).not.toContain("Verified on-chain");
+  });
+
+  test("reports an on-chain mismatch as an assertive alert, outside the collapsed Pro fields", () => {
+    const app = renderWithClassHash({
+      expectedClassHash: account.classHash,
+      onChainClassHash: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+      status: "mismatch",
+    });
+
+    const alert = app.querySelector(".verify-status.mismatch");
+    expect(alert?.getAttribute("role")).toBe("alert");
+    expect(alert?.textContent).toContain("On-chain mismatch");
+    // Pro renders collapsed, so "do not trust this account" cannot live inside
+    // it — and it renders once, not once in each place.
+    expect(app.querySelector("#receive-pro-fields")?.contains(alert ?? null)).toBe(false);
+    expect(app.querySelectorAll(".verify-status").length).toBe(1);
+  });
+
+  test("keeps every other verdict with the class hash it judges, inside Pro", () => {
+    for (const status of ["undeployed", "unreachable", "verified"] as const) {
+      const app = renderWithClassHash({ onChainClassHash: account.classHash, status });
+      const badge = app.querySelector(".verify-status");
+      expect(app.querySelectorAll(".verify-status").length).toBe(1);
+      expect(app.querySelector("#receive-pro-fields")?.contains(badge ?? null)).toBe(true);
+    }
+  });
+
+  test("omits the rows entirely for a caller with no class hash (watched multisig)", () => {
+    const app = render();
+
+    expect(app.querySelector("#receive-pro-fields")?.textContent).not.toContain("Class hash");
+    expect(app.querySelector(".verify-status")).toBeNull();
   });
 });
