@@ -17,7 +17,12 @@ import type { SidepanelWallet } from "../runtime/runtime";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
-import { takeAddressBookDraft } from "./address-draft";
+import {
+  addressBookDraft,
+  clearAddressBookDraft,
+  rememberAddressBookDraft,
+  takeAddressBookLabelFocus,
+} from "./address-draft";
 
 /**
  * Shared context: the app root, the runtime client, and a full re-render.
@@ -36,17 +41,35 @@ export type BindingContext = {
  */
 export const bindAddressBook = ({ app, render, wallet }: BindingContext): void => {
   const form = app?.querySelector<HTMLFormElement>("#address-form");
+  // The handoff lives until Save, or until this screen is gone. A shell
+  // repaint rebuilds the form from an empty template and reads it again.
+  if (!form) {
+    clearAddressBookDraft();
+    return;
+  }
   const result = app?.querySelector<HTMLElement>("#address-result");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
 
   // Arriving from Send's "Save address": the address is already known, so the
-  // form opens on it with only the label left to fill.
-  const draft = form ? takeAddressBookDraft() : "";
-  const addressField = form?.querySelector<HTMLInputElement>('[name="address"]');
-  if (draft && addressField) {
-    addressField.value = draft;
-    form?.querySelector<HTMLInputElement>('[name="label"]')?.focus();
+  // form opens on it with only the label left to fill. A later paint fills
+  // whichever of the two fields the focus restore left empty.
+  const addressField = form.querySelector<HTMLInputElement>('[name="address"]');
+  const labelField = form.querySelector<HTMLInputElement>('[name="label"]');
+  const draft = addressBookDraft();
+  if (addressField && addressField.value.trim() === "" && draft.address) {
+    addressField.value = draft.address;
   }
+  if (labelField && labelField.value.trim() === "" && draft.label) {
+    labelField.value = draft.label;
+  }
+  if (takeAddressBookLabelFocus()) {
+    labelField?.focus({ preventScroll: true });
+  }
+  const remember = (): void => {
+    rememberAddressBookDraft(addressField?.value ?? "", labelField?.value ?? "");
+  };
+  addressField?.addEventListener("input", remember);
+  labelField?.addEventListener("input", remember);
 
   // Everything past label and address is opt-in: the form asked for five fields
   // to record a name and an address, which is why it read as complex.
@@ -88,6 +111,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         if (input instanceof HTMLInputElement) input.value = value;
       }
       if (result) result.textContent = "Wallet card verified. Add a label, then save.";
+      rememberAddressBookDraft(addressField?.value ?? "", labelField?.value ?? "");
       const label = form.elements.namedItem("label");
       if (label instanceof HTMLInputElement) label.focus({ preventScroll: true });
     });
@@ -113,6 +137,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
       )
       .then(
         async () => {
+          clearAddressBookDraft();
           showToast("Address saved", "success", form);
           if (result) {
             result.textContent = "Address saved";
