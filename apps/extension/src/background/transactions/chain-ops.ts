@@ -8,12 +8,15 @@ import { walletErrorMessage } from "@bramble/core/errors";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
+import { requireLiveAuthorizableClass } from "@bramble/starknet/deployment";
+import { withRpcFallback } from "@bramble/starknet/provider";
 import { typedDataHashForChain } from "@bramble/starknet/typed-data";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
   type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
+import type { RpcProvider } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
@@ -35,6 +38,7 @@ import {
 } from "../routing/senders";
 import {
   type ActiveStateCoordinator,
+  networkRpcUrls,
   runActiveStateMutation,
   switchActiveNetwork,
 } from "../runtime/runtime-state";
@@ -93,7 +97,10 @@ const describeTypedData = (typedData: unknown): string => {
  * signature, or an error response the caller can deliver back to the dapp.
  */
 export const executeSignApproval = async (
-  deps: Pick<ChainOpsDeps, "ledgerSignQueue" | "preferencesStore" | "session" | "wallet">,
+  deps: Pick<ChainOpsDeps, "ledgerSignQueue" | "preferencesStore" | "session" | "wallet"> & {
+    /** Overrides endpoint construction. Unset, each endpoint builds its own client. */
+    readonly rpcProviderFor?: (nodeUrl: string) => RpcProvider;
+  },
   input: {
     readonly context?: ApprovalContext;
     readonly origin: string;
@@ -141,6 +148,17 @@ export const executeSignApproval = async (
   // settles the held dapp request with the real reason instead of leaving it to
   // hang on an unhandled throw. Fails closed — no signature returned on error.
   try {
+    // Argent 0.4's signer-array is the only Argent encoding this wallet emits.
+    // Check the class the account runs now, before the key is used, so an
+    // unupgraded 0.3.x account is refused instead of given a signature it
+    // cannot verify.
+    if (account.accountContractType === "argent") {
+      await withRpcFallback(
+        networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+        (provider) => requireLiveAuthorizableClass(provider, account),
+        deps.rpcProviderFor,
+      );
+    }
     const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
     return {
       ok: true,

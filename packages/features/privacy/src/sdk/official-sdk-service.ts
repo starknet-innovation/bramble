@@ -6,7 +6,8 @@
 import { WalletError } from "@bramble/core/errors";
 import { isJson } from "@bramble/core/json";
 import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
-import { createRpcProvider } from "@bramble/starknet/provider";
+import { requireLiveAuthorizableClass } from "@bramble/starknet/deployment";
+import { createRpcProvider, withRpcFallback } from "@bramble/starknet/provider";
 import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { Call, RpcProvider, TypedData } from "starknet";
@@ -369,6 +370,13 @@ export const createOfficialStrk20Service = ({
                 value as unknown as TypedData,
                 input.account.address,
               );
+              if (input.account.accountContractType === "argent") {
+                await withRpcFallback(
+                  input.rpcUrls,
+                  (provider) => requireLiveAuthorizableClass(provider, input.account),
+                  providerFor,
+                );
+              }
               const signature = await input.signHash(messageHash);
               return serializeAccountSignature(input.account.accountContractType, signature);
             },

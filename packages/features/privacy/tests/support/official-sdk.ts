@@ -59,12 +59,19 @@ const poolCallResult = (
  * queried address, with `"0x0"` modelling an unregistered recipient.
  */
 export const strk20ProviderFor =
-  (options: { readonly poolFee?: string; readonly publicKey?: string } = {}) =>
+  (
+    options: {
+      readonly classHash?: string;
+      readonly poolFee?: string;
+      readonly publicKey?: string;
+    } = {},
+  ) =>
   (): RpcProvider =>
     ({
       callContract: async (call: { entrypoint?: string }) =>
         poolCallResult(call?.entrypoint, options.poolFee ?? "0x0", options.publicKey ?? "0x77"),
-      getClassHashAt: async () => "0xdef",
+      getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 100 }),
+      getClassHashAt: async () => options.classHash ?? "0xdef",
       getBlockNumber: async () => 20,
       waitForTransaction: async () => ({
         block_number: 10,

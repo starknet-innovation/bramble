@@ -44,6 +44,8 @@ import {
   requireCompatibleArgentSigner,
 } from "./account-compatibility";
 
+export { requireLiveAuthorizableClass } from "./account-compatibility";
+
 /**
  * DEPLOY_ACCOUNT parameters for a counterfactual wallet account.
  */
