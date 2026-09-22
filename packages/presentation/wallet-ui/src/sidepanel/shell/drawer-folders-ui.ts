@@ -116,6 +116,12 @@ const bindDropTargets = (root: Element, deps: DrawerFolderDeps): void => {
       }
       void deps.wallet.setAccountInGroup(accountId, groupId, true).then(
         async () => {
+          // The archive starts collapsed, and a user-collapsed folder stays
+          // closed. Open the destination so the account that just landed
+          // there is on screen.
+          if (deps.collapsedFolders().includes(groupId)) {
+            deps.setCollapsedFolders(deps.collapsedFolders().filter((id) => id !== groupId));
+          }
           await repaint(deps);
         },
         (error: unknown) => {

@@ -216,6 +216,36 @@ describe("manage-accounts group management", () => {
     expect(harness.container.querySelector('[data-group-expand="work"]')).toBeNull();
   });
 
+  test("My accounts counts unfiled accounts, and clearing that row writes nothing", async () => {
+    const harness = mount([group("folder", "work", "Work", [acctA.id])], "account");
+
+    click(harness.container.querySelector(`[data-group-expand="${DEFAULT_GROUP_IDS.home}"]`));
+    await harness.tick();
+
+    const home = harness.container.querySelector(`[data-group-expand="${DEFAULT_GROUP_IDS.home}"]`);
+    // acctA is filed in Work. acctB is unfiled, so it is shown here.
+    expect(home?.textContent).toContain("1 account");
+    const homeRow = (id: string) =>
+      harness.container.querySelector<HTMLButtonElement>(
+        `[data-group-toggle="${DEFAULT_GROUP_IDS.home}"][data-account="${id}"]`,
+      );
+    expect(homeRow(acctB.id)?.getAttribute("aria-pressed")).toBe("true");
+    expect(homeRow(acctB.id)?.disabled).toBe(true);
+    expect(homeRow(acctA.id)?.getAttribute("aria-pressed")).toBe("false");
+    expect(homeRow(acctA.id)?.disabled).toBe(false);
+
+    click(homeRow(acctB.id) ?? null);
+    await harness.tick();
+    expect(harness.calls.setAccountInGroup).toEqual([]);
+    expect(homeRow(acctB.id)?.getAttribute("aria-pressed")).toBe("true");
+
+    click(homeRow(acctA.id) ?? null);
+    await harness.tick();
+    expect(harness.calls.setAccountInGroup).toEqual([[acctA.id, DEFAULT_GROUP_IDS.home, true]]);
+    expect(harness.groupById("work")?.accountIds).not.toContain(acctA.id);
+    expect(homeRow(acctA.id)?.getAttribute("aria-pressed")).toBe("true");
+  });
+
   test("buckets an account into a group from the members checklist", async () => {
     const harness = mount([group("folder", "work", "Work")], "account");
 
