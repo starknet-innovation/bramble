@@ -219,6 +219,11 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
 ${SIGN_REQUEST_STYLES}
   .review-flag { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; }
   .review-fee { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
+  /* The total is what the account pays; the deployment share explains it and
+     sits quieter, so the figure a user acts on is the one that reads first. */
+  .review-fee > p { margin: 0; }
+  .review-fee > p:first-child { color: var(--bramble-text); }
+  .review-fee-part { font-size: ${TYPE.micro.size}; }
   .tx-hint { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
   /* Allowances: one grouped surface, flat rows with inset dividers. */
   .allowance-list {

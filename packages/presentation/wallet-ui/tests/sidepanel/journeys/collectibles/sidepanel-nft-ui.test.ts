@@ -168,7 +168,7 @@ describe("NFT send review", () => {
     submit(app);
     await flush();
     expect(app.querySelector("#nft-review-panel")?.textContent).toContain(
-      "Estimated account deployment fee",
+      "Creating this account on Starknet is",
     );
     submit(app);
     await flush();
