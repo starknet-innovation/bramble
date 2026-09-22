@@ -61,10 +61,11 @@ export const privacyPoolNotice = (
 };
 
 /**
- * Renders the on-chain class-hash verification state shown beneath the account's
- * class hash. `null` is the still-loading state (kept visually distinct from a
- * confirmed result); a `mismatch` is a security signal and is surfaced as an
- * assertive alert. Only an exact on-chain match reads as verified.
+ * Renders the on-chain class-hash verification state. `null` is the still-loading
+ * state (kept visually distinct from a confirmed result). A `mismatch` is a
+ * security signal and names both the class deployed on-chain and the class this
+ * wallet expects, because that alert is hoisted above the collapsed Pro fields.
+ * Only an exact on-chain match reads as verified.
  */
 export const classHashVerificationBadge = (verification: ClassHashVerification | null): string => {
   if (verification === null) {
@@ -74,7 +75,7 @@ export const classHashVerificationBadge = (verification: ClassHashVerification |
     case "verified":
       return `<p class="verify-status verified" role="status">${icon("shield")}Verified on-chain</p>`;
     case "mismatch":
-      return `<p class="verify-status mismatch" role="alert">${icon("alert")}On-chain mismatch — the contract deployed at this address runs class <code>${escapeHtml(verification.onChainClassHash)}</code>, not the class shown above. Do not trust this account until resolved.</p>`;
+      return `<p class="verify-status mismatch" role="alert">${icon("alert")}On-chain mismatch — the contract deployed at this address runs class <code>${escapeHtml(verification.onChainClassHash)}</code>, not <code>${escapeHtml(verification.expectedClassHash)}</code>, the class this wallet expects. Do not trust this account until resolved.</p>`;
     case "undeployed":
       return `<p class="verify-status pending" role="status">${icon("alert")}Not deployed yet — the class hash cannot be verified on-chain until this account is deployed.</p>`;
     case "unreachable":
