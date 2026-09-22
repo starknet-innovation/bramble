@@ -321,6 +321,39 @@ describe("bindTransfer", () => {
     expect(calls.submitTransfer).toHaveLength(0);
   });
 
+  test("re-estimates instead of sending when the two fees cannot be added", async () => {
+    let reviewCount = 0;
+    const { app, calls, deps } = mount({
+      async reviewTransfer() {
+        reviewCount += 1;
+        return {
+          deploymentFee: { overallFee: "1500", unit: "WEI" },
+          deploymentFeeEstimateFailed: false,
+          fee: { overallFee: "2000", unit: "FRI" },
+          feeEstimateFailed: false,
+          flags: [],
+          requiresDeployment: true,
+          summaries: ["Deploy + transfer"],
+        };
+      },
+    });
+    bindTransfer(deps);
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+
+    submit(app);
+    await flush();
+    expect(reviewCount).toBe(1);
+    expect(feeText(app)).toContain("Couldn't estimate both");
+    expect(app.querySelector<HTMLButtonElement>("#send-confirm-button")?.disabled).toBe(true);
+    expect(calls.submitTransfer).toHaveLength(0);
+
+    app.querySelector<HTMLButtonElement>("#send-review-fee #review-retry-fee")?.click();
+    await flush();
+    expect(reviewCount).toBe(2);
+    expect(calls.submitTransfer).toHaveLength(0);
+  });
+
   test("keeps the review pending and offers a retry when the fee estimate fails", async () => {
     let reviewCount = 0;
     const { app, calls, deps } = mount({

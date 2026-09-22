@@ -52,6 +52,24 @@ const shortfallHtml = (state: ReviewFeeState): string =>
     ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it.</p>`
     : "";
 
+/**
+ * Whether this review has no single figure the user can consent to.
+ *
+ * A failed component, or two estimates that cannot be added (unlike units, a
+ * malformed amount), fails closed. Callers withhold the reviewed key and
+ * disable Confirm so the next click re-estimates instead of sending a figure
+ * the review did not quote. A deployment whose fee is simply not ready yet
+ * (no failure flag, no deployment estimate) is not blocked: that screen says
+ * the fee comes after deployment.
+ */
+export const reviewFeeBlocked = (state: ReviewFeeState): boolean =>
+  state.feeEstimateFailed === true ||
+  state.deploymentFeeEstimateFailed === true ||
+  (state.requiresDeployment === true &&
+    state.fee != null &&
+    state.deploymentFee != null &&
+    sumFeeEstimates(state.fee, state.deploymentFee) === null);
+
 const reviewBoundary = (content: string): string =>
   `<section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
     <p class="decision-label">Maximum cost and constraints</p>
