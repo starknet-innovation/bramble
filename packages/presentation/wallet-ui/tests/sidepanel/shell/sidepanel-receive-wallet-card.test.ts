@@ -145,7 +145,36 @@ describe("Receive address and wallet card", () => {
     expect(control?.querySelector("[data-receive-address-text]")?.textContent).toBe(
       account.address,
     );
+    // The label names the action; the address is the button's description, so
+    // assistive tech hears what will be copied rather than only "Copy".
+    expect(control?.getAttribute("aria-describedby")).toBe("receive-address-text");
+    expect(control?.querySelector("#receive-address-text")?.textContent).toBe(account.address);
     expect(control?.querySelector(".receive-address-copy-mark")).not.toBeNull();
+  });
+
+  test("puts the address back on the QR when Pro closes", async () => {
+    // Pro on, card selected, Pro off: the payload switch is gone, so the QR must
+    // not stay on a payload the user can no longer see or change.
+    const app = render();
+    bindReceiveWalletCard({
+      app,
+      render: async () => undefined,
+      wallet: { loadNostrPublicKey: async () => "11".repeat(32) } as unknown as SidepanelWallet,
+    });
+    await settle();
+    const pro = app.querySelector<HTMLButtonElement>("#receive-pro");
+    const qr = app.querySelector<HTMLElement>("[data-receive-qr]");
+
+    pro?.click();
+    app.querySelector<HTMLButtonElement>('[data-receive-payload="card"]')?.click();
+    expect(qr?.dataset["qrPayload"]).toBe("card");
+
+    pro?.click();
+    expect(qr?.dataset["qrPayload"]).toBe("address");
+    expect(qrLabel(app)).toBe("QR code for your Starknet address");
+    expect(
+      app.querySelector('[data-receive-payload="address"]')?.getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   test("keeps the contact card and the keys behind the Pro switch", () => {
