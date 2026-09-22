@@ -47,6 +47,7 @@ export const STRK20_CALL_AND_PROOF = {
 export type Strk20HarnessOptions = {
   /** Seeded activity log, for pending-registration derivation. */
   readonly activity?: ActivityLog;
+  readonly deployed?: boolean;
   readonly balance?: string;
   readonly balanceCalls?: { value: number };
   readonly invoked?: InvokeInput[];
@@ -205,6 +206,9 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       },
     },
     runtimeRpc: makeRuntimeRpc({
+      async getDeploymentStatus() {
+        return options.deployed ?? true;
+      },
       async getTokenBalances({ tokens }) {
         const balance = options.publicBalance ?? "100000000000000000000";
         return tokens.map((token) => ({

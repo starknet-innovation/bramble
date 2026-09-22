@@ -47,7 +47,7 @@ import {
   multisigsFlow,
 } from "../../journeys/multisig/multisig-views";
 import { activityScreen, requestsFlow } from "../../journeys/portfolio/activity-views";
-import { homeScreen } from "../../journeys/portfolio/home-view";
+import { homeScreen, strkAvailableForFees } from "../../journeys/portfolio/home-view";
 import {
   DEFAULT_CURRENCY,
   tokenAddFlow,
@@ -76,6 +76,7 @@ import { backupFlow, simpleFlowScreen } from "./flows";
 export { isWalletView, WALLET_VIEWS, type WalletView };
 
 type JourneyContext = {
+  readonly deployment: boolean | null;
   readonly account: AccountRef | null;
   readonly chart: readonly number[];
   readonly currency: DisplayCurrency;
@@ -86,6 +87,7 @@ type JourneyContext = {
   readonly multisigs: readonly ArgentMultisigView[];
   readonly multisigsError: boolean;
   readonly preferences: WalletPreferences | null;
+  readonly fundedForFees: boolean | null;
   readonly prices: Readonly<Record<string, number>>;
   readonly privacy: PrivacyDisclosureState;
   readonly privacyJourney: PrivacyJourneyState;
@@ -249,6 +251,8 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     price,
     context.currency,
     context.privacy,
+    context.deployment,
+    context.fundedForFees,
   );
 };
 
@@ -301,14 +305,17 @@ export const dashboard = (
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
   const trackedBalances = "balances" in balances ? balances.balances : [];
+  const fundedForFees = strkAvailableForFees(balances);
   const selectedPortfolioBalances =
     selectedMultisigId !== null && multisigBalanceId === selectedMultisigId
       ? multisigBalances
       : { error: "Shared balances are loading." };
   const journeyContext: JourneyContext = {
+    deployment,
     account,
     chart,
     currency,
+    fundedForFees,
     discoveredNfts,
     multisigClassDeclared,
     multisigPortfolio: {

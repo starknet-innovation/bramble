@@ -180,16 +180,29 @@ export const explorerTile = (url: string | null): string => {
  * no token to name — no account, or a network with none tracked — following the
  * explorer tile in staying put rather than reflowing the row.
  */
-export const shieldTile = (tokenId: string | null, ready: boolean): string => {
+export const shieldTile = (
+  tokenId: string | null,
+  ready: boolean,
+  deployment: boolean | null = null,
+  fundedForFees: boolean | null = true,
+): string => {
+  const needsDeploy = deployment === false;
+  const needsFunds = needsDeploy && fundedForFees === false;
+  const tileLabel = needsFunds ? "Fund with STRK" : needsDeploy ? "Deploy and enable" : "Shield";
   const body = `<span class="tile-icon">${icon("shield")}</span>
-      <span class="tile-label">Shield</span>`;
+      <span class="tile-label">${tileLabel}</span>`;
   if (tokenId === null) {
     return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable until a token is tracked">${body}</button>`;
   }
-  const attribute = ready ? "data-send-shield" : "data-privacy-open";
-  const label = ready
-    ? "Shield public value into your private balance"
-    : "Activate private balances";
+  if (needsFunds) {
+    return `<button class="action-tile" data-view="receive" type="button" aria-label="Receive STRK before deploying this account">${body}</button>`;
+  }
+  const attribute = ready && !needsDeploy ? "data-send-shield" : "data-privacy-open";
+  const label = needsDeploy
+    ? "Deploy and enable"
+    : ready
+      ? "Shield public value into your private balance"
+      : "Activate private balances";
   return `<button class="action-tile" ${attribute}="${escapeHtml(tokenId)}" type="button" aria-label="${label}">${body}</button>`;
 };
 
@@ -201,21 +214,22 @@ export const shieldTile = (tokenId: string | null, ready: boolean): string => {
 export const deployNotice = (
   account: AccountRef | null,
   deployment: boolean | null,
-  fundedForFees = true,
+  fundedForFees: boolean | null = true,
 ): string =>
   account === null || deployment !== false
     ? ""
     : `<div class="deploy-notice">
         ${button({
           attributes: {
-            "data-view": fundedForFees ? "deploy-account" : "receive",
-            title: fundedForFees
-              ? "This account contract is not on-chain yet. Deploying it enables transactions."
-              : "Deploying costs a network fee. Receive STRK into this account first.",
+            "data-view": fundedForFees === false ? "receive" : "deploy-account",
+            title:
+              fundedForFees === false
+                ? "Deploying costs a network fee. Receive STRK into this account first."
+                : "This account contract is not on-chain yet. Deploying it enables transactions.",
           },
           className: "deploy-chip",
           icon: "alert",
-          label: fundedForFees ? "Deploy account" : "Fund with STRK",
+          label: fundedForFees === false ? "Fund with STRK" : "Deploy account",
           size: "small",
           variant: "secondary",
         })}

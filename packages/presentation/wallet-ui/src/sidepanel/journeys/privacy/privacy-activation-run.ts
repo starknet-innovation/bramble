@@ -119,7 +119,11 @@ export const runActivation = (
     (error: unknown) => {
       const watched = settled();
       if (watched === null) return;
-      onBlocked(watched, privacyBlockerFor(errorMessage(error, "Private journey unavailable")));
+      const blocker = privacyBlockerFor(error);
+      onBlocked(watched, {
+        kind: blocker.kind,
+        message: errorMessage(error, blocker.message),
+      });
     },
   );
 };

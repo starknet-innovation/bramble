@@ -3,6 +3,10 @@
  * journeys. Nothing here is persisted across lock or extension restart.
  */
 
+import {
+  PrivacyBlockerError,
+  type PrivacyBlockerKind,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import type { PreparationProgress } from "./privacy-preparation-job";
 import type { PrivacyAccountState, PrivacyPreparation } from "./privacy-runtime";
 
@@ -13,6 +17,7 @@ import type { PrivacyAccountState, PrivacyPreparation } from "./privacy-runtime"
  */
 export type PrivacyDisclosureState = {
   readonly error: string | null;
+  readonly blockerKind?: PrivacyBlockerKind;
   readonly loading: boolean;
   readonly value: PrivacyAccountState | null;
 };
@@ -22,19 +27,7 @@ export type PrivacyDisclosureState = {
  * can do about it. Each kind maps to one explained screen with one action, so a
  * Shield control that cannot shield yet still leads somewhere.
  */
-export type PrivacyBlockerKind =
-  /** Registration needs a deployed account contract to send from. */
-  | "deploy"
-  /** The account holds less STRK than the pool fee plus network fee need. */
-  | "fund"
-  /** Private balances are not offered for this account type. */
-  | "ledger"
-  /** No privacy pool is configured for the active network. */
-  | "network"
-  /** A registration is broadcast and waiting on the indexer; nothing to do. */
-  | "pending"
-  /** Discovery or preparation failed for a reason a retry may clear. */
-  | "service";
+export type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
 
 /**
  * A blocker and the display-safe reason behind it. The message is what the
@@ -46,25 +39,42 @@ export type PrivacyBlocker = {
   readonly message: string;
 };
 
-// The privileged runtime's own wording for each prerequisite, matched by prefix
-// so a trailing detail (an amount, a token symbol) does not defeat the match.
-// Anything unrecognised is a service condition worth retrying, never a silent
-// return: the wrong classification still lands on an explained screen.
-const BLOCKER_PATTERNS: readonly (readonly [RegExp, PrivacyBlockerKind])[] = [
-  [/^Not enough STRK\b/i, "fund"],
-  [/^Deploy this account\b/i, "deploy"],
-  [/not configured for this network/i, "network"],
-  [/not available for Ledger/i, "ledger"],
-  [/already on its way/i, "pending"],
-];
+/**
+ * A network without a pool, or a Ledger account, cannot register. Those
+ * answers stay ahead of a deployment offer: paying to deploy would not make
+ * privacy available.
+ */
+export const privacyIneligibleKind = (
+  privacy: PrivacyDisclosureState,
+): "ledger" | "network" | null =>
+  privacy.blockerKind === "ledger" || privacy.blockerKind === "network"
+    ? privacy.blockerKind
+    : null;
 
 /**
- * Classifies a refusal from discovery or registration preparation into the
- * blocker the privacy screen explains.
+ * Registration that has already been broadcast or indexed only happens for an
+ * account that exists on chain. A stale "undeployed" cache must not hide that.
  */
-export const privacyBlockerFor = (message: string): PrivacyBlocker => ({
-  kind: BLOCKER_PATTERNS.find(([pattern]) => pattern.test(message))?.[1] ?? "service",
-  message,
+export const deploymentKnownFromPrivacy = (
+  deployment: boolean | null,
+  privacy: PrivacyDisclosureState,
+): boolean | null => {
+  const registration = privacy.value?.registration;
+  if (registration === "pending" || registration === "registered") {
+    return true;
+  }
+  return deployment;
+};
+
+/** Reads a validated typed refusal; unclassified errors always offer a service retry. */
+export const privacyBlockerFor = (error: unknown): PrivacyBlocker => ({
+  kind: error instanceof PrivacyBlockerError ? error.kind : "service",
+  message:
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "Private journey unavailable",
 });
 
 /**

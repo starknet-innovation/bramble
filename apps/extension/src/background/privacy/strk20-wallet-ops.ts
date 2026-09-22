@@ -21,6 +21,7 @@ import {
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import { systemClock } from "@bramble/transactions/activity";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
 import { createApprovalContext } from "../approvals/approval-context";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
@@ -28,6 +29,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
+  assertPrivacyAccountDeployed,
   assertPublicPoolSpendAffordable,
   errorText,
   estimatePublicStrk20Fee,
@@ -89,7 +91,7 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
     active: await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore),
   });
   if ("error" in context) {
-    return { error: context.error };
+    return context;
   }
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
@@ -163,6 +165,7 @@ const registrationPreparationWork = async (
 ): Promise<RuntimeResponse> => {
   const context = reportingPrivacyContext(resolved, report);
   try {
+    await assertPrivacyAccountDeployed(deps, context);
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
     const status = await readStrk20RegistrationStatus(service, {
       ...context.accountContext,
@@ -175,11 +178,17 @@ const registrationPreparationWork = async (
     // exactly the window in which a user is most likely to try again. Refuse to
     // prepare a duplicate on the local record instead.
     if (await hasPendingRegistration(deps, context)) {
-      return { error: "A registration is already on its way for this account" };
+      return {
+        error: "A registration is already on its way for this account",
+        privacyBlocker: "pending",
+      };
     }
     const config = context.accountContext.config;
     if (!config) {
-      return { error: "Private balances are not configured for this network" };
+      return {
+        error: "Private balances are not configured for this network",
+        privacyBlocker: "network",
+      };
     }
     if (!service.poolFee) {
       return { error: "Private pool fee is unavailable. Retry the registration." };
@@ -220,7 +229,10 @@ const registrationPreparationWork = async (
       }),
     };
   } catch (error) {
-    return { error: errorText(error, "Privacy registration preparation failed") };
+    return {
+      error: errorText(error, "Privacy registration preparation failed"),
+      privacyBlocker: error instanceof PrivacyBlockerError ? error.kind : "service",
+    };
   }
 };
 
@@ -230,7 +242,7 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
     active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
   });
   if ("error" in context) {
-    return { error: context.error };
+    return context;
   }
   return deps.strk20Jobs.start("register", (report) =>
     registrationPreparationWork(deps, context, report),

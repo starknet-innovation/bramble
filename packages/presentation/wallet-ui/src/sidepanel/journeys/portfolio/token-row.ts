@@ -121,14 +121,25 @@ export type PrivateBreakdown =
   | { readonly kind: "unavailable" }
   /** Registration broadcast, not yet visible to the privacy indexer. */
   | { readonly kind: "pending" }
-  | { readonly kind: "unregistered" };
+  | { readonly kind: "unregistered" }
+  | { readonly kind: "undeployed" }
+  /** Undeployed, and the public STRK balance cannot pay the deployment fee. */
+  | { readonly kind: "needs-funds" };
 
 const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown): string => {
   const symbol = token.symbol;
-  if (breakdown.kind === "unregistered") {
-    return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="Register to start shielding">
+  if (breakdown.kind === "needs-funds") {
+    return `<button class="token-breakdown-register" data-view="receive" type="button" title="Receive STRK before deploying this account">
         <span class="token-breakdown-label">${icon("lock")}Private balance</span>
-        <span>Register to start shielding</span>
+        <span>Fund with STRK</span>
+      </button>`;
+  }
+  if (breakdown.kind === "unregistered" || breakdown.kind === "undeployed") {
+    const label =
+      breakdown.kind === "undeployed" ? "Deploy and enable" : "Register to start shielding";
+    return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="${label}">
+        <span class="token-breakdown-label">${icon("lock")}Private balance</span>
+        <span>${label}</span>
       </button>`;
   }
   const value =

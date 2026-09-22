@@ -30,6 +30,11 @@ export type DeploymentCache = {
     activeView: WalletView,
     force?: boolean,
   ) => Promise<boolean | null>;
+  /**
+   * Records that this account is deployed. A poll that just watched deployment
+   * land must not leave the 60-second undeployed snapshot in place.
+   */
+  readonly noteDeployed: (networkId: string, accountId: string) => void;
 };
 
 /**
@@ -66,6 +71,10 @@ export const createDeploymentCache = (
         snapshots.set(known, snapshot);
       }
       return result ? result.deployed : null;
+    },
+    noteDeployed(networkId, accountId) {
+      const snapshot = { checkedAt: now(), deployed: true };
+      snapshots.set(`${networkId}:${accountId}`, snapshot);
     },
   };
 };

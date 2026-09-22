@@ -12,6 +12,11 @@ import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferenc
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { withTokenId } from "@bramble/wallet-model/preferences";
+import {
+  PRIVACY_DEPLOY_REQUIRED,
+  PrivacyBlockerError,
+  type PrivacyBlockerKind,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
@@ -128,7 +133,7 @@ export const assertPublicPoolSpendAffordable = async (
   const amount = depositAmountRaw === undefined ? 0n : BigInt(depositAmountRaw);
   if (depositIsStrk) {
     if (balanceOf(STRK_TOKEN_ADDRESS) < amount + fee) {
-      throw new WalletError("Not enough STRK for the amount and pool fee");
+      throw new PrivacyBlockerError("fund", "Not enough STRK for the amount and pool fee");
     }
     return;
   }
@@ -136,7 +141,7 @@ export const assertPublicPoolSpendAffordable = async (
     throw new WalletError(`Not enough ${context.token.symbol}`);
   }
   if (balanceOf(STRK_TOKEN_ADDRESS) < fee) {
-    throw new WalletError("Not enough STRK for the pool fee");
+    throw new PrivacyBlockerError("fund", "Not enough STRK for the pool fee");
   }
 };
 
@@ -150,14 +155,7 @@ export const estimatePublicStrk20Fee = async (
   calls: readonly Call[],
   proof: Strk20Proof,
 ): Promise<FeeEstimate> => {
-  if (
-    !(await deps.runtimeRpc.getDeploymentStatus({
-      accountAddress: context.accountContext.account.address,
-      rpcUrls: context.accountContext.rpcUrls,
-    }))
-  ) {
-    throw new WalletError("Deploy this account before using public privacy transactions");
-  }
+  await assertPrivacyAccountDeployed(deps, context);
   return deps.runtimeRpc.estimateInvokeFee({
     account: context.accountContext.account,
     calls,
@@ -165,6 +163,21 @@ export const estimatePublicStrk20Fee = async (
     rpcUrls: context.accountContext.rpcUrls,
     signHash: context.accountContext.signHash,
   });
+};
+
+/** Checks chain deployment before any registration discovery, fee read, or proof. RPC failures fail closed. */
+export const assertPrivacyAccountDeployed = async (
+  deps: Pick<Strk20WalletOpsDeps, "runtimeRpc">,
+  context: ActivePrivacyContext,
+): Promise<void> => {
+  if (
+    !(await deps.runtimeRpc.getDeploymentStatus({
+      accountAddress: context.accountContext.account.address,
+      rpcUrls: context.accountContext.rpcUrls,
+    }))
+  ) {
+    throw new PrivacyBlockerError("deploy", PRIVACY_DEPLOY_REQUIRED);
+  }
 };
 
 /**
@@ -183,7 +196,9 @@ export const estimatePublicStrk20Fee = async (
 export const resolvePrivacyContext = async (
   deps: Strk20WalletOpsDeps,
   input: { readonly active: ActiveAccountContext; readonly tokenId?: string },
-): Promise<ActivePrivacyContext | { readonly error: string }> => {
+): Promise<
+  ActivePrivacyContext | { readonly error: string; readonly privacyBlocker?: PrivacyBlockerKind }
+> => {
   const { active, tokenId } = input;
   if (active.error !== undefined) {
     return { error: active.error };
@@ -191,10 +206,16 @@ export const resolvePrivacyContext = async (
   const preferences = await deps.preferencesStore.read();
   const config = preferences.strk20Networks?.[active.networkId] ?? null;
   if (!config) {
-    return { error: "Private balances are not configured for this network" };
+    return {
+      error: "Private balances are not configured for this network",
+      privacyBlocker: "network",
+    };
   }
   if (active.account.derivation.kind === "ledger") {
-    return { error: "Private balances are not available for Ledger accounts" };
+    return {
+      error: "Private balances are not available for Ledger accounts",
+      privacyBlocker: "ledger",
+    };
   }
   const token = tokenId
     ? preferences.tokens.find(
