@@ -358,7 +358,7 @@ describe("swap operations", () => {
       amount: "0.01",
       hash: "0x5aa9",
       kind: "invoke",
-      summary: "Swap 0.01 ETH for ~12.5 STRK via AVNU",
+      summary: "Swap 0.01 ETH for ~12.5 STRK via avnu",
       token: "ETH",
     });
     expect(await handler({ preparationId, type: "wallet.swapExecute" }, extensionSender)).toEqual({

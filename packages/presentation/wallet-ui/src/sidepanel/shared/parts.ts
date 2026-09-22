@@ -133,7 +133,7 @@ const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   swap: "Swap",
   tokens: "Tokens",
   "token-add": "Add token",
-  "token-catalog": "AVNU token list",
+  "token-catalog": "avnu token list",
   "token-detail": "Token details",
   "token-discover": "Discover tokens",
 };
