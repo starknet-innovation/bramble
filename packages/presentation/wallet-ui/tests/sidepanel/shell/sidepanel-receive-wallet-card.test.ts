@@ -132,4 +132,46 @@ describe("Receive address and wallet card", () => {
     expect(html).not.toContain("data-receive-payload-switch");
     expect(html).toContain(account.address);
   });
+
+  test("the address itself is the copy control, marked as one", () => {
+    // Receiving is: show a QR, show the address, let it be copied. The copy
+    // button that used to sit below is the address row now, so what you tap
+    // and what you get are the same thing.
+    const app = render();
+    const control = app.querySelector<HTMLButtonElement>("button.receive-address-copy");
+
+    expect(control?.dataset["copy"]).toBe(account.address);
+    expect(control?.getAttribute("aria-label")).toBe("Copy account address");
+    expect(control?.querySelector("[data-receive-address-text]")?.textContent).toBe(
+      account.address,
+    );
+    expect(control?.querySelector(".receive-address-copy-mark")).not.toBeNull();
+  });
+
+  test("keeps the contact card and the keys behind the Pro switch", () => {
+    const app = render();
+    bindReceiveWalletCard({
+      app,
+      render: async () => undefined,
+      wallet: { loadNostrPublicKey: async () => "11".repeat(32) } as unknown as SidepanelWallet,
+    });
+
+    const pro = app.querySelector<HTMLButtonElement>("#receive-pro");
+    const fields = app.querySelector<HTMLElement>("#receive-pro-fields");
+    expect(pro?.getAttribute("aria-checked")).toBe("false");
+    expect(fields?.hasAttribute("hidden")).toBe(true);
+    // The QR and the address stay out in front of it.
+    expect(app.querySelector("[data-receive-qr]")).not.toBeNull();
+    expect(app.querySelector("button.receive-address-copy")).not.toBeNull();
+    // The card switch and the keys live inside, so they are there when asked for.
+    expect(fields?.querySelector("[data-receive-payload-switch]")).not.toBeNull();
+    expect(fields?.querySelector("[data-nostr-key-row]")).not.toBeNull();
+
+    pro?.click();
+    expect(pro?.getAttribute("aria-checked")).toBe("true");
+    expect(fields?.hasAttribute("hidden")).toBe(false);
+
+    pro?.click();
+    expect(fields?.hasAttribute("hidden")).toBe(true);
+  });
 });
