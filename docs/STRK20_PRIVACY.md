@@ -84,7 +84,8 @@ is reset on lock, account switch, network switch, side-panel reload, or extensio
    discovers private note totals for tracked tokens on the active network.
 2. An unregistered account gets an **Activate private balances** action. Its immutable review
    identifies the network, pool, public account route, and public link between the wallet address
-   and its viewing-key commitment. No registration is silent.
+   and its viewing-key commitment. The same batch opens the account's own private channel, so a
+   later shield to another wallet opens only that recipient's channel. No registration is silent.
 3. After activation, each tracked asset detail has a **Shield SYMBOL** action. The composer keeps
    token identity, public balance, amount shortcuts, and destination network together.
 4. The shielding review freezes the amount, token metadata, pool, actions, submission route, and

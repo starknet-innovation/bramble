@@ -40,6 +40,30 @@ describe("official STRK20 SDK registration discovery", () => {
     await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("registered");
   });
 
+  test("registration opens the account's own channel alongside the viewing key", async () => {
+    // The pinned SDK warns (`USER_LINKAGE`) when one batch opens more than one
+    // channel, and the wallet refuses on any warning. A registration that left
+    // the self channel unopened made the account's first shield to another
+    // wallet need two channels at once, so it always failed as a privacy leak.
+    const seen: unknown[] = [];
+    const sdk = runtime(() => ({
+      build: (options: unknown) => {
+        seen.push(options);
+        return builder(executeResult());
+      },
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({ providerFor, sdk });
+
+    await service.prepareRegistration?.({ ...context, poolFeeFri: "0x0" });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ autoRegister: false, autoSetup: true });
+  });
+
   test("invokes SDK discovery on its receiver rather than detached", async () => {
     // The real SDK is a class:
     //   discoverRequirement(t,n){ return this.discoveryProvider.discoverRequirement(this.user, …) }

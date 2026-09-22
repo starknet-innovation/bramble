@@ -186,6 +186,7 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
         `Registration preflight token ${token.address}`,
         `Approve and pay the reviewed ${poolFeeFri} STRK fri pool fee`,
         "Publishes a viewing-key commitment, never the viewing key",
+        "Opens this account's own private channel",
       ],
     });
   } catch (error) {
