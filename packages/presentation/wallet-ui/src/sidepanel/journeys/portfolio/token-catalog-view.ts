@@ -1,5 +1,5 @@
 /**
- * AVNU catalog screen template: the verified token list AVNU publishes for the
+ * avnu catalog screen template: the verified token list avnu publishes for the
  * active network, each entry offering the action that moves it — add it to the
  * tracked registry, or hide/show one already tracked.
  *
@@ -17,30 +17,30 @@ import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen } from "../../shared/parts";
 
 /** Copy shown while the list is being fetched. */
-export const CATALOG_LOADING_TEXT = "Loading the AVNU token list…";
+export const CATALOG_LOADING_TEXT = "Loading the avnu token list…";
 
 /**
- * Copy for a network AVNU publishes no catalog for — devnet, and a Sepolia list
+ * Copy for a network avnu publishes no catalog for — devnet, and a Sepolia list
  * that comes back empty. The screen stays reachable everywhere so the Tokens
  * screen does not change shape per network; it says so here instead, and points
  * at the path that always works.
  */
 export const CATALOG_EMPTY_TEXT =
-  "AVNU lists no tokens for this network. Add one by contract address instead.";
+  "avnu lists no tokens for this network. Add one by contract address instead.";
 
 /**
- * Renders the AVNU catalog screen: a search field over the list and the rows
+ * Renders the avnu catalog screen: a search field over the list and the rows
  * themselves, which arrive asynchronously.
  */
 export const tokenCatalogFlow = (status: WalletStatus): string =>
-  flowHeader("AVNU token list", status, "Tokens AVNU verifies for this network") +
+  flowHeader("avnu token list", status, "Tokens avnu verifies for this network") +
   flowScreen(
     "token-catalog",
     `<section class="section">
       <label class="send-search">
         <span>Search</span>
         <span class="send-search-control">${icon("search")}${inputControl({
-          ariaLabel: "Search the AVNU token list by name, symbol, or address",
+          ariaLabel: "Search the avnu token list by name, symbol, or address",
           attributes: { id: "token-catalog-search" },
           autocomplete: "off",
           placeholder: "Name, symbol, or address",

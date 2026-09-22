@@ -1,5 +1,5 @@
 /**
- * Swap flow screen template (AVNU aggregator): a Sell panel and a Buy panel
+ * Swap flow screen template (avnu aggregator): a Sell panel and a Buy panel
  * stacked around a flip control, a rate/fee meta line, and the staged
  * confirm/receipt sections. Pure skeleton — every dynamic region (token
  * chips, balances, USD figures, quote, receipts) is populated by
@@ -66,7 +66,7 @@ const swapPanel = (side: "buy" | "sell", disabled: boolean): string => `
 export const swapFlow = (status: WalletStatus, account: AccountRef | null): string => {
   const disabled = account === null;
   return (
-    flowHeader("Swap", status, "Best route via AVNU") +
+    flowHeader("Swap", status, "Best route via avnu") +
     flowScreen(
       "swap",
       `${disabled ? noAccountEmpty(status) : ""}
@@ -194,5 +194,5 @@ export const swapQuoteDetails = (figures: SwapConfirmFigures): string =>
       label: "Aggregator fee estimate",
       value: `≈ ${formatFiat(figures.gasFeesInUsd, "usd")} (not wallet-enforced)`,
     },
-    { label: "Route", value: "AVNU aggregator" },
+    { label: "Route", value: "avnu aggregator" },
   ]);

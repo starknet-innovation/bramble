@@ -1,9 +1,9 @@
 /**
- * In-wallet swap operations over the AVNU aggregator, dispatched from the
+ * In-wallet swap operations over the avnu aggregator, dispatched from the
  * background message handler. Both messages are privileged (extension pages
  * only, deny-by-default in ../routing/senders.ts) and follow the wallet's
  * execution contract: token addresses come from the user's TRACKED registry
- * (never from the UI message), AVNU responses are validated at the
+ * (never from the UI message), avnu responses are validated at the
  * @bramble/transactions/avnu boundary, the COMPLETE built call set passes the
  * intent policy gate in ../privacy/swap-build-policy.ts — against the router
  * address and swap selector the WALLET pins per network and the route calldata
@@ -42,7 +42,7 @@ import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "
 import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
 
 /**
- * Dependencies for the swap handler: the shared wallet-ops set plus the AVNU
+ * Dependencies for the swap handler: the shared wallet-ops set plus the avnu
  * swap service (injected fetch; unavailable default fails closed).
  */
 export type SwapOpsDeps = WalletOpsDeps & {
@@ -313,7 +313,7 @@ const swapExecuteResponse = async (
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.networkId,
-      summary: `Swap ${preparation.amount} ${preparation.sellSymbol} for ~${preparation.buyAmount} ${preparation.buySymbol} via AVNU`,
+      summary: `Swap ${preparation.amount} ${preparation.sellSymbol} for ~${preparation.buyAmount} ${preparation.buySymbol} via avnu`,
       token: preparation.sellSymbol,
     });
     return { ok: true, transactionHash: result.transactionHash };

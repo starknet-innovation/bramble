@@ -127,6 +127,23 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-list-heading > .icon { height: ${CONTROL.icon}; width: ${CONTROL.icon}; }
   .send-list-heading > strong:first-of-type { color: var(--bramble-text); margin-right: auto; }
+  /* Recipient folders: the same grouping the account drawer shows, so an
+     account is found under the folder the user filed it into. */
+  .send-recipient-folder { display: grid; gap: ${SPACE.sm}; }
+  button.send-folder-head {
+    background: transparent;
+    padding: 0;
+    text-align: start;
+    width: 100%;
+  }
+  .send-folder-count {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.micro.size};
+    font-variant-numeric: tabular-nums;
+  }
+  .send-folder-mark { display: inline-flex; }
+  .send-folder-mark .icon { height: 14px; width: 14px; }
+  .send-folder-empty { margin: 0; }
   .send-recipient-row, .send-asset-row {
     background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
