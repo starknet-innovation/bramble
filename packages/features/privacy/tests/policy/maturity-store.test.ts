@@ -47,4 +47,53 @@ describe("STRK20 maturity store", () => {
 
     expect(await store.read(scope)).toBeNull();
   });
+
+  test("round-trips the signed identity of a submitting write", async () => {
+    const store = createStrk20MaturityStore(createMemoryStore());
+    const signed = {
+      nonce: "0x0",
+      senderAddress: "0xabc",
+      state: "submitting" as const,
+      transactionHash: "0x456",
+    };
+    await store.write(scope, signed);
+
+    expect(await store.read(scope)).toEqual(signed);
+  });
+
+  test("drops a signed identity that is partial, malformed, or on a submitted row", async () => {
+    const backing = createMemoryStore();
+    const store = createStrk20MaturityStore(backing);
+    for (const row of [
+      // Hash and nonce without the sender that proves a spent nonce.
+      { ...scope, nonce: "0x1", state: "submitting", transactionHash: "0x456" },
+      // A nonce that is not a canonical field element.
+      {
+        ...scope,
+        nonce: "1",
+        senderAddress: "0xabc",
+        state: "submitting",
+        transactionHash: "0x456",
+      },
+      // A zero hash names no transaction.
+      {
+        ...scope,
+        nonce: "0x1",
+        senderAddress: "0xabc",
+        state: "submitting",
+        transactionHash: "0x0",
+      },
+      // Identity fields belong to the submitting marker only.
+      {
+        ...scope,
+        nonce: "0x1",
+        senderAddress: "0xabc",
+        state: "submitted",
+        transactionHash: "0x456",
+      },
+    ]) {
+      await backing.set("bramble:strk20-maturity", [row]);
+      expect(await store.read(scope)).toBeNull();
+    }
+  });
 });

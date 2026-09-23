@@ -15,6 +15,7 @@ import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isNonZeroStarkFieldElement,
+  isStarkFieldElement,
   isStarknetNetworkId,
   sameFelt,
 } from "@bramble/wallet-model/networks";
@@ -24,13 +25,31 @@ const MAX_RECORDS = 100;
 
 type StoredMaturity = Strk20MaturityRecord & Strk20MaturityScope;
 
+// A submitting record either names nothing yet, or names the complete signed
+// write: hash, sender, and nonce together, each a canonical field element (the
+// nonce may be zero). A partial identity could not resolve anything and is
+// dropped like any other malformed entry.
+const isSubmittingIdentity = (value: Record<string, unknown>): boolean =>
+  value["acceptedBlock"] === undefined &&
+  ((value["transactionHash"] === undefined &&
+    value["senderAddress"] === undefined &&
+    value["nonce"] === undefined) ||
+    (typeof value["transactionHash"] === "string" &&
+      isNonZeroStarkFieldElement(value["transactionHash"]) &&
+      typeof value["senderAddress"] === "string" &&
+      isNonZeroStarkFieldElement(value["senderAddress"]) &&
+      typeof value["nonce"] === "string" &&
+      isStarkFieldElement(value["nonce"])));
+
 const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
     "acceptedBlock",
     "accountId",
     "networkId",
+    "nonce",
     "poolAddress",
+    "senderAddress",
     "state",
     "transactionHash",
   ]) &&
@@ -39,10 +58,10 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   typeof value["poolAddress"] === "string" &&
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
-  ((value["state"] === "submitting" &&
-    value["transactionHash"] === undefined &&
-    value["acceptedBlock"] === undefined) ||
+  ((value["state"] === "submitting" && isSubmittingIdentity(value)) ||
     (value["state"] === "submitted" &&
+      value["senderAddress"] === undefined &&
+      value["nonce"] === undefined &&
       typeof value["transactionHash"] === "string" &&
       isNonZeroStarkFieldElement(value["transactionHash"]) &&
       (value["acceptedBlock"] === undefined ||
@@ -72,7 +91,14 @@ export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityS
           return null;
         }
         if (entry.state === "submitting") {
-          return { state: "submitting" };
+          return entry.transactionHash === undefined
+            ? { state: "submitting" }
+            : {
+                nonce: entry.nonce,
+                senderAddress: entry.senderAddress,
+                state: "submitting",
+                transactionHash: entry.transactionHash,
+              };
         }
         return {
           ...(entry.acceptedBlock === undefined ? {} : { acceptedBlock: entry.acceptedBlock }),

@@ -16,14 +16,32 @@ export type Strk20MaturityScope = {
 };
 
 /**
+ * Public identity of a signed privacy write, journaled before it is sent: the
+ * transaction hash to look it up by, and the sender and nonce that prove it can
+ * no longer land once the sender's nonce has moved past it. Only account-mode
+ * sends have one; the private relay builds its own transaction and reports the
+ * hash only in its answer.
+ */
+export type Strk20SignedSubmission = {
+  readonly nonce: string;
+  readonly senderAddress: string;
+  readonly transactionHash: string;
+};
+
+/**
  * Latest privacy write. `submitting` is persisted immediately before the
  * broadcast boundary so an indeterminate post-broadcast failure cannot be
- * mistaken for a clean scope.
+ * mistaken for a clean scope. It carries the signed identity once the write is
+ * signed, which lets a later action resolve the outcome on-chain instead of
+ * waiting for the browser session to end.
  */
 export type Strk20MaturityRecord =
-  | {
+  | ({
       readonly state: "submitting";
-    }
+    } & (
+      | Strk20SignedSubmission
+      | { readonly nonce?: never; readonly senderAddress?: never; readonly transactionHash?: never }
+    ))
   | {
       readonly acceptedBlock?: number;
       readonly state: "submitted";
