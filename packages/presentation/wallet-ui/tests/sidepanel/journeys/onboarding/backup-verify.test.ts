@@ -4,7 +4,9 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  BACKUP_VERIFY_COPY,
   BACKUP_VERIFY_POSITIONS,
+  backupVerifyState,
   verifyBackupWords,
 } from "../../../../src/sidepanel/journeys/onboarding/backup-verify";
 
@@ -41,5 +43,40 @@ describe("verifyBackupWords", () => {
 
   test("does not match a blank answer against a missing word", () => {
     expect(verifyBackupWords("one two", ["", "", ""])).toBe(false);
+  });
+});
+
+describe("backupVerifyState", () => {
+  // Positional placeholders, not recovery words: the classifier only compares
+  // answers against the words at the requested positions.
+  const placeholder = Array.from({ length: 12 }, (_, index) => `w${index + 1}`).join(" ");
+  const matching = BACKUP_VERIFY_POSITIONS.map((position) => `w${position}`);
+
+  test("confirms exactly when verifyBackupWords does", () => {
+    expect(backupVerifyState(placeholder, matching)).toBe("confirmed");
+    expect(backupVerifyState(placeholder, [" W3 ", "w7", "W11"])).toBe("confirmed");
+  });
+
+  test("is incomplete while any requested word is blank", () => {
+    expect(backupVerifyState(placeholder, [])).toBe("incomplete");
+    expect(backupVerifyState(placeholder, ["w3", "", "w11"])).toBe("incomplete");
+    expect(backupVerifyState(placeholder, ["w3", "   ", "w11"])).toBe("incomplete");
+    expect(backupVerifyState(placeholder, ["nope", "nope"])).toBe("incomplete");
+  });
+
+  test("is a mismatch once every word is entered and any differs", () => {
+    expect(backupVerifyState(placeholder, ["w3", "w7", "w12"])).toBe("mismatch");
+    expect(backupVerifyState(placeholder, ["w7", "w3", "w11"])).toBe("mismatch");
+    // A phrase too short to check never confirms, however complete the answers.
+    expect(backupVerifyState("w1 w2", matching)).toBe("mismatch");
+  });
+
+  test("tells a wrong word apart from an empty form", () => {
+    expect(BACKUP_VERIFY_COPY.mismatch).not.toBe(BACKUP_VERIFY_COPY.incomplete);
+    expect(BACKUP_VERIFY_COPY.confirmed).toBe("Backup confirmed.");
+    // The copy never echoes or points at a word.
+    for (const copy of Object.values(BACKUP_VERIFY_COPY)) {
+      expect(copy).not.toMatch(/\bw\d+\b|word [0-9]/i);
+    }
   });
 });
