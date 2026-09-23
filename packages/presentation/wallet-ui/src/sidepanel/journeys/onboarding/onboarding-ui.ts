@@ -198,7 +198,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const verificationState = () => backupVerifyState(mnemonic, verifyAnswers());
   const verificationSatisfied = () => verificationState() === "confirmed";
 
-  // A mismatch shows once a word is committed (blur/Enter), never mid-typing.
+  // A mismatch shows on commit (blur/Enter) or a Continue attempt, never mid-typing.
   const refreshVerification = (reportMismatch = false): void => {
     const state = verificationState();
     const shown = state === "mismatch" && !reportMismatch ? "incomplete" : state;
@@ -360,7 +360,8 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     input.addEventListener("input", () => refreshVerification());
     input.addEventListener("change", () => refreshVerification(true));
   }
-  verifyContinue?.addEventListener("click", () => {
+  verifyContinue?.parentElement?.addEventListener("click", () => {
+    refreshVerification(true);
     if (verificationSatisfied()) {
       showStep("password");
       refreshPassword();

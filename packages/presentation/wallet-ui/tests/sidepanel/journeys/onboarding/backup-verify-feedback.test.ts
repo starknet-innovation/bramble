@@ -1,9 +1,9 @@
 /**
  * The "Confirm your backup" step tells a wrong word apart from an unfinished
  * form. Typing stays quiet, so the last word never flashes an error while it
- * is still being entered; committing a word (blur or Enter) that leaves the
- * set mismatched says so in the danger tone, and Continue stays gated on the
- * unchanged backup check either way.
+ * is still being entered; committing a word (blur or Enter), or pressing the
+ * still-disabled Continue, says so in the danger tone. Continue stays gated
+ * on the unchanged backup check either way.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
@@ -14,6 +14,7 @@ import {
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
+import { ONBOARDING_STYLES } from "../../../../src/sidepanel/styles/onboarding/styles-onboarding";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
@@ -112,6 +113,27 @@ describe("backup verification feedback", () => {
     expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.mismatch);
     expect(statusLine(app)?.classList.contains("is-invalid")).toBe(true);
     expect(continueDisabled(app)).toBe(true);
+  });
+
+  test("pressing the disabled Continue reports a mismatch without a field commit", async () => {
+    const app = await mountAtVerify();
+    type(app, 0, MATCHING[0] ?? "");
+    type(app, 1, MATCHING[1] ?? "");
+    type(app, 2, "wrong");
+    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.incomplete);
+    expect(continueDisabled(app)).toBe(true);
+    // A disabled button is not a hit target. The click lands on the step
+    // action because the control is taken out of pointer events.
+    expect(ONBOARDING_STYLES).toContain("#verify-continue:disabled { pointer-events: none; }");
+    app
+      .querySelector('[data-onboarding-step="verify"] .onboarding-step-cta')
+      ?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.mismatch);
+    expect(statusLine(app)?.classList.contains("is-invalid")).toBe(true);
+    expect(continueDisabled(app)).toBe(true);
+    expect(app.querySelector('[data-onboarding-step="password"]')?.hasAttribute("hidden")).toBe(
+      true,
+    );
   });
 
   test("committing an unfinished form never reports a mismatch", async () => {
