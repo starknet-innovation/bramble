@@ -136,9 +136,9 @@ export const ONBOARDING_STYLES = `
     width: 100%;
   }
   .onboarding-step-cta button, .onboarding-welcome-actions button { width: 100%; }
-  /* A disabled Continue cannot take focus, so a click on it never blurs the
-     word field. Let that click fall through to the step action, which reports
-     a mismatch. */
+  /* The hit shell is only the button's box. A disabled Continue lets the click
+     fall through to that shell, not into the CTA padding above it. */
+  .verify-continue-hit { display: grid; }
   #verify-continue:disabled { pointer-events: none; }
 
   .onboarding-gate {
