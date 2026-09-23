@@ -117,7 +117,7 @@ const deployAccountFlow = (
     `<section class="section">
       ${
         account
-          ? `<section id="deploy-review-stage">
+          ? `<section class="section" id="deploy-review-stage">
               ${reviewOutcome("Deploy this account contract on Starknet so it can submit transactions.")}
               ${receipt([
                 { label: "Account", value: accountDisplayName(account, preferences) },
