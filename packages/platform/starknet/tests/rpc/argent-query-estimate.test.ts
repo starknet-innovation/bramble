@@ -3,7 +3,7 @@
 import { expect, test } from "bun:test";
 import { ARGENT_ACCOUNT_CONTRACT } from "@bramble/starknet/account-contracts";
 import { estimateInvokeFee } from "@bramble/starknet/rpc";
-import { submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
+import { INVOKE_NOT_JOURNALED, submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { logger, type RpcProvider } from "starknet";
 
@@ -157,6 +157,67 @@ test("Argent submission settles validation-inclusive bounds before private signi
     `"signature":["1","0","${account.publicKeyX}","0x1","0x2"]`,
   );
   expect(privatelySigned).toBe(1);
+});
+
+test("a journaled submission reports the signed invoke and its pinned nonce before sending", async () => {
+  let signedHash: string | undefined;
+  const { calls, provider } = makeProvider(
+    account.classHash,
+    account.publicKeyX,
+    "0x0",
+    () => signedHash,
+  );
+  const journaled: { readonly signed: unknown; readonly sentBefore: boolean }[] = [];
+  const result = await submitInvokeTransaction(
+    {
+      account,
+      calls: [{ calldata: [], contractAddress: "0x111", entrypoint: "transfer" }],
+      onSigned: async (signed) => {
+        journaled.push({ sentBefore: calls.some((call) => call.method === "invoke"), signed });
+      },
+      reviewedFee: { overallFee: "100", unit: "FRI" },
+      rpcUrls: ["https://rpc.invalid"],
+      signHash: async (messageHash) => {
+        signedHash = messageHash;
+        return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+      },
+    },
+    () => provider,
+  );
+
+  // One journal entry, written before the invoke reached the node, naming the
+  // exact transaction that was sent and the nonce read to sign it.
+  expect(journaled).toEqual([
+    {
+      sentBefore: false,
+      signed: {
+        nonce: "0x0",
+        senderAddress: account.address,
+        transactionHash: result.transactionHash,
+      },
+    },
+  ]);
+  expect(calls.some((call) => call.method === "getNonceForAddress")).toBe(true);
+});
+
+test("a journal that fails aborts the submission before anything is sent, determinately", async () => {
+  const { calls, provider } = makeProvider();
+  await expect(
+    submitInvokeTransaction(
+      {
+        account,
+        calls: [{ calldata: [], contractAddress: "0x111", entrypoint: "transfer" }],
+        onSigned: async () => {
+          throw new Error("journal unavailable");
+        },
+        reviewedFee: { overallFee: "100", unit: "FRI" },
+        rpcUrls: ["https://rpc.invalid"],
+        signHash: async () => ({ publicKey: account.publicKeyX, r: "0x1", s: "0x2" }),
+      },
+      () => provider,
+    ),
+  ).rejects.toThrow(INVOKE_NOT_JOURNALED);
+  expect(calls.some((call) => call.method === "invoke")).toBe(false);
 });
 
 test("Argent invoke estimate and submission reject a different live class before signing", async () => {
