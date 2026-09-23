@@ -120,11 +120,12 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   li.token-row:has(button.token-open:active) { background: var(--bramble-soft-press); transform: scale(0.985); }
   .token-list > li.token-row:has(button.token-open:active)::before,
   .token-list > li.token-row:has(button.token-open:active) + .token-row::before { opacity: 0; }
-  /* The row that trails the list (Manage tokens) reads as its last row: the
-     same bleed, and its glyph centred in the logo column so its label starts
-     where the token names do. */
-  .token-list ~ button.menu-row { gap: ${SPACE.md}; margin: 0 -${SPACE.sm}; padding: 0 ${SPACE.sm}; width: calc(100% + ${SPACE.sm} * 2); }
-  .token-list ~ button.menu-row .menu-icon { justify-content: center; width: 40px; }
+  /* Manage tokens reads as the list's last row: the same bleed, and its glyph
+     centred in the logo column so its label starts where the token names do.
+     The portfolio still renders this row when every balance is hidden and no
+     list exists, so the column does not depend on a preceding .token-list. */
+  .home-tabs > button.menu-row { gap: ${SPACE.md}; margin: 0 -${SPACE.sm}; padding: 0 ${SPACE.sm}; width: calc(100% + ${SPACE.sm} * 2); }
+  .home-tabs > button.menu-row .menu-icon { justify-content: center; width: 40px; }
   /* Token glyph: a neutral chip — the accent is reserved for signal, not logos. */
   .token-mark {
     align-items: center;

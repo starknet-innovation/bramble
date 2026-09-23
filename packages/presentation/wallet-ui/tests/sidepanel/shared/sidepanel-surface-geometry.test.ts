@@ -77,6 +77,17 @@ describe("sidepanel surface geometry", () => {
     );
   });
 
+  test("Manage tokens keeps the token column when the list is absent", () => {
+    // Hiding every balance renders the empty state and this row, with no
+    // .token-list for a sibling selector to hang from.
+    const row = rule(".home-tabs > button.menu-row");
+    expect(row).toContain(`gap: ${SPACE.md}`);
+    expect(row).toContain(`margin: 0 -${SPACE.sm}`);
+    expect(row).toContain(`padding: 0 ${SPACE.sm}`);
+    expect(rule(".home-tabs > button.menu-row .menu-icon")).toContain("width: 40px");
+    expect(CSS).not.toContain(".token-list ~ button.menu-row");
+  });
+
   test("a composite search field carries one continuous edge", () => {
     // The input's own bottom stroke stopped short of the icon and curled up at
     // the input's corner; the box owns the edge and the radius instead.
