@@ -10,11 +10,11 @@ import {
   isTransactionNotFoundError,
   isTransportRpcError,
 } from "@bramble/starknet/provider";
+import { classifyTransactionStatus } from "@bramble/starknet/rpc";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
-  sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import {
@@ -64,24 +64,53 @@ const canonicalSigned = (signed: Strk20SignedSubmission): Strk20SignedSubmission
     : null;
 };
 
-type SignedOutcome = "dropped" | "landed" | "unknown";
+type SignedOutcome = "dropped" | "landed" | "rejected" | "unknown";
 
-// What the chain says about a write whose send lost its answer. Any status
-// answer means the node knows the transaction, so it is followed like any
-// submitted write. "Not found" alone is noise — a hash can be unknown to one
-// node for a moment, or to one backend behind a balancer — so the write counts
-// as dropped only when the sender's nonce was already spent past it in a block
-// PROVING_BLOCK_DEPTH deep, and the node, asked again after that, still does not
-// know the hash. A nonce is spent once, so such a write can never land.
-// Everything else, including any failed read, stays unknown and closed.
+// A nonce answer is an untrusted RPC value. Only a string that canonicalizes
+// to a field element can prove the sender's nonce moved; a decimal or an
+// integer past the field is not a nonce, and treating it as one could release
+// a write that may still land.
+const chainNonce = (value: unknown): bigint | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const felt = canonicalFelt(value);
+  return felt !== null && isStarkFieldElement(felt) ? BigInt(felt) : null;
+};
+
+// What the chain says about a write whose send lost its answer. A status the
+// node answers is followed like any submitted write, except REJECTED: the
+// sequencer refused that hash, it will not be included, and its nonce was not
+// spent, so the signed marker is released instead of being replaced by a
+// submitted record that no longer carries the nonce. "Not found" alone is
+// noise — a hash can be unknown to one node for a moment, or to one backend
+// behind a balancer — so the write counts as dropped only when the sender's
+// nonce was already spent past it in a block PROVING_BLOCK_DEPTH deep, and the
+// node, asked again after that, still does not know the hash. A nonce is spent
+// once, so such a write can never land. Everything else, including any failed
+// read or a nonce that is not a field element, stays unknown and closed.
 const resolveSigned = async (
   provider: RpcProvider,
   signed: Strk20SignedSubmission,
 ): Promise<SignedOutcome> => {
   const lookUp = async (): Promise<SignedOutcome> => {
     try {
-      await provider.getTransactionStatus(signed.transactionHash);
-      return "landed";
+      const status = classifyTransactionStatus(
+        await provider.getTransactionStatus(signed.transactionHash),
+      ).status;
+      switch (status) {
+        case "rejected":
+          return "rejected";
+        case "accepted":
+        case "pending":
+        case "preconfirmed":
+        case "reverted":
+          return "landed";
+        default: {
+          const unreachable: never = status;
+          return unreachable;
+        }
+      }
     } catch (error) {
       return isTransactionNotFoundError(error) ? "dropped" : "unknown";
     }
@@ -95,8 +124,8 @@ const resolveSigned = async (
     if (!Number.isSafeInteger(settled) || settled < 0) {
       return "unknown";
     }
-    const spent = BigInt(await provider.getNonceForAddress(signed.senderAddress, settled));
-    if (spent <= BigInt(signed.nonce)) {
+    const spent = chainNonce(await provider.getNonceForAddress(signed.senderAddress, settled));
+    if (spent === null || spent <= BigInt(signed.nonce)) {
       return "unknown";
     }
   } catch {
@@ -120,19 +149,35 @@ const journalFor =
     await store.write(scope, { ...identity, state: "submitting" });
   };
 
-// Replaces a stuck marker only while it is still the one that was resolved: a
-// send that started meanwhile has written its own marker, which must survive.
+// Replaces a stuck marker only while the store still names it. The comparison
+// is inside the store's mutation, not a read followed by a later write: a send
+// that started meanwhile has written its own marker, which must survive.
 const replaceStuck = async (
   store: Strk20MaturityStore,
   scope: Strk20MaturityScope,
   transactionHash: string,
   next: SubmittedRecord | null,
 ): Promise<void> => {
-  const current = await store.read(scope);
-  if (current?.state !== "submitting" || !sameFelt(current.transactionHash, transactionHash)) {
+  if (!(await store.replaceIfCurrentHash(scope, transactionHash, next))) {
     throw new WalletError(STATUS_UNKNOWN);
   }
-  await store.write(scope, next);
+};
+
+const settledRecord = (
+  outcome: Exclude<SignedOutcome, "unknown">,
+  transactionHash: string,
+): SubmittedRecord | null => {
+  switch (outcome) {
+    case "landed":
+      return { state: "submitted", transactionHash };
+    case "dropped":
+    case "rejected":
+      return null;
+    default: {
+      const unreachable: never = outcome;
+      return unreachable;
+    }
+  }
 };
 
 // Settles a `submitting` marker on-chain: the submitted write to follow, null
@@ -152,8 +197,7 @@ const settleSubmitting = async (
   if (outcome === "unknown") {
     throw new WalletError(STATUS_UNKNOWN);
   }
-  const next: SubmittedRecord | null =
-    outcome === "dropped" ? null : { state: "submitted", transactionHash: marker.transactionHash };
+  const next = settledRecord(outcome, marker.transactionHash);
   await replaceStuck(store, scope, marker.transactionHash, next);
   return next;
 };
@@ -264,7 +308,9 @@ export const createStrk20MaturityRuntime = ({
     if (!Number.isSafeInteger(block) || block < 0) {
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }
-    await store.write(scope, {
+    // The receipt wait is a gap. Record the block only while this hash is
+    // still the scope's marker; a newer send's marker must survive it.
+    await store.replaceIfCurrentHash(scope, transactionHash, {
       acceptedBlock: block,
       state: "submitted",
       transactionHash,
@@ -291,7 +337,7 @@ export const createStrk20MaturityRuntime = ({
       return await acceptedBlock(provider, scope, record.transactionHash);
     } catch (error) {
       if (error instanceof RejectedPrivacyTransaction) {
-        await store.write(scope, null);
+        await store.replaceIfCurrentHash(scope, record.transactionHash, null);
       }
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }
@@ -352,7 +398,7 @@ export const createStrk20MaturityRuntime = ({
       await acceptedBlock(provider, scope, transactionHash);
     } catch (error) {
       if (error instanceof RejectedPrivacyTransaction) {
-        await store.write(scope, null);
+        await store.replaceIfCurrentHash(scope, transactionHash, null);
       }
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }

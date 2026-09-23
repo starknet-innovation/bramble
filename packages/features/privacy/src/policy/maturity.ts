@@ -3,7 +3,7 @@
  * its browser-session persistence boundary.
  */
 
-import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import { type StarknetNetworkId, sameFelt } from "@bramble/wallet-model/networks";
 
 /**
  * Account/network/pool scope whose latest privacy write must mature before a
@@ -49,11 +49,40 @@ export type Strk20MaturityRecord =
     };
 
 /**
+ * True when `record` still names `transactionHash`, whether the write is
+ * `submitting` or already `submitted`. A missing hash does not match: a bare
+ * submitting claim and an empty scope must not be replaced as if they were the
+ * resolved write.
+ */
+export const maturityRecordNamesHash = (
+  record: Strk20MaturityRecord | null,
+  transactionHash: string,
+): boolean => {
+  if (!record || record.transactionHash === undefined) {
+    return false;
+  }
+  return sameFelt(record.transactionHash, transactionHash);
+};
+
+/**
  * Minimal persistence boundary. Production uses trusted browser session
  * storage so a service-worker restart cannot forget a just-submitted write.
+ * `replaceIfCurrentHash` is the conditional update: production runs the
+ * comparison and the write as one serialized mutation, so a read that happened
+ * earlier cannot overwrite a marker a newer send stored in between.
  */
 export type Strk20MaturityStore = {
   readonly read: (scope: Strk20MaturityScope) => Promise<Strk20MaturityRecord | null>;
+  /**
+   * Writes `record` (or clears the scope, when `record` is null) only while the
+   * stored marker still names `transactionHash`. Returns false and writes
+   * nothing when it does not. Callers must leave the scope untouched on false.
+   */
+  readonly replaceIfCurrentHash: (
+    scope: Strk20MaturityScope,
+    transactionHash: string,
+    record: Strk20MaturityRecord | null,
+  ) => Promise<boolean>;
   readonly write: (
     scope: Strk20MaturityScope,
     record: Strk20MaturityRecord | null,
@@ -68,17 +97,27 @@ const scopeKey = (scope: Strk20MaturityScope): string =>
  */
 export const memoryStrk20MaturityStore = (): Strk20MaturityStore => {
   const records = new Map<string, Strk20MaturityRecord>();
+  const put = (scope: Strk20MaturityScope, record: Strk20MaturityRecord | null): void => {
+    const key = scopeKey(scope);
+    if (record) {
+      records.set(key, { ...record });
+    } else {
+      records.delete(key);
+    }
+  };
   return {
     async read(scope) {
       return records.get(scopeKey(scope)) ?? null;
     },
-    async write(scope, record) {
-      const key = scopeKey(scope);
-      if (record) {
-        records.set(key, { ...record });
-      } else {
-        records.delete(key);
+    async replaceIfCurrentHash(scope, transactionHash, record) {
+      if (!maturityRecordNamesHash(records.get(scopeKey(scope)) ?? null, transactionHash)) {
+        return false;
       }
+      put(scope, record);
+      return true;
+    },
+    async write(scope, record) {
+      put(scope, record);
     },
   };
 };
