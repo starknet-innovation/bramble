@@ -252,11 +252,13 @@ const verifyStep = (): string => `
       <p id="verify-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
-      ${button({
-        attributes: { id: "verify-continue" },
-        disabled: true,
-        label: "Continue",
-      })}
+      <div class="verify-continue-hit">
+        ${button({
+          attributes: { id: "verify-continue" },
+          disabled: true,
+          label: "Continue",
+        })}
+      </div>
     </div>
   </section>`;
 

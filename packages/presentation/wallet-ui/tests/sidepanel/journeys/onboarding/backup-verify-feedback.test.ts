@@ -1,9 +1,9 @@
 /**
  * The "Confirm your backup" step tells a wrong word apart from an unfinished
  * form. Typing stays quiet, so the last word never flashes an error while it
- * is still being entered; committing a word (blur or Enter), or pressing the
- * still-disabled Continue, says so in the danger tone. Continue stays gated
- * on the unchanged backup check either way.
+ * is still being entered. Committing a word — blur, Enter, or the disabled
+ * Continue control — says so in the danger tone. Continue stays gated on the
+ * unchanged backup check, and only that control's own box can advance.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
@@ -125,14 +125,51 @@ describe("backup verification feedback", () => {
     // A disabled button is not a hit target. The click lands on the step
     // action because the control is taken out of pointer events.
     expect(ONBOARDING_STYLES).toContain("#verify-continue:disabled { pointer-events: none; }");
+    expect(ONBOARDING_STYLES).toContain(".verify-continue-hit { display: grid; }");
     app
-      .querySelector('[data-onboarding-step="verify"] .onboarding-step-cta')
+      .querySelector('[data-onboarding-step="verify"] .verify-continue-hit')
       ?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
     expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.mismatch);
     expect(statusLine(app)?.classList.contains("is-invalid")).toBe(true);
     expect(continueDisabled(app)).toBe(true);
     expect(app.querySelector('[data-onboarding-step="password"]')?.hasAttribute("hidden")).toBe(
       true,
+    );
+  });
+
+  test("pressing Enter in the last field reports a mismatch without blurring it", async () => {
+    const app = await mountAtVerify();
+    type(app, 0, MATCHING[0] ?? "");
+    type(app, 1, MATCHING[1] ?? "");
+    type(app, 2, "wrong");
+    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.incomplete);
+    verifyInput(app, 2).dispatchEvent(
+      new window.KeyboardEvent("keydown", { bubbles: true, key: "Enter" }),
+    );
+    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.mismatch);
+    expect(statusLine(app)?.classList.contains("is-invalid")).toBe(true);
+    expect(continueDisabled(app)).toBe(true);
+    expect(app.querySelector('[data-onboarding-step="password"]')?.hasAttribute("hidden")).toBe(
+      true,
+    );
+  });
+
+  test("a click in the padding above Continue does not leave the step", async () => {
+    const app = await mountAtVerify();
+    type(app, 0, MATCHING[0] ?? "");
+    type(app, 1, MATCHING[1] ?? "");
+    type(app, 2, MATCHING[2] ?? "");
+    expect(continueDisabled(app)).toBe(false);
+    app
+      .querySelector('[data-onboarding-step="verify"] .onboarding-step-cta')
+      ?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    expect(app.querySelector('[data-onboarding-step="password"]')?.hasAttribute("hidden")).toBe(
+      true,
+    );
+    click(app, "#verify-continue");
+    expect(app.querySelector('[data-onboarding-step="verify"]')?.hasAttribute("hidden")).toBe(true);
+    expect(app.querySelector('[data-onboarding-step="password"]')?.hasAttribute("hidden")).toBe(
+      false,
     );
   });
 
