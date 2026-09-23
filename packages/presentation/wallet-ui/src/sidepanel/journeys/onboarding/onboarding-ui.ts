@@ -202,9 +202,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const refreshVerification = (reportMismatch = false): void => {
     const state = verificationState();
     const shown = state === "mismatch" && !reportMismatch ? "incomplete" : state;
-    if (verifyContinue) {
-      verifyContinue.disabled = state !== "confirmed";
-    }
+    verifyContinue?.toggleAttribute("disabled", state !== "confirmed");
     if (verifyResult) {
       verifyResult.textContent = BACKUP_VERIFY_COPY[shown];
       verifyResult.classList.toggle("is-invalid", shown === "mismatch");
