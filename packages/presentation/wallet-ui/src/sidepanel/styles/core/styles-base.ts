@@ -114,13 +114,20 @@ export const BASE_STYLES = `
     width: 100%;
   }
   .screen > * { max-width: 100%; min-width: 0; }
-  /* Dock screens scroll their content UNDER the anchored bottom bar. Reserve
-     clearance below the content equal to the bar footprint, topped up so that
-     with the shell's own bottom padding the last row clears the pill by the
-     same gap the pill keeps from the panel edge. Reserving more than that made
-     a screen whose content already cleared the dock scroll by a few pixels.
-     Flow screens carry no dock. */
-  .screen:not(.flow) { padding-bottom: calc(var(--bramble-dock-h) + ${DOCK_OFFSET} - ${SPACE.md}); }
+  /* Dock screens scroll their content UNDER the anchored bottom bar. With the
+     shell's own bottom padding, the clearance is exactly the bar footprint, so
+     a screen scrolls only once its content would reach the pill. Any breathing
+     gap reserved on top of that is space the user never sees, and it made a
+     screen whose content already cleared the dock scroll by a few pixels. At
+     the end of a long screen the last row meets the pill's edge, and the
+     pill's shadow separates the two. Flow screens carry no dock. */
+  .screen:not(.flow) { padding-bottom: calc(var(--bramble-dock-h) - ${SPACE.md}); }
+  /* An empty status line that ends a dock screen holds nothing yet, and there
+     is nothing below it to keep from shifting, so it takes no room: out of flow
+     it drops both its reserved line and the grid gap before it. It stays in the
+     document, so the live region still announces a message written into it. */
+  .screen:not(.flow) > [role="status"]:empty:last-child,
+  .screen:not(.flow) > :last-child > [role="status"]:empty:last-child { position: absolute; }
 
   /* Layout primitives */
   .row, .address-line, .context-line, .callout, .token-row {
