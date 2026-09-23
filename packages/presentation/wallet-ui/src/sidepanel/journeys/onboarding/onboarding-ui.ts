@@ -7,6 +7,7 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { BACKUP_VERIFY_COPY, backupVerifyState } from "./backup-verify";
 import { bindBackupVerification } from "./backup-verify-bind";
+import { bindGeneratedPhrase } from "./generated-phrase-ui";
 import { bindKeyImport } from "./import-key-ui";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
@@ -14,12 +15,7 @@ import { applyPassphraseMeter } from "./passphrase-meter";
 import { bindRecoveryAccountUi } from "./recovery-account-ui";
 import { bindRecoveryImportControls } from "./recovery-import-bind";
 import { bindRecoveryWordAssist } from "./recovery-word-assist";
-import {
-  fillRecoveryWords,
-  recoveryWordsFrom,
-  setGeneratedPhraseMasked,
-  setRecoveryWordCount,
-} from "./recovery-word-state";
+import { fillRecoveryWords, recoveryWordsFrom, setRecoveryWordCount } from "./recovery-word-state";
 import { createWeakPassphraseAck } from "./weak-passphrase-ack";
 
 /** Dependencies the onboarding binding closes over. */
@@ -71,13 +67,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   );
   const previewAddress = form.querySelector<HTMLElement>("[data-preview-address]");
   const previewLabel = form.querySelector<HTMLElement>("[data-preview-label]");
-  const phraseToggle = form.querySelector<HTMLButtonElement>("#phrase-toggle");
-  const generatedGrid = form.querySelector<HTMLElement>('[data-recovery-grid="generated"]');
   const walletReady = form.dataset["walletReady"] === "true";
   const history: string[] = ["welcome"];
   let mnemonic = "";
   let importWordCount: 12 | 24 = 12;
-  let generatedWasRevealed = false;
   let requiresVerification = false;
   let accountSelected = false;
   let previewMatchesInput = false;
@@ -298,6 +291,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     wordAssist,
   }));
 
+  const generatedPhrase = bindGeneratedPhrase(form, () => mnemonic);
   const createNew = form.querySelector<HTMLButtonElement>("#create-new-button");
   createNew?.addEventListener("click", () => {
     const generation = ++mnemonicGeneration;
@@ -312,14 +306,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         keyImport.deactivate();
         passwordContinue?.lastChild?.replaceWith("Review account");
         requiresVerification = true;
-        generatedWasRevealed = false;
-        setGeneratedPhraseMasked(generatedGrid, generatedInputs, true);
+        generatedPhrase.reset();
         fillWords(generatedInputs, mnemonic.split(/\s+/), "generated");
         for (const input of verifyInputs) {
           input.value = "";
-        }
-        if (generatedContinue) {
-          generatedContinue.disabled = true;
         }
         if (generateResult) {
           generateResult.textContent = "Reveal the phrase, save it offline, then continue.";
@@ -337,18 +327,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         buttonBusy(createNew, false);
       },
     );
-  });
-
-  phraseToggle?.addEventListener("click", () => {
-    const masked = !(generatedGrid?.classList.contains("is-masked") ?? false);
-    setGeneratedPhraseMasked(generatedGrid, generatedInputs, masked);
-    phraseToggle.lastChild?.replaceWith(masked ? "Show recovery phrase" : "Hide recovery phrase");
-    if (!masked) {
-      generatedWasRevealed = true;
-    }
-    if (generatedContinue) {
-      generatedContinue.disabled = !generatedWasRevealed;
-    }
   });
 
   generatedContinue?.addEventListener("click", () => {
