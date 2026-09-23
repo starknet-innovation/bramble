@@ -31,6 +31,7 @@ import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
 import { bindCopyButtons, hiddenOverlayMount, showToast } from "../shared/dom";
+import { guardedCopyClearIsPending, guardedCopyPendingClear } from "../shared/guarded-copy";
 import { isParkedCollectibleView } from "../shared/parts";
 import { utcDayKey } from "../shared/timestamp";
 import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
@@ -126,7 +127,16 @@ export const startWalletUi = async (
   const bindAll = (): void => {
     bindEntryNavigation(app, navigate, goBack);
     bindCopyButtons(app);
-    bindOnboardingCompletion(app, extensionApi, () => globalThis.close());
+    bindOnboardingCompletion(app, extensionApi, () => {
+      if (guardedCopyClearIsPending()) {
+        const result = app.querySelector<HTMLElement>("#onboarding-complete-result");
+        if (result) {
+          result.textContent =
+            "Opening the wallet… This tab stays open until the clipboard clear finishes.";
+        }
+      }
+      void guardedCopyPendingClear().then(() => globalThis.close());
+    });
     bindOnboardingLaunch(app, () => globalThis.close());
     bindOnboarding({ app, render, wallet });
     bindLedgerFirstRun({ app, startLedgerSetup: ledgerOnboard.startLedgerSetup });

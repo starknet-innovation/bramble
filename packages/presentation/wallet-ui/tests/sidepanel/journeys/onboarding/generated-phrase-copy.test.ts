@@ -14,6 +14,9 @@ import {
   bindGuardedCopy,
   GUARDED_COPY_CLEAR_MS,
   GUARDED_COPY_NOTE,
+  guardedCopyClearIsPending,
+  guardedCopyPendingClear,
+  resetGuardedCopyClearForTests,
 } from "../../../../src/sidepanel/shared/guarded-copy";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
@@ -63,6 +66,7 @@ beforeEach(() => {
   copied = [];
   clears = [];
   rejectWrites = false;
+  resetGuardedCopyClearForTests();
   realSetTimeout = window.setTimeout;
   Object.defineProperty(window.navigator, "clipboard", {
     configurable: true,
@@ -170,6 +174,36 @@ describe("onboarding phrase copy", () => {
     expect(html).not.toContain("data-copy");
     expect(html).not.toContain("w1 w2");
     expect(onboarding(status)).not.toContain("data-copy");
+  });
+
+  test("holds the completion close until the clipboard clear has run", async () => {
+    const app = await mountAtGenerated();
+    click(app, "#phrase-toggle");
+    click(app, "#generated-copy-phrase");
+    await tick();
+    expect(guardedCopyClearIsPending()).toBe(true);
+    let closed = 0;
+    void guardedCopyPendingClear().then(() => {
+      closed += 1;
+    });
+    await tick();
+    expect(closed).toBe(0);
+
+    clears[0]?.();
+    await tick();
+    expect(closed).toBe(1);
+    expect(guardedCopyClearIsPending()).toBe(false);
+    expect(copied).toEqual([FIRST, ""]);
+  });
+
+  test("does not hold the completion close when nothing was copied", async () => {
+    let closed = 0;
+    void guardedCopyPendingClear().then(() => {
+      closed += 1;
+    });
+    await tick();
+    expect(closed).toBe(1);
+    expect(guardedCopyClearIsPending()).toBe(false);
   });
 
   test("reports a clipboard that refuses the write and schedules no clear", async () => {
