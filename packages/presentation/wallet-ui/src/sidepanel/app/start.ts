@@ -129,7 +129,7 @@ export const startWalletUi = async (
     bindCopyButtons(app);
     bindOnboardingCompletion(app, extensionApi, () => {
       if (guardedCopyClearIsPending()) {
-        const result = app.querySelector<HTMLElement>("#onboarding-complete-result");
+        const result = app?.querySelector<HTMLElement>("#onboarding-complete-result");
         if (result) {
           result.textContent =
             "Opening the wallet… This tab stays open until the clipboard clear finishes.";
