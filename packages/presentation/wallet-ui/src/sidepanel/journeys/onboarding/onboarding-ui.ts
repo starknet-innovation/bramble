@@ -6,6 +6,7 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { BACKUP_VERIFY_COPY, backupVerifyState } from "./backup-verify";
+import { bindBackupVerification } from "./backup-verify-bind";
 import { bindKeyImport } from "./import-key-ui";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
@@ -354,16 +355,15 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     showStep("verify");
     refreshVerification();
   });
-  for (const input of verifyInputs) {
-    input.addEventListener("input", () => refreshVerification());
-    input.addEventListener("change", () => refreshVerification(true));
-  }
-  verifyContinue?.parentElement?.addEventListener("click", () => {
-    refreshVerification(true);
-    if (verificationSatisfied()) {
+  bindBackupVerification({
+    continueButton: verifyContinue,
+    inputs: verifyInputs,
+    onConfirmed: () => {
       showStep("password");
       refreshPassword();
-    }
+    },
+    refresh: refreshVerification,
+    satisfied: verificationSatisfied,
   });
 
   passphraseInput?.addEventListener("input", refreshPassword);
