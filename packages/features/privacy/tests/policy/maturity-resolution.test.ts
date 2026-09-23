@@ -3,10 +3,11 @@
  * the write's signed identity is journaled the next action resolves it
  * on-chain instead of waiting for the browser session to end. The rules pinned
  * here are the safety argument: any status answer means the write reached the
- * network and is followed like any submitted write; "not found" releases the
- * scope only when the sender's nonce is provably spent past the write in a
- * settled block and a second lookup still misses; everything else stays
- * closed, exactly as before.
+ * network and is followed like any submitted write, except REJECTED, which
+ * releases the scope because that hash will not be included; "not found"
+ * releases the scope only when the sender's nonce is a field element provably
+ * spent past the write in a settled block and a second lookup still misses;
+ * everything else stays closed, exactly as before.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -34,8 +35,8 @@ const notFound = (): Error =>
 
 type NodeScript = {
   readonly blocks?: number[];
-  readonly nonce?: string;
-  readonly statuses?: Array<"found" | "not-found" | "transport">;
+  readonly nonce?: unknown;
+  readonly statuses?: Array<"found" | "not-found" | "rejected" | "transport">;
   readonly receipt?: { readonly block_number: number; readonly success: boolean };
 };
 
@@ -60,12 +61,18 @@ const node = (script: NodeScript) => {
       if (answer === "found") {
         return { execution_status: "SUCCEEDED", finality_status: "ACCEPTED_ON_L2" };
       }
+      if (answer === "rejected") {
+        return { finality_status: "REJECTED" };
+      }
       throw answer === "transport" ? new Error("socket hang up") : notFound();
     },
-    waitForTransaction: async () => ({
-      block_number: script.receipt?.block_number ?? 50,
-      isSuccess: () => script.receipt?.success ?? true,
-    }),
+    waitForTransaction: async (hash: string) => {
+      reads.push(`wait:${hash}`);
+      return {
+        block_number: script.receipt?.block_number ?? 50,
+        isSuccess: () => script.receipt?.success ?? true,
+      };
+    },
   };
   return { provider: provider as unknown as RpcProvider, reads };
 };
@@ -220,21 +227,60 @@ describe("resolving a stuck privacy write", () => {
     expect(reads).toEqual([]);
   });
 
-  test("leaves a newer send's marker alone if the scope changed while resolving", async () => {
+  test("releases a rejected write without following it or dropping its nonce first", async () => {
+    const store = await seeded();
+    const { provider, reads } = node({ statuses: ["rejected"] });
+
+    await expect(runtimeFor(store).provingBlock(provider, scope)).resolves.toBe(90);
+
+    expect(await store.read(scope)).toBeNull();
+    expect(reads).toEqual(["status:0x456", "block"]);
+  });
+
+  test("keeps the scope closed when the chain nonce is not a field element", async () => {
+    const store = await seeded();
+    const { provider, reads } = node({
+      nonce: `0x${"f".repeat(64)}`,
+      statuses: ["not-found"],
+    });
+
+    await expect(runtimeFor(store).provingBlock(provider, scope)).rejects.toThrow(STATUS_UNKNOWN);
+    expect(await store.read(scope)).toEqual(stuck);
+    expect(reads.filter((read) => read.startsWith("status:"))).toEqual(["status:0x456"]);
+  });
+
+  test("treats a decimal chain nonce as spent once it canonicalizes to a field element", async () => {
+    const store = await seeded();
+    const { provider } = node({
+      nonce: "6",
+      statuses: ["not-found", "not-found"],
+    });
+
+    await expect(runtimeFor(store).provingBlock(provider, scope)).resolves.toBe(90);
+    expect(await store.read(scope)).toBeNull();
+  });
+
+  test("stops when the store refuses to replace a marker a newer send already owns", async () => {
     const backing = await seeded();
-    const newer: Strk20MaturityRecord = { state: "submitting" };
-    let reads = 0;
+    const newer: Strk20MaturityRecord = {
+      nonce: "0x9",
+      senderAddress: "0xdef",
+      state: "submitting",
+      transactionHash: "0x789",
+    };
     const writes: unknown[] = [];
-    // The first read sees the stuck write; by the time the resolution goes to
-    // release it, a new send has already claimed the scope.
     const store: Strk20MaturityStore = {
-      read: async (target) => (reads++ === 0 ? backing.read(target) : newer),
+      read: (target) => backing.read(target),
+      replaceIfCurrentHash: async () => {
+        await backing.write(scope, newer);
+        return false;
+      },
       write: async (target, record) => {
         writes.push(record);
         await backing.write(target, record);
       },
     };
-    const { provider } = node({
+    const { provider, reads } = node({
       blocks: [100],
       nonce: "0x6",
       statuses: ["not-found", "not-found"],
@@ -242,5 +288,7 @@ describe("resolving a stuck privacy write", () => {
 
     await expect(runtimeFor(store).provingBlock(provider, scope)).rejects.toThrow(STATUS_UNKNOWN);
     expect(writes).toEqual([]);
+    expect(await backing.read(scope)).toEqual(newer);
+    expect(reads.some((read) => read.startsWith("wait:"))).toBe(false);
   });
 });
