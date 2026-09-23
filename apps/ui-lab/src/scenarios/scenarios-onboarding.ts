@@ -155,6 +155,16 @@ const prepareGenerated =
     updateForm(context, 'input[name="verify-2"]', "alert");
   };
 
+// Placeholder answers that cannot match the fixture, the last one committed as
+// a user leaving the field would, so the step reports the mismatch.
+const prepareMismatchedBackup = async (context: FrameContext): Promise<void> => {
+  await prepareGenerated(true, false)(context);
+  press(context, "#generated-continue");
+  updateForm(context, 'input[name="verify-0"]', "one");
+  updateForm(context, 'input[name="verify-1"]', "two");
+  updateForm(context, 'input[name="verify-2"]', "three", true);
+};
+
 const prepareLedger = (context: FrameContext): void => {
   prepareMethod(context);
   press(context, "#ledger-method-button");
@@ -255,6 +265,15 @@ export const onboardingScenario: WalletScenario = {
         "Requested fixture words prove the offline backup before password setup can continue.",
       prepare: prepareGenerated(true, true),
       state: { phrase: "visible fixture", verification: "passed" },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "backup-mismatch",
+      label: "Backup words don't match",
+      narrative:
+        "A committed word that does not match reads as an error to fix, not the empty-form prompt.",
+      prepare: prepareMismatchedBackup,
+      state: { phrase: "visible fixture", verification: "mismatch" },
     },
     {
       content: () => onboarding(emptyWalletStatus),

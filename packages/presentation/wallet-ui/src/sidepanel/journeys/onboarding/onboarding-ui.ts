@@ -5,7 +5,7 @@ import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { verifyBackupWords } from "./backup-verify";
+import { BACKUP_VERIFY_COPY, backupVerifyState } from "./backup-verify";
 import { bindKeyImport } from "./import-key-ui";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
@@ -194,21 +194,20 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     invalidatePreview();
   };
 
-  const verificationSatisfied = (): boolean =>
-    verifyBackupWords(
-      mnemonic,
-      verifyInputs.map((input) => input.value),
-    );
+  const verifyAnswers = () => verifyInputs.map((input) => input.value);
+  const verificationState = () => backupVerifyState(mnemonic, verifyAnswers());
+  const verificationSatisfied = () => verificationState() === "confirmed";
 
-  const refreshVerification = (): void => {
-    const satisfied = verificationSatisfied();
+  // A mismatch shows once a word is committed (blur/Enter), never mid-typing.
+  const refreshVerification = (reportMismatch = false): void => {
+    const state = verificationState();
+    const shown = state === "mismatch" && !reportMismatch ? "incomplete" : state;
     if (verifyContinue) {
-      verifyContinue.disabled = !satisfied;
+      verifyContinue.disabled = state !== "confirmed";
     }
     if (verifyResult) {
-      verifyResult.textContent = satisfied
-        ? "Backup confirmed."
-        : "Enter the requested words to continue.";
+      verifyResult.textContent = BACKUP_VERIFY_COPY[shown];
+      verifyResult.classList.toggle("is-invalid", shown === "mismatch");
     }
   };
 
@@ -358,7 +357,8 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     refreshVerification();
   });
   for (const input of verifyInputs) {
-    input.addEventListener("input", refreshVerification);
+    input.addEventListener("input", () => refreshVerification());
+    input.addEventListener("change", () => refreshVerification(true));
   }
   verifyContinue?.addEventListener("click", () => {
     if (verificationSatisfied()) {

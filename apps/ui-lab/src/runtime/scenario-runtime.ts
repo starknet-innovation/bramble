@@ -12,7 +12,17 @@ export const nextTurn = async (): Promise<void> => {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 };
 
-export const updateForm = (context: FrameContext, selector: string, value: string): void => {
+/**
+ * Sets a fixture control's value as typing does. `commit` also fires `change`,
+ * as leaving the field or pressing Enter would, for views that only judge a
+ * committed value.
+ */
+export const updateForm = (
+  context: FrameContext,
+  selector: string,
+  value: string,
+  commit = false,
+): void => {
   const input = context.app.querySelector<HTMLInputElement | HTMLSelectElement>(selector);
   const view = context.document.defaultView;
   if (!input || !view) {
@@ -20,4 +30,7 @@ export const updateForm = (context: FrameContext, selector: string, value: strin
   }
   input.value = value;
   input.dispatchEvent(new view.Event("input", { bubbles: true }));
+  if (commit) {
+    input.dispatchEvent(new view.Event("change", { bubbles: true }));
+  }
 };
