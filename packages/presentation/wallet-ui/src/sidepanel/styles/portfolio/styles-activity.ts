@@ -23,11 +23,14 @@ const GLYPH_SIZE = "16px";
  */
 export const ACTIVITY_STYLES = `
   /* Activity list: rows breathe on a 4px gap with no rule between them; the
-     rounded hover fill is the only affordance, since the verb is a link. */
+     rounded hover fill is the only affordance, since the verb is a link. Row
+     content sits on the page's text column — glyphs line up with the screen
+     title and the day headings — and the fill bleeds one step past it, the
+     same geometry as the token list on Home. */
   .tx-list { display: grid; gap: ${SPACE.xs}; }
   .tx-row {
     align-items: center; border-radius: ${RADIUS.md}; display: flex; gap: ${SPACE.sm};
-    justify-content: space-between; min-width: 0; padding: ${SPACE.sm} ${SPACE.lg};
+    justify-content: space-between; margin: 0 -${SPACE.sm}; min-width: 0; padding: ${SPACE.sm};
     transition: background ${MOTION.pressMs}ms ${MOTION.ease};
   }
   @media (hover: hover) and (pointer: fine) {
@@ -112,8 +115,9 @@ export const ACTIVITY_STYLES = `
      entry names no token). No network badge: every row here is on Starknet. */
   .tx-avatar { display: inline-flex; flex: none; }
   .tx-avatar > .token-logo, .tx-avatar > .token-mark { height: ${SIZE.avatar}; width: ${SIZE.avatar}; }
-  /* One heading per UTC day in the kit's small medium voice, aligned with the
-     rows' inner edge; the list hangs 12px below it and days sit 32px apart. */
+  /* One heading per UTC day in the kit's small medium voice, on the same text
+     column as the rows' content; the list hangs 12px below it and days sit
+     32px apart. */
   .tx-day { display: grid; gap: ${SPACE.md}; }
   .tx-day + .tx-day { margin-top: calc(${SPACE.lg} * 2); }
   .tx-day-label {
@@ -122,6 +126,5 @@ export const ACTIVITY_STYLES = `
     font-weight: ${WEIGHT.medium};
     line-height: ${TYPE.body.line};
     margin: 0;
-    padding: 0 ${SPACE.lg};
   }
 `;
