@@ -136,6 +136,10 @@ export const ONBOARDING_STYLES = `
     width: 100%;
   }
   .onboarding-step-cta button, .onboarding-welcome-actions button { width: 100%; }
+  /* A disabled Continue cannot take focus, so a click on it never blurs the
+     word field. Let that click fall through to the step action, which reports
+     a mismatch. */
+  #verify-continue:disabled { pointer-events: none; }
 
   .onboarding-gate {
     justify-content: center;
