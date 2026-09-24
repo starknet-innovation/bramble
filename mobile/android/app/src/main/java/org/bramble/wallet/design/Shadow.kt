@@ -17,19 +17,36 @@ import androidx.compose.ui.graphics.toArgb
  * work from API 28, the minimum SDK. Put it before the modifier that fills the shape, so the fill
  * covers the part of the shadow under it.
  */
-fun Modifier.brambleShadow(style: BrambleShadowStyle, shape: Shape): Modifier = drawBehind {
-    val outline = shape.createOutline(size, layoutDirection, this)
-    val paint = Paint()
-    paint.asFrameworkPaint().apply {
-        isAntiAlias = true
-        color = android.graphics.Color.TRANSPARENT
-        setShadowLayer(style.blur.toPx() / 2f, 0f, style.y.toPx(), Color.Black.copy(alpha = style.alpha).toArgb())
-    }
-    drawIntoCanvas { canvas ->
-        when (outline) {
-            is Outline.Rectangle -> canvas.drawRect(outline.rect, paint)
-            is Outline.Rounded -> canvas.drawPath(androidx.compose.ui.graphics.Path().apply { addRoundRect(outline.roundRect) }, paint)
-            is Outline.Generic -> canvas.drawPath(outline.path, paint)
+fun Modifier.brambleShadow(
+    style: BrambleShadowStyle,
+    shape: Shape,
+): Modifier =
+    drawBehind {
+        val outline = shape.createOutline(size, layoutDirection, this)
+        val paint = Paint()
+        paint.asFrameworkPaint().apply {
+            isAntiAlias = true
+            color = android.graphics.Color.TRANSPARENT
+            setShadowLayer(style.blur.toPx() / 2f, 0f, style.y.toPx(), Color.Black.copy(alpha = style.alpha).toArgb())
+        }
+        drawIntoCanvas { canvas ->
+            when (outline) {
+                is Outline.Rectangle -> {
+                    canvas.drawRect(outline.rect, paint)
+                }
+
+                is Outline.Rounded -> {
+                    canvas.drawPath(
+                        androidx.compose.ui.graphics.Path().apply {
+                            addRoundRect(outline.roundRect)
+                        },
+                        paint,
+                    )
+                }
+
+                is Outline.Generic -> {
+                    canvas.drawPath(outline.path, paint)
+                }
+            }
         }
     }
-}

@@ -13,15 +13,19 @@ import SwiftUI
 struct OnboardingFlow: View {
     enum Path: Equatable { case create, recover }
     enum Step: Equatable {
-        case welcome, importMethod, recoveryPhrase, passphrase, reviewAccount, findAccounts, savePhrase, confirmBackup, complete
+        case welcome, importMethod, recoveryPhrase, passphrase
+        case reviewAccount, findAccounts, savePhrase, confirmBackup, complete
 
         /// The edge back-swipe runs only on the steps before the vault is written. `welcome` is
         /// the root, and every step from `reviewAccount` / `findAccounts` on comes after
         /// `replace(with:)`, so a swipe there must do nothing (design-mobile.md 4.6).
         var allowsSwipeBack: Bool {
             switch self {
-            case .importMethod, .recoveryPhrase, .passphrase: true
-            case .welcome, .reviewAccount, .findAccounts, .savePhrase, .confirmBackup, .complete: false
+            case .importMethod, .recoveryPhrase, .passphrase:
+                true
+
+            case .welcome, .reviewAccount, .findAccounts, .savePhrase, .confirmBackup, .complete:
+                false
             }
         }
     }
@@ -37,6 +41,7 @@ struct OnboardingFlow: View {
         _steps = State(initialValue: [resumingDiscovery ? .findAccounts : .welcome])
         _path = State(initialValue: resumingDiscovery ? .recover : .create)
     }
+
     @State private var forward = true
     /// Phrase typed on the recovery step, handed to the core at the passphrase step, then cleared.
     @State private var importedPhrase = ""
@@ -49,7 +54,10 @@ struct OnboardingFlow: View {
                         .id(steps.last)
                         .transition(BrambleMotionPolicy.step(forward: forward, reduceMotion: reduceMotion))
                 }
-                .animation(BrambleMotionPolicy.animation(BrambleSpring.drawer, reduceMotion: reduceMotion), value: steps)
+                .animation(
+                    BrambleMotionPolicy.animation(BrambleSpring.drawer, reduceMotion: reduceMotion),
+                    value: steps
+                )
             }
         }
         .background { OnboardingBackdrop() }
@@ -83,13 +91,16 @@ struct OnboardingFlow: View {
                 create: { path = .create; push(.passphrase) },
                 recover: { path = .recover; push(.importMethod) }
             )
+
         case .importMethod:
-            ImportMethodStep(back: pop, recoveryPhrase: { push(.recoveryPhrase) })
+            ImportMethodStep(back: pop) { push(.recoveryPhrase) }
+
         case .recoveryPhrase:
             RecoveryPhraseStep(back: pop) { phrase in
                 importedPhrase = phrase
                 push(.passphrase)
             }
+
         case .passphrase:
             PassphraseStep(path: path, back: pop) { passphrase in
                 if path == .create {
@@ -100,14 +111,19 @@ struct OnboardingFlow: View {
                 }
                 replace(with: path == .create ? .reviewAccount : .findAccounts)
             }
+
         case .reviewAccount:
             ReviewAccountStep(network: store.network) { replace(with: .savePhrase) }
+
         case .findAccounts:
             FindAccountsStep { replace(with: .complete) }
+
         case .savePhrase:
             SavePhraseStep(words: store.pendingBackup) { push(.confirmBackup) }
+
         case .confirmBackup:
             ConfirmBackupStep(words: store.pendingBackup, back: pop) { replace(with: .complete) }
+
         case .complete:
             CompleteStep { Task { await store.finishOnboarding() } }
         }

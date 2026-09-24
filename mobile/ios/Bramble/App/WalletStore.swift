@@ -2,6 +2,14 @@ import BrambleCore
 import Foundation
 import Observation
 
+/// Fixed parameters of the store's core calls.
+private enum WalletDefaults {
+    /// Words in a newly created recovery phrase.
+    static let newPhraseWordCount: UInt8 = 12
+    /// Fraction digits shown for a formatted token balance.
+    static let balanceFractionDigits: UInt8 = 4
+}
+
 /// UI state over the Rust `WalletCore`. Everything secret stays inside the core: this type holds
 /// public account metadata, and a new recovery phrase only while onboarding shows and verifies it
 /// (`pendingBackup`), cleared when onboarding finishes or the app locks.
@@ -77,7 +85,10 @@ final class WalletStore {
     }
 
     var networkInfo: NetworkInfo {
-        supportedNetworks().first { $0.network == network }!
+        guard let info = supportedNetworks().first(where: { $0.network == network }) else {
+            preconditionFailure("the core supports every NetworkId")
+        }
+        return info
     }
 
     /// The header's network label, as the side panel's `.account-network-label`.
@@ -96,21 +107,25 @@ final class WalletStore {
     // MARK: Onboarding
 
     func create(password: String) async throws {
-        let core = core, network = network
+        let walletCore = core, selected = network
         pendingBackup = try await work {
-            try core.createWalletOnNetwork(password: password, wordCount: 12, network: network)
+            try walletCore.createWalletOnNetwork(
+                password: password,
+                wordCount: WalletDefaults.newPhraseWordCount,
+                network: selected
+            )
         }.words
     }
 
     func importWallet(phrase: String, password: String) async throws {
-        let core = core
-        try await work { try core.importWallet(password: password, phrase: phrase, passphrase: nil) }
+        let walletCore = core
+        try await work { try walletCore.importWallet(password: password, phrase: phrase, passphrase: nil) }
     }
 
     /// The first account of a just-created vault, for the review step.
     func previewAccount() async throws -> AccountRecord? {
-        let core = core
-        return try await work { try core.activeAccount() }
+        let walletCore = core
+        return try await work { try walletCore.activeAccount() }
     }
 
     /// Leaves onboarding for the wallet; the backup words are dropped here.
@@ -122,9 +137,9 @@ final class WalletStore {
     // MARK: Session
 
     func unlock(password: String) async throws {
-        let core = core
+        let walletCore = core
         do {
-            try await work { try core.unlock(password: password) }
+            try await work { try walletCore.unlock(password: password) }
         } catch {
             refreshSecurity()
             throw error
@@ -161,15 +176,15 @@ final class WalletStore {
     }
 
     func revealPhrase(password: String) async throws -> [String] {
-        let core = core
+        let walletCore = core
         defer { refreshSecurity(); scheduleIdleLock() }
-        return try await work { try core.revealRecoveryPhrase(password: password).words }
+        return try await work { try walletCore.revealRecoveryPhrase(password: password).words }
     }
 
     func deleteWallet(password: String) async throws {
-        let core = core
+        let walletCore = core
         do {
-            try await work { try core.deleteWallet(password: password) }
+            try await work { try walletCore.deleteWallet(password: password) }
         } catch {
             refreshSecurity()
             throw error
@@ -213,7 +228,7 @@ final class WalletStore {
         idleTimer = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(Int64(remaining)))
             guard !Task.isCancelled, let self else { return }
-            if self.core.status() == .unlocked { self.scheduleIdleLock() } else { self.lock() }
+            if core.status() == .unlocked { scheduleIdleLock() } else { lock() }
         }
     }
 
@@ -228,14 +243,17 @@ final class WalletStore {
             try core.reconcileBiometricDomain(domain: BiometricKeychain.domain())
         } catch CoreError.BiometricInvalidated {
             invalidateBiometric()
-        } catch {}
-        if (route == .wallet || route == .discovery) && core.status() != .unlocked { lock() }
+        } catch {
+            // Any other failure leaves the biometric slot as it is; the core still guards unlock.
+        }
+        if route == .wallet || route == .discovery, core.status() != .unlocked { lock() }
         refreshSecurity()
     }
 
     private func invalidateBiometric() {
         BiometricKeychain.delete()
-        biometricNotice = BrambleCopy.biometricInvalidated.replacingOccurrences(of: "{biometry}", with: BiometricKeychain.name)
+        biometricNotice = BrambleCopy.biometricInvalidated
+            .replacingOccurrences(of: "{biometry}", with: BiometricKeychain.name)
         lock()
     }
 
@@ -248,9 +266,11 @@ final class WalletStore {
         switch read {
         case .fallback:
             return
+
         case .invalidated:
             try? core.biometricInvalidated()
             invalidateBiometric()
+
         case .secret(let secret):
             // Wiped as soon as the core has its copy, before any suspension point.
             let unlocked = Result { try core.unlockWithBiometric(wrapSecret: secret.data) }
@@ -278,10 +298,10 @@ final class WalletStore {
         let secret = WrapSecret(try BiometricKeychain.newWrapSecret())
         defer { secret.wipe() }
         try BiometricKeychain.store(secret.data)
-        let core = core
+        let walletCore = core
         do {
             try await work {
-                try core.enableBiometricUnlock(password: password, wrapSecret: secret.data, domainState: domain)
+                try walletCore.enableBiometricUnlock(password: password, wrapSecret: secret.data, domainState: domain)
             }
         } catch {
             BiometricKeychain.delete()
@@ -304,9 +324,9 @@ final class WalletStore {
     func refreshBalances(reset: Bool = false) async {
         // A private reading belongs to one account record on one network; anything else is dropped.
         privacy.retain(network: network, accountId: activeRecord?.id)
-        guard let account = activeRecord else { return }
-        if reset || portfolio.scope?.accountId != account.id {
-            await portfolio.load(account: account, network: networkInfo)
+        guard let active = activeRecord else { return }
+        if reset || portfolio.scope?.accountId != active.id {
+            await portfolio.load(account: active, network: networkInfo)
         } else {
             await portfolio.refresh(force: true)
         }
@@ -339,27 +359,56 @@ final class WalletStore {
     /// Base-unit balance formatted for display, or nil until it has loaded.
     func amount(of token: TokenInfo) -> String? {
         guard let raw = balances[token.symbol] else { return nil }
-        return try? formatTokenAmount(raw: raw, decimals: token.decimals, maxFraction: 4)
+        return try? formatTokenAmount(
+            raw: raw,
+            decimals: token.decimals,
+            maxFraction: WalletDefaults.balanceFractionDigits
+        )
     }
 }
 
 /// User-facing text for a core error, in the extension's wording. Never includes input.
 func describe(_ error: Error) -> String {
     switch error as? CoreError {
-    case .WrongPassword: BrambleCopy.incorrectPassphrase
-    case .Throttled(let retryAfterMs): throttledText(ms: retryAfterMs)
-    case .BiometricInvalidated: BrambleCopy.biometricInvalidated.replacingOccurrences(of: "{biometry}", with: BiometricKeychain.name)
-    case .InvalidInput(let reason): reason.prefix(1).uppercased() + reason.dropFirst()
-    case .WalletExists: "A wallet already exists on this device"
-    case .Locked: "The wallet is locked"
-    default: "Something went wrong. Try again."
+    case .WrongPassword:
+        BrambleCopy.incorrectPassphrase
+
+    case .Throttled(let retryAfterMs):
+        throttledText(ms: retryAfterMs)
+
+    case .BiometricInvalidated:
+        BrambleCopy.biometricInvalidated.replacingOccurrences(of: "{biometry}", with: BiometricKeychain.name)
+
+    case .InvalidInput(let reason):
+        reason.prefix(1).uppercased() + reason.dropFirst()
+
+    case .WalletExists:
+        "A wallet already exists on this device"
+
+    case .Locked:
+        "The wallet is locked"
+
+    default:
+        "Something went wrong. Try again."
     }
 }
 
+/// Unit sizes for the throttle countdown.
+private enum ThrottleClock {
+    static let millisecondsPerSecond: UInt64 = 1_000
+    static let secondsPerMinute = 60
+    static let secondsPerHour = 3_600
+}
+
 /// "Too many attempts. Try again in 1:59." for a remaining delay.
-func throttledText(ms: UInt64) -> String {
-    let seconds = Int((ms + 999) / 1000)
-    let time = seconds >= 3600 ? "\(seconds / 3600):\(String(format: "%02d", seconds % 3600 / 60)):\(String(format: "%02d", seconds % 60))"
-        : "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
+func throttledText(ms milliseconds: UInt64) -> String {
+    // Rounds up, so a partial second still shows as one.
+    let perSecond = ThrottleClock.millisecondsPerSecond
+    let seconds = Int((milliseconds + perSecond - 1) / perSecond)
+    let minute = ThrottleClock.secondsPerMinute, hour = ThrottleClock.secondsPerHour
+    let clockSeconds = String(format: "%02d", seconds % minute)
+    let time = seconds >= hour
+        ? "\(seconds / hour):\(String(format: "%02d", seconds % hour / minute)):\(clockSeconds)"
+        : "\(seconds / minute):\(clockSeconds)"
     return BrambleCopy.throttled.replacingOccurrences(of: "{time}", with: time)
 }

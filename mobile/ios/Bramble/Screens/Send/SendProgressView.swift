@@ -9,31 +9,38 @@ struct SendTaskList: View {
     let active: Int
 
     var body: some View {
-        let m = BrambleMetrics.SendWorking.self
+        let metrics = BrambleMetrics.SendWorking.self
         VStack(spacing: 0) {
             ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
-                HStack(spacing: m.taskGap) {
+                HStack(spacing: metrics.taskGap) {
                     Circle()
                         .fill(index < active ? skin.positive : index == active ? skin.accent : skin.hairlineStrong)
-                        .frame(width: m.taskDot, height: m.taskDot)
+                        .frame(width: metrics.taskDot, height: metrics.taskDot)
                         .accessibilityHidden(true)
                     Text(label)
-                        .brambleText(BrambleTypeScale.label.sized(m.taskSize), weight: index == active ? BrambleWeight.semibold : BrambleWeight.regular)
+                        .brambleText(
+                            BrambleTypeScale.label.sized(metrics.taskSize),
+                            weight: index == active ? BrambleWeight.semibold : BrambleWeight.regular
+                        )
                         .foregroundStyle(index > active ? skin.muted : skin.text)
                     Spacer(minLength: 0)
                 }
-                .frame(minHeight: m.taskHeight)
+                .frame(minHeight: metrics.taskHeight)
                 .overlay(alignment: .top) {
                     if index > 0 {
-                        Rectangle().fill(skin.hairline).frame(height: 1).padding(.leading, m.taskHairlineInset).accessibilityHidden(true)
+                        Rectangle()
+                            .fill(skin.hairline)
+                            .frame(height: 1)
+                            .padding(.leading, metrics.taskHairlineInset)
+                            .accessibilityHidden(true)
                     }
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityValue(index < active ? "Done" : index == active ? "In progress" : "")
             }
         }
-        .padding(m.taskListPadding)
-        .background(skin.panel, in: RoundedRectangle(cornerRadius: m.taskListRadius, style: .continuous))
+        .padding(metrics.taskListPadding)
+        .background(skin.panel, in: RoundedRectangle(cornerRadius: metrics.taskListRadius, style: .continuous))
         .elevation(BrambleElevation.sendTaskList)
     }
 }
@@ -43,38 +50,83 @@ struct SendWorkingView: View {
     @Environment(\.skin) private var skin
     let stage: SendFlowModel.Stage
 
-    private var content: (title: String, copy: String, liveness: String, labels: [String], active: Int) {
+    /// The stage's copy and its position in the task list.
+    private struct Content {
+        let title: String
+        let copy: String
+        let liveness: String
+        let labels: [String]
+        let active: Int
+    }
+
+    /// Index of the active row in the task list: sign, broadcast, then confirm.
+    private enum ActiveTask {
+        static let authorizing = 1
+        static let broadcasting = 2
+        static let confirming = 3
+    }
+
+    private var content: Content {
         switch stage {
         case .broadcasting:
-            (SendCopy.workingBroadcastingTitle, SendCopy.workingBroadcastingCopy, SendCopy.keepAppOpen,
-             [SendCopy.taskReviewLocked, SendCopy.taskSign, SendCopy.taskBroadcast, SendCopy.taskConfirm], 2)
+            Content(
+                title: SendCopy.workingBroadcastingTitle,
+                copy: SendCopy.workingBroadcastingCopy,
+                liveness: SendCopy.keepAppOpen,
+                labels: [SendCopy.taskReviewLocked, SendCopy.taskSign, SendCopy.taskBroadcast, SendCopy.taskConfirm],
+                active: ActiveTask.broadcasting
+            )
+
         case .confirming:
-            (SendCopy.workingConfirmingTitle, SendCopy.workingConfirmingCopy, SendCopy.workingConfirmingLiveness,
-             [SendCopy.taskReviewLocked, SendCopy.taskAuthorized, SendCopy.taskBroadcastComplete, SendCopy.taskConfirm], 3)
+            Content(
+                title: SendCopy.workingConfirmingTitle,
+                copy: SendCopy.workingConfirmingCopy,
+                liveness: SendCopy.workingConfirmingLiveness,
+                labels: [
+                    SendCopy.taskReviewLocked,
+                    SendCopy.taskAuthorized,
+                    SendCopy.taskBroadcastComplete,
+                    SendCopy.taskConfirm
+                ],
+                active: ActiveTask.confirming
+            )
+
         default:
-            (SendCopy.workingAuthorizingTitle, SendCopy.workingAuthorizingCopy, SendCopy.keepAppOpen,
-             [SendCopy.taskReviewLocked, SendCopy.taskSign, SendCopy.taskBroadcast, SendCopy.taskConfirm], 1)
+            Content(
+                title: SendCopy.workingAuthorizingTitle,
+                copy: SendCopy.workingAuthorizingCopy,
+                liveness: SendCopy.keepAppOpen,
+                labels: [SendCopy.taskReviewLocked, SendCopy.taskSign, SendCopy.taskBroadcast, SendCopy.taskConfirm],
+                active: ActiveTask.authorizing
+            )
         }
     }
 
     var body: some View {
-        let content = content
-        let m = BrambleMetrics.SendWorking.self
-        VStack(spacing: m.gap) {
+        let stageContent = content
+        let metrics = BrambleMetrics.SendWorking.self
+        VStack(spacing: metrics.gap) {
             LiquidDots()
                 .foregroundStyle(skin.accent)
-                .frame(width: m.markSize, height: m.markSize)
-            VStack(spacing: m.copyGap) {
-                Text(content.title)
-                    .brambleText(BrambleTypeScale.title.sized(m.titleSize), weight: BrambleMetrics.H2.weight, tracking: BrambleMetrics.H2.tracking)
+                .frame(width: metrics.markSize, height: metrics.markSize)
+            VStack(spacing: metrics.copyGap) {
+                Text(stageContent.title)
+                    .brambleText(
+                        BrambleTypeScale.title.sized(metrics.titleSize),
+                        weight: BrambleMetrics.H2.weight,
+                        tracking: BrambleMetrics.H2.tracking
+                    )
                     .accessibilityAddTraits(.isHeader)
-                Text(content.copy).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
+                Text(stageContent.copy).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
             }
             .multilineTextAlignment(.center)
-            SendTaskList(labels: content.labels, active: content.active)
-            Text(content.liveness).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted).multilineTextAlignment(.center)
+            SendTaskList(labels: stageContent.labels, active: stageContent.active)
+            Text(stageContent.liveness)
+                .brambleText(BrambleTypeScale.caption)
+                .foregroundStyle(skin.muted)
+                .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity, minHeight: m.minHeight)
+        .frame(maxWidth: .infinity, minHeight: metrics.minHeight)
         .accessibilityElement(children: .contain)
     }
 }
@@ -93,49 +145,63 @@ struct SendOutcomeLayout<Actions: View>: View {
     @ViewBuilder let actions: () -> Actions
 
     var body: some View {
-        let m = BrambleMetrics.SendOutcome.self
-        VStack(spacing: m.gap) {
-            BrambleIcon(icon, size: m.markSize / 2)
+        let metrics = BrambleMetrics.SendOutcome.self
+        VStack(spacing: metrics.gap) {
+            BrambleIcon(icon, size: metrics.markSize / OutcomeLayout.glyphDivisor)
                 .foregroundStyle(tint)
-                .frame(width: m.markSize, height: m.markSize)
+                .frame(width: metrics.markSize, height: metrics.markSize)
                 .accessibilityHidden(true)
-            VStack(spacing: m.copyGap) {
+            VStack(spacing: metrics.copyGap) {
                 Text(kicker)
-                    .brambleText(BrambleTypeScale.caption.sized(m.kickerSize), weight: m.kickerWeight)
+                    .brambleText(BrambleTypeScale.caption.sized(metrics.kickerSize), weight: metrics.kickerWeight)
                     .foregroundStyle(skin.muted)
                 Text(title)
-                    .brambleText(BrambleTypeScale.headline.sized(m.titleSize), weight: BrambleWeight.bold, tracking: BrambleTracking.display)
+                    .brambleText(
+                        BrambleTypeScale.headline.sized(metrics.titleSize),
+                        weight: BrambleWeight.bold,
+                        tracking: BrambleTracking.display
+                    )
                     .accessibilityAddTraits(.isHeader)
                 if let message {
                     Text(message).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
                 }
                 if let hash {
                     Text(hash)
-                        .brambleText(BrambleTypeScale.mono.sized(m.hashSize), mono: true)
+                        .brambleText(BrambleTypeScale.mono.sized(metrics.hashSize), mono: true)
                         .foregroundStyle(skin.muted)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
                         .accessibilityLabel("Transaction hash \(hash)")
                 }
-                // Deliberate deviation (transactions.md §2.6): the extension links only from Activity.
-                if let explorerURL {
-                    Link(destination: explorerURL) {
-                        HStack(spacing: BrambleSpace.xs) {
-                            BrambleIcon(.externalLink, size: BrambleSpace.lg)
-                            Text(SendCopy.explorerLinkLabel).brambleText(BrambleTypeScale.caption, weight: BrambleWeight.semibold)
-                        }
-                        .foregroundStyle(skin.accent)
-                        .frame(minHeight: BrambleHit.minimum)
-                    }
-                    .accessibilityLabel(SendCopy.explorerLinkLabel)
-                }
+                explorerLink
             }
             .multilineTextAlignment(.center)
             VStack(spacing: BrambleMetrics.Send.actionsGap) { actions() }
         }
-        .frame(maxWidth: .infinity, minHeight: m.minHeight)
+        .frame(maxWidth: .infinity, minHeight: metrics.minHeight)
     }
+
+    /// Deliberate deviation (transactions.md §2.6): the extension links only from Activity.
+    @ViewBuilder private var explorerLink: some View {
+        if let explorerURL {
+            Link(destination: explorerURL) {
+                HStack(spacing: BrambleSpace.xs) {
+                    BrambleIcon(.externalLink, size: BrambleSpace.lg)
+                    Text(SendCopy.explorerLinkLabel)
+                        .brambleText(BrambleTypeScale.caption, weight: BrambleWeight.semibold)
+                }
+                .foregroundStyle(skin.accent)
+                .frame(minHeight: BrambleHit.minimum)
+            }
+            .accessibilityLabel(SendCopy.explorerLinkLabel)
+        }
+    }
+}
+
+private enum OutcomeLayout {
+    /// The outcome glyph is drawn at half the mark's size.
+    static let glyphDivisor: CGFloat = 2
 }
 
 /// `#send-success`, `#send-pending` and `#send-failure`.
@@ -148,21 +214,46 @@ struct SendOutcomeView: View {
     var body: some View {
         switch model.stage {
         case .submitted:
-            let sent = model.review.map { $0.amountDisplay + " " + $0.tokenSymbol + SendCopy.sentTo + $0.recipientShort }
-            SendOutcomeLayout(icon: .check, tint: skin.positive, kicker: SendCopy.successKicker, title: SendCopy.successTitle,
-                              message: sent, hash: model.hash, explorerURL: model.explorerURL) {
+            let sent = model.review.map { review in
+                review.amountDisplay + " " + review.tokenSymbol + SendCopy.sentTo + review.recipientShort
+            }
+            SendOutcomeLayout(
+                icon: .check,
+                tint: skin.positive,
+                kicker: SendCopy.successKicker,
+                title: SendCopy.successTitle,
+                message: sent,
+                hash: model.hash,
+                explorerURL: model.explorerURL
+            ) {
                 PillButton(SendCopy.viewActivity, icon: .activity, action: viewActivity)
                 PillButton(SendCopy.backToHome, kind: .secondary, action: done)
             }
+
         case .pending:
-            SendOutcomeLayout(icon: .refresh, tint: skin.accent, kicker: SendCopy.pendingKicker, title: SendCopy.pendingTitle,
-                              message: SendCopy.pendingBody, hash: model.hash, explorerURL: model.explorerURL) {
+            SendOutcomeLayout(
+                icon: .refresh,
+                tint: skin.accent,
+                kicker: SendCopy.pendingKicker,
+                title: SendCopy.pendingTitle,
+                message: SendCopy.pendingBody,
+                hash: model.hash,
+                explorerURL: model.explorerURL
+            ) {
                 PillButton(SendCopy.checkConfirmation) { Task { await model.checkAgain() } }
                 PillButton(SendCopy.viewActivity, kind: .secondary, icon: .activity, action: viewActivity)
             }
+
         default:
-            SendOutcomeLayout(icon: .x, tint: skin.danger, kicker: SendCopy.failureKicker, title: SendCopy.failureTitle,
-                              message: model.failureMessage ?? SendCopy.failureDefault, hash: model.hash, explorerURL: model.explorerURL) {
+            SendOutcomeLayout(
+                icon: .x,
+                tint: skin.danger,
+                kicker: SendCopy.failureKicker,
+                title: SendCopy.failureTitle,
+                message: model.failureMessage ?? SendCopy.failureDefault,
+                hash: model.hash,
+                explorerURL: model.explorerURL
+            ) {
                 PillButton(SendCopy.tryAgain) { Task { await model.reviewSend() } }
                 PillButton(SendCopy.editTransaction, kind: .secondary) { model.edit() }
             }

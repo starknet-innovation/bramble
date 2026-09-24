@@ -50,12 +50,24 @@ fun PortfolioHeroSection(store: PortfolioStore) {
             color = skin.text,
             textAlign = TextAlign.Center,
             style = textStyle(BrambleTypeScale.portfolio, BrambleWeight.heavy, BrambleTracking.amount),
-            modifier = Modifier.semantics { contentDescription = "Portfolio total ${store.hero.totalText ?: "unavailable"}" },
+            modifier =
+                Modifier.semantics {
+                    contentDescription =
+                        "Portfolio total ${store.hero.totalText ?: "unavailable"}"
+                },
         )
         store.hero.delta?.let { delta ->
             Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-                Text(delta.amountText, color = if (delta.down) skin.danger else skin.positive, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
-                Text(delta.windowText, color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.medium))
+                Text(
+                    delta.amountText,
+                    color = if (delta.down) skin.danger else skin.positive,
+                    style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold),
+                )
+                Text(
+                    delta.windowText,
+                    color = skin.muted,
+                    style = textStyle(BrambleTypeScale.label, BrambleWeight.medium),
+                )
             }
         }
     }
@@ -73,27 +85,54 @@ fun PortfolioTokenList(store: PortfolioStore) {
             if (offset > 0) Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(skin.hairline))
             PortfolioTokenRow(row.balance, prices)
         }
-        store.home?.notShown?.takeIf { it > 0u }?.let { StatusLine("Manage tokens · $it not shown") }
+        store.home
+            ?.notShown
+            ?.takeIf { it > 0u }
+            ?.let { StatusLine("Manage tokens · $it not shown") }
     }
 }
 
 @Composable
-private fun PortfolioTokenRow(balance: TokenBalance, prices: org.bramble.core.PriceView) {
+private fun PortfolioTokenRow(
+    balance: TokenBalance,
+    prices: org.bramble.core.PriceView,
+) {
     val skin = LocalSkin.current
     val fiat = tokenRowFiat(balance, prices)
     Row(
-        Modifier.fillMaxWidth().heightIn(min = BrambleSize.rowCompact).padding(horizontal = BrambleSpace.sm, vertical = BrambleSpace.md),
+        Modifier
+            .fillMaxWidth()
+            .heightIn(
+                min = BrambleSize.rowCompact,
+            ).padding(horizontal = BrambleSpace.sm, vertical = BrambleSpace.md),
         horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TokenMark(balance.token.address, balance.token.symbol)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
-            Text(balance.token.symbol, color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.semibold))
-            Text(portfolioAmount(balance.formatted), color = skin.muted, style = textStyle(BrambleTypeScale.body).copy(fontFeatureSettings = "tnum"))
+            Text(
+                balance.token.symbol,
+                color = skin.text,
+                style = textStyle(BrambleTypeScale.row, BrambleWeight.semibold),
+            )
+            Text(
+                portfolioAmount(balance.formatted),
+                color = skin.muted,
+                style = textStyle(BrambleTypeScale.body).copy(fontFeatureSettings = "tnum"),
+            )
         }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap),
+        ) {
             Text(fiat.valueText ?: "—", color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.bold))
-            fiat.change?.let { Text(it.text, color = if (it.up) skin.positive else skin.danger, style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold)) }
+            fiat.change?.let {
+                Text(
+                    it.text,
+                    color = if (it.up) skin.positive else skin.danger,
+                    style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold),
+                )
+            }
         }
     }
 }
@@ -126,7 +165,10 @@ private fun ActivityRowItem(row: ActivityRow) {
     val skin = LocalSkin.current
     val uri = LocalUriHandler.current
     Row(
-        Modifier.fillMaxWidth().padding(vertical = BrambleSpace.sm).semantics { contentDescription = row.accessibilityLabel },
+        Modifier.fillMaxWidth().padding(vertical = BrambleSpace.sm).semantics {
+            contentDescription =
+                row.accessibilityLabel
+        },
         horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
@@ -139,7 +181,9 @@ private fun ActivityRowItem(row: ActivityRow) {
                 modifier = if (link != null) Modifier.clickable { uri.openUri(link) } else Modifier,
             )
             row.detail?.let { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption)) }
-            row.statusWord?.let { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold)) }
+            row.statusWord?.let {
+                Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold))
+            }
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(row.fiatText ?: "—", color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.medium))

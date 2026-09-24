@@ -9,9 +9,22 @@ package org.bramble.wallet.ui
  * copy time), so something the person copied since is never wiped.
  */
 object ClipboardPolicy {
+    /** The clip label every Bramble copy carries; a clip with any other label is never cleared. */
     const val LABEL = "Starknet address"
+
+    /** How long a copied value stays on the clipboard before Bramble clears it. */
     const val EXPIRY_MS = 120_000L
 
-    fun shouldClear(label: String?, stamp: Long?, ourStamp: Long?, copiedAt: Long?, now: Long): Boolean =
-        label == LABEL && stamp != null && stamp == ourStamp && copiedAt != null && now - copiedAt >= EXPIRY_MS
+    /**
+     * True when the current clip ([label], system [stamp]) is still the one Bramble wrote
+     * ([ourStamp], recorded at [copiedAt]) and [EXPIRY_MS] has passed by [now]. Any missing value
+     * means "not ours" or "unknown", so the answer is false and nothing is cleared.
+     */
+    fun shouldClear(
+        label: String?,
+        stamp: Long?,
+        ourStamp: Long?,
+        copiedAt: Long?,
+        now: Long,
+    ): Boolean = label == LABEL && stamp != null && stamp == ourStamp && copiedAt != null && now - copiedAt >= EXPIRY_MS
 }

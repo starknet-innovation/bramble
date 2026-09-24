@@ -1,3 +1,4 @@
+@testable import Bramble
 import BrambleCore
 import XCTest
 
@@ -6,6 +7,11 @@ import XCTest
 final class PrivacyEndpointOverrideTests: XCTestCase {
     private let bundled = privacyDiscoveryUrl(network: .mainnet)
 
+    override func setUp() {
+        super.setUp()
+        try? setPrivacyDiscoveryOverride(network: .mainnet, url: nil)
+    }
+
     override func tearDown() {
         try? setPrivacyDiscoveryOverride(network: .mainnet, url: nil)
         super.tearDown()
@@ -13,21 +19,23 @@ final class PrivacyEndpointOverrideTests: XCTestCase {
 
     func testAnHttpsUrlIsTakenAndCanBeRestored() throws {
         let url = "https://privacy.example.org/api/strk20/discovery"
-        XCTAssertEqual(try PrivacyEndpointOverride.apply(arguments: [], environment: [PrivacyEndpointOverride.environmentKey: url]), url)
+        let environment = [PrivacyEndpointOverride.environmentKey: url]
+        XCTAssertEqual(try PrivacyEndpointOverride.apply(arguments: [], environment: environment), url)
         try setPrivacyDiscoveryOverride(network: .mainnet, url: nil)
         XCTAssertEqual(privacyDiscoveryUrl(network: .mainnet), bundled)
     }
 
     func testAnHttpUrlIsRefused() {
-        XCTAssertThrowsError(try setPrivacyDiscoveryOverride(network: .mainnet, url: "http://privacy.example.org/discovery")) {
-            XCTAssertEqual($0 as? PrivacyError, .InvalidEndpoint)
+        XCTAssertThrowsError(try setPrivacyDiscoveryOverride(network: .mainnet, url: "http://privacy.example.org/discovery")) { error in
+            XCTAssertEqual(error as? PrivacyError, .InvalidEndpoint)
         }
         XCTAssertEqual(privacyDiscoveryUrl(network: .mainnet), bundled)
     }
 
     func testAUrlWithCredentialsIsRefused() {
-        XCTAssertThrowsError(try setPrivacyDiscoveryOverride(network: .mainnet, url: "https://user:secret@privacy.example.org/discovery")) {
-            XCTAssertEqual($0 as? PrivacyError, .InvalidEndpoint)
+        let withCredentials = "https://user:secret@privacy.example.org/discovery"
+        XCTAssertThrowsError(try setPrivacyDiscoveryOverride(network: .mainnet, url: withCredentials)) { error in
+            XCTAssertEqual(error as? PrivacyError, .InvalidEndpoint)
         }
         XCTAssertEqual(privacyDiscoveryUrl(network: .mainnet), bundled)
     }

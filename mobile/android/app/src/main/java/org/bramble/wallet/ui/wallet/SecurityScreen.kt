@@ -1,5 +1,6 @@
 package org.bramble.wallet.ui.wallet
 
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,7 +17,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import java.security.GeneralSecurityException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.bramble.wallet.WalletStore
@@ -31,7 +31,10 @@ import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.SegmentedControl
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.StatusTone
+import org.bramble.wallet.disableBiometric
+import org.bramble.wallet.enableBiometric
 import org.bramble.wallet.securityCopy
+import java.security.GeneralSecurityException
 
 /**
  * "Unlock & auto-lock", port of the iOS `SecurityView` (`docs/vault-security.md` §5): the
@@ -42,7 +45,10 @@ import org.bramble.wallet.securityCopy
  * with the Keystore's storage level while biometrics are on.
  */
 @Composable
-fun SecurityScreen(store: WalletStore, back: () -> Unit) {
+fun SecurityScreen(
+    store: WalletStore,
+    back: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val activity = LocalContext.current
     val available = store.biometricsAvailable
@@ -59,8 +65,14 @@ fun SecurityScreen(store: WalletStore, back: () -> Unit) {
     fun select(on: Boolean) {
         choice = on
         when {
-            on == store.security.biometricEnabled -> confirming = false
-            on -> confirming = true
+            on == store.security.biometricEnabled -> {
+                confirming = false
+            }
+
+            on -> {
+                confirming = true
+            }
+
             else -> {
                 store.disableBiometric()
                 confirming = false
@@ -72,47 +84,90 @@ fun SecurityScreen(store: WalletStore, back: () -> Unit) {
         val attempt = passphrase
         passphrase = ""
         scope.launch {
-            try {
-                store.enableBiometric(activity, attempt)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (unavailable: GeneralSecurityException) {
-                // The Keystore refused a biometric-bound key (for example, nothing enrolled).
-                store.showToast(securityCopy(BrambleCopy.biometricUnavailable))
-            } catch (error: Exception) {
-                store.showError(error)
-            }
+            tryEnableBiometric(store, activity, attempt)
             choice = store.security.biometricEnabled
             confirming = false
         }
     }
 
-    val status = when {
-        enabled -> securityCopy(BrambleCopy.biometricOnStatus)
-        !available -> securityCopy(BrambleCopy.biometricUnavailable)
-        else -> null
-    }
+    val status = biometricStatus(enabled, available)
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = BrambleSpace.lg),
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.md),
     ) {
-        FlowHeader(BrambleCopy.securityTitle, subtitle = BrambleCopy.securitySubtitle, network = store.networkLabel, back = back)
+        FlowHeader(
+            BrambleCopy.securityTitle,
+            subtitle = BrambleCopy.securitySubtitle,
+            network = store.networkLabel,
+            back = back,
+        )
         Eyebrow(BrambleCopy.biometricEyebrow)
-        SegmentedControl(listOf("Off" to false, "On" to true), choice, enabled = available || enabled, onSelect = ::select)
-        if (confirming) {
-            BrambleField(label = "Confirm vault passphrase", placeholder = "", value = passphrase, onValueChange = { passphrase = it })
-            PillButton(
-                securityCopy(BrambleCopy.biometricEnable),
-                icon = BrambleIconName.LOCK_KEYHOLE,
-                busy = store.busy,
-                enabled = passphrase.isNotEmpty() && store.retryRemainingMs() == 0L,
-                onClick = ::enable,
-            )
-        }
+        SegmentedControl(
+            listOf("Off" to false, "On" to true),
+            choice,
+            enabled = available || enabled,
+            onSelect = ::select,
+        )
+        if (confirming) PassphraseConfirm(store, passphrase, { passphrase = it }, ::enable)
         StatusLine(status, if (!available && !enabled) StatusTone.DANGER else StatusTone.MUTED)
         if (enabled) DetailRow(BrambleIconName.SHIELD, store.keyStorageLabel)
         Eyebrow(BrambleCopy.autoLockEyebrow, Modifier.padding(top = BrambleSpace.sm))
         DetailRow(BrambleIconName.LOCK_KEYHOLE, securityCopy(BrambleCopy.autoLockIdle))
         DetailRow(BrambleIconName.LOCK, BrambleCopy.autoLockBackground)
     }
+}
+
+/**
+ * Asks the core to add the biometric slot for [attempt]; every failure but cancellation becomes a
+ * toast, and the caller re-reads the stored state afterwards either way.
+ */
+private suspend fun tryEnableBiometric(
+    store: WalletStore,
+    activity: Context,
+    attempt: String,
+) {
+    try {
+        store.enableBiometric(activity, attempt)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (unavailable: GeneralSecurityException) {
+        // The Keystore refused a biometric-bound key (for example, nothing enrolled).
+        store.showToast(securityCopy(BrambleCopy.biometricUnavailable))
+    } catch (error: Exception) {
+        store.showError(error)
+    }
+}
+
+/** The status line under the control: on, unavailable on this device, or nothing. */
+private fun biometricStatus(
+    enabled: Boolean,
+    available: Boolean,
+): String? =
+    when {
+        enabled -> securityCopy(BrambleCopy.biometricOnStatus)
+        !available -> securityCopy(BrambleCopy.biometricUnavailable)
+        else -> null
+    }
+
+/** The passphrase re-check shown while turning biometrics on; blocked while the core throttles. */
+@Composable
+private fun PassphraseConfirm(
+    store: WalletStore,
+    passphrase: String,
+    onPassphrase: (String) -> Unit,
+    enable: () -> Unit,
+) {
+    BrambleField(
+        label = "Confirm vault passphrase",
+        placeholder = "",
+        value = passphrase,
+        onValueChange = onPassphrase,
+    )
+    PillButton(
+        securityCopy(BrambleCopy.biometricEnable),
+        icon = BrambleIconName.LOCK_KEYHOLE,
+        busy = store.busy,
+        enabled = passphrase.isNotEmpty() && store.retryRemainingMs() == 0L,
+        onClick = enable,
+    )
 }

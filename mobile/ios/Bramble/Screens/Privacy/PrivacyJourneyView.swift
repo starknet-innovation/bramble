@@ -23,16 +23,24 @@ final class PrivacyJourney {
         var afterRead = false
         guard let account = store.account else { return }
         while true {
-            switch privacyEntry(network: store.network, deployment: deployment, reading: store.privacy.reading, afterRead: afterRead) {
+            let entry = privacyEntry(
+                network: store.network,
+                deployment: deployment,
+                reading: store.privacy.reading,
+                afterRead: afterRead
+            )
+            switch entry {
             case let .blocked(blocker):
                 screen = .blocked(blocker, hint: Self.hint(blocker))
                 return
+
             case .checkDeployment:
                 deployment = await store.rpc.deploymentState(of: account.address, on: store.networkInfo)
                 if deployment == .unknown {
                     screen = .blocked(.service, hint: PrivacyCopy.deploymentUnchecked)
                     return
                 }
+
             case .discovering:
                 if afterRead {
                     screen = .blocked(.service, hint: PrivacyCopy.blockedServiceTitle)
@@ -48,9 +56,14 @@ final class PrivacyJourney {
     /// extension's fallback, "Private balances unavailable".
     private static func hint(_ blocker: PrivacyBlocker) -> String? {
         switch blocker {
-        case .deploy: PrivacyCopy.deployRequired
-        case .service: PrivacyCopy.blockedServiceTitle
-        default: nil
+        case .deploy:
+            PrivacyCopy.deployRequired
+
+        case .service:
+            PrivacyCopy.blockedServiceTitle
+
+        default:
+            nil
         }
     }
 }
@@ -63,13 +76,32 @@ struct PrivacyJourneyView: View {
     @State private var journey = PrivacyJourney()
     let chooseNetwork: () -> Void
 
+    private enum Layout {
+        /// Readable measure for the centred title's body copy.
+        static let titleBodyMaxWidth: CGFloat = 320
+    }
+
+    private static let preparingTasks = [
+        PrivacyCopy.preparingTask1,
+        PrivacyCopy.preparingTask2,
+        PrivacyCopy.preparingTask3,
+        PrivacyCopy.preparingTask4
+    ]
+
     var body: some View {
         ScrollView {
             VStack(spacing: BrambleMetrics.Screen.gap) {
-                FlowHeader(title: PrivacyCopy.headerJourney, subtitle: "STRK", network: store.networkLabel) { dismiss() }
+                FlowHeader(
+                    title: PrivacyCopy.headerJourney,
+                    subtitle: "STRK",
+                    network: store.networkLabel
+                ) { dismiss() }
                 switch journey.screen {
-                case .preparing: preparing
-                case let .blocked(blocker, hint): blocked(blocker, hint: hint)
+                case .preparing:
+                    preparing
+
+                case let .blocked(blocker, hint):
+                    blocked(blocker, hint: hint)
                 }
             }
             .padding(BrambleMetrics.Screen.shellPadding)
@@ -82,10 +114,14 @@ struct PrivacyJourneyView: View {
             ProgressView().controlSize(.large)
             title(PrivacyCopy.preparingTitle, body: PrivacyCopy.preparingBody)
             VStack(alignment: .leading, spacing: BrambleSpace.sm) {
-                ForEach(Array([PrivacyCopy.preparingTask1, PrivacyCopy.preparingTask2, PrivacyCopy.preparingTask3, PrivacyCopy.preparingTask4].enumerated()), id: \.offset) { index, task in
+                ForEach(Array(Self.preparingTasks.enumerated()), id: \.offset) { index, task in
                     HStack(spacing: BrambleSpace.md) {
-                        Circle().fill(index == 0 ? skin.text : skin.elevated).frame(width: BrambleSpace.md, height: BrambleSpace.md)
-                        Text(task).fontWeight(index == 0 ? .medium : .regular).foregroundStyle(index == 0 ? skin.text : skin.muted)
+                        Circle()
+                            .fill(index == 0 ? skin.text : skin.elevated)
+                            .frame(width: BrambleSpace.md, height: BrambleSpace.md)
+                        Text(task)
+                            .fontWeight(index == 0 ? .medium : .regular)
+                            .foregroundStyle(index == 0 ? skin.text : skin.muted)
                     }
                     .brambleText(BrambleTypeScale.body)
                     .frame(minHeight: BrambleControl.hit)
@@ -103,12 +139,19 @@ struct PrivacyJourneyView: View {
         return VStack(spacing: BrambleSpace.lg) {
             Medallion(icon: .shield)
             title(copy.title, body: copy.body)
-            if let hint { Text(hint).brambleText(BrambleTypeScale.label).foregroundStyle(skin.muted).multilineTextAlignment(.center) }
+            if let hint {
+                Text(hint)
+                    .brambleText(BrambleTypeScale.label)
+                    .foregroundStyle(skin.muted)
+                    .multilineTextAlignment(.center)
+            }
             switch blocker {
             case .network:
                 PillButton(copy.action, icon: .globe) { chooseNetwork() }
+
             case .service:
                 PillButton(copy.action, icon: .refresh) { Task { await journey.start(store) } }
+
             default:
                 // Deploy, fund, pending and unsupported offer no action on mobile (§2.5).
                 EmptyView()
@@ -120,12 +163,18 @@ struct PrivacyJourneyView: View {
     private func title(_ title: String, body: String) -> some View {
         VStack(spacing: BrambleSpace.sm) {
             Text(title)
-                .brambleText(BrambleTypeScale.title.sized(BrambleMetrics.H2.size), weight: BrambleMetrics.H2.weight, tracking: BrambleMetrics.H2.tracking)
+                .brambleText(
+                    BrambleTypeScale.title.sized(BrambleMetrics.H2.size),
+                    weight: BrambleMetrics.H2.weight,
+                    tracking: BrambleMetrics.H2.tracking
+                )
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
-            Text(body).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
+            Text(body)
+                .brambleText(BrambleTypeScale.body)
+                .foregroundStyle(skin.muted)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 320)
+                .frame(maxWidth: Layout.titleBodyMaxWidth)
         }
     }
 }
@@ -139,39 +188,67 @@ struct TokenPrivacySection: View {
     let receive: () -> Void
     let journey: () -> Void
 
+    private static let lockIconSize: CGFloat = 12
+
     var body: some View {
         let detail = store.tokenDetailPrivacyFor(tokenAddress)
         VStack(alignment: .leading, spacing: BrambleSpace.sm) {
             summary(detail.summary)
             switch detail.action {
-            case .none: EmptyView()
-            case .fundWithStrk: PillButton(PrivacyCopy.tileFundLabel, icon: .qrCode, action: receive)
-            case .deployAndEnable: PillButton(PrivacyCopy.tileDeployLabel, icon: .shield, action: journey)
-            case .goPrivate: PillButton(PrivacyCopy.detailGoPrivate, icon: .shield, action: journey)
+            case .none:
+                EmptyView()
+
+            case .fundWithStrk:
+                PillButton(PrivacyCopy.tileFundLabel, icon: .qrCode, action: receive)
+
+            case .deployAndEnable:
+                PillButton(PrivacyCopy.tileDeployLabel, icon: .shield, action: journey)
+
+            case .goPrivate:
+                PillButton(PrivacyCopy.detailGoPrivate, icon: .shield, action: journey)
+
             case .shieldUnshield:
                 HStack(spacing: BrambleSpace.sm) {
-                    PillButton(PrivacyCopy.detailShield, icon: .shield) {}.disabled(!privacyCapabilities().canShield)
-                    PillButton(PrivacyCopy.detailUnshield, kind: .secondary) {}.disabled(!privacyCapabilities().canUnshield)
+                    PillButton(PrivacyCopy.detailShield, icon: .shield) {
+                        // No action: shielding is not built on mobile, so the capability keeps this disabled.
+                    }
+                    .disabled(!privacyCapabilities().canShield)
+                    PillButton(PrivacyCopy.detailUnshield, kind: .secondary) {
+                        // No action: unshielding is not built on mobile, so the capability keeps this disabled.
+                    }
+                    .disabled(!privacyCapabilities().canUnshield)
                 }
                 Text(PrivacyCopy.unsupportedTitle).brambleText(BrambleTypeScale.label).foregroundStyle(skin.muted)
             }
         }
     }
 
-    @ViewBuilder private func summary(_ summary: DetailSummary) -> some View {
+    @ViewBuilder
+    private func summary(_ summary: DetailSummary) -> some View {
         switch summary {
-        case .none: EmptyView()
+        case .none:
+            EmptyView()
+
         case .retry:
-            Button { Task { await store.refreshPrivacy() } } label: { line(PrivacyCopy.retry, muted: true) }.buttonStyle(.plain)
-        case .registerToStart: line(PrivacyCopy.registerToStart, muted: true)
-        case let .amount(text): line(text, muted: false)
+            Button {
+                Task { await store.refreshPrivacy() }
+            } label: {
+                line(PrivacyCopy.retry, muted: true)
+            }
+            .buttonStyle(.plain)
+
+        case .registerToStart:
+            line(PrivacyCopy.registerToStart, muted: true)
+
+        case let .amount(text):
+            line(text, muted: false)
         }
     }
 
     private func line(_ value: String, muted: Bool) -> some View {
         HStack {
             HStack(spacing: BrambleSpace.xs) {
-                BrambleIcon(.lock, size: 12)
+                BrambleIcon(.lock, size: Self.lockIconSize)
                 Text(PrivacyCopy.privateBalance)
             }
             .foregroundStyle(skin.muted)

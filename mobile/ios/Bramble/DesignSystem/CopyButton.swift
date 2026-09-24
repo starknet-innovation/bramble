@@ -18,16 +18,27 @@ struct CopyButton: View {
     var status: Binding<String?>?
     @State private var confirmed = false
 
+    /// The receipt style's glyph and its gap to the label.
+    private static let receiptGlyph: CGFloat = 16
+    private static let receiptGap: CGFloat = 6
+
     var body: some View {
         switch style {
         case .icon:
-            IconButton(icon: confirmed ? .check : .copy, label: label, tint: confirmed ? skin.positive : skin.muted, action: copy)
+            IconButton(
+                icon: confirmed ? .check : .copy,
+                label: label,
+                tint: confirmed ? skin.positive : skin.muted,
+                action: copy
+            )
+
         case .pill(let kind):
             PillButton(label, kind: kind, icon: confirmed ? .check : .copy, action: copy)
+
         case .receipt:
             Button(action: copy) {
-                HStack(spacing: 6) {
-                    BrambleIcon(confirmed ? .check : .copy, size: 16)
+                HStack(spacing: Self.receiptGap) {
+                    BrambleIcon(confirmed ? .check : .copy, size: Self.receiptGlyph)
                     Text(label).brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold)
                 }
                 .foregroundStyle(confirmed ? skin.positive : skin.accent)

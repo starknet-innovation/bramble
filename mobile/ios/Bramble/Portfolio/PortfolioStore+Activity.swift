@@ -24,11 +24,13 @@ extension PortfolioStore {
             activityView = view
         } else {
             guard generation == self.generation else { return }
-            let rows = await scan(scope: scope, tokens: tokens)
+            let scanned = await scan(scope: scope, tokens: tokens)
             guard generation == self.generation else { return }
-            activityView = if let rows {
+            activityView = switch scanned {
+            case let .answered(rows):
                 activity.scanApply(accountId: scope.accountId, network: net, rows: rows, nowMs: now)
-            } else {
+
+            case .unanswered:
                 activity.markUnavailable(accountId: scope.accountId, network: net, nowMs: now)
             }
         }
@@ -55,22 +57,33 @@ extension PortfolioStore {
     private func starkscan(scope: Scope, tokens: [TokenConfig], now: Double, generation: Int) async -> ActivityView? {
         let net = scope.network.network
         guard let request = activity.starkscanRequest(
-            accountId: scope.accountId, network: net, tracked: tokens,
-            explorerAllowed: preferences.explorerFallbackAllowed(network: net), nowMs: now
+            accountId: scope.accountId,
+            network: net,
+            tracked: tokens,
+            explorerAllowed: preferences.explorerFallbackAllowed(network: net),
+            nowMs: now
         ) else { return nil }
         let outcome = await transport.perform(request)
         guard generation == self.generation else { return nil }
-        return activity.starkscanApply(accountId: scope.accountId, network: net, tracked: tokens, outcome: outcome, nowMs: now)
+        return activity.starkscanApply(
+            accountId: scope.accountId,
+            network: net,
+            tracked: tokens,
+            outcome: outcome,
+            nowMs: now
+        )
     }
 
     // The RPC scan, replayed from the start on the next verified endpoint after a transport
-    // failure (`withRpcFallback` around `collectTransactionHistory`); `nil` when every endpoint failed.
-    private func scan(scope: Scope, tokens: [TokenConfig]) async -> [ActivityEntry]? {
-        guard let history = try? HistoryScan(accountId: scope.accountId, network: scope.network.network, tracked: tokens) else {
-            return nil
+    // failure (`withRpcFallback` around `collectTransactionHistory`); `.unanswered` when every
+    // endpoint failed.
+    private func scan(scope: Scope, tokens: [TokenConfig]) async -> HistoryScanOutcome {
+        let started = try? HistoryScan(accountId: scope.accountId, network: scope.network.network, tracked: tokens)
+        guard let history = started else {
+            return .unanswered
         }
         let endpoints = endpoints
-        return await endpoints.firstAnswer(on: scope.network) { url in
+        let answered: HistoryScanOutcome? = await endpoints.firstAnswer(on: scope.network) { url in
             history.restart()
             while true {
                 let calls = history.nextCalls()
@@ -79,7 +92,16 @@ extension PortfolioStore {
                     return nil
                 }
             }
-            return try? history.finish()
+            guard let rows = try? history.finish() else { return nil }
+            return .answered(rows)
         }
+        return answered ?? .unanswered
     }
+}
+
+/// What the RPC history scan produced: the rows from the first endpoint that answered (possibly
+/// none), or no answer from any endpoint, which marks history unavailable.
+private enum HistoryScanOutcome: Sendable {
+    case answered([ActivityEntry])
+    case unanswered
 }

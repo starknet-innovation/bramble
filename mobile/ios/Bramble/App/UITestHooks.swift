@@ -9,7 +9,10 @@ enum UITestHooks {
     static func prepare(vaultDirectory: URL) {
         #if DEBUG
         guard ProcessInfo.processInfo.arguments.contains("-BrambleUITestReset") else { return }
-        let contents = (try? FileManager.default.contentsOfDirectory(at: vaultDirectory, includingPropertiesForKeys: nil)) ?? []
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: vaultDirectory,
+            includingPropertiesForKeys: nil
+        )) ?? []
         for file in contents { try? FileManager.default.removeItem(at: file) }
         #endif
     }

@@ -9,7 +9,14 @@ object BackupVerify {
     /** `BACKUP_VERIFY_POSITIONS`, 1-based. */
     val POSITIONS = listOf(3, 7, 11)
 
-    fun confirmed(words: List<String>, answers: List<String>): Boolean =
+    /**
+     * True when [answers] match [words] at [POSITIONS]; false for a missing, empty, or wrong
+     * answer, or a phrase too short to hold every position.
+     */
+    fun confirmed(
+        words: List<String>,
+        answers: List<String>,
+    ): Boolean =
         answers.size == POSITIONS.size &&
             words.size >= POSITIONS.max() &&
             POSITIONS.zip(answers).all { (position, answer) ->

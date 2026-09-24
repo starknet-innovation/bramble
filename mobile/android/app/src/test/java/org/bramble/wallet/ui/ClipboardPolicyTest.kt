@@ -22,14 +22,23 @@ class ClipboardPolicyTest {
     }
 
     @Test
-    fun neverClearsSomethingCopiedSince() {
+    fun neverClearsALaterClip() {
         assertFalse(ClipboardPolicy.shouldClear("Note", stamp + 1, stamp, copiedAt, copiedAt + EXPIRY_MS))
         assertFalse(ClipboardPolicy.shouldClear(LABEL, stamp + 1, stamp, copiedAt, copiedAt + EXPIRY_MS))
     }
 
     @Test
     fun doesNothingWithoutFocusOrACopy() {
-        assertFalse("no focus: the description reads as null", ClipboardPolicy.shouldClear(null, null, stamp, copiedAt, copiedAt + EXPIRY_MS))
+        assertFalse(
+            "no focus: the description reads as null",
+            ClipboardPolicy.shouldClear(
+                null,
+                null,
+                stamp,
+                copiedAt,
+                copiedAt + EXPIRY_MS,
+            ),
+        )
         assertFalse("never copied", ClipboardPolicy.shouldClear(LABEL, stamp, null, null, copiedAt + EXPIRY_MS))
     }
 }

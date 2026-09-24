@@ -35,18 +35,31 @@ enum BrambleHaptic {
 
     var feedback: SensoryFeedback {
         switch self {
-        case .press: .impact(weight: .light)
-        case .success: .success
-        case .error: .error
-        case .selection: .selection
-        case .dismiss: .impact(flexibility: .soft)
+        case .press:
+            .impact(weight: .light)
+
+        case .success:
+            .success
+
+        case .error:
+            .error
+
+        case .selection:
+            .selection
+
+        case .dismiss:
+            .impact(flexibility: .soft)
         }
     }
 }
 
 extension View {
     /// Plays `haptic` whenever `trigger` changes (and `when` holds for the change).
-    func brambleHaptic<T: Equatable>(_ haptic: BrambleHaptic, trigger: T, when: @escaping (T, T) -> Bool = { _, _ in true }) -> some View {
+    func brambleHaptic<T: Equatable>(
+        _ haptic: BrambleHaptic,
+        trigger: T,
+        when: @escaping (T, T) -> Bool = { _, _ in true }
+    ) -> some View {
         sensoryFeedback(trigger: trigger) { old, new in when(old, new) ? haptic.feedback : nil }
     }
 }

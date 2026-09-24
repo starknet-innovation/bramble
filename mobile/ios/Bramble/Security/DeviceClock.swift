@@ -6,6 +6,9 @@ import Foundation
 /// cannot be set from Settings) and the kernel's per-boot session UUID. There is deliberately no
 /// wall clock here, so changing the date cannot shorten a backoff delay or extend a session.
 final class DeviceClock: HostClock {
+    /// Nanoseconds per millisecond, for the monotonic reading.
+    private static let nanosecondsPerMillisecond: UInt64 = 1_000_000
+
     private let numer: UInt64
     private let denom: UInt64
     private let boot: String
@@ -21,7 +24,7 @@ final class DeviceClock: HostClock {
     func monotonicMs() -> UInt64 {
         let ticks = mach_continuous_time()
         // ticks × numer / denom is nanoseconds; divide first so the product cannot overflow.
-        return ticks / denom * numer / 1_000_000
+        return ticks / denom * numer / Self.nanosecondsPerMillisecond
     }
 
     func bootId() -> String { boot }

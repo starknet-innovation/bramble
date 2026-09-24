@@ -7,6 +7,28 @@ enum UITest {
     static let publicPhrase = "habit hope tip crystal because grunt nation idea electric witness alert like"
     static let passphrase = "ui test passphrase"
 
+    /// How long each kind of wait allows, in seconds.
+    enum Timeout {
+        /// Any screen element the flow expects next.
+        static let element: TimeInterval = 20
+        /// A field or row already on the current screen.
+        static let onScreen: TimeInterval = 5
+        /// The first screen after launch.
+        static let firstScreen: TimeInterval = 10
+        /// The unlock screen, checked once the welcome screen did not appear.
+        static let lockedScreen: TimeInterval = 5
+        /// The whole "Find your accounts" search over the fixture node.
+        static let accountSearch: TimeInterval = 90
+    }
+
+    /// The leading-edge swipe: normalized start and end x, the row it runs along, and the press.
+    private enum EdgeSwipe {
+        static let startX: CGFloat = 0.01
+        static let endX: CGFloat = 0.85
+        static let rowY: CGFloat = 0.55
+        static let pressDuration: TimeInterval = 0.05
+    }
+
     /// Refuses to run when a real phrase is present in the environment.
     static func refuseRealPhrase() throws {
         if ProcessInfo.processInfo.environment["BRAMBLE_MOBILE_MAINNET_MNEMONIC"] != nil {
@@ -23,7 +45,12 @@ enum UITest {
         return app
     }
 
-    static func wait(_ element: XCUIElement, _ timeout: TimeInterval = 20, file: StaticString = #filePath, line: UInt = #line) {
+    static func wait(
+        _ element: XCUIElement,
+        _ timeout: TimeInterval = Timeout.element,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
         XCTAssertTrue(element.waitForExistence(timeout: timeout), "\(element) exists", file: file, line: line)
     }
 
@@ -33,7 +60,7 @@ enum UITest {
     }
 
     static func type(_ text: String, into field: XCUIElement) {
-        wait(field, 5)
+        wait(field, Timeout.onScreen)
         field.tap()
         field.typeText(text)
         dismissKeyboardTip(XCUIApplication())
@@ -45,7 +72,8 @@ enum UITest {
         let tip = app.keyboards.buttons["Continue"]
         if tip.exists { tip.tap() }
         let other = app.buttons.matching(NSPredicate(format: "label == 'Continue'"))
-        if other.count > 1, app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Type English'")).firstMatch.exists {
+        let tipText = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Type English'"))
+        if other.count > 1, tipText.firstMatch.exists {
             // The tip's button is not always last: never tap the app's own Continue (the main
             // window's), or the flow advances behind the caller's back.
             let own = app.windows.element(boundBy: 0).buttons["Continue"]
@@ -62,7 +90,8 @@ enum UITest {
     static func resetToFirstRun(_ app: XCUIApplication) {
         let create = app.buttons["Create a new wallet"]
         let locked = app.staticTexts["Welcome back"]
-        _ = create.waitForExistence(timeout: 10) || locked.waitForExistence(timeout: 5)
+        _ = create.waitForExistence(timeout: Timeout.firstScreen)
+            || locked.waitForExistence(timeout: Timeout.lockedScreen)
         if locked.exists {
             unlock(app)
             removeWallet(app)
@@ -85,6 +114,10 @@ enum UITest {
         XCTAssertFalse(name.isEmpty || name.hasPrefix("Account "), "header shows \(name)", file: file, line: line)
     }
 
+    /// The restore acknowledgement's label, exactly as "Find your accounts" shows it.
+    static let restoreAcknowledgement = "I checked these account types and indices and want to restore the "
+        + "selected accounts on Starknet Mainnet."
+
     /// The published wallet's primary account as "Find your accounts" titles it.
     static let primaryCandidate = "Account 0, 0x2083…98d9"
 
@@ -94,14 +127,14 @@ enum UITest {
     /// acknowledges, and restores. `shot` captures the review before the restore.
     static func restorePrimaryAccount(_ app: XCUIApplication, shot: (() -> Void)? = nil) {
         wait(app.staticTexts["Find your accounts"])
-        wait(app.staticTexts["Search complete. Checked 20 indices across every account type."], 90)
+        wait(app.staticTexts["Search complete. Checked 20 indices across every account type."], Timeout.accountSearch)
         let group = app.buttons["Bramble accounts"]
         if (group.value as? String) != "Expanded" { tap(group) }
         let row = app.buttons[primaryCandidate]
-        wait(row, 5)
+        wait(row, Timeout.onScreen)
         if !row.isSelected { row.tap() }
         shot?()
-        let acknowledge = app.buttons["I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet."]
+        let acknowledge = app.buttons[restoreAcknowledgement]
         if !acknowledge.isHittable { app.swipeUp() }
         tap(acknowledge)
         tap(app.buttons["Restore selected accounts"])
@@ -121,7 +154,7 @@ enum UITest {
     static func enterPublicPhrase(_ app: XCUIApplication) {
         for (index, word) in publicPhrase.split(separator: " ").enumerated() {
             let field = app.textFields["Word \(index + 1)"]
-            wait(field, 5)
+            wait(field, Timeout.onScreen)
             if !field.isHittable { app.swipeUp() }
             field.tap()
             field.typeText(String(word))
@@ -155,14 +188,14 @@ enum UITest {
 
     /// A drag from the leading screen edge to 85% of the width.
     static func edgeSwipe(_ app: XCUIApplication) {
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.55))
-        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.55))
-        start.press(forDuration: 0.05, thenDragTo: end)
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: EdgeSwipe.startX, dy: EdgeSwipe.rowY))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: EdgeSwipe.endX, dy: EdgeSwipe.rowY))
+        start.press(forDuration: EdgeSwipe.pressDuration, thenDragTo: end)
     }
 
     /// A screen coordinate in points.
-    static func point(_ app: XCUIApplication, _ x: CGFloat, _ y: CGFloat) -> XCUICoordinate {
-        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: x, dy: y))
+    static func point(_ app: XCUIApplication, _ pointX: CGFloat, _ pointY: CGFloat) -> XCUICoordinate {
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: pointX, dy: pointY))
     }
 
     static var deviceName: String {

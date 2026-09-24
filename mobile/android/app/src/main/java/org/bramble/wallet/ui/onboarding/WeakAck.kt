@@ -8,8 +8,14 @@ package org.bramble.wallet.ui.onboarding
  */
 object WeakAck {
     /** The tick after the value changed to one whose acknowledgement need is [needs]. */
-    fun sync(needs: Boolean, ticked: Boolean): Boolean = needs && ticked
+    fun sync(
+        needs: Boolean,
+        ticked: Boolean,
+    ): Boolean = needs && ticked
 
     /** Gate: nothing weak is accepted silently, nothing acceptable is blocked. */
-    fun ok(needs: Boolean, ticked: Boolean): Boolean = !needs || ticked
+    fun accepts(
+        needs: Boolean,
+        ticked: Boolean,
+    ): Boolean = !needs || ticked
 }

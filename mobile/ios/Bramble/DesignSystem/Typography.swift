@@ -8,17 +8,52 @@ enum BrambleTypography {
     /// UIKit's weight axis at each CSS hundred. Values between hundreds (the extension's 650) are
     /// interpolated linearly, so 650 renders between semibold and bold rather than as either.
     private static let axis: [(css: Double, ui: UIFont.Weight)] = [
-        (100, .ultraLight), (200, .thin), (300, .light), (400, .regular), (500, .medium),
-        (600, .semibold), (700, .bold), (800, .heavy), (900, .black),
+        (CSSWeight.ultraLight, .ultraLight),
+        (CSSWeight.thin, .thin),
+        (CSSWeight.light, .light),
+        (CSSWeight.regular, .regular),
+        (CSSWeight.medium, .medium),
+        (CSSWeight.semibold, .semibold),
+        (CSSWeight.bold, .bold),
+        (CSSWeight.heavy, .heavy),
+        (CSSWeight.black, .black)
     ]
 
+    /// The CSS `font-weight` keyword values at each hundred, the stops of `axis`.
+    private enum CSSWeight {
+        static let ultraLight: Double = 100
+        static let thin: Double = 200
+        static let light: Double = 300
+        static let regular: Double = 400
+        static let medium: Double = 500
+        static let semibold: Double = 600
+        static let bold: Double = 700
+        static let heavy: Double = 800
+        static let black: Double = 900
+        /// The CSS weight range; values outside it are clamped.
+        static let minimum = 100
+        static let maximum = 900
+    }
+
+    /// Lower size bound (points, inclusive) of each Dynamic Type text-style band in `textStyle(for:)`.
+    private enum TextStyleBand {
+        static let largeTitle: CGFloat = 34
+        static let title1: CGFloat = 26
+        static let title2: CGFloat = 21
+        static let title3: CGFloat = 18
+        static let headline: CGFloat = 16
+        static let body: CGFloat = 14
+        static let footnote: CGFloat = 13
+        static let caption1: CGFloat = 12
+    }
+
     static func weight(_ css: Int) -> UIFont.Weight {
-        let value = Double(min(max(css, 100), 900))
+        let value = Double(min(max(css, CSSWeight.minimum), CSSWeight.maximum))
         guard let upper = axis.firstIndex(where: { $0.css >= value }) else { return .black }
         if axis[upper].css == value || upper == 0 { return axis[upper].ui }
         let low = axis[upper - 1], high = axis[upper]
-        let t = (value - low.css) / (high.css - low.css)
-        return UIFont.Weight(rawValue: low.ui.rawValue + (high.ui.rawValue - low.ui.rawValue) * t)
+        let fraction = (value - low.css) / (high.css - low.css)
+        return UIFont.Weight(rawValue: low.ui.rawValue + (high.ui.rawValue - low.ui.rawValue) * fraction)
     }
 
     /// The UIKit text style whose Dynamic Type curve a token size follows. The pairing is a
@@ -26,15 +61,32 @@ enum BrambleTypography {
     /// style closest to it at the default "Large" size, so at "Large" the size is the token itself.
     static func textStyle(for size: CGFloat) -> UIFont.TextStyle {
         switch size {
-        case 34...: .largeTitle
-        case 26..<34: .title1
-        case 21..<26: .title2
-        case 18..<21: .title3
-        case 16..<18: .headline
-        case 14..<16: .body
-        case 13..<14: .footnote
-        case 12..<13: .caption1
-        default: .caption2
+        case TextStyleBand.largeTitle...:
+            .largeTitle
+
+        case TextStyleBand.title1..<TextStyleBand.largeTitle:
+            .title1
+
+        case TextStyleBand.title2..<TextStyleBand.title1:
+            .title2
+
+        case TextStyleBand.title3..<TextStyleBand.title2:
+            .title3
+
+        case TextStyleBand.headline..<TextStyleBand.title3:
+            .headline
+
+        case TextStyleBand.body..<TextStyleBand.headline:
+            .body
+
+        case TextStyleBand.footnote..<TextStyleBand.body:
+            .footnote
+
+        case TextStyleBand.caption1..<TextStyleBand.footnote:
+            .caption1
+
+        default:
+            .caption2
         }
     }
 
@@ -60,6 +112,9 @@ private struct BrambleTextModifier: ViewModifier {
     let tracking: CGFloat
     let mono: Bool
 
+    /// CSS half-leading: the extra leading is shared between the space above and below a line.
+    private static let leadingShares: CGFloat = 2
+
     func body(content: Content) -> some View {
         let size = BrambleTypography.scaled(style.size, for: dynamicType)
         let font = BrambleTypography.uiFont(size: size, weight: weight, mono: mono)
@@ -68,21 +123,26 @@ private struct BrambleTextModifier: ViewModifier {
             .font(Font(font))
             .tracking(size * tracking)
             .lineSpacing(leading)
-            .padding(.vertical, leading / 2)
+            .padding(.vertical, leading / Self.leadingShares)
     }
 }
 
 extension View {
     /// A type-scale style: size (scaled by Dynamic Type), CSS weight, the token's line height, and
     /// tracking in em.
-    func brambleText(_ style: BrambleTypeStyle, weight: Int = BrambleWeight.regular, tracking: CGFloat = 0, mono: Bool = false) -> some View {
+    func brambleText(
+        _ style: BrambleTypeStyle,
+        weight: Int = BrambleWeight.regular,
+        tracking: CGFloat = 0,
+        mono: Bool = false
+    ) -> some View {
         modifier(BrambleTextModifier(style: style, weight: weight, tracking: tracking, mono: mono))
     }
 }
 
 /// A length that follows Dynamic Type with the same curve as the text beside it (row heights and
 /// icons next to text). Equal to the metric at "Large".
-struct BrambleScaled {
+enum BrambleScaled {
     static func value(_ metric: CGFloat, relativeTo textSize: CGFloat, _ dynamicType: DynamicTypeSize) -> CGFloat {
         metric * BrambleTypography.scaled(textSize, for: dynamicType) / textSize
     }

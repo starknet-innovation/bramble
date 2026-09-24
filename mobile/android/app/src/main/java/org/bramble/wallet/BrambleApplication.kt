@@ -16,17 +16,30 @@ import org.bramble.wallet.security.DeviceClock
  * result (see [SessionGuard]). Coming back re-checks the biometric key and the idle deadline.
  */
 class BrambleApplication : Application() {
-    lateinit var store: WalletStore
-        private set
+    /**
+     * The process-wide store, built on the main thread by [onCreate] before any activity reads it.
+     * The vault lives in `noBackupFilesDir`: app-private, excluded from backup and device transfer.
+     */
+    val store: WalletStore by lazy {
+        val core = WalletCore(noBackupFilesDir.resolve("vault").absolutePath, DeviceClock(contentResolver))
+        WalletStore(
+            core,
+            getSharedPreferences("bramble", MODE_PRIVATE),
+            BiometricVault(this),
+            MainScope(),
+            noBackupFilesDir.resolve("portfolio"),
+        )
+    }
 
     override fun onCreate() {
         super.onCreate()
-        // noBackupFilesDir: app-private, excluded from backup and device transfer.
-        val core = WalletCore(noBackupFilesDir.resolve("vault").absolutePath, DeviceClock(contentResolver))
-        store = WalletStore(core, getSharedPreferences("bramble", MODE_PRIVATE), BiometricVault(this), MainScope(), noBackupFilesDir.resolve("portfolio"))
-        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStop(owner: LifecycleOwner) = store.lock()
-            override fun onStart(owner: LifecycleOwner) = store.onForeground()
-        })
+        val walletStore = store
+        ProcessLifecycleOwner.get().lifecycle.addObserver(
+            object : DefaultLifecycleObserver {
+                override fun onStop(owner: LifecycleOwner) = walletStore.lock()
+
+                override fun onStart(owner: LifecycleOwner) = walletStore.onForeground()
+            },
+        )
     }
 }

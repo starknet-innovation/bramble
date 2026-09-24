@@ -24,7 +24,8 @@ struct SendFlowView: View {
                 if FixtureTransport.requested() != nil {
                     // UI tests read this to prove the fixture node received no write.
                     Text("rpc-fixture-writes-\(FixtureTransport.writes.value)")
-                        .font(.system(size: 1)).opacity(0.01)
+                        .font(.system(size: 1))
+                        .opacity(FixtureProbe.opacity)
                         .accessibilityIdentifier("rpc-fixture-writes")
                 }
                 #endif
@@ -40,11 +41,23 @@ struct SendFlowView: View {
         }
     }
 
+    #if DEBUG
+    /// The fixture write counter is present for UI tests but effectively invisible.
+    private enum FixtureProbe {
+        static let opacity = 0.01
+    }
+    #endif
+
     private func back(_ model: SendFlowModel) {
         switch model.stage {
-        case .recipient, .submitted, .pending: dismiss()
-        case .details, .asset, .review, .failed: model.back()
-        default: break
+        case .recipient, .submitted, .pending:
+            dismiss()
+
+        case .details, .asset, .review, .failed:
+            model.back()
+
+        default:
+            break
         }
     }
 }
@@ -57,12 +70,23 @@ struct SendStageView: View {
 
     var body: some View {
         switch model.stage {
-        case .recipient: SendRecipientView(model: model)
-        case .asset: SendAssetView(model: model)
-        case .details, .reviewing: SendDetailsView(model: model)
-        case .review: SendReviewView(model: model)
-        case .authorizing, .broadcasting, .confirming: SendWorkingView(stage: model.stage)
-        case .pending, .submitted, .failed: SendOutcomeView(model: model, done: done, viewActivity: viewActivity)
+        case .recipient:
+            SendRecipientView(model: model)
+
+        case .asset:
+            SendAssetView(model: model)
+
+        case .details, .reviewing:
+            SendDetailsView(model: model)
+
+        case .review:
+            SendReviewView(model: model)
+
+        case .authorizing, .broadcasting, .confirming:
+            SendWorkingView(stage: model.stage)
+
+        case .pending, .submitted, .failed:
+            SendOutcomeView(model: model, done: done, viewActivity: viewActivity)
         }
     }
 }
@@ -73,19 +97,19 @@ struct SendOriginCard: View {
     let account: AccountRecord
 
     var body: some View {
-        let m = BrambleMetrics.Send.self
-        HStack(spacing: m.searchGap) {
+        let metrics = BrambleMetrics.Send.self
+        HStack(spacing: metrics.searchGap) {
             AccountAvatarView(address: account.address)
-            VStack(alignment: .leading, spacing: m.rowCopyGap) {
+            VStack(alignment: .leading, spacing: metrics.rowCopyGap) {
                 Text(account.displayName).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
                 Text(account.shortAddress).brambleText(BrambleTypeScale.caption, mono: true).foregroundStyle(skin.muted)
             }
             Spacer(minLength: 0)
         }
-        .padding(.leading, m.originInset)
+        .padding(.leading, metrics.originInset)
         .padding(.vertical, BrambleSpace.sm)
-        .frame(minHeight: m.originHeight)
-        .background(skin.elevated, in: RoundedRectangle(cornerRadius: m.originRadius, style: .continuous))
+        .frame(minHeight: metrics.originHeight)
+        .background(skin.elevated, in: RoundedRectangle(cornerRadius: metrics.originRadius, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
@@ -97,11 +121,15 @@ struct SendHeading: View {
     var kicker = false
 
     var body: some View {
-        let m = BrambleMetrics.Send.self
+        let metrics = BrambleMetrics.Send.self
         Text(text)
-            .brambleText(kicker ? BrambleTypeScale.label.sized(m.kickerSize) : BrambleTypeScale.title.sized(m.sectionTitleSize),
-                         weight: kicker ? m.kickerWeight : m.sectionTitleWeight,
-                         tracking: kicker ? 0 : BrambleTracking.title)
+            .brambleText(
+                kicker
+                    ? BrambleTypeScale.label.sized(metrics.kickerSize)
+                    : BrambleTypeScale.title.sized(metrics.sectionTitleSize),
+                weight: kicker ? metrics.kickerWeight : metrics.sectionTitleWeight,
+                tracking: kicker ? 0 : BrambleTracking.title
+            )
             .foregroundStyle(kicker ? skin.muted : skin.text)
             .accessibilityAddTraits(.isHeader)
     }
@@ -115,11 +143,13 @@ struct SendSearchField: View {
     let label: String
     @Binding var text: String
     var invalid = false
-    var submit: () -> Void = {}
+    var submit: () -> Void = {
+        // No action by default: pressing return submits nothing unless the caller opts in.
+    }
 
     var body: some View {
-        let m = BrambleMetrics.Send.self
-        HStack(spacing: m.searchGap) {
+        let metrics = BrambleMetrics.Send.self
+        HStack(spacing: metrics.searchGap) {
             BrambleIcon(.search).foregroundStyle(invalid ? skin.danger : skin.muted).accessibilityHidden(true)
             TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(skin.muted))
                 .textInputAutocapitalization(.never)
@@ -131,10 +161,13 @@ struct SendSearchField: View {
                 .submitLabel(.continue)
                 .onSubmit(submit)
         }
-        .padding(.leading, m.searchInset)
+        .padding(.leading, metrics.searchInset)
         .padding(.trailing, BrambleMetrics.Field.padding.trailing)
-        .frame(minHeight: m.searchHeight)
-        .background(invalid ? skin.dangerSoft : skin.elevated, in: RoundedRectangle(cornerRadius: m.searchRadius, style: .continuous))
+        .frame(minHeight: metrics.searchHeight)
+        .background(
+            invalid ? skin.dangerSoft : skin.elevated,
+            in: RoundedRectangle(cornerRadius: metrics.searchRadius, style: .continuous)
+        )
     }
 }
 
@@ -151,26 +184,42 @@ struct SendChoiceRow<Mark: View>: View {
     let action: () -> Void
 
     var body: some View {
-        let m = BrambleMetrics.Send.self
+        let metrics = BrambleMetrics.Send.self
         Button(action: action) {
             HStack(spacing: 0) {
                 mark().frame(width: BrambleSize.mark, height: BrambleSize.mark)
-                VStack(alignment: .leading, spacing: m.rowCopyGap) {
-                    Text(title).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold).foregroundStyle(skin.text).lineLimit(1)
-                    Text(detail).brambleText(BrambleTypeScale.caption, mono: mono).foregroundStyle(skin.muted).lineLimit(1)
+                VStack(alignment: .leading, spacing: metrics.rowCopyGap) {
+                    Text(title)
+                        .brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
+                        .foregroundStyle(skin.text)
+                        .lineLimit(1)
+                    Text(detail)
+                        .brambleText(BrambleTypeScale.caption, mono: mono)
+                        .foregroundStyle(skin.muted)
+                        .lineLimit(1)
                 }
-                .padding(.horizontal, m.rowCopyInset)
+                .padding(.horizontal, metrics.rowCopyInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if let value {
-                    Text(value).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold).monospacedDigit().foregroundStyle(skin.text)
+                    Text(value)
+                        .brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
+                        .monospacedDigit()
+                        .foregroundStyle(skin.text)
                 } else {
                     BrambleIcon(.chevronRight, size: BrambleControl.icon).foregroundStyle(skin.muted)
                 }
             }
-            .padding(m.rowPadding)
-            .frame(minHeight: m.rowHeight)
+            .padding(metrics.rowPadding)
+            .frame(minHeight: metrics.rowHeight)
         }
-        .buttonStyle(FillPressStyle(fill: skin.panel, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: m.rowRadius, style: .continuous), scale: BramblePress.tokenRow))
+        .buttonStyle(
+            FillPressStyle(
+                fill: skin.panel,
+                pressed: skin.softPress,
+                shape: RoundedRectangle(cornerRadius: metrics.rowRadius, style: .continuous),
+                scale: BramblePress.tokenRow
+            )
+        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityAddTraits(.isButton)
@@ -184,8 +233,8 @@ struct SendRecipientView: View {
     @State private var tab = 0
 
     var body: some View {
-        let m = BrambleMetrics.Send.self
-        VStack(alignment: .leading, spacing: m.stageGap) {
+        let metrics = BrambleMetrics.Send.self
+        VStack(alignment: .leading, spacing: metrics.stageGap) {
             VStack(alignment: .leading, spacing: BrambleSpace.sm) {
                 SendHeading(text: SendCopy.sendingFrom, kicker: true)
                 SendOriginCard(account: model.account)
@@ -196,14 +245,13 @@ struct SendRecipientView: View {
                     placeholder: SendCopy.recipientPlaceholder,
                     label: SendCopy.recipientFieldLabel,
                     text: $model.recipientInput,
-                    invalid: model.recipientError != nil,
-                    submit: { model.continueWithRecipient() }
-                )
+                    invalid: model.recipientError != nil
+                ) { model.continueWithRecipient() }
                 StatusLine(text: model.recipientError, tone: .danger)
             }
             SegmentedControl(options: [(SendCopy.myAccounts, 0), (SendCopy.addressBook, 1)], selection: $tab)
             if tab == 0 {
-                VStack(spacing: m.listGap) {
+                VStack(spacing: metrics.listGap) {
                     ForEach(model.otherAccounts, id: \.id) { account in
                         SendChoiceRow(
                             title: account.displayName,
@@ -229,8 +277,8 @@ struct SendAssetView: View {
     let model: SendFlowModel
 
     var body: some View {
-        let m = BrambleMetrics.Send.self
-        VStack(alignment: .leading, spacing: m.listGap) {
+        let metrics = BrambleMetrics.Send.self
+        VStack(alignment: .leading, spacing: metrics.listGap) {
             HStack {
                 SendHeading(text: SendCopy.yourTokens, kicker: true)
                 Spacer()

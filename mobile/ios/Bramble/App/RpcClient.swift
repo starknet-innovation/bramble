@@ -2,10 +2,15 @@ import BrambleCore
 import Foundation
 
 /// Moves JSON-RPC bytes for the Rust core, which builds every request and judges every response
-/// (`rpc.rs`, `recovery_scan.rs`). An endpoint is used only after it proves it serves the expected chain; failures
-/// fall through to the next bundled endpoint, as the extension's read path does.
+/// (`rpc.rs`, `recovery_scan.rs`). An endpoint is used only after it proves it serves the expected
+/// chain; failures fall through to the next bundled endpoint, as the extension's read path does.
 struct RpcClient {
     enum Failure: Error { case unreachable }
+
+    /// Balance reads take ids from here on, after the chain-id request's id 1.
+    private static let firstBalanceRequestId = 2
+    /// The deployment-status read's id, after the chain-id request's id 1.
+    private static let deploymentRequestId: UInt64 = 2
 
     /// Moves the bytes: URLSession, or the DEBUG offline fixtures under `-uiTestOfflineFixtures`.
     let transport: RpcTransport
@@ -23,14 +28,18 @@ struct RpcClient {
         throw Failure.unreachable
     }
 
-    private func balances(of account: String, on network: NetworkInfo, at url: URL) async throws -> [String: String] {
+    private func balances(
+        of account: String,
+        on network: NetworkInfo,
+        at url: URL
+    ) async throws -> [String: String] {
         let chainBody = try await post(rpcChainIdRequest(id: 1), to: url)
         guard try rpcVerifyChainId(body: chainBody, id: 1, network: network.network) else {
             throw Failure.unreachable
         }
         var result: [String: String] = [:]
         for (offset, token) in network.tokens.enumerated() {
-            let id = UInt64(offset + 2)
+            let id = UInt64(offset + Self.firstBalanceRequestId)
             let body = try await post(try rpcBalanceRequest(id: id, token: token.address, account: account), to: url)
             result[token.symbol] = try rpcParseBalance(body: body, id: id)
         }
@@ -43,9 +52,9 @@ struct RpcClient {
         for url in network.rpcUrls.compactMap(URL.init(string:)) {
             guard let chain = try? await post(rpcChainIdRequest(id: 1), to: url),
                   (try? rpcVerifyChainId(body: chain, id: 1, network: network.network)) == true,
-                  let request = deploymentStatusRequest(id: 2, address: account),
+                  let request = deploymentStatusRequest(id: Self.deploymentRequestId, address: account),
                   let body = try? await post(request, to: url) else { continue }
-            return judgeDeploymentStatus(body: body, id: 2)
+            return judgeDeploymentStatus(body: body, id: Self.deploymentRequestId)
         }
         return .unknown
     }

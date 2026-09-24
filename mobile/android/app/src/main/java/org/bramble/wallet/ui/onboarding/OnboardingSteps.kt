@@ -33,6 +33,7 @@ import org.bramble.wallet.design.BrambleLayout
 import org.bramble.wallet.design.BrambleSize
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
+import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.design.DetailRow
 import org.bramble.wallet.design.Eyebrow
 import org.bramble.wallet.design.FlexSpacer
@@ -41,7 +42,6 @@ import org.bramble.wallet.design.OptionCard
 import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.textStyle
-import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.ui.HEADLINE_TRACKING
 
 // Each step reproduces its extension counterpart in `onboarding-views.ts` /
@@ -49,7 +49,10 @@ import org.bramble.wallet.ui.HEADLINE_TRACKING
 
 /** `.onboarding-welcome`: wordmark lockup, two actions, the local-encryption note. */
 @Composable
-fun WelcomeStep(create: () -> Unit, recover: () -> Unit) {
+fun WelcomeStep(
+    create: () -> Unit,
+    recover: () -> Unit,
+) {
     val skin = LocalSkin.current
     Column(
         Modifier.fillMaxSize().padding(
@@ -86,16 +89,32 @@ fun WelcomeStep(create: () -> Unit, recover: () -> Unit) {
 
 /** "Choose how to add your wallet": only the recovery phrase is available on mobile so far. */
 @Composable
-fun ImportMethodStep(back: () -> Unit, recoveryPhrase: () -> Unit) {
+fun ImportMethodStep(
+    back: () -> Unit,
+    recoveryPhrase: () -> Unit,
+) {
     OnboardingStep(
         back = back,
-        icon = BrambleIconName.WALLET,
-        title = "Choose how to add your wallet",
-        lede = "Bring an existing Starknet wallet into Bramble.",
+        heading =
+            StepHeading(
+                icon = BrambleIconName.WALLET,
+                title = "Choose how to add your wallet",
+                lede = "Bring an existing Starknet wallet into Bramble.",
+            ),
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-                OptionCard(BrambleIconName.BOOK, "Recovery phrase", "Import 12 or 24 recovery words from another wallet.", onClick = recoveryPhrase)
-                OptionCard(BrambleIconName.SHIELD, "Ledger hardware wallet", "Coming to Bramble mobile.", enabled = false) {}
+                OptionCard(
+                    BrambleIconName.BOOK,
+                    "Recovery phrase",
+                    "Import 12 or 24 recovery words from another wallet.",
+                    onClick = recoveryPhrase,
+                )
+                OptionCard(
+                    BrambleIconName.SHIELD,
+                    "Ledger hardware wallet",
+                    "Coming to Bramble mobile.",
+                    enabled = false,
+                ) {}
                 OptionCard(BrambleIconName.LINK, "Private key", "Coming to Bramble mobile.", enabled = false) {}
             }
         },
@@ -103,24 +122,38 @@ fun ImportMethodStep(back: () -> Unit, recoveryPhrase: () -> Unit) {
     )
 }
 
+/** The shorter recovery-phrase length; the grid offers the 24-word toggle while at this size. */
+private const val SHORT_PHRASE_WORDS = 12
+
+private const val RECOVERY_LEDE =
+    "Type each word, or paste the complete phrase into the first field. Unknown words are flagged as you go."
+
 /**
  * "Enter your recovery phrase". Continue is enabled only when every cell is a BIP-39 word and the
  * core accepts the phrase; the grid is cleared as the phrase is handed on, and when it leaves.
  */
 @Composable
-fun RecoveryPhraseStep(back: () -> Unit, onPaste: () -> Unit, next: (String) -> Unit) {
+fun RecoveryPhraseStep(
+    back: () -> Unit,
+    onPaste: () -> Unit,
+    next: (String) -> Unit,
+) {
     var words by remember { mutableStateOf(RecoveryEntry.empty()) }
     DisposableEffect(Unit) { onDispose { words = emptyList() } }
-    val complete = words.isNotEmpty() && words.all { isRecoveryWord(it) } && isValidRecoveryPhrase(words.joinToString(" "))
+    val complete =
+        words.isNotEmpty() && words.all { isRecoveryWord(it) } && isValidRecoveryPhrase(words.joinToString(" "))
     OnboardingStep(
         back = back,
-        icon = BrambleIconName.BOOK,
-        title = "Enter your recovery phrase",
-        lede = "Type each word, or paste the complete phrase into the first field. Unknown words are flagged as you go.",
+        heading =
+            StepHeading(
+                icon = BrambleIconName.BOOK,
+                title = "Enter your recovery phrase",
+                lede = RECOVERY_LEDE,
+            ),
         content = {
             RecoveryEntryGrid(words, onPaste = onPaste) { words = it }
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                InlineAction(if (words.size == 12) "Use a 24-word phrase" else "Use a 12-word phrase") {
+                InlineAction(if (words.size == SHORT_PHRASE_WORDS) "Use a 24-word phrase" else "Use a 12-word phrase") {
                     words = RecoveryEntry.toggled(words)
                 }
             }
@@ -145,12 +178,22 @@ fun CompleteStep(open: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
     ) {
         FlexSpacer()
-        Box(Modifier.size(BrambleSize.brand).background(skin.positive, CircleShape), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.size(BrambleSize.brand).background(skin.positive, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
             BrambleIcon(BrambleIconName.CHECK, skin.accentText, BrambleLayout.completeIcon)
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
+        ) {
             Eyebrow("Setup complete")
-            Text("You’re all set", color = skin.text, style = textStyle(BrambleTypeScale.headline, BrambleWeight.heavy, HEADLINE_TRACKING))
+            Text(
+                "You’re all set",
+                color = skin.text,
+                style = textStyle(BrambleTypeScale.headline, BrambleWeight.heavy, HEADLINE_TRACKING),
+            )
             Text(
                 "Your account is ready in Bramble. Receive assets, or deploy when you’re ready.",
                 color = skin.muted,

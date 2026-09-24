@@ -1,3 +1,4 @@
+@testable import Bramble
 import BrambleCore
 import XCTest
 
@@ -11,7 +12,7 @@ import XCTest
 /// never a key or the phrase. Never commit the phrase; delete the `.xcresult` after a run.
 @MainActor
 final class MainnetPrivacyTests: XCTestCase {
-    static let acknowledgement = "I understand this sends my viewing key to the privacy service"
+    private static let acknowledgement = "I understand this sends my viewing key to the privacy service"
 
     func testReadsPrivateBalancesOnMainnet() async throws {
         let environment = ProcessInfo.processInfo.environment
@@ -28,16 +29,16 @@ final class MainnetPrivacyTests: XCTestCase {
 
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: dir) }
-        let core = try WalletCore(dataDir: dir.path)
+        let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
         try core.importWallet(password: "mainnet privacy test", phrase: phrase, passphrase: nil)
-        let account = try XCTUnwrap(core.accounts(network: .mainnet).first)
+        let account = try XCTUnwrap(try core.ensureNetworkAccount(network: .mainnet))
         if let expected = environment["BRAMBLE_MOBILE_MAINNET_ADDRESS"] {
             XCTAssertEqual(Self.canonical(account.address), Self.canonical(expected))
         }
 
         let rpc = URLSessionRpcTransport()
         if let body = deploymentStatusRequest(id: 1, address: account.address),
-           let url = mainnet().rpcUrls.first.flatMap(URL.init(string:)),
+           let url = try mainnet().rpcUrls.first.flatMap(URL.init(string:)),
            let reply = try? await rpc.post(body, to: url, write: false) {
             print("account deployment: \(judgeDeploymentStatus(body: reply, id: 1))")
         }
@@ -45,11 +46,18 @@ final class MainnetPrivacyTests: XCTestCase {
         let recorder = RecordingPrivacyTransport()
         let model = PrivacyModel()
         let started = Date()
-        await model.refresh(core: core, network: mainnet(), accountIndex: 0, rpc: rpc, transports: (recorder, rpc))
-        print("read total: \(Int(Date().timeIntervalSince(started) * 1000)) ms")
+        try await model.refresh(
+            core: core,
+            network: mainnet(),
+            accountId: account.id,
+            rpc: rpc,
+            transports: (recorder, rpc)
+        )
+        print("read total: \(Int(Date().timeIntervalSince(started) * 1_000)) ms")
         for line in recorder.lines { print(line) }
         guard case let .settled(registration) = model.reading, let state = model.state else {
-            return XCTFail("read failed: \(model.reading)")
+            XCTFail("read failed: \(model.reading)")
+            return
         }
         print("registration: \(registration)")
         for balance in state.balances {
@@ -58,7 +66,7 @@ final class MainnetPrivacyTests: XCTestCase {
         print("pool fee: \(state.poolFeeFri) fri")
         let blocks = recorder.blockRefs
         print("discovery pages: \(blocks.count), block_ref per page: \(blocks)")
-        XCTAssertEqual(Set(blocks).count <= 1, true, "every page answered from the same block")
+        XCTAssertLessThanOrEqual(Set(blocks).count, 1, "every page answered from the same block")
     }
 
     private static func canonical(_ value: String) -> String {
@@ -69,6 +77,9 @@ final class MainnetPrivacyTests: XCTestCase {
 /// The production privacy transport, timing each POST and noting each discovery reply's
 /// `block_ref`. It never reads the request body, which carries the viewing key.
 private final class RecordingPrivacyTransport: PrivacyTransport, @unchecked Sendable {
+    private static let millisecondsPerSecond = 1_000.0
+    private static let httpOK = 200
+
     private let inner = URLSessionPrivacyTransport()
     private let lock = NSLock()
     private var recorded: [String] = []
@@ -81,11 +92,11 @@ private final class RecordingPrivacyTransport: PrivacyTransport, @unchecked Send
         let started = Date()
         let reply = try await inner.post(body, to: url)
         let path = url.lastPathComponent
-        let elapsed = Int(Date().timeIntervalSince(started) * 1000)
+        let elapsed = Int(Date().timeIntervalSince(started) * Self.millisecondsPerSecond)
         let object = try? JSONSerialization.jsonObject(with: reply.body) as? [String: Any]
         lock.withLock {
             recorded.append("\(path): HTTP \(reply.status), \(elapsed) ms")
-            if path == "incoming_state", reply.status == 200 {
+            if path == "incoming_state", reply.status == Self.httpOK {
                 blocks.append(object?["block_ref"].map { "\($0)" } ?? "missing")
             }
         }

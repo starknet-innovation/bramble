@@ -5,7 +5,7 @@ import Foundation
 /// held registry tokens, and a token's 7-day chart. Error copy is the extension's, from the core.
 extension PortfolioStore {
     /// `setTokenHidden`; `false` when the id is refused ("Token update failed").
-    func setHidden(_ tokenId: String, hidden: Bool) async -> Bool {
+    func setHidden(_ tokenId: String, hidden: Bool) -> Bool {
         guard (try? preferences.setHidden(tokenId: tokenId, hidden: hidden)) != nil else { return false }
         persist()
         recompute()
@@ -20,8 +20,11 @@ extension PortfolioStore {
         let endpoints = endpoints
         let generation = generation
         let outcome: TokenMetaOutcome? = await endpoints.firstAnswer(on: scope.network) { url in
-            guard let calls = try? tokenMetadataRequests(firstId: 1, address: address) else { return .failed(message: "Add token failed") }
-            let judged = tokenMetadataJudge(network: net, address: address, firstId: 1, replies: await endpoints.send(calls, to: url))
+            guard let calls = try? tokenMetadataRequests(firstId: 1, address: address) else {
+                return .failed(message: "Add token failed")
+            }
+            let replies = await endpoints.send(calls, to: url)
+            let judged = tokenMetadataJudge(network: net, address: address, firstId: 1, replies: replies)
             if case .transport = judged { return nil }
             return judged
         }
@@ -33,8 +36,10 @@ extension PortfolioStore {
             recompute()
             await refresh(force: true)
             return nil
+
         case let .failed(message):
             return message
+
         case .transport, nil:
             return tokenNetworkError()
         }
@@ -50,17 +55,25 @@ extension PortfolioStore {
         let endpoints = endpoints
         let generation = generation
         let outcome: DiscoveryOutcome? = await endpoints.firstAnswer(on: scope.network) { url in
-            guard let calls = try? balanceRequests(firstId: 1, account: address, tokens: candidates) else { return nil }
-            let judged = discoveryJudge(firstId: 1, candidates: candidates, replies: await endpoints.send(calls, to: url))
+            guard let calls = try? balanceRequests(firstId: 1, account: address, tokens: candidates) else {
+                return nil
+            }
+            let replies = await endpoints.send(calls, to: url)
+            let judged = discoveryJudge(firstId: 1, candidates: candidates, replies: replies)
             if case .transport = judged { return nil }
             return judged
         }
         // A scan that outlived an account/network switch or a lock never shows under the new scope.
         guard generation == self.generation else { return .success([]) }
         switch outcome {
-        case let .found(tokens): return .success(tokens)
-        case let .failed(message): return .failure(DiscoveryFailure(message: message))
-        case .transport, nil: return .failure(DiscoveryFailure(message: tokenNetworkError()))
+        case let .found(tokens):
+            return .success(tokens)
+
+        case let .failed(message):
+            return .failure(DiscoveryFailure(message: message))
+
+        case .transport, nil:
+            return .failure(DiscoveryFailure(message: tokenNetworkError()))
         }
     }
 
@@ -68,12 +81,19 @@ extension PortfolioStore {
     func chart(for token: TokenConfig) async -> [Double] {
         guard let scope else { return [] }
         let now = clock()
-        guard let plan = try? prices.chartPlan(network: scope.network.network, address: token.address, currency: currency, nowMs: now) else {
+        let planned = try? prices.chartPlan(
+            network: scope.network.network,
+            address: token.address,
+            currency: currency,
+            nowMs: now
+        )
+        guard let plan = planned else {
             return []
         }
         switch plan {
         case let .serve(points):
             return points
+
         case let .fetch(request):
             let generation = generation
             let outcome = await transport.perform(request)

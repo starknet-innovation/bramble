@@ -50,24 +50,24 @@ final class PrivacyModel {
         transports: (privacy: PrivacyTransport, rpc: RpcTransport)? = nil
     ) async {
         reset()
-        let scope = generation
-        self.scope = (network.network, accountId)
+        let started = generation
+        scope = (network.network, accountId)
         guard privacyConfigured(network: network.network) else {
             reading = .unconfigured
             return
         }
-        guard let plan = try? core.preparePrivacyRead(accountId: accountId) else {
+        guard let prepared = try? core.preparePrivacyRead(accountId: accountId) else {
             reading = .failed
             return
         }
-        self.plan = plan
+        plan = prepared
         reading = .loading
-        let transports = transports ?? PrivacyTransports.launch(rpc: rpc)
-        let driver = PrivacyDriver(plan: plan, network: network, privacy: transports.privacy, rpc: transports.rpc)
+        let chosen = transports ?? PrivacyTransports.launch(rpc: rpc)
+        let driver = PrivacyDriver(plan: prepared, network: network, privacy: chosen.privacy, rpc: chosen.rpc)
         let work = Task { try? await driver.run() }
         task = work
         let step = await work.value
-        guard scope == generation else { return }
+        guard started == generation else { return }
         self.plan = nil
         task = nil
         if case let .finished(state) = step {

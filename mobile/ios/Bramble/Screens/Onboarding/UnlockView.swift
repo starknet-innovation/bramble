@@ -13,28 +13,16 @@ struct UnlockView: View {
     @State private var failed = false
     @FocusState private var focused: Bool
 
+    private static let millisecondsPerSecond: UInt64 = 1_000
+    private static let attosecondsPerMillisecond: Int64 = 1_000_000_000_000_000
+
     var body: some View {
         let gate = BrambleMetrics.Gate.self
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: gate.gap) {
-                    Image("BrandMark")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: gate.brandGlyph, height: gate.brandGlyph)
-                        .foregroundStyle(skin.accentText)
-                        .frame(width: gate.brandSize, height: gate.brandSize)
-                        .background(skin.accent, in: Circle())
-                        .padding(.top, gate.brandTop)
-                        .accessibilityHidden(true)
-                    VStack(spacing: gate.headGap) {
-                        Text("Welcome back")
-                            .brambleText(BrambleTypeStyle(size: gate.titleSize, lineHeight: gate.titleLineHeight), weight: gate.titleWeight, tracking: gate.titleTracking)
-                            .accessibilityAddTraits(.isHeader)
-                        Text("Unlock your wallet to continue.").brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
-                    }
-                    .multilineTextAlignment(.center)
+                    brandMark
+                    heading
                     VStack(spacing: gate.formGap) {
                         BrambleField(placeholder: "Enter your passphrase", text: $passphrase, secure: true)
                             .focused($focused)
@@ -68,10 +56,43 @@ struct UnlockView: View {
         .background(skin.bg.ignoresSafeArea())
         .task {
             store.refreshSecurity()
-            if store.security.biometricEnabled && store.biometricNotice == nil {
+            if store.security.biometricEnabled, store.biometricNotice == nil {
                 await store.unlockWithBiometric()
             }
         }
+    }
+
+    /// `.gate-brand`: the brand mark on the accent disc.
+    private var brandMark: some View {
+        let gate = BrambleMetrics.Gate.self
+        return Image(.brandMark)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: gate.brandGlyph, height: gate.brandGlyph)
+            .foregroundStyle(skin.accentText)
+            .frame(width: gate.brandSize, height: gate.brandSize)
+            .background(skin.accent, in: Circle())
+            .padding(.top, gate.brandTop)
+            .accessibilityHidden(true)
+    }
+
+    /// `.gate-head`: the title and the lede.
+    private var heading: some View {
+        let gate = BrambleMetrics.Gate.self
+        return VStack(spacing: gate.headGap) {
+            Text("Welcome back")
+                .brambleText(
+                    BrambleTypeStyle(size: gate.titleSize, lineHeight: gate.titleLineHeight),
+                    weight: gate.titleWeight,
+                    tracking: gate.titleTracking
+                )
+                .accessibilityAddTraits(.isHeader)
+            Text("Unlock your wallet to continue.")
+                .brambleText(BrambleTypeScale.body)
+                .foregroundStyle(skin.muted)
+        }
+        .multilineTextAlignment(.center)
     }
 
     /// The biometric-invalidation notice, then either the throttle countdown or the wrong-passphrase
@@ -100,7 +121,8 @@ struct UnlockView: View {
         guard let retryAt = store.retryAt else { return 0 }
         let left = ContinuousClock.now.duration(to: retryAt)
         guard left > .zero else { return 0 }
-        return UInt64(left.components.seconds) * 1000 + UInt64(left.components.attoseconds / 1_000_000_000_000_000)
+        return UInt64(left.components.seconds) * Self.millisecondsPerSecond
+            + UInt64(left.components.attoseconds / Self.attosecondsPerMillisecond)
     }
 
     private func unlock() {

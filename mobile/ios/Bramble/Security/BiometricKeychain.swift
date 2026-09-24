@@ -9,12 +9,15 @@ import Security
 /// W is generated here with the platform CSPRNG, stored before the core ever sees it, and held in
 /// Swift only inside a `WrapSecret`, whose single buffer is handed to the core and zeroed in place.
 /// The Keychain's own reply (an immutable `CFData`) and UniFFI's lowering copy are released
-/// without being wiped; SCOPE.md lists both as known limits. The item is device-only, never synchronised, needs a device
-/// passcode to exist, and becomes unreadable (`errSecItemNotFound`) after any enrolment change.
+/// without being wiped; SCOPE.md lists both as known limits. The item is device-only, never
+/// synchronised, needs a device passcode to exist, and becomes unreadable (`errSecItemNotFound`)
+/// after any enrolment change.
 /// There is no passcode fallback: the flags do not include `.devicePasscode`.
 enum BiometricKeychain {
     static let service = "org.bramble.wallet.biometric"
     static let account = "wrap-secret.v1"
+    /// Length of W in bytes; a stored item of any other length is treated as invalidated.
+    private static let wrapSecretLength = 32
 
     /// Outcome of asking the Keychain for W.
     enum Read {
@@ -33,9 +36,14 @@ enum BiometricKeychain {
         let context = LAContext()
         _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
         switch context.biometryType {
-        case .touchID: return "Touch ID"
-        case .opticID: return "Optic ID"
-        default: return "Face ID"
+        case .touchID:
+            return "Touch ID"
+
+        case .opticID:
+            return "Optic ID"
+
+        default:
+            return "Face ID"
         }
     }
 
@@ -66,8 +74,11 @@ enum BiometricKeychain {
 
     /// 32 bytes from the system CSPRNG.
     static func newWrapSecret() throws -> Data {
-        var secret = Data(count: 32)
-        let status = secret.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
+        var secret = Data(count: wrapSecretLength)
+        let status = secret.withUnsafeMutableBytes { buffer -> OSStatus in
+            guard let start = buffer.baseAddress else { preconditionFailure("a non-empty Data has storage") }
+            return SecRandomCopyBytes(kSecRandomDefault, wrapSecretLength, start)
+        }
         guard status == errSecSuccess else { throw Failure.keychain(status) }
         return secret
     }
@@ -85,7 +96,7 @@ enum BiometricKeychain {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecUseDataProtectionKeychain as String: true,
+            kSecUseDataProtectionKeychain as String: true
         ]
     }
 
@@ -105,7 +116,10 @@ enum BiometricKeychain {
     static func confirm(reason: String) async -> Bool {
         let context = LAContext()
         context.localizedFallbackTitle = ""
-        return (try? await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)) ?? false
+        return (try? await context.evaluatePolicy(
+            .deviceOwnerAuthenticationWithBiometrics,
+            localizedReason: reason
+        )) ?? false
     }
 
     /// Asks for W. The biometric check runs first as an explicit policy evaluation, whose context
@@ -115,9 +129,11 @@ enum BiometricKeychain {
         let context = LAContext()
         context.localizedFallbackTitle = ""
         do {
-            guard try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) else {
-                return .fallback
-            }
+            let passed = try await context.evaluatePolicy(
+                .deviceOwnerAuthenticationWithBiometrics,
+                localizedReason: reason
+            )
+            guard passed else { return .fallback }
         } catch {
             return .fallback
         }
@@ -133,26 +149,29 @@ enum BiometricKeychain {
             // to `Data`, whose copy-on-write storage would leave copies that `wipe()` cannot reach.
             guard let result, CFGetTypeID(result) == CFDataGetTypeID() else { return .invalidated }
             let item = unsafeBitCast(result, to: CFData.self)
-            guard CFDataGetLength(item) == 32 else { return .invalidated }
+            guard CFDataGetLength(item) == wrapSecretLength else { return .invalidated }
             return .secret(WrapSecret(copying: item))
+
         case errSecItemNotFound:
             return .invalidated
+
         default:
             // errSecAuthFailed (no match), errSecUserCanceled, lockout: keep the slot.
             return .fallback
         }
     }
 
-    /// The stored item's attributes, read without authentication (for tests and diagnostics).
-    static func attributes() -> [String: Any]? {
+    /// The stored item's attributes, read without authentication (for tests and diagnostics);
+    /// empty when there is no item.
+    static func attributes() -> [String: Any] {
         var query = base
         query[kSecReturnAttributes as String] = true
         let context = LAContext()
         context.interactionNotAllowed = true
         query[kSecUseAuthenticationContext as String] = context
         var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
-        return result as? [String: Any]
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return [:] }
+        return result as? [String: Any] ?? [:]
     }
 
     static func delete() {
@@ -172,7 +191,11 @@ final class WrapSecret: @unchecked Sendable {
     init(copying item: CFData) {
         var owned = Data(count: CFDataGetLength(item))
         owned.withUnsafeMutableBytes { buffer in
-            CFDataGetBytes(item, CFRange(location: 0, length: buffer.count), buffer.bindMemory(to: UInt8.self).baseAddress)
+            CFDataGetBytes(
+                item,
+                CFRange(location: 0, length: buffer.count),
+                buffer.bindMemory(to: UInt8.self).baseAddress
+            )
         }
         data = owned
     }

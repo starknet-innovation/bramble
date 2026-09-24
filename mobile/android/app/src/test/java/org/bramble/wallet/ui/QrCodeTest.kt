@@ -9,7 +9,10 @@ import org.junit.Test
  * `mobile/android/scripts/qr-fixture.ts`, which runs the extension's `shared/qr.ts`.
  */
 class QrCodeTest {
-    private data class Case(val input: String, val rows: List<String>)
+    private data class Case(
+        val input: String,
+        val rows: List<String>,
+    )
 
     private fun cases(): List<Case> {
         val text = checkNotNull(javaClass.classLoader?.getResource("qr-parity.txt")) { "qr-parity.txt" }.readText()
@@ -23,7 +26,10 @@ class QrCodeTest {
                     input = line.removePrefix("input ")
                     rows.clear()
                 }
-                line.startsWith("row ") -> rows.add(line.removePrefix("row "))
+
+                line.startsWith("row ") -> {
+                    rows.add(line.removePrefix("row "))
+                }
             }
         }
         input?.let { cases.add(Case(it, rows.toList())) }

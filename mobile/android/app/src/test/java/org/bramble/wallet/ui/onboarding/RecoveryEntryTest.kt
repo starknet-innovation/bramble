@@ -24,7 +24,7 @@ class RecoveryEntryTest {
     }
 
     @Test
-    fun onlySeveralWordsInOneEditCountAsAPaste() {
+    fun onlyMultiWordEditIsAPaste() {
         assertTrue(RecoveryEntry.isPaste("one two"))
         assertTrue(RecoveryEntry.isPaste(" one\ttwo three "))
         assertFalse(RecoveryEntry.isPaste("abandon"))

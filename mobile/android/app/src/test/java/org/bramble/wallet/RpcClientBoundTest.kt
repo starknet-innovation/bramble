@@ -1,10 +1,10 @@
 package org.bramble.wallet
 
-import java.io.ByteArrayInputStream
-import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.IOException
 
 /** A response body is read up to the cap and refused beyond it, before the core sees it. */
 class RpcClientBoundTest {

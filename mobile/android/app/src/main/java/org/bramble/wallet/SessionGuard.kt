@@ -15,10 +15,13 @@ import kotlinx.coroutines.CancellationException
 class SessionGuard {
     private var epoch = 0L
 
+    /** The current epoch, taken by an action before its first core call. */
     fun ticket(): Long = epoch
 
+    /** True while no lock has ended the session since [ticket] was taken. */
     fun isCurrent(ticket: Long): Boolean = ticket == epoch
 
+    /** Moves the epoch on (every lock), so every earlier ticket stops being current. */
     fun end() {
         epoch += 1
     }

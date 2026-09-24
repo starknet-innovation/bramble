@@ -3,8 +3,9 @@ import Foundation
 
 /// The app's one bounded HTTP path. Moves the bytes of one exchange the Rust core described
 /// (`HttpRequest`) and reports exactly what came back (`HttpOutcome`): portfolio reads, prices,
-/// Starkscan, and — through `URLSessionRpcTransport` — every JSON-RPC post. The core judges every response; this type only enforces the
-/// transport bounds the extension's `fetchBoundedJson` enforces:
+/// Starkscan, and — through `URLSessionRpcTransport` — every JSON-RPC post. The core judges every
+/// response; this type only enforces the transport bounds the extension's `fetchBoundedJson`
+/// enforces:
 ///
 /// - **Size.** A declared `Content-Length` over `maxBodyBytes` (or one that is not all digits) is
 ///   refused before a byte is read, and the streamed body is cut off the moment it passes the
@@ -19,10 +20,11 @@ protocol PortfolioTransport: Sendable {
 final class BoundedHttp: NSObject, PortfolioTransport, URLSessionTaskDelegate, @unchecked Sendable {
     static let shared = BoundedHttp()
 
-    private let protocolClasses: [AnyClass]?
+    private let protocolClasses: [AnyClass]
 
-    /// `protocolClasses` replaces the session's URL protocols (tests only); the app passes none.
-    init(protocolClasses: [AnyClass]? = nil) {
+    /// A non-empty `protocolClasses` replaces the session's URL protocols (tests only); the app
+    /// passes none, and an empty list keeps the system protocols.
+    init(protocolClasses: [AnyClass] = []) {
         self.protocolClasses = protocolClasses
     }
 
@@ -36,14 +38,19 @@ final class BoundedHttp: NSObject, PortfolioTransport, URLSessionTaskDelegate, @
         #if DEBUG
         PortfolioNetworkStub.install(on: config)
         #endif
-        if let protocolClasses { config.protocolClasses = protocolClasses }
+        if !protocolClasses.isEmpty { config.protocolClasses = protocolClasses }
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
 
     /// Refuses every redirect: the core never follows a hop it did not choose.
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
-                    newRequest request: URLRequest) async -> URLRequest? {
-        nil
+    func urlSession(
+        _: URLSession,
+        task _: URLSessionTask,
+        willPerformHTTPRedirection _: HTTPURLResponse,
+        newRequest _: URLRequest,
+        completionHandler: @Sendable (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
     }
 
     func perform(_ request: HttpRequest) async -> HttpOutcome {
@@ -77,7 +84,7 @@ final class BoundedHttp: NSObject, PortfolioTransport, URLSessionTaskDelegate, @
                 try? await Task.sleep(for: .milliseconds(Int(deadline)))
                 return nil
             }
-            let first = await group.next() ?? nil
+            let first = await group.next().flatMap(\.self)
             group.cancelAll()
             return first ?? HttpOutcome(status: 0, retryAfter: nil, body: nil, timedOut: true)
         }

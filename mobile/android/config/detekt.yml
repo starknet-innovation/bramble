@@ -6,10 +6,11 @@
 # UndocumentedPublicClass off), so every one of those rules is switched on by name below. The list
 # is every `active: false` rule in `detekt --generate-config` for 1.23.8; regenerate it on upgrade.
 #
-# Three stay off, each because it contradicts the repository (see the comments at each). Nothing
-# is switched off to hide findings, and inline @Suppress is not used anywhere (AGENTS.md): fix the
-# code, or change a rule here in review. Generated code (*.generated.kt, the UniFFI bindings under
-# build/) is excluded on the command line.
+# Four stay off, each because it contradicts the repository or another rule (see the comments at
+# each), and three are narrowed where they misfire on this code (MagicNumber, UnnecessaryParentheses,
+# FunctionNaming). Nothing is switched off to hide findings, and inline @Suppress is not used
+# anywhere (AGENTS.md): fix the code, or change a rule here in review. Generated code
+# (*.generated.kt, the UniFFI bindings under build/) is excluded on the command line.
 #
 # Rules that need type resolution (for example Deprecation, ExplicitCollectionElementAccessMethod)
 # are active but report nothing until detekt is given the compiled classpath, which needs a
@@ -152,8 +153,10 @@ style:
     active: true
   CanBeNonNullable:
     active: true
+  # Contradicts ktlint's chain-method-continuation, which keeps a call that follows a closing
+  # bracket on that bracket's line (`}.fillPress(...)`); ktlint owns chain wrapping.
   CascadingCallWrapping:
-    active: true
+    active: false
   ClassOrdering:
     active: true
   CollapsibleIfStatements:
@@ -178,6 +181,10 @@ style:
     active: true
   ForbiddenSuppress:
     active: true
+  # A literal assigned to a named, non-local property is already the named constant this rule asks
+  # for; it keeps spec tables (the QR version table) as tables. Arguments and locals stay checked.
+  MagicNumber:
+    ignorePropertyDeclaration: true
   MandatoryBracesLoops:
     active: true
   MaxChainedCallsOnSameLine:
@@ -222,8 +229,11 @@ style:
     active: true
   UnnecessaryLet:
     active: true
+  # Keeps parentheses that spell out infix precedence (`(value shr index) and 1`): the QR encoder
+  # mirrors the TypeScript step for step, where these operators bind differently.
   UnnecessaryParentheses:
     active: true
+    allowForUnclearPrecedence: true
   UntilInsteadOfRangeTo:
     active: true
   UnusedImports:

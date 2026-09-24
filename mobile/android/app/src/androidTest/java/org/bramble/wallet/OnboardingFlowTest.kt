@@ -22,6 +22,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class OnboardingFlowTest {
     @get:Rule val rule = createAndroidComposeRule<MainActivity>()
+
     @get:Rule val name = TestName()
 
     private fun robot(): Robot {
@@ -64,7 +65,7 @@ class OnboardingFlowTest {
     }
 
     @Test
-    fun importOnMainnetThenLockAndUnlock() {
+    fun importMainnetThenLockUnlock() {
         val r = robot()
         r.tap("Add an existing wallet")
         r.waitForText("Choose how to add your wallet")

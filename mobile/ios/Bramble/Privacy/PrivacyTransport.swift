@@ -2,8 +2,9 @@ import BrambleCore
 import Foundation
 
 /// Moves one privacy-service POST. The Rust core builds the body, which carries the viewing key
-/// (the one place it crosses FFI; docs/privacy.md §1.1): a transport sends it unread and unlogged, never follows a redirect (a 307/308 would resend the
-/// body elsewhere), keeps no cache or cookies, and stops reading at `maxPrivacyResponseBytes()`.
+/// (the one place it crosses FFI; docs/privacy.md §1.1): a transport sends it unread and unlogged,
+/// never follows a redirect (a 307/308 would resend the body elsewhere), keeps no cache or cookies,
+/// and stops reading at `maxPrivacyResponseBytes()`.
 /// It returns every status with its body: the core judges non-2xx replies (retry text, 409).
 protocol PrivacyTransport: Sendable {
     func post(_ body: Data, to url: URL) async throws -> (status: Int, body: Data)
@@ -22,7 +23,12 @@ struct URLSessionPrivacyTransport: PrivacyTransport {
 
     func post(_ body: Data, to url: URL) async throws -> (status: Int, body: Data) {
         guard url.scheme == "https" else { throw PrivacyTransportFailure.notHttps }
-        let outcome = await http.post(body, to: url, maxBodyBytes: UInt64(maxPrivacyResponseBytes()), deadlineMs: Self.deadlineMs)
+        let outcome = await http.post(
+            body,
+            to: url,
+            maxBodyBytes: UInt64(maxPrivacyResponseBytes()),
+            deadlineMs: Self.deadlineMs
+        )
         guard outcome.status != 0 else { throw PrivacyTransportFailure.noResponse }
         guard let data = outcome.body else { throw PrivacyTransportFailure.tooLarge }
         return (Int(outcome.status), data)
@@ -53,6 +59,9 @@ enum PrivacyTransports {
 /// body's bytes once the exchange ends. That wipe is best effort: URLSession and the TLS stack may
 /// hold copies Swift cannot reach, which is why the key crossing FFI needs sign-off (docs §1.1).
 actor PrivacyDriver {
+    /// Milliseconds per second, for the host clock the plan reads.
+    private static let millisecondsPerSecond: Double = 1_000
+
     let plan: PrivacyReadPlan
     private let urls: [URL]
     private let network: NetworkId
@@ -68,7 +77,7 @@ actor PrivacyDriver {
         self.rpc = rpc
     }
 
-    private func now() -> UInt64 { UInt64(Date().timeIntervalSince1970 * 1000) }
+    private func now() -> UInt64 { UInt64(Date().timeIntervalSince1970 * Self.millisecondsPerSecond) }
 
     /// Runs the plan to `Finished` or `Failed`. Cancelling the task closes the plan.
     func run() async throws -> PrivacyStep {
@@ -82,11 +91,14 @@ actor PrivacyDriver {
             switch step {
             case let .post(id, url, body, _):
                 reply = await post(id: id, url: url, body: body)
+
             case let .rpc(id, body, purpose):
                 reply = await exchange(id: id, body: body, purpose: purpose)
+
             case let .wait(delayMs):
                 try await Task.sleep(for: .milliseconds(Int(delayMs)))
                 reply = .waitElapsed(nowMs: now())
+
             case .finished, .failed:
                 return step
             }
@@ -107,7 +119,7 @@ actor PrivacyDriver {
     /// the key in the original.
     static func wipe(_ body: Data) {
         body.withUnsafeBytes { raw in
-            guard let base = raw.baseAddress, raw.count > 0 else { return }
+            guard let base = raw.baseAddress, !raw.isEmpty else { return }
             memset_s(UnsafeMutableRawPointer(mutating: base), raw.count, 0, raw.count)
         }
     }

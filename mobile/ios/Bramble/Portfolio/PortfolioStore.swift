@@ -2,6 +2,9 @@ import BrambleCore
 import Foundation
 import Observation
 
+/// Converts `Date`'s seconds to JavaScript's epoch milliseconds.
+private let millisecondsPerSecond: Double = 1_000
+
 /// Balance state as Home renders it: the side panel's `BalanceState`.
 enum PortfolioBalances: Equatable {
     case loading
@@ -55,30 +58,39 @@ final class PortfolioStore {
     /// Bumped on every scope change and on lock; in-flight results compare against it.
     var generation = 0
 
-    init(activity: ActivityBook,
-         files: PortfolioFiles = .standard(),
-         transport: any PortfolioTransport = BoundedHttp.shared,
-         // Whole epoch milliseconds, as JavaScript's `Date.now()`: the core's stored timestamps
-         // must be safe integers or it refuses to record them.
-         clock: @escaping @Sendable () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }) {
+    init(
+        activity: ActivityBook,
+        files: PortfolioFiles = .standard(),
+        transport: any PortfolioTransport = BoundedHttp.shared,
+        // Whole epoch milliseconds, as JavaScript's `Date.now()`: the core's stored timestamps
+        // must be safe integers or it refuses to record them.
+        clock: @escaping @Sendable () -> Double = {
+            (Date().timeIntervalSince1970 * millisecondsPerSecond).rounded(.down)
+        }
+    ) {
         self.files = files
         self.transport = transport
         self.clock = clock
         endpoints = PortfolioEndpoints(transport: transport)
-        let preferences = TokenPreferences(persisted: files.read(.preferences))
-        self.preferences = preferences
+        let saved = TokenPreferences(persisted: files.read(.preferences))
+        preferences = saved
         prices = PriceBook(persisted: files.read(.prices))
         snapshots = BalanceSnapshots(persisted: files.read(.snapshots))
         self.activity = activity
-        currency = preferences.displayCurrency()
+        currency = saved.displayCurrency()
     }
 
     /// The header pill's description (`networkDataIssue`), `nil` while data is current.
     var issue: String? {
         let health: BalanceHealth = switch balances {
-        case .loading: .loading
-        case let .loaded(view): .loaded(stale: view.stale, asOfMs: view.fetchedAtMs)
-        case .failed: .failed
+        case .loading:
+            .loading
+
+        case let .loaded(view):
+            .loaded(stale: view.stale, asOfMs: view.fetchedAtMs)
+
+        case .failed:
+            .failed
         }
         return networkDataIssue(balances: health, prices: priceView)
     }
@@ -97,10 +109,24 @@ final class PortfolioStore {
             scope = next
         }
         tracked = preferences.tracked(network: network.network)
-        if case let .serve(view) = snapshots.plan(accountId: accountId, network: network.network, nowMs: clock(), cachedOnly: true, force: false) {
+        let savedBalances = snapshots.plan(
+            accountId: accountId,
+            network: network.network,
+            nowMs: clock(),
+            cachedOnly: true,
+            force: false
+        )
+        if case let .serve(view) = savedBalances {
             balances = .loaded(view)
         }
-        if case let .serve(view) = prices.plan(network: network.network, addresses: addresses, currency: currency, nowMs: clock(), cachedOnly: true) {
+        let savedPrices = prices.plan(
+            network: network.network,
+            addresses: addresses,
+            currency: currency,
+            nowMs: clock(),
+            cachedOnly: true
+        )
+        if case let .serve(view) = savedPrices {
             priceView = view
         }
         activityView = activity.cached(accountId: accountId, network: network.network)
@@ -112,26 +138,38 @@ final class PortfolioStore {
     /// keeps the saved balances, marked stale, and only shows an error when nothing was saved.
     func refresh(force: Bool) async {
         guard let scope else { return }
-        let generation = generation
+        let started = generation
         let net = scope.network.network
-        switch snapshots.plan(accountId: scope.accountId, network: net, nowMs: clock(), cachedOnly: false, force: force) {
+        let plan = snapshots.plan(
+            accountId: scope.accountId,
+            network: net,
+            nowMs: clock(),
+            cachedOnly: false,
+            force: force
+        )
+        switch plan {
         case let .serve(view):
             balances = .loaded(view)
+
         case .empty:
             break
+
         case .load:
             let tokens = tracked.map(\.token)
             let address = scope.address
-            let endpoints = endpoints
-            let outcome: BalanceOutcome? = await endpoints.firstAnswer(on: scope.network) { url in
-                guard let calls = try? balanceRequests(firstId: 1, account: address, tokens: tokens) else { return .failed }
-                let judged = balanceJudge(firstId: 1, tokens: tokens, replies: await endpoints.send(calls, to: url))
+            let reader = endpoints
+            let outcome: BalanceOutcome? = await reader.firstAnswer(on: scope.network) { url in
+                guard let calls = try? balanceRequests(firstId: 1, account: address, tokens: tokens) else {
+                    return .failed
+                }
+                let judged = balanceJudge(firstId: 1, tokens: tokens, replies: await reader.send(calls, to: url))
                 if case .transport = judged { return nil }
                 return judged
             }
-            guard generation == self.generation else { return }
+            guard started == generation else { return }
             if case let .balances(rows) = outcome {
-                balances = .loaded(snapshots.loaded(accountId: scope.accountId, network: net, balances: rows, nowMs: clock()))
+                let fresh = snapshots.loaded(accountId: scope.accountId, network: net, balances: rows, nowMs: clock())
+                balances = .loaded(fresh)
             } else if let saved = snapshots.failed(accountId: scope.accountId, network: net) {
                 balances = .loaded(saved)
             } else {
@@ -146,17 +184,20 @@ final class PortfolioStore {
     /// `getPrices` for the tracked tokens on the active network, in the display currency.
     func refreshPrices() async {
         guard let scope else { return }
-        let generation = generation
+        let started = generation
         let net = scope.network.network
         let now = clock()
         switch prices.plan(network: net, addresses: addresses, currency: currency, nowMs: now, cachedOnly: false) {
         case let .serve(view):
             priceView = view
+
         case let .fetch(requests):
-            let transport = transport
+            let session = transport
             let outcomes = await withTaskGroup(of: PriceOutcome.self) { group in
                 for request in requests {
-                    group.addTask { PriceOutcome(address: request.address, outcome: await transport.perform(request.request)) }
+                    group.addTask {
+                        PriceOutcome(address: request.address, outcome: await session.perform(request.request))
+                    }
                 }
                 var collected: [PriceOutcome] = []
                 for await outcome in group {
@@ -164,8 +205,14 @@ final class PortfolioStore {
                 }
                 return collected
             }
-            guard generation == self.generation else { return }
-            priceView = prices.apply(network: net, addresses: addresses, currency: currency, outcomes: outcomes, attemptedAtMs: now)
+            guard started == generation else { return }
+            priceView = prices.apply(
+                network: net,
+                addresses: addresses,
+                currency: currency,
+                outcomes: outcomes,
+                attemptedAtMs: now
+            )
             persist()
         }
         recompute()
@@ -224,10 +271,21 @@ final class PortfolioStore {
         if case let .loaded(saved) = balances {
             let rows = preferences.homeRows(balances: saved.balances)
             home = rows
-            unified = scope.map {
-                unifiedHomeBalances(network: $0.network.network, visible: rows.visible, hiddenTokenAddresses: hiddenTokenAddresses,
-                                    reading: privacyReading, state: privacyState)
-            } ?? rows.visible.map { UnifiedBalance(balance: $0, publicCompact: portfolioAmount(formatted: $0.formatted), privateOnly: false) }
+            unified = scope.map { active in
+                unifiedHomeBalances(
+                    network: active.network.network,
+                    visible: rows.visible,
+                    hiddenTokenAddresses: hiddenTokenAddresses,
+                    reading: privacyReading,
+                    state: privacyState
+                )
+            } ?? rows.visible.map { balance in
+                UnifiedBalance(
+                    balance: balance,
+                    publicCompact: portfolioAmount(formatted: balance.formatted),
+                    privateOnly: false
+                )
+            }
             hero = portfolioHero(visible: unified.map(\.balance), prices: view, hasAccount: scope != nil)
         } else {
             home = nil

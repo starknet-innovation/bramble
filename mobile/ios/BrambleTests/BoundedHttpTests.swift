@@ -1,5 +1,5 @@
-import BrambleCore
 @testable import Bramble
+import BrambleCore
 import XCTest
 
 /// A URL protocol whose behaviour each test scripts, so the bounded transport can be shown to
@@ -8,16 +8,25 @@ final class ScriptedProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handler: ((ScriptedProtocol) -> Void)?
     nonisolated(unsafe) static var seen: [URLRequest] = []
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override static func canInit(with _: URLRequest) -> Bool { true }
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         Self.seen.append(request)
         Self.handler?(self)
     }
-    override func stopLoading() {}
+    override func stopLoading() {
+        // No action: a scripted exchange holds nothing that needs cancelling.
+    }
 
     func respond(status: Int, headers: [String: String] = [:], body: Data? = nil, finish: Bool = true) {
-        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
+        guard let url = request.url,
+              let response = HTTPURLResponse(
+                  url: url,
+                  statusCode: status,
+                  httpVersion: "HTTP/1.1",
+                  headerFields: headers
+              )
+        else { preconditionFailure("a scripted request always carries a URL") }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         if let body { client?.urlProtocol(self, didLoad: body) }
         if finish { client?.urlProtocolDidFinishLoading(self) }
@@ -34,6 +43,11 @@ final class BoundedHttpTests: XCTestCase {
         ScriptedProtocol.handler = nil
     }
 
+    override func tearDown() {
+        ScriptedProtocol.handler = nil
+        ScriptedProtocol.seen = []
+    }
+
     func testAnswersWithinBounds() async {
         ScriptedProtocol.handler = { $0.respond(status: 200, body: Data("{\"ok\":1}".utf8)) }
         let outcome = await BoundedHttp(protocolClasses: [ScriptedProtocol.self]).perform(request("/ok"))
@@ -45,7 +59,9 @@ final class BoundedHttpTests: XCTestCase {
     }
 
     func testDeclaredOversizedBodyIsRefusedBeforeReading() async {
-        ScriptedProtocol.handler = { $0.respond(status: 200, headers: ["Content-Length": "100000"], body: Data("{}".utf8)) }
+        ScriptedProtocol.handler = { proto in
+            proto.respond(status: 200, headers: ["Content-Length": "100000"], body: Data("{}".utf8))
+        }
         let outcome = await BoundedHttp(protocolClasses: [ScriptedProtocol.self]).perform(request("/declared"))
         XCTAssertNil(outcome.body, "a declared length over budget is never read")
     }
@@ -60,7 +76,8 @@ final class BoundedHttpTests: XCTestCase {
     func testDeadlineCoversTheWholeExchange() async {
         ScriptedProtocol.handler = { $0.respond(status: 200, body: Data("{".utf8), finish: false) }
         let started = Date()
-        let outcome = await BoundedHttp(protocolClasses: [ScriptedProtocol.self]).perform(request("/stall", deadlineMs: 300))
+        let outcome = await BoundedHttp(protocolClasses: [ScriptedProtocol.self])
+            .perform(request("/stall", deadlineMs: 300))
         XCTAssertTrue(outcome.timedOut)
         XCTAssertNil(outcome.body)
         XCTAssertLessThan(Date().timeIntervalSince(started), 5)
@@ -69,8 +86,16 @@ final class BoundedHttpTests: XCTestCase {
     func testRedirectsAreRefused() async {
         ScriptedProtocol.handler = { proto in
             guard proto.request.url?.path == "/start" else { return proto.respond(status: 200, body: Data("{}".utf8)) }
-            let next = URLRequest(url: URL(string: "https://elsewhere.test/landing")!)
-            let redirect = HTTPURLResponse(url: proto.request.url!, statusCode: 302, httpVersion: "HTTP/1.1", headerFields: ["Location": "https://elsewhere.test/landing"])!
+            guard let landing = URL(string: "https://elsewhere.test/landing"),
+                  let start = proto.request.url,
+                  let redirect = HTTPURLResponse(
+                      url: start,
+                      statusCode: 302,
+                      httpVersion: "HTTP/1.1",
+                      headerFields: ["Location": "https://elsewhere.test/landing"]
+                  )
+            else { preconditionFailure("the redirect fixture is well formed") }
+            let next = URLRequest(url: landing)
             proto.client?.urlProtocol(proto, wasRedirectedTo: next, redirectResponse: redirect)
             proto.respond(status: 302, body: Data())
         }

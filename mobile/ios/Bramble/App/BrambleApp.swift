@@ -15,9 +15,15 @@ struct BrambleApp: App {
             preconditionFailure("\(PrivacyEndpointOverride.argument) refused by the core: \(error)")
         }
         #endif
-        let directory = try! VaultDirectory.prepare()
+        let directory: URL
+        do { directory = try VaultDirectory.prepare() } catch {
+            preconditionFailure("vault directory could not be prepared: \(error)")
+        }
         UITestHooks.prepare(vaultDirectory: directory)
-        let core = try! WalletCore(dataDir: directory.path, clock: DeviceClock())
+        let core: WalletCore
+        do { core = try WalletCore(dataDir: directory.path, clock: DeviceClock()) } catch {
+            preconditionFailure("wallet core could not be opened: \(error)")
+        }
         _store = State(initialValue: WalletStore(core: core))
     }
 
@@ -44,7 +50,10 @@ struct BrambleApp: App {
 /// Blocks third-party keyboards app-wide, so no keyboard extension sees a passphrase or a phrase
 /// word, and none can learn from them.
 final class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication, shouldAllowExtensionPointIdentifier identifier: UIApplication.ExtensionPointIdentifier) -> Bool {
+    func application(
+        _: UIApplication,
+        shouldAllowExtensionPointIdentifier identifier: UIApplication.ExtensionPointIdentifier
+    ) -> Bool {
         identifier != .keyboard
     }
 }
@@ -52,9 +61,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 /// App-private vault location: Application Support, complete file protection, no backups.
 enum VaultDirectory {
     static func prepare() throws -> URL {
-        var url = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("vault", isDirectory: true)
-        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
+        var url = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent("vault", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: url,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.complete]
+        )
         // createDirectory leaves an existing directory's class alone: re-assert it every launch, so
         // the files the core writes there (vault.json, its .tmp, security.json) inherit it. The
         // app-wide default comes from the Data Protection entitlement (Bramble.entitlements).
@@ -75,34 +93,51 @@ struct RootView: View {
         DeviceClassReader {
             ZStack(alignment: .bottom) {
                 switch store.route {
-                case .onboarding: OnboardingFlow()
-                case .locked: UnlockView()
-                case .discovery: OnboardingFlow(resumingDiscovery: true)
-                case .wallet: WalletShell()
+                case .onboarding:
+                    OnboardingFlow()
+
+                case .locked:
+                    UnlockView()
+
+                case .discovery:
+                    OnboardingFlow(resumingDiscovery: true)
+
+                case .wallet:
+                    WalletShell()
                 }
                 // Errors, plus the few confirmations raised through `store.notify`; other success is
                 // shown in place by each screen.
                 ToastHost(message: store.toast, tone: store.toastTone) { store.toast = nil }
             }
         }
-        .animation(BrambleMotionPolicy.animation(BrambleEase.out.animation(ms: BrambleMotion.enterMs), reduceMotion: reduceMotion), value: store.route)
+        .animation(
+            BrambleMotionPolicy.animation(
+                BrambleEase.out.animation(ms: BrambleMotion.enterMs),
+                reduceMotion: reduceMotion
+            ),
+            value: store.route
+        )
         .brambleHaptic(.success, trigger: store.route) { old, new in old != .wallet && new == .wallet }
     }
 }
 
 /// Covers the app-switcher snapshot so no phrase, address, or balance lands in it.
 struct PrivacyCover: View {
+    /// Width of the wordmark centred on the cover.
+    private static let wordmarkWidth: CGFloat = 180
+
     @Environment(\.skin) private var skin
 
     var body: some View {
         ZStack {
             skin.bg.ignoresSafeArea()
-            Image("BrandWordmark")
+            Image(.brandWordmark)
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 180)
+                .frame(width: Self.wordmarkWidth)
                 .foregroundStyle(skin.text)
+                .accessibilityLabel("Bramble")
         }
     }
 }

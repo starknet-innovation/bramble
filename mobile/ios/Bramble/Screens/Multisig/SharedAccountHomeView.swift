@@ -12,7 +12,10 @@ struct SharedAccountHomeView: View {
     @Environment(\.openCoordinationFlow) private var open
     let id: String
     @State private var tab = Tab.tokens
-    @State private var balances: [String: String]?
+    /// Raw balances by token symbol; meaningful only while `balancesAvailable` is true.
+    @State private var balances: [String: String] = [:]
+    /// False until a balance read succeeds (and after one fails), which shows the unavailable line.
+    @State private var balancesAvailable = false
     @State private var syncResult: String?
     @State private var syncFailed = false
     @State private var syncing = false
@@ -20,29 +23,49 @@ struct SharedAccountHomeView: View {
 
     enum Tab: Hashable { case tokens, intents }
 
+    private enum Layout {
+        static let intentsTextSpacing: CGFloat = 2
+    }
+
+    /// Fraction digits shown for each shared token balance.
+    private static let balanceFractionDigits: UInt8 = 4
+
     private var record: MultisigRecord? { store.coordination.multisigs.first { $0.id == id } }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
                 if let record {
-                    FlowHeader(title: multisigDisplayName(record), subtitle: multisigConfigLabel(record), network: store.networkLabel) { dismiss() }
+                    FlowHeader(
+                        title: multisigDisplayName(record),
+                        subtitle: multisigConfigLabel(record),
+                        network: store.networkLabel
+                    ) { dismiss() }
                     actions(record)
-                    SegmentedControl(options: [("Tokens", Tab.tokens), ("Intents", Tab.intents)], selection: $tab)
-                        .accessibilityElement(children: .contain)
+                    SegmentedControl(
+                        options: [("Tokens", Tab.tokens), ("Intents", Tab.intents)],
+                        selection: $tab
+                    )
+                    .accessibilityElement(children: .contain)
                     .accessibilityLabel("Shared account sections")
                     if tab == .tokens { tokens } else { intents(record) }
                     remove(record)
                 } else {
                     FlowHeader(title: "Ready multisig", network: store.networkLabel) { dismiss() }
-                    Text("This Ready multisig is no longer watched.").brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
+                    Text("This Ready multisig is no longer watched.")
+                        .brambleText(BrambleTypeScale.body)
+                        .foregroundStyle(skin.muted)
                 }
             }
             .padding(BrambleMetrics.Screen.shellPadding)
             .padding(.bottom, BrambleSpace.xl)
         }
         .task {
-            if let address = record?.address { balances = await store.coordination.balances(of: address) }
+            if let address = record?.address {
+                let fetched = try? await store.coordination.balances(of: address)
+                balances = fetched ?? [:]
+                balancesAvailable = fetched != nil
+            }
         }
     }
 
@@ -55,7 +78,8 @@ struct SharedAccountHomeView: View {
                 }
                 PillButton("Receive", kind: .secondary, icon: .qrCode) { open(.sharedReceive(id: record.id)) }
                 IconButton(icon: .externalLink, label: "Open in explorer", tint: skin.muted) {
-                    if let link = explorerAccountUrl(network: store.network, address: record.address), let url = URL(string: link) {
+                    if let link = explorerAccountUrl(network: store.network, address: record.address),
+                       let url = URL(string: link) {
                         UIApplication.shared.open(url)
                     }
                 }
@@ -64,9 +88,9 @@ struct SharedAccountHomeView: View {
                 if undeployed {
                     Text("Deployment required. ").bold() + Text("Continue the saved setup before sending.")
                 } else if record.threshold == nil {
-                    Text("Deployment and signer authority could not be verified. Retry when network access is restored.")
+                    Text(Self.authorityUnverifiedMessage)
                 } else if record.localSignerAccountIds.isEmpty {
-                    Text("This wallet does not own a current signer, so it can watch this account but cannot propose actions.")
+                    Text(Self.watchOnlyMessage)
                 } else if !record.hasCurrentConfig {
                     Text("Signer found. ").bold() + Text("Add the remaining public signer keys before sending.")
                 }
@@ -76,16 +100,21 @@ struct SharedAccountHomeView: View {
         }
     }
 
+    private static let authorityUnverifiedMessage = "Deployment and signer authority could not be verified. "
+        + "Retry when network access is restored."
+
+    private static let watchOnlyMessage = "This wallet does not own a current signer, "
+        + "so it can watch this account but cannot propose actions."
+
     @ViewBuilder private var tokens: some View {
-        if let balances {
+        if balancesAvailable {
             MenuGroup {
                 ForEach(store.networkInfo.tokens, id: \.address) { token in
                     HStack(spacing: BrambleSpace.md) {
                         TokenMark(address: token.address, symbol: token.symbol)
                         Text(token.name).brambleText(BrambleTypeScale.row, weight: BrambleWeight.medium)
                         Spacer()
-                        Text(balances[token.symbol].flatMap { try? formatTokenAmount(raw: $0, decimals: token.decimals, maxFraction: 4) }
-                            .map { "\($0) \(token.symbol)" } ?? "—")
+                        Text(balanceLabel(raw: balances[token.symbol], token: token))
                             .brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
                     }
                     .padding(BrambleMetrics.MenuRow.padding)
@@ -93,14 +122,24 @@ struct SharedAccountHomeView: View {
                 }
             }
         } else {
-            Text("Shared balances are unavailable right now.").brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
+            Text("Shared balances are unavailable right now.")
+                .brambleText(BrambleTypeScale.body)
+                .foregroundStyle(skin.muted)
         }
+    }
+
+    /// The formatted balance with its symbol, or a dash when the read has no usable amount.
+    private func balanceLabel(raw: String?, token: TokenInfo) -> String {
+        raw.flatMap { value in
+            try? formatTokenAmount(raw: value, decimals: token.decimals, maxFraction: Self.balanceFractionDigits)
+        }
+        .map { amount in "\(amount) \(token.symbol)" } ?? "—"
     }
 
     private func intents(_ record: MultisigRecord) -> some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             HStack(alignment: .center, spacing: BrambleSpace.md) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Layout.intentsTextSpacing) {
                     Text("Co-signer updates").brambleText(BrambleTypeScale.body, weight: BrambleWeight.bold)
                     Text("Check securely for intents and signatures shared by known contacts.")
                         .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
@@ -125,7 +164,8 @@ struct SharedAccountHomeView: View {
                 syncFailed = false
                 syncResult = outcome.held == 0
                     ? "No new co-signer updates"
-                    : "\(outcome.held) co-signer update\(outcome.held == 1 ? "" : "s") received. Open them after the next Bramble update."
+                    : "\(outcome.held) co-signer update\(outcome.held == 1 ? "" : "s") received. "
+                    + "Open them after the next Bramble update."
             } catch CoreError.Locked {
                 syncFailed = true
                 syncResult = "The wallet is locked"
@@ -146,7 +186,11 @@ struct SharedAccountHomeView: View {
             PillButton("Stop watching", kind: .ghost) { confirmingRemove = true }
         }
         .padding(.top, BrambleSpace.md)
-        .confirmationDialog("Stop watching this shared account?", isPresented: $confirmingRemove, titleVisibility: .visible) {
+        .confirmationDialog(
+            "Stop watching this shared account?",
+            isPresented: $confirmingRemove,
+            titleVisibility: .visible
+        ) {
             Button("Stop watching", role: .destructive) {
                 Task {
                     try? await store.coordination.removeShared(record.id)
@@ -167,10 +211,17 @@ struct SharedReceiveView: View {
         let record = store.coordination.multisigs.first { $0.id == id }
         ScrollView {
             VStack(spacing: BrambleMetrics.Receive.gap) {
-                FlowHeader(title: "Receive", subtitle: record.map(multisigDisplayName), network: store.networkLabel) { dismiss() }
+                FlowHeader(
+                    title: "Receive",
+                    subtitle: record.map(multisigDisplayName),
+                    network: store.networkLabel
+                ) { dismiss() }
                 if let record {
-                    ReceiveAddressView(address: record.address, copyLabel: "Copy address",
-                                       hint: "Send only Starknet assets on \(store.networkInfo.name).")
+                    ReceiveAddressView(
+                        address: record.address,
+                        copyLabel: "Copy address",
+                        hint: "Send only Starknet assets on \(store.networkInfo.name)."
+                    )
                 }
             }
             .padding(BrambleMetrics.Screen.shellPadding)

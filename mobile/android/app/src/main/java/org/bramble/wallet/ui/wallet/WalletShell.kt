@@ -56,15 +56,11 @@ import org.bramble.wallet.design.StatusDot
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.send.SendScreen
 
-/** Screens pushed over the shell, without the dock. */
-enum class Flow { RECEIVE, SEND, MANAGE_ACCOUNTS, NETWORK, APPEARANCE, SECURITY, REVEAL, REMOVE, ADDRESS_BOOK, SHARED_ACCOUNTS, READY_MULTISIG, PRIVACY }
-
 /**
  * The wallet frame from `wallet-shell.ts` / `styles-dock.ts`, port of the iOS `WalletShell`:
  * persistent account header, the active dock screen with pull-to-refresh, and the floating dock.
  * Flow screens replace it (the system back gesture pops them); the accounts sheet opens over it.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WalletShell(store: WalletStore) {
     val skin = LocalSkin.current
@@ -73,45 +69,163 @@ fun WalletShell(store: WalletStore) {
     var accountsOpen by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     val pop = { flows = flows.dropLast(1) }
+    val push = { next: Flow -> flows = flows + next }
     BackHandler(enabled = flows.isNotEmpty()) { pop() }
 
     val flow = flows.lastOrNull()
     if (flow != null) {
         Box(Modifier.fillMaxSize().background(skin.bg).safeDrawingPadding()) {
-            when (flow) {
-                Flow.RECEIVE -> ReceiveScreen(store, back = pop, openPrivacy = { flows = flows + Flow.PRIVACY })
-                Flow.SEND -> SendScreen(store, back = pop)
-                Flow.MANAGE_ACCOUNTS -> ManageAccountsScreen(store, back = pop)
-                Flow.NETWORK -> NetworkScreen(store, back = pop)
-                Flow.APPEARANCE -> AppearanceScreen(store, back = pop)
-                Flow.SECURITY -> SecurityScreen(store, back = pop)
-                Flow.REVEAL -> RevealScreen(store, back = pop)
-                Flow.REMOVE -> RemoveWalletScreen(store, back = pop)
-                Flow.ADDRESS_BOOK -> org.bramble.wallet.coordination.AddressBookScreen(store, back = pop)
-                Flow.SHARED_ACCOUNTS -> org.bramble.wallet.coordination.SharedAccountsScreen(store, back = pop)
-                Flow.READY_MULTISIG -> org.bramble.wallet.coordination.ReadyMultisigScreen(store, back = pop)
-                Flow.PRIVACY -> {
-                    // Mobile writes nothing yet (docs/privacy.md §1): the journey's answer is a blocker.
-                    val entry = org.bramble.core.privacyEntry(store.network, org.bramble.core.DeploymentState.UNKNOWN, store.privacy.reading, true)
-                    val blocker = (entry as? org.bramble.core.PrivacyEntry.Blocked)?.blocker ?: org.bramble.core.PrivacyBlocker.SERVICE
-                    org.bramble.wallet.privacy.PrivacyBlockedScreen(blocker, null, chooseNetwork = { flows = flows + Flow.NETWORK }, retry = pop, back = pop)
-                }
-            }
+            FlowScreen(flow, store, pop, push)
         }
         return
     }
 
+    DockFrame(
+        store = store,
+        refreshing = refreshing,
+        refresh = {
+            scope.launch {
+                refreshing = true
+                store.refreshBalances()
+                refreshing = false
+            }
+        },
+    ) {
+        WalletHeader(store, openAccounts = { accountsOpen = true })
+        DockScreen(store, push)
+    }
+    if (accountsOpen) {
+        AccountsSheet(
+            store,
+            onDismiss = { accountsOpen = false },
+            openManage = { push(Flow.MANAGE_ACCOUNTS) },
+            openMultisig = { push(Flow.READY_MULTISIG) },
+        )
+    }
+}
+
+/** The pushed [flow]'s screen; [pop] returns to the one below it, [push] opens another. */
+@Composable
+private fun FlowScreen(
+    flow: Flow,
+    store: WalletStore,
+    pop: () -> Unit,
+    push: (Flow) -> Unit,
+) {
+    when (flow) {
+        Flow.RECEIVE -> {
+            ReceiveScreen(store, back = pop, openPrivacy = { push(Flow.PRIVACY) })
+        }
+
+        Flow.SEND -> {
+            SendScreen(store, back = pop)
+        }
+
+        Flow.MANAGE_ACCOUNTS -> {
+            ManageAccountsScreen(store, back = pop)
+        }
+
+        Flow.NETWORK -> {
+            NetworkScreen(store, back = pop)
+        }
+
+        Flow.APPEARANCE -> {
+            AppearanceScreen(store, back = pop)
+        }
+
+        Flow.SECURITY -> {
+            SecurityScreen(store, back = pop)
+        }
+
+        Flow.REVEAL -> {
+            RevealScreen(store, back = pop)
+        }
+
+        Flow.REMOVE -> {
+            RemoveWalletScreen(store, back = pop)
+        }
+
+        Flow.ADDRESS_BOOK -> {
+            org.bramble.wallet.coordination
+                .AddressBookScreen(store, back = pop)
+        }
+
+        Flow.SHARED_ACCOUNTS -> {
+            org.bramble.wallet.coordination
+                .SharedAccountsScreen(store, back = pop)
+        }
+
+        Flow.READY_MULTISIG -> {
+            org.bramble.wallet.coordination
+                .ReadyMultisigScreen(store, back = pop)
+        }
+
+        Flow.PRIVACY -> {
+            org.bramble.wallet.privacy.PrivacyBlockedScreen(
+                privacyBlocker(store),
+                null,
+                chooseNetwork = { push(Flow.NETWORK) },
+                retry = pop,
+                back = pop,
+            )
+        }
+    }
+}
+
+/** Mobile writes nothing yet (docs/privacy.md §1): the journey's answer is a blocker. */
+private fun privacyBlocker(store: WalletStore): org.bramble.core.PrivacyBlocker {
+    val entry =
+        org.bramble.core.privacyEntry(
+            store.network,
+            org.bramble.core.DeploymentState.UNKNOWN,
+            store.privacy.reading,
+            true,
+        )
+    return (entry as? org.bramble.core.PrivacyEntry.Blocked)?.blocker
+        ?: org.bramble.core.PrivacyBlocker.SERVICE
+}
+
+/** The dock screen for the selected tab. */
+@Composable
+private fun DockScreen(
+    store: WalletStore,
+    push: (Flow) -> Unit,
+) {
+    when (store.tab) {
+        Tab.HOME -> {
+            HomeScreen(
+                store,
+                receive = { push(Flow.RECEIVE) },
+                send = { push(Flow.SEND) },
+                privacy = { push(Flow.PRIVACY) },
+            )
+        }
+
+        Tab.ACTIVITY -> {
+            ActivityScreen(store)
+        }
+
+        Tab.SETTINGS -> {
+            SettingsHubScreen(store, open = push)
+        }
+    }
+}
+
+/** The pull-to-refresh scroll column over which the floating dock sits; [content] fills the column. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DockFrame(
+    store: WalletStore,
+    refreshing: Boolean,
+    refresh: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val skin = LocalSkin.current
     val refreshState = rememberPullToRefreshState()
     Box(Modifier.fillMaxSize().background(skin.bg)) {
         PullToRefreshBox(
             isRefreshing = refreshing,
-            onRefresh = {
-                scope.launch {
-                    refreshing = true
-                    store.refreshBalances()
-                    refreshing = false
-                }
-            },
+            onRefresh = refresh,
             state = refreshState,
             modifier = Modifier.fillMaxSize().safeDrawingPadding(),
             indicator = {
@@ -128,17 +242,7 @@ fun WalletShell(store: WalletStore) {
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = BrambleSpace.lg),
                 verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
             ) {
-                WalletHeader(store, openAccounts = { accountsOpen = true })
-                when (store.tab) {
-                    Tab.HOME -> HomeScreen(
-                        store,
-                        receive = { flows = flows + Flow.RECEIVE },
-                        send = { flows = flows + Flow.SEND },
-                        privacy = { flows = flows + Flow.PRIVACY },
-                    )
-                    Tab.ACTIVITY -> ActivityScreen(store)
-                    Tab.SETTINGS -> SettingsHubScreen(store, open = { flows = flows + it })
-                }
+                content()
                 // Clearance for the floating dock: item, its padding, and the gap above the inset.
                 Spacer(Modifier.height(BrambleControl.dockItem + BrambleSpace.md + BrambleSpace.lg + BrambleSpace.lg))
             }
@@ -149,14 +253,6 @@ fun WalletShell(store: WalletStore) {
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = BrambleSpace.lg),
         )
     }
-    if (accountsOpen) {
-        AccountsSheet(
-            store,
-            onDismiss = { accountsOpen = false },
-            openManage = { flows = flows + Flow.MANAGE_ACCOUNTS },
-            openMultisig = { flows = flows + Flow.READY_MULTISIG },
-        )
-    }
 }
 
 /**
@@ -164,9 +260,11 @@ fun WalletShell(store: WalletStore) {
  * chevron, network status, actions. No address and no copy here, as in the extension.
  */
 @Composable
-private fun WalletHeader(store: WalletStore, openAccounts: () -> Unit) {
+private fun WalletHeader(
+    store: WalletStore,
+    openAccounts: () -> Unit,
+) {
     val skin = LocalSkin.current
-    val context = LocalContext.current
     val account = store.activeRecord
     val explorer = account?.let { explorerAccountUrl(store.network, it.address) }
     Row(
@@ -175,18 +273,21 @@ private fun WalletHeader(store: WalletStore, openAccounts: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            Modifier.weight(1f)
+            Modifier
+                .weight(1f)
                 .semantics(mergeDescendants = true) {
                     contentDescription = "Accounts"
                     role = Role.Button
-                }
-                .clickable(onClick = openAccounts),
+                }.clickable(onClick = openAccounts),
             horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AccountAvatar(account?.address ?: "0x0")
             Column(verticalArrangement = Arrangement.spacedBy(BrambleLayout.subtitleGap)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
                         account?.displayName.orEmpty(),
                         color = skin.text,
@@ -196,28 +297,42 @@ private fun WalletHeader(store: WalletStore, openAccounts: () -> Unit) {
                     )
                     BrambleIcon(BrambleIconName.CHEVRON_DOWN, skin.muted, BrambleLayout.accountChevron)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(BrambleLayout.pillGap), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(BrambleLayout.pillGap),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     StatusDot(store.networkHealthy)
                     Text(store.networkLabel, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-            IconButton(
-                BrambleIconName.EXTERNAL_LINK,
-                if (explorer != null) "Open in explorer" else "Explorer unavailable on this network",
-                tint = skin.muted,
-                enabled = explorer != null,
-            ) {
-                if (explorer != null) {
-                    try {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(explorer)))
-                    } catch (ignored: ActivityNotFoundException) {
-                        store.showToast("No app can open the explorer link")
-                    }
+        HeaderActions(store, explorer)
+    }
+}
+
+/** The header's explorer link ([explorer] is null where the network has none) and lock control. */
+@Composable
+private fun HeaderActions(
+    store: WalletStore,
+    explorer: String?,
+) {
+    val skin = LocalSkin.current
+    val context = LocalContext.current
+    Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
+        IconButton(
+            BrambleIconName.EXTERNAL_LINK,
+            if (explorer != null) "Open in explorer" else "Explorer unavailable on this network",
+            tint = skin.muted,
+            enabled = explorer != null,
+        ) {
+            if (explorer != null) {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(explorer)))
+                } catch (ignored: ActivityNotFoundException) {
+                    store.showToast("No app can open the explorer link")
                 }
             }
-            IconButton(BrambleIconName.LOCK, "Lock wallet", tint = skin.muted) { store.lock() }
         }
+        IconButton(BrambleIconName.LOCK, "Lock wallet", tint = skin.muted) { store.lock() }
     }
 }

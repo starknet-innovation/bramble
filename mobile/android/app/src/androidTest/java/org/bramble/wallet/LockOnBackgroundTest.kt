@@ -23,12 +23,16 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class LockOnBackgroundTest {
     @get:Rule val rule = createAndroidComposeRule<MainActivity>()
+
     @get:Rule val name = TestName()
 
-    private fun robot() = Robot(rule, name.methodName).also { it.waitForButton("Create a new wallet") }
+    private fun robot() = Robot(rule, name.methodName).apply { waitForButton("Create a new wallet") }
 
     /** Starts [action] on the main thread, waits until its core call is running, then locks. */
-    private fun <T> lockWhileRunning(r: Robot, action: suspend WalletStore.() -> T): Result<T> {
+    private fun <T> lockWhileRunning(
+        r: Robot,
+        action: suspend WalletStore.() -> T,
+    ): Result<T> {
         val running = r.store.appScope.async { runCatching { r.store.action() } }
         rule.waitUntil(5_000) { r.onMain { busy } || running.isCompleted }
         r.onMain { lock() } // what ProcessLifecycleOwner.onStop does
@@ -41,7 +45,7 @@ class LockOnBackgroundTest {
     }
 
     @Test
-    fun pressingHomeLocksAndReturnsToUnlock() {
+    fun homeLocksAndReturnsToUnlock() {
         val r = robot()
         r.importPublicWalletDirectly()
         r.waitForHome()
@@ -53,9 +57,12 @@ class LockOnBackgroundTest {
     }
 
     @Test
-    fun aLockDuringUnlockLeavesTheWalletLocked() {
+    fun lockDuringUnlockStaysLocked() {
         val r = robot()
-        r.onMain { importWallet(PublicWallet.PHRASE, PublicWallet.PASSPHRASE); lock() }
+        r.onMain {
+            importWallet(PublicWallet.PHRASE, PublicWallet.PASSPHRASE)
+            lock()
+        }
         r.awaitCoreStatus(WalletStatus.LOCKED)
         assertEndedOrOvertaken(lockWhileRunning(r) { unlock(PublicWallet.PASSPHRASE) })
         r.awaitCoreStatus(WalletStatus.LOCKED)
@@ -75,7 +82,7 @@ class LockOnBackgroundTest {
     }
 
     @Test
-    fun aLockDuringCreateDropsTheNewPhrase() {
+    fun lockDuringCreateDropsPhrase() {
         val r = robot()
         assertEndedOrOvertaken(lockWhileRunning(r) { create(PublicWallet.PASSPHRASE) })
         r.awaitCoreStatus(WalletStatus.LOCKED)
@@ -85,7 +92,7 @@ class LockOnBackgroundTest {
     }
 
     @Test
-    fun backgroundingMidOnboardingKeepsThePhraseRecoverable() {
+    fun unconfirmedPhraseSurvivesLock() {
         val r = robot()
         r.onMain { create(PublicWallet.PASSPHRASE) }
         assertEquals(12, r.onMain { pendingBackup.size })
@@ -100,7 +107,7 @@ class LockOnBackgroundTest {
     }
 
     @Test
-    fun backgroundingBeforeAVaultExistsDropsTheTypedPhrase() {
+    fun preVaultBackgroundDropsPhrase() {
         val r = robot()
         r.tap("Add an existing wallet")
         r.tap("Recovery phrase")

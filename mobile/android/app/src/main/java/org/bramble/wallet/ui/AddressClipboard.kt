@@ -20,33 +20,46 @@ object AddressClipboard {
     private var copiedAt: Long? = null
 
     /** Copies [value]; false when the clipboard is unavailable or refused the clip ("Copy failed"). */
-    fun copy(context: Context, value: String, scope: CoroutineScope): Boolean {
+    fun copy(
+        context: Context,
+        value: String,
+        scope: CoroutineScope,
+    ): Boolean {
         val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return false
-        try {
-            clipboard.setPrimaryClip(ClipData.newPlainText(ClipboardPolicy.LABEL, value))
-        } catch (refused: RuntimeException) {
-            return false
+        val copied =
+            try {
+                clipboard.setPrimaryClip(ClipData.newPlainText(ClipboardPolicy.LABEL, value))
+                true
+            } catch (refused: RuntimeException) {
+                false
+            }
+        if (copied) {
+            ourStamp = clipboard.primaryClipDescription?.timestamp
+            copiedAt = SystemClock.elapsedRealtime()
+            val app = context.applicationContext
+            scope.launch {
+                delay(ClipboardPolicy.EXPIRY_MS)
+                clearIfExpired(app)
+            }
         }
-        ourStamp = clipboard.primaryClipDescription?.timestamp
-        copiedAt = SystemClock.elapsedRealtime()
-        val app = context.applicationContext
-        scope.launch {
-            delay(ClipboardPolicy.EXPIRY_MS)
-            clearIfExpired(app)
-        }
-        return true
+        return copied
     }
 
+    /**
+     * Clears the clipboard if it still holds our clip and [ClipboardPolicy.EXPIRY_MS] has passed
+     * since the copy; otherwise leaves it untouched. Does nothing when the clipboard is unavailable.
+     */
     fun clearIfExpired(context: Context) {
         val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
         val description = clipboard.primaryClipDescription
-        val clear = ClipboardPolicy.shouldClear(
-            description?.label?.toString(),
-            description?.timestamp,
-            ourStamp,
-            copiedAt,
-            SystemClock.elapsedRealtime(),
-        )
+        val clear =
+            ClipboardPolicy.shouldClear(
+                description?.label?.toString(),
+                description?.timestamp,
+                ourStamp,
+                copiedAt,
+                SystemClock.elapsedRealtime(),
+            )
         if (clear) {
             clipboard.clearPrimaryClip()
             ourStamp = null

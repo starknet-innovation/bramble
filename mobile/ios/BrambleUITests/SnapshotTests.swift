@@ -11,6 +11,12 @@ final class SnapshotTests: XCTestCase {
         try UITest.refuseRealPhrase()
     }
 
+    override func tearDownWithError() throws {
+        // Restores the XCTest default that setUp changed; nothing else is shared between tests.
+        continueAfterFailure = true
+        try super.tearDownWithError()
+    }
+
     func testImportPathDark() { importPath(theme: "dark") }
     func testImportPathLight() { importPath(theme: "light") }
     func testCreatePathDark() { createPath(theme: "dark") }
@@ -26,7 +32,14 @@ final class SnapshotTests: XCTestCase {
     }
 
     private func importPath(theme: String) {
-        var app = UITest.launch(theme: theme)
+        let app = UITest.launch(theme: theme)
+        importPublicWallet(app, theme)
+        walletScreens(app, theme)
+        homeStates(app, theme)
+    }
+
+    /// Welcome through "Find your accounts" to a ready Home, capturing each step.
+    private func importPublicWallet(_ app: XCUIApplication, _ theme: String) {
         UITest.resetToFirstRun(app)
         shot(app, "welcome", theme)
         UITest.tap(app.buttons["Add an existing wallet"])
@@ -47,7 +60,10 @@ final class SnapshotTests: XCTestCase {
         UITest.tap(app.buttons["Open Bramble"])
         UITest.wait(UITest.labelled(app, containing: "STRK, 125.5"))
         shot(app, "home-ready", theme)
+    }
 
+    /// Accounts, Send, Receive, Activity, Settings and the unlock screen of the imported wallet.
+    private func walletScreens(_ app: XCUIApplication, _ theme: String) {
         UITest.tap(app.buttons["Accounts"])
         UITest.wait(app.buttons["Add account"])
         shot(app, "accounts-sheet", theme)
@@ -94,7 +110,11 @@ final class SnapshotTests: XCTestCase {
         UITest.tap(app.buttons["Unlock"])
         UITest.wait(app.staticTexts["Incorrect passphrase"].firstMatch)
         shot(app, "unlock-failed", theme)
+    }
 
+    /// Relaunches into the empty and balance-error Home states, then removes the wallet.
+    private func homeStates(_ launched: XCUIApplication, _ theme: String) {
+        var app = launched
         for state in ["empty", "balanceError"] {
             app.terminate()
             app = UITest.launch(theme: theme, fixtures: state)

@@ -30,7 +30,9 @@ final class SecurityTests: XCTestCase {
             XCTAssertThrowsError(try core.unlock(password: "wrong password"))
         }
         XCTAssertThrowsError(try core.unlock(password: "a strong password")) { error in
-            guard case .Throttled(let retry) = error as? CoreError else { return XCTFail("expected Throttled, got \(error)") }
+            guard case .Throttled(let retry) = error as? CoreError else {
+                return XCTFail("expected Throttled, got \(error)")
+            }
             XCTAssertGreaterThan(retry, 29_000)
             XCTAssertEqual(describe(error), "Too many attempts. Try again in 0:30.")
         }
@@ -47,7 +49,10 @@ final class SecurityTests: XCTestCase {
         XCTAssertEqual(BrambleCopy.incorrectPassphrase, "Incorrect passphrase")
         XCTAssertEqual(describe(CoreError.WrongPassword), "Incorrect passphrase")
         XCTAssertEqual(BrambleCopy.idleLockMs, 1_800_000)
-        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "NSFaceIDUsageDescription") as? String, BrambleCopy.faceIdUsage)
+        XCTAssertEqual(
+            Bundle.main.object(forInfoDictionaryKey: "NSFaceIDUsageDescription") as? String,
+            BrambleCopy.faceIdUsage
+        )
     }
 
     func testTheWrapSecretIsWipedAfterUse() throws {
@@ -73,15 +78,25 @@ final class SecurityTests: XCTestCase {
         defer { BiometricKeychain.delete() }
         do {
             try BiometricKeychain.store(Data(repeating: 1, count: 32))
-        } catch BiometricKeychain.Failure.keychain(let status) where status == errSecNotAvailable || status == -34018 || status == errSecAuthFailed || status == errSecParam {
+        } catch BiometricKeychain.Failure.keychain(let status) where Self.simulatorRefusesPasscodeItems(status) {
             throw XCTSkip("this simulator cannot hold passcode-bound items (status \(status))")
         }
-        let attributes = try XCTUnwrap(BiometricKeychain.attributes())
-        XCTAssertEqual(attributes[kSecAttrAccessible as String] as? String, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly as String)
+        let attributes = BiometricKeychain.attributes()
+        XCTAssertFalse(attributes.isEmpty, "the stored item is readable")
+        XCTAssertEqual(
+            attributes[kSecAttrAccessible as String] as? String,
+            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly as String
+        )
         XCTAssertNotEqual(attributes[kSecAttrSynchronizable as String] as? Bool, true)
         XCTAssertNotNil(attributes[kSecAttrAccessControl as String])
         BiometricKeychain.delete()
-        XCTAssertNil(BiometricKeychain.attributes())
+        XCTAssertTrue(BiometricKeychain.attributes().isEmpty)
+    }
+
+    /// The statuses a simulator without a passcode (or the entitlement, -34018) answers a
+    /// passcode-bound store with.
+    private static func simulatorRefusesPasscodeItems(_ status: OSStatus) -> Bool {
+        status == errSecNotAvailable || status == -34_018 || status == errSecAuthFailed || status == errSecParam
     }
 
     func testDarkIsTheDefaultTheme() {

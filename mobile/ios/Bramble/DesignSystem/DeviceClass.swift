@@ -10,10 +10,10 @@ struct DeviceClass: Equatable {
     /// `max-height: 760px`: the compact onboarding paddings and lockup.
     let short: Bool
 
-    static let regularPhone = DeviceClass(phone: true, short: false)
+    static let regularPhone = Self(phone: true, short: false)
 
-    static func resolve(size: CGSize, insets: EdgeInsets) -> DeviceClass {
-        DeviceClass(
+    static func resolve(size: CGSize, insets: EdgeInsets) -> Self {
+        Self(
             phone: size.width + insets.leading + insets.trailing <= BrambleBreakpoint.phoneWidth,
             short: size.height + insets.top + insets.bottom <= BrambleBreakpoint.shortHeight
         )

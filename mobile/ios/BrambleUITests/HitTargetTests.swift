@@ -11,6 +11,12 @@ final class HitTargetTests: XCTestCase {
         try UITest.refuseRealPhrase()
     }
 
+    override func tearDownWithError() throws {
+        // Restores the XCTest default that setUp changed; nothing else is shared between tests.
+        continueAfterFailure = true
+        try super.tearDownWithError()
+    }
+
     func testSmallControlsAnswerAcrossTheirExpandedRegion() {
         let app = UITest.launch()
         UITest.resetToFirstRun(app)
@@ -49,11 +55,14 @@ final class HitTargetTests: XCTestCase {
 }
 
 private extension XCUIElement {
+    /// How often `waitForSelection` re-reads the element, in seconds.
+    private static let selectionPollInterval: TimeInterval = 0.1
+
     func waitForSelection(timeout: TimeInterval = 3) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if isSelected { return true }
-            Thread.sleep(forTimeInterval: 0.1)
+            Thread.sleep(forTimeInterval: Self.selectionPollInterval)
         }
         return isSelected
     }

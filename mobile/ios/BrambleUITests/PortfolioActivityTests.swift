@@ -21,7 +21,8 @@ final class PortfolioActivityTests: XCTestCase {
     private func tapHittable(_ query: XCUIElementQuery, timeout: TimeInterval = 15) {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if let element = query.allElementsBoundByIndex.first(where: { $0.exists && $0.isHittable && $0.isEnabled }) {
+            let hittable = query.allElementsBoundByIndex.first { $0.exists && $0.isHittable && $0.isEnabled }
+            if let element = hittable {
                 element.tap()
                 return
             }
@@ -38,8 +39,10 @@ final class PortfolioActivityTests: XCTestCase {
     }
 
     private func launch(_ app: XCUIApplication, scenario: String, freshCaches: Bool = false) {
-        app.launchArguments = ["-network", "mainnet", "-BrambleUITestNetworkStub", scenario,
-                               "-BrambleUITestFreshCaches", freshCaches ? "YES" : "NO"]
+        app.launchArguments = [
+            "-network", "mainnet", "-BrambleUITestNetworkStub", scenario,
+            "-BrambleUITestFreshCaches", freshCaches ? "YES" : "NO"
+        ]
         app.launch()
     }
 
@@ -48,7 +51,11 @@ final class PortfolioActivityTests: XCTestCase {
     }
 
     /// Waits until an element's accessibility value satisfies a predicate.
-    private func waitForValue(_ element: XCUIElement, timeout: TimeInterval = 20, _ matches: @escaping (String) -> Bool) -> String {
+    private func waitForValue(
+        _ element: XCUIElement,
+        timeout: TimeInterval = 20,
+        _ matches: (String) -> Bool
+    ) -> String {
         let deadline = Date().addingTimeInterval(timeout)
         var last = ""
         while Date() < deadline {
@@ -84,8 +91,10 @@ final class PortfolioActivityTests: XCTestCase {
 
     private func importWallet(_ app: XCUIApplication) {
         removeExistingWallet(app)
-        XCTAssertTrue(app.buttons["Add an existing wallet"].waitForExistence(timeout: 15),
-                      "onboarding starts from an empty device")
+        XCTAssertTrue(
+            app.buttons["Add an existing wallet"].waitForExistence(timeout: 15),
+            "onboarding starts from an empty device"
+        )
         tap(app.buttons["Add an existing wallet"])
         tap(app.buttons["Recovery phrase"])
         for (index, word) in phrase.split(separator: " ").enumerated() {
@@ -133,16 +142,27 @@ final class PortfolioActivityTests: XCTestCase {
         let app = XCUIApplication()
         launch(app, scenario: "ready")
         importWallet(app)
-
-        // (1) Hero total and the 24h line, rows with fiat and badges.
         let total = element(app, "portfolio-total")
+        heroStory(app, total: total)
+        manageTokensStory(app)
+        currencyStory(app, total: total)
+        activityStory(app)
+        degradedStories(app, total: total)
+        removeWalletAtEnd(app)
+    }
+
+    /// (1) Hero total and the 24h line, rows with fiat and badges.
+    private func heroStory(_ app: XCUIApplication, total: XCUIElement) {
         XCTAssertEqual(waitForValue(total) { $0 == "$1,242.25" }, "$1,242.25")
         XCTAssertTrue(element(app, "portfolio-change").waitForExistence(timeout: 5))
         XCTAssertTrue((element(app, "portfolio-change").label).contains("% · 24h"))
         XCTAssertTrue(element(app, "token-row-STRK").exists && element(app, "token-row-ETH").exists)
         snapshot(app, "home-ready")
+    }
 
-        // (2) Manage tokens: hide STRK, see "1 not shown", show it again.
+    /// (2) Manage tokens: hide STRK, see "1 not shown", show it again. (3) Add by contract, then
+    /// find held tokens.
+    private func manageTokensStory(_ app: XCUIApplication) {
         tap(app.buttons["Portfolio actions"])
         tap(app.buttons["Manage tokens"])
         XCTAssertTrue(app.staticTexts["2 tracked"].waitForExistence(timeout: 5))
@@ -173,8 +193,10 @@ final class PortfolioActivityTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Token added"].waitForExistence(timeout: 15))
         tap(app.buttons["Back"])
         tap(app.buttons["Back"])
+    }
 
-        // (4) Appearance & currency → EUR.
+    /// (4) Appearance & currency → EUR.
+    private func currencyStory(_ app: XCUIApplication, total: XCUIElement) {
         tap(app.buttons["Settings"])
         tap(app.buttons["Appearance & currency"])
         XCTAssertTrue(app.buttons["Dark"].exists, "the Theme section stays")
@@ -184,8 +206,10 @@ final class PortfolioActivityTests: XCTestCase {
         XCTAssertEqual(app.buttons["Appearance & currency"].value as? String, "EUR")
         tap(app.buttons["Home"])
         _ = waitForValue(total) { $0.hasPrefix("€") }
+    }
 
-        // (5) Activity: grouped rows linked to the explorer, with a copy control.
+    /// (5) Activity: grouped rows linked to the explorer, with a copy control.
+    private func activityStory(_ app: XCUIApplication) {
         tap(app.buttons["Activity"])
         let received = element(app, "activity-link-0xabc1")
         XCTAssertTrue(received.waitForExistence(timeout: 20))
@@ -195,7 +219,10 @@ final class PortfolioActivityTests: XCTestCase {
         XCTAssertTrue(element(app, "activity-link-0xabc2").exists)
         tap(app.buttons["Copy sender address"].firstMatch)
         snapshot(app, "activity")
+    }
 
+    /// Prices offline, saved data, balance error, and history unavailable, each from a relaunch.
+    private func degradedStories(_ app: XCUIApplication, total: XCUIElement) {
         // (7) prices-offline: balances load, prices do not; the header says so and the hero is "—".
         let accounts = app.buttons["Accounts"]
         relaunch(app, scenario: "prices-offline")
@@ -215,7 +242,8 @@ final class PortfolioActivityTests: XCTestCase {
         // balance-error: nothing saved, every endpoint unreachable: the error panel and its retry.
         relaunch(app, scenario: "balance-error")
         XCTAssertTrue(app.buttons["Retry loading balances"].waitForExistence(timeout: 60))
-        XCTAssertTrue(app.staticTexts["Couldn't reach the network. Check your connection or RPC endpoint."].exists)
+        let unreachable = app.staticTexts["Couldn't reach the network. Check your connection or RPC endpoint."]
+        XCTAssertTrue(unreachable.exists)
         _ = waitForValue(accounts) { $0.hasPrefix("Balances are temporarily unavailable.") }
         snapshot(app, "balance-error")
 
@@ -225,8 +253,10 @@ final class PortfolioActivityTests: XCTestCase {
         XCTAssertTrue(element(app, "history-unavailable").waitForExistence(timeout: 60))
         XCTAssertTrue(app.staticTexts["No transactions recorded on this device yet."].waitForExistence(timeout: 5))
         snapshot(app, "history-unavailable")
+    }
 
-        // Leave the simulator clean through the real removal path.
+    /// Leaves the simulator clean through the real removal path.
+    private func removeWalletAtEnd(_ app: XCUIApplication) {
         tap(app.buttons["Settings"])
         app.swipeUp()
         tap(app.buttons["Remove wallet from this device"])

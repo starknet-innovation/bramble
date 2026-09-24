@@ -19,7 +19,18 @@ struct PillButton: View {
     let action: () -> Void
     @State private var presses = 0
 
-    init(_ title: String, kind: PillKind = .primary, icon: BrambleIconName? = nil, busy: Bool = false, small: Bool = false, action: @escaping () -> Void) {
+    /// `button[data-busy]` opacity, and the disabled `button` opacity.
+    private static let busyOpacity: Double = 0.7
+    private static let disabledOpacity: Double = 0.5
+
+    init(
+        _ title: String,
+        kind: PillKind = .primary,
+        icon: BrambleIconName? = nil,
+        busy: Bool = false,
+        small: Bool = false,
+        action: @escaping () -> Void
+    ) {
         self.title = title
         self.kind = kind
         self.icon = icon
@@ -30,26 +41,43 @@ struct PillButton: View {
 
     private var fill: Color {
         switch kind {
-        case .primary: skin.accent
-        case .secondary, .danger: skin.elevated
-        case .ghost: .clear
+        case .primary:
+            skin.accent
+
+        case .secondary, .danger:
+            skin.elevated
+
+        case .ghost:
+            .clear
         }
     }
 
     private var ink: Color {
         switch kind {
-        case .primary: skin.accentText
-        case .secondary: skin.text
-        case .danger: skin.danger
-        case .ghost: skin.muted
+        case .primary:
+            skin.accentText
+
+        case .secondary:
+            skin.text
+
+        case .danger:
+            skin.danger
+
+        case .ghost:
+            skin.muted
         }
     }
 
     private var pressed: Color {
         switch kind {
-        case .primary: skin.accentPress
-        case .danger: skin.dangerSoft
-        case .secondary, .ghost: skin.softPress
+        case .primary:
+            skin.accentPress
+
+        case .danger:
+            skin.dangerSoft
+
+        case .secondary, .ghost:
+            skin.softPress
         }
     }
 
@@ -61,16 +89,20 @@ struct PillButton: View {
         } label: {
             HStack(spacing: BrambleMetrics.Button.gap) {
                 if let icon { BrambleIcon(icon) }
-                Text(title).brambleText(type, weight: BrambleMetrics.Button.weight, tracking: BrambleMetrics.Button.tracking)
+                Text(title)
+                    .brambleText(type, weight: BrambleMetrics.Button.weight, tracking: BrambleMetrics.Button.tracking)
             }
             .lineLimit(1)
             .foregroundStyle(ink)
             .padding(small ? BrambleMetrics.ButtonSmall.padding : BrambleMetrics.Button.padding)
-            .frame(maxWidth: small ? nil : .infinity, minHeight: small ? BrambleMetrics.ButtonSmall.height : BrambleMetrics.Button.height)
+            .frame(
+                maxWidth: small ? nil : .infinity,
+                minHeight: small ? BrambleMetrics.ButtonSmall.height : BrambleMetrics.Button.height
+            )
             .contentShape(Capsule())
         }
         .buttonStyle(FillPressStyle(fill: fill, pressed: pressed, shape: Capsule()))
-        .opacity(enabled ? (busy ? 0.7 : 1) : 0.5)
+        .opacity(enabled ? (busy ? Self.busyOpacity : 1) : Self.disabledOpacity)
         .disabled(busy)
         .accessibilityValue(busy ? "Busy" : "")
         .brambleHaptic(kind == .primary ? .press : .selection, trigger: presses)
@@ -92,8 +124,13 @@ struct FillPressStyle<S: Shape>: ButtonStyle {
         configuration.label
             .background(configuration.isPressed ? pressed : fill, in: shape)
             .modifier(HitRegion(shape: shape, visual: hit))
-            .scaleEffect(BrambleMotionPolicy.pressScale(scale, pressed: configuration.isPressed, reduceMotion: reduceMotion))
-            .animation(BrambleMotionPolicy.animation(BrambleSpring.default, reduceMotion: reduceMotion), value: configuration.isPressed)
+            .scaleEffect(
+                BrambleMotionPolicy.pressScale(scale, pressed: configuration.isPressed, reduceMotion: reduceMotion)
+            )
+            .animation(
+                BrambleMotionPolicy.animation(BrambleSpring.default, reduceMotion: reduceMotion),
+                value: configuration.isPressed
+            )
     }
 }
 
@@ -127,7 +164,15 @@ struct IconButton: View {
                 .foregroundStyle(tint ?? skin.text)
                 .frame(width: size, height: size)
         }
-        .buttonStyle(FillPressStyle(fill: .clear, pressed: skin.softPress, shape: Circle(), scale: BramblePress.iconButton, hit: CGSize(width: size, height: size)))
+        .buttonStyle(
+            FillPressStyle(
+                fill: .clear,
+                pressed: skin.softPress,
+                shape: Circle(),
+                scale: BramblePress.iconButton,
+                hit: CGSize(width: size, height: size)
+            )
+        )
         .accessibilityLabel(label)
         .accessibilityHint(hint ?? "")
     }
@@ -145,8 +190,11 @@ struct BrambleField: View {
     var invalid = false
     var hint: String?
 
+    /// Gap between the label, the field, and the hint.
+    private static let stackSpacing: CGFloat = 6
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Self.stackSpacing) {
             if let label {
                 Text(label)
                     .brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold)
@@ -172,7 +220,10 @@ struct BrambleField: View {
             .frame(minHeight: BrambleMetrics.Field.height)
             .background(invalid ? skin.dangerSoft : skin.elevated, in: FieldShape())
             if let hint {
-                Text(hint).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted).accessibilityHidden(true)
+                Text(hint)
+                    .brambleText(BrambleTypeScale.caption)
+                    .foregroundStyle(skin.muted)
+                    .accessibilityHidden(true)
             }
         }
     }
@@ -196,7 +247,11 @@ struct Eyebrow: View {
 
     var body: some View {
         Text(text.uppercased())
-            .brambleText(BrambleTypeScale.caption.sized(BrambleMetrics.Eyebrow.fontSize), weight: BrambleMetrics.Eyebrow.weight, tracking: BrambleMetrics.Eyebrow.tracking)
+            .brambleText(
+                BrambleTypeScale.caption.sized(BrambleMetrics.Eyebrow.fontSize),
+                weight: BrambleMetrics.Eyebrow.weight,
+                tracking: BrambleMetrics.Eyebrow.tracking
+            )
             .foregroundStyle(skin.muted)
             .accessibilityLabel(text)
             .accessibilityAddTraits(.isHeader)
@@ -245,7 +300,9 @@ struct SegmentedControl<Value: Hashable>: View {
                         .frame(maxWidth: .infinity, minHeight: metrics.optionHeight)
                         .background {
                             if selected {
-                                Capsule().fill(skin.panel).elevation(BrambleElevation.segmentSelected)
+                                Capsule()
+                                    .fill(skin.panel)
+                                    .elevation(BrambleElevation.segmentSelected)
                                     .matchedGeometryEffect(id: "chip", in: chip)
                             }
                         }
@@ -267,7 +324,16 @@ private struct SegmentPressStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(BrambleMotionPolicy.pressScale(BramblePress.segment, pressed: configuration.isPressed, reduceMotion: reduceMotion))
-            .animation(BrambleMotionPolicy.animation(BrambleSpring.default, reduceMotion: reduceMotion), value: configuration.isPressed)
+            .scaleEffect(
+                BrambleMotionPolicy.pressScale(
+                    BramblePress.segment,
+                    pressed: configuration.isPressed,
+                    reduceMotion: reduceMotion
+                )
+            )
+            .animation(
+                BrambleMotionPolicy.animation(BrambleSpring.default, reduceMotion: reduceMotion),
+                value: configuration.isPressed
+            )
     }
 }

@@ -1,5 +1,6 @@
 package org.bramble.wallet.ui
 
+import android.content.Context
 import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -27,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.bramble.core.CoreException
@@ -50,6 +52,7 @@ import org.bramble.wallet.design.StatusTone
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.securityCopy
 import org.bramble.wallet.throttledText
+import org.bramble.wallet.unlockWithBiometric
 
 /** The side panel's display tracking for gate and onboarding headlines (iOS uses -0.035). */
 internal const val HEADLINE_TRACKING = -0.035f
@@ -69,56 +72,27 @@ fun UnlockScreen(store: WalletStore) {
     val activity = LocalContext.current
     var passphrase by remember { mutableStateOf("") }
     var failure by remember { mutableStateOf<String?>(null) }
-    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-    LaunchedEffect(store.retryAtElapsedMs) {
-        now = SystemClock.elapsedRealtime()
-        while (store.retryAtElapsedMs > now) {
-            delay(COUNTDOWN_TICK_MS)
-            now = SystemClock.elapsedRealtime()
-        }
-    }
+    val now = rememberThrottleClock(store)
     LaunchedEffect(Unit) {
         store.refreshSecurity()
         if (store.security.biometricEnabled && store.biometricNotice == null) store.unlockWithBiometric(activity)
     }
     val remaining = store.retryRemainingMs(now)
-    val unlock = {
+    val unlock: () -> Unit = {
         val attempt = passphrase
         passphrase = ""
-        scope.launch {
-            try {
-                store.unlock(attempt)
-                failure = null
-            } catch (ignored: CancellationException) {
-            } catch (error: Exception) {
-                // A throttled attempt is shown by the countdown below, which ends on its own.
-                failure = if (error is CoreException.Throttled) null else describe(error)
-                store.showError(error)
-            }
-        }
-        Unit
+        scope.launchUnlock(store, attempt) { failure = it }
     }
     Column(
-        Modifier.fillMaxSize().background(skin.bg).safeDrawingPadding()
+        Modifier
+            .fillMaxSize()
+            .background(skin.bg)
+            .safeDrawingPadding()
             .padding(start = BrambleSpace.lg, end = BrambleSpace.lg, bottom = BrambleSpace.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
     ) {
-        Box(
-            Modifier.padding(top = BrambleSpace.xl + BrambleSpace.xl).size(BrambleSize.brand).background(skin.accent, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painterResource(R.drawable.brand_mark),
-                contentDescription = null,
-                colorFilter = ColorFilter.tint(skin.accentText),
-                modifier = Modifier.size(BrambleLayout.unlockMark),
-            )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
-            Text("Welcome back", color = skin.text, style = textStyle(BrambleTypeScale.headline, BrambleWeight.heavy, HEADLINE_TRACKING))
-            Text("Unlock your wallet to continue.", color = skin.muted, style = textStyle(BrambleTypeScale.body), textAlign = TextAlign.Center)
-        }
+        UnlockHeader()
         BrambleField(
             label = null,
             placeholder = "Enter your passphrase",
@@ -129,12 +103,105 @@ fun UnlockScreen(store: WalletStore) {
         StatusLine(store.biometricNotice, StatusTone.DANGER)
         StatusLine(if (remaining > 0) throttledText(remaining) else failure, StatusTone.DANGER)
         FlexSpacer()
-        if (store.security.biometricEnabled) {
-            PillButton(securityCopy(BrambleCopy.unlockWithBiometry), kind = PillKind.SECONDARY, icon = BrambleIconName.LOCK_KEYHOLE) {
-                scope.launch { store.unlockWithBiometric(activity) }
-            }
-        }
+        if (store.security.biometricEnabled) BiometricUnlockButton(store, scope, activity)
         PillButton("Unlock", busy = store.busy, enabled = passphrase.isNotEmpty() && remaining == 0L, onClick = unlock)
+    }
+}
+
+/**
+ * The elapsed-realtime clock the throttle countdown reads: ticks every [COUNTDOWN_TICK_MS] while
+ * the core's retry time is in the future, and stops once it has passed.
+ */
+@Composable
+private fun rememberThrottleClock(store: WalletStore): Long {
+    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(store.retryAtElapsedMs) {
+        now = SystemClock.elapsedRealtime()
+        while (store.retryAtElapsedMs > now) {
+            delay(COUNTDOWN_TICK_MS)
+            now = SystemClock.elapsedRealtime()
+        }
+    }
+    return now
+}
+
+/** Brand disc, "Welcome back", and the one-line prompt above the passphrase field. */
+@Composable
+private fun UnlockHeader() {
+    val skin = LocalSkin.current
+    Box(
+        Modifier
+            .padding(
+                top = BrambleSpace.xl + BrambleSpace.xl,
+            ).size(BrambleSize.brand)
+            .background(skin.accent, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painterResource(R.drawable.brand_mark),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(skin.accentText),
+            modifier = Modifier.size(BrambleLayout.unlockMark),
+        )
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
+    ) {
+        Text(
+            "Welcome back",
+            color = skin.text,
+            style = textStyle(BrambleTypeScale.headline, BrambleWeight.heavy, HEADLINE_TRACKING),
+        )
+        Text(
+            "Unlock your wallet to continue.",
+            color = skin.muted,
+            style = textStyle(BrambleTypeScale.body),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** Offers the system biometric prompt again; the passphrase stays usable beside it. */
+@Composable
+private fun BiometricUnlockButton(
+    store: WalletStore,
+    scope: CoroutineScope,
+    activity: Context,
+) {
+    PillButton(
+        securityCopy(BrambleCopy.unlockWithBiometry),
+        kind = PillKind.SECONDARY,
+        icon = BrambleIconName.LOCK_KEYHOLE,
+    ) {
+        scope.launch { store.unlockWithBiometric(activity) }
+    }
+}
+
+/**
+ * Runs one passphrase attempt in [this] scope and reports the status-line text through
+ * [onFailure]: null on success or when throttled (the countdown shows that), the described error
+ * otherwise. A cancelled attempt reports nothing. Every failure also goes to [WalletStore.showError].
+ */
+private fun CoroutineScope.launchUnlock(
+    store: WalletStore,
+    attempt: String,
+    onFailure: (String?) -> Unit,
+) {
+    launch {
+        try {
+            store.unlock(attempt)
+            onFailure(null)
+        } catch (ignored: CancellationException) {
+            // The screen left composition mid-attempt: nothing to show.
+        } catch (throttled: CoreException.Throttled) {
+            // A throttled attempt is shown by the countdown below, which ends on its own.
+            onFailure(null)
+            store.showError(throttled)
+        } catch (error: Exception) {
+            onFailure(describe(error))
+            store.showError(error)
+        }
     }
 }
 

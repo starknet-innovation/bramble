@@ -27,8 +27,11 @@ struct SharedAccountsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
-                FlowHeader(title: "Shared accounts", subtitle: "\(records.count) account\(records.count == 1 ? "" : "s")",
-                           network: store.networkLabel) { dismiss() }
+                FlowHeader(
+                    title: "Shared accounts",
+                    subtitle: "\(records.count) account\(records.count == 1 ? "" : "s")",
+                    network: store.networkLabel
+                ) { dismiss() }
                 MenuGroup {
                     MenuRow(icon: .plus, title: "Add shared account") { open(.addShared) }
                     MenuRow(icon: .users, title: "Create a multisig") { open(.createMultisig(resume: nil)) }
@@ -40,7 +43,11 @@ struct SharedAccountsView: View {
                 } else {
                     SettingsSection(title: "Shared accounts") {
                         ForEach(records, id: \.id) { record in
-                            MenuRow(icon: .wallet, title: multisigDisplayName(record), value: multisigConfigLabel(record)) {
+                            MenuRow(
+                                icon: .wallet,
+                                title: multisigDisplayName(record),
+                                value: multisigConfigLabel(record)
+                            ) {
                                 open(.sharedAccount(id: record.id))
                             }
                         }
@@ -61,9 +68,21 @@ struct ReadyMultisigView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
-            FlowHeader(title: "Ready Multisig", subtitle: "Multiple signers approve together", network: store.networkLabel) { dismiss() }
-            OptionCard(icon: .users, title: "Create a multisig", detail: "Set participants, fund, and deploy.") { open(.createMultisig(resume: nil)) }
-            OptionCard(icon: .search, title: "Add a shared address", detail: "Sync it or resume setup.") { open(.addShared) }
+            FlowHeader(
+                title: "Ready Multisig",
+                subtitle: "Multiple signers approve together",
+                network: store.networkLabel
+            ) { dismiss() }
+            OptionCard(
+                icon: .users,
+                title: "Create a multisig",
+                detail: "Set participants, fund, and deploy."
+            ) { open(.createMultisig(resume: nil)) }
+            OptionCard(
+                icon: .search,
+                title: "Add a shared address",
+                detail: "Sync it or resume setup."
+            ) { open(.addShared) }
             Spacer()
         }
         .padding(BrambleMetrics.Screen.shellPadding)
@@ -80,11 +99,23 @@ struct AddSharedAccountView: View {
     @State private var failed = false
     @State private var busy = false
 
+    private static let addressHint = "If deployed, signer authority syncs from Starknet. "
+        + "If not, the address is saved and deployment setup is verified before use."
+
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
-            FlowHeader(title: "Add shared account", subtitle: "Sync or resume a Ready multisig", network: store.networkLabel) { dismiss() }
-            BrambleField(label: "Multisig address", placeholder: "0x…", text: $address, mono: true,
-                         hint: "If deployed, signer authority syncs from Starknet. If not, the address is saved and deployment setup is verified before use.")
+            FlowHeader(
+                title: "Add shared account",
+                subtitle: "Sync or resume a Ready multisig",
+                network: store.networkLabel
+            ) { dismiss() }
+            BrambleField(
+                label: "Multisig address",
+                placeholder: "0x…",
+                text: $address,
+                mono: true,
+                hint: Self.addressHint
+            )
             PillButton("Add shared account", busy: busy) { add() }
                 .disabled(address.trimmingCharacters(in: .whitespaces).isEmpty)
             StatusLine(text: result, tone: .danger)

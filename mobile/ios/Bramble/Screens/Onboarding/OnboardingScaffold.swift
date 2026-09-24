@@ -16,6 +16,9 @@ struct OnboardingBackdrop: View {
         .url(forResource: "onboarding-landscape", withExtension: "webp")
         .flatMap { UIImage(contentsOfFile: $0.path) }
 
+    /// The text colour's 45% share of the midnight skin's landscape mix.
+    private static let darkTextShare = 0.45
+
     var body: some View {
         // The image fills whatever space the layout offers but never proposes a size of its own,
         // so a wide painting cannot widen the card laid over it.
@@ -27,7 +30,12 @@ struct OnboardingBackdrop: View {
             if scheme == .dark {
                 // `color-mix(in srgb, var(--bramble-bg) 55%, var(--bramble-text))`, multiplied.
                 // Text at 45% over opaque bg is exactly that mix; it is composited, then multiplied.
-                ZStack { skin.bg; skin.text.opacity(0.45) }.compositingGroup().blendMode(.multiply)
+                ZStack {
+                    skin.bg
+                    skin.text.opacity(Self.darkTextShare)
+                }
+                .compositingGroup()
+                .blendMode(.multiply)
             }
         }
         .clipped()
@@ -46,11 +54,20 @@ struct OnboardingCard<Content: View>: View {
         let radius = device.phone ? 0 : BrambleRadius.xl
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content()
-            .frame(maxWidth: device.phone ? .infinity : 520, maxHeight: .infinity)
+            .frame(maxWidth: device.phone ? .infinity : OnboardingCardLayout.maxWidth, maxHeight: .infinity)
             .background { shape.fill(skin.panel).ignoresSafeArea(edges: device.phone ? .all : []) }
             .elevation(device.phone ? BrambleElevation.onboardingWizardPhone : BrambleElevation.onboardingWizard)
-            .padding(device.phone ? EdgeInsets() : EdgeInsets(top: BrambleSpace.lg, leading: BrambleSpace.xl, bottom: BrambleSpace.lg, trailing: BrambleSpace.xl))
+            .padding(device.phone ? EdgeInsets() : Self.cardMargin)
     }
+
+    private static var cardMargin: EdgeInsets {
+        EdgeInsets(top: BrambleSpace.lg, leading: BrambleSpace.xl, bottom: BrambleSpace.lg, trailing: BrambleSpace.xl)
+    }
+}
+
+private enum OnboardingCardLayout {
+    /// `.onboarding-wizard { max-width: 520px }` outside the phone rule.
+    static let maxWidth: CGFloat = 520
 }
 
 /// The step paddings for the current scene: base, `max-width: 520px`, `max-height: 760px`.
@@ -62,13 +79,13 @@ struct OnboardingInsets {
     let headBottom: CGFloat
 
     init(_ device: DeviceClass) {
-        let m = BrambleMetrics.Onboarding.self
-        top = device.short ? m.paddingTopShort : m.paddingTop
-        bottom = device.short ? m.paddingBottomShort : m.paddingBottom
+        let metrics = BrambleMetrics.Onboarding.self
+        top = device.short ? metrics.paddingTopShort : metrics.paddingTop
+        bottom = device.short ? metrics.paddingBottomShort : metrics.paddingBottom
         // The base inline padding is `clamp(24px, 7vw, 42px)`; every phone takes the 16pt rule.
-        inline = device.phone ? m.paddingInlinePhone : BrambleSpace.xl
-        headTop = device.short ? m.headTopShort : m.headTop
-        headBottom = device.short ? m.headBottomShort : m.headBottom
+        inline = device.phone ? metrics.paddingInlinePhone : BrambleSpace.xl
+        headTop = device.short ? metrics.headTopShort : metrics.headTop
+        headBottom = device.short ? metrics.headBottomShort : metrics.headBottom
     }
 }
 
@@ -86,11 +103,11 @@ struct OnboardingStep<Body: View, CTA: View>: View {
     @ViewBuilder let cta: () -> CTA
 
     var body: some View {
-        let m = BrambleMetrics.Onboarding.self
+        let metrics = BrambleMetrics.Onboarding.self
         let insets = OnboardingInsets(device)
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: m.gap) {
+                VStack(spacing: metrics.gap) {
                     head(insets)
                     content()
                 }
@@ -101,34 +118,38 @@ struct OnboardingStep<Body: View, CTA: View>: View {
             .scrollBounceBehavior(.basedOnSize)
             // `.onboarding-step-cta` (`margin-top: auto`): pinned to the foot of the step, and so
             // above the keyboard while it is up.
-            VStack(spacing: m.ctaGap) { cta() }
+            VStack(spacing: metrics.ctaGap) { cta() }
                 .padding(.horizontal, insets.inline)
-                .padding(.top, m.ctaTop)
+                .padding(.top, metrics.ctaTop)
                 .padding(.bottom, insets.bottom)
         }
         .overlay(alignment: .topLeading) {
             if let back {
                 IconButton(icon: .chevronLeft, label: "Back", tint: skin.muted, action: back)
-                    .padding(.leading, m.backInset)
-                    .padding(.top, m.backInset)
+                    .padding(.leading, metrics.backInset)
+                    .padding(.top, metrics.backInset)
             }
         }
     }
 
     private func head(_ insets: OnboardingInsets) -> some View {
-        let m = BrambleMetrics.Onboarding.self
-        return VStack(spacing: m.headGap) {
-            Medallion(icon: icon).padding(.bottom, m.iconGap)
+        let metrics = BrambleMetrics.Onboarding.self
+        return VStack(spacing: metrics.headGap) {
+            Medallion(icon: icon).padding(.bottom, metrics.iconGap)
             Text(title)
-                .brambleText(BrambleTypeStyle(size: m.titleSize, lineHeight: m.titleLineHeight), weight: m.titleWeight, tracking: m.titleTracking)
+                .brambleText(
+                    BrambleTypeStyle(size: metrics.titleSize, lineHeight: metrics.titleLineHeight),
+                    weight: metrics.titleWeight,
+                    tracking: metrics.titleTracking
+                )
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
             Text(lede)
-                .brambleText(BrambleTypeStyle(size: BrambleTypeScale.body.size, lineHeight: m.ledeLineHeight))
+                .brambleText(BrambleTypeStyle(size: BrambleTypeScale.body.size, lineHeight: metrics.ledeLineHeight))
                 .foregroundStyle(skin.muted)
                 .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: m.headMaxWidth)
+        .frame(maxWidth: metrics.headMaxWidth)
         .frame(maxWidth: .infinity)
         .padding(.top, insets.headTop)
         .padding(.bottom, insets.headBottom)
@@ -145,7 +166,10 @@ struct CheckRow: View {
         Button { isOn.toggle() } label: {
             HStack(alignment: .top, spacing: BrambleSpace.sm) {
                 CheckBox(isOn: isOn).padding(.top, 1)
-                Text(text).brambleText(BrambleTypeScale.body).foregroundStyle(skin.text).multilineTextAlignment(.leading)
+                Text(text)
+                    .brambleText(BrambleTypeScale.body)
+                    .foregroundStyle(skin.text)
+                    .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
             }
             .hitTarget(height: BrambleTypeScale.body.size * BrambleTypeScale.body.lineHeight)

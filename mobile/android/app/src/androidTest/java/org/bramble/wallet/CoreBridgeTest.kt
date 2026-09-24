@@ -2,8 +2,6 @@ package org.bramble.wallet
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
-import java.util.UUID
 import org.bramble.core.AccountFamily
 import org.bramble.core.CoreException
 import org.bramble.core.NetworkId
@@ -19,6 +17,8 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
+import java.util.UUID
 
 /**
  * Exercises the Rust core through the generated Kotlin bindings on a device, as the iOS
@@ -80,7 +80,7 @@ class CoreBridgeTest {
     }
 
     @Test
-    fun wrongPassphrasesAreCountedAndThenThrottled() {
+    fun wrongPassphrasesAreThrottled() {
         val core = core()
         core.createWallet("a strong password", 12u)
         core.lock()
@@ -93,7 +93,7 @@ class CoreBridgeTest {
     }
 
     @Test
-    fun biometricSlotOpensOnlyWithItsWrapSecret() {
+    fun biometricSlotNeedsWrapSecret() {
         val core = core()
         core.createWallet("a strong password", 12u)
         val secret = ByteArray(32) { it.toByte() }
@@ -108,7 +108,7 @@ class CoreBridgeTest {
     }
 
     @Test
-    fun bundledNetworksComeFromTheExtensionCatalog() {
+    fun networksMatchExtensionCatalog() {
         val sepolia = supportedNetworks().first { it.network == NetworkId.SEPOLIA }
         assertEquals("0x534e5f5345504f4c4941", sepolia.chainId)
         assertTrue(sepolia.tokens.any { it.symbol == "STRK" })

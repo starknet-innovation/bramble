@@ -12,16 +12,26 @@ struct StepProgress: View {
     let steps: [String]
     let active: Int
 
+    /// Diameter of a numbered step disc.
+    private static let discSize: CGFloat = 22
+    /// The connector runs through the disc centres: half a disc down from the top.
+    private static let connectorY: CGFloat = 11
+    private static let connectorThickness: CGFloat = 1
+    /// Each step takes an equal column, so the first centre sits half a column in.
+    private static let halfColumn: CGFloat = 2
+
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             ForEach(Array(steps.enumerated()), id: \.offset) { index, label in
-                VStack(spacing: 4) {
+                VStack(spacing: BrambleSpace.xs) {
                     Text("\(index + 1)")
                         .brambleText(BrambleTypeScale.micro, weight: BrambleWeight.semibold)
-                        .foregroundStyle(index == active ? skin.accentText : index < active ? skin.positive : skin.muted)
-                        .frame(width: 22, height: 22)
-                        .background(index == active ? skin.accent : index < active ? skin.positiveSoft : skin.elevated, in: Circle())
-                    Text(label).brambleText(BrambleTypeScale.micro).foregroundStyle(index == active ? skin.text : skin.muted)
+                        .foregroundStyle(discInk(index))
+                        .frame(width: Self.discSize, height: Self.discSize)
+                        .background(discFill(index), in: Circle())
+                    Text(label)
+                        .brambleText(BrambleTypeScale.micro)
+                        .foregroundStyle(index == active ? skin.text : skin.muted)
                 }
                 .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .combine)
@@ -32,13 +42,22 @@ struct StepProgress: View {
             // The connector runs between the first and last step centres, behind the discs.
             GeometryReader { geometry in
                 let count = CGFloat(max(steps.count, 1))
-                Rectangle().fill(skin.hairline)
-                    .frame(width: geometry.size.width * (count - 1) / count, height: 1)
-                    .offset(x: geometry.size.width / (2 * count), y: 11)
+                Rectangle()
+                    .fill(skin.hairline)
+                    .frame(width: geometry.size.width * (count - 1) / count, height: Self.connectorThickness)
+                    .offset(x: geometry.size.width / (Self.halfColumn * count), y: Self.connectorY)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Multisig creation progress")
+    }
+
+    private func discInk(_ index: Int) -> Color {
+        index == active ? skin.accentText : index < active ? skin.positive : skin.muted
+    }
+
+    private func discFill(_ index: Int) -> Color {
+        index == active ? skin.accent : index < active ? skin.positiveSoft : skin.elevated
     }
 }
 
@@ -60,11 +79,16 @@ struct KeyValueRow: View {
                 .foregroundStyle(skin.text)
             Spacer(minLength: row.gap)
             if let value {
-                Text(shortAddress(value)).brambleText(BrambleTypeScale.caption, mono: true).foregroundStyle(skin.muted)
+                Text(shortAddress(value))
+                    .brambleText(BrambleTypeScale.caption, mono: true)
+                    .foregroundStyle(skin.muted)
                     .accessibilityLabel(shortAddress(value))
                 CopyButton(value: value, label: copyLabel)
             } else if let status {
-                Text(status).brambleText(BrambleTypeScale.caption.sized(row.valueSize)).foregroundStyle(skin.muted).multilineTextAlignment(.trailing)
+                Text(status)
+                    .brambleText(BrambleTypeScale.caption.sized(row.valueSize))
+                    .foregroundStyle(skin.muted)
+                    .multilineTextAlignment(.trailing)
             }
         }
         .frame(minHeight: BrambleControl.hit)
@@ -81,11 +105,18 @@ struct BrambleTextArea: View {
     var hint: String?
     var invalid = false
 
+    /// Gap between the label, the field, and the hint.
+    private static let stackSpacing: CGFloat = 6
+    /// A pasted wallet card shows at least three lines and grows to six before scrolling.
+    private static let visibleLines = 3...6
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label).brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold).foregroundStyle(skin.muted)
+        VStack(alignment: .leading, spacing: Self.stackSpacing) {
+            Text(label)
+                .brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold)
+                .foregroundStyle(skin.muted)
             TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(skin.muted), axis: .vertical)
-                .lineLimit(3...6)
+                .lineLimit(Self.visibleLines)
                 .accessibilityLabel(label)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()

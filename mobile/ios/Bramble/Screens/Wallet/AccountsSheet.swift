@@ -9,13 +9,18 @@ import SwiftUI
 /// bottom sheet with medium/large detents (an intentional platform difference); its row metrics
 /// are the drawer's (`BrambleMetrics.Drawer`).
 struct AccountsSheet: View {
+    private enum Layout {
+        /// Vertical gap between stacked lines in the header and in an account row.
+        static let lineSpacing: CGFloat = 2
+    }
+
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let openManage: () -> Void
     /// Pushes the Ready Multisig gateway (`multisig-add`) onto the wallet's stack.
-    var openMultisig: () -> Void = {}
+    var openMultisig: () -> Void = { /* No action: the gateway is optional for callers without a stack. */ }
     @State private var groupFilter: String?
     @State private var openAssignId: String?
     @State private var choosing = false
@@ -38,7 +43,13 @@ struct AccountsSheet: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(BrambleRadius.xl)
         .presentationBackground(skin.panel)
-        .animation(BrambleMotionPolicy.animation(BrambleEase.out.animation(ms: BrambleMotion.drawerMs), reduceMotion: reduceMotion), value: choosing)
+        .animation(
+            BrambleMotionPolicy.animation(
+                BrambleEase.out.animation(ms: BrambleMotion.drawerMs),
+                reduceMotion: reduceMotion
+            ),
+            value: choosing
+        )
     }
 
     private var activeGroup: AccountGroup? {
@@ -53,9 +64,13 @@ struct AccountsSheet: View {
     private var drawer: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Drawer.gap) {
             HStack(alignment: .center, spacing: BrambleSpace.sm) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Layout.lineSpacing) {
                     Text("Accounts")
-                        .brambleText(BrambleTypeScale.title.sized(BrambleMetrics.H2.size), weight: BrambleMetrics.H2.weight, tracking: BrambleMetrics.H2.tracking)
+                        .brambleText(
+                            BrambleTypeScale.title.sized(BrambleMetrics.H2.size),
+                            weight: BrambleMetrics.H2.weight,
+                            tracking: BrambleMetrics.H2.tracking
+                        )
                         .accessibilityAddTraits(.isHeader)
                     Text(store.networkInfo.name).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
                 }
@@ -65,9 +80,11 @@ struct AccountsSheet: View {
             if !store.groups.isEmpty { chips }
             ScrollView {
                 if visible.isEmpty {
-                    StatusLine(text: activeGroup == nil
-                               ? "No accounts on this network yet. Add one below."
-                               : "No accounts in this group yet. Open an account's folder button to add it.")
+                    StatusLine(
+                        text: activeGroup == nil
+                            ? "No accounts on this network yet. Add one below."
+                            : "No accounts in this group yet. Open an account's folder button to add it."
+                    )
                 } else {
                     VStack(spacing: BrambleSpace.xs) {
                         ForEach(visible, id: \.id) { record in row(record) }
@@ -100,17 +117,25 @@ struct AccountsSheet: View {
     /// `.group-chip`: the pill silhouette, raised to the hit height; the pressed one on accent-soft.
     private func chip(_ id: String?, _ label: String, _ icon: BrambleIconName) -> some View {
         let selected = groupFilter == id
-        let m = BrambleMetrics.Pill.self
+        let pill = BrambleMetrics.Pill.self
         return Button { groupFilter = id } label: {
-            HStack(spacing: m.gap) {
+            HStack(spacing: pill.gap) {
                 BrambleIcon(icon, size: BrambleMetrics.HardwarePill.glyph)
-                Text(label).brambleText(BrambleTypeScale.caption.sized(m.fontSize), weight: m.weight).lineLimit(1)
+                Text(label).brambleText(BrambleTypeScale.caption.sized(pill.fontSize), weight: pill.weight).lineLimit(1)
             }
             .foregroundStyle(selected ? skin.accent : skin.text)
-            .padding(m.padding)
-            .frame(minHeight: m.height)
+            .padding(pill.padding)
+            .frame(minHeight: pill.height)
         }
-        .buttonStyle(FillPressStyle(fill: selected ? skin.accentSoft : skin.elevated, pressed: skin.softPress, shape: Capsule(), scale: BramblePress.iconButton, hit: CGSize(width: BrambleHit.minimum, height: m.height)))
+        .buttonStyle(
+            FillPressStyle(
+                fill: selected ? skin.accentSoft : skin.elevated,
+                pressed: skin.softPress,
+                shape: Capsule(),
+                scale: BramblePress.iconButton,
+                hit: CGSize(width: BrambleHit.minimum, height: pill.height)
+            )
+        )
         .accessibilityLabel(label)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
@@ -119,36 +144,14 @@ struct AccountsSheet: View {
         let selected = record.id == store.activeRecord?.id
         let folder = store.groups.first { $0.id == record.groupId }
         let pickerLabel = folder.map { "Folder: \($0.name)" } ?? "No folder — choose one"
-        let m = BrambleMetrics.Drawer.self
         return VStack(spacing: BrambleSpace.xs) {
             HStack(spacing: BrambleSpace.xs) {
-                Button {
-                    Task { await store.select(id: record.id) }
-                    dismiss()
-                } label: {
-                    HStack(spacing: m.rowGap) {
-                        AccountAvatarView(address: record.address)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(record.displayName).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold).lineLimit(1)
-                            Text(record.shortAddress)
-                                .brambleText(BrambleTypeScale.mono, weight: BrambleWeight.semibold, mono: true)
-                                .foregroundStyle(skin.muted)
-                        }
-                        Spacer(minLength: 0)
-                        if selected { BrambleIcon(.check).foregroundStyle(skin.accent) }
-                    }
-                    .padding(m.rowPadding)
-                    .frame(minHeight: m.rowHeight)
-                }
-                .buttonStyle(FillPressStyle(fill: selected ? skin.accentSoft : .clear, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: m.rowRadius, style: .continuous), scale: BramblePress.drawerRow))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(record.displayName), \(record.shortAddress)")
-                .accessibilityValue(record.address)
-                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-                .accessibilityHint(selected ? "" : "Switches to this account")
-                IconButton(icon: folder.map { groupIcon($0.icon) } ?? .folder,
-                           label: "\(pickerLabel) for \(record.displayName)",
-                           tint: folder == nil ? skin.muted : skin.text) {
+                switchButton(record, selected: selected)
+                IconButton(
+                    icon: folder.map { groupIcon($0.icon) } ?? .folder,
+                    label: "\(pickerLabel) for \(record.displayName)",
+                    tint: folder == nil ? skin.muted : skin.text
+                ) {
                     openAssignId = openAssignId == record.id ? nil : record.id
                 }
             }
@@ -156,6 +159,44 @@ struct AccountsSheet: View {
                 FolderPicker(record: record, current: folder?.id) { openAssignId = nil }
             }
         }
+    }
+
+    /// The row's main control: switches to the account and closes the drawer.
+    private func switchButton(_ record: AccountRecord, selected: Bool) -> some View {
+        let drawerMetrics = BrambleMetrics.Drawer.self
+        return Button {
+            Task { await store.select(id: record.id) }
+            dismiss()
+        } label: {
+            HStack(spacing: drawerMetrics.rowGap) {
+                AccountAvatarView(address: record.address)
+                VStack(alignment: .leading, spacing: Layout.lineSpacing) {
+                    Text(record.displayName)
+                        .brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
+                        .lineLimit(1)
+                    Text(record.shortAddress)
+                        .brambleText(BrambleTypeScale.mono, weight: BrambleWeight.semibold, mono: true)
+                        .foregroundStyle(skin.muted)
+                }
+                Spacer(minLength: 0)
+                if selected { BrambleIcon(.check).foregroundStyle(skin.accent) }
+            }
+            .padding(drawerMetrics.rowPadding)
+            .frame(minHeight: drawerMetrics.rowHeight)
+        }
+        .buttonStyle(
+            FillPressStyle(
+                fill: selected ? skin.accentSoft : .clear,
+                pressed: skin.softPress,
+                shape: RoundedRectangle(cornerRadius: drawerMetrics.rowRadius, style: .continuous),
+                scale: BramblePress.drawerRow
+            )
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(record.displayName), \(record.shortAddress)")
+        .accessibilityValue(record.address)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint(selected ? "" : "Switches to this account")
     }
 }
 
@@ -171,7 +212,8 @@ struct FolderPicker: View {
         VStack(spacing: 0) {
             if store.groups.isEmpty {
                 Text("No groups yet. Create one in Manage accounts & groups.")
-                    .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                    .brambleText(BrambleTypeScale.caption)
+                    .foregroundStyle(skin.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(BrambleSpace.md)
             }
@@ -180,7 +222,10 @@ struct FolderPicker: View {
             }
             if !store.groups.isEmpty { option(nil, "None", .folder) }
         }
-        .background(skin.elevated, in: RoundedRectangle(cornerRadius: BrambleMetrics.MenuRow.radius, style: .continuous))
+        .background(
+            skin.elevated,
+            in: RoundedRectangle(cornerRadius: BrambleMetrics.MenuRow.radius, style: .continuous)
+        )
         .clipShape(RoundedRectangle(cornerRadius: BrambleMetrics.MenuRow.radius, style: .continuous))
         .accessibilityLabel("Choose a folder")
     }
@@ -193,17 +238,24 @@ struct FolderPicker: View {
                 done()
             }
         } label: {
-            let m = BrambleMetrics.MenuRow.self
-            HStack(spacing: m.gap) {
-                BrambleIcon(icon, size: m.glyph).foregroundStyle(skin.muted)
-                Text(name).brambleText(BrambleTypeScale.body.sized(m.titleSize), weight: m.titleWeight)
+            let menuRow = BrambleMetrics.MenuRow.self
+            HStack(spacing: menuRow.gap) {
+                BrambleIcon(icon, size: menuRow.glyph).foregroundStyle(skin.muted)
+                Text(name).brambleText(BrambleTypeScale.body.sized(menuRow.titleSize), weight: menuRow.titleWeight)
                 Spacer(minLength: 0)
                 if selected { BrambleIcon(.check).foregroundStyle(skin.accent) }
             }
-            .padding(m.padding)
-            .frame(minHeight: m.height)
+            .padding(menuRow.padding)
+            .frame(minHeight: menuRow.height)
         }
-        .buttonStyle(FillPressStyle(fill: selected ? skin.accentSoft : .clear, pressed: skin.softPress, shape: Rectangle(), scale: 1))
+        .buttonStyle(
+            FillPressStyle(
+                fill: selected ? skin.accentSoft : .clear,
+                pressed: skin.softPress,
+                shape: Rectangle(),
+                scale: 1
+            )
+        )
         .accessibilityLabel(name)
         .accessibilityIdentifier("folder-option-\(id ?? "none")")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
@@ -225,13 +277,21 @@ struct AddAccountChooser: View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Drawer.gap) {
             HStack(spacing: BrambleSpace.sm) {
                 Text("Add a new account")
-                    .brambleText(BrambleTypeScale.title.sized(BrambleMetrics.H2.size), weight: BrambleMetrics.H2.weight, tracking: BrambleMetrics.H2.tracking)
+                    .brambleText(
+                        BrambleTypeScale.title.sized(BrambleMetrics.H2.size),
+                        weight: BrambleMetrics.H2.weight,
+                        tracking: BrambleMetrics.H2.tracking
+                    )
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 IconButton(icon: .x, label: "Close Add account", tint: skin.text, action: close)
             }
             VStack(spacing: BrambleMetrics.Onboarding.fieldsGap) {
-                OptionCard(icon: .wallet, title: "Regular account", detail: "Create the next account from this wallet’s recovery phrase.") {
+                OptionCard(
+                    icon: .wallet,
+                    title: "Regular account",
+                    detail: "Create the next account from this wallet’s recovery phrase."
+                ) {
                     guard !busy else { return }
                     busy = true
                     Task {
@@ -242,8 +302,15 @@ struct AddAccountChooser: View {
                         busy = false
                     }
                 }
-                OptionCard(icon: .users, title: "Multisig account", detail: "Create a Ready Multisig or add a shared address.", action: multisig)
-                OptionCard(icon: .link, title: "Import an existing account", detail: "Coming to Bramble mobile.") {}
+                OptionCard(
+                    icon: .users,
+                    title: "Multisig account",
+                    detail: "Create a Ready Multisig or add a shared address.",
+                    action: multisig
+                )
+                OptionCard(icon: .link, title: "Import an existing account", detail: "Coming to Bramble mobile.") {
+                    // No action: importing is not offered yet, and the card is disabled.
+                }
                     .disabled(true)
             }
             Spacer(minLength: 0)

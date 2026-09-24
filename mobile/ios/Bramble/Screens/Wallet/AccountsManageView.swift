@@ -5,6 +5,13 @@ import SwiftUI
 /// address copy), add one, organise groups, then name the active account and inspect its
 /// identifiers as a receipt with copy controls, top to bottom: pick → organise → inspect.
 struct AccountsManageView: View {
+    private enum Layout {
+        /// Vertical gap between the name and address lines of an account row.
+        static let rowLineSpacing: CGFloat = 2
+        /// Longest account name, in UTF-16 units, the field keeps.
+        static let maxLabelLength = 64
+    }
+
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
@@ -61,12 +68,14 @@ struct AccountsManageView: View {
             Button { Task { await store.select(id: record.id) } } label: {
                 HStack(spacing: drawer.rowGap) {
                     AccountAvatarView(address: record.address)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Layout.rowLineSpacing) {
                         HStack(spacing: BrambleMetrics.Pill.gap) {
                             Text(record.displayName)
-                                .brambleText(BrambleTypeScale.body.sized(row.titleSize), weight: row.titleWeight).lineLimit(1)
+                                .brambleText(BrambleTypeScale.body.sized(row.titleSize), weight: row.titleWeight)
+                                .lineLimit(1)
                             if let group {
-                                BrambleIcon(groupIcon(group.icon), size: BrambleMetrics.HardwarePill.glyph).foregroundStyle(skin.muted)
+                                BrambleIcon(groupIcon(group.icon), size: BrambleMetrics.HardwarePill.glyph)
+                                    .foregroundStyle(skin.muted)
                                     .accessibilityLabel("Groups: \(group.name)")
                             }
                         }
@@ -80,7 +89,14 @@ struct AccountsManageView: View {
                 .padding(row.padding)
                 .frame(minHeight: drawer.rowHeight)
             }
-            .buttonStyle(FillPressStyle(fill: selected ? skin.accentSoft : .clear, pressed: skin.softPress, shape: Rectangle(), scale: 1))
+            .buttonStyle(
+                FillPressStyle(
+                    fill: selected ? skin.accentSoft : .clear,
+                    pressed: skin.softPress,
+                    shape: Rectangle(),
+                    scale: 1
+                )
+            )
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(record.displayName), \(record.shortAddress)")
             .accessibilityValue(record.address)
@@ -93,11 +109,15 @@ struct AccountsManageView: View {
     private func activeSection(_ active: AccountRecord) -> some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Section.gap) {
             Eyebrow(text: "Active account")
-            BrambleField(label: "Name", placeholder: active.shortAddress, text: $label,
-                         hint: "Shown instead of the address. Leave empty to clear.")
-                .onChange(of: label) { _, next in
-                    if next.utf16.count > 64 { label = String(next.prefix(64)) }
-                }
+            BrambleField(
+                label: "Name",
+                placeholder: active.shortAddress,
+                text: $label,
+                hint: "Shown instead of the address. Leave empty to clear."
+            )
+            .onChange(of: label) { _, next in
+                if next.utf16.count > Layout.maxLabelLength { label = String(next.prefix(Layout.maxLabelLength)) }
+            }
             PillButton("Save name", kind: .secondary, icon: .check) {
                 Task {
                     await store.saveLabel(label, for: active.id)
@@ -106,9 +126,24 @@ struct AccountsManageView: View {
             }
             StatusLine(text: labelResult, tone: .danger)
             MenuGroup {
-                ReceiptRow(label: "Address", value: active.shortAddress, copy: active.address, copyLabel: "Copy address")
-                ReceiptRow(label: "Signer public key", value: accountLabel(address: active.publicKey), copy: active.publicKey, copyLabel: "Copy signer public key")
-                ReceiptRow(label: "Class hash", value: accountLabel(address: active.classHash), copy: active.classHash, copyLabel: "Copy class hash")
+                ReceiptRow(
+                    label: "Address",
+                    value: active.shortAddress,
+                    copy: active.address,
+                    copyLabel: "Copy address"
+                )
+                ReceiptRow(
+                    label: "Signer public key",
+                    value: accountLabel(address: active.publicKey),
+                    copy: active.publicKey,
+                    copyLabel: "Copy signer public key"
+                )
+                ReceiptRow(
+                    label: "Class hash",
+                    value: accountLabel(address: active.classHash),
+                    copy: active.classHash,
+                    copyLabel: "Copy class hash"
+                )
                 if let type = active.typeLabel {
                     ReceiptRow(label: "Type", value: type)
                 }
@@ -120,6 +155,8 @@ struct AccountsManageView: View {
 /// One `receipt()` line: a muted label, the (truncated) value, and an optional copy action that
 /// always copies the full value.
 struct ReceiptRow: View {
+    /// Vertical gap between the label and value lines.
+    private static let lineSpacing: CGFloat = 2
     @Environment(\.skin) private var skin
     let label: String
     let value: String
@@ -129,10 +166,16 @@ struct ReceiptRow: View {
     var body: some View {
         let row = BrambleMetrics.MenuRow.self
         HStack(spacing: row.gap) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label).brambleText(BrambleTypeScale.caption.sized(row.valueSize), weight: BrambleWeight.semibold).foregroundStyle(skin.muted)
+            VStack(alignment: .leading, spacing: Self.lineSpacing) {
+                Text(label)
+                    .brambleText(BrambleTypeScale.caption.sized(row.valueSize), weight: BrambleWeight.semibold)
+                    .foregroundStyle(skin.muted)
                 Text(value)
-                    .brambleText(copy != nil ? BrambleTypeScale.mono : BrambleTypeScale.body.sized(row.titleSize), weight: BrambleWeight.medium, mono: copy != nil)
+                    .brambleText(
+                        copy != nil ? BrambleTypeScale.mono : BrambleTypeScale.body.sized(row.titleSize),
+                        weight: BrambleWeight.medium,
+                        mono: copy != nil
+                    )
             }
             Spacer(minLength: 0)
             if let copy, let copyLabel {

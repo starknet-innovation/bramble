@@ -23,7 +23,6 @@ import org.bramble.core.coreInfo
 import org.bramble.core.supportedNetworks
 import org.bramble.wallet.NetworkPreference
 import org.bramble.wallet.WalletStore
-import org.bramble.wallet.securityCopy
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.BrambleIcon
 import org.bramble.wallet.design.BrambleIconName
@@ -42,10 +41,14 @@ import org.bramble.wallet.design.SegmentedControl
 import org.bramble.wallet.design.ThemeChoice
 import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.securityCopy
 
 /** Settings hub (`settings-ui.ts`), port of the iOS `SettingsHubView`: eyebrow-labelled groups. */
 @Composable
-fun SettingsHubScreen(store: WalletStore, open: (Flow) -> Unit) {
+fun SettingsHubScreen(
+    store: WalletStore,
+    open: (Flow) -> Unit,
+) {
     val skin = LocalSkin.current
     val info = remember { coreInfo() }
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
@@ -63,7 +66,7 @@ fun SettingsHubScreen(store: WalletStore, open: (Flow) -> Unit) {
             MenuRow(
                 BrambleIconName.SETTINGS,
                 "Appearance & currency",
-                value = "${if (store.theme == ThemeChoice.LIGHT) "Light" else "Dark"} · ${store.portfolio.currency.name.uppercase()}",
+                value = appearanceSummary(store),
             ) {
                 open(Flow.APPEARANCE)
             }
@@ -74,7 +77,11 @@ fun SettingsHubScreen(store: WalletStore, open: (Flow) -> Unit) {
         }
         Eyebrow("Security")
         MenuGroup {
-            MenuRow(BrambleIconName.SHIELD, BrambleCopy.securityTitle, value = securityValue(store)) { open(Flow.SECURITY) }
+            MenuRow(
+                BrambleIconName.SHIELD,
+                BrambleCopy.securityTitle,
+                value = securityValue(store),
+            ) { open(Flow.SECURITY) }
             MenuDivider()
             MenuRow(BrambleIconName.LOCK_KEYHOLE, "Lock wallet", chevron = false) { store.lock() }
             MenuDivider()
@@ -96,18 +103,25 @@ private fun securityValue(store: WalletStore): String =
 
 /** `network`: the supported networks as an option list, the active one selected. */
 @Composable
-fun NetworkScreen(store: WalletStore, back: () -> Unit) {
+fun NetworkScreen(
+    store: WalletStore,
+    back: () -> Unit,
+) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
     val networks = remember { supportedNetworks() }
-    Column(Modifier.fillMaxSize().padding(horizontal = BrambleSpace.lg), verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = BrambleSpace.lg),
+        verticalArrangement = Arrangement.spacedBy(BrambleSpace.md),
+    ) {
         FlowHeader("Network", subtitle = "Choose where the wallet operates", network = store.networkLabel, back = back)
         MenuGroup {
             networks.forEachIndexed { offset, network ->
                 if (offset > 0) MenuDivider()
                 val selected = network.network == store.network
                 Row(
-                    Modifier.fillMaxWidth()
+                    Modifier
+                        .fillMaxWidth()
                         .semantics(mergeDescendants = true) { this.selected = selected }
                         .fillPress(
                             if (selected) skin.accentSoft else Color.Transparent,
@@ -120,7 +134,11 @@ fun NetworkScreen(store: WalletStore, back: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
-                        Text(network.name, color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.medium))
+                        Text(
+                            network.name,
+                            color = skin.text,
+                            style = textStyle(BrambleTypeScale.row, BrambleWeight.medium),
+                        )
                         Text(
                             NetworkPreference.chainLabel(network.network),
                             color = skin.muted,
@@ -131,23 +149,47 @@ fun NetworkScreen(store: WalletStore, back: () -> Unit) {
                 }
             }
         }
-        Text("Switching selects or derives an account on the target network.", color = skin.muted, style = textStyle(BrambleTypeScale.label))
-        org.bramble.wallet.coordination.CoordinationRelaySettings(store)
+        Text(
+            "Switching selects or derives an account on the target network.",
+            color = skin.muted,
+            style = textStyle(BrambleTypeScale.label),
+        )
+        org.bramble.wallet.coordination
+            .CoordinationRelaySettings(store)
     }
 }
 
 /** `appearance`: the Dark / Light theme segmented control. Dark is the default. */
 @Composable
-fun AppearanceScreen(store: WalletStore, back: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(horizontal = BrambleSpace.lg), verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-        FlowHeader("Appearance & currency", subtitle = "How the wallet looks and values assets", network = store.networkLabel, back = back)
+fun AppearanceScreen(
+    store: WalletStore,
+    back: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = BrambleSpace.lg),
+        verticalArrangement = Arrangement.spacedBy(BrambleSpace.md),
+    ) {
+        FlowHeader(
+            "Appearance & currency",
+            subtitle = "How the wallet looks and values assets",
+            network = store.networkLabel,
+            back = back,
+        )
         Eyebrow("Theme")
-        SegmentedControl(listOf("Dark" to ThemeChoice.DARK, "Light" to ThemeChoice.LIGHT), store.theme, onSelect = store::setTheme)
+        SegmentedControl(
+            listOf("Dark" to ThemeChoice.DARK, "Light" to ThemeChoice.LIGHT),
+            store.theme,
+            onSelect = store::setTheme,
+        )
         // The extension's "Values" section of the same screen (`settings-views.ts`).
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         Eyebrow("Values")
         SegmentedControl(
-            listOf("USD" to org.bramble.core.DisplayCurrency.USD, "EUR" to org.bramble.core.DisplayCurrency.EUR, "GBP" to org.bramble.core.DisplayCurrency.GBP),
+            listOf(
+                "USD" to org.bramble.core.DisplayCurrency.USD,
+                "EUR" to org.bramble.core.DisplayCurrency.EUR,
+                "GBP" to org.bramble.core.DisplayCurrency.GBP,
+            ),
             store.portfolio.currency,
         ) { next -> scope.launch { store.portfolio.setCurrency(next) } }
         Text(
@@ -157,3 +199,7 @@ fun AppearanceScreen(store: WalletStore, back: () -> Unit) {
         )
     }
 }
+
+/** The hub row's value: the theme, then the display currency's code. */
+private fun appearanceSummary(store: WalletStore): String =
+    "${if (store.theme == ThemeChoice.LIGHT) "Light" else "Dark"} · ${store.portfolio.currency.name.uppercase()}"

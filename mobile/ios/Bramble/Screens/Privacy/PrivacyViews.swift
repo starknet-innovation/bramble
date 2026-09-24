@@ -1,6 +1,9 @@
 import BrambleCore
 import SwiftUI
 
+/// The lock glyph beside private-balance labels, smaller than the standard icon.
+private let privacyLockIconSize: CGFloat = 12
+
 /// The Home Shield tile (`wallet-shell.ts` `shieldTile`). Label and accessibility label are the
 /// extension's; the tap follows mobile/docs/privacy.md §2.1 (deploy and every write suppressed).
 struct ShieldActionTile: View {
@@ -24,7 +27,7 @@ struct ShieldedHeroLabel: View {
     var body: some View {
         if store.includesShieldedBalances {
             HStack(spacing: BrambleMetrics.Hero.gap) {
-                BrambleIcon(.lock, size: 12)
+                BrambleIcon(.lock, size: privacyLockIconSize)
                 Text(PrivacyCopy.heroShielded).brambleText(BrambleTypeScale.caption)
             }
             .foregroundStyle(skin.muted)
@@ -43,7 +46,7 @@ struct PrivacyRetryRow: View {
             Button { Task { await store.refreshPrivacy() } } label: {
                 HStack {
                     HStack(spacing: BrambleSpace.xs) {
-                        BrambleIcon(.lock, size: 12)
+                        BrambleIcon(.lock, size: privacyLockIconSize)
                         Text(PrivacyCopy.privateBalances)
                     }
                     Spacer()

@@ -2,6 +2,16 @@ import BrambleCore
 import Foundation
 import Observation
 
+/// Fixed numbers of the Send journey's arithmetic and formatting.
+private enum SendFlowNumbers {
+    /// Fraction digits the balance line shows.
+    static let balanceFractionDigits: UInt8 = 4
+    /// The base of the decimal strings `halve` works on.
+    static let decimalBase = 10
+    /// Half: the divisor `halve` applies.
+    static let halvingDivisor = 2
+}
+
 /// The Send journey's state machine on the UI side, mirroring the extension's `TransferStage`.
 /// All protocol decisions (validation, fees, hashing, signing, what is sent where) are the core's
 /// `TransferPlan`; this type only tracks which screen to show and what the user typed. Any edit
@@ -10,7 +20,8 @@ import Observation
 @Observable
 final class SendFlowModel {
     enum Stage: Equatable {
-        case recipient, asset, details, reviewing, review, authorizing, broadcasting, confirming, pending, submitted, failed
+        case recipient, asset, details, reviewing, review, authorizing, broadcasting, confirming, pending
+        case submitted, failed
     }
 
     private(set) var stage: Stage = .recipient
@@ -45,7 +56,15 @@ final class SendFlowModel {
     private let track: (TransferPlan) -> Void
     private var driver: SendDriver?
 
-    init(core: WalletCore, network: NetworkInfo, account: AccountRecord, otherAccounts: [AccountRecord], balances: [String: String], transport: RpcTransport, track: @escaping (TransferPlan) -> Void = { _ in }) {
+    init(
+        core: WalletCore,
+        network: NetworkInfo,
+        account: AccountRecord,
+        otherAccounts: [AccountRecord],
+        balances: [String: String],
+        transport: RpcTransport,
+        track: @escaping (TransferPlan) -> Void = { _ in /* Nothing tracks the plan. */ }
+    ) {
         self.core = core
         self.network = network
         self.account = account
@@ -58,16 +77,35 @@ final class SendFlowModel {
 
     var title: String {
         switch stage {
-        case .recipient: SendCopy.titleRecipient
-        case .asset: SendCopy.titleAsset
-        case .details, .reviewing: SendCopy.titleDetails
-        case .review: SendCopy.titleReview
-        case .authorizing: SendCopy.titleAuthorizing
-        case .broadcasting: SendCopy.titleBroadcasting
-        case .confirming: SendCopy.titleConfirming
-        case .pending: SendCopy.titlePending
-        case .submitted: SendCopy.titleSubmitted
-        case .failed: SendCopy.titleFailed
+        case .recipient:
+            SendCopy.titleRecipient
+
+        case .asset:
+            SendCopy.titleAsset
+
+        case .details, .reviewing:
+            SendCopy.titleDetails
+
+        case .review:
+            SendCopy.titleReview
+
+        case .authorizing:
+            SendCopy.titleAuthorizing
+
+        case .broadcasting:
+            SendCopy.titleBroadcasting
+
+        case .confirming:
+            SendCopy.titleConfirming
+
+        case .pending:
+            SendCopy.titlePending
+
+        case .submitted:
+            SendCopy.titleSubmitted
+
+        case .failed:
+            SendCopy.titleFailed
         }
     }
 
@@ -76,7 +114,12 @@ final class SendFlowModel {
 
     /// "Balance <amount> SYMBOL", or "Balance unavailable" while unread.
     var balanceLine: String {
-        guard let raw = rawBalance, let text = try? formatTokenAmount(raw: raw, decimals: token.decimals, maxFraction: 4) else {
+        guard let raw = rawBalance,
+              let text = try? formatTokenAmount(
+                raw: raw,
+                decimals: token.decimals,
+                maxFraction: SendFlowNumbers.balanceFractionDigits
+              ) else {
             return SendCopy.balanceUnavailable
         }
         return "\(SendCopy.balancePrefix)\(text) \(token.symbol)"
@@ -110,9 +153,14 @@ final class SendFlowModel {
 
     func back() {
         switch stage {
-        case .asset, .review, .failed: dropPlan(); stage = recipient == nil ? .recipient : .details
-        case .details: dropPlan(); stage = .recipient
-        default: break
+        case .asset, .review, .failed:
+            dropPlan(); stage = recipient == nil ? .recipient : .details
+
+        case .details:
+            dropPlan(); stage = .recipient
+
+        default:
+            break
         }
     }
 
@@ -122,7 +170,11 @@ final class SendFlowModel {
         guard let raw = rawBalance else { return }
         let selected = half ? Self.halve(raw) : raw
         guard selected.contains(where: { $0 != "0" }),
-              let text = try? formatTokenAmount(raw: selected, decimals: token.decimals, maxFraction: token.decimals) else { return }
+              let text = try? formatTokenAmount(
+                raw: selected,
+                decimals: token.decimals,
+                maxFraction: token.decimals
+              ) else { return }
         amount = text
     }
 
@@ -132,9 +184,9 @@ final class SendFlowModel {
         var digits = ""
         for character in decimal {
             guard let digit = character.wholeNumberValue else { return "0" }
-            let current = remainder * 10 + digit
-            digits.append(String(current / 2))
-            remainder = current % 2
+            let current = remainder * SendFlowNumbers.decimalBase + digit
+            digits.append(String(current / SendFlowNumbers.halvingDivisor))
+            remainder = current % SendFlowNumbers.halvingDivisor
         }
         let trimmed = digits.drop { $0 == "0" }
         return trimmed.isEmpty ? "0" : String(trimmed)
@@ -148,9 +200,14 @@ final class SendFlowModel {
             _ = try parseTokenAmount(amount: amount, decimals: token.decimals)
         } catch let SendError.InvalidAmount(reason) {
             amountError = switch reason {
-            case .notPositive: SendCopy.amountGate
-            case .tooManyDecimals: SendCopy.amountTooManyDecimals
-            case .invalid, .tooLarge: SendCopy.amountInvalid
+            case .notPositive:
+                SendCopy.amountGate
+
+            case .tooManyDecimals:
+                SendCopy.amountTooManyDecimals
+
+            case .invalid, .tooLarge:
+                SendCopy.amountInvalid
             }
             return
         } catch {
@@ -159,7 +216,14 @@ final class SendFlowModel {
         }
         guard let recipient else { stage = .recipient; return }
         dropPlan()
-        let request = TransferRequest(network: network.network, accountId: account.id, tokenAddress: token.address, recipient: recipient, amount: amount, feeBalance: balances["STRK"])
+        let request = TransferRequest(
+            network: network.network,
+            accountId: account.id,
+            tokenAddress: token.address,
+            recipient: recipient,
+            amount: amount,
+            feeBalance: balances["STRK"]
+        )
         let plan: TransferPlan
         do {
             plan = try core.prepareTransfer(request: request)
@@ -178,10 +242,10 @@ final class SendFlowModel {
             return
         }
         track(plan)
-        let driver = SendDriver(plan: plan, network: network, transport: transport)
-        self.driver = driver
+        let started = SendDriver(plan: plan, network: network, transport: transport)
+        driver = started
         stage = .reviewing
-        await settle { try await driver.run(from: .start) }
+        await settle { try await started.run(from: .start) }
     }
 
     func retryFee() async {
@@ -245,22 +309,29 @@ final class SendFlowModel {
     private func handle(_ step: SendStep) async throws {
         switch step {
         case .review:
-            guard let review = driver?.plan.currentReview() else { return fail(with: SendFailure(code: .nodeError, hash: nil)) }
-            self.review = review
-            reviewBlock = review.flags.contains(.addressPoisoning) ? SendCopy.poisonedBlock
-                : review.canConfirm ? nil : SendCopy.feeUnavailableBlock
+            guard let current = driver?.plan.currentReview() else {
+                fail(with: SendFailure(code: .nodeError, hash: nil))
+                return
+            }
+            review = current
+            reviewBlock = current.flags.contains(.addressPoisoning) ? SendCopy.poisonedBlock
+                : current.canConfirm ? nil : SendCopy.feeUnavailableBlock
             stage = .review
+
         case let .broadcast(hash):
             self.hash = hash
             explorerURL = explorerTransactionUrl(network: network.network, hash: hash).flatMap(URL.init(string:))
             stage = .confirming
             if let driver { try await handle(try await driver.run(from: .proceed)) }
+
         case let .finished(status, hash, explorerUrl):
             self.hash = hash
             explorerURL = explorerUrl.flatMap(URL.init(string:))
             finish(status)
+
         case let .failed(failure):
             fail(with: failure)
+
         case .rpc, .wait:
             break
         }
@@ -268,11 +339,24 @@ final class SendFlowModel {
 
     private func finish(_ status: TxStatus) {
         switch status {
-        case .accepted: stage = .submitted; toast = Toast(message: SendCopy.toastConfirmed, success: true)
-        case .preconfirmed: stage = .submitted; toast = Toast(message: SendCopy.toastPreconfirmed, success: true)
-        case .pending: stage = .pending
-        case .rejected: failureMessage = SendCopy.rejectedMessage; stage = .failed; toast = Toast(message: SendCopy.toastNotConfirmed, success: false)
-        case .reverted: failureMessage = SendCopy.revertedMessage; stage = .failed; toast = Toast(message: SendCopy.toastNotConfirmed, success: false)
+        case .accepted:
+            stage = .submitted; toast = Toast(message: SendCopy.toastConfirmed, success: true)
+
+        case .preconfirmed:
+            stage = .submitted; toast = Toast(message: SendCopy.toastPreconfirmed, success: true)
+
+        case .pending:
+            stage = .pending
+
+        case .rejected:
+            failureMessage = SendCopy.rejectedMessage
+            stage = .failed
+            toast = Toast(message: SendCopy.toastNotConfirmed, success: false)
+
+        case .reverted:
+            failureMessage = SendCopy.revertedMessage
+            stage = .failed
+            toast = Toast(message: SendCopy.toastNotConfirmed, success: false)
         }
     }
 

@@ -11,7 +11,7 @@ import org.junit.Test
  */
 class ErrorTextTest {
     @Test
-    fun mapsEveryCoreErrorToTheIosWording() {
+    fun mapsCoreErrorsToIosWording() {
         assertEquals("Incorrect passphrase", describe(CoreException.WrongPassword()))
         assertEquals("Invalid recovery phrase", describe(CoreException.InvalidInput("invalid recovery phrase")))
         assertEquals("A wallet already exists on this device", describe(CoreException.WalletExists()))
@@ -26,14 +26,14 @@ class ErrorTextTest {
     }
 
     @Test
-    fun throttlingCountsDownInMinutesAndSeconds() {
+    fun throttleShowsMinutesAndSeconds() {
         assertEquals("Too many attempts. Try again in 0:30.", describe(CoreException.Throttled(30_000uL)))
         assertEquals("Too many attempts. Try again in 1:59.", throttledText(118_001))
         assertEquals("Too many attempts. Try again in 1:00:00.", throttledText(3_600_000))
     }
 
     @Test
-    fun securityCopyNamesTheFingerprintAndTheIdleWindow() {
+    fun namesFingerprintAndIdleWindow() {
         assertEquals(
             "Fingerprint changed on this device. Enter your passphrase, then turn it on again in Security.",
             describe(CoreException.BiometricInvalidated()),

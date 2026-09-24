@@ -11,7 +11,10 @@ protocol RelayTransport: Sendable {
 private struct RelayTimeout: Error {}
 
 /// Runs `body`, failing with `RelayTimeout` once `milliseconds` pass.
-private func withTimeout<T: Sendable>(_ milliseconds: UInt32, _ body: @escaping @Sendable () async throws -> T) async throws -> T {
+private func withTimeout<T: Sendable>(
+    _ milliseconds: UInt32,
+    _ body: @escaping @Sendable () async throws -> T
+) async throws -> T {
     try await withThrowingTaskGroup(of: T.self) { group in
         group.addTask { try await body() }
         group.addTask {
@@ -81,7 +84,7 @@ struct WebSocketRelayTransport: RelayTransport {
 struct StubRelayTransport: RelayTransport {
     let events: [String]
 
-    func sync(_ plan: NostrSyncPlan, policy: RelayPolicy) async {
+    func sync(_ plan: NostrSyncPlan, policy _: RelayPolicy) {
         for index in plan.relayUrls().indices where index > 0 { plan.relayEnded(relay: UInt32(index)) }
         guard !plan.relayUrls().isEmpty else { return }
         for event in events {

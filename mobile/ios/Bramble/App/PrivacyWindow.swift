@@ -15,7 +15,9 @@ final class PrivacyWindow {
             return
         }
         guard window == nil,
-              let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+              let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first else { return }
         let cover = UIWindow(windowScene: scene)
         cover.windowLevel = .alert + 1
         cover.rootViewController = UIHostingController(rootView: SkinProvider { PrivacyCover() })

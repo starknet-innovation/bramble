@@ -1,5 +1,5 @@
-import BrambleCore
 @testable import Bramble
+import BrambleCore
 import XCTest
 
 /// Nostr identity, wallet cards, relay URLs, the Argent multisig layout, and the sans-IO relay and
@@ -16,7 +16,7 @@ final class NostrMultisigBridgeTests: XCTestCase {
         let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
         try core.importWallet(password: "parity password", phrase: phrase, passphrase: nil)
         _ = try core.restoreRecoveredAccounts(network: .sepolia, selections: [
-            RecoverySelection(family: .openZeppelin, accountIndex: 0, classHash: nil),
+            RecoverySelection(family: .openZeppelin, accountIndex: 0, classHash: nil)
         ])
         return core
     }
@@ -36,28 +36,39 @@ final class NostrMultisigBridgeTests: XCTestCase {
     func testMultisigAddressesMatchTheExtension() throws {
         let argent = try XCTUnwrap(try fixture()["argent"] as? [String: Any])
         for vector in try XCTUnwrap(argent["configs"] as? [[String: Any]]) {
-            let config = ArgentMultisigConfig(threshold: try XCTUnwrap(vector["threshold"] as? UInt32),
-                                              signerPublicKeys: try XCTUnwrap(vector["signerPublicKeys"] as? [String]))
+            let config = ArgentMultisigConfig(
+                threshold: try XCTUnwrap(vector["threshold"] as? UInt32),
+                signerPublicKeys: try XCTUnwrap(vector["signerPublicKeys"] as? [String])
+            )
             let prediction = try argentMultisigPredict(config: config, salt: try XCTUnwrap(vector["salt"] as? String))
             XCTAssertEqual(prediction.address, vector["address"] as? String)
             XCTAssertEqual(prediction.constructorCalldata, vector["calldata"] as? [String])
         }
-        XCTAssertThrowsError(try argentMultisigNormalize(config: ArgentMultisigConfig(threshold: 2, signerPublicKeys: ["0x1"])))
+        let belowThreshold = ArgentMultisigConfig(threshold: 2, signerPublicKeys: ["0x1"])
+        XCTAssertThrowsError(try argentMultisigNormalize(config: belowThreshold))
     }
 
     func testWalletCardsRoundTripAndKnowTheirNetwork() throws {
-        let card = WalletContactCard(network: .sepolia, address: "0x123", publicKeyX: "0x456", nostrPublicKey: String(repeating: "11", count: 32))
+        let card = WalletContactCard(
+            network: .sepolia,
+            address: "0x123",
+            publicKeyX: "0x456",
+            nostrPublicKey: String(repeating: "11", count: 32)
+        )
         let encoded = try walletContactCardEncode(card: card)
         XCTAssertTrue(encoded.hasPrefix("mcw:contact:1:SN_SEPOLIA:"))
         guard case .valid(let parsed) = walletContactCardParse(text: encoded, network: .sepolia) else {
-            return XCTFail("a valid card parses")
+            XCTFail("a valid card parses")
+            return
         }
         XCTAssertEqual(parsed.address, "0x" + String(repeating: "0", count: 61) + "123")
         guard case .otherNetwork = walletContactCardParse(text: encoded, network: .mainnet) else {
-            return XCTFail("another network's card is named as such")
+            XCTFail("another network's card is named as such")
+            return
         }
         guard case .unrecognized = walletContactCardParse(text: "mcw:contact:2:x", network: .mainnet) else {
-            return XCTFail("garbage is unrecognised")
+            XCTFail("garbage is unrecognised")
+            return
         }
         XCTAssertEqual(shortAddress("0x0123456789abcdef"), "0x0123…cdef")
     }
@@ -75,14 +86,21 @@ final class NostrMultisigBridgeTests: XCTestCase {
         let core = try wallet(try XCTUnwrap((fixture["nostrKeys"] as? [[String: Any]])?.first?["mnemonic"] as? String))
         let account = try XCTUnwrap(try core.accountRecords(network: .sepolia).first)
         let config = ArgentMultisigConfig(threshold: 1, signerPublicKeys: [account.publicKey])
-        let record = try core.saveMultisigSetup(network: .sepolia, name: "Team", config: config, salt: "0x0", deployerAccountId: account.id)
+        let record = try core.saveMultisigSetup(
+            network: .sepolia,
+            name: "Team",
+            config: config,
+            salt: "0x0",
+            deployerAccountId: account.id
+        )
         let plan = try core.coordinationSyncBegin(multisigId: record.id, now: 1_750_000_000)
         XCTAssertEqual(plan.relayUrls(), try core.relayPolicy().relayUrls)
         XCTAssertTrue(plan.openFrame(relay: 0).hasPrefix(##"["REQ","mcw-1",{"#p":["##))
         let oversized = #"["NOTICE",""# + String(repeating: "x", count: 140_001) + #""]"#
         XCTAssertEqual(plan.acceptFrame(relay: 0, frame: oversized), .continue)
         guard case .finish(let close) = plan.acceptFrame(relay: 0, frame: #"["EOSE","mcw-1"]"#) else {
-            return XCTFail("EOSE finishes the relay")
+            XCTFail("EOSE finishes the relay")
+            return
         }
         XCTAssertEqual(close, #"["CLOSE","mcw-1"]"#)
         plan.relayEnded(relay: 1)
@@ -93,8 +111,8 @@ final class NostrMultisigBridgeTests: XCTestCase {
         let silent = try core.coordinationSyncBegin(multisigId: record.id, now: 1_750_000_100)
         silent.relayEnded(relay: 0)
         silent.relayEnded(relay: 1)
-        XCTAssertThrowsError(try core.coordinationSyncFinish(plan: silent)) {
-            guard case .Coordination = $0 as? CoreError else { return XCTFail("every relay failing is unavailable") }
+        XCTAssertThrowsError(try core.coordinationSyncFinish(plan: silent)) { error in
+            guard case .Coordination = error as? CoreError else { return XCTFail("every relay failing is unavailable") }
         }
     }
 
@@ -108,7 +126,7 @@ final class NostrMultisigBridgeTests: XCTestCase {
         let answers: [String] = [
             #""0x534e5f5345504f4c4941""#, #"{"block_hash":"0xabc","block_number":1}"#,
             #""0x07aeca3456816e3b833506d7cc5c1313d371fbdb0ae95ee70af72a4ddbf42594""#, #"["0x1"]"#,
-            #"["0x1",""# + guid + #""]"#,
+            #"["0x1",""# + guid + #""]"#
         ]
         for answer in answers {
             let request = try XCTUnwrap(read.nextRequest())

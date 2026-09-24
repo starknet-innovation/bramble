@@ -12,10 +12,18 @@ import XCTest
 /// (`CODE_SIGN_IDENTITY=-`): an unsigned app cannot use the data-protection Keychain.
 final class SecurityFlowTests: XCTestCase {
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+    /// The unlock screen's throttle countdown, while under a minute remains.
+    private let throttledCountdown = NSPredicate(format: "label BEGINSWITH 'Too many attempts. Try again in 0:'")
 
     override func setUpWithError() throws {
         continueAfterFailure = false
         try UITest.refuseRealPhrase()
+    }
+
+    override func tearDownWithError() throws {
+        // Restores the XCTest default that setUp changed; nothing else is shared between tests.
+        continueAfterFailure = true
+        try super.tearDownWithError()
     }
 
     // MARK: Simulator biometrics
@@ -51,7 +59,7 @@ final class SecurityFlowTests: XCTestCase {
         let fresh = app.buttons["Create a new wallet"]
         let locked = app.secureTextFields["Enter your passphrase"]
         let deadline = Date().addingTimeInterval(15)
-        while !fresh.exists && !locked.exists && Date() < deadline { usleep(250_000) }
+        while !fresh.exists, !locked.exists, Date() < deadline { usleep(250_000) }
         if fresh.exists { return app }
         XCTAssertTrue(locked.exists, "Bramble opened on neither first run nor unlock")
         // A leftover wallet may have Face ID on: dismiss its automatic prompt if one appears.
@@ -61,8 +69,10 @@ final class SecurityFlowTests: XCTestCase {
         UITest.type(UITest.passphrase, into: locked)
         waitUntilEnabled(unlock, timeout: 90)
         unlock.tap()
-        XCTAssertTrue(app.buttons["Accounts"].waitForExistence(timeout: 20),
-                      "a leftover wallet uses a passphrase other than the suite's; uninstall Bramble from Bramble Workflow")
+        XCTAssertTrue(
+            app.buttons["Accounts"].waitForExistence(timeout: 20),
+            "a leftover wallet uses a passphrase other than the suite's; uninstall Bramble from Bramble Workflow"
+        )
         UITest.removeWallet(app)
         return app
     }
@@ -98,8 +108,36 @@ final class SecurityFlowTests: XCTestCase {
     }
 
     private func waitUntilEnabled(_ element: XCUIElement, timeout: TimeInterval = 20) {
-        let enabled = expectation(for: NSPredicate(format: "exists == true AND isEnabled == true"), evaluatedWith: element)
+        let enabled = expectation(
+            for: NSPredicate(format: "exists == true AND isEnabled == true"),
+            evaluatedWith: element
+        )
         wait(for: [enabled], timeout: timeout)
+    }
+
+    /// Turns Face ID on from Settings: the passphrase is re-checked first.
+    private func turnOnFaceID(_ app: XCUIApplication) {
+        UITest.tap(app.buttons["Unlock & auto-lock"])
+        XCTAssertTrue(app.staticTexts["After 30 minutes idle"].exists)
+        UITest.tap(app.buttons["On"])
+        UITest.type(UITest.passphrase, into: app.secureTextFields["Confirm vault passphrase"])
+        UITest.tap(app.buttons["Turn on Face ID"])
+        // First use asks for the Face ID permission, then the face itself.
+        let allow = springboard.alerts.buttons["Allow"].exists
+            ? springboard.alerts.buttons["Allow"]
+            : app.alerts.buttons["Allow"]
+        if allow.waitForExistence(timeout: 5) {
+            allow.tap()
+        } else if springboard.buttons["Allow"].exists {
+            springboard.buttons["Allow"].tap()
+        }
+        face(matching: true)
+        let enabledNotice = app.staticTexts[
+            "Face ID will unlock this wallet. Your passphrase still works and is still needed to reveal secrets."
+        ]
+        XCTAssertTrue(enabledNotice.waitForExistence(timeout: 20))
+        snapshot(app, "security-on")
+        UITest.tap(app.buttons["Back"])
     }
 
     // MARK: Tests
@@ -114,20 +152,7 @@ final class SecurityFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Dark"].isSelected)
         UITest.tap(app.buttons["Back"])
 
-        // Turn Face ID on: the passphrase is re-checked first.
-        UITest.tap(app.buttons["Unlock & auto-lock"])
-        XCTAssertTrue(app.staticTexts["After 30 minutes idle"].exists)
-        UITest.tap(app.buttons["On"])
-        UITest.type(UITest.passphrase, into: app.secureTextFields["Confirm vault passphrase"])
-        UITest.tap(app.buttons["Turn on Face ID"])
-        // First use asks for the Face ID permission, then the face itself.
-        let allow = springboard.alerts.buttons["Allow"].exists ? springboard.alerts.buttons["Allow"] : app.alerts.buttons["Allow"]
-        if allow.waitForExistence(timeout: 5) { allow.tap() } else if springboard.buttons["Allow"].exists { springboard.buttons["Allow"].tap() }
-        face(matching: true)
-        XCTAssertTrue(app.staticTexts["Face ID will unlock this wallet. Your passphrase still works and is still needed to reveal secrets."]
-            .waitForExistence(timeout: 20))
-        snapshot(app, "security-on")
-        UITest.tap(app.buttons["Back"])
+        turnOnFaceID(app)
 
         // 1. A matching face unlocks.
         UITest.tap(app.buttons["Lock wallet"].firstMatch)
@@ -162,8 +187,10 @@ final class SecurityFlowTests: XCTestCase {
         XCUIDevice.shared.press(.home)
         setFaceIDEnrolled(false)
         app.activate()
-        XCTAssertTrue(app.staticTexts["Face ID changed on this device. Enter your passphrase, then turn it on again in Security."]
-            .waitForExistence(timeout: 10))
+        let invalidatedNotice = app.staticTexts[
+            "Face ID changed on this device. Enter your passphrase, then turn it on again in Security."
+        ]
+        XCTAssertTrue(invalidatedNotice.waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["Unlock with Face ID"].exists)
         snapshot(app, "biometric-invalidated")
         setFaceIDEnrolled(true)
@@ -187,14 +214,14 @@ final class SecurityFlowTests: XCTestCase {
             // ("Error: Incorrect passphrase") while the status line counts down.
             XCTAssertTrue(UITest.labelled(app, containing: "Incorrect passphrase").waitForExistence(timeout: 10))
         }
-        let throttled = app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Too many attempts. Try again in 0:'")).firstMatch
+        let throttled = app.staticTexts.containing(throttledCountdown).firstMatch
         XCTAssertTrue(throttled.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Unlock"].isEnabled)
         snapshot(app, "throttled")
 
         app.terminate()
         let relaunched = UITest.launch()
-        let countdown = relaunched.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Too many attempts. Try again in 0:'")).firstMatch
+        let countdown = relaunched.staticTexts.containing(throttledCountdown).firstMatch
         XCTAssertTrue(countdown.waitForExistence(timeout: 10), "the delay survived the relaunch")
         snapshot(relaunched, "throttled-after-relaunch")
 

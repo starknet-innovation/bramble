@@ -60,10 +60,16 @@ import org.bramble.wallet.ui.AddressClipboard
 // The review, working and outcome stages of `SendScreen` (split by stage to stay readable; the
 // shapes are `SendScreen.kt`'s). Uncompiled: checked by reading against the generated bindings.
 
+/** The review stage: the plan's summary, fee, technical details, and Confirm. */
 @Composable
-internal fun ReviewStage(store: WalletStore, model: SendFlowModel, review: TransferReview, retry: () -> Unit, confirm: () -> Unit) {
+internal fun ReviewStage(
+    store: WalletStore,
+    model: SendFlowModel,
+    review: TransferReview,
+    retry: () -> Unit,
+    confirm: () -> Unit,
+) {
     val skin = LocalSkin.current
-    val context = LocalContext.current
     var detailsOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         // The flow header titles the stage; the head row keeps only Edit.
@@ -72,71 +78,143 @@ internal fun ReviewStage(store: WalletStore, model: SendFlowModel, review: Trans
                 PillButton(SendCopy.edit, kind = PillKind.GHOST) { model.edit() }
             }
         }
-        // `.send-review-summary`: token hero over the recipient fact.
-        Column(Modifier.fillMaxWidth().background(skin.panel, cardShape).padding(BrambleSpace.lg)) {
-            Row(Modifier.padding(bottom = BrambleSpace.lg), horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md), verticalAlignment = Alignment.CenterVertically) {
-                TokenMark(model.token.address, review.tokenSymbol)
-                Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-                    Text("${review.amountDisplay} ${review.tokenSymbol}", color = skin.text, style = textStyle(BrambleTypeScale.display, BrambleWeight.bold, BrambleTracking.display))
-                    Text(SendCopy.fiatUnavailable, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
-                }
-            }
-            Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(skin.hairline))
-            Row(Modifier.fillMaxWidth().heightIn(min = BrambleSize.rowCompact), verticalAlignment = Alignment.CenterVertically) {
-                Text(SendCopy.recipientRowLabel, color = skin.muted, style = textStyle(BrambleTypeScale.label), modifier = Modifier.weight(1f))
-                Text(review.recipientShort, color = skin.muted, style = textStyle(BrambleTypeScale.mono, mono = true))
-                IconButton(BrambleIconName.COPY, SendCopy.copyRecipient, tint = skin.muted) {
-                    AddressClipboard.copy(context, review.recipient, store.appScope)
-                }
-            }
-        }
+        ReviewSummary(store, model, review)
         FeeSection(review, retry)
-        // `.send-review-disclosure`: technical details behind a full-width summary row.
-        Column(Modifier.fillMaxWidth().clip(panelShape).background(skin.panel, panelShape)) {
-            Row(
-                Modifier.fillMaxWidth()
-                    .fillPress(Color.Transparent, skin.softPress, panelShape, pressedScale = 1f) { detailsOpen = !detailsOpen }
-                    .heightIn(min = BrambleSize.rowCompact)
-                    .padding(horizontal = BrambleSpace.lg),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(SendCopy.technicalDetails, color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold), modifier = Modifier.weight(1f))
-                BrambleIcon(BrambleIconName.CHEVRON_DOWN, skin.muted, modifier = Modifier.rotate(if (detailsOpen) 180f else 0f))
-            }
-            if (detailsOpen) {
-                Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(skin.hairline))
-                Column(Modifier.padding(BrambleSpace.md), verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-                    Eyebrow(SendCopy.whatWillHappen)
-                    Text(review.summary, color = skin.text, style = textStyle(BrambleTypeScale.body))
-                    Eyebrow(SendCopy.riskAndRecovery)
-                    flagMessages(review).forEach { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.body)) }
-                }
-            }
-        }
+        TechnicalDetails(review, detailsOpen) { detailsOpen = !detailsOpen }
         StatusLine(model.reviewBlock, StatusTone.DANGER)
         Text(SendCopy.reviewNote, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
         PillButton(SendCopy.confirmLabel, icon = BrambleIconName.CHECK, enabled = review.canConfirm, onClick = confirm)
     }
 }
 
+/** `.send-review-summary`: token hero over the recipient fact. */
+@Composable
+private fun ReviewSummary(
+    store: WalletStore,
+    model: SendFlowModel,
+    review: TransferReview,
+) {
+    val skin = LocalSkin.current
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth().background(skin.panel, cardShape).padding(BrambleSpace.lg)) {
+        Row(
+            Modifier.padding(bottom = BrambleSpace.lg),
+            horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TokenMark(model.token.address, review.tokenSymbol)
+            Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
+                Text(
+                    "${review.amountDisplay} ${review.tokenSymbol}",
+                    color = skin.text,
+                    style = textStyle(BrambleTypeScale.display, BrambleWeight.bold, BrambleTracking.display),
+                )
+                Text(SendCopy.fiatUnavailable, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(skin.hairline))
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = BrambleSize.rowCompact),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                SendCopy.recipientRowLabel,
+                color = skin.muted,
+                style = textStyle(BrambleTypeScale.label),
+                modifier = Modifier.weight(1f),
+            )
+            Text(review.recipientShort, color = skin.muted, style = textStyle(BrambleTypeScale.mono, mono = true))
+            IconButton(BrambleIconName.COPY, SendCopy.copyRecipient, tint = skin.muted) {
+                AddressClipboard.copy(context, review.recipient, store.appScope)
+            }
+        }
+    }
+}
+
+/** `.send-review-disclosure`: technical details behind a full-width summary row. */
+@Composable
+private fun TechnicalDetails(
+    review: TransferReview,
+    open: Boolean,
+    onToggle: () -> Unit,
+) {
+    val skin = LocalSkin.current
+    Column(Modifier.fillMaxWidth().clip(panelShape).background(skin.panel, panelShape)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .fillPress(Color.Transparent, skin.softPress, panelShape, pressedScale = 1f, onClick = onToggle)
+                .heightIn(min = BrambleSize.rowCompact)
+                .padding(horizontal = BrambleSpace.lg),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                SendCopy.technicalDetails,
+                color = skin.text,
+                style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold),
+                modifier = Modifier.weight(1f),
+            )
+            BrambleIcon(
+                BrambleIconName.CHEVRON_DOWN,
+                skin.muted,
+                modifier = Modifier.rotate(if (open) CHEVRON_OPEN_DEGREES else 0f),
+            )
+        }
+        if (open) {
+            Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(skin.hairline))
+            Column(Modifier.padding(BrambleSpace.md), verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
+                Eyebrow(SendCopy.whatWillHappen)
+                Text(review.summary, color = skin.text, style = textStyle(BrambleTypeScale.body))
+                Eyebrow(SendCopy.riskAndRecovery)
+                flagMessages(
+                    review,
+                ).forEach { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.body)) }
+            }
+        }
+    }
+}
+
+/** The disclosure chevron's turn while the details are open. */
+private const val CHEVRON_OPEN_DEGREES = 180f
+
 private fun flagMessages(review: TransferReview): List<String> {
-    val messages = review.flags.map { if (it == ReviewFlag.SELF_TRANSFER) SendCopy.selfTransfer else SendCopy.poisonedRecipient }.toMutableList()
+    val messages =
+        review.flags
+            .map {
+                if (it ==
+                    ReviewFlag.SELF_TRANSFER
+                ) {
+                    SendCopy.selfTransfer
+                } else {
+                    SendCopy.poisonedRecipient
+                }
+            }.toMutableList()
     if (review.requiresDeployment) messages += SendCopy.deployNote
     return messages.ifEmpty { listOf(SendCopy.noWarnings) }
 }
 
 /** `.send-review-fee` with the extension's four fee states, first match wins. */
 @Composable
-private fun FeeSection(review: TransferReview, retry: () -> Unit) {
+private fun FeeSection(
+    review: TransferReview,
+    retry: () -> Unit,
+) {
     val skin = LocalSkin.current
     val fee = review.fee
     val deployment = review.deploymentFee
     Column(
-        Modifier.fillMaxWidth().background(skin.panel, panelShape).padding(horizontal = BrambleSpace.lg, vertical = BrambleSpace.md),
+        Modifier
+            .fillMaxWidth()
+            .background(
+                skin.panel,
+                panelShape,
+            ).padding(horizontal = BrambleSpace.lg, vertical = BrambleSpace.md),
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
     ) {
         Eyebrow(SendCopy.maximumCost)
-        val line = @Composable { text: String -> Text(text, color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold)) }
+        val line = @Composable { text: String ->
+            Text(text, color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold))
+        }
         val failed = @Composable { text: String ->
             StatusLine(text, StatusTone.DANGER)
             PillButton(SendCopy.retryFee, kind = PillKind.SECONDARY, icon = BrambleIconName.REFRESH, onClick = retry)
@@ -146,9 +224,18 @@ private fun FeeSection(review: TransferReview, retry: () -> Unit) {
                 line(SendCopy.transactionFeePrefix + fee.display)
                 line(SendCopy.deploymentFeePrefix + deployment.display)
             }
-            review.requiresDeployment -> failed(SendCopy.feesFailed)
-            fee != null -> line(SendCopy.feePrefix + fee.display)
-            else -> failed(SendCopy.feeFailed)
+
+            review.requiresDeployment -> {
+                failed(SendCopy.feesFailed)
+            }
+
+            fee != null -> {
+                line(SendCopy.feePrefix + fee.display)
+            }
+
+            else -> {
+                failed(SendCopy.feeFailed)
+            }
         }
         if (fee != null && review.affordability == FeeAffordability.INSUFFICIENT) {
             Text(SendCopy.shortfall, color = skin.warning, style = textStyle(BrambleTypeScale.caption))
@@ -156,82 +243,242 @@ private fun FeeSection(review: TransferReview, retry: () -> Unit) {
     }
 }
 
+/** What the working stage shows for one stage: its copy, and the task list with the active task. */
+private data class WorkingCopy(
+    val title: String,
+    val copy: String,
+    val liveness: String,
+    val tasks: List<String>,
+    val active: Int,
+)
+
+/** Task indices in the working list: review, sign (authorize), broadcast, confirm. */
+private const val TASK_SIGN = 1
+private const val TASK_BROADCAST = 2
+private const val TASK_CONFIRM = 3
+
+private fun workingCopy(stage: SendFlowModel.Stage): WorkingCopy =
+    when (stage) {
+        SendFlowModel.Stage.BROADCASTING -> {
+            WorkingCopy(
+                SendCopy.workingBroadcastingTitle,
+                SendCopy.workingBroadcastingCopy,
+                SendCopy.keepAppOpen,
+                listOf(SendCopy.taskReviewLocked, SendCopy.taskSign, SendCopy.taskBroadcast, SendCopy.taskConfirm),
+                TASK_BROADCAST,
+            )
+        }
+
+        SendFlowModel.Stage.CONFIRMING -> {
+            WorkingCopy(
+                SendCopy.workingConfirmingTitle,
+                SendCopy.workingConfirmingCopy,
+                SendCopy.workingConfirmingLiveness,
+                listOf(
+                    SendCopy.taskReviewLocked,
+                    SendCopy.taskAuthorized,
+                    SendCopy.taskBroadcastComplete,
+                    SendCopy.taskConfirm,
+                ),
+                TASK_CONFIRM,
+            )
+        }
+
+        else -> {
+            WorkingCopy(
+                SendCopy.workingAuthorizingTitle,
+                SendCopy.workingAuthorizingCopy,
+                SendCopy.keepAppOpen,
+                listOf(SendCopy.taskReviewLocked, SendCopy.taskSign, SendCopy.taskBroadcast, SendCopy.taskConfirm),
+                TASK_SIGN,
+            )
+        }
+    }
+
 /** `#send-working`: centred progress, the stage's copy, and the task list. */
 @Composable
 internal fun WorkingStage(stage: SendFlowModel.Stage) {
     val skin = LocalSkin.current
-    val (title, copy, liveness) = when (stage) {
-        SendFlowModel.Stage.BROADCASTING -> Triple(SendCopy.workingBroadcastingTitle, SendCopy.workingBroadcastingCopy, SendCopy.keepAppOpen)
-        SendFlowModel.Stage.CONFIRMING -> Triple(SendCopy.workingConfirmingTitle, SendCopy.workingConfirmingCopy, SendCopy.workingConfirmingLiveness)
-        else -> Triple(SendCopy.workingAuthorizingTitle, SendCopy.workingAuthorizingCopy, SendCopy.keepAppOpen)
-    }
-    val (labels, active) = when (stage) {
-        SendFlowModel.Stage.BROADCASTING -> listOf(SendCopy.taskReviewLocked, SendCopy.taskSign, SendCopy.taskBroadcast, SendCopy.taskConfirm) to 2
-        SendFlowModel.Stage.CONFIRMING -> listOf(SendCopy.taskReviewLocked, SendCopy.taskAuthorized, SendCopy.taskBroadcastComplete, SendCopy.taskConfirm) to 3
-        else -> listOf(SendCopy.taskReviewLocked, SendCopy.taskSign, SendCopy.taskBroadcast, SendCopy.taskConfirm) to 1
-    }
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg)) {
+    val working = workingCopy(stage)
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
+    ) {
         Box(Modifier.size(BrambleSize.brand), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = skin.accent, strokeWidth = BrambleLayout.checkStroke, modifier = Modifier.size(BrambleSpace.xl))
+            CircularProgressIndicator(
+                color = skin.accent,
+                strokeWidth = BrambleLayout.checkStroke,
+                modifier = Modifier.size(BrambleSpace.xl),
+            )
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
-            Text(title, color = skin.text, textAlign = TextAlign.Center, style = textStyle(BrambleTypeScale.title, BrambleWeight.bold), modifier = Modifier.semantics { heading() })
-            Text(copy, color = skin.muted, textAlign = TextAlign.Center, style = textStyle(BrambleTypeScale.body))
-        }
-        // `.send-task-list`: the panel with the xs elevation, hairlines inset past the dot.
         Column(
-            Modifier.fillMaxWidth().brambleShadow(BrambleShadow.xs, panelShape).background(skin.panel, panelShape)
-                .padding(horizontal = BrambleSpace.lg, vertical = BrambleSpace.sm),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
         ) {
-            labels.forEachIndexed { index, label ->
-                if (index > 0) {
-                    Box(Modifier.fillMaxWidth().padding(start = BrambleLayout.sendTaskHairlineInset).height(BrambleLayout.hairline).background(skin.hairline))
-                }
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = BrambleControl.hit),
-                    horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val dot = when {
-                        index < active -> skin.positive
-                        index == active -> skin.accent
-                        else -> skin.hairlineStrong
-                    }
-                    Box(Modifier.size(BrambleSpace.sm).background(dot, CircleShape))
-                    Text(
-                        label,
-                        color = if (index > active) skin.muted else skin.text,
-                        style = textStyle(BrambleTypeScale.label, if (index == active) BrambleWeight.semibold else BrambleWeight.regular),
-                    )
-                }
-            }
+            Text(
+                working.title,
+                color = skin.text,
+                textAlign = TextAlign.Center,
+                style =
+                    textStyle(
+                        BrambleTypeScale.title,
+                        BrambleWeight.bold,
+                    ),
+                modifier =
+                    Modifier.semantics {
+                        heading()
+                    },
+            )
+            Text(
+                working.copy,
+                color = skin.muted,
+                textAlign = TextAlign.Center,
+                style = textStyle(BrambleTypeScale.body),
+            )
         }
-        Text(liveness, color = skin.muted, textAlign = TextAlign.Center, style = textStyle(BrambleTypeScale.caption))
+        TaskList(working.tasks, working.active)
+        Text(
+            working.liveness,
+            color = skin.muted,
+            textAlign = TextAlign.Center,
+            style = textStyle(BrambleTypeScale.caption),
+        )
     }
 }
+
+/** `.send-task-list`: the panel with the xs elevation, hairlines inset past the dot. */
+@Composable
+private fun TaskList(
+    labels: List<String>,
+    active: Int,
+) {
+    val skin = LocalSkin.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .brambleShadow(BrambleShadow.xs, panelShape)
+            .background(skin.panel, panelShape)
+            .padding(horizontal = BrambleSpace.lg, vertical = BrambleSpace.sm),
+    ) {
+        labels.forEachIndexed { index, label ->
+            if (index > 0) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = BrambleLayout.sendTaskHairlineInset,
+                        ).height(BrambleLayout.hairline)
+                        .background(skin.hairline),
+                )
+            }
+            TaskRow(label, index, active)
+        }
+    }
+}
+
+/** One task: done (positive dot), active (accent dot, semibold), or still to come (muted). */
+@Composable
+private fun TaskRow(
+    label: String,
+    index: Int,
+    active: Int,
+) {
+    val skin = LocalSkin.current
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = BrambleControl.hit),
+        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val dot =
+            when {
+                index < active -> skin.positive
+                index == active -> skin.accent
+                else -> skin.hairlineStrong
+            }
+        Box(Modifier.size(BrambleSpace.sm).background(dot, CircleShape))
+        Text(
+            label,
+            color = if (index > active) skin.muted else skin.text,
+            style =
+                textStyle(
+                    BrambleTypeScale.label,
+                    if (index == active) BrambleWeight.semibold else BrambleWeight.regular,
+                ),
+        )
+    }
+}
+
+/**
+ * The copy of an [Outcome]: the muted [kicker], the [title], and an optional [message].
+ *
+ * @property kicker the small line above the title.
+ * @property title the outcome's heading.
+ * @property message the explanation under the title, or null for none.
+ */
+internal data class OutcomeCopy(
+    val kicker: String,
+    val title: String,
+    val message: String?,
+)
 
 /** `.send-outcome`: a centred mark, kicker, title, copy and hash, then the stage's actions. */
 @Composable
 internal fun Outcome(
     icon: BrambleIconName,
     tint: Color,
-    kicker: String,
-    title: String,
-    message: String?,
+    copy: OutcomeCopy,
     hash: String?,
     actions: @Composable ColumnScope.() -> Unit,
 ) {
     val skin = LocalSkin.current
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg)) {
+    val message = copy.message
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
+    ) {
         Box(Modifier.size(BrambleLayout.sendOutcomeMark), contentAlignment = Alignment.Center) {
             BrambleIcon(icon, tint, BrambleSize.mark)
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
-            Text(kicker, color = skin.muted, style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold))
-            Text(title, color = skin.text, textAlign = TextAlign.Center, style = textStyle(BrambleTypeScale.headline, BrambleWeight.bold, BrambleTracking.display), modifier = Modifier.semantics { heading() })
-            if (message != null) Text(message, color = skin.muted, textAlign = TextAlign.Center, style = textStyle(BrambleTypeScale.body))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
+        ) {
+            Text(copy.kicker, color = skin.muted, style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold))
+            Text(
+                copy.title,
+                color = skin.text,
+                textAlign = TextAlign.Center,
+                style =
+                    textStyle(
+                        BrambleTypeScale.headline,
+                        BrambleWeight.bold,
+                        BrambleTracking.display,
+                    ),
+                modifier =
+                    Modifier.semantics {
+                        heading()
+                    },
+            )
+            if (message !=
+                null
+            ) {
+                Text(
+                    message,
+                    color = skin.muted,
+                    textAlign = TextAlign.Center,
+                    style = textStyle(BrambleTypeScale.body),
+                )
+            }
             if (hash != null) {
-                Text(hash, color = skin.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, style = textStyle(BrambleTypeScale.mono, mono = true))
+                Text(
+                    hash,
+                    color = skin.muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = textStyle(BrambleTypeScale.mono, mono = true),
+                )
             }
         }
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm), content = actions)

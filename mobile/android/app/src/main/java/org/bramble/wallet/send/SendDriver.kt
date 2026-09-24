@@ -1,6 +1,5 @@
 package org.bramble.wallet.send
 
-import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -12,6 +11,7 @@ import org.bramble.core.TransferPlan
 import org.bramble.core.rpcChainIdRequest
 import org.bramble.core.rpcVerifyChainId
 import org.bramble.wallet.RpcClient
+import java.net.URL
 
 /**
  * Relays one core `TransferPlan` over HTTPS, mirroring the iOS `SendDriver`. The plan decides
@@ -24,30 +24,46 @@ import org.bramble.wallet.RpcClient
  *
  * Uncompiled: this machine has no Android SDK; checked by reading against the generated bindings.
  */
-class SendDriver(val plan: TransferPlan, network: NetworkInfo) {
+class SendDriver(
+    /** The core plan this relays; closed by the owner (`SendFlowModel`), never here. */
+    val plan: TransferPlan,
+    network: NetworkInfo,
+) {
     private val urls = network.rpcUrls.map(::URL)
     private val networkId = network.network
+
+    /** The endpoint bound for the rest of the plan once it proved the chain, or null before. */
     var endpoint: URL? = null
         private set
+
+    /** How many signed writes were posted; once non-zero the endpoint is never released. */
     var writesSent = 0
         private set
 
     /** Advances from [reply] until the plan needs the user: Review, Broadcast, Finished, Failed. */
-    suspend fun run(reply: StepReply, onStep: (SendStep) -> Unit = {}): SendStep {
+    suspend fun run(
+        reply: StepReply,
+        onStep: (SendStep) -> Unit = {},
+    ): SendStep {
         var next = reply
         while (true) {
             val step = withContext(Dispatchers.Default) { plan.advance(next) }
-            next = when (step) {
-                is SendStep.Rpc -> {
-                    onStep(step)
-                    exchange(step.id, step.body, step.purpose, step.isWrite)
+            next =
+                when (step) {
+                    is SendStep.Rpc -> {
+                        onStep(step)
+                        exchange(step.id, step.body, step.purpose, step.isWrite)
+                    }
+
+                    is SendStep.Wait -> {
+                        delay(step.delayMs.toLong())
+                        StepReply.WaitElapsed
+                    }
+
+                    else -> {
+                        return step
+                    }
                 }
-                is SendStep.Wait -> {
-                    delay(step.delayMs.toLong())
-                    StepReply.WaitElapsed
-                }
-                else -> return step
-            }
         }
     }
 
@@ -58,24 +74,51 @@ class SendDriver(val plan: TransferPlan, network: NetworkInfo) {
 
     private fun now(): ULong = System.currentTimeMillis().toULong()
 
-    private suspend fun exchange(id: ULong, body: String, purpose: RpcPurpose, write: Boolean): StepReply =
+    private suspend fun exchange(
+        id: ULong,
+        body: String,
+        purpose: RpcPurpose,
+        write: Boolean,
+    ): StepReply =
         withContext(Dispatchers.IO) {
-            if (endpoint == null && purpose == RpcPurpose.CHAIN_ID && !write) return@withContext bind(id, body)
-            if (endpoint == null && !write) probe()
-            val url = endpoint ?: return@withContext StepReply.TransportFailure(id, now())
-            if (write) writesSent += 1
-            runCatching { post(url, body, write) }
-                .map { StepReply.Rpc(id, it, now()) as StepReply }
-                .getOrElse { StepReply.TransportFailure(id, now()) }
+            if (endpoint == null && purpose == RpcPurpose.CHAIN_ID && !write) {
+                bind(id, body)
+            } else {
+                if (endpoint == null && !write) probe()
+                endpoint?.let { url -> relay(url, id, body, write) } ?: StepReply.TransportFailure(id, now())
+            }
         }
 
-    private fun probe() {
-        endpoint = urls.firstOrNull { url ->
-            runCatching { rpcVerifyChainId(post(url, rpcChainIdRequest(0u), false), 0u, networkId) }.getOrDefault(false)
-        }
+    /** Posts one step to the bound [url]; a [write] is counted before it is posted, and posted once. */
+    private fun relay(
+        url: URL,
+        id: ULong,
+        body: String,
+        write: Boolean,
+    ): StepReply {
+        if (write) writesSent += 1
+        return runCatching { post(url, body, write) }
+            .map { StepReply.Rpc(id, it, now()) as StepReply }
+            .getOrElse { StepReply.TransportFailure(id, now()) }
     }
 
-    private fun bind(id: ULong, body: String): StepReply {
+    private fun probe() {
+        endpoint =
+            urls.firstOrNull { url ->
+                runCatching {
+                    rpcVerifyChainId(
+                        post(url, rpcChainIdRequest(0u), false),
+                        0u,
+                        networkId,
+                    )
+                }.getOrDefault(false)
+            }
+    }
+
+    private fun bind(
+        id: ULong,
+        body: String,
+    ): StepReply {
         var mismatch: String? = null
         for (url in urls) {
             val text = runCatching { post(url, body, false) }.getOrNull() ?: continue
@@ -88,5 +131,9 @@ class SendDriver(val plan: TransferPlan, network: NetworkInfo) {
         return mismatch?.let { StepReply.Rpc(id, it, now()) } ?: StepReply.TransportFailure(id, now())
     }
 
-    private fun post(url: URL, body: String, write: Boolean): String = RpcClient.post(url, body, write)
+    private fun post(
+        url: URL,
+        body: String,
+        write: Boolean,
+    ): String = RpcClient.post(url, body, write)
 }

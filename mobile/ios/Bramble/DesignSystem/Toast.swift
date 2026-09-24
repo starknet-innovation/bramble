@@ -20,7 +20,10 @@ struct ToastView: View {
             BrambleIcon(tone == .error ? .alert : .check, size: metrics.glyph)
                 .foregroundStyle(tone == .error ? skin.danger : skin.positive)
                 .frame(width: metrics.iconSize, height: metrics.iconSize)
-                .background(tone == .error ? skin.dangerSoft : skin.positiveSoft, in: RoundedRectangle(cornerRadius: metrics.iconRadius, style: .continuous))
+                .background(
+                    tone == .error ? skin.dangerSoft : skin.positiveSoft,
+                    in: RoundedRectangle(cornerRadius: metrics.iconRadius, style: .continuous)
+                )
             Text(message)
                 .brambleText(BrambleTypeScale.label.sized(metrics.fontSize), weight: metrics.weight)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -34,7 +37,15 @@ struct ToastView: View {
                         .foregroundStyle(skin.text)
                         .frame(width: metrics.copySize, height: metrics.copySize)
                 }
-                .buttonStyle(FillPressStyle(fill: .clear, pressed: skin.softPress, shape: Circle(), scale: BramblePress.iconButton, hit: CGSize(width: metrics.copySize, height: metrics.copySize)))
+                .buttonStyle(
+                    FillPressStyle(
+                        fill: .clear,
+                        pressed: skin.softPress,
+                        shape: Circle(),
+                        scale: BramblePress.iconButton,
+                        hit: CGSize(width: metrics.copySize, height: metrics.copySize)
+                    )
+                )
                 .accessibilityLabel(copied ? BrambleToast.copiedLabel : BrambleToast.copyLabel)
                 .task(id: copied) {
                     guard copied else { return }
@@ -58,8 +69,16 @@ struct ToastHost: View {
     let message: String?
     var tone: ToastTone = .error
     let dismiss: () -> Void
-    @State private var dx: CGFloat = 0
+    @State private var dragOffsetX: CGFloat = 0
     @State private var swiped = 0
+
+    /// `translateY(18px) scale(0.95)`: where the toast springs in from.
+    private static let entryScale: CGFloat = 0.95
+    private static let entryOffsetY: CGFloat = 18
+    /// Horizontal travel before the drag is treated as a swipe.
+    private static let swipeMinimumDistance: CGFloat = 8
+    /// Converts SwiftUI's pt/s drag velocity to the extension's px/ms.
+    private static let millisecondsPerSecond: CGFloat = 1_000
 
     var body: some View {
         let metrics = BrambleMetrics.Toast.self
@@ -67,13 +86,14 @@ struct ToastHost: View {
             Spacer()
             if let message {
                 ToastView(message: message, tone: tone)
-                    .offset(x: dx)
-                    .opacity(Double(max(0, 1 - abs(dx) / BrambleToast.swipeFade)))
+                    .offset(x: dragOffsetX)
+                    .opacity(Double(max(0, 1 - abs(dragOffsetX) / BrambleToast.swipeFade)))
                     .gesture(swipe)
                     .transition(entry)
                     .task(id: message) {
-                        dx = 0
-                        try? await Task.sleep(for: .milliseconds(tone == .error ? BrambleToast.errorMs : BrambleToast.successMs))
+                        dragOffsetX = 0
+                        let lifetime = tone == .error ? BrambleToast.errorMs : BrambleToast.successMs
+                        try? await Task.sleep(for: .milliseconds(lifetime))
                         dismiss()
                     }
                     .onAppear { AccessibilityNotification.Announcement(message).post() }
@@ -88,20 +108,25 @@ struct ToastHost: View {
 
     /// `translateY(18px) scale(0.95)` and transparent, springing to rest; a fade under Reduce Motion.
     private var entry: AnyTransition {
-        reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: 18))
+        reduceMotion
+            ? .opacity
+            : .opacity
+                .combined(with: .scale(scale: Self.entryScale))
+                .combined(with: .offset(y: Self.entryOffsetY))
     }
 
     private var swipe: some Gesture {
-        DragGesture(minimumDistance: 8)
-            .onChanged { dx = $0.translation.width }
+        DragGesture(minimumDistance: Self.swipeMinimumDistance)
+            .onChanged { dragOffsetX = $0.translation.width }
             .onEnded { value in
                 // SwiftUI reports pt/s; the extension's threshold is px/ms.
-                let velocity = abs(value.velocity.width) / 1000
+                let velocity = abs(value.velocity.width) / Self.millisecondsPerSecond
                 if velocity > BrambleToast.swipeVelocity || abs(value.translation.width) > BrambleToast.swipeDistance {
                     swiped += 1
                     dismiss()
                 } else {
-                    withAnimation(BrambleMotionPolicy.animation(BrambleSpring.default, reduceMotion: reduceMotion)) { dx = 0 }
+                    let settle = BrambleMotionPolicy.animation(BrambleSpring.default, reduceMotion: reduceMotion)
+                    withAnimation(settle) { dragOffsetX = 0 }
                 }
             }
     }

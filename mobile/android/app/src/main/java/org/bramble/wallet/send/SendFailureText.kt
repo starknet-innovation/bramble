@@ -1,0 +1,50 @@
+package org.bramble.wallet.send
+
+import org.bramble.core.SendFailure
+import org.bramble.core.SendFailureCode
+
+// The Send journey's text helpers, split from SendFlowModel.kt: the failure wording and the Half
+// shortcut's integer halving. Pure functions over core values; no state.
+
+/** The extension's wording per failure code (`SendCopy`, generated). */
+object SendFailureText {
+    private val reasons: Map<SendFailureCode, String> =
+        mapOf(
+            SendFailureCode.REVIEWED_FEE_EXCEEDED to SendCopy.reviewedFeeExceeded,
+            SendFailureCode.REVIEWED_FEE_REQUIRED to SendCopy.reviewedFeeRequired,
+            SendFailureCode.REVIEWED_DEPLOYMENT_FEE_EXCEEDED to SendCopy.reviewedDeploymentFeeExceeded,
+            SendFailureCode.REVIEWED_DEPLOYMENT_FEE_REQUIRED to SendCopy.reviewedDeploymentFeeRequired,
+            SendFailureCode.POISONED_RECIPIENT to SendCopy.poisonedRecipient,
+            SendFailureCode.WRONG_CHAIN to SendCopy.failureWrongChain,
+            SendFailureCode.PREPARATION_UNAVAILABLE to SendCopy.failurePreparationUnavailable,
+            SendFailureCode.HASH_MISMATCH to SendCopy.failureHashMismatch,
+            SendFailureCode.SUBMISSION_INDETERMINATE to SendCopy.failureIndeterminate,
+            SendFailureCode.DEPLOYMENT_STATUS_UNKNOWN to SendCopy.failureDeploymentStatusUnknown,
+            SendFailureCode.DEPLOYMENT_UNCONFIRMED to SendCopy.failureDeploymentUnconfirmed,
+            SendFailureCode.DEPLOYMENT_THEN_INVOKE_UNCONFIRMED to SendCopy.failureDeploymentThenInvokeUnconfirmed,
+            SendFailureCode.AUTO_DEPLOYMENT_FAILED to SendCopy.failureAutoDeploymentFailed,
+            SendFailureCode.ALREADY_DEPLOYED to SendCopy.failureAlreadyDeployed,
+            SendFailureCode.UNRECOGNISED_FEE_UNIT to SendCopy.failureUnrecognisedUnit,
+        )
+
+    /** The failure line for [failure], with its hash filled in; the generic line for other codes. */
+    fun message(failure: SendFailure): String {
+        val reason = reasons[failure.code] ?: return SendCopy.failureDefault
+        return SendCopy.failurePrefix + reason.replace("{hash}", failure.hash ?: "")
+    }
+}
+
+/** Integer halving of a base-10 string (floor), as the extension's `raw / 2n`. */
+internal fun halve(decimal: String): String {
+    var remainder = 0
+    val digits = StringBuilder()
+    for (character in decimal) {
+        val digit = character.digitToIntOrNull() ?: return "0"
+        val current = remainder * DECIMAL_RADIX + digit
+        digits.append(current / 2)
+        remainder = current % 2
+    }
+    return digits.trimStart('0').toString().ifEmpty { "0" }
+}
+
+private const val DECIMAL_RADIX = 10

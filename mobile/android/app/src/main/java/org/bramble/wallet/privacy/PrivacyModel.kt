@@ -21,8 +21,11 @@ import org.bramble.core.privacyConfigured
  * Uncompiled: this machine has no Android SDK; written against the generated Kotlin bindings.
  */
 class PrivacyModel {
+    /** The reading's phase for the UI (idle, loading, settled, failed, or unconfigured). */
     var reading by mutableStateOf<PrivacyReading>(PrivacyReading.Idle)
         private set
+
+    /** The settled public state (registration, per-token totals, pool fee); null until settled. */
     var state by mutableStateOf<PrivacyState?>(null)
         private set
     private var generation = 0
@@ -30,10 +33,14 @@ class PrivacyModel {
     private var scope: Pair<org.bramble.core.NetworkId, String>? = null
 
     /** Forgets the reading unless it belongs to this network and account. */
-    fun retain(network: org.bramble.core.NetworkId, accountId: String?) {
+    fun retain(
+        network: org.bramble.core.NetworkId,
+        accountId: String?,
+    ) {
         if (accountId == null || scope != Pair(network, accountId)) reset()
     }
 
+    /** Closes any running plan and drops the reading; a read still in flight is then discarded. */
     fun reset() {
         plan?.close()
         plan = null
@@ -44,14 +51,28 @@ class PrivacyModel {
     }
 
     /** Reads one account record's private balances; an unrouted network settles as `Unconfigured`. */
-    suspend fun refresh(core: WalletCore, network: NetworkInfo, accountId: String) {
+    suspend fun refresh(
+        core: WalletCore,
+        network: NetworkInfo,
+        accountId: String,
+    ) {
         reset()
         val scope = generation
         this.scope = Pair(network.network, accountId)
         if (!privacyConfigured(network.network)) {
             reading = PrivacyReading.Unconfigured
-            return
+        } else {
+            read(core, network, accountId, scope)
         }
+    }
+
+    /** Prepares and runs the core's read plan; a result that lands after [ticket] ends is dropped. */
+    private suspend fun read(
+        core: WalletCore,
+        network: NetworkInfo,
+        accountId: String,
+        ticket: Int,
+    ) {
         val prepared = runCatching { core.preparePrivacyRead(accountId) }.getOrNull()
         if (prepared == null) {
             reading = PrivacyReading.Failed
@@ -60,7 +81,7 @@ class PrivacyModel {
         plan = prepared
         reading = PrivacyReading.Loading
         val step = runCatching { PrivacyDriver(prepared, network).run() }.getOrNull()
-        if (scope != generation) return
+        if (ticket != generation) return
         plan = null
         if (step is PrivacyStep.Finished) {
             state = step.state

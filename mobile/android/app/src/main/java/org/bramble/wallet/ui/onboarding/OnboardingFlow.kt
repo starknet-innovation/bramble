@@ -22,9 +22,27 @@ import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.BrambleMotion
 import org.bramble.wallet.design.brambleTween
 
-enum class OnboardingPath { CREATE, RECOVER }
+private enum class Step {
+    WELCOME,
+    IMPORT_METHOD,
+    RECOVERY_PHRASE,
+    PASSPHRASE,
+    REVIEW_ACCOUNT,
+    FIND_ACCOUNTS,
+    SAVE_PHRASE,
+    CONFIRM_BACKUP,
+    COMPLETE,
+}
 
-private enum class Step { WELCOME, IMPORT_METHOD, RECOVERY_PHRASE, PASSPHRASE, REVIEW_ACCOUNT, FIND_ACCOUNTS, SAVE_PHRASE, CONFIRM_BACKUP, COMPLETE }
+/** The navigation and side effects each step triggers; built by [OnboardingFlow] over its state. */
+private data class StepActions(
+    val push: (Step) -> Unit,
+    val pop: () -> Unit,
+    val replace: (Step) -> Unit,
+    val choose: (OnboardingPath) -> Unit,
+    val phraseEntered: (String) -> Unit,
+    val passphraseAccepted: suspend (String) -> Unit,
+)
 
 /**
  * First-run flow, step for step with the iOS `OnboardingFlow` (and so the extension wizard):
@@ -40,7 +58,10 @@ private enum class Step { WELCOME, IMPORT_METHOD, RECOVERY_PHRASE, PASSPHRASE, R
  * cut when animations are off.
  */
 @Composable
-fun OnboardingFlow(store: WalletStore, resumingDiscovery: Boolean = false) {
+fun OnboardingFlow(
+    store: WalletStore,
+    resumingDiscovery: Boolean = false,
+) {
     val scope = rememberCoroutineScope()
     var steps by remember { mutableStateOf(listOf(if (resumingDiscovery) Step.FIND_ACCOUNTS else Step.WELCOME)) }
     var path by remember { mutableStateOf(if (resumingDiscovery) OnboardingPath.RECOVER else OnboardingPath.CREATE) }
@@ -52,14 +73,29 @@ fun OnboardingFlow(store: WalletStore, resumingDiscovery: Boolean = false) {
         forward = true
         steps = steps + step
     }
+
     fun pop() {
         forward = false
         if (steps.size > 1) steps = steps.dropLast(1)
     }
+
     fun replace(step: Step) {
         forward = true
         steps = listOf(step)
     }
+
+    val actions =
+        StepActions(
+            push = ::push,
+            pop = ::pop,
+            replace = ::replace,
+            choose = { path = it },
+            phraseEntered = { importedPhrase = it },
+            passphraseAccepted = { passphrase ->
+                writeVault(store, path, passphrase, importedPhrase) { importedPhrase = "" }
+                replace(stepAfterVault(path))
+            },
+        )
 
     BackHandler(enabled = steps.size > 1) { pop() }
     Box(Modifier.fillMaxSize()) {
@@ -71,38 +107,105 @@ fun OnboardingFlow(store: WalletStore, resumingDiscovery: Boolean = false) {
                     val spec = brambleTween<androidx.compose.ui.unit.IntOffset>(BrambleMotion.drawerMs)
                     val fade = brambleTween<Float>(BrambleMotion.drawerMs)
                     val sign = if (forward) 1 else -1
-                    (slideInHorizontally(spec) { sign * it } + fadeIn(fade)) togetherWith
-                        (slideOutHorizontally(spec) { -sign * it } + fadeOut(fade))
+                    slideInHorizontally(spec) { sign * it } + fadeIn(fade) togetherWith
+                        slideOutHorizontally(spec) { -sign * it } + fadeOut(fade)
                 },
                 label = "onboarding-step",
             ) { step ->
-                when (step) {
-                    Step.WELCOME -> WelcomeStep(
-                        create = { path = OnboardingPath.CREATE; push(Step.PASSPHRASE) },
-                        recover = { path = OnboardingPath.RECOVER; push(Step.IMPORT_METHOD) },
-                    )
-                    Step.IMPORT_METHOD -> ImportMethodStep(back = ::pop, recoveryPhrase = { push(Step.RECOVERY_PHRASE) })
-                    Step.RECOVERY_PHRASE -> RecoveryPhraseStep(back = ::pop, onPaste = { store.showNotice(BrambleCopy.clipboardCleared) }) { phrase ->
-                        importedPhrase = phrase
-                        push(Step.PASSPHRASE)
-                    }
-                    Step.PASSPHRASE -> PassphraseStep(store, path, back = ::pop) { passphrase ->
-                        if (path == OnboardingPath.CREATE) {
-                            store.create(passphrase)
-                        } else {
-                            val phrase = importedPhrase
-                            store.importWallet(phrase, passphrase)
-                            importedPhrase = ""
-                        }
-                        replace(if (path == OnboardingPath.CREATE) Step.REVIEW_ACCOUNT else Step.FIND_ACCOUNTS)
-                    }
-                    Step.REVIEW_ACCOUNT -> ReviewAccountStep(store, store.network) { replace(Step.SAVE_PHRASE) }
-                    Step.FIND_ACCOUNTS -> FindAccountsStep(store) { replace(Step.COMPLETE) }
-                    Step.SAVE_PHRASE -> SavePhraseStep(store.pendingBackup) { push(Step.CONFIRM_BACKUP) }
-                    Step.CONFIRM_BACKUP -> ConfirmBackupStep(store.pendingBackup, back = ::pop) { replace(Step.COMPLETE) }
-                    Step.COMPLETE -> CompleteStep { scope.launch { runCatching { store.finishOnboarding() } } }
+                StepContent(step, store, path, actions) {
+                    scope.launch { runCatching { store.finishOnboarding() } }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Writes the vault at the passphrase step: a new wallet for [OnboardingPath.CREATE], otherwise an
+ * import of [phrase], after which [consumed] clears the held phrase. A failure propagates before
+ * [consumed] runs, so the phrase is kept for a retry.
+ */
+private suspend fun writeVault(
+    store: WalletStore,
+    path: OnboardingPath,
+    passphrase: String,
+    phrase: String,
+    consumed: () -> Unit,
+) {
+    if (path == OnboardingPath.CREATE) {
+        store.create(passphrase)
+    } else {
+        store.importWallet(phrase, passphrase)
+        consumed()
+    }
+}
+
+/** Where the flow goes once the vault is written; the stack is replaced so back cannot undo it. */
+private fun stepAfterVault(path: OnboardingPath): Step =
+    if (path == OnboardingPath.CREATE) Step.REVIEW_ACCOUNT else Step.FIND_ACCOUNTS
+
+/**
+ * One step of [OnboardingFlow]; [path] is the branch chosen at the welcome step, and [finish]
+ * leaves onboarding from the last step.
+ */
+@Composable
+private fun StepContent(
+    step: Step,
+    store: WalletStore,
+    path: OnboardingPath,
+    actions: StepActions,
+    finish: () -> Unit,
+) {
+    when (step) {
+        Step.WELCOME -> {
+            WelcomeStep(
+                create = {
+                    actions.choose(OnboardingPath.CREATE)
+                    actions.push(Step.PASSPHRASE)
+                },
+                recover = {
+                    actions.choose(OnboardingPath.RECOVER)
+                    actions.push(Step.IMPORT_METHOD)
+                },
+            )
+        }
+
+        Step.IMPORT_METHOD -> {
+            ImportMethodStep(back = actions.pop, recoveryPhrase = { actions.push(Step.RECOVERY_PHRASE) })
+        }
+
+        Step.RECOVERY_PHRASE -> {
+            RecoveryPhraseStep(
+                back = actions.pop,
+                onPaste = { store.showNotice(BrambleCopy.clipboardCleared) },
+            ) { phrase ->
+                actions.phraseEntered(phrase)
+                actions.push(Step.PASSPHRASE)
+            }
+        }
+
+        Step.PASSPHRASE -> {
+            PassphraseStep(store, path, back = actions.pop, submit = actions.passphraseAccepted)
+        }
+
+        Step.REVIEW_ACCOUNT -> {
+            ReviewAccountStep(store, store.network) { actions.replace(Step.SAVE_PHRASE) }
+        }
+
+        Step.FIND_ACCOUNTS -> {
+            FindAccountsStep(store) { actions.replace(Step.COMPLETE) }
+        }
+
+        Step.SAVE_PHRASE -> {
+            SavePhraseStep(store.pendingBackup) { actions.push(Step.CONFIRM_BACKUP) }
+        }
+
+        Step.CONFIRM_BACKUP -> {
+            ConfirmBackupStep(store.pendingBackup, back = actions.pop) { actions.replace(Step.COMPLETE) }
+        }
+
+        Step.COMPLETE -> {
+            CompleteStep(finish)
         }
     }
 }

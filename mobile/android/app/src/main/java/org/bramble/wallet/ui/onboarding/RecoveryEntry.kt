@@ -2,13 +2,32 @@ package org.bramble.wallet.ui.onboarding
 
 /** Where keyboard focus goes after an edit in the recovery grid. */
 sealed interface FocusMove {
+    /** Focus stays in the edited cell. */
     data object Stay : FocusMove
-    data class To(val index: Int) : FocusMove
+
+    /**
+     * Focus moves to another cell.
+     *
+     * @property index The zero-based cell that receives focus.
+     */
+    data class To(
+        val index: Int,
+    ) : FocusMove
+
+    /** Focus leaves the grid (the keyboard is dismissed). */
     data object Release : FocusMove
 }
 
-/** The grid after one edit. */
-data class RecoveryEdit(val words: List<String>, val focus: FocusMove)
+/**
+ * The grid after one edit.
+ *
+ * @property words The cell values after the edit, lowercased.
+ * @property focus Where keyboard focus goes next.
+ */
+data class RecoveryEdit(
+    val words: List<String>,
+    val focus: FocusMove,
+)
 
 /**
  * The recovery grid's input rules, port of the iOS `RecoveryEntryGrid` binding:
@@ -20,7 +39,15 @@ object RecoveryEntry {
     private const val SHORT = 12
     private const val LONG = 24
 
-    fun apply(words: List<String>, index: Int, value: String): RecoveryEdit {
+    /**
+     * Applies [value] typed or pasted into cell [index] of [words]; pure, never throws for an
+     * [index] inside [words].
+     */
+    fun apply(
+        words: List<String>,
+        index: Int,
+        value: String,
+    ): RecoveryEdit {
         val parts = value.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
         val endsInSpace = value.lastOrNull()?.isWhitespace() == true
         val next = words.toMutableList()
@@ -32,11 +59,12 @@ object RecoveryEntry {
         }
         val word = parts.firstOrNull().orEmpty()
         next[index] = word
-        val focus = when {
-            !endsInSpace || word.isEmpty() -> FocusMove.Stay
-            index + 1 < next.size -> FocusMove.To(index + 1)
-            else -> FocusMove.Release
-        }
+        val focus =
+            when {
+                !endsInSpace || word.isEmpty() -> FocusMove.Stay
+                index + 1 < next.size -> FocusMove.To(index + 1)
+                else -> FocusMove.Release
+            }
         return RecoveryEdit(next, focus)
     }
 
@@ -46,5 +74,6 @@ object RecoveryEntry {
     /** The other grid size, cleared, as the "Use a 24-word phrase" toggle. */
     fun toggled(words: List<String>): List<String> = List(if (words.size == SHORT) LONG else SHORT) { "" }
 
+    /** A cleared 12-cell grid. */
     fun empty(): List<String> = List(SHORT) { "" }
 }
