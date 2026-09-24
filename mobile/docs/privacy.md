@@ -335,7 +335,7 @@ and address, and fixed failure codes.
 | Threat | Mitigation |
 | --- | --- |
 | Viewing key leaks to UI, logs, storage or crash reports | Derived only inside `plan_viewing_key` and never returned across FFI. No record field holds it. `Post` Debug is redacted. Hosts never log step bodies (a Swift test asserts the store's observable state never contains the fixture key). Nothing about privacy is persisted. |
-| Host or attacker redirects the key to another server | The URL comes from the embedded generated routing, not the host, and is `https` (re-checked in Rust at load). The host transport for `Post` refuses every redirect, uses an ephemeral session without cache or cookies, and is HTTPS-only under ATS and `usesCleartextTraffic=false`. |
+| Host or attacker redirects the key to another server | The URL comes from the embedded generated routing, not the host, and is `https` (re-checked in Rust at load). The one exception is the DEBUG discovery override (README "Pointing at your own privacy service"): it passes the same URL rules, only replaces an already-routed non-OHTTP network's URL, and a release core refuses it. The host transport for `Post` refuses every redirect, uses an ephemeral session without cache or cookies, and is HTTPS-only under ATS and `usesCleartextTraffic=false`. |
 | Key sent in plaintext once upstream enables OHTTP | The generator renders an OHTTP network with no URL; the core loader refuses `ohttp: true` independently; `prepare_privacy_read` returns `NotConfigured`. Conformance and Rust tests pin both. |
 | Key persists in memory | Krusty 0.11.0 returns a plain `Felt` (Copy, cannot be zeroized). The core holds it for one body build and serialises into an exactly sized `Zeroizing` buffer. The FFI copy is zeroed by the host after the send, but the HTTP/TLS stack's internal copies cannot be. Both **residual**; the upstream fix is in §9. |
 | Key for the wrong network or pool, or reused across scopes | The scope string is built from the plan's `NetworkId` chain id and that network's generated pool. The endpoint must prove `starknet_chainId` first. No unscoped `derive_strk20_viewing_key` call exists; a grep test enforces this. |
@@ -398,15 +398,15 @@ params; every fixture-4 outcome, request count and pause; every fixture-5 gate, 
 row and compact amount), `tests/privacy_plan.rs` (ordering, lock after re-unlock, per-attempt
 budget, restart from page one, classification, changed `block_ref`, page cap, unregistered) and
 `tests/privacy_key_boundary.rs` (the key's hex appears only inside `Post` bodies; no unscoped
-`derive_strk20_viewing_key` anywhere in `src`). The core has no HTTP client, so the opt-in live
-read is a Swift test.
+`derive_strk20_viewing_key` anywhere in `src`). The core has no HTTP client; the opt-in live read
+`tests/privacy_mainnet.rs` moves its bytes with the system `curl` (README).
 
 **Swift unit** (`BrambleTests`): `PrivacyBridgeTests` (fixture-3 bytes through the Swift model,
 fixture-5 strings, the mobile-only pair), `PrivacyModelTests` (Sepolia makes no plan, failure and
 reset, a locked core never posts, Swift state never holds the key, cleartext refused), and
 `MainnetPrivacyTests`: skipped unless `TEST_RUNNER_BRAMBLE_MOBILE_PRIVACY_LIVE_ACK` is the exact
 acknowledgement and no CI marker is set; read-only; sends that wallet's viewing key to the Mainnet
-discovery service, as the extension would. Agents never run it.
+discovery service, as the extension would. Run only with the wallet owner's authorisation.
 
 **XCUITest** (`BrambleUITests/PrivacyFlowTests.swift`), only on the run-owned "Bramble privacy"
 simulator, with the DEBUG-only `-BramblePrivacyFixture <scenario>` beside `-BrambleRpcFixture`:

@@ -7,6 +7,13 @@ struct BrambleApp: App {
     @State private var store: WalletStore
 
     init() {
+        #if DEBUG
+        // A refused override stops the launch: silently using the default service would send the
+        // viewing key somewhere the developer did not choose.
+        do { try PrivacyEndpointOverride.apply() } catch {
+            preconditionFailure("\(PrivacyEndpointOverride.argument) refused by the core: \(error)")
+        }
+        #endif
         let core = try! WalletCore(dataDir: VaultDirectory.prepare().path)
         _store = State(initialValue: WalletStore(core: core))
     }

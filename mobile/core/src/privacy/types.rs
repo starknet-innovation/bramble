@@ -165,6 +165,12 @@ pub enum PrivacyError {
     OutOfOrder,
     #[error("plan closed")]
     PlanClosed,
+    /// A discovery override that fails the configured-URL rules.
+    #[error("privacy endpoint refused")]
+    InvalidEndpoint,
+    /// A release build of the core never takes a discovery override.
+    #[error("privacy endpoint overrides are debug-only")]
+    OverrideUnavailable,
 }
 
 /// The extension's `PrivacyDisclosureState`, reduced to what the gates read.

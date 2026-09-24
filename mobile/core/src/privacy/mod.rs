@@ -43,6 +43,32 @@ pub fn privacy_configured(network: NetworkId) -> bool {
     config::route_for(network).is_some()
 }
 
+/// DEBUG builds only: points `network`'s discovery service at `url` for this process, or with
+/// `None` restores the generated URL. The URL must pass the rules the generated routing does
+/// (`https`, at most 2048 bytes, no credentials, query, fragment or trailing slash), and the
+/// network must already be routed, so an override never re-enables Sepolia or an OHTTP network.
+/// A release build of the core refuses every call with `OverrideUnavailable`. Hosts call this
+/// only from a DEBUG launch argument or environment variable (mobile/README.md), before any read;
+/// a plan already prepared keeps the URL it was prepared with. A refusal changes nothing.
+#[uniffi::export]
+pub fn set_privacy_discovery_override(
+    network: NetworkId,
+    url: Option<String>,
+) -> Result<(), types::PrivacyError> {
+    config::set_override(network, url.as_deref()).map_err(|refusal| match refusal {
+        config::OverrideRefusal::ReleaseBuild => types::PrivacyError::OverrideUnavailable,
+        config::OverrideRefusal::NotRouted => types::PrivacyError::NotConfigured,
+        config::OverrideRefusal::InvalidUrl => types::PrivacyError::InvalidEndpoint,
+    })
+}
+
+/// The discovery URL a read on `network` would post to now (the generated one, or a DEBUG
+/// override); `None` when the network is not routed. Public routing only; carries no key.
+#[uniffi::export]
+pub fn privacy_discovery_url(network: NetworkId) -> Option<String> {
+    config::route_for(network).map(|route| route.discovery_url)
+}
+
 /// Which privacy writes mobile supports; every surface branches on these, never on a literal.
 #[uniffi::export]
 pub fn privacy_capabilities() -> PrivacyCapabilities {

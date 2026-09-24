@@ -9,10 +9,17 @@ use bramble_core::{NetworkId, WalletCore};
 #[test]
 #[ignore = "needs BRAMBLE_MOBILE_MAINNET_MNEMONIC and BRAMBLE_MOBILE_MAINNET_ADDRESS"]
 fn derives_the_configured_mainnet_account() {
-    assert!(
-        std::env::var_os("CI").is_none(),
-        "the mainnet wallet check never runs in CI"
-    );
+    for marker in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "TEST_RUNNER_CI",
+        "TEST_RUNNER_GITHUB_ACTIONS",
+    ] {
+        assert!(
+            std::env::var_os(marker).is_none(),
+            "the mainnet wallet check never runs in CI ({marker} is set)"
+        );
+    }
     let phrase =
         std::env::var("BRAMBLE_MOBILE_MAINNET_MNEMONIC").expect("BRAMBLE_MOBILE_MAINNET_MNEMONIC");
     let expected =

@@ -29,9 +29,10 @@ pub use privacy::types::{
     PublicBalance, ShieldTile, TokenDetailPrivacy, UnifiedBalance,
 };
 pub use privacy::{
-    max_privacy_response_bytes, privacy_capabilities, privacy_configured, privacy_entry,
-    privacy_status, private_line, receive_pool_notice, shield_tile, shielded_balances_included,
-    token_detail_privacy, unified_home_balances,
+    max_privacy_response_bytes, privacy_capabilities, privacy_configured, privacy_discovery_url,
+    privacy_entry, privacy_status, private_line, receive_pool_notice,
+    set_privacy_discovery_override, shield_tile, shielded_balances_included, token_detail_privacy,
+    unified_home_balances,
 };
 pub use send::plan::TransferPlan;
 pub use send::types::{

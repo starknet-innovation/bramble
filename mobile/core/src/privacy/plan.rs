@@ -50,7 +50,7 @@ pub(crate) struct ReadState {
     pub network: NetworkId,
     pub account_index: u32,
     pub address: Felt,
-    pub route: &'static Route,
+    pub route: Route,
     pub limits: &'static Limits,
     pub tokens: &'static [TokenInfo],
     pub generation: u64,

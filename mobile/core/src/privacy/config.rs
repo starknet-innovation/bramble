@@ -6,8 +6,13 @@
 //! (`"ohttp": true`), without a discovery URL or pool, with a non-`https` URL, or with a pool that
 //! is not a non-zero felt is **not configured**. Mobile has no OHTTP client, so an OHTTP network is
 //! never routed (docs/privacy.md §1.1): the viewing key is never put in a plaintext body for it.
+//!
+//! A debug build of the core may replace a routed network's discovery URL (`set_override`), so a
+//! developer can point the app or the tests at their own service. The override passes the same
+//! URL rules as the generated file, applies only to a network that is already routed (so it never
+//! re-enables an OHTTP network), and is refused outright by a release build.
 
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 
 use serde::Deserialize;
 use starknet_types_core::felt::Felt;
@@ -87,13 +92,17 @@ fn network_for(id: &str) -> Option<NetworkId> {
     }
 }
 
+/// The extension's bound on a service URL (`isServiceUrl` in `@bramble/core/service-url`).
+pub const MAX_SERVICE_URL_BYTES: usize = 2048;
+
 fn is_service_url(url: &str) -> bool {
-    url.strip_prefix("https://").is_some_and(|rest| {
-        !rest.is_empty()
-            && !url.ends_with('/')
-            && url.bytes().all(|b| b.is_ascii_graphic())
-            && !url.contains(['?', '#', '@', '\\'])
-    })
+    url.len() <= MAX_SERVICE_URL_BYTES
+        && url.strip_prefix("https://").is_some_and(|rest| {
+            !rest.is_empty()
+                && !url.ends_with('/')
+                && url.bytes().all(|b| b.is_ascii_graphic())
+                && !url.contains(['?', '#', '@', '\\'])
+        })
 }
 
 fn route(raw: RawNetwork) -> Option<Route> {
@@ -140,12 +149,72 @@ pub fn routing() -> &'static Routing {
     ROUTING.get_or_init(|| parse(ROUTING_JSON).expect("bundled privacy routing parses"))
 }
 
-/// The route for a network, if it is configured.
-pub fn route_for(network: NetworkId) -> Option<&'static Route> {
-    routing()
+fn overrides() -> &'static RwLock<Vec<(NetworkId, String)>> {
+    static OVERRIDES: OnceLock<RwLock<Vec<(NetworkId, String)>>> = OnceLock::new();
+    OVERRIDES.get_or_init(|| RwLock::new(Vec::new()))
+}
+
+/// Why an override was refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverrideRefusal {
+    /// A release build never takes one.
+    ReleaseBuild,
+    /// The network has no plain routing (Sepolia, or OHTTP on); an override cannot add one.
+    NotRouted,
+    /// The URL fails the configured-URL rules: `https`, at most 2048 bytes, no credentials,
+    /// query, fragment, backslash, whitespace or trailing slash.
+    InvalidUrl,
+}
+
+/// Checks an override against the configured-URL rules and the network's routing, without
+/// storing it. Pure, so the rules are testable without touching the process-wide override.
+pub fn check_override(
+    routing: &Routing,
+    network: NetworkId,
+    url: &str,
+) -> Result<(), OverrideRefusal> {
+    if !routing.routes.iter().any(|route| route.network == network) {
+        return Err(OverrideRefusal::NotRouted);
+    }
+    if !is_service_url(url) {
+        return Err(OverrideRefusal::InvalidUrl);
+    }
+    Ok(())
+}
+
+/// Replaces (or with `None`, restores) a routed network's discovery URL for this process.
+/// Debug builds only; every refusal leaves the current routing unchanged.
+pub fn set_override(network: NetworkId, url: Option<&str>) -> Result<(), OverrideRefusal> {
+    if !cfg!(debug_assertions) {
+        return Err(OverrideRefusal::ReleaseBuild);
+    }
+    if let Some(url) = url {
+        check_override(routing(), network, url)?;
+    }
+    let mut table = overrides()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    table.retain(|(id, _)| *id != network);
+    if let Some(url) = url {
+        table.push((network, url.to_owned()));
+    }
+    Ok(())
+}
+
+/// The route for a network, if it is configured, with any debug override of its discovery URL.
+pub fn route_for(network: NetworkId) -> Option<Route> {
+    let mut route = routing()
         .routes
         .iter()
-        .find(|route| route.network == network)
+        .find(|route| route.network == network)?
+        .clone();
+    let table = overrides()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((_, url)) = table.iter().find(|(id, _)| *id == network) {
+        route.discovery_url.clone_from(url);
+    }
+    Some(route)
 }
 
 #[cfg(test)]
@@ -202,9 +271,77 @@ mod tests {
             ));
             assert!(routing.routes.is_empty(), "{url}");
         }
+        let long = format!("https://d.example/{}", "a".repeat(MAX_SERVICE_URL_BYTES));
+        let routing = with_networks(&format!(
+            r#"{{"id":"SN_MAIN","ohttp":false,"discoveryUrl":"{long}","poolAddress":"0x1"}}"#
+        ));
+        assert!(
+            routing.routes.is_empty(),
+            "an over-long URL is not configured"
+        );
         let zero_pool = with_networks(
             r#"{"id":"SN_MAIN","ohttp":false,"discoveryUrl":"https://d.example","poolAddress":"0x0"}"#,
         );
         assert!(zero_pool.routes.is_empty());
+    }
+
+    #[test]
+    fn an_override_passes_the_configured_url_rules() {
+        let routing = routing();
+        assert_eq!(
+            check_override(
+                routing,
+                NetworkId::Mainnet,
+                "https://privacy.example.org/discovery"
+            ),
+            Ok(())
+        );
+        for url in [
+            "http://privacy.example.org/discovery",
+            "https://user:secret@privacy.example.org/discovery",
+            "https://token@privacy.example.org",
+            "https://privacy.example.org/discovery/",
+            "https://privacy.example.org/discovery?key=1",
+            "https://privacy.example.org/dis covery",
+            "https://",
+        ] {
+            assert_eq!(
+                check_override(routing, NetworkId::Mainnet, url),
+                Err(OverrideRefusal::InvalidUrl),
+                "{url}"
+            );
+        }
+        let long = format!(
+            "https://privacy.example.org/{}",
+            "a".repeat(MAX_SERVICE_URL_BYTES)
+        );
+        assert_eq!(
+            check_override(routing, NetworkId::Mainnet, &long),
+            Err(OverrideRefusal::InvalidUrl)
+        );
+    }
+
+    #[test]
+    fn an_override_never_routes_an_unrouted_or_ohttp_network() {
+        assert_eq!(
+            check_override(routing(), NetworkId::Sepolia, "https://privacy.example.org"),
+            Err(OverrideRefusal::NotRouted)
+        );
+        let pool = "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a";
+        let ohttp = with_networks(&format!(
+            r#"{{"id":"SN_MAIN","ohttp":true,"discoveryUrl":"https://d.example/discovery","poolAddress":"{pool}"}}"#
+        ));
+        assert_eq!(
+            check_override(&ohttp, NetworkId::Mainnet, "https://privacy.example.org"),
+            Err(OverrideRefusal::NotRouted)
+        );
+        // A refused override stores nothing: the bundled URL is still the one served.
+        assert!(set_override(NetworkId::Mainnet, Some("http://privacy.example.org")).is_err());
+        assert!(set_override(NetworkId::Sepolia, Some("https://privacy.example.org")).is_err());
+        assert_eq!(
+            route_for(NetworkId::Mainnet).unwrap().discovery_url,
+            routing().routes[0].discovery_url
+        );
+        assert!(route_for(NetworkId::Sepolia).is_none());
     }
 }
