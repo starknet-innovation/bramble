@@ -34,13 +34,13 @@ const EXACT: ReadonlyMap<string, string> = new Map([
   ["failed to fetch", NETWORK_UNREACHABLE],
   ["network error", NETWORK_UNREACHABLE],
   ["load failed", NETWORK_UNREACHABLE],
-  // Swap (AVNU) conditions a user can act on.
+  // Swap (avnu) conditions a user can act on.
   [
     "no swap route available for this pair",
     "No route found for this pair right now. Try a different amount or pair.",
   ],
   ["swap quote failed", "Couldn't fetch a quote. Check your connection and try again."],
-  ["swap build failed", "AVNU couldn't prepare this swap. Get a fresh quote and try again."],
+  ["swap build failed", "avnu couldn't prepare this swap. Get a fresh quote and try again."],
   ["swaps are not available on this network", "Swaps aren't available on this network."],
   [
     "swap build touched an unexpected token approval",

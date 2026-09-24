@@ -1,8 +1,7 @@
 /**
  * Unit checks for the pure self-healing of the side panel's transient
- * account-group selections: a filter or expanded group whose group is gone, and
- * an open assign panel whose account is gone, are dropped; live selections pass
- * through untouched.
+ * account-group selection: an expanded group whose group is gone is dropped; a
+ * live selection passes through untouched.
  */
 import { describe, expect, test } from "bun:test";
 import type { AccountGroups } from "@bramble/settings/groups";
@@ -17,49 +16,37 @@ const groups: AccountGroups = [
 ];
 
 describe("healTransientGroupState", () => {
-  test("keeps selections that still resolve", () => {
-    const healed = healTransientGroupState(
-      { drawerGroupFilter: "work", expandedGroupId: "savings", openAssignId: "SN_MAIN:0xabc" },
-      groups,
-      ["SN_MAIN:0xabc"],
-    );
-
-    expect(healed).toEqual({
-      drawerGroupFilter: "work",
+  test("keeps an expanded group that still resolves", () => {
+    expect(healTransientGroupState({ expandedGroupId: "savings" }, groups)).toEqual({
       expandedGroupId: "savings",
-      openAssignId: "SN_MAIN:0xabc",
     });
   });
 
-  test("drops a filter and expanded group whose group was deleted", () => {
-    const healed = healTransientGroupState(
-      { drawerGroupFilter: "gone", expandedGroupId: "also-gone", openAssignId: null },
-      groups,
-      ["SN_MAIN:0xabc"],
+  test("drops an expanded group whose group was deleted", () => {
+    expect(healTransientGroupState({ expandedGroupId: "also-gone" }, groups).expandedGroupId).toBe(
+      null,
     );
-
-    expect(healed.drawerGroupFilter).toBeNull();
-    expect(healed.expandedGroupId).toBeNull();
   });
 
-  test("drops an open assign panel whose account is gone", () => {
-    const healed = healTransientGroupState(
-      { drawerGroupFilter: null, expandedGroupId: null, openAssignId: "SN_MAIN:0xdead" },
-      groups,
-      ["SN_MAIN:0xabc"],
-    );
+  test("drops collapsed folders that were deleted and keeps the ones that remain", () => {
+    expect(
+      healTransientGroupState(
+        { collapsedFolderIds: ["savings", "gone", "work"], expandedGroupId: null },
+        groups,
+      ).collapsedFolderIds,
+    ).toEqual(["savings", "work"]);
+  });
 
-    expect(healed.openAssignId).toBeNull();
+  test("leaves collapsed folders untouched when the caller did not pass them", () => {
+    expect(healTransientGroupState({ expandedGroupId: "savings" }, groups).collapsedFolderIds).toBe(
+      undefined,
+    );
   });
 
   test("keeps the Create a group panel sentinel (not a group id) across a heal", () => {
-    const healed = healTransientGroupState(
-      { drawerGroupFilter: null, expandedGroupId: CREATE_GROUP_PANEL, openAssignId: null },
-      groups,
-      ["SN_MAIN:0xabc"],
-    );
-
     // The sentinel is a UI mode, not a deleted-group id, so it must survive.
-    expect(healed.expandedGroupId).toBe(CREATE_GROUP_PANEL);
+    expect(
+      healTransientGroupState({ expandedGroupId: CREATE_GROUP_PANEL }, groups).expandedGroupId,
+    ).toBe(CREATE_GROUP_PANEL);
   });
 });

@@ -79,18 +79,15 @@ const mount = (
       document.createRange().createContextualFragment(importKeyFlow(status)),
     );
     const deps: SettingsUiDeps = {
-      activeAccountId: () => account.id,
       app: container,
       expandedGroup: () => null,
       networkId: () => "SN_MAIN",
-      openAssign: () => null,
       refresh: () => Promise.resolve(status),
       render: async () => {
         renders += 1;
         paint();
       },
       setExpandedGroup: () => undefined,
-      setOpenAssign: () => undefined,
       startAddAccount: () => undefined,
       wallet: wallet as unknown as SettingsUiDeps["wallet"],
     };

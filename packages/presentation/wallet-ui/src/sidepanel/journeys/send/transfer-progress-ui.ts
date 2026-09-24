@@ -27,17 +27,12 @@ export const setText = (root: ParentNode, id: string, text: string): void => {
  */
 export const setSendProgress = (form: HTMLFormElement, stage: TransferStage): void => {
   const progress = form.querySelector<HTMLElement>(".send-progress");
-  progress?.toggleAttribute("hidden", stage === "recipient" || stage === "asset");
-  const activeIndex =
-    stage === "details"
-      ? 0
-      : stage === "review" || stage === "reviewing"
-        ? 1
-        : stage === "submitted"
-          ? 3
-          : stage === "confirming" || stage === "pending"
-            ? 3
-            : 2;
+  progress?.removeAttribute("hidden");
+  // Three steps: naming the recipient, naming the amount, then Confirm, which
+  // holds everything from the review through authorizing, broadcasting and the
+  // chain's own confirmation — one step for one act, rather than a rail that
+  // keeps moving while the user has nothing left to do.
+  const activeIndex = stage === "recipient" ? 0 : stage === "details" ? 1 : 2;
   form.querySelectorAll<HTMLElement>("[data-send-step]").forEach((step, index) => {
     const currentStep = step;
     currentStep.dataset["state"] =

@@ -96,11 +96,11 @@ const approvalCallPolicyError = (call: BuiltCall, intent: SwapIntent): string | 
 // burn, upgrade, and every other selector.
 const routeCounterpartyError = (call: BuiltCall, intent: SwapIntent): string | null => {
   if (!sameFelt(call.contractAddress, intent.routerAddress)) {
-    return "swap build called a contract that is not the AVNU router";
+    return "swap build called a contract that is not the avnu router";
   }
   return isAvnuSwapEntrypoint(call.entrypoint)
     ? null
-    : "swap build called an entrypoint that is not an AVNU swap";
+    : "swap build called an entrypoint that is not an avnu swap";
 };
 
 // The half that makes the review mean something: the admitted call's CALLDATA,

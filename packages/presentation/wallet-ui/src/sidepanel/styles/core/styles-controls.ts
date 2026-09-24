@@ -70,6 +70,55 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
     background: transparent;
     color: var(--bramble-muted);
   }
+  /* Switch: a label beside a track whose knob moves and inverts when on. The
+     surface is a fill, not a ring, per the Clean Mono control rule. */
+  button.switch-control {
+    background: var(--bramble-sunken);
+    border-radius: ${RADIUS.full};
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.medium};
+    gap: ${SPACE.sm};
+    /* A button stretches to its container and centres its content; a switch is
+       its own small control, so it sizes to its label and stays at the start. */
+    justify-self: start;
+    min-height: ${CONTROL.hitSmall};
+    padding: 0 4px 0 ${SPACE.md};
+  }
+  .switch-copy { align-items: center; display: inline-flex; gap: 5px; }
+  .switch-copy .icon { height: 13px; width: 13px; }
+  .switch-track {
+    align-items: center;
+    background: var(--bramble-elevated);
+    border-radius: ${RADIUS.full};
+    box-sizing: border-box;
+    display: inline-flex;
+    height: 24px;
+    justify-content: flex-start;
+    padding: 3px;
+    width: 40px;
+  }
+  .switch-knob {
+    background: var(--bramble-muted);
+    border-radius: ${RADIUS.full};
+    height: 18px;
+    width: 18px;
+  }
+  button.switch-control[data-checked="true"] { color: var(--bramble-text); }
+  button.switch-control[data-checked="true"] .switch-track {
+    background: var(--bramble-text);
+    justify-content: flex-end;
+  }
+  button.switch-control[data-checked="true"] .switch-knob { background: var(--bramble-bg); }
+  @media (hover: hover) and (pointer: fine) {
+    button.switch-control:not(:disabled):hover {
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
+    }
+  }
+  button.switch-control:not(:disabled):active { background: var(--bramble-soft-press); }
+  .address-pro-fields { display: grid; gap: ${SPACE.md}; }
+  .address-pro-fields[hidden] { display: none; }
   button.danger { background: var(--bramble-elevated); color: var(--bramble-danger); }
   button.danger:not(:disabled):active { background: var(--bramble-danger-soft); }
   @media (hover: hover) and (pointer: fine) {

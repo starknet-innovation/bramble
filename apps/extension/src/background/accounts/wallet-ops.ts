@@ -274,6 +274,9 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
       feeEstimateFailed: fees.feeEstimateFailed,
       flags: report.flags,
       requiresDeployment: fees.requiresDeployment,
+      // Deployment and the send are two transactions, so a device signs twice.
+      // The review says so rather than letting the second prompt surprise.
+      signsTwice: fees.requiresDeployment && account.derivation.kind === "ledger",
       summaries: report.calls.map((decoded) => decoded.summary),
     },
   };

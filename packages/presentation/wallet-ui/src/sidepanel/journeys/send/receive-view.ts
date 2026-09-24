@@ -1,11 +1,13 @@
 /** Shared account-address surface used by single-owner and multisig Receive. */
 import { escapeHtml } from "@bramble/core/html";
-import { button } from "@bramble/ui-kit/controls";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
+import { button, switchControl } from "@bramble/ui-kit/controls";
 import { icon } from "@bramble/ui-kit/icons";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { walletContactCard } from "@bramble/wallet-model/preferences";
 import { accountLabel, copyButton } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
+import { knownAccountType } from "../../shell/account-types";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 
 const PUBLIC_ONLY_COPY = "Public transfers only";
@@ -59,6 +61,67 @@ export const privacyPoolNotice = (
 };
 
 /**
+ * Renders the on-chain class-hash verification state. `null` is the still-loading
+ * state (kept visually distinct from a confirmed result). A `mismatch` is a
+ * security signal and names both the class deployed on-chain and the class this
+ * wallet expects, because that alert is hoisted above the collapsed Pro fields.
+ * Only an exact on-chain match reads as verified.
+ */
+export const classHashVerificationBadge = (verification: ClassHashVerification | null): string => {
+  if (verification === null) {
+    return `<p class="verify-status pending" role="status">${icon("refresh")}Verifying on-chain…</p>`;
+  }
+  switch (verification.status) {
+    case "verified":
+      return `<p class="verify-status verified" role="status">${icon("shield")}Verified on-chain</p>`;
+    case "mismatch":
+      return `<p class="verify-status mismatch" role="alert">${icon("alert")}On-chain mismatch — the contract deployed at this address runs class <code>${escapeHtml(verification.onChainClassHash)}</code>, not <code>${escapeHtml(verification.expectedClassHash)}</code>, the class this wallet expects. Do not trust this account until resolved.</p>`;
+    case "undeployed":
+      return `<p class="verify-status pending" role="status">${icon("alert")}Not deployed yet — the class hash cannot be verified on-chain until this account is deployed.</p>`;
+    case "unreachable":
+      return `<p class="verify-status pending" role="status">${icon("alert")}Could not reach the network — shown from local data and not yet verified on-chain.</p>`;
+  }
+};
+
+// A mismatch says "do not trust this account", so it is the one verdict that
+// cannot sit behind the Pro switch: Pro renders collapsed, and a security signal
+// nobody opens is a signal nobody gets. It is hoisted to the top of the card and
+// left out of the Pro rows, so exactly one badge renders either way.
+const isMismatch = (verification: ClassHashVerification | null | undefined): boolean =>
+  verification?.status === "mismatch";
+
+// The contract identifiers: the class this account runs, its familiar name when
+// the registry knows that class, and the on-chain verdict for it. Rendered
+// inside Pro beside the public keys, because a class hash answers "what am I
+// handing you" the same way the address and signer key do. Omitted entirely
+// when the caller passes no class hash (a watched multisig's Receive).
+const classHashRows = (
+  classHash: string | undefined,
+  verification: ClassHashVerification | null | undefined,
+): string => {
+  if (!classHash) {
+    return "";
+  }
+  const accountType = knownAccountType(classHash);
+  return `<div class="receive-key-row">
+      <strong>Class hash</strong>
+      <span class="receive-key-value">
+        <code title="${escapeHtml(classHash)}">${escapeHtml(accountLabel(classHash))}</code>
+        ${copyButton(classHash, "Copy class hash")}
+      </span>
+    </div>
+    ${
+      accountType
+        ? `<div class="receive-key-row">
+      <strong>Type</strong>
+      <span class="receive-key-value">${escapeHtml(accountType)}</span>
+    </div>`
+        : ""
+    }
+    ${verification === undefined || isMismatch(verification) ? "" : classHashVerificationBadge(verification)}`;
+};
+
+/**
  * Accessible names of the two QR payloads Receive can show. Shared with the
  * shell binding that swaps between them, so the label and the payload cannot
  * drift apart.
@@ -82,6 +145,10 @@ const CARD_EXPLAINER =
  */
 type ReceiveAddressViewOptions = {
   readonly address: string;
+  /** Class this account's contract runs; omitted where the caller has none. */
+  readonly classHash?: string;
+  /** On-chain verdict for that class; `null` while it is still being checked. */
+  readonly classHashVerification?: ClassHashVerification | null;
   readonly copyLabel: string;
   readonly hint: string;
   readonly networkId: StarknetNetworkId;
@@ -93,10 +160,15 @@ type ReceiveAddressViewOptions = {
 
 /**
  * Renders the canonical Receive card. Callers provide account-type context as
- * escaped presentation copy and may expose one already-public signer key.
+ * escaped presentation copy and may expose one already-public signer key. A
+ * caller that knows the account's class hash passes it too: it is public
+ * contract metadata, and Pro is where the wallet hands out the identifiers
+ * someone may need to check what they are paying into.
  */
 export const receiveAddressView = ({
   address,
+  classHash,
+  classHashVerification,
   copyLabel,
   hint,
   networkId,
@@ -116,65 +188,61 @@ export const receiveAddressView = ({
     : "";
   return `
   <div class="stack receive-address-view"${rootData}>
+    ${classHash && isMismatch(classHashVerification) ? classHashVerificationBadge(classHashVerification ?? null) : ""}
     <div class="qr-card" data-receive-qr data-qr-payload="address">${qrSvg(address, RECEIVE_QR_LABELS.address)}</div>
     <div class="receive-intro">
       <h2>Your Starknet address</h2>
-      <p class="receive-address-line"><code data-receive-address-text>${escapeHtml(address)}</code></p>
+      <button class="receive-address-copy" type="button" data-copy="${escapeHtml(address)}" aria-label="${escapeHtml(copyLabel)}" aria-describedby="receive-address-text" title="${escapeHtml(copyLabel)}">
+        <code id="receive-address-text" data-receive-address-text>${escapeHtml(address)}</code>
+        <span class="receive-address-copy-mark" aria-hidden="true">${icon("copy")}</span>
+      </button>
       ${networkName ? `<p class="receive-network">Network: <strong>${escapeHtml(networkName)}</strong></p>` : ""}
-      <p>${escapeHtml(hint)}</p>
     </div>
     ${
       publicKeyX
-        ? `<div class="seg receive-payload-switch" role="group" aria-label="QR code contents" data-receive-payload-switch>
-        <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">Address</button>
-        <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Bramble contact card</button>
-      </div>
-      <p class="hint receive-card-explainer" data-receive-card-explainer>${escapeHtml(CARD_EXPLAINER)}</p>`
-        : ""
-    }
-    <div class="receive-actions">
-      ${button({ attributes: { "data-copy": address }, icon: "copy", label: copyLabel })}
-      ${
-        publicKeyX
-          ? button({
-              attributes: {
-                "data-copy": walletCardReady ? contactCard : "",
-                "data-wallet-card-copy": true,
-              },
-              disabled: !walletCardReady,
-              icon: "copy",
-              label: walletCardReady ? "Copy wallet card" : "Preparing card…",
-              variant: "secondary",
-            })
-          : ""
-      }
-    </div>
-    ${
-      publicKeyX
-        ? `<details class="disclosure receive-identity" data-disclosure="receive-identity">
-            <summary>
-              <span class="menu-copy"><strong>Wallet identity</strong><small>Signer and coordination keys</small></span>
-              <span class="disclosure-mark">${icon("chevronRight")}</span>
-            </summary>
-            <div class="disclosure-body receive-public-key">
-              <div class="receive-key-row">
-                <strong>Signer public key</strong>
-                <span class="receive-key-value">
-                  <code title="${escapeHtml(publicKeyX)}">${escapeHtml(accountLabel(publicKeyX))}</code>
-                  ${copyButton(publicKeyX, "Copy signer public key")}
-                </span>
-              </div>
-              <div class="receive-key-row" data-nostr-key-row>
-                <strong>Coordination public key</strong>
-                <span data-nostr-key-status role="status" aria-live="polite"${nostrPublicKey ? " hidden" : ""}>Preparing secure coordination…</span>
-                <span class="receive-key-value" data-nostr-key-value${nostrPublicKey ? "" : " hidden"}>
-                  <code data-nostr-key title="${escapeHtml(nostrPublicKey ?? "")}">${nostrPublicKey ? escapeHtml(accountLabel(nostrPublicKey)) : ""}</code>
-                  ${copyButton(nostrPublicKey ?? "", "Copy coordination public key")}
-                </span>
-              </div>
-            </div>
-          </details>`
-        : ""
+        ? `${switchControl({
+            attributes: { id: "receive-pro" },
+            label: "Pro",
+          })}
+      <div class="receive-pro-fields" id="receive-pro-fields" hidden>
+        <p class="hint">${escapeHtml(hint)}</p>
+        <div class="seg receive-payload-switch" role="group" aria-label="QR code contents" data-receive-payload-switch>
+          <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">Address</button>
+          <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Bramble contact card</button>
+        </div>
+        <p class="hint receive-card-explainer" data-receive-card-explainer>${escapeHtml(CARD_EXPLAINER)}</p>
+        <div class="receive-actions">
+          ${button({
+            attributes: {
+              "data-copy": walletCardReady ? contactCard : "",
+              "data-wallet-card-copy": true,
+            },
+            disabled: !walletCardReady,
+            icon: "copy",
+            label: walletCardReady ? "Copy wallet card" : "Preparing card…",
+            variant: "secondary",
+          })}
+        </div>
+        <div class="receive-public-key">
+          <div class="receive-key-row">
+            <strong>Signer public key</strong>
+            <span class="receive-key-value">
+              <code title="${escapeHtml(publicKeyX)}">${escapeHtml(accountLabel(publicKeyX))}</code>
+              ${copyButton(publicKeyX, "Copy signer public key")}
+            </span>
+          </div>
+          <div class="receive-key-row" data-nostr-key-row>
+            <strong>Coordination public key</strong>
+            <span data-nostr-key-status role="status" aria-live="polite"${nostrPublicKey ? " hidden" : ""}>Preparing secure coordination…</span>
+            <span class="receive-key-value" data-nostr-key-value${nostrPublicKey ? "" : " hidden"}>
+              <code data-nostr-key title="${escapeHtml(nostrPublicKey ?? "")}">${nostrPublicKey ? escapeHtml(accountLabel(nostrPublicKey)) : ""}</code>
+              ${copyButton(nostrPublicKey ?? "", "Copy coordination public key")}
+            </span>
+          </div>
+          ${classHashRows(classHash, classHashVerification)}
+        </div>
+      </div>`
+        : `<p class="hint">${escapeHtml(hint)}</p>`
     }
   </div>`;
 };

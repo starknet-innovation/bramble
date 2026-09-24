@@ -7,6 +7,7 @@
 
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
+import { reviewFeeBlocked } from "../../shared/review-render";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
   type TransferMode,
@@ -167,7 +168,6 @@ export const applyTransferUi = (
   currentForm.dataset["stage"] = state.stage;
   currentForm.toggleAttribute("aria-busy", working);
   const stageIds: Readonly<Record<string, TransferStage>> = {
-    "send-asset-stage": "asset",
     "send-details": "details",
     "send-failure": "failed",
     "send-pending": "pending",
@@ -190,7 +190,7 @@ export const applyTransferUi = (
   buttonBusy(form.querySelector<HTMLButtonElement>("#send-review-button"), reviewing);
   buttonBusy(confirmButton, state.stage === "authorizing");
   if (confirmButton && state.stage === "review") {
-    confirmButton.disabled = state.review?.feeEstimateFailed === true;
+    confirmButton.disabled = state.review != null && reviewFeeBlocked(state.review);
   }
   setText(
     form,

@@ -22,7 +22,7 @@ import {
 export const SEND_OUTCOME_STYLES = `
   .send-review-summary {
     background: var(--bramble-panel);
-    border-radius: ${RADIUS.xl};
+    border-radius: ${RADIUS.lg};
     display: grid;
     padding: ${SPACE.lg};
   }

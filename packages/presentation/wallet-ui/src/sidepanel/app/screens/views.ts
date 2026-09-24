@@ -48,6 +48,7 @@ import {
 } from "../../journeys/multisig/multisig-views";
 import { activityScreen, requestsFlow } from "../../journeys/portfolio/activity-views";
 import { homeScreen, strkAvailableForFees } from "../../journeys/portfolio/home-view";
+import { tokenCatalogFlow } from "../../journeys/portfolio/token-catalog-view";
 import {
   DEFAULT_CURRENCY,
   tokenAddFlow,
@@ -67,6 +68,7 @@ import type { BalanceState } from "../../runtime/runtime";
 import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";
 import { accountDrawer } from "../../shell/account-drawer";
+import { INITIAL_COLLAPSED_FOLDERS } from "../../shell/drawer-folders";
 import { walletDock, walletHeader } from "../../shell/wallet-shell";
 import { backupFlow, simpleFlowScreen } from "./flows";
 
@@ -226,6 +228,9 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
   if (activeView === "token-add") {
     return tokenAddFlow(context.status);
   }
+  if (activeView === "token-catalog") {
+    return tokenCatalogFlow(context.status);
+  }
   if (activeView === "token-discover") {
     return tokenDiscoverFlow(context.status);
   }
@@ -280,12 +285,12 @@ export const dashboard = (
   multisigIntents: readonly ArgentMultisigSigningIntent[] = [],
   selectedMultisigId: string | null = null,
   multisigClassDeclared: boolean | "error" | null = null,
-  drawerGroupFilter: string | null = null,
+  collapsedFolders: readonly string[] = INITIAL_COLLAPSED_FOLDERS,
   expandedGroupId: string | null = null,
   priceStale = false,
   priceAsOf: number | null = null,
   discoveredNfts: readonly DiscoveredNft[] = [],
-  openAssignId: string | null = null,
+  addFolderOpen = false,
   classHashVerification: ClassHashVerification | null = null,
   historyUnavailable = false,
   snoozedApprovalIds: readonly string[] = [],
@@ -459,8 +464,8 @@ export const dashboard = (
       status,
       account,
       preferences,
-      drawerGroupFilter,
-      openAssignId,
+      collapsedFolders,
+      addFolderOpen,
       multisigs,
       multisigIntents,
       selectedMultisigId,

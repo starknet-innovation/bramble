@@ -136,6 +136,10 @@ export const ONBOARDING_STYLES = `
     width: 100%;
   }
   .onboarding-step-cta button, .onboarding-welcome-actions button { width: 100%; }
+  /* The hit shell is only the button's box. A disabled Continue lets the click
+     fall through to that shell, not into the CTA padding above it. */
+  .verify-continue-hit { display: grid; }
+  #verify-continue:disabled { pointer-events: none; }
 
   .onboarding-gate {
     justify-content: center;
@@ -406,6 +410,9 @@ export const ONBOARDING_STYLES = `
 
   html[data-onboarding-direction]::view-transition-old(root),
   html[data-onboarding-direction]::view-transition-new(root) { animation: none; }
+  /* The snapshot sits in the top layer. A transition that never settles would
+     otherwise swallow every click on the live step. */
+  ::view-transition { pointer-events: none; }
   ::view-transition-group(onboarding-stage) {
     animation-duration: ${ONBOARDING_TRANSITION.enterMs}ms;
     animation-timing-function: ${EASE.out};

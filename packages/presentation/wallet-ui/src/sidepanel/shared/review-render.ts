@@ -10,7 +10,7 @@
  * messages directly.
  */
 import { escapeHtml } from "@bramble/core/html";
-import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
@@ -26,6 +26,12 @@ import { formatFri } from "./parts";
 export type ReviewFeeState = {
   readonly deploymentFee?: FeeEstimate | null;
   readonly deploymentFeeEstimateFailed?: boolean;
+  /**
+   * Set when the account signs on a device: deployment and the transaction are
+   * two transactions, so the device prompts twice. Said here rather than left
+   * as a surprise between the confirm press and the second prompt.
+   */
+  readonly signsTwice?: boolean;
   readonly fee: FeeEstimate | null;
   /**
    * Verdict of the shared fee-affordability predicate (issue 191). Only
@@ -45,6 +51,24 @@ const shortfallHtml = (state: ReviewFeeState): string =>
   state.feeAffordability === "insufficient"
     ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it.</p>`
     : "";
+
+/**
+ * Whether this review has no single figure the user can consent to.
+ *
+ * A failed component, or two estimates that cannot be added (unlike units, a
+ * malformed amount), fails closed. Callers withhold the reviewed key and
+ * disable Confirm so the next click re-estimates instead of sending a figure
+ * the review did not quote. A deployment whose fee is simply not ready yet
+ * (no failure flag, no deployment estimate) is not blocked: that screen says
+ * the fee comes after deployment.
+ */
+export const reviewFeeBlocked = (state: ReviewFeeState): boolean =>
+  state.feeEstimateFailed === true ||
+  state.deploymentFeeEstimateFailed === true ||
+  (state.requiresDeployment === true &&
+    state.fee != null &&
+    state.deploymentFee != null &&
+    sumFeeEstimates(state.fee, state.deploymentFee) === null);
 
 const reviewBoundary = (content: string): string =>
   `<section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
@@ -91,9 +115,23 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
     return reviewBoundary('<p class="review-fee" role="status">Estimating network fee…</p>');
   }
   if (state.requiresDeployment === true && state.fee && state.deploymentFee) {
-    return reviewBoundary(
-      `<div class="review-fee"><p>Estimated transaction fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p><p>Estimated account deployment fee: ${escapeHtml(formatFeeEstimate(state.deploymentFee))}</p></div>${shortfallHtml(state)}`,
-    );
+    // One action, one figure. Creating the account and sending are two
+    // transactions on chain and the user pays for both, so the total leads and
+    // the deployment share is named under it — quoting the transaction alone
+    // understates what leaves the account, and quoting two figures asks the
+    // user to add them up.
+    const total = sumFeeEstimates(state.fee, state.deploymentFee);
+    // Unlike units or a malformed estimate fail closed: quoting one component
+    // as the total would understate the cost the same way a missing half does.
+    if (total) {
+      return reviewBoundary(
+        `<div class="review-fee"><p>Estimated fee: ${escapeHtml(
+          formatFeeEstimate(total),
+        )}</p><p class="review-fee-part">Creating this account on Starknet is ${escapeHtml(
+          formatFeeEstimate(state.deploymentFee),
+        )} of that${state.signsTwice === true ? ", and your Ledger asks to sign both" : ""}.</p></div>${shortfallHtml(state)}`,
+      );
+    }
   }
   if (
     state.requiresDeployment === true &&

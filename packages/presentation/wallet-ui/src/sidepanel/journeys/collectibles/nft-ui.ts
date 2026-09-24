@@ -10,6 +10,7 @@ import type { TransferReviewResponse, WalletStatus } from "../../../popup/respon
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../../shared/dom";
 import { icon } from "../../shared/icons";
+import { reviewFeeBlocked } from "../../shared/review-render";
 import { watchDeployment } from "../../shell/shell-bindings";
 import { friendlyReviewError, recipientFieldError, reviewPanelHtml } from "../send/transfer-ui";
 
@@ -47,7 +48,7 @@ const renderNftTransferReview = (
   ) => void,
 ): void => {
   const { form, result, reviewPanel, submitButton } = elements;
-  const feeFailed = review.feeEstimateFailed || review.deploymentFeeEstimateFailed === true;
+  const feeFailed = reviewFeeBlocked(review);
   const recipientBlocked = review.flags.some((flag) => flag.code === "address-poisoning");
   setReviewedKey(feeFailed || recipientBlocked ? null : key);
   setRequiresDeployment(review.requiresDeployment);

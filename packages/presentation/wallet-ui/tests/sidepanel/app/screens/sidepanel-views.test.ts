@@ -1,7 +1,6 @@
 /** Side-panel template and navigation contract checks. */
 import { describe, expect, test } from "bun:test";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
-import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard, WALLET_VIEWS } from "../../../../src/sidepanel/app/screens/views";
 import {
@@ -129,14 +128,17 @@ describe("sidepanel views", () => {
     expect(html).not.toContain("wallet-dock");
   });
 
-  test("account flow lists network accounts and shows active identifiers", () => {
+  test("account flow lists every network account as an editable name", () => {
     const html = dashboard("account", status, [], preferences, { balances: [] });
 
-    expect(html).toMatch(new RegExp(`data-account-id="${account.id}"[^>]*aria-pressed="true"`));
-    expect(html).toMatch(
-      new RegExp(`data-account-id="${secondAccount.id}"[^>]*aria-pressed="false"`),
-    );
-    expect(html).toContain(account.classHash);
+    for (const stored of [account, secondAccount]) {
+      expect(html).toContain(`data-account-name-form="${stored.id}"`);
+      expect(html).toContain(`data-account-name="${stored.id}"`);
+    }
+    // Switching accounts and inspecting identifiers both moved off this screen —
+    // to the drawer and to Receive respectively.
+    expect(html).not.toContain("data-account-id=");
+    expect(html).not.toContain(account.classHash);
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
@@ -160,7 +162,7 @@ describe("sidepanel views", () => {
   test("swap flow renders the AVNU screen skeleton with staged sections", () => {
     const html = dashboard("swap", status, [], preferences, { balances: [] });
 
-    expect(html).toContain("Best route via AVNU");
+    expect(html).toContain("Best route via avnu");
     expect(html).toContain('id="swap-sell-amount"');
     expect(html).toContain('id="swap-flip"');
     expect(html).toContain('id="swap-review"');
@@ -182,35 +184,26 @@ describe("sidepanel views", () => {
     expect(html).toMatch(/id="send-review-button" type="submit" disabled/);
   });
 
-  test("shows a deployment recovery chip only when the account is not deployed", () => {
+  test("Home says nothing about an account that is not on chain yet", () => {
+    // Home used to carry a "Deploy account" / "Fund with STRK" chip in the
+    // danger colour. The first send creates the account and quotes both fees as
+    // one, so the state is normal and the shortcut lives in Security &
+    // permissions instead.
     const undeployed = dashboard("home", status, [], preferences, { balances: [] }, false);
-    const deployed = dashboard("home", status, [], preferences, { balances: [] }, true);
-    const unknown = dashboard("home", status, [], preferences, { balances: [] }, null);
 
-    expect(undeployed).toContain('class="deploy-notice"');
-    expect(deployed).not.toContain('class="deploy-notice"');
-    expect(unknown).not.toContain('class="deploy-notice"');
-  });
-
-  test("deploying stays disabled until the account can pay the fee in STRK", () => {
-    // Fees are paid in STRK, so only a STRK balance unlocks deployment.
-    const strkBalance = {
-      address: STRK_TOKEN_ADDRESS,
-      balance: "0x1",
-      decimals: 18,
-      formatted: "0.000000000000000001",
-      id: `SN_MAIN:STRK:${STRK_TOKEN_ADDRESS}`,
-      name: "Starknet Token",
-      networkId: "SN_MAIN" as const,
-      symbol: "STRK",
-    };
-    const empty = dashboard("home", status, [], preferences, { balances: [] }, false);
-    const funded = dashboard("home", status, [], preferences, { balances: [strkBalance] }, false);
-
-    expect(empty).toContain('data-view="receive"');
-    expect(empty).toContain("Fund with STRK");
-    expect(funded).toContain('data-view="deploy-account"');
-    expect(funded).toContain("Deploy account");
+    expect(undeployed).not.toContain("deploy-notice");
+    expect(undeployed).not.toContain("Deploy account");
+    expect(undeployed).not.toContain('data-view="deploy-account"');
+    // The Shield tile's own "Fund with STRK" is a different control and stays:
+    // shielding really does need STRK, whatever the account's deploy state.
+    // The dedicated deployment flow is still reachable by its own route, and
+    // that route has a way in: the Settings hub links to Security & permissions.
+    expect(dashboard("security", status, [], preferences, { balances: [] }, false)).toContain(
+      'data-view="deploy-account"',
+    );
+    expect(dashboard("settings", status, [], preferences, { balances: [] }, false)).toContain(
+      'data-view="security"',
+    );
   });
 
   test("deploys a single-signer account in a dedicated transaction flow", () => {
@@ -284,12 +277,12 @@ describe("sidepanel views", () => {
       [],
       null,
       null,
-      null,
+      [],
       null,
       false,
       null,
       [],
-      null,
+      false,
       null,
       true,
     );
@@ -330,9 +323,16 @@ describe("sidepanel views", () => {
     expect(home).toContain('class="avatar"');
 
     const accountFlowHtml = dashboard("account", status, [], labeled, { balances: [] });
-    expect(accountFlowHtml).toContain('id="label-form"');
+    expect(accountFlowHtml).toContain(`data-account-name-form="${account.id}"`);
     expect(accountFlowHtml).toContain('value="Savings"');
     expect(accountFlowHtml).toContain('class="option-avatar"');
+    // An unnamed account shows the generated name it falls back to, rather than
+    // an empty box that hides what the wallet calls it.
+    expect(accountFlowHtml).toMatch(
+      new RegExp(
+        `placeholder="[A-Z][a-z]+ [A-Z][a-z]+" value="" data-account-name="${secondAccount.id}"`,
+      ),
+    );
   });
 
   test("avatars are deterministic Beam characters from the identity palette", () => {
@@ -416,8 +416,6 @@ describe("sidepanel views", () => {
 
     expect(html).toContain('id="new-account"');
     expect(html).toContain("Add account");
-    expect(html).toContain("Signer public key");
-    expect(html).toContain(`data-copy="${account.publicKeyX}"`);
   });
 
   test("reveal flow re-authenticates and masks secrets until tapped", () => {

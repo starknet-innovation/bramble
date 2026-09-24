@@ -103,7 +103,7 @@ const preparationDetails = (
       <p>This one-time registration lets this account discover and use its private notes.</p>
     </section>
     ${reviewPanel([
-      "Registration is public. It stores this account's viewing-key commitment on-chain; it does not reveal the viewing key or private balance.",
+      "Registration is public. It stores this account's viewing-key commitment on-chain and opens the account's own private channel; it does not reveal the viewing key or private balance.",
     ])}
     <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
       <p class="decision-label">Maximum cost and constraints</p>

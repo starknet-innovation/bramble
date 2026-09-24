@@ -147,21 +147,27 @@ describe("amount shortcuts", () => {
 });
 
 describe("asset and recipient selection", () => {
-  test("the token trigger opens the asset step", () => {
+  test("the token trigger opens the dropdown in place, without leaving the step", () => {
     const { form, stages } = mount();
+    const panel = form.querySelector<HTMLElement>("#send-token-options");
 
+    expect(panel?.hasAttribute("hidden")).toBe(true);
     click(form, "#send-token-trigger");
 
-    expect(stages).toContain("asset");
+    expect(panel?.hasAttribute("hidden")).toBe(false);
+    // Choosing a token is no longer a screen of its own.
+    expect(stages).not.toContain("asset");
   });
 
-  test("choosing an asset records it and returns to the amount step", () => {
-    const { fields, form, stages } = mount();
+  test("choosing an asset from the dropdown records it and closes the dropdown", () => {
+    const { fields, form } = mount();
+    click(form, "#send-token-trigger");
 
-    click(form, "[data-send-asset]");
+    click(form, "[data-token-option]");
 
     expect(fields.at(-1)?.tokenSymbol).toBe("ETH");
-    expect(stages).toContain("details");
+    expect(form.querySelector("#send-token-options")?.hasAttribute("hidden")).toBe(true);
+    expect(form.querySelector("#send-selected-token-symbol")?.textContent).toBe("ETH");
   });
 
   test("keeps the balance line compact through an asset pick and a repaint", () => {
@@ -213,5 +219,24 @@ describe("asset and recipient selection", () => {
     row.dispatchEvent(new Event("click", { bubbles: true }));
 
     expect(fields.at(-1)?.recipient).toBe(row.dataset["sendRecipient"] ?? "");
+  });
+
+  test("an empty address book says nothing until a search misses", () => {
+    // The standing "no contacts on this network" line was noise on a screen
+    // whose job is to take an address; a search that matches nothing reports
+    // through the same line the accounts list uses.
+    const { form } = mount();
+    const empty = form.querySelector<HTMLElement>("#send-recipient-empty");
+    const search = form.querySelector<HTMLInputElement>("#send-recipient-search");
+    if (!search) throw new Error("no recipient search");
+
+    expect(form.textContent).not.toContain("address book has no contacts");
+    expect(empty?.hasAttribute("hidden")).toBe(true);
+
+    search.value = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbee";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+
+    expect(empty?.hasAttribute("hidden")).toBe(false);
+    expect(empty?.textContent).toBe("No matching recipient.");
   });
 });

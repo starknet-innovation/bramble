@@ -42,12 +42,6 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     justify-content: center;
     width: 34px;
   }
-  .deploy-notice { display: grid; gap: 2px; justify-items: start; }
-  button.deploy-chip { color: var(--bramble-danger); }
-  @media (hover: hover) and (pointer: fine) {
-    button.deploy-chip:not(:disabled):hover { background: var(--bramble-danger-soft); }
-  }
-  button.deploy-chip:not(:disabled):active { background: var(--bramble-danger-soft); }
   .callout-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .callout-copy strong { font-size: ${TYPE.body.size}; }
   .callout-copy p { font-size: ${TYPE.caption.size}; }
@@ -101,22 +95,37 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .address-book .stack-tight { flex: 1 1 120px; }
   /* Token list: de-boxed, flush rows carried by alignment and a single hairline
      divider — no per-row fill/edge/radius box. The right-hand fiat/change column
-     is right-aligned with tabular figures; a hover fill still highlights a row. */
+     is right-aligned with tabular figures; a hover fill still highlights a row.
+     Row content sits on the page's text column (logos line up with the
+     section heading) and the hover fill bleeds one step past it, so the fill
+     never crowds the content. */
   .token-list { display: grid; }
   .token-row {
     align-items: center;
-    border-radius: ${RADIUS.sm};
+    border-radius: ${RADIUS.md};
     display: flex;
     gap: ${SPACE.md};
+    margin: 0 -${SPACE.sm};
     padding: ${SPACE.md} ${SPACE.sm}; position: relative;
     transition: background ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms var(--ease-out);
   }
-  /* Divider is a flat pseudo-line, not a border-top: a border-top curls along the row's border-radius and reads as a raised "top shadow" lip. */
-  .token-list > .token-row + .token-row::before { background: var(--bramble-hairline); content: ""; height: 1px; inset: 0 0 auto; position: absolute; }
+  /* Divider is a flat pseudo-line, not a border-top: a border-top curls along the row's border-radius and reads as a raised "top shadow" lip. It spans the text column, not the bleed. */
+  .token-list > .token-row + .token-row::before { background: var(--bramble-hairline); content: ""; height: 1px; inset: 0 ${SPACE.sm} auto; position: absolute; transition: opacity ${MOTION.pressMs}ms ${MOTION.ease}; }
+  /* A highlighted row is its own shape: the dividers on both of its edges step
+     aside, so a rounded fill never runs into a straight hairline. */
   @media (hover: hover) and (pointer: fine) {
     li.token-row:hover { background: var(--bramble-hover); }
+    .token-list > li.token-row:hover::before, .token-list > li.token-row:hover + .token-row::before { opacity: 0; }
   }
   li.token-row:has(button.token-open:active) { background: var(--bramble-soft-press); transform: scale(0.985); }
+  .token-list > li.token-row:has(button.token-open:active)::before,
+  .token-list > li.token-row:has(button.token-open:active) + .token-row::before { opacity: 0; }
+  /* Manage tokens reads as the list's last row: the same bleed, and its glyph
+     centred in the logo column so its label starts where the token names do.
+     The portfolio still renders this row when every balance is hidden and no
+     list exists, so the column does not depend on a preceding .token-list. */
+  .home-tabs > button.menu-row { gap: ${SPACE.md}; margin: 0 -${SPACE.sm}; padding: 0 ${SPACE.sm}; width: calc(100% + ${SPACE.sm} * 2); }
+  .home-tabs > button.menu-row .menu-icon { justify-content: center; width: 40px; }
   /* Token glyph: a neutral chip — the accent is reserved for signal, not logos. */
   .token-mark {
     align-items: center;
@@ -207,18 +216,25 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .sparkline-up polyline { stroke: var(--bramble-positive); }
   .sparkline-down polyline { stroke: var(--bramble-danger); }
   .request-list { gap: ${SPACE.md}; }
+  /* The risk panel is a card like the receipt and fee card it sits between:
+     same fill, corner, and text inset, so a review reads as one stack. */
   .review-panel {
-    background: var(--bramble-soft);
-    border-radius: ${RADIUS.md};
+    background: var(--bramble-panel);
+    border-radius: ${RADIUS.lg};
     display: grid;
     gap: ${SPACE.sm};
-    padding: ${SPACE.md};
+    padding: ${SPACE.md} ${SPACE.lg};
   }
   .review-panel p { color: var(--bramble-text); font-size: ${TYPE.label.size}; }
   .review-panel .decision-label { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
 ${SIGN_REQUEST_STYLES}
   .review-flag { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; }
   .review-fee { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
+  /* The total is what the account pays; the deployment share explains it and
+     sits quieter, so the figure a user acts on is the one that reads first. */
+  .review-fee > p { margin: 0; }
+  .review-fee > p:first-child { color: var(--bramble-text); }
+  .review-fee-part { font-size: ${TYPE.micro.size}; }
   .tx-hint { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
   /* Allowances: one grouped surface, flat rows with inset dividers. */
   .allowance-list {
@@ -242,6 +258,10 @@ ${SIGN_REQUEST_STYLES}
     left: ${SPACE.lg};
     position: absolute;
   }
+  /* Prepared multisig calls reuse the review panel as rows of this group: the
+     group is the card, so each call is a flat row under an inset divider. */
+  .allowance-list > .review-panel { border-radius: 0; position: relative; }
+  .allowance-list > .review-panel + .review-panel::before { background: var(--bramble-hairline); content: ""; height: 1px; inset: 0 0 auto ${SPACE.lg}; position: absolute; }
   .allowance-copy { display: grid; flex: 1; gap: 2px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
   .allowance-copy > * { min-width: 0; overflow-wrap: anywhere; }
   /* Revoke is red ink, not a red box — the row stays quiet until hovered. */
@@ -322,17 +342,6 @@ ${SIGN_REQUEST_STYLES}
   .request-site-copy > span { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
   .request-site-copy strong { font-size: ${TYPE.body.size}; overflow-wrap: anywhere; }
   .request-site-copy code { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; overflow-wrap: anywhere; word-break: normal; }
-  .detail-grid { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .detail {
-    background: var(--bramble-soft);
-    border-radius: ${RADIUS.md};
-    display: grid;
-    gap: 2px;
-    min-width: 0;
-    padding: ${SPACE.sm} ${SPACE.md};
-  }
-  .detail p { font-size: ${TYPE.caption.size}; }
-  .detail .value { font-family: var(--bramble-font-mono); font-size: ${TYPE.title.size}; }
   .pill {
     align-items: center;
     background: var(--bramble-elevated);
@@ -390,7 +399,10 @@ ${SIGN_REQUEST_STYLES}
 
   /* Reveal secrets: blurred until tapped; wiped whenever the shell re-renders */
   [hidden] { display: none !important; }
-  .reveal-danger { color: var(--bramble-danger); font-weight: ${WEIGHT.semibold}; }
+  /* The warning glyph leads its sentence like every other flagged line: a
+     fixed gap, pinned to the first line so a wrapped warning stays aligned. */
+  .reveal-danger { align-items: flex-start; color: var(--bramble-danger); display: flex; font-weight: ${WEIGHT.semibold}; gap: ${SPACE.sm}; }
+  .reveal-danger .icon { flex: none; margin-top: 1px; }
   .reveal-output { display: grid; gap: ${SPACE.sm}; }
   .reveal-value {
     background: var(--bramble-panel);
@@ -404,6 +416,8 @@ ${SIGN_REQUEST_STYLES}
   }
   .reveal-value.is-masked, .gate-form textarea.is-masked { filter: blur(7px); user-select: none; }
   .verify-grid { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* Words that do not match the phrase read as an error to fix, not a prompt. */
+  #verify-result.is-invalid { color: var(--bramble-danger); }
   .icon {
     fill: none;
     height: ${CONTROL.icon};
@@ -427,15 +441,17 @@ ${SIGN_REQUEST_STYLES}
   .qr { display: block; height: auto; width: 100%; }
 
   /* Toasts: pinned above the dock at the bottom of the panel; the offset is
-     derived from the same dock-footprint token the bar itself uses. */
+     derived from the same dock-footprint token the bar itself uses, and the
+     stack shares the shell's text column so a toast lines up with the cards
+     above it. */
   .toast-stack {
     bottom: calc(var(--bramble-dock-h) + ${SPACE.md});
     display: grid;
     gap: ${SPACE.sm};
-    left: ${SPACE.md};
+    left: ${SPACE.lg};
     pointer-events: none;
     position: fixed;
-    right: ${SPACE.md};
+    right: ${SPACE.lg};
     z-index: 10;
   }
   /* Toasts are a solid panel card dragged/dismissed with an interruptible WAAPI

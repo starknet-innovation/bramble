@@ -9,20 +9,27 @@
  * of the suites so the drawer and edge-case files share one source.
  */
 
+import { WalletError } from "@bramble/core/errors";
 import {
   type AccountGroup,
   type AccountGroupIcon,
   type AccountGroups,
   createGroup,
+  isDefaultGroup,
   removeGroup,
   renameGroup,
   setAccountInGroup,
   setGroupIcon,
+  withDefaultGroups,
 } from "@bramble/settings/groups";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../src/popup/responses/responses";
+import {
+  captureRepaintFocus,
+  restoreRepaintFocus,
+} from "../../src/sidepanel/app/rendering/focus-memo";
 import { accountFlow } from "../../src/sidepanel/app/screens/flows";
 import type { HomeUiDeps } from "../../src/sidepanel/journeys/portfolio/home-ui";
 import { bindHomeUi } from "../../src/sidepanel/journeys/portfolio/home-ui";
@@ -30,6 +37,10 @@ import { healTransientGroupState } from "../../src/sidepanel/journeys/settings/g
 import type { GroupControlDeps } from "../../src/sidepanel/journeys/settings/group-ui";
 import { bindGroupControls } from "../../src/sidepanel/journeys/settings/group-ui";
 import { accountDrawer } from "../../src/sidepanel/shell/account-drawer";
+import {
+  bindDrawerFolders,
+  createDrawerFolderState,
+} from "../../src/sidepanel/shell/drawer-folders-ui";
 
 // Minimal WAAPI + matchMedia so the toast/motion helpers run under happy-dom
 // (which ships neither): reduced motion routes through a no-op cut-to-final.
@@ -156,54 +167,76 @@ export type Harness = {
   readonly container: HTMLElement;
   readonly calls: Calls;
   readonly groups: () => AccountGroups;
+  /**
+   * One stored group by id. Positional lookup is not usable: the seeded default
+   * folders bracket the user's own, so index 0 is "My accounts", not the first
+   * fixture group.
+   */
+  readonly groupById: (id: string) => AccountGroup | undefined;
+  /** Repaints the mounted view the way a balance update does, keeping focus. */
+  readonly repaint: () => void;
   readonly tick: () => Promise<void>;
 };
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 const buildWallet = (
-  getGroups: () => AccountGroups,
+  readGroups: () => AccountGroups,
   setGroups: (next: AccountGroups) => void,
   calls: Calls,
-) => ({
-  createGroup: (name: string, groupIcon: AccountGroupIcon): Promise<string> => {
-    calls.createGroup.push([name, groupIcon]);
-    const next = createGroup(getGroups(), name, groupIcon);
-    setGroups(next);
-    return Promise.resolve(next[next.length - 1]?.id ?? "");
-  },
-  renameGroup: (id: string, name: string): Promise<void> => {
-    calls.renameGroup.push([id, name]);
-    setGroups(renameGroup(getGroups(), id, name));
-    return Promise.resolve();
-  },
-  setGroupIcon: (id: string, groupIcon: AccountGroupIcon): Promise<void> => {
-    calls.setGroupIcon.push([id, groupIcon]);
-    setGroups(setGroupIcon(getGroups(), id, groupIcon));
-    return Promise.resolve();
-  },
-  removeGroup: (id: string): Promise<void> => {
-    calls.removeGroup.push(id);
-    setGroups(removeGroup(getGroups(), id));
-    return Promise.resolve();
-  },
-  setAccountInGroup: (accountId: string, groupId: string, member: boolean): Promise<void> => {
-    calls.setAccountInGroup.push([accountId, groupId, member]);
-    setGroups(setAccountInGroup(getGroups(), groupId, accountId, member));
-    return Promise.resolve();
-  },
-  addAccount: (networkId: string): Promise<string> => {
-    calls.addAccount.push(networkId);
-    return Promise.resolve(newAccountId);
-  },
-  setActiveAccount: (): Promise<void> => Promise.resolve(),
-  loadStatus: (): Promise<WalletStatus> => Promise.resolve(status),
-});
+  rejects: boolean,
+) => {
+  // Mirrors the real store: every group write starts from a seeded list, so a
+  // test can file an account into a default folder the fixture never declared.
+  const getGroups = (): AccountGroups => withDefaultGroups(readGroups());
+  // A store fault, so the failure paths (error toast, un-busied control, the
+  // unchanged store) are driven by the real bindings rather than assumed.
+  const fail = <T>(): Promise<T> => Promise.reject(new WalletError("store unavailable"));
+  return {
+    createGroup: (name: string, groupIcon: AccountGroupIcon): Promise<string> => {
+      calls.createGroup.push([name, groupIcon]);
+      if (rejects) {
+        return fail();
+      }
+      const next = withDefaultGroups(createGroup(getGroups(), name, groupIcon));
+      setGroups(next);
+      const created = [...next].reverse().find((entry) => !isDefaultGroup(entry.id));
+      return Promise.resolve(created?.id ?? "");
+    },
+    renameGroup: (id: string, name: string): Promise<void> => {
+      calls.renameGroup.push([id, name]);
+      setGroups(renameGroup(getGroups(), id, name));
+      return Promise.resolve();
+    },
+    setGroupIcon: (id: string, groupIcon: AccountGroupIcon): Promise<void> => {
+      calls.setGroupIcon.push([id, groupIcon]);
+      setGroups(setGroupIcon(getGroups(), id, groupIcon));
+      return Promise.resolve();
+    },
+    removeGroup: (id: string): Promise<void> => {
+      calls.removeGroup.push(id);
+      setGroups(removeGroup(getGroups(), id));
+      return Promise.resolve();
+    },
+    setAccountInGroup: (accountId: string, groupId: string, member: boolean): Promise<void> => {
+      calls.setAccountInGroup.push([accountId, groupId, member]);
+      if (rejects) {
+        return fail();
+      }
+      setGroups(setAccountInGroup(getGroups(), groupId, accountId, member));
+      return Promise.resolve();
+    },
+    addAccount: (networkId: string): Promise<string> => {
+      calls.addAccount.push(networkId);
+      return Promise.resolve(newAccountId);
+    },
+    setActiveAccount: (): Promise<void> => Promise.resolve(),
+    loadStatus: (): Promise<WalletStatus> => Promise.resolve(status),
+  };
+};
 
 // Shared transient UI state, mirroring the entrypoint module vars.
 type UiState = {
-  filter: string | null;
-  openAssign: string | null;
   expandedGroupId: string | null;
 };
 
@@ -213,7 +246,16 @@ const paint = (container: HTMLElement, html: string): void => {
   container.replaceChildren(document.createRange().createContextualFragment(html));
 };
 
-export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"): Harness => {
+/** Options for {@link mount}; `rejects` makes every group write fail. */
+export type MountOptions = {
+  readonly rejects?: boolean;
+};
+
+export const mount = (
+  initialGroups: AccountGroups,
+  view: "drawer" | "account",
+  options: MountOptions = {},
+): Harness => {
   document.body.replaceChildren();
   const container = document.createElement("div");
   container.id = "app";
@@ -228,10 +270,9 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
     setAccountInGroup: [],
     startAddAccount: 0,
   };
+  const folders = createDrawerFolderState();
   const state: UiState = {
     expandedGroupId: null,
-    filter: null,
-    openAssign: null,
   };
   const wallet = buildWallet(
     () => groups,
@@ -239,34 +280,27 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
       groups = next;
     },
     calls,
+    options.rejects === true,
   ) as unknown as GroupControlDeps["wallet"];
   const prefs = (): WalletPreferences => ({ ...preferences, groups });
 
   const groupDeps: GroupControlDeps = {
     expandedGroup: () => state.expandedGroupId,
-    openAssign: () => state.openAssign,
     rerender: async () => {
       render();
     },
     setExpandedGroup: (id) => {
       state.expandedGroupId = id;
     },
-    setOpenAssign: (id) => {
-      state.openAssign = id;
-    },
     wallet,
   };
 
   const homeDeps: HomeUiDeps = {
     app: container,
-    drawerGroupFilter: () => state.filter,
     drawerOpen: () => true,
     networkId: () => "SN_MAIN",
     render: async () => {
       render();
-    },
-    setDrawerGroupFilter: (filter) => {
-      state.filter = filter;
     },
     setDrawerOpen: () => undefined,
     startAddAccount: () => {
@@ -276,37 +310,63 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
   };
 
   const render = (): void => {
-    // Mirror the entrypoint's paint(): heal stale group selections against the
-    // current store before rendering, so a deleted group's filter/editor can
-    // never silently re-apply and tests exercise the real self-heal path.
+    // Mirror the entrypoint's paint(): heal the stale expanded group against the
+    // current store before rendering, so a deleted group's editor can never
+    // silently re-apply and tests exercise the real self-heal path.
     const healed = healTransientGroupState(
       {
-        drawerGroupFilter: state.filter,
+        collapsedFolderIds: folders.collapsedFolders(),
         expandedGroupId: state.expandedGroupId,
-        openAssignId: state.openAssign,
       },
-      groups,
-      status.accounts.map((stored) => stored.id),
+      withDefaultGroups(groups),
     );
-    state.filter = healed.drawerGroupFilter;
     state.expandedGroupId = healed.expandedGroupId;
-    state.openAssign = healed.openAssignId;
+    const collapsed = healed.collapsedFolderIds ?? [];
+    if (collapsed.length !== folders.collapsedFolders().length) {
+      folders.setCollapsedFolders(collapsed);
+    }
     if (view === "drawer") {
+      const focus = captureRepaintFocus(container);
       const trigger = '<button id="account-trigger" aria-haspopup="dialog"></button>';
       paint(
         container,
-        trigger + accountDrawer(status, acctA, prefs(), state.filter, state.openAssign),
+        trigger +
+          accountDrawer(
+            status,
+            acctA,
+            prefs(),
+            folders.collapsedFolders(),
+            folders.addFolderOpen(),
+          ),
       );
+      restoreRepaintFocus(container, focus);
       bindGroupControls(container, groupDeps);
       bindHomeUi(homeDeps);
+      bindDrawerFolders({
+        ...folders,
+        app: container,
+        render: async () => {
+          render();
+        },
+        wallet,
+      });
     } else {
-      paint(container, accountFlow(status, acctA, prefs(), state.expandedGroupId));
+      paint(container, accountFlow(status, prefs(), state.expandedGroupId));
       bindGroupControls(container, groupDeps);
     }
   };
 
   render();
-  return { calls, container, groups: () => groups, tick };
+  return {
+    calls,
+    container,
+    groupById: (id) => groups.find((group) => group.id === id),
+    groups: () => groups,
+    repaint: () => {
+      render();
+    },
+    tick,
+  };
 };
 
 export const click = (element: Element | null): void => {
@@ -314,6 +374,42 @@ export const click = (element: Element | null): void => {
     throw new Error("click target missing");
   }
   element.click();
+};
+
+// happy-dom constructs a DragEvent but drops `dataTransfer` from the init dict,
+// leaving it undefined, so the one clipboard the drag carries is attached here.
+// Everything else — setData on dragstart, getData on drop — is the real
+// DataTransfer the bindings call, not a stub standing in for them.
+const dragEvent = (type: string, dataTransfer: DataTransfer): DragEvent => {
+  const event = new window.DragEvent(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+  return event;
+};
+
+/**
+ * Drives the dragstart → dragover → drop sequence that moves `accountId` onto
+ * the folder section `groupId`, exactly as a pointer drag produces it. Pass an
+ * `emptyDrop` of true to model a browser that hands the drop an empty payload,
+ * which is what the binding's dragging-row fallback exists for.
+ */
+export const dragAccountToFolder = (
+  container: HTMLElement,
+  accountId: string,
+  groupId: string,
+  emptyDrop = false,
+): void => {
+  const row = container.querySelector<HTMLElement>(
+    `[data-drag-account="${CSS.escape(accountId)}"]`,
+  );
+  const folder = container.querySelector<HTMLElement>(`[data-folder="${CSS.escape(groupId)}"]`);
+  if (!row || !folder) {
+    throw new Error("drag source or drop target missing");
+  }
+  const dataTransfer = new window.DataTransfer();
+  row.dispatchEvent(dragEvent("dragstart", dataTransfer));
+  folder.dispatchEvent(dragEvent("dragover", dataTransfer));
+  folder.dispatchEvent(dragEvent("drop", emptyDrop ? new window.DataTransfer() : dataTransfer));
+  row.dispatchEvent(dragEvent("dragend", dataTransfer));
 };
 
 export const submit = (form: Element | null): void => {

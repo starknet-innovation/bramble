@@ -134,7 +134,8 @@ describe("sidepanel home", () => {
     expect(html).toContain('id="portfolio-menu" role="menu"');
     expect(html).toContain('data-view="tokens" role="menuitem"');
     expect(html).not.toContain('data-view="nfts"');
-    expect(html).toContain('data-view="settings" role="menuitem"');
+    // Settings has its own dock button, so the menu does not repeat it.
+    expect(html).not.toContain('data-view="settings" role="menuitem"');
     expect(html).toContain('id="refresh-button" role="menuitem"');
   });
 
@@ -158,6 +159,9 @@ describe("sidepanel home", () => {
     expect(html).toContain("Manage tokens");
     expect(html).toContain("1 not shown");
     expect(html).not.toContain("Hidden tokens");
+    // Every balance is hidden, so the panel has no list for the row to follow.
+    expect(html).not.toContain('class="token-list"');
+    expect(html).toContain('<button class="menu-row" data-view="tokens"');
   });
 
   test("Activity stays a top-level dock destination instead of a portfolio tab", () => {
@@ -216,7 +220,7 @@ describe("sidepanel home", () => {
       [],
       null,
       null,
-      null,
+      [],
       null,
       priceStale,
       priceAsOf,

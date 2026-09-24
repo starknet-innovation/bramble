@@ -9,31 +9,19 @@ import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState } from "@bramble/ui-kit/content";
-import { button, iconButton } from "@bramble/ui-kit/controls";
+import { button, iconButton, switchControl } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
-import {
-  accountAvatar,
-  accountDisplayName,
-  accountLabel,
-  flowScreen,
-  noAccountEmpty,
-} from "../../shared/parts";
+import { accountDisplayName, accountLabel, flowScreen, noAccountEmpty } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
-import { multisigDisplayName } from "../multisig/multisig-views";
+import { tokenDropdown } from "../../shared/token-dropdown";
 import { starknetNetworkGlyph, tokenGlyph } from "../portfolio/token-row";
-import {
-  type SendAsset,
-  type SendIntent,
-  sendAssets,
-  sendBalanceLabel,
-  sendBalanceLine,
-  sendRecipientAccounts,
-} from "./send-model";
+import { type SendAsset, type SendIntent, sendAssets, sendBalanceLine } from "./send-model";
+import { recipientStage } from "./send-recipient-view";
 import {
   type TransferMode,
   type TransferModeCopy,
@@ -63,160 +51,50 @@ const sendHeader = (mode: TransferMode, copy: TransferModeCopy): string => `
 
 const sendProgress = (copy: TransferModeCopy): string => `
   <ol class="send-progress" aria-label="${escapeHtml(copy.progressLabel)}" hidden>
-    <li data-send-step="details" data-state="active">
-      <span class="send-step-mark">1</span><span>Amount</span>
+    <li data-send-step="recipient" data-state="active">
+      <span class="send-step-mark">1</span><span>Recipient</span>
+    </li>
+    <li data-send-step="details" data-state="pending">
+      <span class="send-step-mark">2</span><span>Amount</span>
     </li>
     <li data-send-step="review" data-state="pending">
-      <span class="send-step-mark">2</span><span>Review</span>
-    </li>
-    <li data-send-step="sign" data-state="pending">
-      <span class="send-step-mark">3</span><span>Authorize</span>
-    </li>
-    <li data-send-step="sent" data-state="pending">
-      <span class="send-step-mark">4</span><span>Confirm</span>
+      <span class="send-step-mark">3</span><span>Confirm</span>
     </li>
   </ol>`;
 
-const recipientAccountRow = (
-  account: AccountRef,
-  preferences: WalletPreferences | null,
-  isSender = false,
-): string => `
-  <button class="send-recipient-row" type="button"
-    data-send-recipient="${escapeHtml(account.address)}"
-    data-send-recipient-label="${escapeHtml(accountDisplayName(account, preferences))}"
-    data-send-search="${escapeHtml(`${accountDisplayName(account, preferences)} ${account.address}`.toLowerCase())}">
-    <span class="send-recipient-avatar">${accountAvatar(account.address)}</span>
-    <span class="send-recipient-copy">
-      <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
-      <code>${escapeHtml(accountLabel(account.address))}</code>
-      ${isSender ? "<small>Current account · shield into its private balance</small>" : ""}
-    </span>
-    ${icon("chevronRight")}
-  </button>`;
+// The dropdown shows a ticker; composing needs the token's decimals, balance
+// and price. Those travel in one hidden element per token, keyed by the same id
+// the dropdown returns, so the binding reads them without a second lookup.
+const assetFacts = (asset: SendAsset): string => `<span
+  data-send-asset="${escapeHtml(asset.id)}"
+  data-send-address="${escapeHtml(asset.address)}"
+  data-send-balance="${escapeHtml(asset.balance)}"
+  data-send-decimals="${asset.decimals}"
+  data-send-formatted="${escapeHtml(asset.formatted)}"
+  data-send-price="${asset.price ?? ""}"
+  data-send-symbol="${escapeHtml(asset.symbol)}"><span class="send-asset-glyph">${tokenGlyph(asset.address, asset.symbol)}</span></span>`;
 
-const addressBookRow = (entry: NonNullable<WalletPreferences["addressBook"]>[number]): string => `
-  <button class="send-recipient-row" type="button"
-    data-send-recipient="${escapeHtml(entry.address)}"
-    data-send-recipient-label="${escapeHtml(entry.label)}"
-    data-send-search="${escapeHtml(`${entry.label} ${entry.address}`.toLowerCase())}">
-    <span class="send-recipient-avatar">${accountAvatar(entry.address)}</span>
-    <span class="send-recipient-copy">
-      <strong>${escapeHtml(entry.label)}</strong>
-      <code>${escapeHtml(accountLabel(entry.address))}</code>
-    </span>
-    ${icon("chevronRight")}
-  </button>`;
-
-const multisigRecipientRow = (record: ArgentMultisigRecord): string => {
-  const name = multisigDisplayName(record);
-  return `
-  <button class="send-recipient-row" type="button"
-    data-send-recipient="${escapeHtml(record.address)}"
-    data-send-recipient-label="${escapeHtml(name)}"
-    data-send-search="${escapeHtml(`${name} multisig ${record.address}`.toLowerCase())}">
-    <span class="send-recipient-avatar">${accountAvatar(record.address)}</span>
-    <span class="send-recipient-copy">
-      <strong>${escapeHtml(name)}</strong>
-      <code>${escapeHtml(accountLabel(record.address))}</code>
-      <small>Ready Multisig account</small>
-    </span>
-    ${icon("chevronRight")}
-  </button>`;
-};
-
-const recipientStage = (
-  status: WalletStatus,
-  account: AccountRef | null,
-  preferences: WalletPreferences | null,
-  multisigs: readonly ArgentMultisigRecord[],
-): string => {
-  const accounts = sendRecipientAccounts(status.accounts, status.networkId);
-  const sharedAccounts = multisigs.filter((record) => record.networkId === status.networkId);
-  const contacts =
-    preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
-  return `<section class="send-stage send-recipient-stage" id="send-recipient-stage">
-    <div class="send-origin-context">
-      <p class="send-section-title">Sending from</p>
-      <div class="send-origin-account">
-        <span class="send-recipient-avatar">${accountAvatar(account?.address ?? "")}</span>
-        <span class="send-recipient-copy">
-          <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
-          <code>${escapeHtml(account ? accountLabel(account.address) : "—")}</code>
-        </span>
-      </div>
-    </div>
-    <label class="send-search">
-      <span>Sending to</span>
-      <span class="send-search-control">${icon("search")}${inputControl({
-        ariaLabel: "Recipient address or saved name",
-        attributes: { id: "send-recipient-search" },
-        autocomplete: "off",
-        className: "mono",
-        placeholder: "Address or saved name",
-        spellcheck: false,
-        type: "search",
-      })}</span>
-    </label>
-    <div class="send-recipient-tabs" role="tablist" aria-label="Recipient sources">
-      <button type="button" role="tab" aria-selected="true" data-send-recipient-tab="accounts">My accounts</button>
-      <button type="button" role="tab" aria-selected="false" data-send-recipient-tab="contacts">Address book</button>
-    </div>
-    <div class="send-recipient-list" data-send-recipient-panel="accounts">
-      <div class="send-list-heading">${icon("wallet")}<strong>My accounts</strong></div>
-      ${
-        accounts.length > 0 || sharedAccounts.length > 0
-          ? accounts
-              .map((stored) => recipientAccountRow(stored, preferences, stored.id === account?.id))
-              .join("") + sharedAccounts.map(multisigRecipientRow).join("")
-          : emptyState("No other accounts are available on this network.")
-      }
-    </div>
-    <div class="send-recipient-list" data-send-recipient-panel="contacts" hidden>
-      <div class="send-list-heading">${icon("book")}<strong>Address book</strong></div>
-      ${contacts.length > 0 ? contacts.map(addressBookRow).join("") : emptyState("Your address book has no contacts on this network.")}
-    </div>
-    <p class="send-recipient-empty" id="send-recipient-empty" hidden>No matching recipient.</p>
-    ${button({
-      attributes: { id: "send-recipient-continue" },
-      disabled: account === null,
-      label: "Continue with address",
-    })}
-  </section>`;
-};
-
-const assetRow = (asset: SendAsset, currency: DisplayCurrency): string => {
-  const fiat = tokenFiatValue(asset.formatted, asset.price);
-  const change =
-    asset.change === undefined || !Number.isFinite(asset.change)
-      ? ""
-      : `<span class="send-asset-change" data-direction="${asset.change < 0 ? "down" : "up"}">${asset.change < 0 ? "↓" : "↑"} ${Math.abs(asset.change).toFixed(2)}%</span>`;
-  return `<button class="send-asset-row" type="button"
-    data-send-asset="${escapeHtml(asset.id)}"
-    data-send-address="${escapeHtml(asset.address)}"
-    data-send-balance="${escapeHtml(asset.balance)}"
-    data-send-decimals="${asset.decimals}"
-    data-send-formatted="${escapeHtml(asset.formatted)}"
-    data-send-price="${asset.price ?? ""}"
-    data-send-search="${escapeHtml(`${asset.symbol} ${asset.name} ${asset.address}`.toLowerCase())}"
-    data-send-symbol="${escapeHtml(asset.symbol)}">
-    <span class="send-asset-glyph">${tokenGlyph(asset.address, asset.symbol)}</span>
-    <span class="send-asset-copy">
-      <strong>${escapeHtml(asset.symbol)}</strong>
-      <span>${asset.spam ? '<em class="send-asset-spam">Likely spam</em> · ' : ""}${escapeHtml(sendBalanceLabel(asset.formatted))} ${escapeHtml(asset.symbol)}</span>
-    </span>
-    <span class="send-asset-value">
-      <strong>${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</strong>
-      ${change}
-    </span>
-  </button>`;
-};
+// The route control is a switch, not a label: what it toggles is privacy, so it
+// names "Private" once and shows on/off, rather than renaming itself to the
+// state it is already in — which read as static text and was reported as such.
+const routeSwitch = (leg: "destination" | "source", label: string): string =>
+  switchControl({
+    attributes: {
+      "aria-label": label,
+      "data-bucket": "public",
+      "data-send-bucket": leg,
+      title: "Switch to the private balance",
+    },
+    className: "send-route-toggle",
+    icon: "lock",
+    label: "Private",
+  });
 
 const amountStage = (
   status: WalletStatus,
   account: AccountRef | null,
   asset: SendAsset | undefined,
-  canChooseAsset: boolean,
+  assets: readonly SendAsset[],
   currency: DisplayCurrency,
   preferences: WalletPreferences | null,
   copy: TransferModeCopy,
@@ -231,7 +109,7 @@ const amountStage = (
             <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
             <code>${escapeHtml(account ? accountLabel(account.address) : "—")}</code>
           </span>
-          <button class="send-route-toggle" data-send-bucket="source" data-bucket="public" type="button" title="Switch to the private balance">Public</button>
+          ${routeSwitch("source", "Send from the private balance")}
         </dd>
       </div>
       <div>
@@ -241,7 +119,7 @@ const amountStage = (
             <strong id="send-recipient-name">Not selected</strong>
             <code id="send-recipient-label">—</code>
           </span>
-          <button class="send-route-toggle" data-send-bucket="destination" data-bucket="public" type="button" title="Switch to the private balance">Public</button>
+          ${routeSwitch("destination", "Receive into the private balance")}
         </dd>
       </div>
       <div><dt>Network</dt><dd class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span><strong>${escapeHtml(networkDisplayName(status.network))}</strong></dd></div>
@@ -252,11 +130,30 @@ const amountStage = (
     </div>
     <p class="send-section-title">Asset</p>
     <div class="send-amount-card">
-      <button class="send-token-trigger" id="send-token-trigger" type="button" ${canChooseAsset ? "" : "disabled"}>
-        <span id="send-selected-token-glyph">${asset ? tokenGlyph(asset.address, asset.symbol) : icon("coins")}</span>
-        <strong id="send-selected-token-symbol">${escapeHtml(asset?.symbol ?? "Select")}</strong>
-        ${icon("chevronDown")}
-      </button>
+      <div class="token-dropdown">
+        <button class="send-token-trigger" id="send-token-trigger" type="button" ${assets.length > 0 ? "" : "disabled"}>
+          <span id="send-selected-token-glyph">${asset ? tokenGlyph(asset.address, asset.symbol) : icon("coins")}</span>
+          <strong id="send-selected-token-symbol">${escapeHtml(asset?.symbol ?? "Select")}</strong>
+          ${icon("chevronDown")}
+        </button>
+        ${tokenDropdown({
+          action: "Manage tokens",
+          groups: [
+            {
+              label: "Your tokens",
+              options: assets.map((entry) => ({
+                address: entry.address,
+                id: entry.id,
+                symbol: entry.symbol,
+              })),
+            },
+          ],
+          label: "Tokens you can send",
+          panelId: "send-token-options",
+          ...(asset ? { selectedId: asset.id } : {}),
+        })}
+      </div>
+      <div class="send-asset-facts" hidden>${assets.map((entry) => assetFacts(entry)).join("")}</div>
       <label class="send-amount-field">
         <span class="sr-only" id="send-amount-label">${escapeHtml(copy.amountLabel)}</span>
         <span class="send-amount-prefix" id="send-amount-prefix" hidden></span>
@@ -279,26 +176,6 @@ const amountStage = (
       <p class="send-fiat-estimate" id="send-fiat-estimate">Estimated value —</p>
     </div>
     <button id="send-review-button" type="submit" ${account === null || asset === undefined ? "disabled" : ""}>${icon("send")}${liquidDots("send", true)}<span id="send-review-label">${escapeHtml(copy.reviewLabel)}</span></button>
-  </section>`;
-
-const assetStage = (assets: readonly SendAsset[], currency: DisplayCurrency): string => `
-  <section class="send-stage send-asset-stage" id="send-asset-stage" hidden>
-    <label class="send-search send-asset-search">
-      <span class="sr-only">Search tokens</span>
-      <span class="send-search-control">${icon("search")}${inputControl({
-        ariaLabel: "Search tokens",
-        attributes: { id: "send-asset-search" },
-        autocomplete: "off",
-        placeholder: "Search tokens",
-        spellcheck: false,
-        type: "search",
-      })}</span>
-    </label>
-    <div class="send-list-heading"><strong>Your tokens</strong><span>Your balance</span></div>
-    <div class="send-asset-list">
-      ${assets.length > 0 ? assets.map((asset) => assetRow(asset, currency)).join("") : emptyState("No tokens are tracked on this network yet.")}
-    </div>
-    <p class="send-asset-empty" id="send-asset-empty" hidden>No matching token.</p>
   </section>`;
 
 const workingStage = (): string => `
@@ -430,8 +307,7 @@ export const sendFlow = (
           ${sendProgress(copy)}
           <div class="send-stage-frame" data-initial-fiat="${escapeHtml(initialFiat)}">
             ${recipientStage(status, account, preferences, multisigs)}
-            ${amountStage(status, account, asset, assets.length > 0, currency, preferences, copy)}
-            ${assetStage(assets, currency)}
+            ${amountStage(status, account, asset, assets, currency, preferences, copy)}
             <section class="send-stage send-review-stage" id="send-review-stage" hidden>
               <div class="send-review-head">
                 <div><p class="context-label" id="send-review-heading">${escapeHtml(copy.reviewLabel)}</p></div>

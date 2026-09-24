@@ -18,6 +18,7 @@ const REPAINT_DRAFT_NAMES = new Set([
   "discoveryUrl",
   "entrypoint",
   "feeToken",
+  "folderName",
   "indexerUrl",
   "intentPackage",
   "label",
@@ -51,7 +52,7 @@ const REAL_GROUP_EXPAND = `[data-group-expand]:not(${attrSelector("data-group-ex
 // Every group mutation repaints the whole shell, so focus must be reclaimed: the
 // first selector targets the acted-on control (which survives most mutations —
 // e.g. a toggle only flips `aria-pressed`), and the rest are logical successors
-// for when the control itself is gone (a deleted group, a healed filter). Icon
+// for when the control itself is gone (a deleted group). Icon
 // picker options are intentionally omitted: pressing one updates state locally
 // without a repaint, so it never loses focus. Returns [] for non-group controls.
 const groupControlMemo = (element: HTMLElement): readonly string[] => {
@@ -59,24 +60,7 @@ const groupControlMemo = (element: HTMLElement): readonly string[] => {
   const groupToggle = data["groupToggle"];
   const account = data["account"];
   if (groupToggle !== undefined && account !== undefined) {
-    return [
-      attrSelector("data-group-toggle", groupToggle) + attrSelector("data-account", account),
-      attrSelector("data-assign-toggle", account),
-    ];
-  }
-  const groupPick = data["groupPick"];
-  if (groupPick !== undefined && account !== undefined) {
-    // The drawer's single-select folder picker: reclaim the acted-on option
-    // (it survives the repaint — only `aria-pressed` moves), else the row's
-    // picker toggle.
-    return [
-      attrSelector("data-group-pick", groupPick) + attrSelector("data-account", account),
-      attrSelector("data-assign-toggle", account),
-    ];
-  }
-  const assignToggle = data["assignToggle"];
-  if (assignToggle !== undefined) {
-    return [attrSelector("data-assign-toggle", assignToggle)];
+    return [attrSelector("data-group-toggle", groupToggle) + attrSelector("data-account", account)];
   }
   const removeGroup = data["removeGroup"];
   if (removeGroup !== undefined) {
@@ -105,11 +89,6 @@ const groupControlMemo = (element: HTMLElement): readonly string[] => {
       REAL_GROUP_EXPAND,
       "[data-group-expand]",
     ];
-  }
-  const groupFilter = data["groupFilter"];
-  if (groupFilter !== undefined) {
-    // Filtering by a group that is then deleted heals the filter back to "All".
-    return [attrSelector("data-group-filter", groupFilter), '[data-group-filter="all"]'];
   }
   if (data["groupName"] !== undefined) {
     // The group name/rename field carries no id or name, so it needs its own
@@ -144,6 +123,13 @@ export const focusMemo = (doc: Document = document): readonly string[] => {
   const group = groupControlMemo(active);
   if (group.length > 0) {
     return group;
+  }
+  const accountName = active.dataset["accountName"];
+  if (accountName !== undefined) {
+    // The account-names list renders one `name="label"` field per account, so a
+    // name-only selector would reclaim focus — and re-seed the draft — into the
+    // first row whichever one was being typed in. Key on the account id.
+    return [attrSelector("data-account-name", accountName)];
   }
   if (active.id) {
     return [`#${active.id}`];

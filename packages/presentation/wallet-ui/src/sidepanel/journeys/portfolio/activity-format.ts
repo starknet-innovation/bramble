@@ -187,7 +187,7 @@ export const activityAppearance = (entry: ActivityEntry): ActivityAppearance => 
   };
 };
 
-// "Swap 1 STRK for ~2.5 USDC via AVNU" → the asset pair the row title implies.
+// "Swap 1 STRK for ~2.5 USDC via avnu" → the asset pair the row title implies.
 const SWAP_PAIR =
   /\bswap(?:ped|ping)?\s+~?[\d.,]*\s*([a-z0-9.$-]+)\s+for\s+(?:(?:at\s+least|~)\s*)?[\d.,]*\s*([a-z0-9.$-]+)/i;
 // The verb the title already conveys, so the detail line does not repeat it.

@@ -4,7 +4,11 @@
  * from the side panel entrypoint to keep it within the size budget.
  */
 
-import { isStarknetNetworkId } from "@bramble/wallet-model/networks";
+import {
+  canonicalAddress,
+  isStarknetNetworkId,
+  normalizeFeltInput,
+} from "@bramble/wallet-model/networks";
 import { parseWalletContactCard, walletContactCard } from "@bramble/wallet-model/preferences";
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
@@ -13,6 +17,12 @@ import type { SidepanelWallet } from "../runtime/runtime";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
+import {
+  addressBookDraft,
+  clearAddressBookDraft,
+  rememberAddressBookDraft,
+  takeAddressBookLabelFocus,
+} from "./address-draft";
 
 /**
  * Shared context: the app root, the runtime client, and a full re-render.
@@ -31,8 +41,46 @@ export type BindingContext = {
  */
 export const bindAddressBook = ({ app, render, wallet }: BindingContext): void => {
   const form = app?.querySelector<HTMLFormElement>("#address-form");
+  // The handoff lives until Save, or until this screen is gone. A shell
+  // repaint rebuilds the form from an empty template and reads it again.
+  if (!form) {
+    clearAddressBookDraft();
+    return;
+  }
   const result = app?.querySelector<HTMLElement>("#address-result");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+  // Arriving from Send's "Save address": the address is already known, so the
+  // form opens on it with only the label left to fill. A later paint fills
+  // whichever of the two fields the focus restore left empty.
+  const addressField = form.querySelector<HTMLInputElement>('[name="address"]');
+  const labelField = form.querySelector<HTMLInputElement>('[name="label"]');
+  const draft = addressBookDraft();
+  if (addressField && addressField.value.trim() === "" && draft.address) {
+    addressField.value = draft.address;
+  }
+  if (labelField && labelField.value.trim() === "" && draft.label) {
+    labelField.value = draft.label;
+  }
+  if (takeAddressBookLabelFocus()) {
+    labelField?.focus({ preventScroll: true });
+  }
+  const remember = (): void => {
+    rememberAddressBookDraft(addressField?.value ?? "", labelField?.value ?? "");
+  };
+  addressField?.addEventListener("input", remember);
+  labelField?.addEventListener("input", remember);
+
+  // Everything past label and address is opt-in: the form asked for five fields
+  // to record a name and an address, which is why it read as complex.
+  const pro = form?.querySelector<HTMLButtonElement>("#address-pro");
+  const proFields = form?.querySelector<HTMLElement>("#address-pro-fields");
+  pro?.addEventListener("click", () => {
+    const open = pro.getAttribute("aria-checked") !== "true";
+    pro.setAttribute("aria-checked", String(open));
+    pro.dataset["checked"] = String(open);
+    proFields?.toggleAttribute("hidden", !open);
+  });
 
   const walletCardField = form?.querySelector<HTMLTextAreaElement>('[name="walletCard"]');
   if (form && walletCardField)
@@ -63,6 +111,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         if (input instanceof HTMLInputElement) input.value = value;
       }
       if (result) result.textContent = "Wallet card verified. Add a label, then save.";
+      rememberAddressBookDraft(addressField?.value ?? "", labelField?.value ?? "");
       const label = form.elements.namedItem("label");
       if (label instanceof HTMLInputElement) label.focus({ preventScroll: true });
     });
@@ -71,16 +120,24 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
     event.preventDefault();
     const data = new FormData(form);
     buttonBusy(submitButton, true);
+    // Canonicalised here, the way the wallet-card path already was: the
+    // background takes lowercase hex only, so an address pasted as 0x04F2…
+    // was refused as a malformed request even though Send had just accepted
+    // that exact text. An unparseable value is passed through untouched so the
+    // background still reports it rather than this quietly sending "null".
+    const typed = String(data.get("address") ?? "");
+    const publicKeyX = normalizeFeltInput(String(data.get("publicKeyX") ?? ""));
     void wallet
       .saveAddress(
         String(data.get("label") ?? ""),
-        String(data.get("address") ?? "").trim(),
+        canonicalAddress(typed) ?? typed.trim(),
         String(data.get("networkId") ?? ""),
-        String(data.get("publicKeyX") ?? "").trim() || undefined,
+        publicKeyX || undefined,
         String(data.get("nostrPublicKey") ?? "").trim() || undefined,
       )
       .then(
         async () => {
+          clearAddressBookDraft();
           showToast("Address saved", "success", form);
           if (result) {
             result.textContent = "Address saved";
@@ -128,6 +185,24 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
       option.setAttribute("aria-pressed", String(option.dataset["receivePayload"] === payload));
     }
   };
+
+  // Everything past the QR and the address is opt-in: receiving needs one
+  // address, and the contact card and keys are for multisig coordination.
+  // Closing Pro hides the payload switch, so the QR goes back to the address
+  // with it: a card QR under "Your Starknet address" with no way to switch it
+  // is not something other wallets can scan.
+  const pro = root.querySelector<HTMLButtonElement>("#receive-pro");
+  const proFields = root.querySelector<HTMLElement>("#receive-pro-fields");
+  pro?.addEventListener("click", () => {
+    const open = pro.getAttribute("aria-checked") !== "true";
+    pro.setAttribute("aria-checked", String(open));
+    pro.dataset["checked"] = String(open);
+    proFields?.toggleAttribute("hidden", !open);
+    if (!open) {
+      showPayload("address");
+    }
+  });
+
   for (const option of options) {
     option.addEventListener("click", () => {
       const payload = option.dataset["receivePayload"];

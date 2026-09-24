@@ -70,7 +70,6 @@ describe("mode copy", () => {
     // Chain-side checkpoints are the same for every mode.
     expect(transferStageTitle("confirming", "shield")).toBe("Confirming");
     expect(transferStageTitle("submitted", "unshield")).toBe("Confirmed");
-    expect(transferStageTitle("asset", "shield")).toBe("Select an asset");
   });
 
   test("keeps the plain send's wording unchanged", () => {

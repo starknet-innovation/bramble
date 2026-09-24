@@ -381,6 +381,26 @@ describe("account groups", () => {
     expect(sent[0]).toEqual({ icon: "folder", name: "Work", type: "wallet.createGroup" });
   });
 
+  test("createGroup returns the new folder when the archive sorts last", async () => {
+    const seeded = {
+      ...preferencesWithGroup,
+      preferences: {
+        ...preferencesWithGroup.preferences,
+        groups: [
+          { accountIds: [], icon: "wallet" as const, id: "my-accounts", name: "My accounts" },
+          ...preferencesWithGroup.preferences.groups,
+          {
+            accountIds: [],
+            icon: "folder" as const,
+            id: "archived-accounts",
+            name: "Archived accounts",
+          },
+        ],
+      },
+    };
+    expect(await runtimeReturning(seeded).createGroup("Work", "folder")).toBe("work");
+  });
+
   test("createGroup throws when the returned preferences carry no groups", async () => {
     // preferences valid but groups empty -> no created entry -> falls through to throw.
     await expect(
