@@ -12,9 +12,20 @@ struct OnboardingFlow: View {
     enum Path: Equatable { case create, recover }
     enum Step: Equatable {
         case welcome, importMethod, recoveryPhrase, passphrase, reviewAccount, savePhrase, confirmBackup, complete
+
+        /// The edge back-swipe runs only on the steps before the vault is written. `welcome` is
+        /// the root, and every step from `reviewAccount` on comes after `replace(with:)`, so a
+        /// swipe there must do nothing (design-mobile.md 4.6).
+        var allowsSwipeBack: Bool {
+            switch self {
+            case .importMethod, .recoveryPhrase, .passphrase: true
+            case .welcome, .reviewAccount, .savePhrase, .confirmBackup, .complete: false
+            }
+        }
     }
 
     @Environment(WalletStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var steps: [Step] = [.welcome]
     @State private var path: Path = .create
     @State private var forward = true
@@ -27,15 +38,13 @@ struct OnboardingFlow: View {
                 ZStack {
                     stepView(steps.last ?? .welcome)
                         .id(steps.last)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
-                            removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity)
-                        ))
+                        .transition(BrambleMotionPolicy.step(forward: forward, reduceMotion: reduceMotion))
                 }
-                .animation(BrambleEase.out.animation(ms: BrambleMotion.drawerMs), value: steps)
+                .animation(BrambleMotionPolicy.animation(BrambleSpring.drawer, reduceMotion: reduceMotion), value: steps)
             }
         }
         .background { OnboardingBackdrop() }
+        .edgeSwipeBack(enabled: (steps.last ?? .welcome).allowsSwipeBack && steps.count > 1, action: pop)
     }
 
     private func push(_ step: Step) {
@@ -45,6 +54,9 @@ struct OnboardingFlow: View {
 
     private func pop() {
         forward = false
+        // The recovery step always remounts with empty cells, so the handed-off copy is unreachable
+        // once we leave the passphrase step; drop it now rather than at the next submit.
+        if steps.last == .passphrase { importedPhrase = "" }
         if steps.count > 1 { steps.removeLast() }
     }
 

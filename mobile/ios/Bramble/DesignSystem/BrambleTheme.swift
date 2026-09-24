@@ -1,8 +1,8 @@
 import SwiftUI
 
 // Hand-written companions to BrambleTokens.generated.swift. Every colour on screen is a generated
-// skin field (base or derived); every size is a generated scale token. Nothing here restates a
-// value: it only adapts the tokens to SwiftUI.
+// skin field (base or derived); every size is a generated scale token or stylesheet metric.
+// Nothing here restates a value: it only adapts the tokens to SwiftUI.
 
 extension Color {
     /// A colour from a generated `0xAARRGGBB` token.
@@ -24,6 +24,9 @@ extension BrambleSkin {
 struct BrambleTypeStyle {
     let size: CGFloat
     let lineHeight: CGFloat
+
+    /// The same line height at another size, for a stylesheet rule that only changes the size.
+    func sized(_ size: CGFloat) -> BrambleTypeStyle { BrambleTypeStyle(size: size, lineHeight: lineHeight) }
 }
 
 struct BrambleBezier {
@@ -37,22 +40,10 @@ struct BrambleBezier {
     }
 }
 
-struct BrambleShadowStyle {
+struct BrambleShadowStyle: Equatable {
     let y: CGFloat
     let blur: CGFloat
     let alpha: Double
-}
-
-enum BrambleFont {
-    /// Maps the CSS weight scale onto SwiftUI weights (600/650 → semibold, as SF renders them).
-    static func weight(_ css: Int) -> Font.Weight {
-        switch css {
-        case ..<500: .regular
-        case ..<700: .semibold
-        case ..<800: .bold
-        default: .heavy
-        }
-    }
 }
 
 private struct SkinKey: EnvironmentKey {
@@ -67,15 +58,10 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// A type-scale style: size, weight, the token's line height, and tracking in em.
-    func brambleText(_ style: BrambleTypeStyle, weight: Int = BrambleWeight.regular, tracking: CGFloat = 0, mono: Bool = false) -> some View {
-        font(.system(size: style.size, weight: BrambleFont.weight(weight), design: mono ? .monospaced : .default))
-            .lineSpacing(style.size * (style.lineHeight - 1))
-            .tracking(style.size * tracking)
-    }
-
-    func brambleShadow(_ style: BrambleShadowStyle) -> some View {
-        shadow(color: .black.opacity(style.alpha), radius: style.blur / 2, x: 0, y: style.y)
+    /// Casts a component's generated elevation (`BrambleElevation.*`); nil casts nothing. CSS blur
+    /// is two Gaussian sigmas, so the SwiftUI radius is half the token's blur.
+    func elevation(_ style: BrambleShadowStyle?) -> some View {
+        shadow(color: .black.opacity(style?.alpha ?? 0), radius: (style?.blur ?? 0) / 2, x: 0, y: style?.y ?? 0)
     }
 }
 
@@ -120,5 +106,6 @@ struct SkinProvider<Content: View>: View {
             .tint(skin.accent)
             .foregroundStyle(skin.text)
             .preferredColorScheme(theme == .light ? .light : .dark)
+            .sensoryFeedback(.selection, trigger: theme)
     }
 }

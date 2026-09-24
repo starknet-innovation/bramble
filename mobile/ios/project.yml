@@ -61,6 +61,9 @@ targets:
     platform: iOS
     sources:
       - path: BrambleTests
+      # The design system is pure presentation over generated tokens; its rules are unit-tested
+      # by compiling it into the test bundle rather than hosting the whole app.
+      - path: Bramble/DesignSystem
       - path: ../core/tests/fixtures/extension-parity.json
         buildPhase: resources
     dependencies:

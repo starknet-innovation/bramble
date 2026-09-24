@@ -64,6 +64,15 @@ What is reused from the extension, and how drift is prevented:
 mainnet/Sepolia, live STRK/ETH balances, receive with QR, explorer, reveal phrase, delete
 wallet. iOS verified; Android source only.
 
+**Phase 0.1 — iOS design parity (done, presentation only).** Generated elevation, press,
+breakpoint and per-component metrics read from the extension's side-panel stylesheet; Dynamic
+Type from the type tokens, 44pt hit targets, haptics, SPRING presses with reduced motion,
+edge swipe-back, sheet detents, SE short-height rules; shared callout / empty / error / pill /
+toast / skeleton components; VoiceOver labels and generated-skin contrast tests; a Debug-only
+offline RPC fixture transport and snapshot XCUITests in both themes. Parity tables in
+`docs/design-mobile-parity.md`. Still open: SE / Pro Max device runs, large Dynamic Type and
+Reduce Motion snapshot passes, Android.
+
 **Phase 1 — sendable wallet.**
 1. Android in CI: Gradle wrapper, NDK build via `build-core-android.sh`, instrumented parity test.
 2. Transactions in the core: invoke v3 hashing (`krusty_kms::compute_invoke_v3_hash`), fee

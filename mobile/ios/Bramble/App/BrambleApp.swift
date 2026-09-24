@@ -7,6 +7,10 @@ struct BrambleApp: App {
     @State private var store: WalletStore
 
     init() {
+        #if DEBUG
+        // UI tests only: answer RPC from generated fixtures instead of a live node.
+        if let fixtures = FixtureTransport.requested() { RpcClient.transportOverride = fixtures }
+        #endif
         let core = try! WalletCore(dataDir: VaultDirectory.prepare().path)
         _store = State(initialValue: WalletStore(core: core))
     }
@@ -20,6 +24,8 @@ struct BrambleApp: App {
                     .overlay { if phase != .active { PrivacyCover() } }
             }
             .onChange(of: phase) { _, next in
+                // Sheets present above the overlay, so the cover also goes up in its own window.
+                PrivacyWindow.shared.update(covered: next != .active)
                 // Leaving the foreground ends the session: the core zeroizes the phrase.
                 if next == .background { store.lock() }
             }
@@ -43,30 +49,27 @@ enum VaultDirectory {
 struct RootView: View {
     @Environment(WalletStore.self) private var store
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        ZStack(alignment: .bottom) {
-            switch store.route {
-            case .onboarding: OnboardingFlow()
-            case .locked: UnlockView()
-            case .wallet: WalletShell()
-            }
-            if let message = store.toast {
-                Toast(message: message)
-                    .padding(.horizontal, BrambleSpace.md)
-                    .padding(.bottom, 76)
-                    .task(id: message) {
-                        try? await Task.sleep(for: .seconds(3))
-                        store.toast = nil
-                    }
+        DeviceClassReader {
+            ZStack(alignment: .bottom) {
+                switch store.route {
+                case .onboarding: OnboardingFlow()
+                case .locked: UnlockView()
+                case .wallet: WalletShell()
+                }
+                // `store.toast` carries errors only; success is shown in place by each screen.
+                ToastHost(message: store.toast, tone: .error) { store.toast = nil }
             }
         }
-        .animation(BrambleEase.out.animation(ms: BrambleMotion.toastMs), value: store.toast)
-        .animation(BrambleEase.out.animation(ms: BrambleMotion.enterMs), value: store.route)
+        .animation(BrambleMotionPolicy.animation(BrambleEase.out.animation(ms: BrambleMotion.enterMs), reduceMotion: reduceMotion), value: store.route)
+        .brambleHaptic(.success, trigger: store.route) { old, new in old != .wallet && new == .wallet }
     }
 }
 
 /// Covers the app-switcher snapshot so no phrase, address, or balance lands in it.
-private struct PrivacyCover: View {
+struct PrivacyCover: View {
     @Environment(\.skin) private var skin
 
     var body: some View {

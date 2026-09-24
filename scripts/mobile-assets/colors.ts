@@ -52,7 +52,7 @@ export const parseDerivedColors = (sources: readonly string[]): readonly Mix[] =
 };
 
 /** `color-mix(in srgb, A p%, B)`: premultiplied interpolation, as browsers compute it. */
-const mix = (a: Rgba, p: number, b: Rgba): Rgba => {
+export const mix = (a: Rgba, p: number, b: Rgba): Rgba => {
   const alpha = a.a * p + b.a * (1 - p);
   if (alpha === 0) {
     return { a: 0, b: 0, g: 0, r: 0 };

@@ -3,17 +3,19 @@ import SwiftUI
 // Structural components from `styles-base.ts`: grouped menu lists with inset hairlines, the flow
 // header with its network pill, and the onboarding badge, option card, and detail row.
 
-/// `.menu-list`: one panel per group, rows split by hairlines inset from the leading edge.
+/// `.menu-list`: one panel per group, rows split by hairlines inset from the leading edge. Flat:
+/// the extension gives grouped lists no shadow.
 struct MenuGroup<Content: View>: View {
     @Environment(\.skin) private var skin
     @ViewBuilder let content: () -> Content
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: BrambleMetrics.MenuList.radius, style: .continuous)
         VStack(spacing: 0) {
             _VariadicView.Tree(DividedRows(hairline: skin.hairline)) { content() }
         }
-        .background(skin.panel, in: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous))
+        .background(skin.panel, in: shape)
+        .clipShape(shape)
     }
 }
 
@@ -24,14 +26,15 @@ private struct DividedRows: _VariadicView_MultiViewRoot {
         ForEach(Array(children.enumerated()), id: \.element.id) { index, child in
             child.overlay(alignment: .top) {
                 if index > 0 {
-                    Rectangle().fill(hairline).frame(height: 1).padding(.leading, BrambleSpace.lg)
+                    Rectangle().fill(hairline).frame(height: 1).padding(.leading, BrambleMetrics.MenuList.hairlineInset)
+                        .accessibilityHidden(true)
                 }
             }
         }
     }
 }
 
-/// `button.menu-row`: icon, label, optional trailing value, chevron; 52pt tall.
+/// `button.menu-row` / `button.option-row`: icon, label, optional trailing value, chevron or check.
 struct MenuRow: View {
     @Environment(\.skin) private var skin
     let icon: BrambleIconName?
@@ -40,18 +43,22 @@ struct MenuRow: View {
     var tone: Color?
     var selected = false
     var chevron = true
+    var hint: String?
     let action: () -> Void
 
     var body: some View {
+        let metrics = BrambleMetrics.MenuRow.self
         Button(action: action) {
-            HStack(spacing: BrambleSpace.sm) {
+            HStack(spacing: metrics.gap) {
                 if let icon {
-                    BrambleIcon(icon, size: 20).foregroundStyle(tone ?? skin.muted).frame(width: 28, alignment: .leading)
+                    BrambleIcon(icon, size: metrics.glyph).foregroundStyle(tone ?? skin.muted)
                 }
-                Text(title).brambleText(BrambleTypeScale.row, weight: BrambleWeight.medium).foregroundStyle(tone ?? skin.text)
-                Spacer(minLength: BrambleSpace.sm)
+                Text(title)
+                    .brambleText(BrambleTypeScale.body.sized(metrics.titleSize), weight: metrics.titleWeight)
+                    .foregroundStyle(tone ?? skin.text)
+                Spacer(minLength: metrics.gap)
                 if let value {
-                    Text(value).brambleText(BrambleTypeScale.body, weight: BrambleWeight.medium).foregroundStyle(skin.muted).lineLimit(1)
+                    Text(value).brambleText(BrambleTypeScale.caption.sized(metrics.valueSize)).foregroundStyle(skin.muted).lineLimit(1)
                 }
                 if selected {
                     BrambleIcon(.check).foregroundStyle(skin.accent)
@@ -59,34 +66,58 @@ struct MenuRow: View {
                     BrambleIcon(.chevronRight).foregroundStyle(skin.muted)
                 }
             }
-            .padding(.horizontal, BrambleSpace.lg)
-            .frame(minHeight: 52)
+            .padding(metrics.padding)
+            .frame(minHeight: metrics.height)
         }
-        .buttonStyle(FillPressStyle(fill: selected ? skin.accentSoft : .clear, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: BrambleRadius.md, style: .continuous), scale: 1))
+        .buttonStyle(FillPressStyle(fill: selected ? skin.accentSoft : .clear, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: metrics.radius, style: .continuous), scale: 1))
         .accessibilityLabel(title)
         .accessibilityValue(value ?? "")
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityHint(hint ?? "")
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
-/// `.pill` with the network dot: positive when the network answered, warning while unknown.
+/// `.dot`: the network status dot, positive when the network answered, warning while degraded.
+/// The degraded dot pulses (`network-status-pulse`), except under Reduce Motion.
+struct StatusDot: View {
+    @Environment(\.skin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var healthy = true
+    var size: CGFloat = BrambleMetrics.Dot.size
+    @State private var dim = false
+
+    var body: some View {
+        Circle()
+            .fill(healthy ? skin.positive : skin.warning)
+            .frame(width: size, height: size)
+            .opacity(!healthy && dim && !reduceMotion ? BrambleMetrics.Dot.degradedPulseOpacity : 1)
+            .onAppear { dim = true }
+            .animation(healthy || reduceMotion ? nil : BrambleEase.inOut.animation(ms: BrambleMetrics.Dot.degradedPulseMs / 2).repeatForever(), value: dim)
+            .accessibilityHidden(true)
+    }
+}
+
+/// `.pill` with the network dot.
 struct NetworkPill: View {
     @Environment(\.skin) private var skin
     let label: String
     var healthy = true
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(healthy ? skin.positive : skin.warning).frame(width: 6, height: 6)
-            Text(label).brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold)
+        let metrics = BrambleMetrics.Pill.self
+        HStack(spacing: metrics.gap) {
+            StatusDot(healthy: healthy)
+            Text(label).brambleText(BrambleTypeScale.caption.sized(metrics.fontSize), weight: metrics.weight).lineLimit(1)
         }
-        .padding(.horizontal, BrambleSpace.md)
-        .frame(height: BrambleSize.pill + 8)
+        .padding(metrics.padding)
+        .frame(minHeight: metrics.height)
         .background(skin.elevated, in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Network: \(label)")
     }
 }
 
-/// `.flow-header`: back control, title and subtitle, network pill.
+/// `.flow-header`: back control, title (`h1`) and subtitle, network pill.
 struct FlowHeader: View {
     @Environment(\.skin) private var skin
     let title: String
@@ -95,32 +126,35 @@ struct FlowHeader: View {
     let back: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: BrambleSpace.sm) {
-            IconButton(icon: .chevronLeft, label: "Back", tint: skin.muted, action: back)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).brambleText(BrambleTypeScale.headline, weight: BrambleWeight.bold, tracking: BrambleTracking.display)
+        let metrics = BrambleMetrics.FlowHeader.self
+        HStack(alignment: .center, spacing: metrics.gap) {
+            IconButton(icon: .chevronLeft, label: "Back", tint: skin.text, action: back)
+            VStack(alignment: .leading, spacing: metrics.titleGap) {
+                Text(title)
+                    .brambleText(BrambleTypeScale.display.sized(metrics.titleSize), weight: BrambleMetrics.H1.weight, tracking: BrambleMetrics.H1.tracking)
+                    .accessibilityAddTraits(.isHeader)
                 if let subtitle {
-                    Text(subtitle).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                    Text(subtitle).brambleText(BrambleTypeScale.caption.sized(metrics.subtitleSize)).foregroundStyle(skin.muted)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if let network { NetworkPill(label: network) }
         }
-        .padding(.top, 2)
-        .padding(.bottom, BrambleSpace.xs)
+        .padding(metrics.padding)
     }
 }
 
-/// `.onboarding-step-icon`: a 54pt elevated disc around a 24pt icon.
+/// `.onboarding-step-icon`: an elevated disc around the step's icon.
 struct Medallion: View {
     @Environment(\.skin) private var skin
     let icon: BrambleIconName
 
     var body: some View {
-        BrambleIcon(icon, size: 24)
+        BrambleIcon(icon, size: BrambleMetrics.Onboarding.iconGlyph)
             .foregroundStyle(skin.text)
-            .frame(width: 54, height: 54)
+            .frame(width: BrambleMetrics.Onboarding.iconSize, height: BrambleMetrics.Onboarding.iconSize)
             .background(skin.elevated, in: Circle())
+            .accessibilityHidden(true)
     }
 }
 
@@ -134,20 +168,26 @@ struct OptionCard: View {
     let action: () -> Void
 
     var body: some View {
+        let metrics = BrambleMetrics.OnboardingOption.self
         Button(action: action) {
-            HStack(spacing: BrambleSpace.md) {
-                BrambleIcon(icon).foregroundStyle(skin.text).frame(width: 40, height: 40).background(skin.panel, in: Circle())
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold).foregroundStyle(skin.text)
-                    Text(detail).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted).multilineTextAlignment(.leading)
+            HStack(spacing: metrics.gap) {
+                BrambleIcon(icon, size: metrics.iconGlyph).foregroundStyle(skin.text)
+                    .frame(width: metrics.iconSize, height: metrics.iconSize)
+                    .background(skin.panel, in: Circle())
+                VStack(alignment: .leading, spacing: metrics.copyGap) {
+                    Text(title).brambleText(BrambleTypeScale.body.sized(metrics.titleSize), weight: metrics.titleWeight).foregroundStyle(skin.text)
+                    // The copy sits inside a `button`, so it inherits the button's weight.
+                    Text(detail)
+                        .brambleText(BrambleTypeStyle(size: metrics.detailSize, lineHeight: metrics.detailLineHeight), weight: BrambleMetrics.Button.weight)
+                        .foregroundStyle(skin.muted).multilineTextAlignment(.leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                BrambleIcon(.chevronRight).foregroundStyle(skin.muted)
+                BrambleIcon(.chevronRight, size: metrics.chevron).foregroundStyle(skin.muted)
             }
-            .padding(BrambleSpace.md)
-            .frame(minHeight: 82)
+            .padding(metrics.padding)
+            .frame(minHeight: metrics.height)
         }
-        .buttonStyle(FillPressStyle(fill: skin.elevated, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous)))
+        .buttonStyle(FillPressStyle(fill: skin.elevated, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: metrics.radius, style: .continuous)))
         .opacity(enabled ? 1 : 0.5)
         .accessibilityLabel(title)
         .accessibilityHint(detail)
@@ -161,57 +201,55 @@ struct DetailRow: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: BrambleSpace.sm) {
-            BrambleIcon(icon, size: 16).foregroundStyle(skin.text)
-            Text(text).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted).multilineTextAlignment(.leading)
+        let metrics = BrambleMetrics.Complete.self
+        HStack(spacing: metrics.detailGap) {
+            BrambleIcon(icon, size: metrics.detailGlyph).foregroundStyle(skin.text)
+            Text(text).brambleText(BrambleTypeScale.caption.sized(metrics.detailSize)).foregroundStyle(skin.muted).multilineTextAlignment(.leading)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, BrambleSpace.md)
-        .frame(minHeight: 44)
-        .background(skin.elevated, in: RoundedRectangle(cornerRadius: BrambleRadius.md, style: .continuous))
+        .padding(metrics.detailPadding)
+        .frame(minHeight: metrics.detailHeight)
+        .background(skin.elevated, in: RoundedRectangle(cornerRadius: metrics.detailRadius, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 
-/// `.toast`: a raised panel with a tinted icon tile, pinned above the primary action.
-struct Toast: View {
-    @Environment(\.skin) private var skin
-    let message: String
-
-    var body: some View {
-        HStack(spacing: BrambleSpace.md) {
-            BrambleIcon(.alert).foregroundStyle(skin.danger)
-                .frame(width: 30, height: 30)
-                .background(skin.dangerSoft, in: RoundedRectangle(cornerRadius: BrambleRadius.sm, style: .continuous))
-            Text(message).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
-            Spacer(minLength: 0)
-        }
-        .padding(BrambleSpace.sm + 2)
-        .background(skin.panel, in: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous))
-        .brambleShadow(BrambleShadow.lg)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-    }
+extension BrambleSkin {
+    var tokenMarkFills: [Color] { [tokenMark0Fill, tokenMark1Fill, tokenMark2Fill, tokenMark3Fill] }
+    var tokenMarkInks: [Color] { [tokenMark0Ink, tokenMark1Ink, tokenMark2Ink, tokenMark3Ink] }
 }
 
-/// Token mark: the bundled logo, or the neutral letter badge the extension falls back to.
+/// Token mark: the bundled logo, or the tinted letter badge the extension falls back to.
 struct TokenMark: View {
     @Environment(\.skin) private var skin
     let address: String
     let symbol: String
 
     var body: some View {
+        let metrics = BrambleMetrics.TokenRow.self
         Group {
             if let asset = BrambleTokenLogo.assets[address.lowercased()] {
-                Image(asset).resizable().scaledToFit()
+                Image(asset).resizable().scaledToFill()
             } else {
-                Text(symbol.prefix(1))
-                    .brambleText(BrambleTypeScale.body, weight: BrambleWeight.bold)
-                    .foregroundStyle(skin.muted)
+                let tone = Self.tone(of: address)
+                Text(symbol.prefix(3))
+                    .brambleText(BrambleTypeScale.micro.sized(metrics.markTextSize), weight: metrics.markWeight, tracking: metrics.markTracking)
+                    .foregroundStyle(skin.tokenMarkInks[tone])
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(skin.sunken)
+                    .background(skin.tokenMarkFills[tone])
             }
         }
-        .frame(width: 40, height: 40)
+        .frame(width: metrics.markSize, height: metrics.markSize)
         .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+
+    /// `BigInt(address) % 4n` (`tokenGlyph`): 16 is a multiple of 4, so the last hex digit
+    /// decides; anything that is not hex takes tone 0, as the extension's catch does.
+    static func tone(of address: String) -> Int {
+        guard address.hasPrefix("0x"), address.count > 2, let digit = address.last?.hexDigitValue,
+              address.dropFirst(2).allSatisfy(\.isHexDigit) else { return 0 }
+        return digit % 4
     }
 }
 

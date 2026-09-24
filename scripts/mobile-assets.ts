@@ -5,19 +5,26 @@
  * `tests/conformance/mobile-generated.test.ts` fails when a committed copy drifts from it.
  *
  * Rendering is pure; the only input read from disk is the side-panel stylesheet source the derived
- * colours are declared in (`readMobileAssetSources`). `scripts/generate-mobile-assets.ts` writes.
+ * colours are declared in (`readMobileAssetSources`). Elevation tiers, press scales, and layout
+ * metrics are read from the rendered stylesheet constant (`SIDEPANEL_STYLES`). `scripts/generate-mobile-assets.ts` writes.
  */
 import { readFile } from "node:fs/promises";
 import { BRAMBLE_MARK_PATH, BRAMBLE_MARK_VIEW_BOX } from "@bramble/ui-kit/brand-mark";
 import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { SIDEPANEL_STYLES } from "../packages/presentation/wallet-ui/src/sidepanel/styles/index";
 import { DERIVED_COLOR_SOURCES, parseDerivedColors } from "./mobile-assets/colors";
+import { parseCss } from "./mobile-assets/css";
+import { TOAST_SOURCE } from "./mobile-assets/feedback";
 import { renderKotlin } from "./mobile-assets/kotlin";
+import { RPC_FIXTURES_PATH, renderRpcFixtures } from "./mobile-assets/rpc-fixtures";
 import { HEADER } from "./mobile-assets/shared";
-import { renderSwift } from "./mobile-assets/swift";
+import { renderSwift, renderSwiftLayout } from "./mobile-assets/swift";
 import { renderVectorAssets } from "./mobile-assets/vectors";
 
 /** Repository-relative path of the Swift design tokens consumed by the iOS app. */
 export const SWIFT_TOKENS_PATH = "mobile/ios/Bramble/DesignSystem/BrambleTokens.generated.swift";
+/** Repository-relative path of the Swift per-component layout read from the stylesheet. */
+export const SWIFT_LAYOUT_PATH = "mobile/ios/Bramble/DesignSystem/BrambleLayout.generated.swift";
 /** Repository-relative path of the Kotlin design tokens consumed by the Android app. */
 export const KOTLIN_TOKENS_PATH =
   "mobile/android/app/src/main/java/org/bramble/wallet/design/BrambleTokens.generated.kt";
@@ -30,9 +37,12 @@ export const NETWORKS_JSON_PATH = "mobile/core/generated/networks.json";
 
 const MOBILE_NETWORK_IDS = ["SN_MAIN", "SN_SEPOLIA"] as const;
 
-/** Reads the stylesheet sources the derived colours are declared in. */
+/**
+ * Reads the source files rendering needs from disk: the stylesheet sources the derived colours are
+ * declared in, then the toast implementation (`TOAST_SOURCE`), in that order.
+ */
 export const readMobileAssetSources = async (): Promise<readonly string[]> =>
-  Promise.all(DERIVED_COLOR_SOURCES.map((path) => readFile(path, "utf8")));
+  Promise.all([...DERIVED_COLOR_SOURCES, TOAST_SOURCE].map((path) => readFile(path, "utf8")));
 
 const renderNetworks = (): string => {
   const networks = MOBILE_NETWORK_IDS.map((id) => ({
@@ -101,14 +111,19 @@ const renderMarkDrawable = (): string => {
  * Every generated mobile source keyed by repository-relative path. Throws when a token no
  * longer has a shape the native platforms can express, rather than emitting a lossy value.
  */
-export const renderMobileAssets = (
-  styleSources: readonly string[],
-): ReadonlyMap<string, string> => {
-  const mixes = parseDerivedColors(styleSources);
+export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<string, string> => {
+  const mixes = parseDerivedColors(sources.slice(0, DERIVED_COLOR_SOURCES.length));
+  const toastSource = sources[DERIVED_COLOR_SOURCES.length];
+  if (toastSource === undefined) {
+    throw new Error(`Missing ${TOAST_SOURCE}; read sources with readMobileAssetSources`);
+  }
+  const rules = parseCss(SIDEPANEL_STYLES);
   return new Map([
-    [SWIFT_TOKENS_PATH, renderSwift(mixes)],
+    [SWIFT_TOKENS_PATH, renderSwift(mixes, rules)],
+    [SWIFT_LAYOUT_PATH, renderSwiftLayout(rules, toastSource)],
     [KOTLIN_TOKENS_PATH, renderKotlin(mixes)],
     [NETWORKS_JSON_PATH, renderNetworks()],
+    [RPC_FIXTURES_PATH, renderRpcFixtures()],
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],
     [ANDROID_MARK_PATH, renderMarkDrawable()],
