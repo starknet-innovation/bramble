@@ -22,14 +22,14 @@
  * - `side_panel` + the `sidePanel` permission → `sidebar_action`. Firefox has
  *   no `sidePanel` API; `sidebar_action` is its equivalent surface and needs no
  *   permission. The panel document itself is unchanged.
- * - `sandbox` and `content_security_policy.sandbox` are copied through, which
- *   is the whole reason {@link FIREFOX_MIN_VERSION} is what it is. Firefox
- *   gained the `sandbox` key in 154; below that it is ignored, and
- *   `sandbox/render.html` — which runs untrusted on-chain HTML — would load as
- *   an ordinary privileged extension page. A page sandboxed on one browser and
- *   privileged on another is the kind of difference that stays invisible until
- *   it matters, so this build either ships it under the same guarantees Chrome
- *   gives it, or refuses to install.
+ * - `sandbox` and `content_security_policy.sandbox` are dropped, and
+ *   `sandbox/render.html` is withheld from the package entirely. Firefox gained
+ *   the `sandbox` key in 154; below that it is ignored, and that page — which
+ *   runs untrusted on-chain HTML — would load as an ordinary privileged
+ *   extension page. A page sandboxed on one browser and privileged on another
+ *   is the kind of difference that stays invisible until it matters, so where
+ *   the manifest cannot sandbox it, it does not ship. Nothing is lost: the
+ *   collectibles journey is parked and no view can reach the gallery.
  * - `browser_specific_settings` is added. The add-on id is what binds this
  *   build to its stored data and its AMO listing, and `strict_min_version`
  *   refuses installation on releases whose MV3 support this manifest assumes.
@@ -47,23 +47,21 @@ export type Manifest = Readonly<Record<string, unknown>>;
 export const FIREFOX_EXTENSION_ID = "bramble@starknet.org";
 
 /**
- * Oldest Firefox this build supports.
+ * Oldest Firefox this build supports: the current ESR, and so the oldest
+ * release Mozilla still serves. Both ESR lines, the release channel, and the
+ * forks that track either are above it.
  *
- * 154 is the release that added the `sandbox` manifest key, which is what lets
- * the collectible renderer ship here at all: that page runs untrusted on-chain
- * HTML, and it is only safe because the manifest gives it its own security
- * principal and an egress-blocking policy. Below 154 the key is ignored, so the
- * page would load with full extension privileges — the reason to hold this
- * floor rather than reach for a wider audience.
+ * 140 is also the first release that understands
+ * {@link FIREFOX_DATA_COLLECTION_PERMISSIONS}. A floor below that would ship a
+ * consent declaration the browser cannot honour, so this is the lowest honest
+ * value rather than merely a conservative one.
  *
- * The cost is deliberate and worth stating: ESR is excluded. The current ESR is
- * 140 and the next is 153, so neither line can install this add-on. Lowering
- * the floor to reach them means withholding the renderer again, not shipping it
- * unsandboxed.
- *
- * Comfortably above two other floors this manifest depends on: 140, where
- * {@link FIREFOX_DATA_COLLECTION_PERMISSIONS} became understood, and 149, where
- * `action.openPopup` stopped requiring a user gesture.
+ * The floor and the collectibles gallery are ONE decision. It was 154 — above
+ * both ESR lines — while the sandboxed renderer shipped, because Firefox gained
+ * the `sandbox` manifest key there. That renderer is now withheld (see
+ * {@link shipsSandboxedRenderer}) because the journey is parked. Un-parking the
+ * gallery means raising this back to 154 and excluding ESR again; it is not a
+ * change that can be made on the UI side alone.
  *
  * Desktop only. No `gecko_android` key is declared, which is how an add-on
  * declines Android compatibility. Gecko has no sidebar on Android at all —
@@ -71,7 +69,7 @@ export const FIREFOX_EXTENSION_ID = "bramble@starknet.org";
  * wallet's primary surface could not render. Android is a future native app,
  * not this package: do not add `gecko_android`.
  */
-export const FIREFOX_MIN_VERSION = "154.0";
+export const FIREFOX_MIN_VERSION = "140.0";
 
 /**
  * What this extension tells Firefox it collects, shown to the user at install.
@@ -130,21 +128,20 @@ const SHARED_KEYS = [
   "host_permissions",
   "optional_host_permissions",
   "web_accessible_resources",
-  "content_security_policy",
-  "sandbox",
 ] as const;
 
 /**
  * Keys this transform replaces with a Gecko equivalent rather than copying.
  * Listed so the exhaustiveness check below can tell "handled" from "forgotten".
  */
-const REWRITTEN_KEYS = ["background", "permissions"] as const;
+const REWRITTEN_KEYS = ["background", "content_security_policy", "permissions"] as const;
 
 /**
  * Keys intentionally absent from the Firefox manifest. `side_panel` has no Gecko
- * counterpart; `sidebar_action` is generated in its place.
+ * counterpart (`sidebar_action` is generated in its place), and `sandbox` is
+ * dropped along with the page it declares — see the module comment.
  */
-const CHROME_ONLY_KEYS = ["side_panel"] as const;
+const CHROME_ONLY_KEYS = ["side_panel", "sandbox"] as const;
 
 /**
  * Manifest permissions that exist only on Chrome. `sidePanel` gates the
@@ -233,6 +230,35 @@ const developer = (chrome: Manifest): Record<string, unknown> => {
   return { name, url };
 };
 
+/**
+ * Keeps the extension-page policy and drops the sandbox policy, which would
+ * describe a page this build does not ship.
+ */
+const contentSecurityPolicy = (chrome: Manifest): Record<string, unknown> => {
+  const declared = requireRecord(chrome["content_security_policy"], "content_security_policy");
+  return { extension_pages: declared["extension_pages"] };
+};
+
+/**
+ * Whether a build target ships the manifest-sandboxed collectible renderer.
+ *
+ * One decision behind both halves of withholding that page: the build skips
+ * bundling and copying it, and {@link FIREFOX_EXCLUDED_FILES} keeps it out of
+ * the packaged set. Two independent target checks would eventually disagree,
+ * and the disagreement would be a page shipped without the manifest entry that
+ * sandboxes it.
+ */
+export const shipsSandboxedRenderer = (target: string): boolean => target !== "firefox";
+
+/**
+ * Packaged files withheld from a target that {@link shipsSandboxedRenderer}
+ * returns false for, as they appear in `EXPECTED_RUNTIME_FILES`.
+ */
+export const FIREFOX_EXCLUDED_FILES: readonly string[] = [
+  "sandbox/render.html",
+  "sandbox/render.js",
+];
+
 /** Drops Chrome-only permissions; an unknown permission blocks install on Firefox. */
 const permissions = (chrome: Manifest): readonly string[] =>
   requireStringArray(chrome["permissions"], "permissions").filter(
@@ -261,6 +287,7 @@ export const toFirefoxManifest = (chrome: Manifest): Record<string, unknown> => 
   return {
     ...shared,
     background: background(chrome),
+    content_security_policy: contentSecurityPolicy(chrome),
     permissions: permissions(chrome),
     sidebar_action: sidebarAction(chrome),
     developer: developer(chrome),

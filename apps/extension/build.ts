@@ -2,8 +2,8 @@
  * Builds the MV3 extension with Bun and copies static extension assets into each
  * target's output directory.
  *
- * One bundle set and one page set serve both browsers; only the manifest
- * differs. `--target=firefox` writes the Gecko output to `dist-firefox/`, and
+ * One bundle set serves both browsers; the manifest and the shipped page set
+ * differ. `--target=firefox` writes the Gecko output to `dist-firefox/`, and
  * `--target=all` writes both from one run of the prerequisite gates — those
  * gates check the sources, which no target changes, so running them per target
  * would only make a two-browser build twice as slow to fail. The two emissions
@@ -15,7 +15,7 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type BuildTarget, nameLimit, outputDirectory, requestedTargets } from "./build-target";
-import { toFirefoxManifest } from "./firefox-manifest";
+import { shipsSandboxedRenderer, toFirefoxManifest } from "./firefox-manifest";
 
 const repositoryRoot = join(import.meta.dir, "../..");
 process.chdir(repositoryRoot);
@@ -170,15 +170,22 @@ const emit = async (target: BuildTarget): Promise<void> => {
     }),
   );
 
-  requireBuild(
-    await Bun.build({
-      entrypoints: [join(extensionRoot, "src/sandbox/render.ts")],
-      format: "esm",
-      minify: true,
-      outdir: join(outdir, "sandbox"),
-      target: "browser",
-    }),
-  );
+  // The collectible renderer ships only where the manifest can declare it as a
+  // sandboxed page. Firefox gained the `sandbox` key in 154 and this build
+  // supports ESR, so on Gecko the key would be ignored and the page would load
+  // with full extension privileges. Nothing is lost: the collectibles journey
+  // is parked and no view can reach the gallery.
+  if (shipsSandboxedRenderer(target)) {
+    requireBuild(
+      await Bun.build({
+        entrypoints: [join(extensionRoot, "src/sandbox/render.ts")],
+        format: "esm",
+        minify: true,
+        outdir: join(outdir, "sandbox"),
+        target: "browser",
+      }),
+    );
+  }
 
   // The browser's extension list is the only place a loaded build identifies
   // itself, and every dev build otherwise looks identical to a release. Stamp the
@@ -213,8 +220,10 @@ const emit = async (target: BuildTarget): Promise<void> => {
   await cp(join(publicRoot, "ledger-grant.html"), join(outdir, "ledger-grant.html"));
   await cp(join(publicRoot, "icons"), join(outdir, "icons"), { recursive: true });
   await cp(join(publicRoot, "brand"), join(outdir, "brand"), { recursive: true });
-  await mkdir(join(outdir, "sandbox"), { recursive: true });
-  await cp(join(publicRoot, "sandbox/render.html"), join(outdir, "sandbox/render.html"));
+  if (shipsSandboxedRenderer(target)) {
+    await mkdir(join(outdir, "sandbox"), { recursive: true });
+    await cp(join(publicRoot, "sandbox/render.html"), join(outdir, "sandbox/render.html"));
+  }
   await mkdir(krustyOutdir, { recursive: true });
   await cp(join(krustyPackage, "krusty_kms_wasm.js"), join(krustyOutdir, "krusty_kms_wasm.js"));
   await cp(
