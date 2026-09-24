@@ -125,7 +125,7 @@ export const addressBookFlow = (
         <p class="eyebrow">Saved addresses</p>
         ${
           addresses.length === 0
-            ? emptyState("No saved addresses yet. Save one to reuse it when sending.")
+            ? emptyState("No saved address yet")
             : `<ul class="address-book">${addresses
                 .map(
                   (entry) => `<li>

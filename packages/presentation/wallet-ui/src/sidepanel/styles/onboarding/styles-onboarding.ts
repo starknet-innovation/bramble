@@ -378,24 +378,6 @@ export const ONBOARDING_STYLES = `
     background: var(--bramble-positive);
     color: var(--bramble-accent-text);
   }
-  .onboarding-complete-details {
-    display: grid;
-    gap: ${SPACE.sm};
-    width: min(100%, 360px);
-  }
-  .onboarding-complete-detail {
-    align-items: center;
-    background: var(--bramble-elevated);
-    border-radius: ${RADIUS.md};
-    color: var(--bramble-muted);
-    display: flex;
-    font-size: ${TYPE.caption.size};
-    gap: ${SPACE.sm};
-    min-height: 44px;
-    padding: 0 ${SPACE.md};
-    text-align: left;
-  }
-  .onboarding-complete-detail .icon { color: var(--bramble-text); height: 16px; width: 16px; }
   .onboarding-complete-actions {
     display: grid;
     gap: ${SPACE.sm};

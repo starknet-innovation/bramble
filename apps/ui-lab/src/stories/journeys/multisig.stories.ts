@@ -39,7 +39,7 @@ export const Watch: LabStory = {
     await expect(body?.querySelectorAll("#multisig-add-form input")).toHaveLength(1);
     await expect(body?.querySelector('input[name="address"]')).toBeVisible();
     await expect(body?.querySelector('button[type="submit"]')).toHaveTextContent(
-      "Add shared account",
+      "Add multisig account",
     );
   },
 };

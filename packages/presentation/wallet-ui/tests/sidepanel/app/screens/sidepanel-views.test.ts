@@ -174,10 +174,9 @@ describe("sidepanel views", () => {
     expect(html).not.toContain("wallet-dock");
   });
 
-  test("explains why sending is unavailable instead of failing silently", () => {
+  test("disables review when the network has no tracked token to send", () => {
     const html = dashboard("send", status, [], preferences, { balances: [] });
 
-    expect(html).toContain("No tokens are tracked on this network yet");
     expect(html).toMatch(/id="send-review-button" type="submit" disabled/);
   });
 
