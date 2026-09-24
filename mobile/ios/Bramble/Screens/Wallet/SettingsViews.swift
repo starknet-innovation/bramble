@@ -14,6 +14,8 @@ struct SettingsHubView: View {
             Eyebrow(text: "Accounts & networks")
             MenuGroup {
                 MenuRow(icon: .globe, title: "Network", value: store.networkInfo.name) { open(.network) }
+                MenuRow(icon: .book, title: "Address book") { open(.coordination(.addressBook)) }
+                MenuRow(icon: .users, title: "Shared accounts") { open(.coordination(.sharedAccounts)) }
             }
             Eyebrow(text: "Preferences")
             MenuGroup {
@@ -25,6 +27,7 @@ struct SettingsHubView: View {
             }
             Eyebrow(text: "Security")
             MenuGroup {
+                MenuRow(icon: .users, title: "Multisigs") { open(.coordination(.sharedAccounts)) }
                 MenuRow(icon: .lockKeyhole, title: "Lock wallet", chevron: false) { store.lock() }
                 MenuRow(icon: .alert, title: "Remove wallet from this device", tone: skin.danger) { open(.remove) }
             }
@@ -71,6 +74,7 @@ struct NetworkView: View {
             }
             Text("Switching selects or derives an account on the target network.")
                 .brambleText(BrambleTypeScale.label).foregroundStyle(skin.muted)
+            CoordinationRelayDisclosure()
             Spacer()
         }
         .padding(.horizontal, BrambleSpace.lg)

@@ -196,6 +196,8 @@ private fun Home(store: WalletStore) {
     val uri = LocalUriHandler.current
     var sheet by remember { mutableStateOf("") }
     if (sheet == "settings") return Settings(store) { sheet = "" }
+    if (sheet == "address-book") return org.bramble.wallet.coordination.AddressBookScreen(store) { sheet = "" }
+    if (sheet == "shared-accounts") return org.bramble.wallet.coordination.SharedAccountsScreen(store) { sheet = "" }
 
     fun amount(symbol: String): String? {
         val raw = store.balances[symbol] ?: return null
@@ -231,6 +233,11 @@ private fun Home(store: WalletStore) {
             Text("Receive on ${store.networkInfo.name}", color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
             Text(store.account?.address ?: "", color = skin.text, style = textStyle(BrambleTypeScale.mono, mono = true))
         }
+        if (sheet == "receive") org.bramble.wallet.coordination.ReceiveIdentity(store)
+        Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
+            SecondaryButton("Address book") { sheet = "address-book" }
+            SecondaryButton("Shared accounts") { sheet = "shared-accounts" }
+        }
         Card {
             Text("Tokens", color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
             store.networkInfo.tokens.forEach { token ->
@@ -262,6 +269,7 @@ private fun Settings(store: WalletStore, close: () -> Unit) {
             }
             SecondaryButton("Add account") { scope.launch { runCatching { store.addAccount() }.onFailure { error = describe(it) } } }
         }
+        org.bramble.wallet.coordination.CoordinationRelaySettings(store)
         Card {
             Text("Security", color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
             SecondaryButton("Lock now") { store.lock() }

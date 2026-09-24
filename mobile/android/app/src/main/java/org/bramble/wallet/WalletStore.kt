@@ -38,6 +38,8 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
         private set
 
     private val rpc = RpcClient()
+    /** Wallet card, contacts, shared accounts, and Nostr coordination (public state only). */
+    val coordination = org.bramble.wallet.coordination.CoordinationStore(core) { networkInfo }
 
     val networkInfo: NetworkInfo get() = supportedNetworks().first { it.network == network }
     val account: AccountInfo? get() = accounts.firstOrNull { it.index == selectedAccount } ?: accounts.firstOrNull()
@@ -74,6 +76,7 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
 
     fun lock() {
         core.lock()
+        coordination.reset()
         pendingBackup = emptyList()
         accounts = emptyList()
         balances = emptyMap()

@@ -4,7 +4,7 @@ import SwiftUI
 /// The wallet frame from `wallet-shell.ts` / `styles-dock.ts`: persistent account header, the
 /// active dock screen, and the floating dock. Flow screens push over it without the dock.
 struct WalletShell: View {
-    enum Flow: Hashable { case receive, network, appearance, reveal, remove }
+    enum Flow: Hashable { case receive, network, appearance, reveal, remove, coordination(CoordinationFlow) }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -38,12 +38,14 @@ struct WalletShell: View {
                     case .appearance: AppearanceView()
                     case .reveal: RevealSecretsView()
                     case .remove: RemoveWalletView()
+                    case .coordination(let flow): CoordinationDestination(flow: flow)
                     }
                 }
                 .toolbar(.hidden, for: .navigationBar)
                 .background(skin.bg.ignoresSafeArea())
             }
         }
+        .environment(\.openCoordinationFlow, CoordinationNavigator { flows.append(.coordination($0)) })
         .sheet(isPresented: $accountsOpen) {
             SkinProvider { AccountsSheet() }.environment(store)
         }

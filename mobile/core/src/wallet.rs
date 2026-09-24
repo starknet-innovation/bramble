@@ -164,6 +164,26 @@ impl WalletCore {
         })
     }
 
+    /// The app-private directory the vault and the public metadata files live in.
+    pub(crate) fn data_dir(&self) -> &std::path::Path {
+        &self.data_dir
+    }
+
+    /// Runs `f` with the unlocked phrase, its BIP-39 passphrase, and the account count, under the
+    /// session lock. For modules that derive keys (Nostr, signer discovery); nothing escapes `f`.
+    pub(crate) fn with_phrase<T>(
+        &self,
+        f: impl FnOnce(&str, Option<&str>, u32) -> Result<T, CoreError>,
+    ) -> Result<T, CoreError> {
+        self.with_session(|session| {
+            f(
+                &session.payload.mnemonic,
+                session.payload.mnemonic_passphrase.as_deref(),
+                session.payload.account_count,
+            )
+        })
+    }
+
     fn install(
         &self,
         password: &str,
@@ -174,6 +194,9 @@ impl WalletCore {
         if self.vault_path().exists() {
             return Err(CoreError::WalletExists);
         }
+        // Metadata without a vault belongs to no wallet (an interrupted delete); a new wallet
+        // must never inherit its contacts, shared accounts, or relay choice.
+        crate::public_store::remove_all(&self.data_dir)?;
         let session = Session {
             payload: VaultPayload {
                 account_count: 1,
@@ -327,6 +350,9 @@ impl WalletCore {
     pub fn delete_wallet(&self, password: String) -> Result<(), CoreError> {
         drop(self.open_session(&password)?);
         let mut guard = self.lock_session();
+        // Public metadata goes first: a failure here leaves the wallet intact and retryable,
+        // never a deleted vault beside another wallet's trusted contacts and shared accounts.
+        crate::public_store::remove_all(&self.data_dir)?;
         fs::remove_file(self.vault_path()).map_err(|_| storage("remove vault"))?;
         *guard = None;
         Ok(())

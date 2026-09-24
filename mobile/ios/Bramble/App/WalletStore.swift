@@ -29,6 +29,8 @@ final class WalletStore {
 
     let core: WalletCore
     private let rpc = RpcClient()
+    /// Wallet card, contacts, shared accounts, and Nostr coordination (public state only).
+    @ObservationIgnored private(set) lazy var coordination = CoordinationStore(wallet: self)
 
     init(core: WalletCore) {
         self.core = core
@@ -88,6 +90,7 @@ final class WalletStore {
 
     func lock() {
         core.lock()
+        coordination.reset()
         pendingBackup = []
         accounts = []
         balances = [:]

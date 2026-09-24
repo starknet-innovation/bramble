@@ -9,15 +9,40 @@
 //! Errors carry an operation name or a fixed reason, never input text, so nothing a user typed
 //! can reach a log through an error message.
 
+mod argent_multisig;
+mod class_declared;
+mod contact_card;
+mod contacts;
+mod coordination;
 mod felt;
+mod ffi_coordination;
+mod ffi_nostr_multisig;
 mod kms;
+mod multisig_constants;
+mod multisig_rpc;
+mod multisig_store;
 mod networks;
+mod nostr;
+mod nostr_relay;
+mod public_store;
 mod rpc;
 mod ui;
 mod vault;
 mod wallet;
 
+pub use argent_multisig::{ArgentMultisigConfig, ArgentMultisigPrediction};
+pub use class_declared::ClassDeclaredRead;
+pub use contact_card::{ContactCardParse, WalletContactCard};
+pub use contacts::Contact;
+pub use ffi_coordination::{CoordinationSyncOutcome, NostrSyncPlan, RelayPolicy};
+pub use ffi_nostr_multisig::{
+    argent_multisig_normalize, argent_multisig_predict, argent_signer_guid, multisig_limits,
+    nostr_relay_url_normalize, short_key, wallet_contact_card_encode, wallet_contact_card_parse,
+    MultisigLimits, MultisigRecord,
+};
+pub use multisig_rpc::{MultisigAuthorityRead, MultisigAuthorityStatus, RpcRequest};
 pub use networks::{NetworkId, NetworkInfo, TokenInfo};
+pub use nostr_relay::RelayStep;
 pub use ui::{AccountAvatar, PassphraseLevel, PassphraseStrength};
 pub use wallet::{AccountInfo, RecoveryPhrase, StarkSignature, WalletCore, WalletStatus};
 
@@ -42,6 +67,9 @@ pub enum CoreError {
     Kms { operation: String },
     #[error("rpc failure: {reason}")]
     Rpc { reason: String },
+    /// Nostr coordination failed; `reason` is a fixed operation name, never input text.
+    #[error("coordination failure: {reason}")]
+    Coordination { reason: String },
 }
 
 /// Versions compiled into this core, for the About screen and bug reports.
@@ -176,5 +204,35 @@ pub mod testing {
                 reason: "not an envelope".into(),
             })?;
         crate::vault::open(&envelope, password, scope).map(|(plaintext, _)| plaintext.to_vec())
+    }
+
+    /// The coordination public key at Nostr address `index`. Parity suites use the published
+    /// test phrase's address 1 as the co-signer, so no second phrase appears in the repository.
+    pub fn nostr_public_key_at(mnemonic: &str, index: u32) -> Result<String, crate::CoreError> {
+        crate::nostr::public_key_at(mnemonic, index)
+    }
+
+    /// Opens a gift wrap for the coordination key at Nostr address `index`:
+    /// `(content, identifier, sender)`.
+    pub fn open_gift_wrap(
+        mnemonic: &str,
+        index: u32,
+        event_json: &str,
+    ) -> Option<(String, String, String)> {
+        let event = crate::nostr::parse_event_json(event_json)?;
+        let opened = crate::nostr::open_at(mnemonic, index, &event)?;
+        Some((opened.content, opened.identifier, opened.sender_public_key))
+    }
+
+    /// Wraps application data from the coordination key at Nostr address `index`.
+    pub fn wrap_gift(
+        mnemonic: &str,
+        index: u32,
+        recipient: &str,
+        identifier: &str,
+        content: &str,
+        now: u64,
+    ) -> Result<String, crate::CoreError> {
+        crate::nostr::wrap(mnemonic, index, recipient, identifier, content, now)
     }
 }

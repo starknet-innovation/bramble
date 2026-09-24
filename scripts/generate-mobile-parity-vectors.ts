@@ -6,6 +6,7 @@
  */
 import { writeFile } from "node:fs/promises";
 import { encryptJson } from "@bramble/vault/encrypted-store";
+import { writeNostrMultisigParity } from "./mobile-assets/write-nostr-multisig-parity";
 import {
   computeParityAccounts,
   computeUiParity,
@@ -33,3 +34,4 @@ const fixture = {
 
 await writeFile(PARITY_FIXTURE_PATH, `${JSON.stringify(fixture, null, 2)}\n`);
 console.log(`wrote ${PARITY_FIXTURE_PATH}`);
+console.log(`wrote ${await writeNostrMultisigParity()}`);

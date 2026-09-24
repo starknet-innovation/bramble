@@ -44,4 +44,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+    // Nostr relay WebSockets for multisig coordination: API 28 has no platform WebSocket client.
+    // Pinned exactly; used by coordination/CoordinationStore.kt (mobile/docs/nostr-multisig.md §10).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

@@ -32,6 +32,10 @@ enum VaultDirectory {
     static func prepare() throws -> URL {
         var url = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
             .appendingPathComponent("vault", isDirectory: true)
+        #if DEBUG
+        // UI tests start from an empty wallet (`-BrambleResetData YES`); never in release builds.
+        if UserDefaults.standard.bool(forKey: "BrambleResetData") { try? FileManager.default.removeItem(at: url) }
+        #endif
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
         var values = URLResourceValues()
         values.isExcludedFromBackup = true

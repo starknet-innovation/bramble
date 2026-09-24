@@ -63,6 +63,8 @@ targets:
       - path: BrambleTests
       - path: ../core/tests/fixtures/extension-parity.json
         buildPhase: resources
+      - path: ../core/tests/fixtures/nostr-multisig-parity.json
+        buildPhase: resources
     dependencies:
       - target: BrambleCore
     settings:
@@ -75,6 +77,8 @@ targets:
     platform: iOS
     sources:
       - path: BrambleUITests
+      - path: ../core/tests/fixtures/ui-coordination.json
+        buildPhase: resources
     dependencies:
       - target: Bramble
     settings:
