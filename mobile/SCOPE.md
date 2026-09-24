@@ -99,9 +99,14 @@ Reduce Motion snapshot passes, Android.
    suites (`:app:testDebugUnitTest`, `:app:connectedDebugAndroidTest`). The pinned Gradle 8.11.1
    wrapper and the Compose/Espresso suites mirroring the iOS XCUITests now exist; they have
    never been run.
-2. Transactions in the core: invoke v3 hashing (`krusty_kms::compute_invoke_v3_hash`), fee
-   estimation and nonce as sans-IO RPC, OZ deploy-account; Send screen with review. Port the
-   extension's review rules rather than re-deriving them.
+2. Transactions in the core — **done (iOS; Android sources uncompiled).** ERC-20 transfer via a
+   core-owned `TransferPlan`: sans-IO nonce, fee estimation and status bodies, the extension's
+   fee margins and 3/2 ceiling, invoke/deploy-account v3 hashing and signing inside the core
+   (`krusty_kms` 0.11.0), automatic OZ deployment before the first send, a standalone Deploy
+   account flow, local activity records with status reconciliation, and a Send journey matching
+   the extension's review. A plan binds to vault-security's session generation (`lock_epoch`):
+   any lock, idle lock or new unlock voids it. Proven against a fixture recorded from the
+   extension's own send path (mobile/docs/transactions.md).
 3. ~~Biometric unlock and persisted wrong-password back-off~~ Done: vault v2 (random DEK,
    passphrase slot + optional biometric slot, one-step v1 → v2 migration), core-enforced
    exponential back-off persisted across restarts, core-enforced 30-minute idle lock on a
@@ -144,4 +149,5 @@ audit of the core and FFI surface, reproducible builds, crash reporting without 
 - A created wallet's vault is written before its backup is confirmed (iOS and Android). If the
   app locks during Save phrase or Confirm backup, nothing prompts the user to finish the backup
   after unlock; Reveal secrets is the way back. The extension verifies words before creating.
-- Send is visible but disabled.
+- Send (ERC-20 from an OpenZeppelin account, with automatic deployment) is implemented on iOS;
+  the Android Send sources are written but uncompiled. See docs/transactions.md.

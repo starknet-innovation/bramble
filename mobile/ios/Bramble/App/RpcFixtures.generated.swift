@@ -3,9 +3,10 @@
 /// Deterministic JSON-RPC answers for the Debug-only offline UI-test seam (`FixtureTransport`),
 /// rendered from the extension's network catalog. Public data only; never compiled into Release.
 enum RpcFixtures {
-    /// The Home states the snapshot suite captures.
+    /// The states an offline UI suite launches into: the Home states the snapshot suite captures
+    /// (deployed, or offline for `balanceError`) and the Send journey's account states.
     enum State: String, CaseIterable {
-        case ready, empty, balanceError
+        case ready, empty, balanceError, undeployed, unfunded, feeFailure
     }
 
     /// Bundled endpoint → the chain id its `starknet_chainId` answers.
@@ -22,5 +23,23 @@ enum RpcFixtures {
         "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7": ["0x9591ba190b4000", "0x0"],
         "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d": ["0x6cda991128f860000", "0x0"],
     ]
+
+    // Replies recorded from the extension's own send path (extension-transactions-wire.json):
+    // a JSON object carrying `result` or `error`, merged into a reply under the request's id.
+
+    /// `starknet_getClassHashAt` for a deployed account.
+    static let deployedClassHash = #"{"result":"0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"}"#
+    /// `starknet_getClassHashAt` for an account that is not deployed yet.
+    static let undeployedClassHash = #"{"error":{"code":20,"message":"Contract not found"}}"#
+    /// `starknet_getNonce` for a deployed account.
+    static let deployedNonce = #"{"result":"0x5"}"#
+    /// `starknet_getNonce` for an account that is not deployed yet.
+    static let undeployedNonce = #"{"error":{"code":20,"message":"Contract not found"}}"#
+    /// One `starknet_estimateFee` entry for the transfer's INVOKE.
+    static let invokeEstimate = #"{"l1_data_gas_consumed":"0x180","l1_data_gas_price":"0x5a0","l1_gas_consumed":"0x0","l1_gas_price":"0x2d5c6b1e1ef","l2_gas_consumed":"0x1234a0","l2_gas_price":"0xb2d05e00","overall_fee":"0x1bb0f4d6c0000","unit":"FRI"}"#
+    /// One `starknet_estimateFee` entry for the account's DEPLOY_ACCOUNT.
+    static let deployEstimate = #"{"l1_data_gas_consumed":"0x1e0","l1_data_gas_price":"0x5a0","l1_gas_consumed":"0x0","l1_gas_price":"0x2d5c6b1e1ef","l2_gas_consumed":"0xf4240","l2_gas_price":"0xb2d05e00","overall_fee":"0xabc","unit":"FRI"}"#
+    /// `starknet_estimateFee` in the `feeFailure` state.
+    static let estimateFailure = #"{"error":{"code":41,"message":"Transaction execution error"}}"#
 }
 #endif

@@ -143,8 +143,8 @@ fun IconButton(icon: BrambleIconName, label: String, tint: Color? = null, enable
 
 /**
  * `input`: elevated fill and `md` radius, with no edge. An [invalid] field turns to the
- * `dangerSoft` fill with `danger` text. Every field in the app holds a secret (passphrases and
- * phrase words), so the input inside is always a [SecretField].
+ * `dangerSoft` fill with `danger` text. The input inside is always the one hardened [SecretField]
+ * (passphrases, phrase words, and the Send recipient and amount, by [kind]).
  */
 @Composable
 fun BrambleField(

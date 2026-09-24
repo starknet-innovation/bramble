@@ -7,19 +7,8 @@ import Foundation
 struct RpcClient {
     enum Failure: Error { case unreachable }
 
-    #if DEBUG
-    /// Debug-only offline seam for UI tests (design-mobile.md section 6): set once by `BrambleApp`
-    /// when launched with `-uiTestOfflineFixtures`, before any client exists. Absent from Release.
-    nonisolated(unsafe) static var transportOverride: (any RpcTransport)?
-    #endif
-
-    private let session: URLSession = {
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 10
-        config.urlCache = nil
-        config.httpCookieStorage = nil
-        return URLSession(configuration: config)
-    }()
+    /// Moves the bytes: URLSession, or the DEBUG offline fixtures under `-uiTestOfflineFixtures`.
+    let transport: RpcTransport = RpcTransports.launch
 
     /// Base-unit balances keyed by token symbol.
     func balances(of account: String, on network: NetworkInfo) async throws -> [String: String] {
@@ -44,16 +33,20 @@ struct RpcClient {
         return result
     }
 
+    /// The core's judgement of whether `account` is deployed, from the first endpoint that
+    /// proves the chain; `.unknown` when none answers (the home notice then shows nothing).
+    func deploymentState(of account: String, on network: NetworkInfo) async -> DeploymentState {
+        for url in network.rpcUrls.compactMap(URL.init(string:)) {
+            guard let chain = try? await post(rpcChainIdRequest(id: 1), to: url),
+                  (try? rpcVerifyChainId(body: chain, id: 1, network: network.network)) == true,
+                  let request = deploymentStatusRequest(id: 2, address: account),
+                  let body = try? await post(request, to: url) else { continue }
+            return judgeDeploymentStatus(body: body, id: 2)
+        }
+        return .unknown
+    }
+
     private func post(_ body: String, to url: URL) async throws -> String {
-        #if DEBUG
-        if let transport = Self.transportOverride { return try await transport.post(body, to: url) }
-        #endif
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = Data(body.utf8)
-        let (data, response) = try await session.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Failure.unreachable }
-        return String(decoding: data, as: UTF8.self)
+        try await transport.post(body, to: url, write: false)
     }
 }

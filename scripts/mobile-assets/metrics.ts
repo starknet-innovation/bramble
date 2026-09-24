@@ -7,6 +7,7 @@
  */
 import { type CssRule, declaredValue, evaluatePx, resolveVars, rootProperties } from "./css";
 import { PHONE_MEDIA, SHORT_MEDIA } from "./elevation";
+import { SEND_LAYOUT_METRICS } from "./send-metrics";
 
 /**
  * How a declared value is read:
@@ -31,7 +32,8 @@ type Kind =
   | "number"
   | "ms";
 
-type Metric = readonly [selector: string, property: string, kind: Kind, media?: string];
+/** Where one metric lives: a selector, a property, how to read it, and an optional media query. */
+export type Metric = readonly [selector: string, property: string, kind: Kind, media?: string];
 
 const B = "button";
 const ONB = ".onboarding-step";
@@ -428,7 +430,7 @@ export const renderSwiftMetrics = (rules: readonly CssRule[]): string[] => {
     "/// Layout metrics read from the side panel's rendered stylesheet (`SIDEPANEL_STYLES`), per",
     "/// component: `…Phone` is the `max-width: 520px` rule, `…Short` the `max-height: 760px` one.",
     "enum BrambleMetrics {",
-    ...sortedKeys(LAYOUT_METRICS).flatMap(([component, metrics]) => [
+    ...sortedKeys({ ...LAYOUT_METRICS, ...SEND_LAYOUT_METRICS }).flatMap(([component, metrics]) => [
       `    enum ${component} {`,
       ...sortedKeys(metrics).map(([name, [selector, property, kind, media]]) => {
         const declared = declaredValue(rules, selector, property, media ? [media] : []);

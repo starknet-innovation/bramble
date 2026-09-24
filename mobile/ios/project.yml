@@ -74,6 +74,18 @@ targets:
       - path: BrambleTests
       - path: ../core/tests/fixtures/extension-parity.json
         buildPhase: resources
+      # The send tests reach the app's send model through `@testable import Bramble` and replay
+      # the same transaction fixture as the Rust suite.
+      - path: ../core/tests/fixtures/extension-transactions-wire.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-transactions-rules.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-transactions-presentation.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-transactions-status.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-transactions-copy.json
+        buildPhase: resources
     dependencies:
       # Hosted in the app so `@testable import Bramble` reaches the Keychain, clock and copy code.
       - target: Bramble

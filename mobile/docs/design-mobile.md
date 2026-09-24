@@ -364,16 +364,15 @@ No mainnet broadcast, no spend, and no network use in the default suites.
 **Offline RPC seam (new, Debug only).** `RpcClient` today always posts to
 `network.rpcUrls`, and no recorded RPC responses exist. The seam is designed explicitly:
 
-- `RpcTransport` (App/RpcTransport.swift, new file) is a one-method protocol,
-  `post(_ body: String, to url: URL) async throws -> String`. `URLSessionTransport` is the
-  production implementation and holds the ephemeral session that `RpcClient` holds today.
-- `RpcClient` gains one additive injection point: `RpcClient.transport`, a static that defaults to
-  `URLSessionTransport()`, and `post` delegates to it. The request building and response judging
-  stay in the Rust core, unchanged. `WalletStore` is **not** changed; it keeps
-  `private let rpc = RpcClient()`.
-- `BrambleApp.init` installs the fixture transport only under `#if DEBUG` and only when the
-  launch argument `-uiTestOfflineFixtures <state>` is present. In a Release build the code does
-  not exist, so the flag does nothing.
+- `RpcTransport` (App/RpcTransport.swift) is a one-method protocol,
+  `post(_ body: String, to url: URL, write: Bool) async throws -> String` (the `write` flag came
+  with mobile/transactions: a write never follows a redirect). `URLSessionRpcTransport` is the
+  production implementation: an ephemeral session with a bounded read.
+- One transport serves the whole app: `RpcTransports.launch` (App/RpcTransport.swift) is
+  `URLSessionRpcTransport` in production, and the fixture transport only under `#if DEBUG` and only
+  when the launch argument `-uiTestOfflineFixtures <state>` is present. `RpcClient` (balances,
+  deployment state) and every send plan's `SendDriver` post through it. In a Release build the
+  fixture code does not exist, so the flag does nothing.
 - `FixtureTransport` (App/FixtureTransport.swift, `#if DEBUG`) answers from
   `RpcFixtures.generated.swift`, which `bun run mobile:assets` renders from
   `STARKNET_NETWORKS` and `DEFAULT_TOKENS`, so the fixtures are generated, never hand-written, and
@@ -381,7 +380,11 @@ No mainnet broadcast, no spend, and no network use in the default suites.
   - `ready`: `starknet_chainId` answers the network's chain id, and every `starknet_call` answers a
     fixed non-zero u256 per token;
   - `empty`: the same, with every balance zero;
-  - `balanceError`: every request fails, so `networkHealthy` goes false.
+  - `balanceError`: every request fails, so `networkHealthy` goes false;
+  - `undeployed`, `unfunded`, `feeFailure`: the Send journey's account states (merged from
+    mobile/transactions). Their class-hash, nonce and fee-estimate replies are generated from the
+    extension's recorded send path (`extension-transactions-wire.json`); any write is refused and
+    counted, so the send UI test proves nothing was broadcast.
   The transport echoes the request `id` and chooses the answer by `method` and the called token
   address. The core then judges these responses exactly as it judges live ones, so the fixtures
   also exercise the real response path.
@@ -443,7 +446,7 @@ suite that uses a live network. The new suites never do.
 - Destination: `platform=iOS Simulator,name=Bramble design-mobile`, plus the SE and Max clones
   from 3.1. Never "iPhone 16".
 - Launch arguments: `-theme dark|light`, `-network sepolia`, `-uiTestOfflineFixtures
-  ready|empty|balanceError` (the Debug-only seam in section 6; no live host is contacted), and
+  ready|empty|balanceError` (and the Send states above) (the Debug-only seam in section 6; no live host is contacted), and
   `-UIPreferredContentSizeCategoryName` for the large-type pass. A reduced-motion pass passes the
   `UIAccessibilityReduceMotion` launch environment.
 - For each screen in 3.2 and each theme, capture an `XCTAttachment` (keepAlways) named

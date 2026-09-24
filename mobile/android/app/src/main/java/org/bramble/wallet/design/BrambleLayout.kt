@@ -73,4 +73,10 @@ object BrambleLayout {
     val dockPaddingVertical = 6.dp
     val qrSide = 156.dp
     val revealAlertIcon = 20.dp
+
+    // Send screens: iOS `BrambleMetrics.Send*`, read from the side panel's send stylesheet
+    // (`.send-amount-field input` min-height, `.send-outcome-mark`, the task-list hairline inset).
+    val sendAmountMin = 52.dp
+    val sendOutcomeMark = 76.dp
+    val sendTaskHairlineInset = 24.dp
 }

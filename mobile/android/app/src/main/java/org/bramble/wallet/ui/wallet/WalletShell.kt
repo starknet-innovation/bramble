@@ -54,9 +54,10 @@ import org.bramble.wallet.design.IconButton
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.StatusDot
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.send.SendScreen
 
 /** Screens pushed over the shell, without the dock. */
-enum class Flow { RECEIVE, NETWORK, APPEARANCE, SECURITY, REVEAL, REMOVE }
+enum class Flow { RECEIVE, SEND, NETWORK, APPEARANCE, SECURITY, REVEAL, REMOVE }
 
 /**
  * The wallet frame from `wallet-shell.ts` / `styles-dock.ts`, port of the iOS `WalletShell`:
@@ -79,6 +80,7 @@ fun WalletShell(store: WalletStore) {
         Box(Modifier.fillMaxSize().background(skin.bg).safeDrawingPadding()) {
             when (flow) {
                 Flow.RECEIVE -> ReceiveScreen(store, back = pop)
+                Flow.SEND -> SendScreen(store, back = pop)
                 Flow.NETWORK -> NetworkScreen(store, back = pop)
                 Flow.APPEARANCE -> AppearanceScreen(store, back = pop)
                 Flow.SECURITY -> SecurityScreen(store, back = pop)
@@ -118,7 +120,7 @@ fun WalletShell(store: WalletStore) {
             ) {
                 WalletHeader(store, openAccounts = { accountsOpen = true })
                 when (store.tab) {
-                    Tab.HOME -> HomeScreen(store, receive = { flows = flows + Flow.RECEIVE })
+                    Tab.HOME -> HomeScreen(store, receive = { flows = flows + Flow.RECEIVE }, send = { flows = flows + Flow.SEND })
                     Tab.ACTIVITY -> ActivityScreen()
                     Tab.SETTINGS -> SettingsHubScreen(store, open = { flows = flows + it })
                 }

@@ -1,10 +1,12 @@
 #if DEBUG
 import Foundation
 
-/// Debug-only offline transport for UI tests (design-mobile.md section 6). Installed by
-/// `BrambleApp` only when launched with `-uiTestOfflineFixtures <state>`, and absent from Release
-/// builds. It answers from `RpcFixtures.generated.swift` (rendered from the extension's network
-/// catalog), echoing each request's id, so the core judges these answers exactly as live ones.
+/// Debug-only offline transport for UI tests (design-mobile.md section 6). Selected by
+/// `RpcTransports.launch` only when launched with `-uiTestOfflineFixtures <state>`, and absent
+/// from Release builds. It answers from `RpcFixtures.generated.swift` (rendered from the
+/// extension's network catalog and its recorded send path), echoing each request's id, so the
+/// core judges these answers exactly as live ones. A write is refused with a JSON-RPC error and
+/// counted, so a test can prove that nothing was ever broadcast.
 struct FixtureTransport: RpcTransport {
     enum Failure: Error { case offline, unknownRequest }
 
@@ -18,26 +20,60 @@ struct FixtureTransport: RpcTransport {
         return FixtureTransport(state: state)
     }
 
-    func post(_ body: String, to url: URL) async throws -> String {
+    /// Writes this process's fixture node has received (always refused).
+    static let writes = WriteCounter()
+
+    final class WriteCounter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        var value: Int { lock.withLock { count } }
+        func increment() { lock.withLock { count += 1 } }
+    }
+
+    private var deployed: Bool { state != .undeployed && state != .unfunded }
+
+    func post(_ body: String, to url: URL, write: Bool) async throws -> String {
+        if write { Self.writes.increment() }
         if state == .balanceError { throw Failure.offline }
         guard let request = try JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any],
               let id = request["id"] as? Int,
               let method = request["method"] as? String else { throw Failure.unknownRequest }
-        let result: Any
+        let params = request["params"] as? [String: Any] ?? [:]
+        let answer: [String: Any]
         switch method {
         case "starknet_chainId":
             guard let chainId = RpcFixtures.chainIds[url.absoluteString] else { throw Failure.unknownRequest }
-            result = chainId
+            answer = ["result": chainId]
         case "starknet_call":
-            let call = (request["params"] as? [String: Any])?["request"] as? [String: Any]
+            let call = params["request"] as? [String: Any]
             guard let token = call?["contract_address"] as? String,
                   let limbs = RpcFixtures.readyBalances[token] else { throw Failure.unknownRequest }
-            result = state == .empty ? ["0x0", "0x0"] : limbs
+            answer = ["result": state == .empty || state == .unfunded ? ["0x0", "0x0"] : limbs]
+        case "starknet_getClassHashAt":
+            answer = try Self.object(deployed ? RpcFixtures.deployedClassHash : RpcFixtures.undeployedClassHash)
+        case "starknet_getNonce":
+            answer = try Self.object(deployed ? RpcFixtures.deployedNonce : RpcFixtures.undeployedNonce)
+        case "starknet_estimateFee" where state == .feeFailure:
+            answer = try Self.object(RpcFixtures.estimateFailure)
+        case "starknet_estimateFee":
+            let transactions = params["request"] as? [[String: Any]] ?? []
+            answer = ["result": try transactions.map { transaction in
+                try Self.object(transaction["type"] as? String == "DEPLOY_ACCOUNT" ? RpcFixtures.deployEstimate : RpcFixtures.invokeEstimate)
+            }]
         default:
+            // Every write (and any read the fixtures do not model) is refused: nothing broadcasts.
+            answer = ["error": ["code": -32601, "message": "The UI-test fixture never broadcasts"]]
+        }
+        var reply: [String: Any] = ["jsonrpc": "2.0", "id": id]
+        reply.merge(answer) { _, new in new }
+        return String(decoding: try JSONSerialization.data(withJSONObject: reply), as: UTF8.self)
+    }
+
+    private static func object(_ json: String) throws -> [String: Any] {
+        guard let value = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else {
             throw Failure.unknownRequest
         }
-        let response: [String: Any] = ["jsonrpc": "2.0", "id": id, "result": result]
-        return String(decoding: try JSONSerialization.data(withJSONObject: response), as: UTF8.self)
+        return value
     }
 }
 #endif

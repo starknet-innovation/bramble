@@ -38,11 +38,11 @@ import org.bramble.wallet.design.textStyle
 
 /**
  * `homeView()` from `portfolio/home-view.ts`, port of the iOS `HomeView`: hero total, the four
- * major actions, the token list. Mobile has no price source yet, so the total and fiat column read
+ * major actions (Send opens `SendScreen`), the token list. Mobile has no price source yet, so the total and fiat column read
  * "—", the side panel's prices-unavailable state (the `portfolio-activity` workstream fills them).
  */
 @Composable
-fun HomeScreen(store: WalletStore, receive: () -> Unit) {
+fun HomeScreen(store: WalletStore, receive: () -> Unit, send: () -> Unit) {
     val skin = LocalSkin.current
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xl)) {
         Text(
@@ -54,7 +54,7 @@ fun HomeScreen(store: WalletStore, receive: () -> Unit) {
                 .clearAndSetSemantics { contentDescription = "Portfolio total unavailable" },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-            ActionTile("Send", BrambleIconName.SEND, enabled = false, modifier = Modifier.weight(1f)) {}
+            ActionTile("Send", BrambleIconName.SEND, enabled = store.account != null, modifier = Modifier.weight(1f), onClick = send)
             ActionTile("Swap", BrambleIconName.SHUFFLE, enabled = false, modifier = Modifier.weight(1f)) {}
             ActionTile("Receive", BrambleIconName.QR_CODE, modifier = Modifier.weight(1f), onClick = receive)
             ActionTile("Shield", BrambleIconName.SHIELD, enabled = false, modifier = Modifier.weight(1f)) {}

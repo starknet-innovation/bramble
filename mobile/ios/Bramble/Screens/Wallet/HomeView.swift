@@ -10,6 +10,8 @@ struct HomeView: View {
     @Environment(\.skin) private var skin
     @State private var retrying = false
     let receive: () -> Void
+    var send: () -> Void = {}
+    var deploy: () -> Void = {}
 
     var body: some View {
         let hero = BrambleMetrics.Hero.self
@@ -22,8 +24,9 @@ struct HomeView: View {
             .tracking(hero.totalSize * hero.totalTracking)
             .frame(maxWidth: .infinity)
             .padding(hero.padding)
+            DeployNoticeView(receive: receive, deploy: deploy)
             HStack(spacing: BrambleMetrics.ActionRow.gap) {
-                ActionTile(title: "Send", icon: .send) {}.disabled(true)
+                ActionTile(title: "Send", icon: .send, action: send).disabled(store.account == nil)
                 ActionTile(title: "Swap", icon: .shuffle) {}.disabled(true)
                 ActionTile(title: "Receive", icon: .qrCode, action: receive)
                 ActionTile(title: "Shield", icon: .shield) {}.disabled(true)
@@ -112,14 +115,20 @@ struct TokenRow: View {
     }
 }
 
-/// Activity dock screen: mobile keeps no history yet, so it shows the side panel's empty copy.
+/// Activity dock screen: the transactions this wallet submitted (the core's local records), or the
+/// side panel's empty copy. Mobile does not index on-chain history yet.
 struct ActivityView: View {
+    @Environment(WalletStore.self) private var store
+
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             Text("Activity")
                 .brambleText(BrambleTypeScale.title.sized(BrambleMetrics.H2.size), weight: BrambleMetrics.H2.weight, tracking: BrambleMetrics.H2.tracking)
                 .accessibilityAddTraits(.isHeader)
-            EmptyState(message: "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.")
+            LocalActivityRows()
+            if store.activity.isEmpty {
+                EmptyState(message: "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.")
+            }
         }
     }
 }

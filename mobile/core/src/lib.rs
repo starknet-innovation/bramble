@@ -9,6 +9,7 @@
 //! Errors carry an operation name or a fixed reason, never input text, so nothing a user typed
 //! can reach a log through an error message.
 
+mod activity;
 mod biometric;
 mod clock;
 mod container;
@@ -20,6 +21,7 @@ mod networks;
 mod records;
 mod rpc;
 mod security;
+mod send;
 mod ui;
 mod vault;
 mod wallet;
@@ -27,6 +29,16 @@ mod wallet;
 pub use biometric::BiometricDomain;
 pub use clock::HostClock;
 pub use networks::{NetworkId, NetworkInfo, TokenInfo};
+pub use send::plan::TransferPlan;
+pub use send::types::{
+    ActivityKind, ActivityRecord, DeploymentState, FeeAffordability, FeeAmount, FeeUnit,
+    ReviewFlag, RpcPurpose, SendAmountError, SendError, SendFailure, SendFailureCode, SendStep,
+    StepReply, TransferRequest, TransferReview, TxStatus,
+};
+pub use send::{
+    confirmation_checkpoints_ms, deployment_status_request, explorer_transaction_url,
+    judge_deployment_status, parse_token_amount, short_address, validate_recipient,
+};
 pub use ui::{AccountAvatar, PassphraseLevel, PassphraseStrength};
 pub use wallet::{
     AccountInfo, RecoveryPhrase, SecurityStatus, StarkSignature, WalletCore, WalletStatus,

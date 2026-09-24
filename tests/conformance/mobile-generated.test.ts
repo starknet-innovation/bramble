@@ -15,7 +15,17 @@ import {
   PARITY_FIXTURE_PATH,
   PARITY_MESSAGE_HASH,
   PARITY_MNEMONIC,
+  sealedIsCurrent,
 } from "../../scripts/mobile-parity";
+import {
+  renderSendCopy,
+  SEND_COPY_KOTLIN_PATH,
+  SEND_COPY_SWIFT_PATH,
+} from "../../scripts/mobile-send-copy";
+import {
+  computeTransactionFixture,
+  splitTransactionFixture,
+} from "../../scripts/mobile-transactions-fixture";
 
 describe("mobile generated sources", async () => {
   for (const [path, expected] of renderMobileAssets(await readMobileAssetSources())) {
@@ -37,6 +47,60 @@ describe("mobile core parity", () => {
     expect(fixture.messageHash).toBe(PARITY_MESSAGE_HASH);
     expect(fixture.accounts).toEqual(await computeParityAccounts());
     expect(fixture.ui).toEqual(JSON.parse(JSON.stringify(computeUiParity())));
+  });
+
+  test("every committed envelope is one the extension seals and opens today", async () => {
+    // The generator keeps a committed envelope instead of re-sealing it (fresh salt and IV would
+    // churn the file), so this is what holds it to the extension: current version and KDF, and
+    // the extension's own `decryptJson` opens it to the recorded plaintext.
+    const fixture = JSON.parse(await readFile(PARITY_FIXTURE_PATH, "utf8")) as Record<
+      "dekSlot" | "envelope",
+      {
+        readonly password: string;
+        readonly plaintext: unknown;
+        readonly scope: string;
+        readonly sealed: unknown;
+      }
+    >;
+    for (const key of ["dekSlot", "envelope"] as const) {
+      const { password, plaintext, scope, sealed } = fixture[key];
+      expect(await sealedIsCurrent(sealed, plaintext, password, scope)).toBe(true);
+      expect(await sealedIsCurrent(sealed, plaintext, `${password}-wrong`, scope)).toBe(false);
+    }
+  });
+
+  test("the committed transaction fixture is what the extension's send path does today", async () => {
+    const parts = splitTransactionFixture(await computeTransactionFixture());
+    for (const [path, part] of parts) {
+      expect(JSON.parse(await readFile(path, "utf8"))).toEqual(part);
+    }
+    // The capture harness must have seen the extension's full write path, not a short-circuit.
+    const wire = [...parts.values()][0] as {
+      readonly scenarios: readonly { readonly submit: readonly string[] }[];
+    };
+    const methods = wire.scenarios.flatMap((scenario) =>
+      scenario.submit.map((call) => (JSON.parse(call) as { readonly method: string }).method),
+    );
+    for (const method of [
+      "starknet_chainId",
+      "starknet_getClassHashAt",
+      "starknet_getNonce",
+      "starknet_estimateFee",
+      "starknet_addDeployAccountTransaction",
+      "starknet_getTransactionStatus",
+      "starknet_addInvokeTransaction",
+    ]) {
+      expect(methods).toContain(method);
+    }
+  });
+
+  test("the Send copy tables are rendered from the committed fixture", async () => {
+    const { copy } = JSON.parse(
+      await readFile("mobile/core/tests/fixtures/extension-transactions-copy.json", "utf8"),
+    ) as { readonly copy: Record<string, unknown> };
+    const rendered = renderSendCopy(copy);
+    expect(await readFile(SEND_COPY_SWIFT_PATH, "utf8")).toBe(rendered.swift);
+    expect(await readFile(SEND_COPY_KOTLIN_PATH, "utf8")).toBe(rendered.kotlin);
   });
 
   test("the Rust core pins the same Krusty release as the extension", async () => {

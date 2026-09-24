@@ -8,10 +8,6 @@ struct BrambleApp: App {
     @State private var store: WalletStore
 
     init() {
-        #if DEBUG
-        // UI tests only: answer RPC from generated fixtures instead of a live node.
-        if let fixtures = FixtureTransport.requested() { RpcClient.transportOverride = fixtures }
-        #endif
         let core = try! WalletCore(dataDir: VaultDirectory.prepare().path, clock: DeviceClock())
         _store = State(initialValue: WalletStore(core: core))
     }

@@ -7,6 +7,11 @@
 //! a time, held across the KDF), `session`, then `file` (every read-modify-write of `vault.json`).
 //! `lock()` only takes `session`, so it is never held up behind a KDF, and it bumps `lock_epoch`
 //! so an unlock already in flight cannot reinstall a session after it.
+//!
+//! `lock_epoch` is also the session generation a transfer plan binds to (the extension's
+//! `captureSessionAuthorization`): it advances on every lock and wallet deletion and whenever a
+//! new session is installed, always under the `session` mutex, so a plan prepared in one session
+//! can never sign in another, however the first one ended (lock, idle lock, re-unlock).
 
 use std::fs;
 use std::io::ErrorKind;
@@ -146,6 +151,8 @@ impl WalletCore {
             pending,
             last_activity: self.now(),
         });
+        // A new session is a new generation: a plan from an idle-expired session stays void.
+        self.lock_epoch.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
 
@@ -188,7 +195,7 @@ impl WalletCore {
         Ok(())
     }
 
-    fn account(
+    pub(crate) fn account(
         session: &Session,
         index: u32,
         network: NetworkId,
@@ -419,6 +426,7 @@ impl WalletCore {
             *session = None;
             let _file = self.lock_file();
             fs::remove_file(self.vault_path()).map_err(|_| storage("remove vault"))?;
+            crate::activity::store::remove(&self.data_dir);
             security::remove(&self.data_dir)
         })
     }

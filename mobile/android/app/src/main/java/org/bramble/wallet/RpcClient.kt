@@ -18,7 +18,8 @@ import org.bramble.core.rpcVerifyChainId
  * HTTPS only (the manifest also forbids cleartext); an endpoint is trusted only after it proves
  * it serves the expected chain, and failures fall through to the next bundled endpoint. A response
  * body is read up to [MAX_RESPONSE_BYTES] and refused beyond it, so a hostile endpoint cannot make
- * the app buffer an unbounded body before the core judges it.
+ * the app buffer an unbounded body before the core judges it. [post] is the one HTTP path: the
+ * send driver (`send/SendDriver.kt`) moves every plan step through it too.
  */
 class RpcClient {
     suspend fun balances(account: String, network: NetworkInfo): Map<String, String> = withContext(Dispatchers.IO) {
@@ -36,26 +37,35 @@ class RpcClient {
         }.toMap()
     }
 
-    private fun post(url: URL, body: String): String {
-        val connection = url.openConnection() as HttpsURLConnection
-        try {
-            connection.requestMethod = "POST"
-            connection.connectTimeout = 10_000
-            connection.readTimeout = 10_000
-            connection.useCaches = false
-            connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.outputStream.use { it.write(body.toByteArray()) }
-            check(connection.responseCode == 200) { "http ${connection.responseCode}" }
-            return connection.inputStream.use { readBounded(it, MAX_RESPONSE_BYTES) }
-        } finally {
-            connection.disconnect()
-        }
-    }
-
     companion object {
-        /** 64 KiB: far above any balance or chain-id answer, far below a memory problem. */
+        /** 64 KiB, the core's `MAX_RESPONSE_BYTES` (`maxRpcResponseBytes()`): far above any reply. */
         const val MAX_RESPONSE_BYTES = 64 * 1024
+        private const val TIMEOUT_MS = 15_000
+
+        /**
+         * POSTs one JSON-RPC [body] and returns the reply, bounded to [MAX_RESPONSE_BYTES]. Throws
+         * on any transport failure or non-200 status. A [write] (a signed transaction) is posted
+         * once and never follows a redirect, which would hand it to an endpoint that never proved
+         * its chain; retrying is the caller's (the core plan's) decision, never this function's.
+         */
+        fun post(url: URL, body: String, write: Boolean = false): String {
+            val connection = url.openConnection() as HttpsURLConnection
+            try {
+                connection.requestMethod = "POST"
+                connection.connectTimeout = TIMEOUT_MS
+                connection.readTimeout = TIMEOUT_MS
+                connection.useCaches = false
+                connection.instanceFollowRedirects = !write
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.outputStream.use { it.write(body.toByteArray()) }
+                check(connection.responseCode == 200) { "http ${connection.responseCode}" }
+                check(connection.contentLengthLong <= MAX_RESPONSE_BYTES) { "reply too large" }
+                return connection.inputStream.use { readBounded(it, MAX_RESPONSE_BYTES) }
+            } finally {
+                connection.disconnect()
+            }
+        }
 
         /** Reads at most [max] bytes as UTF-8; throws once the stream has more. */
         fun readBounded(input: InputStream, max: Int): String {

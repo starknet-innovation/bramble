@@ -34,13 +34,21 @@ final class WalletStore {
     var biometricNotice: String?
     /// Fires the idle lock in the UI at the core's deadline (the core enforces it regardless).
     @ObservationIgnored private var idleTimer: Task<Void, Never>?
+    /// The core's judgement of the selected account's deployment, for the home deploy notice.
+    var deployment: DeploymentState = .unknown
+    /// Locally recorded transactions for the selected account (WalletStore+Send.swift).
+    var activity: [ActivityRecord] = []
+    /// Open transfer plans, closed on lock (defence in depth: the core refuses them anyway).
+    var plans: [TransferPlan] = []
+    /// When each pending record was last read (ms), so reconciliation keeps the extension's cadence.
+    var observedAtMs: [String: UInt64] = [:]
 
     var network: NetworkId {
         didSet { UserDefaults.standard.set(network == .sepolia ? "sepolia" : "mainnet", forKey: "network") }
     }
 
     let core: WalletCore
-    private let rpc = RpcClient()
+    let rpc = RpcClient()
 
     init(core: WalletCore) {
         self.core = core
@@ -116,6 +124,11 @@ final class WalletStore {
 
     func lock() {
         idleTimer?.cancel()
+        plans.forEach { $0.close() }
+        plans = []
+        observedAtMs = [:]
+        deployment = .unknown
+        activity = []
         core.lock()
         refreshSecurity()
         pendingBackup = []
@@ -285,6 +298,7 @@ final class WalletStore {
         } catch {
             networkHealthy = false
         }
+        await refreshSendState()
     }
 
     /// Base-unit balance formatted for display, or nil until it has loaded.

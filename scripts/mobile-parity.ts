@@ -8,6 +8,7 @@
  */
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { deriveAccount } from "@bramble/vault/accounts";
+import { decryptJson, isEncryptedEnvelope, KDF_ITERATIONS } from "@bramble/vault/encrypted-store";
 import {
   estimatePassphraseStrength,
   isVaultPassphrase,
@@ -136,3 +137,30 @@ export const computeUiParity = (): {
     };
   }),
 });
+
+/** The envelope version `encryptJson` writes today. */
+const CURRENT_ENVELOPE_VERSION = 3;
+
+/**
+ * Whether `sealed` is an envelope the extension writes today (current version and KDF iterations,
+ * bound to `scope`) that its own `decryptJson` opens with `password` to exactly `plaintext`. The
+ * parity generator keeps such an envelope instead of re-sealing (whose fresh salt and IV would
+ * churn the fixture), and the conformance test requires it of every committed envelope. Never
+ * throws: a malformed or foreign value is simply not current.
+ */
+export const sealedIsCurrent = async (
+  sealed: unknown,
+  plaintext: unknown,
+  password: string,
+  scope: string,
+): Promise<boolean> => {
+  if (!isEncryptedEnvelope(sealed)) return false;
+  if (sealed.version !== CURRENT_ENVELOPE_VERSION || sealed.iterations !== KDF_ITERATIONS)
+    return false;
+  try {
+    const opened = await decryptJson(sealed, password, scope);
+    return JSON.stringify(opened) === JSON.stringify(plaintext);
+  } catch {
+    return false;
+  }
+};

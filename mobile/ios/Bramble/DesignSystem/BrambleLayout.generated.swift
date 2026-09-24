@@ -310,6 +310,92 @@ enum BrambleMetrics {
         static let optionWeight: Int = 650
         static let padding: CGFloat = 3
     }
+    enum Send {
+        static let actionsGap: CGFloat = 8
+        static let amountCardGap: CGFloat = 12
+        static let amountCardPadding: EdgeInsets = EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
+        static let amountCardRadius: CGFloat = 24
+        static let amountHeight: CGFloat = 52
+        static let amountSize: CGFloat = 36
+        static let amountWeight: Int = 650
+        static let formGap: CGFloat = 12
+        static let kickerSize: CGFloat = 13
+        static let kickerWeight: Int = 650
+        static let listGap: CGFloat = 8
+        static let metaGap: CGFloat = 8
+        static let metaSize: CGFloat = 12
+        static let originHeight: CGFloat = 46
+        static let originInset: CGFloat = 12
+        static let originRadius: CGFloat = 20
+        static let receiptCodeSize: CGFloat = 12
+        static let receiptGap: CGFloat = 12
+        static let receiptLabelSize: CGFloat = 13
+        static let receiptPadding: EdgeInsets = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
+        static let receiptRadius: CGFloat = 20
+        static let receiptRowHeight: CGFloat = 56
+        static let rowCopyGap: CGFloat = 2
+        static let rowCopyInset: CGFloat = 12
+        static let rowHeight: CGFloat = 72
+        static let rowPadding: EdgeInsets = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
+        static let rowRadius: CGFloat = 20
+        static let searchGap: CGFloat = 8
+        static let searchHeight: CGFloat = 46
+        static let searchInset: CGFloat = 12
+        static let searchRadius: CGFloat = 20
+        static let sectionTitleSize: CGFloat = 17
+        static let sectionTitleWeight: Int = 650
+        static let shortcutHeight: CGFloat = 40
+        static let shortcutPadding: EdgeInsets = EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
+        static let shortcutsGap: CGFloat = 4
+        static let stageGap: CGFloat = 16
+        static let tokenTriggerGlyph: CGFloat = 26
+        static let tokenTriggerHeight: CGFloat = 40
+        static let tokenTriggerPadding: EdgeInsets = EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12)
+    }
+    enum SendOutcome {
+        static let copyGap: CGFloat = 8
+        static let gap: CGFloat = 16
+        static let hashSize: CGFloat = 12
+        static let kickerSize: CGFloat = 12
+        static let kickerWeight: Int = 650
+        static let markSize: CGFloat = 76
+        static let minHeight: CGFloat = 390
+        static let titleSize: CGFloat = 28
+    }
+    enum SendReview {
+        static let disclosureBodyGap: CGFloat = 12
+        static let disclosureBodyPadding: EdgeInsets = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
+        static let disclosureHeight: CGFloat = 56
+        static let disclosurePadding: EdgeInsets = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
+        static let disclosureRadius: CGFloat = 20
+        static let feeGap: CGFloat = 8
+        static let feePadding: EdgeInsets = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
+        static let feeRadius: CGFloat = 20
+        static let headGap: CGFloat = 12
+        static let heroBottom: CGFloat = 16
+        static let heroCopyGap: CGFloat = 4
+        static let heroGap: CGFloat = 12
+        static let heroSize: CGFloat = 22
+        static let markSize: CGFloat = 40
+        static let noteSize: CGFloat = 12
+        static let stackGap: CGFloat = 8
+        static let summaryPadding: EdgeInsets = EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
+        static let summaryRadius: CGFloat = 24
+    }
+    enum SendWorking {
+        static let copyGap: CGFloat = 8
+        static let gap: CGFloat = 16
+        static let markSize: CGFloat = 64
+        static let minHeight: CGFloat = 340
+        static let taskDot: CGFloat = 8
+        static let taskGap: CGFloat = 12
+        static let taskHairlineInset: CGFloat = 24
+        static let taskHeight: CGFloat = 40
+        static let taskListPadding: EdgeInsets = EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+        static let taskListRadius: CGFloat = 20
+        static let taskSize: CGFloat = 13
+        static let titleSize: CGFloat = 17
+    }
     enum Toast {
         static let copySize: CGFloat = 30
         static let fontSize: CGFloat = 13

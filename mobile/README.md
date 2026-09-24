@@ -84,3 +84,18 @@ arguments and is refused with `ci=true`, which the build sets whenever the host'
 
 The Android app has not yet been compiled (no Android toolchain where it was written) or built in
 CI (SCOPE.md, Phase 1.1).
+
+## Sending
+
+Design and review resolutions: [docs/transactions.md](docs/transactions.md). A transfer plan is
+bound to the vault session generation (`lock_epoch`), so any lock, idle lock or new unlock voids a
+reviewed plan. The send UI test (`BrambleUITests/SendFlowTests`) runs on the offline fixture
+transport (`-uiTestOfflineFixtures ready|undeployed|unfunded|feeFailure`, DEBUG only), whose
+nonce, estimate and class-hash replies are generated from the extension's recorded send path; it
+never taps "Confirm and send". A real mainnet send is opt-in and never run in CI:
+
+```bash
+TEST_RUNNER_BRAMBLE_MOBILE_MAINNET_SEND_ACK="I understand this broadcasts a real mainnet transaction" \
+TEST_RUNNER_BRAMBLE_MOBILE_MAINNET_MNEMONIC="…" \
+  xcodebuild … -only-testing:BrambleTests/MainnetSendTests test
+```

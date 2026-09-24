@@ -26,8 +26,13 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.viewinterop.AndroidView
 
-/** What a secret input holds: a vault passphrase (masked) or one recovery word (readable). */
-enum class SecretKind { PASSPHRASE, WORD }
+/**
+ * What the one hardened input holds: a vault passphrase (masked), one recovery word (readable), a
+ * recipient address (readable, pasteable), or a token amount (the decimal keypad). The last two are
+ * not secrets, but they go through the same field so no second input path exists and no
+ * suggestion strip or keyboard dictionary learns an address or an amount either.
+ */
+enum class SecretKind { PASSPHRASE, WORD, ADDRESS, AMOUNT }
 
 /**
  * Keyboard and autofill policy for every secret input (threat T4/T5 in `docs/android-parity.md`,
@@ -47,7 +52,14 @@ object SecretInput {
     /** No learning from what is typed, and no full-screen extract editor that copies the text. */
     const val IME_FLAGS: Int = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING or EditorInfo.IME_FLAG_NO_EXTRACT_UI
 
-    fun inputType(kind: SecretKind): Int = if (kind == SecretKind.PASSPHRASE) PASSPHRASE_TYPE else WORD_TYPE
+    /** Digits and one decimal separator; a number class carries no suggestions by definition. */
+    const val AMOUNT_TYPE: Int = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+
+    fun inputType(kind: SecretKind): Int = when (kind) {
+        SecretKind.PASSPHRASE -> PASSPHRASE_TYPE
+        SecretKind.WORD, SecretKind.ADDRESS -> WORD_TYPE
+        SecretKind.AMOUNT -> AMOUNT_TYPE
+    }
 }
 
 /**

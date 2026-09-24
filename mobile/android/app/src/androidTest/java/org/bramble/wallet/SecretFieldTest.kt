@@ -63,6 +63,16 @@ class SecretFieldTest {
     }
 
     @Test
+    fun sendFieldsNeitherSuggestNorLearn() = onMain {
+        val address = editorInfo(field(SecretKind.ADDRESS, EditorInfo.IME_ACTION_GO))
+        assertEquals(SecretInput.WORD_TYPE, address.inputType)
+        assertTrue(address.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
+        val amount = editorInfo(field(SecretKind.AMOUNT))
+        assertEquals(InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL, amount.inputType)
+        assertTrue(amount.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
+    }
+
+    @Test
     fun autofillIsExcluded() = onMain {
         assertEquals(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS, field(SecretKind.PASSPHRASE).importantForAutofill)
     }

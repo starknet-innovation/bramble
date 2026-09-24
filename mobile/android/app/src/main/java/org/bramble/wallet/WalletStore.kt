@@ -20,12 +20,14 @@ import org.bramble.core.NetworkId
 import org.bramble.core.NetworkInfo
 import org.bramble.core.SecurityStatus
 import org.bramble.core.TokenInfo
+import org.bramble.core.TransferPlan
 import org.bramble.core.WalletCore
 import org.bramble.core.WalletStatus
 import org.bramble.core.formatTokenAmount
 import org.bramble.core.supportedNetworks
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.ThemeChoice
+import org.bramble.wallet.send.SendFlowModel
 import org.bramble.wallet.security.BiometricVault
 
 /**
@@ -55,6 +57,8 @@ class WalletStore(
     private var pendingLock: Job? = null
     /** Shows the unlock screen at the core's idle deadline (the core refuses work past it anyway). */
     private var idleTimer: Job? = null
+    /** Open transfer plans, closed on lock (defence in depth: the core voids them on any lock). */
+    private val plans = mutableListOf<TransferPlan>()
 
     var route by mutableStateOf(if (vaultWritten) Route.LOCKED else Route.ONBOARDING)
         private set
@@ -224,6 +228,8 @@ class WalletStore(
      */
     fun lock() {
         session.end()
+        plans.forEach { it.close() }
+        plans.clear()
         idleTimer?.cancel()
         idleTimer = null
         pendingBackup = emptyList()
@@ -437,6 +443,17 @@ class WalletStore(
         runCatching { core.disableBiometricUnlock() }
         biometrics.delete()
         refreshSecurity()
+    }
+
+    // Send
+
+    /** A Send journey for the selected account (null while locked), with balances of this view only. */
+    fun makeSendModel(): SendFlowModel? {
+        val account = account ?: return null
+        val current = if (balancesOwner != null && balancesOwner == currentView()) balances else emptyMap()
+        return SendFlowModel(core, networkInfo, account, accounts.filter { it.index != account.index }, current, { plans += it }) { message, success ->
+            showToast(message, positive = success)
+        }
     }
 
     // Balances
