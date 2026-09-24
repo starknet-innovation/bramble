@@ -8,13 +8,14 @@
  * colours are declared in (`readMobileAssetSources`). `scripts/generate-mobile-assets.ts` writes.
  */
 import { readFile } from "node:fs/promises";
+import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import { BRAMBLE_MARK_PATH, BRAMBLE_MARK_VIEW_BOX } from "@bramble/ui-kit/brand-mark";
 import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { DERIVED_COLOR_SOURCES, parseDerivedColors } from "./mobile-assets/colors";
 import { renderKotlin } from "./mobile-assets/kotlin";
 import { HEADER } from "./mobile-assets/shared";
 import { renderSwift } from "./mobile-assets/swift";
-import { renderVectorAssets } from "./mobile-assets/vectors";
+import { renderVectorAssets, tokenLogoAddresses } from "./mobile-assets/vectors";
 
 /** Repository-relative path of the Swift design tokens consumed by the iOS app. */
 export const SWIFT_TOKENS_PATH = "mobile/ios/Bramble/DesignSystem/BrambleTokens.generated.swift";
@@ -27,6 +28,8 @@ export const IOS_MARK_DIR = "mobile/ios/Bramble/Resources/Assets.xcassets/BrandM
 export const ANDROID_MARK_PATH = "mobile/android/app/src/main/res/drawable/brand_mark.xml";
 /** Repository-relative path of the network catalog the Rust core embeds at compile time. */
 export const NETWORKS_JSON_PATH = "mobile/core/generated/networks.json";
+/** Repository-relative path of the token registry and bundled-logo set the Rust core embeds. */
+export const TOKEN_REGISTRY_JSON_PATH = "mobile/core/generated/token-registry.json";
 
 const MOBILE_NETWORK_IDS = ["SN_MAIN", "SN_SEPOLIA"] as const;
 
@@ -49,6 +52,21 @@ const renderNetworks = (): string => {
     })),
   }));
   return `${JSON.stringify({ generatedBy: HEADER, networks }, null, 2)}\n`;
+};
+
+// The curated discovery registry (`knownTokensForNetwork`, ids stripped: the core derives them
+// through its own `tokenConfigId` port) and the addresses that ship a bundled logo.
+const renderTokenRegistry = (): string => {
+  const tokens = MOBILE_NETWORK_IDS.flatMap((id) =>
+    knownTokensForNetwork(id).map((token) => ({
+      address: token.address,
+      decimals: token.decimals,
+      name: token.name,
+      networkId: token.networkId,
+      symbol: token.symbol,
+    })),
+  );
+  return `${JSON.stringify({ generatedBy: HEADER, logos: tokenLogoAddresses(), tokens }, null, 2)}\n`;
 };
 
 const markSize = (): readonly [string, string] => {
@@ -109,6 +127,7 @@ export const renderMobileAssets = (
     [SWIFT_TOKENS_PATH, renderSwift(mixes)],
     [KOTLIN_TOKENS_PATH, renderKotlin(mixes)],
     [NETWORKS_JSON_PATH, renderNetworks()],
+    [TOKEN_REGISTRY_JSON_PATH, renderTokenRegistry()],
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],
     [ANDROID_MARK_PATH, renderMarkDrawable()],

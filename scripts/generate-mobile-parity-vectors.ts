@@ -13,6 +13,7 @@ import {
   PARITY_MESSAGE_HASH,
   PARITY_MNEMONIC,
 } from "./mobile-parity";
+import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 
 const envelopePassword = "parity-vector-password";
 const envelopeScope = "bramble.parity";
@@ -33,3 +34,5 @@ const fixture = {
 
 await writeFile(PARITY_FIXTURE_PATH, `${JSON.stringify(fixture, null, 2)}\n`);
 console.log(`wrote ${PARITY_FIXTURE_PATH}`);
+await writeFile(PORTFOLIO_PARITY_FIXTURE_PATH, await renderPortfolioParity());
+console.log(`wrote ${PORTFOLIO_PARITY_FIXTURE_PATH}`);

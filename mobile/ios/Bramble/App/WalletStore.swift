@@ -29,6 +29,8 @@ final class WalletStore {
 
     let core: WalletCore
     private let rpc = RpcClient()
+    /// Prices, tracked tokens, saved balances and activity (mobile/docs/portfolio-activity.md).
+    let portfolio = PortfolioStore()
 
     init(core: WalletCore) {
         self.core = core
@@ -88,6 +90,7 @@ final class WalletStore {
 
     func lock() {
         core.lock()
+        portfolio.lock()
         pendingBackup = []
         accounts = []
         balances = [:]
@@ -123,6 +126,7 @@ final class WalletStore {
         let core = core
         try await work { try core.deleteWallet(password: password) }
         lock()
+        portfolio.deleteFiles()
         route = .onboarding
     }
 
@@ -142,6 +146,7 @@ final class WalletStore {
         } catch {
             networkHealthy = false
         }
+        await portfolio.load(account: account, network: networkInfo)
     }
 
     /// Base-unit balance formatted for display, or nil until it has loaded.

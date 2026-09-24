@@ -96,7 +96,7 @@ pub fn parse_balance_of(body: &str, id: u64) -> Result<String, CoreError> {
     Ok(u256_to_decimal(limb(&limbs[0])?, limb(&limbs[1])?))
 }
 
-fn u256_to_decimal(low: u128, high: u128) -> String {
+pub(crate) fn u256_to_decimal(low: u128, high: u128) -> String {
     if high == 0 {
         return low.to_string();
     }

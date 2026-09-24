@@ -19,7 +19,7 @@ pub enum NetworkId {
 }
 
 impl NetworkId {
-    fn catalog_id(self) -> &'static str {
+    pub(crate) fn catalog_id(self) -> &'static str {
         match self {
             Self::Mainnet => "SN_MAIN",
             Self::Sepolia => "SN_SEPOLIA",

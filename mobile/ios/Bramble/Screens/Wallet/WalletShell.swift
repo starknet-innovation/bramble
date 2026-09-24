@@ -4,7 +4,7 @@ import SwiftUI
 /// The wallet frame from `wallet-shell.ts` / `styles-dock.ts`: persistent account header, the
 /// active dock screen, and the floating dock. Flow screens push over it without the dock.
 struct WalletShell: View {
-    enum Flow: Hashable { case receive, network, appearance, reveal, remove }
+    enum Flow: Hashable { case receive, network, appearance, reveal, remove, tokens, addToken, discoverTokens, token(String) }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -18,15 +18,19 @@ struct WalletShell: View {
                 VStack(alignment: .leading, spacing: BrambleSpace.lg) {
                     WalletHeader(openAccounts: { accountsOpen = true })
                     switch store.tab {
-                    case .home: HomeView(receive: { flows.append(.receive) })
-                    case .activity: ActivityView()
+                    case .home: HomeView(receive: { flows.append(.receive) }, open: { flows.append($0) })
+                    case .activity: ActivityScreen()
                     case .settings: SettingsHubView(open: { flows.append($0) })
                     }
                 }
                 .padding(.horizontal, BrambleSpace.lg)
                 .padding(.bottom, BrambleControl.dockItem + 12 + BrambleSpace.lg + BrambleSpace.lg)
             }
-            .refreshable { await store.refreshBalances() }
+            .refreshable {
+                await store.refreshBalances()
+                await store.portfolio.refresh(force: true)
+                if store.tab == .activity { await store.portfolio.refreshActivity(force: true) }
+            }
             .background(skin.bg.ignoresSafeArea())
             .overlay(alignment: .bottom) { Dock(tab: $store.tab).padding(.bottom, BrambleSpace.sm) }
             .toolbar(.hidden, for: .navigationBar)
@@ -38,6 +42,10 @@ struct WalletShell: View {
                     case .appearance: AppearanceView()
                     case .reveal: RevealSecretsView()
                     case .remove: RemoveWalletView()
+                    case .tokens: TokensView(open: { flows.append($0) })
+                    case .addToken: AddTokenView()
+                    case .discoverTokens: DiscoverTokensView()
+                    case let .token(id): TokenDetailView(tokenId: id)
                     }
                 }
                 .toolbar(.hidden, for: .navigationBar)
@@ -69,7 +77,7 @@ struct WalletHeader: View {
                             BrambleIcon(.chevronDown, size: 12).foregroundStyle(skin.muted)
                         }
                         HStack(spacing: 6) {
-                            Circle().fill(store.networkHealthy ? skin.positive : skin.warning).frame(width: 6, height: 6)
+                            Circle().fill(store.networkHealthy && store.portfolio.issue == nil ? skin.positive : skin.warning).frame(width: 6, height: 6)
                             Text(store.networkLabel).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
                         }
                     }
@@ -77,6 +85,8 @@ struct WalletHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Accounts")
+            // `aria-describedby="network-status-detail"`: the header's data-freshness copy.
+            .accessibilityValue(store.portfolio.issue ?? "")
             Spacer()
             HStack(spacing: BrambleSpace.xs) {
                 IconButton(icon: .externalLink, label: "Open in explorer", tint: skin.muted) { openExplorer() }

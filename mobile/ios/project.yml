@@ -63,6 +63,11 @@ targets:
       - path: BrambleTests
       - path: ../core/tests/fixtures/extension-parity.json
         buildPhase: resources
+      # The portfolio store and its transport are self-contained (BrambleCore + Foundation), so
+      # the unit suite compiles them directly and drives them with the debug fixture network.
+      - path: Bramble/Portfolio
+      - path: ../core/tests/fixtures/portfolio-parity.jsonl
+        buildPhase: resources
     dependencies:
       - target: BrambleCore
     settings:

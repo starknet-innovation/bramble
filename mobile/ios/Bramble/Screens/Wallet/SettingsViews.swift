@@ -17,7 +17,7 @@ struct SettingsHubView: View {
             }
             Eyebrow(text: "Preferences")
             MenuGroup {
-                MenuRow(icon: .settings, title: "Appearance", value: theme == .light ? "Light" : "Dark") { open(.appearance) }
+                MenuRow(icon: .settings, title: "Appearance & currency", value: store.portfolio.currency.code) { open(.appearance) }
             }
             Eyebrow(text: "Backup & recovery")
             MenuGroup {
@@ -156,9 +156,10 @@ struct AppearanceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.md) {
-            FlowHeader(title: "Appearance", subtitle: "How the wallet looks", network: store.networkLabel) { dismiss() }
+            FlowHeader(title: "Appearance & currency", subtitle: "How the wallet looks and values assets", network: store.networkLabel) { dismiss() }
             Eyebrow(text: "Theme")
             SegmentedControl(options: [("Dark", ThemeChoice.dark), ("Light", ThemeChoice.light)], selection: $theme)
+            CurrencySection()
             Spacer()
         }
         .padding(.horizontal, BrambleSpace.lg)

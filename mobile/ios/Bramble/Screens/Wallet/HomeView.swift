@@ -1,42 +1,24 @@
 import BrambleCore
 import SwiftUI
 
-/// `homeView()` from `portfolio/home-view.ts`: hero total, the four major actions, the token list.
-/// Mobile has no price source yet, so the total and fiat column read "—", exactly the side
-/// panel's prices-unavailable state; token amounts still show under each symbol.
+/// `homeView()` from `portfolio/home-view.ts`: hero total, the four major actions, the token list
+/// (`PortfolioHeroView`, `PortfolioTokens`: prices, tracked tokens and states from the core).
 struct HomeView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     let receive: () -> Void
+    let open: (WalletShell.Flow) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.xl) {
-            Text("—")
-                .brambleText(BrambleTypeScale.portfolio, weight: BrambleWeight.heavy, tracking: BrambleTracking.amount)
-                .frame(maxWidth: .infinity)
-                .padding(.top, BrambleSpace.md)
-                .accessibilityLabel("Portfolio total unavailable")
+            PortfolioHeroView()
             HStack(spacing: BrambleSpace.md) {
                 ActionTile(title: "Send", icon: .send) {}.disabled(true)
                 ActionTile(title: "Swap", icon: .shuffle) {}.disabled(true)
                 ActionTile(title: "Receive", icon: .qrCode, action: receive)
                 ActionTile(title: "Shield", icon: .shield) {}.disabled(true)
             }
-            VStack(alignment: .leading, spacing: BrambleSpace.sm) {
-                HStack {
-                    Text("Tokens").brambleText(BrambleTypeScale.title, weight: BrambleWeight.bold)
-                    Spacer()
-                    BrambleIcon(.moreHorizontal).foregroundStyle(skin.muted).frame(width: BrambleControl.hit, height: BrambleControl.hit)
-                }
-                VStack(spacing: 0) {
-                    ForEach(Array(store.networkInfo.tokens.enumerated()), id: \.element.address) { offset, token in
-                        TokenRow(token: token, amount: store.amount(of: token))
-                            .overlay(alignment: .top) {
-                                if offset > 0 { Rectangle().fill(skin.hairline).frame(height: 1) }
-                            }
-                    }
-                }
-            }
+            PortfolioTokens(open: open)
         }
     }
 }
@@ -82,23 +64,5 @@ struct TokenRow: View {
         .padding(.horizontal, BrambleSpace.sm)
         .padding(.vertical, BrambleSpace.md)
         .frame(minHeight: BrambleSize.rowCompact)
-    }
-}
-
-/// Activity dock screen: mobile keeps no history yet, so it shows the side panel's empty copy.
-struct ActivityView: View {
-    @Environment(\.skin) private var skin
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: BrambleSpace.md) {
-            Text("Activity").brambleText(BrambleTypeScale.title, weight: BrambleWeight.bold)
-            Text("No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.")
-                .brambleText(BrambleTypeScale.label)
-                .foregroundStyle(skin.muted)
-                .multilineTextAlignment(.center)
-                .padding(.vertical, BrambleSpace.lg)
-                .padding(.horizontal, BrambleSpace.md)
-                .frame(maxWidth: .infinity)
-        }
     }
 }
