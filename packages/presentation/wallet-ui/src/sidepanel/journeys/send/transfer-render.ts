@@ -135,25 +135,27 @@ const applyWorkingStatus = (form: HTMLFormElement, status: WorkingStatus): void 
 };
 
 /**
- * Points the confirmed hash at the explorer and arms its copy control. A network
- * with no explorer (devnet) renders the hash as plain text rather than a link
- * that cannot resolve.
+ * Fills one outcome's hash row: truncated on screen so it leaves room for the
+ * copy control beside it, the whole hash on its title and in that control, and
+ * the explorer behind the link. A network with no explorer (devnet) renders the
+ * hash as plain text rather than a link that cannot resolve.
  */
-const applySuccessHash = (form: HTMLFormElement, hash: string): void => {
-  // Truncated on screen so the row leaves room for the copy control; the link
-  // and that control both carry the whole hash, and the title shows it on hover.
-  setText(form, "send-success-hash", accountLabel(hash));
-  form.querySelector("#send-success-hash")?.setAttribute("title", hash);
-  const link = form.querySelector<HTMLAnchorElement>("#send-success-hash-link");
+const applyOutcomeHash = (form: HTMLFormElement, id: string, hash: string): void => {
+  const code = form.querySelector(`#${id}`);
+  if (!code) {
+    return;
+  }
+  code.textContent = accountLabel(hash);
+  code.setAttribute("title", hash);
+  const row = code.closest(".send-outcome-hash");
+  const link = row?.querySelector<HTMLAnchorElement>("a");
   const explorer = explorerTransactionUrl(form.dataset["sendNetwork"] ?? "", hash);
   if (link && explorer) {
     link.href = explorer;
   } else {
     link?.removeAttribute("href");
   }
-  form
-    .querySelector<HTMLElement>(".send-outcome-hash [data-copy]")
-    ?.setAttribute("data-copy", hash);
+  row?.querySelector<HTMLElement>("[data-copy]")?.setAttribute("data-copy", hash);
 };
 
 /**
@@ -258,9 +260,9 @@ export const applyTransferUi = (
       state.fields.recipientLabel || accountLabel(state.fields.recipient),
     );
     setText(form, "send-success-summary", summary);
-    applySuccessHash(form, state.transactionHash);
-    setText(form, "send-pending-hash", state.transactionHash);
-    setText(form, "send-failure-hash", state.transactionHash);
+    applyOutcomeHash(form, "send-success-hash", state.transactionHash);
+    applyOutcomeHash(form, "send-pending-hash", state.transactionHash);
+    applyOutcomeHash(form, "send-failure-hash", state.transactionHash);
   }
   if (state.stage === "failed") {
     setText(

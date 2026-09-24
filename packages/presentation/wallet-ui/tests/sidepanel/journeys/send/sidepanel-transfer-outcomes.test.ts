@@ -170,7 +170,8 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("pending");
     expect(app.querySelector("#send-pending")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-pending-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-pending-hash")?.textContent).toBe(accountLabel(HASH));
+    expect(app.querySelector("#send-pending-hash")?.getAttribute("title")).toBe(HASH);
   });
 });
 
