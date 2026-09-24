@@ -39,8 +39,8 @@ const points = (value: string): string[] => {
   return pairs;
 };
 
-/** Exact path data for one SVG basic shape. */
-const pathData = ({ tag, attrs }: Element): string => {
+/** Exact path data for one SVG basic shape (shared with `android-token-logos.ts`). */
+export const pathData = ({ tag, attrs }: Element): string => {
   switch (tag) {
     case "path":
       return attrs["d"] ?? "";
@@ -197,8 +197,8 @@ const androidWordmark = (): [string, string] => {
 export const tokenLogoAssetName = (address: string): string =>
   `token-${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;
 
-// iOS only for now: the logos use gradients and clip paths that need a real SVG-to-vector
-// conversion on Android, where the token row falls back to the extension's letter badge.
+// iOS takes each logo as an SVG; Android's vector drawables are rendered from the same SVGs by
+// `android-token-logos.ts`.
 const iosTokenLogos = (): [string, string][] =>
   [...new Map(DEFAULT_TOKENS.map((token) => [token.address, token.symbol])).entries()].flatMap(
     ([address, symbol]) => {

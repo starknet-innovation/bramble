@@ -10,6 +10,7 @@
 import { readFile } from "node:fs/promises";
 import { BRAMBLE_MARK_PATH, BRAMBLE_MARK_VIEW_BOX } from "@bramble/ui-kit/brand-mark";
 import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { renderAndroidTokenLogos } from "./mobile-assets/android-token-logos";
 import { DERIVED_COLOR_SOURCES, parseDerivedColors } from "./mobile-assets/colors";
 import { renderKotlin } from "./mobile-assets/kotlin";
 import { HEADER } from "./mobile-assets/shared";
@@ -113,5 +114,6 @@ export const renderMobileAssets = (
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],
     [ANDROID_MARK_PATH, renderMarkDrawable()],
     ...renderVectorAssets(),
+    ...renderAndroidTokenLogos(),
   ]);
 };

@@ -62,10 +62,19 @@ What is reused from the extension, and how drift is prevented:
 
 **Phase 0 — prototype (this branch).** Create/import, backup, unlock/lock, multiple accounts,
 mainnet/Sepolia, live STRK/ETH balances, receive with QR, explorer, reveal phrase, delete
-wallet. iOS verified; Android source only.
+wallet. iOS verified. Android now matches the iOS screens one for one (onboarding, unlock,
+wallet shell, home, accounts, receive, settings, reveal, remove), uses only generated tokens,
+icons, token logos, and the build-time onboarding landscape, and has FLAG_SECURE, overlay and
+autofill hardening, secret fields without suggestions, lock on background (including a lock that
+lands mid-PBKDF2, and dropping onboarding input typed before a vault exists), and balances tied to
+the network and account they were read for. It is still uncompiled: no JDK or Android SDK was
+available where it was written (see `docs/android-parity.md`).
 
 **Phase 1 — sendable wallet.**
-1. Android in CI: Gradle wrapper, NDK build via `build-core-android.sh`, instrumented parity test.
+1. Android in CI: NDK build via `build-core-android.sh`, then the JVM unit and instrumented
+   suites (`:app:testDebugUnitTest`, `:app:connectedDebugAndroidTest`). The pinned Gradle 8.11.1
+   wrapper and the Compose/Espresso suites mirroring the iOS XCUITests now exist; they have
+   never been run.
 2. Transactions in the core: invoke v3 hashing (`krusty_kms::compute_invoke_v3_hash`), fee
    estimation and nonce as sans-IO RPC, OZ deploy-account; Send screen with review. Port the
    extension's review rules rather than re-deriving them.
@@ -98,4 +107,7 @@ audit of the core and FFI surface, reproducible builds, crash reporting without 
 - Swift/Kotlin `String` passwords and the phrase shown at backup can't be zeroized by the host.
   The Rust side zeroizes its copies, but serde's parse buffers aren't guaranteed to be wiped.
 - Unlock back-off is not persisted yet (Phase 1.3).
+- A created wallet's vault is written before its backup is confirmed (iOS and Android). If the
+  app locks during Save phrase or Confirm backup, nothing prompts the user to finish the backup
+  after unlock; Reveal secrets is the way back. The extension verifies words before creating.
 - Send is visible but disabled.
