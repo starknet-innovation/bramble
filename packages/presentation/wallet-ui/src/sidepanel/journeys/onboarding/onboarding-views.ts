@@ -167,7 +167,6 @@ const welcomeStep = (ready: boolean): string => `
         variant: "secondary",
       })}
     </div>
-    <p class="onboarding-local-note">${icon("lock")} Encrypted locally on this device</p>
   </section>`;
 
 const methodStep = (): string => `

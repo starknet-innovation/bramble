@@ -145,10 +145,10 @@ describe("the first paint", () => {
     expect(shield).toContain("Review shield");
     expect(shield).toContain("Confirm and shield");
     expect(shield).toContain("Shield complete");
-    expect(shield).not.toContain('<h1 id="send-header-title">Send to</h1>');
+    expect(shield).not.toContain('<h1 id="send-header-title">Send</h1>');
 
     const plain = sendFlow(status, account, preferences);
-    expect(plain).toContain('<h1 id="send-header-title">Send to</h1>');
+    expect(plain).toContain('<h1 id="send-header-title">Send</h1>');
     expect(plain).toContain("Review send");
     expect(plain).toContain("Confirm and send");
   });
@@ -158,7 +158,7 @@ describe("the first paint", () => {
       ...shieldIntent,
       accountId: "SN_MAIN:0xother",
     });
-    expect(foreign).toContain('<h1 id="send-header-title">Send to</h1>');
+    expect(foreign).toContain('<h1 id="send-header-title">Send</h1>');
   });
 });
 

@@ -60,7 +60,7 @@ describe("transferModeFor", () => {
 
 describe("mode copy", () => {
   test("titles every checkpoint in the mode's own words", () => {
-    expect(transferStageTitle("recipient")).toBe("Send to");
+    expect(transferStageTitle("recipient")).toBe("Send");
     expect(transferStageTitle("details", "shield")).toBe("Shield");
     expect(transferStageTitle("reviewing", "unshield")).toBe("Unshield");
     expect(transferStageTitle("review", "shield")).toBe("Review shield");

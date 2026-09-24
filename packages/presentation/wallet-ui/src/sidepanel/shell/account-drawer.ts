@@ -19,13 +19,14 @@ import { escapeHtml } from "@bramble/core/html";
 import { withDefaultGroups } from "@bramble/settings/groups";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
-import { emptyState } from "@bramble/ui-kit/content";
+import { emptyState, pill } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ArgentMultisigView } from "../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { icon } from "../shared/icons";
+import { networkDisplayName } from "../shared/network-label";
 import { accountAvatar, accountDisplayName, accountLabel, hardwareBadge } from "../shared/parts";
 import {
   addFolderControl,
@@ -80,6 +81,34 @@ const drawerAccountRow = (
 };
 
 /**
+ * The drawer's network pill, and the list it opens. The pill names the network
+ * the wallet is on rather than the chain, since the chain is never the question
+ * here. Switching is offered where the network is shown instead of only in
+ * settings; the option ids are distinct from the settings picker's so the two
+ * bindings never claim each other's buttons — that picker returns to settings
+ * after a switch, which is wrong from inside the drawer.
+ */
+const networkControl = (status: WalletStatus): string => `
+  <div class="drawer-network">
+    <button class="drawer-network-pill" type="button" data-drawer-network-toggle
+      aria-expanded="false" aria-haspopup="listbox" aria-controls="drawer-network-menu">
+      ${pill(networkDisplayName(status.network), { dot: true })}${icon("chevronDown")}
+    </button>
+    <div class="drawer-network-menu" id="drawer-network-menu" role="listbox" aria-label="Network" hidden>
+      ${status.networks
+        .map(
+          (network) => `<button class="drawer-network-option" type="button" role="option"
+            data-drawer-network-id="${escapeHtml(network.id)}"
+            aria-selected="${network.id === status.networkId}">
+            <span>${escapeHtml(network.name)}</span>
+            ${network.id === status.networkId ? icon("check") : ""}
+          </button>`,
+        )
+        .join("")}
+    </div>
+  </div>`;
+
+/**
  * Renders the account drawer and its backdrop, closed by default. The header
  * avatar trigger toggles `data-open`; backdrop, close control, and Escape all
  * dismiss it.
@@ -113,7 +142,7 @@ export const accountDrawer = (
       <header class="drawer-head">
         <div class="drawer-title">
           <h2>Accounts</h2>
-          <p>${escapeHtml(status.network)}</p>
+          ${networkControl(status)}
         </div>
         ${iconButton({
           attributes: { "data-drawer-close": true },

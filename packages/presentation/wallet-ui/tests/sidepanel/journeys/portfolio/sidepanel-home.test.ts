@@ -74,7 +74,7 @@ describe("sidepanel home", () => {
     const html = walletHeader(status, account, preferences, multisig);
     const network = html.slice(html.indexOf('class="account-net'), html.indexOf("</header>"));
 
-    expect(network).toContain('class="account-network-label">Starknet</span>');
+    expect(network).toContain('class="account-network-label">Mainnet</span>');
     expect(network).not.toContain("Argent Multisig");
   });
 

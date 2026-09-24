@@ -46,7 +46,6 @@ export const onboardingLaunch = (): string => `
         label: "Open full-screen setup",
         target: "_blank",
       })}
-      <p class="onboarding-local-note">${icon("lock")} Encrypted locally on this device</p>
     </div>
   </main>`;
 

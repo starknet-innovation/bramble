@@ -161,6 +161,7 @@ type Calls = {
   setAccountInGroup: Array<readonly [string, string, boolean]>;
   addAccount: string[];
   startAddAccount: number;
+  setActiveNetwork: string[];
 };
 
 export type Harness = {
@@ -231,6 +232,10 @@ const buildWallet = (
       return Promise.resolve(newAccountId);
     },
     setActiveAccount: (): Promise<void> => Promise.resolve(),
+    setActiveNetwork: (networkId: string): Promise<WalletStatus> => {
+      calls.setActiveNetwork.push(networkId);
+      return rejects ? fail() : Promise.resolve(status);
+    },
     loadStatus: (): Promise<WalletStatus> => Promise.resolve(status),
   };
 };
@@ -269,6 +274,7 @@ export const mount = (
     removeGroup: [],
     setAccountInGroup: [],
     startAddAccount: 0,
+    setActiveNetwork: [],
   };
   const folders = createDrawerFolderState();
   const state: UiState = {

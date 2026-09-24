@@ -147,11 +147,12 @@ export const transferModeCopy = (mode: TransferMode): TransferModeCopy => COPY[m
 /**
  * Human-readable header title for the current Send checkpoint, in the mode's
  * own words. The recipient step is only reachable as a send — a shield has
- * nobody to choose — so it keeps its "Send to" prompt.
+ * nobody to choose — and the stage's own "Send to" label names the step, so the
+ * header stays the verb rather than repeating it.
  */
 export const transferStageTitle = (stage: TransferStage, mode: TransferMode = "send"): string => {
   const copy = COPY[mode];
-  if (stage === "recipient") return mode === "send" ? "Send to" : copy.noun;
+  if (stage === "recipient") return copy.noun;
   if (stage === "details" || stage === "reviewing") return copy.noun;
   if (stage === "review") return `Review ${copy.verb}`;
   if (stage === "authorizing") return `Authorize ${copy.verb}`;
