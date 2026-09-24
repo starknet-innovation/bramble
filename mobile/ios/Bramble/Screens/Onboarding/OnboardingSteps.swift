@@ -176,7 +176,7 @@ struct ReviewAccountStep: View {
     @Environment(WalletStore.self) private var store
     let network: NetworkId
     let next: () -> Void
-    @State private var account: AccountInfo?
+    @State private var account: AccountRecord?
     @State private var selected = true
     @State private var acknowledged = false
 
@@ -192,7 +192,7 @@ struct ReviewAccountStep: View {
                         }
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Primary Bramble account").brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
-                            Text(account.map { shortAddress($0.address) } ?? "Deriving account…")
+                            Text(account.map { accountPreviewLabel(address: $0.address) } ?? "Deriving account…")
                                 .brambleText(BrambleTypeScale.caption, mono: true).foregroundStyle(skin.muted)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

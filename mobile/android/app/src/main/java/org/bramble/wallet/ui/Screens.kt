@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -31,15 +32,23 @@ import org.bramble.wallet.WalletStore
 import org.bramble.wallet.describe
 import org.bramble.wallet.design.*
 
-/** Route switch; same four routes as the iOS RootView. */
+/** Route switch; the iOS RootView's routes, including discovery for a pending import. */
 @Composable
 fun Root(store: WalletStore) {
     val skin = LocalSkin.current
+    val context = LocalContext.current
+    LaunchedEffect(store.toast) {
+        store.toast?.let { (message, _) ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            store.toast = null
+        }
+    }
     Box(Modifier.fillMaxSize().background(skin.bg).systemBarsPadding().imePadding()) {
         when (store.route) {
             WalletStore.Route.WELCOME -> Welcome(store)
             WalletStore.Route.BACKUP -> Backup(store)
             WalletStore.Route.LOCKED -> Unlock(store)
+            WalletStore.Route.DISCOVERY -> FindAccounts(store)
             WalletStore.Route.HOME -> Home(store)
         }
     }
@@ -196,6 +205,8 @@ private fun Home(store: WalletStore) {
     val uri = LocalUriHandler.current
     var sheet by remember { mutableStateOf("") }
     if (sheet == "settings") return Settings(store) { sheet = "" }
+    if (sheet == "accounts") return AccountsDrawer(store, close = { sheet = "" }, openManage = { sheet = "manage" })
+    if (sheet == "manage") return ManageAccounts(store) { sheet = "" }
 
     fun amount(symbol: String): String? {
         val raw = store.balances[symbol] ?: return null
@@ -205,10 +216,11 @@ private fun Home(store: WalletStore) {
 
     Screen(title = "") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-            AccountAvatar(store.account?.index ?: 0u)
-            Column(Modifier.weight(1f)) {
-                Text("Account ${(store.account?.index ?: 0u) + 1u}", color = skin.text, style = textStyle(BrambleTypeScale.title, BrambleWeight.semibold))
-                Text(shortAddress(store.account?.address ?: ""), color = skin.muted, style = textStyle(BrambleTypeScale.mono, mono = true))
+            AccountAvatar(store.activeRecord?.accountIndex ?: 0u)
+            // The core's display name (label, else nickname); tapping opens the account drawer.
+            Column(Modifier.weight(1f).clickable { sheet = "accounts" }) {
+                Text(store.activeRecord?.displayName ?: "", color = skin.text, style = textStyle(BrambleTypeScale.title, BrambleWeight.semibold))
+                Text(store.activeRecord?.shortAddress ?: "", color = skin.muted, style = textStyle(BrambleTypeScale.mono, mono = true))
             }
             Text(if (store.network == NetworkId.MAINNET) "Mainnet" else "Sepolia", color = skin.muted,
                 style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold),
@@ -230,6 +242,12 @@ private fun Home(store: WalletStore) {
         if (sheet == "receive") Card {
             Text("Receive on ${store.networkInfo.name}", color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
             Text(store.account?.address ?: "", color = skin.text, style = textStyle(BrambleTypeScale.mono, mono = true))
+            store.activeRecord?.let { active ->
+                CopyControl(active.address, "Copy address")
+                Text("Signer public key ${org.bramble.core.accountLabel(active.publicKey)}",
+                    color = skin.muted, style = textStyle(BrambleTypeScale.caption, mono = true))
+                CopyControl(active.publicKey, "Copy signer public key")
+            }
         }
         Card {
             Text("Tokens", color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
@@ -260,7 +278,7 @@ private fun Settings(store: WalletStore, close: () -> Unit) {
             SecondaryButton(if (store.network == NetworkId.SEPOLIA) "Switch to Mainnet" else "Switch to Sepolia") {
                 scope.launch { store.switchNetwork(if (store.network == NetworkId.SEPOLIA) NetworkId.MAINNET else NetworkId.SEPOLIA) }
             }
-            SecondaryButton("Add account") { scope.launch { runCatching { store.addAccount() }.onFailure { error = describe(it) } } }
+            SecondaryButton("Add account") { scope.launch { runCatching { store.addRegularAccount() }.onFailure { error = describe(it) } } }
         }
         Card {
             Text("Security", color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))

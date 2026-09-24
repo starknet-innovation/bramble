@@ -54,7 +54,9 @@ What is reused from the extension, and how drift is prevented:
 - **Network.** Sans-IO: no TLS or HTTP code in Rust. HTTPS only (ATS / `usesCleartextTraffic=false`),
   ephemeral URLSession. An endpoint is trusted only after `starknet_chainId` proves the chain;
   responses must answer their request id, are size-bounded, and u256 limbs are range-checked.
-- **Clipboard.** Addresses only, local-only and expiring after two minutes on iOS.
+- **Clipboard.** Public identifiers only (account address, signer public key, class hash; see
+  `docs/accounts.md` §2.8), local-only and expiring after two minutes on iOS; Android clears its
+  own clip after two minutes. Never the phrase, a private key, or a viewing key.
 - **Supply chain.** Every Rust dependency pinned exactly with a committed `Cargo.lock`; builds use
   `--locked`. Gradle and Android dependencies pinned exactly.
 
@@ -63,6 +65,18 @@ What is reused from the extension, and how drift is prevented:
 **Phase 0 — prototype (this branch).** Create/import, backup, unlock/lock, multiple accounts,
 mainnet/Sepolia, live STRK/ETH balances, receive with QR, explorer, reveal phrase, delete
 wallet. iOS verified; Android source only.
+
+**Phase 0.5 — account parity (built on `mobile/accounts`; see `docs/accounts.md`).** The
+extension's account naming (address-derived nickname, 1–64 character labels) and address
+truncation; vault payload v2 with typed account records, one active account, labels and groups
+(v1 → v2 migrated on unlock, every record re-derived from the phrase and checked on open);
+sans-IO "Find your accounts" discovery over the first 20 indices for Bramble (OpenZeppelin),
+Ready (Argent 0.4.0/0.3.1/0.3.0) and Braavos (1.0.0/base, view-only), with manual index and the
+extension's restore acknowledgement; "Regular account" from the drawer's Add account; account
+drawer groups, selected row and "Manage accounts & groups"; copy of public identifiers through
+the expiring local-only clipboard with the extension's toast. Signing is by record
+(`sign_hash_for_account`, refusing view-only records). iOS verified; Android source only. Not
+yet: private-key import (Bramble/Ready contract choice and deployment salt), Braavos signing.
 
 **Phase 1 — sendable wallet.**
 1. Android in CI: Gradle wrapper, NDK build via `build-core-android.sh`, instrumented parity test.
@@ -73,7 +87,7 @@ wallet. iOS verified; Android source only.
    user presence; the password stays the recovery path. Persisted wrong-password back-off.
 4. CI job for `cargo test --locked`, clippy, `cargo deny`, and the iOS unit suite.
 
-**Phase 2 — feature parity.** Token list and prices, activity history, Argent/Braavos discovery,
+**Phase 2 — feature parity.** Token list and prices, activity history, private-key import,
 multisig, WalletConnect in place of the injected provider, STRK20 privacy (viewing keys stay in
 the core, as the extension's AGENTS.md rules require), Ledger over BLE.
 

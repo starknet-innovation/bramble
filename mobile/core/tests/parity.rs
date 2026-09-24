@@ -2,7 +2,7 @@
 //! is written by `bun run mobile:parity` from the extension's real Krusty WASM path, and
 //! `tests/conformance/mobile-parity.test.ts` keeps it in step with the extension.
 
-use bramble_core::{NetworkId, WalletCore};
+use bramble_core::{AccountFamily, NetworkId, RecoverySelection, WalletCore};
 use serde_json::Value;
 
 fn fixture() -> Value {
@@ -28,12 +28,23 @@ fn accounts_and_signatures_match_the_extension() {
         None,
     )
     .unwrap();
-    core.add_account(NetworkId::Sepolia).unwrap();
+    let oz = |account_index| RecoverySelection {
+        family: AccountFamily::OpenZeppelin,
+        account_index,
+        class_hash: None,
+    };
+    let restored = core
+        .restore_recovered_accounts(NetworkId::Sepolia, vec![oz(0), oz(1)])
+        .unwrap();
+    // Switching to Mainnet projects the active (first) account there.
+    core.select_account(restored[0].id.clone()).unwrap();
+    core.ensure_network_account(NetworkId::Mainnet).unwrap();
 
     for vector in fixture["accounts"].as_array().unwrap() {
         let index = u32::try_from(vector["accountIndex"].as_u64().unwrap()).unwrap();
         let net = network(vector["networkId"].as_str().unwrap());
-        let account = &core.accounts(net).unwrap()[index as usize];
+        let accounts = core.accounts(net).unwrap();
+        let account = accounts.iter().find(|a| a.index == index).unwrap();
         assert_eq!(
             account.address,
             vector["address"].as_str().unwrap(),

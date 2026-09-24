@@ -14,15 +14,15 @@ use crate::{felt, CoreError};
 const BALANCE_OF_SELECTOR: &str =
     "0x2e4263afad30923c891518314c3c95dbe830a16874e8abc5777a9a20b54c76e";
 /// Longest response body the core will parse.
-const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+pub(crate) const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
-fn rpc_error(reason: &str) -> CoreError {
+pub(crate) fn rpc_error(reason: &str) -> CoreError {
     CoreError::Rpc {
         reason: reason.into(),
     }
 }
 
-fn envelope(id: u64, method: &str, params: Value) -> String {
+pub(crate) fn envelope(id: u64, method: &str, params: Value) -> String {
     json!({ "id": id, "jsonrpc": "2.0", "method": method, "params": params }).to_string()
 }
 

@@ -13,6 +13,7 @@ import {
   PARITY_MESSAGE_HASH,
   PARITY_MNEMONIC,
 } from "./mobile-parity";
+import { ACCOUNTS_PARITY_FIXTURE_PATHS, computeAccountParity } from "./mobile-parity-accounts";
 
 const envelopePassword = "parity-vector-password";
 const envelopeScope = "bramble.parity";
@@ -33,3 +34,10 @@ const fixture = {
 
 await writeFile(PARITY_FIXTURE_PATH, `${JSON.stringify(fixture, null, 2)}\n`);
 console.log(`wrote ${PARITY_FIXTURE_PATH}`);
+
+const accounts = await computeAccountParity();
+for (const part of ["families", "rules"] as const) {
+  const path = ACCOUNTS_PARITY_FIXTURE_PATHS[part];
+  await writeFile(path, `${JSON.stringify(accounts[part], null, 2)}\n`);
+  console.log(`wrote ${path}`);
+}

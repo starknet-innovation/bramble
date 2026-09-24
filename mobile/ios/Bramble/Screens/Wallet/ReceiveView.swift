@@ -1,13 +1,14 @@
+import BrambleCore
 import CoreImage.CIFilterBuiltins
 import SwiftUI
-import UniformTypeIdentifiers
 
-/// `receive` from the activity-and-assets journey: QR card, full address, network line, copy.
+/// `receive` from the activity-and-assets journey: QR card, full address, network line, copy, and
+/// the collapsed "Wallet identity" disclosure with the signer public key (`receive-view.ts`).
 struct ReceiveView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
-    @State private var copied = false
+    @State private var identityOpen = false
 
     var body: some View {
         let address = store.account?.address ?? ""
@@ -36,18 +37,47 @@ struct ReceiveView: View {
                     .brambleText(BrambleTypeScale.label)
                 Text("Only send \(networkName) assets to this address.")
                     .brambleText(BrambleTypeScale.label).foregroundStyle(skin.muted).multilineTextAlignment(.center)
-                PillButton(copied ? "Copied" : "Copy address", icon: .copy) {
-                    // Local-only and expiring: no Universal Clipboard hand-off.
-                    UIPasteboard.general.setItems(
-                        [[UTType.plainText.identifier: address]],
-                        options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(120)]
-                    )
-                    copied = true
-                }
-                .padding(.top, BrambleSpace.sm)
+                // Local-only and expiring (Clipboard): no Universal Clipboard hand-off.
+                CopyButton(value: address, label: "Copy address", style: .pill(.primary))
+                    .padding(.top, BrambleSpace.sm)
+                if let publicKey = store.activeRecord?.publicKey { identity(publicKey) }
             }
             .padding(.horizontal, BrambleSpace.lg)
         }
+    }
+
+    /// `.receive-identity`: collapsed by default; the signer key truncated, copied in full. The
+    /// coordination key row belongs to the Nostr workstream and is not shown here.
+    private func identity(_ publicKey: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button { identityOpen.toggle() } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Wallet identity").brambleText(BrambleTypeScale.row, weight: BrambleWeight.semibold)
+                        Text("Signer and coordination keys").brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                    }
+                    Spacer()
+                    BrambleIcon(identityOpen ? .chevronDown : .chevronRight).foregroundStyle(skin.muted)
+                }
+                .padding(.horizontal, BrambleSpace.lg)
+                .frame(minHeight: 56)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Wallet identity")
+            .accessibilityValue(identityOpen ? "Expanded" : "Collapsed")
+            if identityOpen {
+                HStack {
+                    Text("Signer public key").brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
+                    Spacer()
+                    Text(accountLabel(address: publicKey)).brambleText(BrambleTypeScale.label, mono: true).foregroundStyle(skin.muted)
+                    CopyButton(value: publicKey, label: "Copy signer public key")
+                }
+                .padding(.leading, BrambleSpace.lg)
+                .padding(.trailing, BrambleSpace.sm)
+            }
+        }
+        .background(skin.panel, in: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous))
+        .padding(.top, BrambleSpace.sm)
     }
 
     private func qrCode(_ text: String) -> UIImage? {

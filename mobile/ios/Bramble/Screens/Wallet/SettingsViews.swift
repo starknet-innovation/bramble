@@ -13,6 +13,7 @@ struct SettingsHubView: View {
             Text("Settings").brambleText(BrambleTypeScale.title, weight: BrambleWeight.bold)
             Eyebrow(text: "Accounts & networks")
             MenuGroup {
+                MenuRow(icon: .wallet, title: "Accounts & groups") { open(.accounts) }
                 MenuRow(icon: .globe, title: "Network", value: store.networkInfo.name) { open(.network) }
             }
             Eyebrow(text: "Preferences")

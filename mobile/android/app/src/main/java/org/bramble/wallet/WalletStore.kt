@@ -6,7 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.bramble.core.AccountGroup
 import org.bramble.core.AccountInfo
+import org.bramble.core.AccountRecord
 import org.bramble.core.CoreException
 import org.bramble.core.NetworkId
 import org.bramble.core.NetworkInfo
@@ -19,12 +21,25 @@ import org.bramble.core.supportedNetworks
  * metadata; a recovery phrase lives here only while the backup screen is showing it.
  */
 class WalletStore(private val core: WalletCore, private val prefs: SharedPreferences) {
-    enum class Route { WELCOME, BACKUP, LOCKED, HOME }
+    /** DISCOVERY: an imported vault waiting for "Find your accounts" (recovery pending). */
+    enum class Route { WELCOME, BACKUP, LOCKED, DISCOVERY, HOME }
 
     var route by mutableStateOf(if (core.status() == WalletStatus.NO_WALLET) Route.WELCOME else Route.LOCKED)
         private set
+    /** Deprecated OZ-only view of the core's `accounts()`; new code reads [records]. */
     var accounts by mutableStateOf(emptyList<AccountInfo>())
         private set
+    /** This network's accounts as the core renders them (name, label, type, group). */
+    var records by mutableStateOf(emptyList<AccountRecord>())
+        private set
+    var allRecords by mutableStateOf(emptyList<AccountRecord>())
+        private set
+    var groups by mutableStateOf(emptyList<AccountGroup>())
+        private set
+    var activeRecord by mutableStateOf<AccountRecord?>(null)
+        private set
+    /** A transient message for the snackbar-style toast, and whether it reports success. */
+    var toast by mutableStateOf<Pair<String, Boolean>?>(null)
     var balances by mutableStateOf(emptyMap<String, String>())
         private set
     var balanceError by mutableStateOf<String?>(null)
@@ -33,17 +48,19 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
         private set
     var pendingBackup by mutableStateOf(emptyList<String>())
         private set
-    var selectedAccount by mutableStateOf(0u)
     var network by mutableStateOf(if (prefs.getString("network", null) == "sepolia") NetworkId.SEPOLIA else NetworkId.MAINNET)
         private set
 
     private val rpc = RpcClient()
+    internal val walletCore: WalletCore get() = core
 
     val networkInfo: NetworkInfo get() = supportedNetworks().first { it.network == network }
-    val account: AccountInfo? get() = accounts.firstOrNull { it.index == selectedAccount } ?: accounts.firstOrNull()
+    /** The active account in the pre-records shape; signing must use [activeRecord] ids. */
+    val account: AccountInfo?
+        get() = activeRecord?.let { AccountInfo(it.accountIndex, it.address, it.publicKey, it.classHash, it.network) }
 
     /** PBKDF2-bound core work runs off the main thread. */
-    private suspend fun <T> work(body: () -> T): T {
+    internal suspend fun <T> work(body: () -> T): T {
         busy = true
         try {
             return withContext(Dispatchers.Default) { body() }
@@ -53,7 +70,8 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
     }
 
     suspend fun create(password: String) {
-        pendingBackup = work { core.createWallet(password, 12u) }.words
+        val network = network
+        pendingBackup = work { core.createWalletOnNetwork(password, 12u, network) }.words
         route = Route.BACKUP
     }
 
@@ -64,7 +82,7 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
 
     suspend fun importWallet(phrase: String, password: String, passphrase: String?) {
         work { core.importWallet(password, phrase, passphrase) }
-        enterHome()
+        route = Route.DISCOVERY
     }
 
     suspend fun unlock(password: String) {
@@ -76,6 +94,10 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
         core.lock()
         pendingBackup = emptyList()
         accounts = emptyList()
+        records = emptyList()
+        allRecords = emptyList()
+        groups = emptyList()
+        activeRecord = null
         balances = emptyMap()
         if (route != Route.WELCOME) route = if (core.status() == WalletStatus.NO_WALLET) Route.WELCOME else Route.LOCKED
     }
@@ -86,12 +108,40 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
         enterHome()
     }
 
-    suspend fun addAccount() {
-        val added = work { core.addAccount(network) }
-        accounts = accounts + added
-        selectedAccount = added.index
+    /** "Regular account": OpenZeppelin at the next free index, made active. */
+    suspend fun addRegularAccount() {
+        val network = network
+        work { core.addRegularAccount(network) }
+        reloadAccounts()
+        refreshBalances()
+        toast = "Account added" to true
+    }
+
+    suspend fun select(id: String) {
+        work { core.selectAccount(id) }
+        reloadAccounts()
         refreshBalances()
     }
+
+    /** Re-reads records and groups; with [ensure], first runs the network-switch rule. */
+    suspend fun reloadAccounts(ensure: Boolean = false) {
+        val network = network
+        runCatching {
+            work {
+                if (ensure) core.ensureNetworkAccount(network)
+                AccountsSnapshot(core.accountRecords(network), core.allAccountRecords(), core.accountGroups(), core.accounts(network))
+            }
+        }.onSuccess { snapshot ->
+            records = snapshot.records
+            allRecords = snapshot.allRecords
+            groups = snapshot.groups
+            accounts = snapshot.legacy
+            activeRecord = records.firstOrNull { it.active }
+        }.onFailure { toast = describe(it) to false }
+    }
+
+    /** Leaves "Find your accounts" once the core has restored the selection. */
+    suspend fun finishRecovery() = enterHome()
 
     suspend fun revealPhrase(password: String): List<String> = work { core.revealRecoveryPhrase(password).words }
 
@@ -101,9 +151,13 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
         route = Route.WELCOME
     }
 
+    /** Back to discovery while recovery is pending; otherwise keep, pick, or project an account. */
     private suspend fun enterHome() {
-        accounts = runCatching { work { core.accounts(network) } }.getOrDefault(emptyList())
-        if (accounts.none { it.index == selectedAccount }) selectedAccount = 0u
+        if (runCatching { core.recoveryPending() }.getOrDefault(false)) {
+            route = Route.DISCOVERY
+            return
+        }
+        reloadAccounts(ensure = true)
         route = Route.HOME
         refreshBalances()
     }
@@ -117,6 +171,14 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
         }
     }
 }
+
+/** One consistent read of the account state, taken off the main thread. */
+private data class AccountsSnapshot(
+    val records: List<AccountRecord>,
+    val allRecords: List<AccountRecord>,
+    val groups: List<AccountGroup>,
+    val legacy: List<AccountInfo>,
+)
 
 /** User-facing text for a core error. Never includes input. */
 fun describe(error: Throwable): String = when (error) {

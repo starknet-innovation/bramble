@@ -44,7 +44,7 @@ final class OnboardingFlowTests: XCTestCase {
 
     private func launchFresh() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-network", "mainnet"]
+        app.launchArguments = ["-network", "mainnet", "-BrambleUITestReset"]
         app.launch()
         XCTAssertTrue(app.buttons["Create a new wallet"].waitForExistence(timeout: 10),
                       "Uninstall Bramble from the simulator before running the UI suite")
@@ -58,21 +58,50 @@ final class OnboardingFlowTests: XCTestCase {
         tap(app.buttons[cta])
     }
 
-    private func reviewAndAdd(_ app: XCUIApplication, expecting account: String?) {
+    private func reviewAndAdd(_ app: XCUIApplication) {
         XCTAssertTrue(app.staticTexts["Review your account"].waitForExistence(timeout: 20))
-        if let account { XCTAssertTrue(app.staticTexts[short(account)].waitForExistence(timeout: 5)) }
+        XCTAssertTrue(app.staticTexts["Primary Bramble account"].exists)
         tap(app.buttons["I understand this wallet can hold real funds on Starknet Mainnet."])
         snapshot(app, "review-account")
         tap(app.buttons["Add selected account"])
+    }
+
+    /// The header names the account the extension's way (label or nickname), never "Account 1".
+    private func checkHeader(_ app: XCUIApplication) {
+        let header = app.buttons["Accounts"]
+        XCTAssertTrue(header.waitForExistence(timeout: 20))
+        let name = header.value as? String ?? ""
+        XCTAssertFalse(name.isEmpty || name.hasPrefix("Account"), "header shows \(name)")
     }
 
     private func finishAndCheckHome(_ app: XCUIApplication) {
         XCTAssertTrue(app.staticTexts["You’re all set"].waitForExistence(timeout: 10))
         snapshot(app, "complete")
         tap(app.buttons["Open Bramble"])
-        XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20))
+        checkHeader(app)
         sleep(4)
         snapshot(app, "home")
+    }
+
+    private func canonical(_ value: String) -> String {
+        "0x" + value.lowercased().dropFirst(2).drop { $0 == "0" }
+    }
+
+    /// "Find your accounts" against Mainnet: the expected account is listed and selected, then
+    /// restored behind the acknowledgement.
+    private func discoverAndRestore(_ app: XCUIApplication, expecting account: String) {
+        XCTAssertTrue(app.staticTexts["Find your accounts"].waitForExistence(timeout: 20))
+        let done = app.staticTexts["Search complete. Checked 20 indices across every account type."]
+        XCTAssertTrue(done.waitForExistence(timeout: 180), "discovery completes against Mainnet")
+        let group = app.buttons["Bramble accounts"]
+        if (group.value as? String) != "Expanded" { tap(group) }
+        let row = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", short(account))).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "the expected account is discovered")
+        if !row.isSelected { row.tap() }
+        snapshot(app, "find-accounts")
+        app.swipeUp()
+        tap(app.buttons["I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet."])
+        tap(app.buttons["Restore selected accounts"])
     }
 
     func testCreateBackupAndConfirm() {
@@ -80,7 +109,7 @@ final class OnboardingFlowTests: XCTestCase {
         snapshot(app, "welcome")
         tap(app.buttons["Create a new wallet"])
         setPassphrase(app, cta: "Continue")
-        reviewAndAdd(app, expecting: nil)
+        reviewAndAdd(app)
 
         XCTAssertTrue(app.staticTexts["Save your recovery phrase"].waitForExistence(timeout: 10))
         snapshot(app, "save-phrase-masked")
@@ -131,7 +160,7 @@ final class OnboardingFlowTests: XCTestCase {
         snapshot(app, "recovery-phrase")
         tap(app.buttons["Continue"])
         setPassphrase(app, cta: "Find your accounts")
-        reviewAndAdd(app, expecting: address)
+        discoverAndRestore(app, expecting: address)
         finishAndCheckHome(app)
 
         tap(app.buttons["Receive"])
@@ -152,9 +181,10 @@ final class OnboardingFlowTests: XCTestCase {
 
         tap(app.buttons["Accounts"])
         XCTAssertTrue(app.buttons["Add account"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts[short(address)].exists, "the drawer lists the expected mainnet account")
+        let listed = app.buttons.matching(NSPredicate(format: "value == %@", canonical(address)))
+        XCTAssertTrue(listed.firstMatch.exists, "the drawer lists the expected mainnet account")
         snapshot(app, "accounts")
-        tap(app.buttons["Close"])
+        tap(app.buttons["Close accounts"])
 
         tap(app.buttons["Lock wallet"].firstMatch)
         XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 5))
@@ -165,6 +195,6 @@ final class OnboardingFlowTests: XCTestCase {
         app.secureTextFields["Enter your passphrase"].tap()
         app.secureTextFields["Enter your passphrase"].typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + passphrase)
         tap(app.buttons["Unlock"])
-        XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20))
+        checkHeader(app)
     }
 }

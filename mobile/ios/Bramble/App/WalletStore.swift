@@ -8,20 +8,30 @@ import Observation
 @MainActor
 @Observable
 final class WalletStore {
-    enum Route: Equatable { case onboarding, locked, wallet }
+    /// `discovery`: an imported vault still waiting for "Find your accounts" (recovery pending).
+    enum Route: Equatable { case onboarding, locked, discovery, wallet }
     enum Tab: Equatable { case home, activity, settings }
 
     private(set) var route: Route = .onboarding
     var tab: Tab = .home
-    private(set) var accounts: [AccountInfo] = []
+    /// Deprecated OZ-only view (`accounts()` in the core); new code reads `records`.
+    var accounts: [AccountInfo] = []
+    /// Every account on the selected network, as the core renders it (name, label, type, group).
+    var records: [AccountRecord] = []
+    /// Every account on every network, for the groups editor.
+    var allRecords: [AccountRecord] = []
+    var groups: [AccountGroup] = []
+    /// The active account (one for the whole vault, as in the extension).
+    var activeRecord: AccountRecord?
     private(set) var balances: [String: String] = [:]
     private(set) var networkHealthy = true
     private(set) var busy = false
-    var selectedAccount: UInt32 = 0
     /// Words of a just-created wallet; never persisted, cleared on finish or lock.
     private(set) var pendingBackup: [String] = []
-    /// A transient error shown as a toast.
-    var toast: String?
+    /// A transient message shown as a toast, and whether it reports success or an error.
+    /// Set directly, a toast reports an error; `notify` sets the tone after the text.
+    var toast: String? { didSet { toastTone = .error } }
+    var toastTone: ToastTone = .error
 
     var network: NetworkId {
         didSet { UserDefaults.standard.set(network == .sepolia ? "sepolia" : "mainnet", forKey: "network") }
@@ -43,12 +53,22 @@ final class WalletStore {
     /// The header's network label, as the side panel's `.account-network-label`.
     var networkLabel: String { network == .mainnet ? "Starknet" : "Sepolia" }
 
+    /// The active account in the pre-records shape other screens read. Signing must go through
+    /// `activeRecord.id` and `signHashForAccount`, never this `index` (docs/accounts.md §2.7).
     var account: AccountInfo? {
-        accounts.first { $0.index == selectedAccount } ?? accounts.first
+        activeRecord.map {
+            AccountInfo(index: $0.accountIndex, address: $0.address, publicKey: $0.publicKey, classHash: $0.classHash, network: $0.network)
+        }
+    }
+
+    /// Shows a toast; success toasts carry the check tile, errors the alert tile.
+    func notify(_ message: String, tone: ToastTone = .success) {
+        toast = message
+        toastTone = tone
     }
 
     /// Runs PBKDF2-bound core work off the main actor.
-    private func work<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
+    func work<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
         busy = true
         defer { busy = false }
         return try await Task.detached(priority: .userInitiated, operation: body).value
@@ -58,7 +78,8 @@ final class WalletStore {
 
     func create(password: String) async throws {
         let core = core
-        pendingBackup = try await work { try core.createWallet(password: password, wordCount: 12) }.words
+        let network = network
+        pendingBackup = try await work { try core.createWalletOnNetwork(password: password, wordCount: 12, network: network) }.words
     }
 
     func importWallet(phrase: String, password: String) async throws {
@@ -66,10 +87,10 @@ final class WalletStore {
         try await work { try core.importWallet(password: password, phrase: phrase, passphrase: nil) }
     }
 
-    /// The first account of a just-written vault, for the review step.
-    func previewAccount() async throws -> AccountInfo? {
-        let core = core, network = network
-        return try await work { try core.accounts(network: network) }.first
+    /// The first account of a just-created vault, for the review step.
+    func previewAccount() async throws -> AccountRecord? {
+        let core = core
+        return try await work { try core.activeAccount() }
     }
 
     /// Leaves onboarding for the wallet; the backup words are dropped here.
@@ -90,6 +111,10 @@ final class WalletStore {
         core.lock()
         pendingBackup = []
         accounts = []
+        records = []
+        allRecords = []
+        groups = []
+        activeRecord = nil
         balances = [:]
         tab = .home
         if core.status() != .noWallet { route = .locked }
@@ -100,19 +125,6 @@ final class WalletStore {
         await enterWallet()
     }
 
-    func addAccount() async throws {
-        let core = core, network = network
-        let account = try await work { try core.addAccount(network: network) }
-        accounts.append(account)
-        selectedAccount = account.index
-        await refreshBalances()
-    }
-
-    func select(_ index: UInt32) async {
-        selectedAccount = index
-        balances = [:]
-        await refreshBalances()
-    }
 
     func revealPhrase(password: String) async throws -> [String] {
         let core = core
@@ -126,11 +138,17 @@ final class WalletStore {
         route = .onboarding
     }
 
+    /// Routes into the wallet: back to discovery while recovery is pending; otherwise the network
+    /// switch rule (keep, pick, or project the active account) runs before anything renders.
     private func enterWallet() async {
-        let core = core, network = network
-        accounts = (try? await work { try core.accounts(network: network) }) ?? []
-        if !accounts.contains(where: { $0.index == selectedAccount }) { selectedAccount = 0 }
+        let core = core
+        if (try? core.recoveryPending()) == true {
+            route = .discovery
+            return
+        }
+        await reloadAccounts(ensure: true)
         route = .wallet
+        balances = [:]
         await refreshBalances()
     }
 

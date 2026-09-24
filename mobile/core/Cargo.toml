@@ -21,6 +21,9 @@ required-features = ["bindgen"]
 
 [features]
 bindgen = ["uniffi/cli"]
+# Integration-test hooks (`bramble_core::testing`: raw vault open/seal). Never enabled for the
+# shipped libraries; the self dev-dependency below turns it on only for test builds.
+testing = []
 
 [dependencies]
 # Wallet cryptography. Pinned exactly, and to the same release as the extension's
@@ -45,6 +48,7 @@ thiserror = { version = "=2.0.21" }
 zeroize = { version = "=1.9.0", features = ["derive"] }
 
 [dev-dependencies]
+bramble-core = { path = ".", features = ["testing"] }
 sha3 = { version = "=0.12.0" }
 tempfile = { version = "=3.27.0" }
 

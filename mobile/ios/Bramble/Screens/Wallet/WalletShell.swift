@@ -4,7 +4,7 @@ import SwiftUI
 /// The wallet frame from `wallet-shell.ts` / `styles-dock.ts`: persistent account header, the
 /// active dock screen, and the floating dock. Flow screens push over it without the dock.
 struct WalletShell: View {
-    enum Flow: Hashable { case receive, network, appearance, reveal, remove }
+    enum Flow: Hashable { case receive, network, appearance, reveal, remove, accounts }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -38,6 +38,7 @@ struct WalletShell: View {
                     case .appearance: AppearanceView()
                     case .reveal: RevealSecretsView()
                     case .remove: RemoveWalletView()
+                    case .accounts: AccountsManageView()
                     }
                 }
                 .toolbar(.hidden, for: .navigationBar)
@@ -45,7 +46,7 @@ struct WalletShell: View {
             }
         }
         .sheet(isPresented: $accountsOpen) {
-            SkinProvider { AccountsSheet() }.environment(store)
+            SkinProvider { AccountsSheet(openManage: { flows.append(.accounts) }) }.environment(store)
         }
     }
 }
@@ -60,10 +61,11 @@ struct WalletHeader: View {
         HStack(spacing: BrambleSpace.md) {
             Button(action: openAccounts) {
                 HStack(spacing: BrambleSpace.md) {
-                    AccountAvatarView(address: store.account?.address ?? "0x0")
+                    AccountAvatarView(address: store.activeRecord?.address ?? "0x0")
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 4) {
-                            Text("Account \((store.account?.index ?? 0) + 1)")
+                            // The core's display name: the user's label, else the friendly nickname.
+                            Text(store.activeRecord?.displayName ?? "")
                                 .brambleText(BrambleTypeScale.body, weight: BrambleWeight.bold)
                                 .lineLimit(1)
                             BrambleIcon(.chevronDown, size: 12).foregroundStyle(skin.muted)
@@ -77,6 +79,7 @@ struct WalletHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Accounts")
+            .accessibilityValue(store.activeRecord?.displayName ?? "")
             Spacer()
             HStack(spacing: BrambleSpace.xs) {
                 IconButton(icon: .externalLink, label: "Open in explorer", tint: skin.muted) { openExplorer() }

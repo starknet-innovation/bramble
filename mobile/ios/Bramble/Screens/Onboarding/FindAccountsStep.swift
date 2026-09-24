@@ -1,0 +1,184 @@
+import BrambleCore
+import SwiftUI
+
+/// `data-onboarding-step="recovery-accounts"`: the first 20 indices searched for Bramble, Ready,
+/// and Braavos accounts, active ones selected, an advanced manual index, the acknowledgement that
+/// gates restore on every network (as `refreshGate` does), and one atomic restore.
+///
+/// **Decision:** no "Back to passphrase". Mobile seals the vault at the passphrase step (with
+/// recovery pending) so a kill or lock resumes here; there is no earlier step to return to.
+struct FindAccountsStep: View {
+    @Environment(WalletStore.self) private var store
+    @Environment(\.skin) private var skin
+    @Environment(\.scenePhase) private var phase
+    let done: () -> Void
+    @State private var driver: RecoveryScanDriver?
+    @State private var acknowledged = false
+    @State private var manualIndex = ""
+    @State private var result: String?
+    @State private var restoring = false
+    @State private var opened: Set<AccountFamily> = []
+
+    var body: some View {
+        OnboardingStep(icon: .wallet, title: "Find your accounts",
+                       lede: "Bramble checks the first 20 account indices for Bramble, Ready, and Braavos accounts. Accounts with on-chain activity are selected automatically.") {
+            VStack(alignment: .leading, spacing: BrambleSpace.md) {
+                HStack {
+                    StatusLine(text: (driver?.status ?? "Ready to search.") + (driver?.selectionNote ?? ""),
+                               tone: driver?.failed == true ? .danger : .muted)
+                        .accessibilityIdentifier("recovery-scan-status")
+                    IconButton(icon: .refresh, label: "Retry account search", tint: skin.muted) {
+                        Task { await driver?.start(on: store.networkInfo) }
+                    }
+                    .disabled(driver?.scanning == true)
+                }
+                Text("The search asks \(store.networkInfo.name)’s RPC endpoint about each derived address.")
+                    .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                group(.openZeppelin, "Bramble accounts")
+                group(.argent, "Ready accounts")
+                group(.braavos, "Braavos accounts")
+                manual
+                CheckRow(text: "I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet.",
+                         isOn: $acknowledged)
+                StatusLine(text: result)
+            }
+        } cta: {
+            PillButton("Restore selected accounts", busy: restoring) { restore() }
+                .disabled((driver?.selected.isEmpty ?? true) || !acknowledged || driver?.scanning == true)
+        }
+        .task {
+            guard driver == nil else { return }
+            let next = RecoveryScanDriver(core: store.core, transport: RpcTransports.current)
+            driver = next
+            await next.start(on: store.networkInfo)
+        }
+        .onChange(of: phase) { _, next in if next == .background { driver?.cancel() } }
+        .onDisappear { driver?.cancel() }
+    }
+
+    private func rows(_ family: AccountFamily) -> [RecoveryCandidate] {
+        (driver?.candidates ?? []).filter { $0.family == family }.enumerated()
+            .sorted { ($0.element.accountIndex, $0.offset) < ($1.element.accountIndex, $1.offset) }
+            .map(\.element)
+    }
+
+    /// One family's disclosure; it opens itself the first time it has a detected account.
+    private func group(_ family: AccountFamily, _ title: String) -> some View {
+        let rows = rows(family)
+        let detected = rows.filter { $0.deployed || $0.funded }.count
+        let isOpen = opened.contains(family)
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                if isOpen { opened.remove(family) } else { opened.insert(family) }
+            } label: {
+                HStack {
+                    Text(title).brambleText(BrambleTypeScale.row, weight: BrambleWeight.semibold)
+                    if detected > 0 {
+                        Text("\(detected) \(detected == 1 ? "account" : "accounts") detected")
+                            .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                    }
+                    Spacer()
+                    BrambleIcon(isOpen ? .chevronDown : .chevronRight).foregroundStyle(skin.muted)
+                }
+                .padding(.horizontal, BrambleSpace.md)
+                .frame(minHeight: 52)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
+            if isOpen {
+                ForEach(rows, id: \.key) { candidate in CandidateRow(candidate: candidate, driver: driver) }
+                    .padding(.horizontal, BrambleSpace.md)
+                    .padding(.bottom, BrambleSpace.sm)
+            }
+        }
+        .background(skin.elevated, in: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous))
+        .onChange(of: detected) { _, count in
+            if count > 0 && !opened.contains(family) { opened.insert(family) }
+        }
+    }
+
+    @State private var manualOpen = false
+
+    private var manual: some View {
+        VStack(alignment: .leading, spacing: BrambleSpace.sm) {
+            Button { manualOpen.toggle() } label: {
+                HStack {
+                    Text("Advanced manual index").brambleText(BrambleTypeScale.row, weight: BrambleWeight.semibold)
+                    Spacer()
+                    BrambleIcon(manualOpen ? .chevronDown : .chevronRight).foregroundStyle(skin.muted)
+                }
+                .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            if manualOpen {
+                BrambleField(label: "Account index", placeholder: "", text: $manualIndex)
+                    .keyboardType(.numberPad)
+                PillButton("Check this index", kind: .secondary) {
+                    guard let index = UInt32(manualIndex), index <= recoveryLimits().maxIndex else {
+                        store.toast = "Enter a valid non-negative account index"
+                        return
+                    }
+                    Task { await driver?.scan(on: store.networkInfo, manual: index) }
+                }
+                .disabled(driver?.scanning == true)
+            }
+        }
+    }
+
+    private func restore() {
+        guard let driver, !driver.selected.isEmpty, acknowledged else { return }
+        restoring = true
+        result = "Restoring the selected accounts into your encrypted vault…"
+        Task {
+            do {
+                let count = try await driver.restore(on: store.network)
+                store.notify("\(count) account\(count == 1 ? "" : "s") restored")
+                done()
+            } catch {
+                result = "Account recovery failed"
+                store.toast = "Account recovery failed"
+                restoring = false
+            }
+        }
+    }
+}
+
+/// `.select-row`: a checkbox, the row title, the truncated address in mono, and the hint.
+private struct CandidateRow: View {
+    @Environment(WalletStore.self) private var store
+    @Environment(\.skin) private var skin
+    let candidate: RecoveryCandidate
+    let driver: RecoveryScanDriver?
+
+    var body: some View {
+        let checked = driver?.selected.contains(candidate.key) == true
+        Button {
+            guard let driver, driver.toggle(candidate) == false else { return }
+            store.toast = "Choose at most \(recoveryLimits().maxSelections) accounts. Uncheck one to add another."
+        } label: {
+            HStack(alignment: .top, spacing: BrambleSpace.sm) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(checked ? skin.accent : Color.clear)
+                    .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).stroke(checked ? skin.accent : skin.border, lineWidth: 1.5))
+                    .overlay { if checked { BrambleIcon(.check, size: 13).foregroundStyle(skin.accentText) } }
+                    .frame(width: 18, height: 18)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(candidate.title).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
+                    Text(candidate.shortAddress).brambleText(BrambleTypeScale.caption, mono: true).foregroundStyle(skin.muted)
+                    Text(candidate.hint).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, BrambleSpace.xs)
+        }
+        .buttonStyle(.plain)
+        .disabled(!candidate.selectable)
+        .opacity(candidate.selectable ? 1 : 0.5)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(candidate.title), \(candidate.shortAddress)")
+        .accessibilityValue(candidate.hint)
+        .accessibilityAddTraits(checked ? .isSelected : [])
+    }
+}

@@ -32,10 +32,15 @@ final class CoreBridgeTests: XCTestCase {
         let fixture = try fixture()
         let core = try core()
         try core.importWallet(password: "parity password", phrase: fixture.mnemonic, passphrase: nil)
-        _ = try core.addAccount(network: .sepolia)
+        // An import waits for discovery; restore OZ 0 and 1, then project index 0 onto Mainnet.
+        let restored = try core.restoreRecoveredAccounts(network: .sepolia, selections: [0, 1].map {
+            RecoverySelection(family: .openZeppelin, accountIndex: $0, classHash: nil)
+        })
+        try core.selectAccount(accountId: restored[0].id)
+        _ = try core.ensureNetworkAccount(network: .mainnet)
         for vector in fixture.accounts {
             let network: NetworkId = vector.networkId == "SN_MAIN" ? .mainnet : .sepolia
-            let account = try core.accounts(network: network)[Int(vector.accountIndex)]
+            let account = try XCTUnwrap(try core.accounts(network: network).first { $0.index == vector.accountIndex })
             XCTAssertEqual(account.address, vector.address)
             XCTAssertEqual(account.publicKey, vector.publicKeyX)
             let signature = try core.signHash(accountIndex: vector.accountIndex, messageHash: fixture.messageHash)

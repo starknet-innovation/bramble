@@ -31,7 +31,7 @@ class RpcClient {
         }.toMap()
     }
 
-    private fun post(url: URL, body: String): String {
+    internal fun post(url: URL, body: String): String {
         val connection = url.openConnection() as HttpsURLConnection
         try {
             connection.requestMethod = "POST"

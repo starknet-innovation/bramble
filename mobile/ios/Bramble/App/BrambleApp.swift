@@ -7,7 +7,9 @@ struct BrambleApp: App {
     @State private var store: WalletStore
 
     init() {
-        let core = try! WalletCore(dataDir: VaultDirectory.prepare().path)
+        let directory = try! VaultDirectory.prepare()
+        UITestHooks.prepare(vaultDirectory: directory)
+        let core = try! WalletCore(dataDir: directory.path)
         _store = State(initialValue: WalletStore(core: core))
     }
 
@@ -48,14 +50,19 @@ struct RootView: View {
             switch store.route {
             case .onboarding: OnboardingFlow()
             case .locked: UnlockView()
+            case .discovery: OnboardingFlow(resumingDiscovery: true)
             case .wallet: WalletShell()
             }
             if let message = store.toast {
-                Toast(message: message)
+                // `SUCCESS_TOAST_MS` / `ERROR_TOAST_MS` from the extension's `dom.ts`.
+                let feedback = copyFeedback()
+                let ms = store.toastTone == .success ? feedback.successToastMs : feedback.errorToastMs
+                Toast(message: message, tone: store.toastTone)
                     .padding(.horizontal, BrambleSpace.md)
                     .padding(.bottom, 76)
                     .task(id: message) {
-                        try? await Task.sleep(for: .seconds(3))
+                        // A newer toast cancels this task; only an uninterrupted wait clears it.
+                        guard (try? await Task.sleep(for: .milliseconds(Int(ms)))) != nil else { return }
                         store.toast = nil
                     }
             }

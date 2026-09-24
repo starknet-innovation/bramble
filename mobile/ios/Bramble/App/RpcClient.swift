@@ -38,7 +38,7 @@ struct RpcClient {
         return result
     }
 
-    private func post(_ body: String, to url: URL) async throws -> String {
+    func post(_ body: String, to url: URL) async throws -> String {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

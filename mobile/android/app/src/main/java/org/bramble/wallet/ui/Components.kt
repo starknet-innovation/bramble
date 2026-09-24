@@ -130,5 +130,5 @@ fun AccountAvatar(index: UInt) {
     }
 }
 
-fun shortAddress(address: String): String =
-    if (address.length <= 14) address else "${address.take(6)}…${address.takeLast(4)}"
+/** `accountLabel` (6…4), computed by the core so every platform truncates identically. */
+fun shortAddress(address: String): String = org.bramble.core.accountLabel(address)

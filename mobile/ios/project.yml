@@ -63,8 +63,15 @@ targets:
       - path: BrambleTests
       - path: ../core/tests/fixtures/extension-parity.json
         buildPhase: resources
+      - path: ../core/tests/fixtures/accounts-parity-families.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/accounts-parity-rules.json
+        buildPhase: resources
     dependencies:
       - target: BrambleCore
+      # Hosted in the app so host-side account code (Clipboard, the discovery driver, routing)
+      # is testable with `@testable import Bramble`.
+      - target: Bramble
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.bramble.wallet.tests

@@ -8,31 +8,25 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use serde::{Deserialize, Serialize};
-use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
+use zeroize::Zeroizing;
 
+use crate::account_catalog::AccountFamily;
+use crate::account_store::{self, VaultPayload};
 use crate::networks::NetworkId;
+use crate::recovery_scan::ScanState;
 use crate::vault::{self, Envelope, SealingKey};
 use crate::{kms, CoreError};
 
-const VAULT_FILE: &str = "vault.json";
-const VAULT_SCOPE: &str = "bramble.mobile.vault.v1";
-/// Accounts one phrase may hold; bounds derivation work and vault size.
-const MAX_ACCOUNTS: u32 = 32;
+pub(crate) const VAULT_FILE: &str = "vault.json";
+// The scope names the envelope's purpose; the payload's own `version` carries its schema
+// (`account_store.rs`).
+pub(crate) const VAULT_SCOPE: &str = "bramble.mobile.vault.v1";
 
-/// Plaintext sealed inside the vault envelope.
-#[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct VaultPayload {
-    account_count: u32,
-    mnemonic: String,
-    mnemonic_passphrase: Option<String>,
-    version: u32,
-}
-
-struct Session {
-    payload: VaultPayload,
+pub(crate) struct Session {
+    pub(crate) payload: VaultPayload,
     sealing_key: SealingKey,
+    /// The discovery scan, never persisted; dropped with the session on lock.
+    pub(crate) scan: Option<ScanState>,
 }
 
 /// Where the wallet is in its lifecycle.
@@ -99,7 +93,8 @@ impl WalletCore {
         serde_json::from_str(&text).map_err(|_| storage("vault file is not an envelope"))
     }
 
-    fn write_session(&self, session: &Session) -> Result<(), CoreError> {
+    pub(crate) fn write_session(&self, session: &Session) -> Result<(), CoreError> {
+        account_store::check_consistent(&session.payload)?;
         let plaintext = Zeroizing::new(
             serde_json::to_vec(&session.payload).map_err(|_| storage("serialise vault"))?,
         );
@@ -114,25 +109,22 @@ impl WalletCore {
         fs::rename(&temporary, self.vault_path()).map_err(|_| storage("commit vault"))
     }
 
-    fn open_session(&self, password: &str) -> Result<Session, CoreError> {
+    /// Opens and validates the vault; `true` when the payload was migrated and must be re-sealed.
+    fn open_session(&self, password: &str) -> Result<(Session, bool), CoreError> {
         let envelope = self.read_envelope()?;
         let (plaintext, sealing_key) = vault::open(&envelope, password, VAULT_SCOPE)?;
-        let payload: VaultPayload =
-            serde_json::from_slice(&plaintext).map_err(|_| storage("vault payload is invalid"))?;
-        if payload.version != 1
-            || payload.account_count == 0
-            || payload.account_count > MAX_ACCOUNTS
-            || !kms::validate_mnemonic(&payload.mnemonic)
-        {
-            return Err(storage("vault payload is invalid"));
-        }
-        Ok(Session {
-            payload,
-            sealing_key,
-        })
+        let (payload, migrated) = account_store::open(&plaintext)?;
+        Ok((
+            Session {
+                payload,
+                sealing_key,
+                scan: None,
+            },
+            migrated,
+        ))
     }
 
-    fn with_session<T>(
+    pub(crate) fn with_session<T>(
         &self,
         f: impl FnOnce(&mut Session) -> Result<T, CoreError>,
     ) -> Result<T, CoreError> {
@@ -144,44 +136,23 @@ impl WalletCore {
         }
     }
 
-    fn account(
-        session: &Session,
-        index: u32,
-        network: NetworkId,
-    ) -> Result<AccountInfo, CoreError> {
-        let derived = kms::derive_account(
-            &session.payload.mnemonic,
-            session.payload.mnemonic_passphrase.as_deref(),
-            index,
-            network.chain(),
-        )?;
-        Ok(AccountInfo {
-            index,
-            address: derived.address,
-            public_key: derived.public_key,
-            class_hash: derived.class_hash,
-            network,
-        })
-    }
-
-    fn install(
+    /// Writes a new vault: OZ index 0 on `first_account` for a created wallet, or no accounts
+    /// and `recoveryPending` for an imported one, which discovery then fills.
+    pub(crate) fn install(
         &self,
         password: &str,
         mnemonic: Zeroizing<String>,
         passphrase: Option<String>,
+        first_account: Option<NetworkId>,
     ) -> Result<(), CoreError> {
         let mut guard = self.lock_session();
         if self.vault_path().exists() {
             return Err(CoreError::WalletExists);
         }
         let session = Session {
-            payload: VaultPayload {
-                account_count: 1,
-                mnemonic: mnemonic.to_string(),
-                mnemonic_passphrase: passphrase,
-                version: 1,
-            },
+            payload: VaultPayload::new(mnemonic.to_string(), passphrase, first_account)?,
             sealing_key: SealingKey::create(password)?,
+            scan: None,
         };
         self.write_session(&session)?;
         *guard = Some(session);
@@ -212,21 +183,21 @@ impl WalletCore {
         }
     }
 
-    /// Creates a wallet from fresh entropy and leaves it unlocked. The returned phrase is the
-    /// only copy the UI ever receives unprompted; it must be shown once for backup and dropped.
+    /// Creates a wallet from fresh entropy with its first account on Mainnet (the extension's
+    /// default network) and leaves it unlocked. Hosts that know the selected network call
+    /// `create_wallet_on_network`. The returned phrase is the only copy the UI ever receives
+    /// unprompted; it must be shown once for backup and dropped.
     pub fn create_wallet(
         &self,
         password: String,
         word_count: u8,
     ) -> Result<RecoveryPhrase, CoreError> {
-        vault::check_password(&password)?;
-        let mnemonic = kms::generate_mnemonic(word_count)?;
-        let words = mnemonic.split(' ').map(str::to_string).collect();
-        self.install(&password, mnemonic, None)?;
-        Ok(RecoveryPhrase { words })
+        self.create_wallet_on_network(password, word_count, NetworkId::Mainnet)
     }
 
-    /// Imports an existing phrase (and optional BIP-39 passphrase) and leaves the wallet unlocked.
+    /// Imports an existing phrase (and optional BIP-39 passphrase) and leaves the wallet unlocked
+    /// with no accounts yet: `recovery_pending` is set until discovery restores the user's
+    /// selection (`restore_recovered_accounts`).
     pub fn import_wallet(
         &self,
         password: String,
@@ -240,12 +211,21 @@ impl WalletCore {
                 reason: "invalid recovery phrase".into(),
             });
         }
-        self.install(&password, mnemonic, passphrase.filter(|p| !p.is_empty()))
+        self.install(
+            &password,
+            mnemonic,
+            passphrase.filter(|p| !p.is_empty()),
+            None,
+        )
     }
 
-    /// Decrypts the vault into memory.
+    /// Decrypts the vault into memory. A version-1 vault is migrated and re-sealed before this
+    /// returns, so an older build then refuses it rather than misreading it.
     pub fn unlock(&self, password: String) -> Result<(), CoreError> {
-        let session = self.open_session(&password)?;
+        let (session, migrated) = self.open_session(&password)?;
+        if migrated {
+            self.write_session(&session)?;
+        }
         *self.lock_session() = Some(session);
         Ok(())
     }
@@ -255,43 +235,64 @@ impl WalletCore {
         *self.lock_session() = None;
     }
 
-    /// Every account on `network`.
+    /// Deprecated shim (`docs/accounts.md` §3.1): the **OpenZeppelin** records on `network`, as
+    /// `AccountInfo` with `index = account_index`. Argent and Braavos records are never returned
+    /// here, so no caller can mistake one for OZ. Use `account_records`. Empty while recovery is
+    /// pending.
     pub fn accounts(&self, network: NetworkId) -> Result<Vec<AccountInfo>, CoreError> {
         self.with_session(|session| {
-            (0..session.payload.account_count)
-                .map(|index| Self::account(session, index, network))
-                .collect()
+            Ok(session
+                .payload
+                .accounts
+                .iter()
+                .filter(|record| {
+                    record.network() == network && record.family() == AccountFamily::OpenZeppelin
+                })
+                .map(|record| AccountInfo {
+                    index: record.account_index,
+                    address: record.address.clone(),
+                    public_key: record.public_key.clone(),
+                    class_hash: record.class_hash.clone(),
+                    network,
+                })
+                .collect())
         })
     }
 
-    /// Derives the next account and persists the new count.
+    /// Deprecated alias of `add_regular_account`, returning `AccountInfo`.
     pub fn add_account(&self, network: NetworkId) -> Result<AccountInfo, CoreError> {
-        self.with_session(|session| {
-            let index = session.payload.account_count;
-            if index >= MAX_ACCOUNTS {
-                return Err(CoreError::InvalidInput {
-                    reason: "account limit reached".into(),
-                });
-            }
-            let account = Self::account(session, index, network)?;
-            session.payload.account_count += 1;
-            if let Err(error) = self.write_session(session) {
-                session.payload.account_count -= 1;
-                return Err(error);
-            }
-            Ok(account)
+        let record = self.add_regular_account(network)?;
+        Ok(AccountInfo {
+            index: record.account_index,
+            address: record.address,
+            public_key: record.public_key,
+            class_hash: record.class_hash,
+            network,
         })
     }
 
-    /// Signs a transaction or message hash for one account. The host computes the hash from the
-    /// reviewed request; the key is derived, used, and wiped inside this call.
+    /// Deprecated shim: signs with the key at `account_index` only when an **OpenZeppelin**
+    /// record exists at that index (either network), no view-only (Braavos) record shares the
+    /// index, and recovery is not pending. Every family at one index shares that key, so a
+    /// view-only record at the index would otherwise be signable through this path; see
+    /// `docs/accounts.md` §2.7. Use `sign_hash_for_account`.
     pub fn sign_hash(
         &self,
         account_index: u32,
         message_hash: String,
     ) -> Result<StarkSignature, CoreError> {
         self.with_session(|session| {
-            if account_index >= session.payload.account_count {
+            let signable = !session.payload.recovery_pending
+                && session.payload.accounts.iter().any(|record| {
+                    record.account_index == account_index
+                        && record.family() == AccountFamily::OpenZeppelin
+                })
+                && !session
+                    .payload
+                    .accounts
+                    .iter()
+                    .any(|record| record.account_index == account_index && record.view_only());
+            if !signable {
                 return Err(CoreError::InvalidInput {
                     reason: "unknown account".into(),
                 });
@@ -312,7 +313,7 @@ impl WalletCore {
 
     /// Re-checks the password against the vault on disk, then returns the phrase for display.
     pub fn reveal_recovery_phrase(&self, password: String) -> Result<RecoveryPhrase, CoreError> {
-        let session = self.open_session(&password)?;
+        let (session, _) = self.open_session(&password)?;
         Ok(RecoveryPhrase {
             words: session
                 .payload
