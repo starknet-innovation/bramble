@@ -13,6 +13,7 @@ mod activity;
 mod felt;
 mod kms;
 mod networks;
+mod privacy;
 mod rpc;
 mod send;
 mod ui;
@@ -20,6 +21,18 @@ mod vault;
 mod wallet;
 
 pub use networks::{NetworkId, NetworkInfo, TokenInfo};
+pub use privacy::plan::PrivacyReadPlan;
+pub use privacy::types::{
+    DetailAction, DetailSummary, PoolNotice, PrivacyBlocker, PrivacyCapabilities, PrivacyEntry,
+    PrivacyError, PrivacyFailure, PrivacyPurpose, PrivacyReading, PrivacyRegistration,
+    PrivacyReply, PrivacyState, PrivacyStatus, PrivacyStep, PrivateBalance, PrivateLine,
+    PublicBalance, ShieldTile, TokenDetailPrivacy, UnifiedBalance,
+};
+pub use privacy::{
+    max_privacy_response_bytes, privacy_capabilities, privacy_configured, privacy_entry,
+    privacy_status, private_line, receive_pool_notice, shield_tile, shielded_balances_included,
+    token_detail_privacy, unified_home_balances,
+};
 pub use send::plan::TransferPlan;
 pub use send::types::{
     ActivityKind, ActivityRecord, DeploymentState, FeeAffordability, FeeAmount, FeeUnit,
@@ -175,7 +188,20 @@ mod tests {
 /// Test-only hooks for the integration suite; not part of the FFI surface.
 #[doc(hidden)]
 pub mod testing {
+    pub use crate::privacy::testing as privacy;
     pub use crate::ui::{account_avatar, passphrase_strength};
+
+    /// The scoped STRK20 viewing key the core derives for an account, for the extension-parity
+    /// suite only (fixture keys come from the published parity phrase and are public).
+    pub fn strk20_viewing_key(
+        mnemonic: &str,
+        account_index: u32,
+        chain_id: &str,
+        pool_address: &str,
+    ) -> Result<String, crate::CoreError> {
+        crate::kms::derive_scoped_viewing_key(mnemonic, None, account_index, chain_id, pool_address)
+            .map(|key| crate::felt::canonical(&key))
+    }
 
     /// Opens a raw envelope JSON string, as the extension would.
     pub fn open_envelope(

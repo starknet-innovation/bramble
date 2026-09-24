@@ -4,7 +4,7 @@ import SwiftUI
 /// The wallet frame from `wallet-shell.ts` / `styles-dock.ts`: persistent account header, the
 /// active dock screen, and the floating dock. Flow screens push over it without the dock.
 struct WalletShell: View {
-    enum Flow: Hashable { case receive, network, appearance, reveal, remove, send, deploy }
+    enum Flow: Hashable { case receive, network, appearance, reveal, remove, send, deploy, privacy }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -18,7 +18,7 @@ struct WalletShell: View {
                 VStack(alignment: .leading, spacing: BrambleSpace.lg) {
                     WalletHeader(openAccounts: { accountsOpen = true })
                     switch store.tab {
-                    case .home: HomeView(receive: { flows.append(.receive) }, send: { flows.append(.send) }, deploy: { flows.append(.deploy) })
+                    case .home: HomeView(receive: { flows.append(.receive) }, send: { flows.append(.send) }, deploy: { flows.append(.deploy) }, privacy: { flows.append(.privacy) })
                     case .activity: ActivityView()
                     case .settings: SettingsHubView(open: { flows.append($0) })
                     }
@@ -40,6 +40,7 @@ struct WalletShell: View {
                     case .remove: RemoveWalletView()
                     case .send: SendFlowView()
                     case .deploy: DeployAccountView()
+                    case .privacy: PrivacyJourneyView(chooseNetwork: { flows.append(.network) })
                     }
                 }
                 .toolbar(.hidden, for: .navigationBar)
@@ -74,6 +75,8 @@ struct WalletHeader: View {
                             Circle().fill(store.networkHealthy ? skin.positive : skin.warning).frame(width: 6, height: 6)
                             Text(store.networkLabel).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityValue(privacyStatusText)
                     }
                 }
             }
@@ -86,6 +89,15 @@ struct WalletHeader: View {
             }
         }
         .padding(.top, BrambleSpace.sm)
+    }
+
+    /// `privacyDataIssue`, spoken with the network status (the extension shows it in the header).
+    private var privacyStatusText: String {
+        switch store.privacyHeaderStatus {
+        case .current: ""
+        case .refreshing: PrivacyCopy.statusRefreshing
+        case .unavailable: PrivacyCopy.statusUnavailable
+        }
     }
 
     private func openExplorer() {

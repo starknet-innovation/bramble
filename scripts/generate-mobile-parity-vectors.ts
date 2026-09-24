@@ -36,3 +36,5 @@ console.log(`wrote ${PARITY_FIXTURE_PATH}`);
 
 // The transaction fixture and Send copy tables are part of the same `bun run mobile:parity` run.
 await import("./generate-mobile-transaction-vectors");
+// So are the privacy fixture and the privacy copy tables.
+await import("./generate-mobile-privacy-vectors");

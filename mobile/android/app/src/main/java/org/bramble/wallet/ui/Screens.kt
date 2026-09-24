@@ -28,6 +28,8 @@ import org.bramble.core.formatTokenAmount
 import org.bramble.core.isValidRecoveryPhrase
 import org.bramble.wallet.R
 import org.bramble.wallet.WalletStore
+import org.bramble.wallet.privacy.PoolNoticeCard
+import org.bramble.wallet.privacy.ShieldActionTile
 import org.bramble.wallet.describe
 import org.bramble.wallet.design.*
 
@@ -223,6 +225,14 @@ private fun Home(store: WalletStore) {
         Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
             ActionTile("Send", "↗", enabled = false, modifier = Modifier.weight(1f)) {}
             ActionTile("Receive", "▦", modifier = Modifier.weight(1f)) { sheet = "receive" }
+            // The core's gate; this app does not read deployment yet, so it passes Unknown.
+            val strkFunded = store.balances["STRK"]?.let { it.trimStart('0').isNotEmpty() }
+            ShieldActionTile(
+                org.bramble.core.shieldTile(store.network, org.bramble.core.DeploymentState.UNKNOWN, strkFunded, store.privacy.reading),
+                modifier = Modifier.weight(1f),
+                receive = { sheet = "receive" },
+                journey = { sheet = "privacy" },
+            )
             ActionTile("Explorer", "⧉", modifier = Modifier.weight(1f)) {
                 store.account?.let { explorerAccountUrl(store.network, it.address)?.let(uri::openUri) }
             }
@@ -230,6 +240,20 @@ private fun Home(store: WalletStore) {
         if (sheet == "receive") Card {
             Text("Receive on ${store.networkInfo.name}", color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
             Text(store.account?.address ?: "", color = skin.text, style = textStyle(BrambleTypeScale.mono, mono = true))
+            PoolNoticeCard(
+                org.bramble.core.receivePoolNotice(
+                    org.bramble.core.DeploymentState.UNKNOWN,
+                    store.balances["STRK"]?.let { it.trimStart('0').isNotEmpty() },
+                    store.privacy.reading,
+                ),
+                journey = { sheet = "privacy" },
+            )
+        }
+        if (sheet == "privacy") {
+            // Mobile writes nothing yet (docs/privacy.md §1): the journey's answer is a blocker.
+            val entry = org.bramble.core.privacyEntry(store.network, org.bramble.core.DeploymentState.UNKNOWN, store.privacy.reading, true)
+            val blocker = (entry as? org.bramble.core.PrivacyEntry.Blocked)?.blocker ?: org.bramble.core.PrivacyBlocker.SERVICE
+            org.bramble.wallet.privacy.PrivacyBlockedScreen(blocker, null, chooseNetwork = { sheet = "settings" }, retry = { sheet = "" }, back = { sheet = "" })
         }
         Card {
             Text("Tokens", color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))

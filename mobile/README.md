@@ -75,3 +75,11 @@ TEST_RUNNER_BRAMBLE_MOBILE_MAINNET_SEND_ACK="I understand this broadcasts a real
 TEST_RUNNER_BRAMBLE_MOBILE_MAINNET_MNEMONIC="…" \
   xcodebuild … -only-testing:BrambleTests/MainnetSendTests test
 ```
+
+## Private balances
+
+Read-only STRK20 privacy (viewing key derived in the core, discovery through the privacy service,
+the extension's gates and copy); nothing is submitted yet. Design, deviations and the pending
+SCOPE.md decision: [docs/privacy.md](docs/privacy.md). UI tests use `-BramblePrivacyFixture`; the
+live read (`BrambleTests/MainnetPrivacyTests`) is opt-in through
+`TEST_RUNNER_BRAMBLE_MOBILE_PRIVACY_LIVE_ACK` and never runs in CI.

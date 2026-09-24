@@ -254,6 +254,35 @@ impl WalletCore {
     }
 }
 
+impl WalletCore {
+    /// Derives one account's scoped STRK20 viewing key for a privacy read plan, only while the
+    /// session generation is still `generation` (checked under the session lock, which is held for
+    /// the whole derivation, so a lock cannot interleave). `Err(CoreError::Locked)` otherwise.
+    /// Never exported: the key goes straight into one request body (privacy/plan.rs).
+    pub(crate) fn plan_viewing_key(
+        &self,
+        generation: u64,
+        account_index: u32,
+        chain_id: &str,
+        pool_address: &str,
+    ) -> Result<starknet_types_core::felt::Felt, CoreError> {
+        let guard = self.lock_session();
+        let session = guard.as_ref().ok_or(CoreError::Locked)?;
+        if self.generation.load(Ordering::SeqCst) != generation
+            || account_index >= session.payload.account_count
+        {
+            return Err(CoreError::Locked);
+        }
+        kms::derive_scoped_viewing_key(
+            &session.payload.mnemonic,
+            session.payload.mnemonic_passphrase.as_deref(),
+            account_index,
+            chain_id,
+            pool_address,
+        )
+    }
+}
+
 #[uniffi::export]
 impl WalletCore {
     /// Opens the core over an app-private directory. The host chooses a directory excluded from

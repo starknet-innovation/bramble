@@ -30,6 +30,8 @@ final class WalletStore {
     var plans: [TransferPlan] = []
     /// When each pending record was last read (ms), so reconciliation keeps the extension's cadence.
     var observedAtMs: [String: UInt64] = [:]
+    /// The selected account's private-balance reading (WalletStore+Privacy.swift); never persisted.
+    let privacy = PrivacyModel()
 
     var network: NetworkId {
         didSet { UserDefaults.standard.set(network == .sepolia ? "sepolia" : "mainnet", forKey: "network") }
@@ -95,6 +97,7 @@ final class WalletStore {
     }
 
     func lock() {
+        privacy.reset()
         plans.forEach { $0.close() }
         plans = []
         observedAtMs = [:]
@@ -109,6 +112,7 @@ final class WalletStore {
     }
 
     func switchNetwork(_ next: NetworkId) async {
+        privacy.reset()
         network = next
         await enterWallet()
     }
@@ -124,6 +128,7 @@ final class WalletStore {
     func select(_ index: UInt32) async {
         selectedAccount = index
         balances = [:]
+        privacy.reset()
         await refreshBalances()
     }
 
@@ -148,6 +153,7 @@ final class WalletStore {
     }
 
     func refreshBalances() async {
+        privacy.retain(network: network, accountIndex: account?.index)
         guard let account else { return }
         do {
             balances = try await rpc.balances(of: account.address, on: networkInfo)
@@ -156,6 +162,7 @@ final class WalletStore {
             networkHealthy = false
         }
         await refreshSendState()
+        await refreshPrivacy()
     }
 
     /// Base-unit balance formatted for display, or nil until it has loaded.

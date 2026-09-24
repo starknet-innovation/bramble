@@ -38,6 +38,8 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
         private set
 
     private val rpc = RpcClient()
+    /** The selected account's private-balance reading (docs/privacy.md); never persisted. */
+    val privacy = org.bramble.wallet.privacy.PrivacyModel()
 
     val networkInfo: NetworkInfo get() = supportedNetworks().first { it.network == network }
     val account: AccountInfo? get() = accounts.firstOrNull { it.index == selectedAccount } ?: accounts.firstOrNull()
@@ -73,6 +75,7 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
     }
 
     fun lock() {
+        privacy.reset()
         core.lock()
         pendingBackup = emptyList()
         accounts = emptyList()
@@ -81,6 +84,7 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
     }
 
     suspend fun switchNetwork(next: NetworkId) {
+        privacy.reset()
         network = next
         prefs.edit().putString("network", if (next == NetworkId.MAINNET) "mainnet" else "sepolia").apply()
         enterHome()
@@ -109,12 +113,14 @@ class WalletStore(private val core: WalletCore, private val prefs: SharedPrefere
     }
 
     suspend fun refreshBalances() {
+        privacy.retain(network, account?.index)
         val address = account?.address ?: return
         balanceError = null
         balances = runCatching { rpc.balances(address, networkInfo) }.getOrElse {
             balanceError = "Couldn't reach ${networkInfo.name}."
             emptyMap()
         }
+        account?.let { privacy.refresh(core, networkInfo, it.index) }
     }
 }
 

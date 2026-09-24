@@ -76,6 +76,14 @@ targets:
         buildPhase: resources
       - path: ../core/tests/fixtures/extension-transactions-copy.json
         buildPhase: resources
+      # The privacy model layer, and the privacy fixture its tests replay (docs/privacy.md §7).
+      - path: Bramble/Privacy
+      - path: ../core/tests/fixtures/extension-privacy-wire.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-privacy-rules.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-privacy-copy.json
+        buildPhase: resources
     dependencies:
       - target: BrambleCore
     settings:

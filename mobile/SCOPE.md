@@ -77,9 +77,18 @@ wallet. iOS verified; Android source only.
    user presence; the password stays the recovery path. Persisted wrong-password back-off.
 4. CI job for `cargo test --locked`, clippy, `cargo deny`, and the iOS unit suite.
 
+5. STRK20 private balances (read-only) — **done (iOS; Android sources uncompiled).** The scoped
+   viewing key is derived inside the core for the configured pool and chain; a sans-IO
+   `PrivacyReadPlan` reads registration, private totals and the pool fee from the discovery
+   service and judges every reply under the extension's limits; Home shows the Shield tile,
+   unified rows and the private line, Receive the "Public transfers only" notice, with the
+   extension's deploy and STRK-funding gates. Registration, shield, private transfer and unshield
+   are not built: Krusty 0.11.0 has no privacy client (mobile/docs/privacy.md §9). **Open
+   decision:** the key crosses FFI inside the opaque discovery request body (docs §1.1).
+
 **Phase 2 — feature parity.** Token list and prices, activity history, Argent/Braavos discovery,
-multisig, WalletConnect in place of the injected provider, STRK20 privacy (viewing keys stay in
-the core, as the extension's AGENTS.md rules require), Ledger over BLE.
+multisig, WalletConnect in place of the injected provider, STRK20 privacy submission (shield,
+private transfer, unshield; needs an upstream Krusty privacy client), Ledger over BLE.
 
 **Phase 3 — release.** Store listings, App Store privacy labels / Play data safety, external
 audit of the core and FFI surface, reproducible builds, crash reporting without PII.
@@ -102,5 +111,7 @@ audit of the core and FFI surface, reproducible builds, crash reporting without 
 - Swift/Kotlin `String` passwords and the phrase shown at backup can't be zeroized by the host.
   The Rust side zeroizes its copies, but serde's parse buffers aren't guaranteed to be wiped.
 - Unlock back-off is not persisted yet (Phase 1.3).
+- The STRK20 viewing key reaches host memory inside each discovery request body; hosts wipe their
+  buffer after the send, but HTTP/TLS internals cannot be wiped (docs/privacy.md §1.1, §5).
 - Send (ERC-20 from an OpenZeppelin account, with automatic deployment) is implemented on iOS;
   the Android Send sources are written but uncompiled. See docs/transactions.md.

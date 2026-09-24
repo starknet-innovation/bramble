@@ -10,6 +10,7 @@ struct HomeView: View {
     let receive: () -> Void
     var send: () -> Void = {}
     var deploy: () -> Void = {}
+    var privacy: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.xl) {
@@ -18,12 +19,13 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, BrambleSpace.md)
                 .accessibilityLabel("Portfolio total unavailable")
+            ShieldedHeroLabel()
             DeployNoticeView(receive: receive, deploy: deploy)
             HStack(spacing: BrambleSpace.md) {
                 ActionTile(title: "Send", icon: .send, action: send).disabled(store.account == nil)
                 ActionTile(title: "Swap", icon: .shuffle) {}.disabled(true)
                 ActionTile(title: "Receive", icon: .qrCode, action: receive)
-                ActionTile(title: "Shield", icon: .shield) {}.disabled(true)
+                ShieldActionTile(receive: receive, journey: privacy)
             }
             VStack(alignment: .leading, spacing: BrambleSpace.sm) {
                 HStack {
@@ -32,12 +34,24 @@ struct HomeView: View {
                     BrambleIcon(.moreHorizontal).foregroundStyle(skin.muted).frame(width: BrambleControl.hit, height: BrambleControl.hit)
                 }
                 VStack(spacing: 0) {
-                    ForEach(Array(store.networkInfo.tokens.enumerated()), id: \.element.address) { offset, token in
-                        TokenRow(token: token, amount: store.amount(of: token))
-                            .overlay(alignment: .top) {
-                                if offset > 0 { Rectangle().fill(skin.hairline).frame(height: 1) }
-                            }
+                    let unified = store.unifiedRows
+                    if unified.isEmpty {
+                        ForEach(Array(store.networkInfo.tokens.enumerated()), id: \.element.address) { offset, token in
+                            TokenRow(token: token, amount: store.amount(of: token))
+                                .overlay(alignment: .top) {
+                                    if offset > 0 { Rectangle().fill(skin.hairline).frame(height: 1) }
+                                }
+                        }
+                    } else {
+                        // Public and private summed per token (mobile/docs/privacy.md §2.2).
+                        ForEach(Array(unified.enumerated()), id: \.element.tokenAddress) { offset, row in
+                            UnifiedTokenRow(row: row, receive: receive, journey: privacy)
+                                .overlay(alignment: .top) {
+                                    if offset > 0 { Rectangle().fill(skin.hairline).frame(height: 1) }
+                                }
+                        }
                     }
+                    PrivacyRetryRow()
                 }
             }
         }

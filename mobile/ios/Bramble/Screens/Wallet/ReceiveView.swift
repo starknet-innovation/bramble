@@ -45,6 +45,7 @@ struct ReceiveView: View {
                     copied = true
                 }
                 .padding(.top, BrambleSpace.sm)
+                PoolNoticeView()
             }
             .padding(.horizontal, BrambleSpace.lg)
         }
