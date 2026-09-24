@@ -8,6 +8,8 @@ struct HomeView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     let receive: () -> Void
+    var send: () -> Void = {}
+    var deploy: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.xl) {
@@ -16,8 +18,9 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, BrambleSpace.md)
                 .accessibilityLabel("Portfolio total unavailable")
+            DeployNoticeView(receive: receive, deploy: deploy)
             HStack(spacing: BrambleSpace.md) {
-                ActionTile(title: "Send", icon: .send) {}.disabled(true)
+                ActionTile(title: "Send", icon: .send, action: send).disabled(store.account == nil)
                 ActionTile(title: "Swap", icon: .shuffle) {}.disabled(true)
                 ActionTile(title: "Receive", icon: .qrCode, action: receive)
                 ActionTile(title: "Shield", icon: .shield) {}.disabled(true)
@@ -88,17 +91,21 @@ struct TokenRow: View {
 /// Activity dock screen: mobile keeps no history yet, so it shows the side panel's empty copy.
 struct ActivityView: View {
     @Environment(\.skin) private var skin
+    @Environment(WalletStore.self) private var store
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.md) {
             Text("Activity").brambleText(BrambleTypeScale.title, weight: BrambleWeight.bold)
-            Text("No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.")
-                .brambleText(BrambleTypeScale.label)
-                .foregroundStyle(skin.muted)
-                .multilineTextAlignment(.center)
-                .padding(.vertical, BrambleSpace.lg)
-                .padding(.horizontal, BrambleSpace.md)
-                .frame(maxWidth: .infinity)
+            LocalActivityRows()
+            if store.activity.isEmpty {
+                Text("No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.")
+                    .brambleText(BrambleTypeScale.label)
+                    .foregroundStyle(skin.muted)
+                    .multilineTextAlignment(.center)
+                    .padding(.vertical, BrambleSpace.lg)
+                    .padding(.horizontal, BrambleSpace.md)
+                    .frame(maxWidth: .infinity)
+            }
         }
     }
 }

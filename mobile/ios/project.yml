@@ -63,6 +63,19 @@ targets:
       - path: BrambleTests
       - path: ../core/tests/fixtures/extension-parity.json
         buildPhase: resources
+      # The send model layer compiles into the unit-test bundle too (it depends only on
+      # BrambleCore), and its tests replay the same transaction fixture as the Rust suite.
+      - path: Bramble/Send
+      - path: ../core/tests/fixtures/extension-transactions-wire.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-transactions-rules.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-transactions-presentation.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-transactions-status.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-transactions-copy.json
+        buildPhase: resources
     dependencies:
       - target: BrambleCore
     settings:

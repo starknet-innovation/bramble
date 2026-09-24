@@ -66,9 +66,13 @@ wallet. iOS verified; Android source only.
 
 **Phase 1 — sendable wallet.**
 1. Android in CI: Gradle wrapper, NDK build via `build-core-android.sh`, instrumented parity test.
-2. Transactions in the core: invoke v3 hashing (`krusty_kms::compute_invoke_v3_hash`), fee
-   estimation and nonce as sans-IO RPC, OZ deploy-account; Send screen with review. Port the
-   extension's review rules rather than re-deriving them.
+2. Transactions in the core — **done (iOS; Android sources uncompiled).** ERC-20 transfer via a
+   core-owned `TransferPlan`: sans-IO nonce, fee estimation and status bodies, the extension's
+   fee margins and 3/2 ceiling, invoke/deploy-account v3 hashing and signing inside the core
+   (`krusty_kms` 0.11.0), automatic OZ deployment before the first send, a standalone Deploy
+   account flow, local activity records with status reconciliation, and a Send journey matching
+   the extension's review. Proven against a fixture recorded from the extension's own send path
+   (mobile/docs/transactions.md).
 3. Biometric unlock: a random vault key wrapped by a Secure Enclave / StrongBox key that needs
    user presence; the password stays the recovery path. Persisted wrong-password back-off.
 4. CI job for `cargo test --locked`, clippy, `cargo deny`, and the iOS unit suite.
@@ -98,4 +102,5 @@ audit of the core and FFI surface, reproducible builds, crash reporting without 
 - Swift/Kotlin `String` passwords and the phrase shown at backup can't be zeroized by the host.
   The Rust side zeroizes its copies, but serde's parse buffers aren't guaranteed to be wiped.
 - Unlock back-off is not persisted yet (Phase 1.3).
-- Send is visible but disabled.
+- Send (ERC-20 from an OpenZeppelin account, with automatic deployment) is implemented on iOS;
+  the Android Send sources are written but uncompiled. See docs/transactions.md.

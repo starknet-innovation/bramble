@@ -1,0 +1,419 @@
+{
+  "copy": {
+    "confirmationOutcomes": [
+      {
+        "outcome": {
+          "kind": "succeeded",
+          "toast": "Transaction confirmed on Starknet"
+        },
+        "status": "accepted"
+      },
+      {
+        "outcome": {
+          "kind": "succeeded",
+          "toast": "Transaction pre-confirmed on Starknet"
+        },
+        "status": "preconfirmed"
+      },
+      {
+        "outcome": {
+          "kind": "failed",
+          "message": "Starknet rejected this transaction. No transfer was completed.",
+          "toast": "Transaction was not confirmed"
+        },
+        "status": "rejected"
+      },
+      {
+        "outcome": {
+          "kind": "failed",
+          "message": "Starknet reverted this transaction. Review its activity details before retrying.",
+          "toast": "Transaction was not confirmed"
+        },
+        "status": "reverted"
+      },
+      {
+        "outcome": null,
+        "status": "pending"
+      }
+    ],
+    "mobileWording": {
+      "keepOpen": "Keep this app open."
+    },
+    "mode": {
+      "amountLabel": "Amount to send",
+      "closeLabel": "Close Send",
+      "confirmLabel": "Confirm and send",
+      "failureTitle": "Send not completed",
+      "noun": "Send",
+      "preparing": "Preparing send",
+      "progressive": "Sending",
+      "progressLabel": "Send progress",
+      "reviewLabel": "Review send",
+      "reviewNote": "Confirm only if the recipient, amount, and decoded action are correct.",
+      "successTitle": "Send complete",
+      "verb": "send"
+    },
+    "amountErrors": {
+      "invalid": "Invalid transfer amount",
+      "notPositive": "Transfer amount must be greater than zero",
+      "tooManyDecimals": "Too many decimal places"
+    },
+    "refusals": {
+      "selfTransfer": "The recipient is this wallet's own address.",
+      "poisonedRecipient": "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending.",
+      "indeterminateWrite": "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+      "invalidRecipient": "Enter a valid Starknet address.",
+      "reviewedDeploymentFeeExceeded": "The account deployment fee rose above the amount you reviewed. Nothing was submitted — review it again.",
+      "reviewedDeploymentFeeRequired": "The account deployment fee was not reviewed. Nothing was submitted — deploy the account first.",
+      "reviewedFeeExceeded": "The network fee for this transaction rose above the amount you reviewed. Nothing was submitted — review it again.",
+      "reviewedFeeRequired": "The network fee was not reviewed. Nothing was submitted — review the transaction again."
+    },
+    "reviewFee": {
+      "deployedFailed": [
+        "Maximum cost and constraints",
+        "Couldn't estimate the network fee right now. Check your connection and retry before sending.",
+        "Retry fee estimate"
+      ],
+      "deployedKnown": ["Maximum cost and constraints", "Estimated fee: 0.008053 STRK"],
+      "undeployedFailed": [
+        "Maximum cost and constraints",
+        "Couldn't estimate both the transaction and account deployment fees. Check your connection and retry before sending.",
+        "Retry fee estimate"
+      ],
+      "undeployedKnown": [
+        "Maximum cost and constraints",
+        "Estimated transaction fee: 0.008053 STRK",
+        "Estimated account deployment fee: 0.005 STRK"
+      ]
+    },
+    "reviewBlocks": {
+      "feeUnavailable": "Fee estimate unavailable. Retry before authorizing this transaction.",
+      "poisoned": "This recipient closely mimics a saved address. Change it and review again."
+    },
+    "stageTitles": [
+      {
+        "stage": "recipient",
+        "title": "Send to"
+      },
+      {
+        "stage": "asset",
+        "title": "Select an asset"
+      },
+      {
+        "stage": "details",
+        "title": "Send"
+      },
+      {
+        "stage": "reviewing",
+        "title": "Send"
+      },
+      {
+        "stage": "review",
+        "title": "Review send"
+      },
+      {
+        "stage": "authorizing",
+        "title": "Authorize send"
+      },
+      {
+        "stage": "broadcasting",
+        "title": "Sending"
+      },
+      {
+        "stage": "confirming",
+        "title": "Confirming"
+      },
+      {
+        "stage": "pending",
+        "title": "Confirmation pending"
+      },
+      {
+        "stage": "submitted",
+        "title": "Confirmed"
+      },
+      {
+        "stage": "failed",
+        "title": "Send failed"
+      }
+    ],
+    "working": {
+      "authorizing": {
+        "copy": "The reviewed transaction is being authorized inside the wallet.",
+        "labels": [
+          "Review locked",
+          "Sign securely",
+          "Broadcast to Starknet",
+          "Confirm on Starknet"
+        ],
+        "liveness": "Keep this panel open.",
+        "states": ["done", "active", "pending", "pending"],
+        "title": "Authorizing transaction"
+      },
+      "broadcasting": {
+        "copy": "Signed. The transaction is being broadcast to Starknet.",
+        "labels": [
+          "Review locked",
+          "Sign securely",
+          "Broadcast to Starknet",
+          "Confirm on Starknet"
+        ],
+        "liveness": "Broadcasting · 0 s. Keep this panel open.",
+        "states": ["done", "done", "active", "pending"],
+        "title": "Sending to Starknet"
+      },
+      "confirming": {
+        "copy": "Starknet received the transaction. Bramble is checking its chain status now.",
+        "labels": ["Review locked", "Authorized", "Broadcast complete", "Confirm on Starknet"],
+        "liveness": "Fast confirmations often arrive in under a second.",
+        "states": ["done", "done", "done", "active"],
+        "title": "Confirming on Starknet"
+      }
+    },
+    "successSummary": "1.5 STRK sent to 0x3fa7…41a3",
+    "failures": {
+      "preparationUnavailable": "Transaction could not be prepared. Check your connection or RPC endpoint.",
+      "wrongChain": "RPC endpoint returned the wrong Starknet chain",
+      "indeterminate": "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+      "hashMismatch": "RPC accepted a different transaction hash. Check on-chain state before retrying.",
+      "unrecognisedUnit": "The node quoted this fee in an unrecognised unit.",
+      "deploymentStatusUnknown": "Account deployment status is unknown. Check the account on-chain before retrying.",
+      "autoDeploymentFailed": "This account is not deployed on-chain yet and automatic deployment failed. Fund the account address with STRK to cover fees, then retry.",
+      "deploymentUnconfirmed": "Account deployment was broadcast as {hash}, but confirmation is unknown. The following transaction was not submitted; check the deployment on-chain before retrying.",
+      "deploymentThenInvokeUnconfirmed": "Account deployment {hash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying.",
+      "alreadyDeployed": "Account is already deployed"
+    },
+    "screens": {
+      "activityRow": {
+        "ariaLabels": [
+          "Transfer, pending",
+          "Sent. Send 1.5 STRK to 0x3fa7…41a3. pending. View transaction on Starkscan",
+          "Copy recipient address"
+        ],
+        "text": ["Sent", "To 0x3fa7…41a3", "Pending", "—", "1.5 STRK", "STR"]
+      },
+      "activityStatusLabels": {
+        "pending": "pending",
+        "preconfirmed": "pre-confirmed",
+        "accepted": "accepted",
+        "rejected": "rejected",
+        "reverted": "reverted"
+      },
+      "amountGate": "Enter an amount greater than zero.",
+      "deployAccount": {
+        "confirmPrefix": "Confirm deployment · ",
+        "deployed": [
+          "Deploy account",
+          "Bold Ladybird",
+          "Sepolia",
+          "What will happen",
+          "Deploy this account contract on Starknet so it can submit transactions.",
+          "Account",
+          "Bold Ladybird",
+          "Address",
+          "0x2083…98d9",
+          "Contract",
+          "Starknet account",
+          "Network",
+          "Sepolia",
+          "Risk and recovery",
+          "Deployment creates this account on-chain. Its address and signing authority do not change.",
+          "Account already deployed",
+          "Submitted to Starknet",
+          "Deployment submitted",
+          "Your account will be ready once Starknet confirms this transaction.",
+          "Back to home"
+        ],
+        "maximumFeePrefix": "Maximum network fee: ",
+        "undeployed": [
+          "Deploy account",
+          "Bold Ladybird",
+          "Sepolia",
+          "What will happen",
+          "Deploy this account contract on Starknet so it can submit transactions.",
+          "Account",
+          "Bold Ladybird",
+          "Address",
+          "0x2083…98d9",
+          "Contract",
+          "Starknet account",
+          "Network",
+          "Sepolia",
+          "Risk and recovery",
+          "Deployment creates this account on-chain. Its address and signing authority do not change.",
+          "Review deployment",
+          "Submitted to Starknet",
+          "Deployment submitted",
+          "Your account will be ready once Starknet confirms this transaction.",
+          "Back to home"
+        ]
+      },
+      "review": {
+        "details": [
+          "What will happen",
+          "Send 1.5 STRK to 0x3fa7…41a3",
+          "Risk and recovery",
+          "No additional wallet warnings were detected. Verify the recipient and decoded action before confirming."
+        ],
+        "detailsUndeployed": [
+          "What will happen",
+          "Send 1.5 STRK to 0x3fa7…41a3",
+          "Risk and recovery",
+          "This account is not deployed yet; the first send also submits its deployment."
+        ],
+        "shortfall": [
+          "Maximum cost and constraints",
+          "Estimated fee: 0.008053 STRK",
+          "This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it."
+        ],
+        "summary": [
+          "1.5 STRK",
+          "Fiat estimate unavailable",
+          "Recipient",
+          "0x3fa7…41a3",
+          "0x3fa7…41a3"
+        ],
+        "summaryLabels": [
+          "Copy recipient address",
+          "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+          "Copy recipient address"
+        ]
+      },
+      "balanceLines": [
+        {
+          "formatted": null,
+          "line": "Balance unavailable"
+        },
+        {
+          "formatted": "12.5",
+          "line": "Balance 12.5 STRK"
+        }
+      ],
+      "deployNotice": {
+        "deploy": {
+          "label": "Deploy account",
+          "title": "This account contract is not on-chain yet. Deploying it enables transactions."
+        },
+        "fund": {
+          "label": "Fund with STRK",
+          "title": "Deploying costs a network fee. Receive STRK into this account first."
+        }
+      },
+      "sections": {
+        "send-recipient-stage": {
+          "ariaLabels": ["Recipient address or saved name", "Recipient sources"],
+          "placeholders": ["Address or saved name"],
+          "text": [
+            "Sending from",
+            "Bold Ladybird",
+            "0x2083…98d9",
+            "Sending to",
+            "My accounts",
+            "Address book",
+            "My accounts",
+            "Bold Ladybird",
+            "0x2083…98d9",
+            "Current account · shield into its private balance",
+            "Address book",
+            "Your address book has no contacts on this network.",
+            "No matching recipient.",
+            "Continue with address"
+          ]
+        },
+        "send-details": {
+          "ariaLabels": ["Amount to send", "Enter an amount in USD"],
+          "placeholders": ["0"],
+          "text": [
+            "Accounts",
+            "From",
+            "Bold Ladybird",
+            "0x2083…98d9",
+            "Public",
+            "To",
+            "Not selected",
+            "—",
+            "Public",
+            "Network",
+            "Sepolia",
+            "Retry",
+            "Asset",
+            "STRK",
+            "Amount to send",
+            "Balance — STRK",
+            "Half",
+            "Max",
+            "USD",
+            "Estimated value —",
+            "Review send"
+          ]
+        },
+        "send-asset-stage": {
+          "ariaLabels": ["Search tokens"],
+          "placeholders": ["Search tokens"],
+          "text": [
+            "Search tokens",
+            "Your tokens",
+            "Your balance",
+            "STRK",
+            "— STRK",
+            "—",
+            "ETH",
+            "— ETH",
+            "—",
+            "No matching token."
+          ]
+        },
+        "send-review-stage": {
+          "ariaLabels": [],
+          "placeholders": [],
+          "text": [
+            "Review send",
+            "Edit",
+            "Technical details",
+            "Confirm only if the recipient, amount, and decoded action are correct.",
+            "Confirm and send"
+          ]
+        },
+        "send-working": {
+          "ariaLabels": ["Transaction status"],
+          "placeholders": [],
+          "text": [
+            "Authorizing transaction",
+            "The reviewed transaction is being authorized inside the wallet.",
+            "Review transaction",
+            "Authorize",
+            "Broadcast",
+            "Confirm on Starknet",
+            "Keep this panel open."
+          ]
+        },
+        "send-pending": {
+          "ariaLabels": [],
+          "placeholders": [],
+          "text": [
+            "Submitted to Starknet",
+            "Confirmation is taking longer",
+            "The transaction has a hash and remains pending. You can check again or follow it in Activity.",
+            "Check confirmation",
+            "View activity"
+          ]
+        },
+        "send-success": {
+          "ariaLabels": [],
+          "placeholders": [],
+          "text": ["Confirmed on Starknet", "Send complete", "View activity", "Back to home"]
+        },
+        "send-failure": {
+          "ariaLabels": [],
+          "placeholders": [],
+          "text": [
+            "Nothing else will be submitted",
+            "Send not completed",
+            "The transaction was not sent. Your balance is unchanged.",
+            "Try again",
+            "Edit transaction"
+          ]
+        }
+      }
+    }
+  }
+}

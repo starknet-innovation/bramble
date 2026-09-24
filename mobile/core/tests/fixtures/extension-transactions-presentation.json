@@ -1,0 +1,349 @@
+{
+  "presentation": {
+    "explorerTransactionUrls": [
+      {
+        "hash": "0x2270039c0c7c45f14e8e57652884c8a44726d67423b2d1959b454b6ce39f099",
+        "networkId": "SN_MAIN",
+        "url": "https://starkscan.co/tx/0x2270039c0c7c45f14e8e57652884c8a44726d67423b2d1959b454b6ce39f099"
+      },
+      {
+        "hash": "0x00ab",
+        "networkId": "SN_SEPOLIA",
+        "url": "https://sepolia.starkscan.co/tx/0x00ab"
+      },
+      {
+        "hash": "0x0",
+        "networkId": "SN_MAIN",
+        "url": null
+      },
+      {
+        "hash": "0xAB",
+        "networkId": "SN_MAIN",
+        "url": null
+      },
+      {
+        "hash": "not a hash",
+        "networkId": "SN_SEPOLIA",
+        "url": null
+      }
+    ],
+    "feeText": [
+      {
+        "fee": {
+          "overallFee": "8053560001244160",
+          "unit": "FRI"
+        },
+        "formatFri": "0.008053 STRK",
+        "text": "0.008053 STRK"
+      },
+      {
+        "fee": {
+          "overallFee": "1000000000000000000",
+          "unit": "FRI"
+        },
+        "formatFri": "1 STRK",
+        "text": "1 STRK"
+      },
+      {
+        "fee": {
+          "overallFee": "1234567890123456789012",
+          "unit": "FRI"
+        },
+        "formatFri": "1234.56789 STRK",
+        "text": "1234.56789 STRK"
+      },
+      {
+        "fee": {
+          "overallFee": "999",
+          "unit": "FRI"
+        },
+        "formatFri": "0 STRK",
+        "text": "0 STRK"
+      },
+      {
+        "fee": {
+          "overallFee": "0",
+          "unit": "FRI"
+        },
+        "formatFri": "0 STRK",
+        "text": "0 STRK"
+      },
+      {
+        "fee": {
+          "overallFee": "12345",
+          "unit": "WEI"
+        },
+        "formatFri": "0 STRK",
+        "text": "12345 WEI"
+      }
+    ],
+    "recipients": [
+      {
+        "error": null,
+        "input": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "valid": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3"
+      },
+      {
+        "error": null,
+        "input": "  0x3FA78C2861131190760B151F3EE110F473940ECA3FEC8CC423ECC307B5241A3  ",
+        "valid": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3"
+      },
+      {
+        "error": null,
+        "input": "0x0003fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "valid": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3"
+      },
+      {
+        "error": null,
+        "input": "0x0",
+        "valid": "0x0"
+      },
+      {
+        "error": null,
+        "input": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "valid": "0x0"
+      },
+      {
+        "error": "Enter a valid Starknet address.",
+        "input": "0x",
+        "valid": null
+      },
+      {
+        "error": "Enter a valid Starknet address.",
+        "input": "0X3fa7",
+        "valid": null
+      },
+      {
+        "error": "Enter a valid Starknet address.",
+        "input": "3fa7",
+        "valid": null
+      },
+      {
+        "error": "Enter a valid Starknet address.",
+        "input": "0x3fa7g",
+        "valid": null
+      },
+      {
+        "error": "Enter a valid Starknet address.",
+        "input": "0x800000000000011000000000000000000000000000000000000000000000001",
+        "valid": null
+      },
+      {
+        "error": null,
+        "input": "0x800000000000011000000000000000000000000000000000000000000000000",
+        "valid": "0x800000000000011000000000000000000000000000000000000000000000000"
+      },
+      {
+        "error": "Enter a valid Starknet address.",
+        "input": "0x10000000000000000000000000000000000000000000000000000000000000000",
+        "valid": null
+      },
+      {
+        "error": "Enter a valid Starknet address.",
+        "input": "alice.stark",
+        "valid": null
+      },
+      {
+        "error": "Enter a valid Starknet address.",
+        "input": "",
+        "valid": null
+      }
+    ],
+    "shortAddresses": [
+      {
+        "input": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "short": "0x3fa7…41a3"
+      },
+      {
+        "input": "0x1",
+        "short": "0x1…0x1"
+      },
+      {
+        "input": "0x12345",
+        "short": "0x1234…2345"
+      },
+      {
+        "input": "0x123456789a",
+        "short": "0x1234…789a"
+      },
+      {
+        "input": "not an address",
+        "short": "not an…ress"
+      },
+      {
+        "input": "",
+        "short": "…"
+      }
+    ],
+    "tokenAmounts": [
+      {
+        "decimals": 18,
+        "raw": "1500000000000000000",
+        "text": "1.5"
+      },
+      {
+        "decimals": 18,
+        "raw": "1",
+        "text": "0.000000000000000001"
+      },
+      {
+        "decimals": 18,
+        "raw": "0",
+        "text": "0"
+      },
+      {
+        "decimals": 6,
+        "raw": "1000000",
+        "text": "1"
+      },
+      {
+        "decimals": 18,
+        "raw": "123456789012345678901234567890",
+        "text": "123456789012.34567890123456789"
+      },
+      {
+        "decimals": 0,
+        "raw": "7",
+        "text": "7"
+      }
+    ],
+    "verification": [
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [],
+        "networkId": "SN_MAIN",
+        "recipient": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "summary": "Send 1.5 ETH to 0x3fa7…41a3",
+        "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [],
+        "networkId": "SN_MAIN",
+        "recipient": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "summary": "Send 1.5 STRK to 0x3fa7…41a3",
+        "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [
+          {
+            "code": "self-transfer",
+            "message": "The recipient is this wallet's own address."
+          }
+        ],
+        "networkId": "SN_MAIN",
+        "recipient": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "summary": "Send 1.5 ETH to 0x2083…98d9",
+        "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [
+          {
+            "code": "self-transfer",
+            "message": "The recipient is this wallet's own address."
+          }
+        ],
+        "networkId": "SN_MAIN",
+        "recipient": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "summary": "Send 1.5 STRK to 0x2083…98d9",
+        "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [
+          {
+            "code": "address-poisoning",
+            "message": "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending."
+          }
+        ],
+        "networkId": "SN_MAIN",
+        "recipient": "0x2083610000000000000000000000000000000000000000000000000000098d9",
+        "summary": "Send 1.5 ETH to 0x2083…98d9",
+        "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [
+          {
+            "code": "address-poisoning",
+            "message": "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending."
+          }
+        ],
+        "networkId": "SN_MAIN",
+        "recipient": "0x2083610000000000000000000000000000000000000000000000000000098d9",
+        "summary": "Send 1.5 STRK to 0x2083…98d9",
+        "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [],
+        "networkId": "SN_SEPOLIA",
+        "recipient": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "summary": "Send 1.5 ETH to 0x3fa7…41a3",
+        "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [],
+        "networkId": "SN_SEPOLIA",
+        "recipient": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "summary": "Send 1.5 STRK to 0x3fa7…41a3",
+        "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [
+          {
+            "code": "self-transfer",
+            "message": "The recipient is this wallet's own address."
+          }
+        ],
+        "networkId": "SN_SEPOLIA",
+        "recipient": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "summary": "Send 1.5 ETH to 0x2083…98d9",
+        "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [
+          {
+            "code": "self-transfer",
+            "message": "The recipient is this wallet's own address."
+          }
+        ],
+        "networkId": "SN_SEPOLIA",
+        "recipient": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "summary": "Send 1.5 STRK to 0x2083…98d9",
+        "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [
+          {
+            "code": "address-poisoning",
+            "message": "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending."
+          }
+        ],
+        "networkId": "SN_SEPOLIA",
+        "recipient": "0x2083610000000000000000000000000000000000000000000000000000098d9",
+        "summary": "Send 1.5 ETH to 0x2083…98d9",
+        "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
+      },
+      {
+        "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "flags": [
+          {
+            "code": "address-poisoning",
+            "message": "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending."
+          }
+        ],
+        "networkId": "SN_SEPOLIA",
+        "recipient": "0x2083610000000000000000000000000000000000000000000000000000098d9",
+        "summary": "Send 1.5 STRK to 0x2083…98d9",
+        "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+      }
+    ]
+  }
+}

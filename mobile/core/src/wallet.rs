@@ -5,7 +5,8 @@
 
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde::{Deserialize, Serialize};
@@ -72,6 +73,10 @@ pub struct StarkSignature {
 pub struct WalletCore {
     data_dir: PathBuf,
     session: Mutex<Option<Session>>,
+    /// Bumped on every unlock, lock, create/import and delete. A transfer plan records it when
+    /// prepared and refuses to sign once it has moved, even if the same wallet was unlocked
+    /// again (the extension's `captureSessionAuthorization`). Only changed under `session`.
+    generation: AtomicU64,
 }
 
 fn storage(reason: &str) -> CoreError {
@@ -185,7 +190,67 @@ impl WalletCore {
         };
         self.write_session(&session)?;
         *guard = Some(session);
+        self.bump_generation();
         Ok(())
+    }
+
+    fn bump_generation(&self) {
+        self.generation.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// The app-private directory the core stores its files in.
+    pub(crate) fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+
+    /// The current session generation, or `None` while locked.
+    pub(crate) fn unlocked_generation(&self) -> Option<u64> {
+        let guard = self.lock_session();
+        guard
+            .as_ref()
+            .map(|_| self.generation.load(Ordering::SeqCst))
+    }
+
+    /// Public metadata for one existing account, for a plan being prepared.
+    pub(crate) fn plan_account(
+        &self,
+        index: u32,
+        network: NetworkId,
+    ) -> Result<(AccountInfo, u64), CoreError> {
+        self.with_session(|session| {
+            if index >= session.payload.account_count {
+                return Err(CoreError::InvalidInput {
+                    reason: "unknown account".into(),
+                });
+            }
+            let account = Self::account(session, index, network)?;
+            Ok((account, self.generation.load(Ordering::SeqCst)))
+        })
+    }
+
+    /// Signs a hash for a plan, only while the session generation is still `generation`.
+    /// `Err(CoreError::Locked)` when the wallet was locked (or re-unlocked) since the plan was
+    /// prepared. The key is derived, used, and wiped inside this call.
+    pub(crate) fn plan_sign(
+        &self,
+        generation: u64,
+        account_index: u32,
+        hash: &starknet_types_core::felt::Felt,
+    ) -> Result<kms::Signature, CoreError> {
+        let mut guard = self.lock_session();
+        let session = guard.as_mut().ok_or(CoreError::Locked)?;
+        if self.generation.load(Ordering::SeqCst) != generation {
+            return Err(CoreError::Locked);
+        }
+        if account_index >= session.payload.account_count {
+            return Err(CoreError::Locked);
+        }
+        kms::sign_hash(
+            &session.payload.mnemonic,
+            session.payload.mnemonic_passphrase.as_deref(),
+            account_index,
+            &crate::felt::canonical(hash),
+        )
     }
 }
 
@@ -200,6 +265,7 @@ impl WalletCore {
         Ok(Arc::new(Self {
             data_dir,
             session: Mutex::new(None),
+            generation: AtomicU64::new(0),
         }))
     }
 
@@ -246,13 +312,17 @@ impl WalletCore {
     /// Decrypts the vault into memory.
     pub fn unlock(&self, password: String) -> Result<(), CoreError> {
         let session = self.open_session(&password)?;
-        *self.lock_session() = Some(session);
+        let mut guard = self.lock_session();
+        *guard = Some(session);
+        self.bump_generation();
         Ok(())
     }
 
     /// Wipes the session; the phrase and vault key are zeroized as they drop.
     pub fn lock(&self) {
-        *self.lock_session() = None;
+        let mut guard = self.lock_session();
+        *guard = None;
+        self.bump_generation();
     }
 
     /// Every account on `network`.
@@ -328,7 +398,9 @@ impl WalletCore {
         drop(self.open_session(&password)?);
         let mut guard = self.lock_session();
         fs::remove_file(self.vault_path()).map_err(|_| storage("remove vault"))?;
+        crate::activity::store::remove(&self.data_dir);
         *guard = None;
+        self.bump_generation();
         Ok(())
     }
 }

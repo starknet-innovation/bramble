@@ -63,3 +63,15 @@ cd mobile/android && gradle wrapper --gradle-version 8.11.1 && ./gradlew install
 ```
 
 The Android app has not yet been compiled in CI (SCOPE.md, Phase 1.1).
+
+## Sending
+
+Design and review resolutions: [docs/transactions.md](docs/transactions.md). The send UI test
+(`BrambleUITests/SendFlowTests`) runs against a canned node (`-BrambleRpcFixture`, DEBUG only)
+and never taps "Confirm and send". A real mainnet send is opt-in and never run in CI:
+
+```bash
+TEST_RUNNER_BRAMBLE_MOBILE_MAINNET_SEND_ACK="I understand this broadcasts a real mainnet transaction" \
+TEST_RUNNER_BRAMBLE_MOBILE_MAINNET_MNEMONIC="…" \
+  xcodebuild … -only-testing:BrambleTests/MainnetSendTests test
+```

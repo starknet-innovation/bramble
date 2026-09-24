@@ -1,0 +1,40 @@
+import BrambleCore
+
+/// The extension's wording for each way a send can end without a confirmed transaction
+/// (`SendCopy`, generated from the extension). Node text is never shown.
+enum SendFailureText {
+    /// The failure screen's body: "The transaction was not sent. <reason>".
+    static func message(_ failure: SendFailure) -> String {
+        guard let reason = reason(failure.code) else { return SendCopy.failureDefault }
+        return SendCopy.failurePrefix + reason.replacingOccurrences(of: "{hash}", with: failure.hash ?? "")
+    }
+
+    static func reason(_ code: SendFailureCode) -> String? {
+        switch code {
+        case .reviewedFeeExceeded: SendCopy.reviewedFeeExceeded
+        case .reviewedFeeRequired: SendCopy.reviewedFeeRequired
+        case .reviewedDeploymentFeeExceeded: SendCopy.reviewedDeploymentFeeExceeded
+        case .reviewedDeploymentFeeRequired: SendCopy.reviewedDeploymentFeeRequired
+        case .poisonedRecipient: SendCopy.poisonedRecipient
+        case .wrongChain: SendCopy.failureWrongChain
+        case .preparationUnavailable: SendCopy.failurePreparationUnavailable
+        case .hashMismatch: SendCopy.failureHashMismatch
+        case .submissionIndeterminate: SendCopy.failureIndeterminate
+        case .deploymentStatusUnknown: SendCopy.failureDeploymentStatusUnknown
+        case .deploymentUnconfirmed: SendCopy.failureDeploymentUnconfirmed
+        case .deploymentThenInvokeUnconfirmed: SendCopy.failureDeploymentThenInvokeUnconfirmed
+        case .autoDeploymentFailed: SendCopy.failureAutoDeploymentFailed
+        case .alreadyDeployed: SendCopy.failureAlreadyDeployed
+        case .unrecognisedFeeUnit: SendCopy.failureUnrecognisedUnit
+        case .boundsOutOfRange, .nodeError, .locked, .signingFailed: nil
+        }
+    }
+
+    /// Whether the failure left something on chain the user must check before retrying.
+    static func mayHaveReachedChain(_ code: SendFailureCode) -> Bool {
+        switch code {
+        case .hashMismatch, .submissionIndeterminate, .deploymentStatusUnknown, .deploymentUnconfirmed, .deploymentThenInvokeUnconfirmed: true
+        default: false
+        }
+    }
+}

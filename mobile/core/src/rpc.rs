@@ -14,7 +14,7 @@ use crate::{felt, CoreError};
 const BALANCE_OF_SELECTOR: &str =
     "0x2e4263afad30923c891518314c3c95dbe830a16874e8abc5777a9a20b54c76e";
 /// Longest response body the core will parse.
-const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+pub(crate) const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
 fn rpc_error(reason: &str) -> CoreError {
     CoreError::Rpc {
@@ -96,7 +96,7 @@ pub fn parse_balance_of(body: &str, id: u64) -> Result<String, CoreError> {
     Ok(u256_to_decimal(limb(&limbs[0])?, limb(&limbs[1])?))
 }
 
-fn u256_to_decimal(low: u128, high: u128) -> String {
+pub(crate) fn u256_to_decimal(low: u128, high: u128) -> String {
     if high == 0 {
         return low.to_string();
     }
