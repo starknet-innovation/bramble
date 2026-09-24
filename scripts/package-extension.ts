@@ -13,7 +13,7 @@ import {
   outputDirectory,
   requestedTargets,
 } from "../apps/extension/build-target";
-import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
+import { EXPECTED_RUNTIME_FILES, FIREFOX_RUNTIME_FILES } from "./extension-runtime-files";
 
 // Parsed by the same strict reader the build uses, so a misspelt target, a
 // space-separated `--target firefox`, or a future target this script has not
@@ -26,6 +26,7 @@ if (requested.length !== 1 || first === undefined) {
 }
 const target: BuildTarget = first;
 const distDir = outputDirectory(target);
+const expectedFiles = target === "firefox" ? FIREFOX_RUNTIME_FILES : EXPECTED_RUNTIME_FILES;
 const artifactDir = "artifacts";
 const reproducibleZipTime = "198001010000";
 
@@ -66,7 +67,7 @@ if (typeof manifest["version"] !== "string") {
 }
 
 const files = (await walk(distDir)).map((path) => relative(distDir, path));
-if (files.join("\n") !== EXPECTED_RUNTIME_FILES.join("\n")) {
+if (files.join("\n") !== expectedFiles.join("\n")) {
   throw new Error(`unexpected packaged files:\n${files.join("\n")}`);
 }
 const zipName =
