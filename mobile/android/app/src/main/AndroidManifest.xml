@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Normal permission for Window.setHideOverlayWindows (API 31+): no overlay over the wallet. -->
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
 
     <!-- No cloud backup or device transfer of app data: the vault lives in noBackupFilesDir,
          and these rules keep everything else out of backups too. -->

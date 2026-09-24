@@ -6,6 +6,7 @@ import android.hardware.biometrics.BiometricPrompt
 import android.os.Build
 import android.os.CancellationSignal
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyInfo
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
@@ -15,6 +16,7 @@ import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
+import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -52,9 +54,22 @@ class BiometricVault(private val context: Context) {
             }
         }
 
-    /** True when the key lives in StrongBox rather than the TEE; shown on the Security screen. */
-    var strongBox: Boolean = false
-        private set
+    /** Set when this process generated the key; the fallback below API 31, where KeyInfo has no level. */
+    private var generatedInStrongBox = false
+
+    /**
+     * True when the key lives in StrongBox rather than the TEE; shown on the Security screen. Read
+     * from the key itself on API 31+, so it stays right after a restart.
+     */
+    val strongBox: Boolean
+        get() {
+            if (Build.VERSION.SDK_INT < 31) return generatedInStrongBox
+            val key = runCatching { key() }.getOrNull() ?: return false
+            return runCatching {
+                val info = SecretKeyFactory.getInstance(key.algorithm, KEYSTORE).getKeySpec(key, KeyInfo::class.java) as KeyInfo
+                info.securityLevel == KeyProperties.SECURITY_LEVEL_STRONGBOX
+            }.getOrDefault(false)
+        }
 
     private fun generateKey(): SecretKey {
         fun spec(strongBox: Boolean) = KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
@@ -71,10 +86,10 @@ class BiometricVault(private val context: Context) {
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
         return try {
             generator.init(spec(strongBox = true))
-            generator.generateKey().also { strongBox = true }
-        } catch (_: StrongBoxUnavailableException) {
+            generator.generateKey().also { generatedInStrongBox = true }
+        } catch (ignored: StrongBoxUnavailableException) {
             generator.init(spec(strongBox = false))
-            generator.generateKey().also { strongBox = false }
+            generator.generateKey().also { generatedInStrongBox = false }
         }
     }
 
@@ -86,7 +101,7 @@ class BiometricVault(private val context: Context) {
         return try {
             Cipher.getInstance(TRANSFORMATION).init(Cipher.ENCRYPT_MODE, key)
             false
-        } catch (_: KeyPermanentlyInvalidatedException) {
+        } catch (ignored: KeyPermanentlyInvalidatedException) {
             true
         }
     }
@@ -114,7 +129,7 @@ class BiometricVault(private val context: Context) {
             Cipher.getInstance(TRANSFORMATION).apply {
                 init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, bytes, 1, ivLength))
             }
-        } catch (_: KeyPermanentlyInvalidatedException) {
+        } catch (ignored: KeyPermanentlyInvalidatedException) {
             return Read.Invalidated
         }
         val authorised = prompt(activity, title, cipher) ?: return Read.Fallback
@@ -131,7 +146,9 @@ class BiometricVault(private val context: Context) {
                 builder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
             }
             // A negative button is required below API 30 and keeps the passphrase one tap away.
-            builder.setNegativeButton("Use passphrase", activity.mainExecutor) { _, _ -> continuation.resume(null) }
+            builder.setNegativeButton("Use passphrase", activity.mainExecutor) { _, _ ->
+                if (continuation.isActive) continuation.resume(null)
+            }
             builder.build().authenticate(
                 BiometricPrompt.CryptoObject(cipher), cancel, activity.mainExecutor,
                 object : BiometricPrompt.AuthenticationCallback() {

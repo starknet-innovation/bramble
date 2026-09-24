@@ -63,11 +63,24 @@ activity log, so delete the result bundle after a run with a real phrase.
 
 ## Android
 
-Needs Android Studio / SDK 35, NDK r27+, and `cargo install cargo-ndk --version 4.1.2 --locked`.
+Needs JDK 17, Android SDK platform 35 with an API 35 emulator image, NDK r27+, the
+`aarch64-linux-android` / `x86_64-linux-android` Rust targets, and
+`cargo install cargo-ndk --version 4.1.2 --locked`. The Gradle wrapper is committed and pinned
+(Gradle 8.11.1, distribution SHA-256 checked); do not regenerate it.
 
 ```bash
 ANDROID_NDK_HOME=… mobile/scripts/build-core-android.sh debug
-cd mobile/android && gradle wrapper --gradle-version 8.11.1 && ./gradlew installDebug
+cd mobile/android && ./gradlew installDebug
+./gradlew :app:testDebugUnitTest                # JVM: QR parity, input rules, source hygiene
+./gradlew :app:connectedDebugAndroidTest        # emulator only: flows, security, core bridge
 ```
 
-The Android app has not yet been compiled in CI (SCOPE.md, Phase 1.1).
+The build copies the extension's onboarding landscape and the core's parity fixture into
+`app/build/generated` (never committed). Instrumented tests run under Android Test Orchestrator
+with `clearPackageData=true`, so each starts from a fresh install state. The opt-in
+`LiveMainnetWalletTest` takes `BRAMBLE_MOBILE_MAINNET_MNEMONIC` / `_ADDRESS` as instrumentation
+arguments and is refused with `ci=true`, which the build sets whenever the host's `CI` is set.
+`bun mobile/android/scripts/qr-fixture.ts` regenerates the QR parity fixture. Design and threat model: [docs/android-parity.md](docs/android-parity.md).
+
+The Android app has not yet been compiled (no Android toolchain where it was written) or built in
+CI (SCOPE.md, Phase 1.1).

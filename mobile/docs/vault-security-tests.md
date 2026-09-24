@@ -65,8 +65,14 @@ production-reachable lever. The host timer is driven by `session_remaining_ms()`
 
 ### 8.4 Android
 
-Instrumented equivalents of 8.3 are written against the generated Kotlin bindings but are
-**uncompiled and unrun** (no SDK). They join CI with SCOPE.md Phase 1.1.
+Written against the generated Kotlin bindings, **uncompiled and unrun** (no SDK); they join CI
+with SCOPE.md Phase 1.1. Instrumented: `CoreBridgeTest` (the fifth wrong passphrase starts a
+delay and a correct one is then refused as `Throttled`; the biometric slot opens only with its
+wrap secret and a wrong one drops it) and `SecretFieldTest` (the one secret input's full input
+type, IME flags, autofill exclusion and saved state). JVM: `ErrorTextTest` (incorrect, throttled
+and invalidation copy), `RecoveryEntryTest` (what counts as a phrase paste) and
+`SourceHygieneTest.secretsOnlyGoThroughSecretField`. The biometric prompt, Keystore invalidation
+and the Security screen have no Android UI test yet; the iOS `SecurityFlowTests` are the model.
 
 ### 8.5 Parity fixtures (`bun run mobile:parity` / `mobile:assets`, checked in `bun run check`)
 

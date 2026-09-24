@@ -325,11 +325,12 @@ renders countdowns without the core ever learning the date.
   `textContentType(nil)`. The vault passphrase: `SecureField` with `textContentType(nil)`, which
   removes today's `.password`. This departs from the extension, which allows password-manager
   autofill (`current-password`), because the brief asks for no autofill (§9, D3).
-- Android (uncompiled): a `SecretTextField` in `ui/Components.kt` wrapping an `AndroidView`
-  `EditText` with `TYPE_TEXT_VARIATION_PASSWORD | TYPE_TEXT_FLAG_NO_SUGGESTIONS`,
-  `IME_FLAG_NO_PERSONALIZED_LEARNING` and `importantForAutofill = NO`, because Compose 1.7's
-  `KeyboardOptions` cannot set that IME flag. Phrase words use `VISIBLE_PASSWORD` with the same
-  flags.
+- Android (uncompiled): the single `SecretField` in `design/SecretField.kt` (from the
+  android-parity port), an `AndroidView` `EditText` with `TYPE_CLASS_TEXT |
+  TYPE_TEXT_VARIATION_PASSWORD | TYPE_TEXT_FLAG_NO_SUGGESTIONS`, `IME_FLAG_NO_PERSONALIZED_LEARNING
+  | IME_FLAG_NO_EXTRACT_UI`, autofill excluded, no copy/cut/share, and no saved-instance state,
+  because Compose 1.7's `KeyboardOptions` cannot set that IME flag. Phrase words use
+  `VISIBLE_PASSWORD` with the same flags. See `docs/android-parity.md` T4 and T10.
 
 ### 5.2 App switcher
 
