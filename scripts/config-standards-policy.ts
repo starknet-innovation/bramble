@@ -15,12 +15,12 @@ export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/testkit": "workspace:*",
-  "@biomejs/biome": "2.5.13",
+  "@biomejs/biome": "2.5.14",
   "@playwright/test": "1.63.0",
   "@types/bun": "1.4.2",
-  "@types/node": "26.5.1",
-  "fast-check": "4.10.0",
-  knip: "6.35.1",
+  "@types/node": "26.6.2",
+  "fast-check": "4.10.2",
+  knip: "6.37.0",
   madge: "8.0.0",
   typescript: "6.0.3",
   // Mozilla's own add-on tooling. `web-ext lint` wraps the exact validator
