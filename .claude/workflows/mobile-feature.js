@@ -18,6 +18,8 @@ export const meta = {
 const FEATURE = args && args.feature
 const BRIEF = args && args.brief
 const ISOLATED = Boolean(args && args.isolated)
+// Branch an isolated run is cut from; a dependent feature can start from an unmerged sibling.
+const BASE_BRANCH = (args && args.base) || 'feature/mobile-wallet'
 if (!FEATURE || !BRIEF) throw new Error('args.feature and args.brief are required')
 
 const BASE = '/Users/theodorepender/Coding/mc-wallet-mobile'
@@ -141,7 +143,7 @@ if (ISOLATED) {
   phase('Setup')
   await agent(
     `Prepare an isolated workspace for the "${FEATURE}" mobile workstream. Steps, stopping on any failure:\n` +
-    `1. If ${REPO} does not exist: \`git -C ${BASE} worktree add ${REPO} -b ${BRANCH} feature/mobile-wallet\` ` +
+    `1. If ${REPO} does not exist: \`git -C ${BASE} worktree add ${REPO} -b ${BRANCH} ${BASE_BRANCH}\` ` +
     `(if the branch already exists, add the worktree on it without -b). Do not touch uncommitted work in ${BASE}.\n` +
     `2. \`cd ${REPO} && bun install --frozen-lockfile\`.\n` +
     `3. mkdir -p ${REPO}/vendor, then copy ${BASE}/vendor/argent-contracts and ${BASE}/vendor/starknet-privacy ` +
