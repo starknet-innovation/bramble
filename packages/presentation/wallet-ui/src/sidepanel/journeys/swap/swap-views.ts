@@ -163,7 +163,7 @@ export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
     </div>
   </div>
   <div class="receipt-group">
-    <p class="decision-label">Maximum cost and constraints</p>
+    <p class="decision-label">Cost</p>
     ${receipt([
       {
         label: "Minimum received",

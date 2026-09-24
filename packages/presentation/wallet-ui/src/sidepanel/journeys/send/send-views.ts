@@ -286,7 +286,7 @@ export const sendFlow = (
       `<section class="section send-flow">
         ${account ? "" : noAccountEmpty(status)}
         ${missingIntentAsset ? '<p class="review-flag" role="alert">The requested token is no longer tracked on this network. Choose an asset before continuing.</p>' : ""}
-        <form id="transfer-form" data-signer="${signer}" data-sender="${escapeHtml(account?.address ?? "")}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
+        <form id="transfer-form" data-signer="${signer}" data-sender="${escapeHtml(account?.address ?? "")}" data-sender-label="${escapeHtml(account ? accountDisplayName(account, preferences) : "")}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />
@@ -307,17 +307,10 @@ export const sendFlow = (
             ${recipientStage(status, account, preferences, multisigs)}
             ${amountStage(status, account, asset, assets, currency, preferences, copy)}
             <section class="send-stage send-review-stage" id="send-review-stage" hidden>
-              <div class="send-review-head">
-                <div><p class="context-label" id="send-review-heading">${escapeHtml(copy.reviewLabel)}</p></div>
-                ${button({ attributes: { id: "send-edit" }, label: "Edit", size: "small", variant: "ghost" })}
-              </div>
               <div class="send-review-summary" id="send-review-summary"></div>
               <div class="send-review-fee" id="send-review-fee" aria-live="polite"></div>
-              <details class="send-review-disclosure" data-disclosure="send-technical-details">
-                <summary><span>Technical details</span>${icon("chevronDown")}</summary>
-                <div class="send-review-disclosure-body" id="review-panel"></div>
-              </details>
-              <p class="send-review-note" id="send-review-note">${escapeHtml(canSend ? copy.reviewNote : "Send is unavailable.")}</p>
+              <div class="send-review-risks" id="send-review-risks" role="note"></div>
+              ${canSend ? "" : '<p class="send-review-note" id="send-review-note">Send is unavailable.</p>'}
               <div class="send-actions">
                 <button id="send-confirm-button" type="submit" ${canSend ? "" : "disabled"}>${icon("check")}<span id="send-confirm-label">${escapeHtml(copy.confirmLabel)}</span></button>
               </div>

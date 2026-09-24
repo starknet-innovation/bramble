@@ -226,9 +226,8 @@ describe("Review unshield", () => {
     submit(app);
     expect(stage(app)).toBe("reviewing");
     expect(hidden(app, "#send-working")).toBe(false);
-    expect(text(app, "#send-working-title")).toBe("Preparing unshield");
-    expect(text(app, "#send-working-copy")).toContain("quoting the relay");
-    expect(text(app, "#send-working-copy")).toContain("proof is built after you confirm");
+    expect(text(app, "#send-working-title")).toBe("Preparing private transfer…");
+    expect(text(app, "#send-working-copy")).toBe("");
     expect(text(app, "#send-task-review-label")).toBe("Quote private relay");
     expect(text(app, "#send-task-broadcast-label")).toBe("Prove and relay privately");
     expect(text(app, "#send-review-label")).toBe("Preparing unshield…");

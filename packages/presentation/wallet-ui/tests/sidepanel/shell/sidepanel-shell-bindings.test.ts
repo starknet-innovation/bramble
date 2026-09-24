@@ -234,9 +234,7 @@ describe("bindDeploy", () => {
 
     click(container.querySelector("#deploy-button"));
     await tick();
-    expect(container.querySelector("#deploy-review")?.textContent).toContain(
-      "Maximum cost and constraints",
-    );
+    expect(container.querySelector("#deploy-review")?.textContent).toContain("Cost");
 
     click(container.querySelector("#deploy-button"));
     await tick();

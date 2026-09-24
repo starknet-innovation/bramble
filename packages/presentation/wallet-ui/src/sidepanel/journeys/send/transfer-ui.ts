@@ -239,7 +239,6 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     route,
   });
 
-  form.querySelector("#send-edit")?.addEventListener("click", editDetails);
   form.querySelector("#send-failure-edit")?.addEventListener("click", editDetails);
   const homeButton = form.querySelector<HTMLButtonElement>("#send-home");
   if (homeButton) {

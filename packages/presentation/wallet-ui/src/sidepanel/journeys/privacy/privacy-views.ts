@@ -105,8 +105,8 @@ const preparationDetails = (
     ${reviewPanel([
       "Registration is public. It stores this account's viewing-key commitment on-chain and opens the account's own private channel; it does not reveal the viewing key or private balance.",
     ])}
-    <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
-      <p class="decision-label">Maximum cost and constraints</p>
+    <section class="decision-layer decision-boundary" aria-label="Cost">
+      <p class="decision-label">Cost</p>
       ${receipt([
         {
           label: "Maximum network fee",

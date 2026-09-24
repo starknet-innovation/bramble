@@ -39,7 +39,7 @@ const resultText = (app: HTMLElement): string =>
   app.querySelector("#transfer-result")?.textContent ?? "";
 
 const reviewText = (app: HTMLElement): string =>
-  app.querySelector("#review-panel")?.textContent ?? "";
+  app.querySelector("#send-review-risks")?.textContent ?? "";
 
 const feeText = (app: HTMLElement): string =>
   app.querySelector("#send-review-fee")?.textContent ?? "";

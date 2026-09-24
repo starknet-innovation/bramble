@@ -391,7 +391,7 @@ describe("private send fee lines", () => {
     // Gas is the paymaster's, so the sender's own broadcast cost is nil.
     expect(html).toContain("Estimated fee: Sponsored");
     // The pool's charge is named as such rather than billed as network gas.
-    expect(html).toContain("Pool fee: 6 STRK from your private balance");
+    expect(html).toContain("Pool fee: 6 STRK");
   });
 
   test("charges the relay's own cut as the network fee when it keeps one", () => {
@@ -399,7 +399,7 @@ describe("private send fee lines", () => {
     const html = relayFeeHtml("0x5a34a38fc00a0000", POOL_FEE);
 
     expect(html).toContain("Estimated fee: 0.5 STRK");
-    expect(html).toContain("Pool fee: 6 STRK from your private balance");
+    expect(html).toContain("Pool fee: 6 STRK");
   });
 
   test("falls back to one unattributed line rather than inventing a split", () => {

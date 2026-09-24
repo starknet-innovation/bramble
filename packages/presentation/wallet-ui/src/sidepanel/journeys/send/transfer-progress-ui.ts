@@ -81,27 +81,22 @@ const broadcastTitle = (mode: TransferMode): string =>
   mode === "send" ? "Sending to Starknet" : `${transferModeCopy(mode).progressive} on Starknet`;
 
 // The wait between Review and the review itself, for a pool route. Nothing is
-// signed or sent here, so the copy says both what is running and that backing
-// out is safe; the proof the background started cannot be interrupted, but an
-// abandoned preparation is never executed.
-const preparingStatus = <Review>(
-  state: TransferState<Review>,
-  mode: TransferMode,
-): WorkingStatus => {
+// The wait before the review lands says only what is running. Nothing is signed
+// or sent here and going back discards the preparation, but neither is worth a
+// paragraph on a screen that exists for a second or two.
+const preparingStatus = <Review>(state: TransferState<Review>): WorkingStatus => {
   const proving = proofLeg(state.fields) === "review";
   return {
-    copy: proving
-      ? "Building the private proof and estimating the network fee. Nothing is signed or sent until you confirm the review; going back discards this preparation."
-      : "Checking the private balance and quoting the relay. The private proof is built after you confirm; going back discards this preparation.",
+    copy: "",
     labels: [
       proving ? "Build private proof" : "Quote private relay",
       "Review and confirm",
       proving ? "Broadcast to Starknet" : "Prove and relay privately",
       "Confirm on Starknet",
     ],
-    liveness: proving ? PROVING_HINT : "Keep this panel open.",
+    liveness: "",
     states: ["active", "pending", "pending", "pending"],
-    title: transferModeCopy(mode).preparing,
+    title: "Preparing private transfer…",
   };
 };
 
@@ -136,7 +131,7 @@ const workingStatusFor = <Review>(
   mode: TransferMode,
 ): WorkingStatus => {
   if (state.stage === "reviewing") {
-    return preparingStatus(state, mode);
+    return preparingStatus(state);
   }
   if (state.stage === "broadcasting") {
     return {

@@ -390,8 +390,8 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
       ${reviewOutcome("Register this exact Cairo contract class on the active network from the reviewed account.")}
     </div>
     ${reviewPanel([...declarationWarnings(approval), ...(approval.insights ?? [])], "Declaration registers code but does not deploy a contract or transfer assets.")}
-    <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
-      <p class="decision-label">Maximum cost and constraints</p>
+    <section class="decision-layer decision-boundary" aria-label="Cost">
+      <p class="decision-label">Cost</p>
       ${declarationDetails(approval)}
     </section>
     ${contextDisclosure(approval)}

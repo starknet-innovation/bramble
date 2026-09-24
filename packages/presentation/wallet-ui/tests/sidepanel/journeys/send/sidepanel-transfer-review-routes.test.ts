@@ -126,7 +126,7 @@ describe("route fee lines", () => {
       review: review(),
     });
     expect(html).toContain("Estimated fee:");
-    expect(html).toContain("Pool fee: 6 STRK from your public balance");
+    expect(html).toContain("Pool fee: 6 STRK");
   });
 
   // A deposit's gas is not knowable at review time — the proof, and so the
@@ -139,7 +139,7 @@ describe("route fee lines", () => {
       review: review({ fee: null }),
     });
     expect(html).toContain("Estimated fee: charged at submission");
-    expect(html).toContain("Pool fee: 6 STRK from your public balance");
+    expect(html).toContain("Pool fee: 6 STRK");
   });
 
   test("a deposit omits the pool line when the fee has not been read", () => {
@@ -161,7 +161,7 @@ describe("route fee lines", () => {
     // billed as network gas.
     expect(html).toContain("Estimated fee: Sponsored");
     expect(html).toContain("Relay fee recipient: 0x2 (0x3)");
-    expect(html).toContain("Pool fee: 6 STRK from your private balance");
+    expect(html).toContain("Pool fee: 6 STRK");
   });
 
   test("every route leads with a network fee line", () => {

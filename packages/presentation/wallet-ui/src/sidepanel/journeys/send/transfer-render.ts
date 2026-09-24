@@ -24,7 +24,7 @@ import {
   type WorkingStatus,
   workingStatus,
 } from "./transfer-progress-ui";
-import { reviewDetailsHtml, reviewSummaryHtml } from "./transfer-review-markup";
+import { reviewRisksHtml, reviewSummaryHtml } from "./transfer-review-markup";
 import { routeReviewFeeHtml } from "./transfer-review-routes";
 import { transferRoute } from "./transfer-route";
 import type { TransferReview } from "./transfer-submit";
@@ -110,11 +110,6 @@ const applyModeCopy = (form: HTMLFormElement, mode: TransferMode, reviewing: boo
   form.querySelector("#send-amount-input")?.setAttribute("aria-label", copy.amountLabel);
   setText(form, "send-amount-label", copy.amountLabel);
   setText(form, "send-review-label", reviewing ? `${copy.preparing}…` : copy.reviewLabel);
-  setText(form, "send-review-heading", copy.reviewLabel);
-  // A form the template marked unsendable keeps its own note about that.
-  if (form.dataset["sendAvailable"] !== "false") {
-    setText(form, "send-review-note", copy.reviewNote);
-  }
   setText(form, "send-success-title", copy.successTitle);
   setText(form, "send-failure-title", copy.failureTitle);
 };
@@ -199,9 +194,14 @@ export const applyTransferUi = (
   );
 
   const route = state.fields ? transferRoute(state.fields) : null;
-  const reviewPanel = form.querySelector<HTMLElement>("#review-panel");
-  if (reviewPanel) {
-    reviewPanel.innerHTML = state.review ? reviewDetailsHtml(state.review) : "";
+  // Only real warnings reach the confirm face. There is no "nothing was
+  // detected" line and no decoded-call list: a quiet transfer shows nothing
+  // here, and a flagged one can no longer hide behind a collapsed disclosure.
+  const reviewRisks = form.querySelector<HTMLElement>("#send-review-risks");
+  if (reviewRisks) {
+    const risks = state.review ? reviewRisksHtml(state.review) : "";
+    reviewRisks.innerHTML = risks;
+    reviewRisks.toggleAttribute("hidden", risks === "");
   }
   const reviewFee = form.querySelector<HTMLElement>("#send-review-fee");
   if (reviewFee && route) {
@@ -215,7 +215,12 @@ export const applyTransferUi = (
   }
   const reviewSummary = form.querySelector<HTMLElement>("#send-review-summary");
   if (reviewSummary) {
-    reviewSummary.innerHTML = state.fields ? reviewSummaryHtml(state.fields, mode) : "";
+    reviewSummary.innerHTML = state.fields
+      ? reviewSummaryHtml(state.fields, mode, {
+          address: form.dataset["sender"] ?? "",
+          label: form.dataset["senderLabel"] ?? "",
+        })
+      : "";
     // Freshly rendered markup: the shell's copy binding ran before this paint.
     bindCopyButtons(reviewSummary);
   }
@@ -226,6 +231,11 @@ export const applyTransferUi = (
   if (working) {
     applyWorkingStatus(form, workingStatus(state, mode));
   }
+  // While a private send is preparing, the screen is the title alone: the task
+  // list and the standing hint belong to a transaction that has been submitted.
+  form.querySelector(".send-task-list")?.toggleAttribute("hidden", preparing);
+  form.querySelector("#send-working-copy")?.toggleAttribute("hidden", preparing);
+  form.querySelector("#send-liveness")?.toggleAttribute("hidden", preparing);
   if (state.fields && state.transactionHash) {
     const summary = transferSuccessSummary(
       mode,

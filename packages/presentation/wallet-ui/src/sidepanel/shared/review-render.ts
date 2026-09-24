@@ -70,9 +70,11 @@ export const reviewFeeBlocked = (state: ReviewFeeState): boolean =>
     state.deploymentFee != null &&
     sumFeeEstimates(state.fee, state.deploymentFee) === null);
 
-const reviewBoundary = (content: string): string =>
-  `<section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
-    <p class="decision-label">Maximum cost and constraints</p>
+// `rule: false` drops the hairline above the section, for a surface that already
+// separates its own blocks and does not want a divider drawn inside them.
+const reviewBoundary = (content: string, rule = true): string =>
+  `<section class="decision-layer${rule ? " decision-boundary" : ""}" aria-label="Cost">
+    <p class="decision-label">Cost</p>
     ${content}
   </section>`;
 
@@ -110,9 +112,17 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
  * surface. Escapes everything; a missing estimate is always a named state,
  * never a fabricated amount.
  */
-export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttributes): string => {
+export const reviewFeeSection = (
+  state: ReviewFeeState,
+  retryAttributes: UiAttributes,
+  options: { readonly extra?: string; readonly rule?: boolean } = {},
+): string => {
+  const { extra = "", rule = true } = options;
+  // Every branch closes the same way, so a caller's extra cost line lands
+  // inside the section rather than orphaned under it.
+  const boundary = (content: string): string => reviewBoundary(`${content}${extra}`, rule);
   if (state.feeEstimatePending === true) {
-    return reviewBoundary('<p class="review-fee" role="status">Estimating network fee…</p>');
+    return boundary('<p class="review-fee" role="status">Estimating network fee…</p>');
   }
   if (state.requiresDeployment === true && state.fee && state.deploymentFee) {
     // One action, one figure. Creating the account and sending are two
@@ -124,7 +134,7 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
     // Unlike units or a malformed estimate fail closed: quoting one component
     // as the total would understate the cost the same way a missing half does.
     if (total) {
-      return reviewBoundary(
+      return boundary(
         `<div class="review-fee"><p>Estimated fee: ${escapeHtml(
           formatFeeEstimate(total),
         )}</p><p class="review-fee-part">Creating this account on Starknet is ${escapeHtml(
@@ -139,12 +149,12 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
     state.deploymentFeeEstimateFailed === undefined &&
     state.feeEstimateFailed !== true
   ) {
-    return reviewBoundary(
+    return boundary(
       '<p class="review-fee">The network fee is estimated once this account is deployed.</p>',
     );
   }
   if (state.requiresDeployment === true) {
-    return reviewBoundary(
+    return boundary(
       `<p class="review-flag" role="alert">Couldn't estimate both the transaction and account deployment fees. Check your connection and retry before sending.</p>${button(
         {
           attributes: retryAttributes,
@@ -155,12 +165,12 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
     );
   }
   if (state.fee) {
-    return reviewBoundary(
+    return boundary(
       `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`,
     );
   }
   if (state.feeEstimateFailed === true) {
-    return reviewBoundary(
+    return boundary(
       `<p class="review-flag" role="alert">Couldn't estimate the network fee right now. Check your connection and retry before sending.</p>${button(
         {
           attributes: retryAttributes,

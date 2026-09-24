@@ -51,7 +51,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("transfer");
     expect(html).toContain("0xdef");
     expect(html).toContain("What will happen");
-    expect(html).toContain("Maximum cost and constraints");
+    expect(html).toContain("Cost");
     expect(html).toContain("Technical details");
     expect(html).not.toContain("Collaborator note");
     expect(html).toContain('data-ms-sign="');

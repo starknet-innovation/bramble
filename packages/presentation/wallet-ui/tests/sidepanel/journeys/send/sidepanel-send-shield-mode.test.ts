@@ -183,7 +183,6 @@ describe("a shield shortcut", () => {
     await flush();
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("review");
     expect(text(app, "#send-header-title")).toBe("Review shield");
-    expect(text(app, "#send-review-heading")).toBe("Review shield");
     expect(text(app, "#send-confirm-label")).toBe("Confirm and shield");
     // The account on both ends is the user's own, so the summary names the
     // movement rather than a "recipient".

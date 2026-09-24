@@ -225,8 +225,8 @@ const intentCard = (
             "The fresh on-chain signer authority does not exactly match this intent snapshot. Signing and submission are disabled.",
           ]),
     ])}
-    <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
-      <p class="decision-label">Maximum cost and constraints</p>
+    <section class="decision-layer decision-boundary" aria-label="Cost">
+      <p class="decision-label">Cost</p>
       ${receipt([
         { label: "Maximum network fee", value: formatFeeEstimate(fee) },
         {

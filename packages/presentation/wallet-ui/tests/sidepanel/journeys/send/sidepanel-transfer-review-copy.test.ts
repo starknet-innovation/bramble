@@ -50,7 +50,9 @@ const review = async (): Promise<HTMLElement> => {
 describe("send review recipient copy", () => {
   test("shows the recipient truncated and copies it in full", async () => {
     const app = await review();
-    const fact = app.querySelector("#send-review-summary .send-review-address");
+    const fact = app
+      .querySelector("#send-review-summary [data-copy]")
+      ?.closest(".send-review-address");
     const code = fact?.querySelector("code");
     const copy = fact?.querySelector<HTMLButtonElement>("[data-copy]");
 

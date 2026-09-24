@@ -216,7 +216,7 @@ describe("sidepanel views", () => {
   test("send flow reviews before it sends, without a fee-speed control", () => {
     const html = dashboard("send", status, [], preferences, { balances: [] });
 
-    expect(html).toContain('id="review-panel"');
+    expect(html).toContain('id="send-review-risks"');
     expect(html).not.toContain('name="speed"');
     expect(html).not.toContain(">Speed<");
     expect(html).toContain("Review send");
