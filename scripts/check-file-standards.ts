@@ -14,6 +14,7 @@ const EXCLUDED = new Set([
   ".playwright-cli",
   "artifacts",
   "bun.lock",
+  "Cargo.lock",
   "dist",
   "dist-firefox",
   "node_modules",
@@ -31,7 +32,19 @@ const EXCLUDED = new Set([
  * disable every `apps/extension/src` rule below, including the secret-material
  * and browser-global boundaries. Skipping by path keeps the extension scanned.
  */
-const EXCLUDED_PATHS = new Set(["apps/terminal", "apps/ui-lab"]);
+// Mobile build outputs, all git-ignored: the XcodeGen project, UniFFI bindings and XCFramework,
+// Gradle state, and the Android native libraries. `target` (Cargo) is excluded by name above.
+const EXCLUDED_PATHS = new Set([
+  "apps/terminal",
+  "apps/ui-lab",
+  "mobile/android/.gradle",
+  "mobile/android/app/build",
+  "mobile/android/app/src/main/jniLibs",
+  "mobile/android/build",
+  "mobile/ios/Bramble.xcodeproj",
+  "mobile/ios/Generated",
+  "mobile/ios/build",
+]);
 const BINARY_EXTENSIONS = [".jpg", ".otf", ".png", ".wasm", ".webp", ".woff2", ".zip"] as const;
 const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/background/index.ts",

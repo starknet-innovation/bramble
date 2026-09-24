@@ -1,0 +1,58 @@
+[package]
+name = "bramble-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.92"
+license = "MIT"
+publish = false
+description = "Bramble mobile wallet core: Krusty KMS key custody, vault, and Starknet protocol logic behind a UniFFI boundary"
+
+[lib]
+# staticlib: linked into the iOS app through an XCFramework.
+# cdylib:    loaded by the Android app from jniLibs, and read by uniffi-bindgen.
+# lib:       integration tests and the bindgen binary.
+crate-type = ["staticlib", "cdylib", "lib"]
+name = "bramble_core"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["bindgen"]
+
+[features]
+bindgen = ["uniffi/cli"]
+
+[dependencies]
+# Wallet cryptography. Pinned exactly, and to the same release as the extension's
+# `@starknetfoundation/krusty-kms-wasm` (tests/conformance/mobile-core-pins.test.ts).
+# `parallel` (rayon) is only used by proof generation, which this core never runs.
+krusty-kms = { version = "=0.11.0", default-features = false }
+krusty-kms-common = { version = "=0.11.0" }
+starknet-types-core = { version = "=0.2.4", features = ["hash"] }
+# Bindings generator for the Swift and Kotlin surfaces.
+uniffi = { version = "=0.29.5" }
+# Vault envelope: the extension's EncryptedEnvelope v3 (PBKDF2-SHA-256 -> AES-256-GCM).
+aes-gcm = { version = "=0.11.1", features = ["zeroize"] }
+pbkdf2 = { version = "=0.13.0", default-features = false, features = ["hmac"] }
+sha2 = { version = "=0.11.0", default-features = false }
+getrandom = { version = "=0.4.3" }
+base64 = { version = "=0.22.1" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151" }
+thiserror = { version = "=2.0.21" }
+zeroize = { version = "=1.9.0", features = ["derive"] }
+
+[dev-dependencies]
+sha3 = { version = "=0.12.0" }
+tempfile = { version = "=3.27.0" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+# PBKDF2 at the extension's 600k iterations is unusably slow unoptimised; the
+# vault tests run the real KDF, so dependencies are optimised even in debug.
+[profile.dev.package."*"]
+opt-level = 3

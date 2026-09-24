@@ -1,0 +1,53 @@
+{
+  "accounts": [
+    {
+      "accountIndex": 0,
+      "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "networkId": "SN_SEPOLIA",
+      "publicKeyX": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+      "signatureR": "0x6a4ee14cdd66ba20473b5ad91c73401f71ffd77fe1afa042eaa0877e5a091bd",
+      "signatureS": "0x3d18b5fb72c48c6e963e6da191d917c24fe01bd588b7ec9b985426770c57abf"
+    },
+    {
+      "accountIndex": 1,
+      "address": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "networkId": "SN_SEPOLIA",
+      "publicKeyX": "0x7873b5322cbee02f90349e3dea6af8daa6e26dec9b13940b7ab7358617f32bd",
+      "signatureR": "0x2de57205bbfe957c6052bd4205e44429dc5b4ac4c5c8e794bff8066d01c9f75",
+      "signatureS": "0x25d984d9a0003f2c91336dd74b1d581971944f0a0b3f24dd048b403d8ba2515"
+    },
+    {
+      "accountIndex": 0,
+      "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "networkId": "SN_MAIN",
+      "publicKeyX": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+      "signatureR": "0x6a4ee14cdd66ba20473b5ad91c73401f71ffd77fe1afa042eaa0877e5a091bd",
+      "signatureS": "0x3d18b5fb72c48c6e963e6da191d917c24fe01bd588b7ec9b985426770c57abf"
+    }
+  ],
+  "envelope": {
+    "password": "parity-vector-password",
+    "plaintext": {
+      "hello": "bramble",
+      "n": 7
+    },
+    "scope": "bramble.parity",
+    "sealed": {
+      "cipher": "AES-256-GCM",
+      "commit": "BoABvN7PbaMEZaVmZryRPQ==",
+      "data": "bqYt3GtW6khH4Gd+GkIrxKB0ePz/lyBAYC0DYAHZ0qcvrb/Ye0XSDQc=",
+      "iterations": 600000,
+      "iv": "VPYQVkXA6ar1r2bn",
+      "kdf": "PBKDF2-SHA-256",
+      "lineage": "7ae22d090aa248ea0c78e302c961948c",
+      "salt": "pb1ih2GsWs+O9ibRkE/+gA==",
+      "scope": "bramble.parity",
+      "version": 3
+    }
+  },
+  "messageHash": "0x3f2d1b0a99887766554433221100ffeeddccbbaa99887766554433221100abc",
+  "mnemonic": "habit hope tip crystal because grunt nation idea electric witness alert like"
+}
