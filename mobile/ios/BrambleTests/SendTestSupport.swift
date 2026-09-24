@@ -8,12 +8,24 @@ let publicPhrase = "habit hope tip crystal because grunt nation idea electric wi
 let testPassword = "parity password"
 let account1 = "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3"
 
+/// The published wallet as after "Find your accounts": OZ 0 and 1 restored on Sepolia, OZ 0
+/// projected onto Mainnet, and OZ 0 on Sepolia active.
 func unlockedCore() throws -> WalletCore {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
     try core.importWallet(password: testPassword, phrase: publicPhrase, passphrase: nil)
-    _ = try core.addAccount(network: .sepolia)
+    let restored = try core.restoreRecoveredAccounts(network: .sepolia, selections: [0, 1].map {
+        RecoverySelection(family: .openZeppelin, accountIndex: $0, classHash: nil)
+    })
+    try core.selectAccount(accountId: restored[0].id)
+    _ = try core.ensureNetworkAccount(network: .mainnet)
+    try core.selectAccount(accountId: restored[0].id)
     return core
+}
+
+/// The OpenZeppelin record at `index` on `network`.
+func ozRecord(_ core: WalletCore, _ network: NetworkId, _ index: UInt32 = 0) throws -> AccountRecord {
+    try XCTUnwrap(try core.accountRecords(network: network).first { $0.family == .openZeppelin && $0.accountIndex == index })
 }
 
 /// The transaction fixture, reassembled from its five files; wire exchanges are stored as one

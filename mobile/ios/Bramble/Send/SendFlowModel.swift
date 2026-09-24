@@ -35,15 +35,17 @@ final class SendFlowModel {
     }
 
     let network: NetworkInfo
-    let account: AccountInfo
-    let otherAccounts: [AccountInfo]
+    /// The sending account: a vault record the core will sign for by id.
+    let account: AccountRecord
+    /// This network's other accounts, offered as recipients.
+    let otherAccounts: [AccountRecord]
     private let core: WalletCore
     private let balances: [String: String]
     private let transport: RpcTransport
     private let track: (TransferPlan) -> Void
     private var driver: SendDriver?
 
-    init(core: WalletCore, network: NetworkInfo, account: AccountInfo, otherAccounts: [AccountInfo], balances: [String: String], transport: RpcTransport, track: @escaping (TransferPlan) -> Void = { _ in }) {
+    init(core: WalletCore, network: NetworkInfo, account: AccountRecord, otherAccounts: [AccountRecord], balances: [String: String], transport: RpcTransport, track: @escaping (TransferPlan) -> Void = { _ in }) {
         self.core = core
         self.network = network
         self.account = account
@@ -157,13 +159,19 @@ final class SendFlowModel {
         }
         guard let recipient else { stage = .recipient; return }
         dropPlan()
-        let request = TransferRequest(network: network.network, accountIndex: account.index, tokenAddress: token.address, recipient: recipient, amount: amount, feeBalance: balances["STRK"])
+        let request = TransferRequest(network: network.network, accountId: account.id, tokenAddress: token.address, recipient: recipient, amount: amount, feeBalance: balances["STRK"])
         let plan: TransferPlan
         do {
             plan = try core.prepareTransfer(request: request)
         } catch SendError.InvalidRecipient {
             recipientError = SendCopy.invalidRecipient
             stage = .recipient
+            return
+        } catch SendError.ViewOnlyAccount {
+            amountError = BrambleCopy.sendViewOnlyAccount
+            return
+        } catch SendError.UnsupportedAccount {
+            amountError = BrambleCopy.sendUnsupportedAccount
             return
         } catch {
             amountError = SendCopy.amountInvalid

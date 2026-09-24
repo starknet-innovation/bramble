@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 
 // Structural components from `styles-base.ts`, ported from the iOS Surfaces.swift: grouped menu
@@ -185,6 +186,43 @@ fun TokenMark(address: String, symbol: String) {
             Box(Modifier.size(BrambleSize.mark).background(skin.sunken), contentAlignment = Alignment.Center) {
                 Text(symbol.take(1), color = skin.muted, style = textStyle(BrambleTypeScale.body, BrambleWeight.bold))
             }
+        }
+    }
+}
+
+/**
+ * `details > summary` (the recovery families, "Wallet identity"): an elevated section whose header
+ * row toggles [content]; [detail] sits after the title (a count), and the chevron shows the state.
+ */
+@Composable
+fun Disclosure(
+    title: String,
+    open: Boolean,
+    onToggle: () -> Unit,
+    detail: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val skin = LocalSkin.current
+    Column(Modifier.fillMaxWidth().clip(lgShape).background(skin.elevated, lgShape)) {
+        Row(
+            Modifier.fillMaxWidth()
+                .semantics(mergeDescendants = true) { stateDescription = if (open) "Expanded" else "Collapsed" }
+                .fillPress(Color.Transparent, skin.softPress, lgShape, pressedScale = 1f, onClick = onToggle)
+                .heightIn(min = BrambleLayout.menuRowMin)
+                .padding(horizontal = BrambleSpace.md),
+            horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.semibold))
+            Text(detail ?: "", color = skin.muted, style = textStyle(BrambleTypeScale.caption), modifier = Modifier.weight(1f))
+            BrambleIcon(if (open) BrambleIconName.CHEVRON_DOWN else BrambleIconName.CHEVRON_RIGHT, skin.muted)
+        }
+        if (open) {
+            Column(
+                Modifier.fillMaxWidth().padding(start = BrambleSpace.md, end = BrambleSpace.md, bottom = BrambleSpace.md),
+                verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
+                content = content,
+            )
         }
     }
 }

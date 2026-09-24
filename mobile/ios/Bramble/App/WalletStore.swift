@@ -8,16 +8,23 @@ import Observation
 @MainActor
 @Observable
 final class WalletStore {
-    enum Route: Equatable { case onboarding, locked, wallet }
+    /// `discovery`: an imported vault still waiting for "Find your accounts" (recovery pending).
+    enum Route: Equatable { case onboarding, locked, discovery, wallet }
     enum Tab: Equatable { case home, activity, settings }
 
     private(set) var route: Route = .onboarding
     var tab: Tab = .home
-    private(set) var accounts: [AccountInfo] = []
+    /// Every account on the selected network, as the core renders it (name, label, type, group).
+    var records: [AccountRecord] = []
+    /// Every account on every network, for the groups editor.
+    var allRecords: [AccountRecord] = []
+    var groups: [AccountGroup] = []
+    /// The active account: one for the whole vault, as in the extension. Everything that acts for
+    /// an account (send, deploy, activity) names it by `activeRecord.id`, never by index.
+    var activeRecord: AccountRecord?
     private(set) var balances: [String: String] = [:]
     private(set) var networkHealthy = true
     private(set) var busy = false
-    var selectedAccount: UInt32 = 0
     /// Words of a just-created wallet; never persisted, cleared on finish or lock.
     private(set) var pendingBackup: [String] = []
     /// A transient message shown as a toast: an error unless it was raised through `notify`.
@@ -72,12 +79,11 @@ final class WalletStore {
     /// The header's network label, as the side panel's `.account-network-label`.
     var networkLabel: String { network == .mainnet ? "Starknet" : "Sepolia" }
 
-    var account: AccountInfo? {
-        accounts.first { $0.index == selectedAccount } ?? accounts.first
-    }
+    /// The active account on the selected network.
+    var account: AccountRecord? { activeRecord }
 
     /// Runs PBKDF2-bound core work off the main actor.
-    private func work<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
+    func work<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
         busy = true
         defer { busy = false }
         return try await Task.detached(priority: .userInitiated, operation: body).value
@@ -86,8 +92,10 @@ final class WalletStore {
     // MARK: Onboarding
 
     func create(password: String) async throws {
-        let core = core
-        pendingBackup = try await work { try core.createWallet(password: password, wordCount: 12) }.words
+        let core = core, network = network
+        pendingBackup = try await work {
+            try core.createWalletOnNetwork(password: password, wordCount: 12, network: network)
+        }.words
     }
 
     func importWallet(phrase: String, password: String) async throws {
@@ -95,10 +103,10 @@ final class WalletStore {
         try await work { try core.importWallet(password: password, phrase: phrase, passphrase: nil) }
     }
 
-    /// The first account of a just-written vault, for the review step.
-    func previewAccount() async throws -> AccountInfo? {
-        let core = core, network = network
-        return try await work { try core.accounts(network: network) }.first
+    /// The first account of a just-created vault, for the review step.
+    func previewAccount() async throws -> AccountRecord? {
+        let core = core
+        return try await work { try core.activeAccount() }
     }
 
     /// Leaves onboarding for the wallet; the backup words are dropped here.
@@ -132,7 +140,10 @@ final class WalletStore {
         core.lock()
         refreshSecurity()
         pendingBackup = []
-        accounts = []
+        records = []
+        allRecords = []
+        groups = []
+        activeRecord = nil
         balances = [:]
         tab = .home
         if core.status() != .noWallet { route = .locked }
@@ -141,21 +152,6 @@ final class WalletStore {
     func switchNetwork(_ next: NetworkId) async {
         network = next
         await enterWallet()
-    }
-
-    func addAccount() async throws {
-        let core = core, network = network
-        let account = try await work { try core.addAccount(network: network) }
-        scheduleIdleLock()
-        accounts.append(account)
-        selectedAccount = account.index
-        await refreshBalances()
-    }
-
-    func select(_ index: UInt32) async {
-        selectedAccount = index
-        balances = [:]
-        await refreshBalances()
     }
 
     func revealPhrase(password: String) async throws -> [String] {
@@ -177,13 +173,18 @@ final class WalletStore {
         route = .onboarding
     }
 
-    private func enterWallet() async {
-        let core = core, network = network
-        accounts = (try? await work { try core.accounts(network: network) }) ?? []
-        if !accounts.contains(where: { $0.index == selectedAccount }) { selectedAccount = 0 }
+    /// Routes into the wallet: back to discovery while recovery is pending; otherwise the network
+    /// switch rule (keep, pick, or project the active account) runs before anything renders.
+    func enterWallet() async {
+        if (try? core.recoveryPending()) == true {
+            route = .discovery
+            scheduleIdleLock()
+            return
+        }
+        await reloadAccounts(ensure: true)
         route = .wallet
         scheduleIdleLock()
-        await refreshBalances()
+        await refreshBalances(reset: true)
     }
 
     // MARK: Security
@@ -199,7 +200,7 @@ final class WalletStore {
     func scheduleIdleLock() {
         idleTimer?.cancel()
         guard let remaining = core.sessionRemainingMs() else {
-            if route == .wallet { lock() }
+            if route == .wallet || route == .discovery { lock() }
             return
         }
         idleTimer = Task { [weak self] in
@@ -221,7 +222,7 @@ final class WalletStore {
         } catch CoreError.BiometricInvalidated {
             invalidateBiometric()
         } catch {}
-        if route == .wallet && core.status() != .unlocked { lock() }
+        if (route == .wallet || route == .discovery) && core.status() != .unlocked { lock() }
         refreshSecurity()
     }
 
@@ -290,8 +291,10 @@ final class WalletStore {
         refreshSecurity()
     }
 
-    func refreshBalances() async {
-        guard let account else { return }
+    /// Reads the active account's balances; `reset` first clears the previous account's figures.
+    func refreshBalances(reset: Bool = false) async {
+        if reset { balances = [:] }
+        guard let account = activeRecord else { return }
         do {
             balances = try await rpc.balances(of: account.address, on: networkInfo)
             networkHealthy = true

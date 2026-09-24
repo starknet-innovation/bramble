@@ -4,7 +4,7 @@ import SwiftUI
 /// The wallet frame from `wallet-shell.ts` / `styles-dock.ts`: persistent account header, the
 /// active dock screen, and the floating dock. Flow screens push over it without the dock.
 struct WalletShell: View {
-    enum Flow: Hashable { case receive, network, appearance, security, reveal, remove, send, deploy }
+    enum Flow: Hashable { case receive, network, appearance, security, reveal, remove, send, deploy, accounts }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -18,7 +18,10 @@ struct WalletShell: View {
                 VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
                     WalletHeader(openAccounts: { accountsOpen = true })
                     switch store.tab {
-                    case .home: HomeView(receive: { flows.append(.receive) }, send: { flows.append(.send) }, deploy: { flows.append(.deploy) })
+                    case .home: HomeView(receive: { flows.append(.receive) }, send: {
+                        // Ready and Braavos accounts are refused by the core; say why up front.
+                        if let refusal = store.sendRefusal { store.toast = refusal } else { flows.append(.send) }
+                    }, deploy: { flows.append(.deploy) })
                     case .activity: ActivityView()
                     case .settings: SettingsHubView(open: { flows.append($0) })
                     }
@@ -42,6 +45,7 @@ struct WalletShell: View {
                     case .remove: RemoveWalletView()
                     case .send: SendFlowView()
                     case .deploy: DeployAccountView()
+                    case .accounts: AccountsManageView()
                     }
                 }
                 .toolbar(.hidden, for: .navigationBar)
@@ -50,9 +54,9 @@ struct WalletShell: View {
                 .edgeSwipeBack(enabled: flow != .reveal && !store.busy) { if !flows.isEmpty { flows.removeLast() } }
             }
         }
-        .brambleHaptic(.selection, trigger: store.selectedAccount)
+        .brambleHaptic(.selection, trigger: store.activeRecord?.id)
         .sheet(isPresented: $accountsOpen) {
-            SkinProvider { AccountsSheet() }.environment(store)
+            SkinProvider { AccountsSheet(openManage: { flows.append(.accounts) }) }.environment(store)
         }
     }
 }
@@ -67,13 +71,14 @@ struct WalletHeader: View {
 
     var body: some View {
         let m = BrambleMetrics.WalletHeader.self
-        let name = "Account \((store.account?.index ?? 0) + 1)"
+        let name = store.activeRecord?.displayName ?? ""
         HStack(spacing: m.gap) {
             Button(action: openAccounts) {
                 HStack(spacing: m.triggerGap) {
-                    AccountAvatarView(address: store.account?.address ?? "0x0")
+                    AccountAvatarView(address: store.activeRecord?.address ?? "0x0")
                     VStack(alignment: .leading, spacing: m.accountGap) {
                         HStack(spacing: m.nameGap) {
+                            // The core's display name: the user's label, else the friendly nickname.
                             Text(name)
                                 .brambleText(BrambleTypeScale.body.sized(m.nameSize), weight: m.nameWeight)
                                 .lineLimit(1)

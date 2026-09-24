@@ -44,7 +44,7 @@ class LockOnBackgroundTest {
     fun pressingHomeLocksAndReturnsToUnlock() {
         val r = robot()
         r.importPublicWalletDirectly()
-        r.waitForText("Account 1", 20_000)
+        r.waitForHome()
         rule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
         rule.waitUntil(5_000) { r.onMain { route } == Route.LOCKED }
         r.awaitCoreStatus(WalletStatus.LOCKED)

@@ -1,3 +1,4 @@
+import BrambleCore
 import SwiftUI
 
 // Structural components from `styles-base.ts`: grouped menu lists with inset hairlines, the flow
@@ -253,8 +254,8 @@ struct TokenMark: View {
     }
 }
 
-/// `0x1234…abcd`, the extension's shortened address.
+/// `0x1234…abcd`, the extension's `accountLabel`, computed by the core so both wallets truncate
+/// identically (no length guard, UTF-16 slicing).
 func shortAddress(_ address: String) -> String {
-    guard address.count > 14 else { return address }
-    return "\(address.prefix(6))…\(address.suffix(4))"
+    accountLabel(address: address)
 }

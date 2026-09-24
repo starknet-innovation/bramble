@@ -27,7 +27,8 @@ Companion to [vault-security.md](vault-security.md); section numbers are kept.
   `reveal` and `delete` calls from many threads leave a stored count equal to the number of KDF runs
   (every `WrongPassword` result), and the rest are `Throttled`.
 - `auto_lock.rs`: expires after `IDLE_LOCK_MS` of monotonic time; `accounts()`/`status()` do not
-  renew; `sign_hash`/`add_account` do; a monotonic value below `last_activity` or a new boot id
+  renew, nor do account reads, selection, labels or groups; `sign_hash_for_account`,
+  `add_regular_account` and `ensure_network_account` do; a monotonic value below `last_activity` or a new boot id
   locks instead of panicking or extending; a wall-clock jump has no effect; an expired session is
   dropped (checked through `status()`).
 - `ffi_surface.rs`: no exported method returns secret-shaped types (above).

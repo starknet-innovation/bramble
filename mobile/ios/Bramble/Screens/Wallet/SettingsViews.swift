@@ -20,6 +20,7 @@ struct SettingsHubView: View {
                 .brambleText(BrambleTypeScale.title.sized(BrambleMetrics.H2.size), weight: BrambleMetrics.H2.weight, tracking: BrambleMetrics.H2.tracking)
                 .accessibilityAddTraits(.isHeader)
             SettingsSection(title: "Accounts & networks") {
+                MenuRow(icon: .wallet, title: "Accounts & groups") { open(.accounts) }
                 MenuRow(icon: .globe, title: "Network", value: store.networkInfo.name) { open(.network) }
             }
             SettingsSection(title: "Preferences") {

@@ -6,7 +6,9 @@ import Foundation
 /// from Release builds. It answers from `RpcFixtures.generated.swift` (rendered from the
 /// extension's network catalog and its recorded send path), echoing each request's id, so the
 /// core judges these answers exactly as live ones. A write is refused with a JSON-RPC error and
-/// counted, so a test can prove that nothing was ever broadcast.
+/// counted, so a test can prove that nothing was ever broadcast. Only the published wallet's
+/// primary account (`RpcFixtures.primaryAccounts`) exists on this node: every other address is
+/// undeployed and empty, so account discovery finds exactly that one account.
 struct FixtureTransport: RpcTransport {
     enum Failure: Error { case offline, unknownRequest }
 
@@ -48,9 +50,13 @@ struct FixtureTransport: RpcTransport {
             let call = params["request"] as? [String: Any]
             guard let token = call?["contract_address"] as? String,
                   let limbs = RpcFixtures.readyBalances[token] else { throw Failure.unknownRequest }
-            answer = ["result": state == .empty || state == .unfunded ? ["0x0", "0x0"] : limbs]
+            let holder = (call?["calldata"] as? [String])?.first ?? ""
+            let empty = state == .empty || state == .unfunded || !RpcFixtures.primaryAccounts.contains(holder)
+            answer = ["result": empty ? ["0x0", "0x0"] : limbs]
         case "starknet_getClassHashAt":
-            answer = try Self.object(deployed ? RpcFixtures.deployedClassHash : RpcFixtures.undeployedClassHash)
+            let address = params["contract_address"] as? String ?? ""
+            let exists = deployed && RpcFixtures.primaryAccounts.contains(address)
+            answer = try Self.object(exists ? RpcFixtures.deployedClassHash : RpcFixtures.undeployedClassHash)
         case "starknet_getNonce":
             answer = try Self.object(deployed ? RpcFixtures.deployedNonce : RpcFixtures.undeployedNonce)
         case "starknet_estimateFee" where state == .feeFailure:

@@ -24,24 +24,26 @@ import org.bramble.wallet.design.brambleTween
 
 enum class OnboardingPath { CREATE, RECOVER }
 
-private enum class Step { WELCOME, IMPORT_METHOD, RECOVERY_PHRASE, PASSPHRASE, REVIEW_ACCOUNT, SAVE_PHRASE, CONFIRM_BACKUP, COMPLETE }
+private enum class Step { WELCOME, IMPORT_METHOD, RECOVERY_PHRASE, PASSPHRASE, REVIEW_ACCOUNT, FIND_ACCOUNTS, SAVE_PHRASE, CONFIRM_BACKUP, COMPLETE }
 
 /**
  * First-run flow, step for step with the iOS `OnboardingFlow` (and so the extension wizard):
  *
  *   create: welcome → passphrase → review account → save phrase → confirm backup → all set
- *   import: welcome → method → recovery phrase → passphrase → review account → all set
+ *   import: welcome → method → recovery phrase → passphrase → find your accounts → all set
  *
  * The vault is written when the passphrase is accepted; after that the stack is replaced, so
- * neither the back control nor the system back gesture returns past it. Steps slide and fade on
+ * neither the back control nor the system back gesture returns past it. An imported vault stays
+ * recovery pending until discovery restores its accounts, so unlocking one resumes at "Find your
+ * accounts" ([resumingDiscovery], `Route.DISCOVERY`). Steps slide and fade on
  * the out ease over `drawerMs`; Compose scales that by the system animator setting, so it is a
  * cut when animations are off.
  */
 @Composable
-fun OnboardingFlow(store: WalletStore) {
+fun OnboardingFlow(store: WalletStore, resumingDiscovery: Boolean = false) {
     val scope = rememberCoroutineScope()
-    var steps by remember { mutableStateOf(listOf(Step.WELCOME)) }
-    var path by remember { mutableStateOf(OnboardingPath.CREATE) }
+    var steps by remember { mutableStateOf(listOf(if (resumingDiscovery) Step.FIND_ACCOUNTS else Step.WELCOME)) }
+    var path by remember { mutableStateOf(if (resumingDiscovery) OnboardingPath.RECOVER else OnboardingPath.CREATE) }
     var forward by remember { mutableStateOf(true) }
     // Typed on the recovery step, handed to the core at the passphrase step, then cleared.
     var importedPhrase by remember { mutableStateOf("") }
@@ -92,11 +94,10 @@ fun OnboardingFlow(store: WalletStore) {
                             store.importWallet(phrase, passphrase)
                             importedPhrase = ""
                         }
-                        replace(Step.REVIEW_ACCOUNT)
+                        replace(if (path == OnboardingPath.CREATE) Step.REVIEW_ACCOUNT else Step.FIND_ACCOUNTS)
                     }
-                    Step.REVIEW_ACCOUNT -> ReviewAccountStep(store, store.network) {
-                        replace(if (path == OnboardingPath.CREATE) Step.SAVE_PHRASE else Step.COMPLETE)
-                    }
+                    Step.REVIEW_ACCOUNT -> ReviewAccountStep(store, store.network) { replace(Step.SAVE_PHRASE) }
+                    Step.FIND_ACCOUNTS -> FindAccountsStep(store) { replace(Step.COMPLETE) }
                     Step.SAVE_PHRASE -> SavePhraseStep(store.pendingBackup) { push(Step.CONFIRM_BACKUP) }
                     Step.CONFIRM_BACKUP -> ConfirmBackupStep(store.pendingBackup, back = ::pop) { replace(Step.COMPLETE) }
                     Step.COMPLETE -> CompleteStep { scope.launch { runCatching { store.finishOnboarding() } } }

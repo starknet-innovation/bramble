@@ -4,8 +4,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.util.UUID
+import org.bramble.core.AccountFamily
 import org.bramble.core.CoreException
 import org.bramble.core.NetworkId
+import org.bramble.core.RecoverySelection
 import org.bramble.core.WalletCore
 import org.bramble.core.WalletStatus
 import org.bramble.core.supportedNetworks
@@ -40,17 +42,26 @@ class CoreBridgeTest {
     fun parityWithTheExtension() {
         val fixture = fixture()
         val core = core()
+        // An import is recovery pending with no accounts until discovery restores some (as
+        // mobile/core/tests/parity.rs): restore OpenZeppelin 0 and 1, then project the active one
+        // onto Mainnet, which is how the Mainnet vectors' records come to exist.
         core.importWallet("parity password", fixture.getString("mnemonic"), null)
-        core.addAccount(NetworkId.SEPOLIA)
+        val oz = { index: UInt -> RecoverySelection(AccountFamily.OPEN_ZEPPELIN, index, null) }
+        val restored = core.restoreRecoveredAccounts(NetworkId.SEPOLIA, listOf(oz(0u), oz(1u)))
+        core.selectAccount(restored.first().id)
+        core.ensureNetworkAccount(NetworkId.MAINNET)
         val vectors = fixture.getJSONArray("accounts")
         for (i in 0 until vectors.length()) {
             val vector = vectors.getJSONObject(i)
             val network = if (vector.getString("networkId") == "SN_MAIN") NetworkId.MAINNET else NetworkId.SEPOLIA
-            val index = vector.getInt("accountIndex")
-            val account = core.accounts(network)[index]
+            val index = vector.getInt("accountIndex").toUInt()
+            val account = core.accountRecords(network).first { it.accountIndex == index }
             assertEquals(vector.getString("address"), account.address)
+            assertEquals(vector.getString("classHash"), account.classHash)
             assertEquals(vector.getString("publicKeyX"), account.publicKey)
-            val signature = core.signHash(index.toUInt(), fixture.getString("messageHash"))
+            // Signing is by account record, never by index.
+            val signature = core.signHashForAccount(account.id, fixture.getString("messageHash"))
+            assertEquals(vector.getString("publicKeyX"), signature.publicKey)
             assertEquals(vector.getString("signatureR"), signature.r)
             assertEquals(vector.getString("signatureS"), signature.s)
         }
@@ -61,9 +72,10 @@ class CoreBridgeTest {
         val core = core()
         val phrase = core.createWallet("a strong password", 12u)
         assertEquals(12, phrase.words.size)
+        val account = core.activeAccount()!!
         core.lock()
         assertEquals(WalletStatus.LOCKED, core.status())
-        assertThrows(CoreException.Locked::class.java) { core.signHash(0u, "0x1") }
+        assertThrows(CoreException.Locked::class.java) { core.signHashForAccount(account.id, "0x1") }
         assertThrows(CoreException.WrongPassword::class.java) { core.unlock("wrong password") }
     }
 

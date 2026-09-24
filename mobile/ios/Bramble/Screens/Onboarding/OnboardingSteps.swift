@@ -201,7 +201,7 @@ struct ReviewAccountStep: View {
     @Environment(WalletStore.self) private var store
     let network: NetworkId
     let next: () -> Void
-    @State private var account: AccountInfo?
+    @State private var account: AccountRecord?
     @State private var selected = true
     @State private var acknowledged = false
 
@@ -212,13 +212,13 @@ struct ReviewAccountStep: View {
                 Button { selected.toggle() } label: {
                     HStack(spacing: option.gap) {
                         // `.onboarding-account-avatar`: the account's two-digit position.
-                        Text(String(format: "%02d", Int(account?.index ?? 0) + 1))
+                        Text(String(format: "%02d", Int(account?.accountIndex ?? 0) + 1))
                             .brambleText(BrambleTypeScale.caption, weight: BrambleWeight.bold)
                             .frame(width: option.iconSize, height: option.iconSize)
                             .background(skin.panel, in: Circle())
                         VStack(alignment: .leading, spacing: option.copyGap) {
                             Text("Primary Bramble account").brambleText(BrambleTypeScale.body.sized(option.titleSize), weight: option.titleWeight)
-                            Text(account.map { shortAddress($0.address) } ?? "Deriving account…")
+                            Text(account.map { accountPreviewLabel(address: $0.address) } ?? "Deriving account…")
                                 .brambleText(BrambleTypeStyle(size: option.detailSize, lineHeight: option.detailLineHeight), weight: BrambleMetrics.Button.weight)
                                 .foregroundStyle(selected ? skin.text : skin.muted)
                         }
@@ -233,7 +233,7 @@ struct ReviewAccountStep: View {
                 .buttonStyle(FillPressStyle(fill: selected ? skin.softPress : skin.elevated, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: option.radius, style: .continuous)))
                 .elevation(selected ? BrambleElevation.onboardingAccountSelected : nil)
                 .animation(BrambleMotionPolicy.animation(BrambleEase.out.animation(ms: BrambleMotion.liftMs), reduceMotion: reduceMotion), value: selected)
-                .accessibilityLabel("Primary Bramble account, \(account.map { shortAddress($0.address) } ?? "deriving account")")
+                .accessibilityLabel("Primary Bramble account, \(account.map { accountPreviewLabel(address: $0.address) } ?? "deriving account")")
                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
                 .accessibilityHint("Selects this account to add")
                 .brambleHaptic(.selection, trigger: selected)

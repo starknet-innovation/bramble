@@ -23,7 +23,9 @@ fn close_between_invoke_write_and_reply_keeps_the_pending_record() {
         plan.advance(rpc_reply(id, &reply)),
         Err(SendError::PlanClosed)
     );
-    let records = core.activity(bramble_core::NetworkId::Sepolia, 0).unwrap();
+    let records = core
+        .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
+        .unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(
         (records[0].hash.as_str(), records[0].status),
@@ -38,7 +40,10 @@ fn close_between_invoke_write_and_reply_keeps_the_pending_record() {
     // The record is settled later by reconciliation, not by the closed plan.
     let refresh = core
         .clone()
-        .refresh_activity(bramble_core::NetworkId::Sepolia, 0, hash.clone())
+        .refresh_activity(
+            oz_id(&core, bramble_core::NetworkId::Sepolia, 0),
+            hash.clone(),
+        )
         .unwrap();
     let done = run_until(
         &refresh,
@@ -72,7 +77,9 @@ fn close_between_auto_deploy_write_and_reply_keeps_the_pending_record() {
         plan.advance(StepReply::WaitElapsed),
         Err(SendError::PlanClosed)
     );
-    let records = core.activity(bramble_core::NetworkId::Sepolia, 0).unwrap();
+    let records = core
+        .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
+        .unwrap();
     assert_eq!(records.len(), 1, "the invoke was never signed");
     assert_eq!(records[0].summary, "Deploy account contract");
     assert_eq!(records[0].status, TxStatus::Pending);
@@ -85,7 +92,10 @@ fn close_between_auto_deploy_write_and_reply_keeps_the_pending_record() {
     for expected in [TxStatus::Pending, TxStatus::Pending, TxStatus::Rejected] {
         let refresh = core
             .clone()
-            .refresh_activity(bramble_core::NetworkId::Sepolia, 0, hash.clone())
+            .refresh_activity(
+                oz_id(&core, bramble_core::NetworkId::Sepolia, 0),
+                hash.clone(),
+            )
             .unwrap();
         let (id, ..) = rpc_parts(&refresh.advance(StepReply::Start).unwrap());
         let gone = json!({"error": {"code": 29, "message": "Transaction hash not found"}});
@@ -163,7 +173,7 @@ fn lock_during_submit_is_refused_at_the_signing_point() {
     assert_eq!(failed.code, SendFailureCode::Locked);
     assert_eq!(plan.signatures_made(), 0);
     assert!(core
-        .activity(bramble_core::NetworkId::Sepolia, 0)
+        .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
         .unwrap()
         .is_empty());
 }
@@ -192,7 +202,7 @@ fn a_refused_invoke_write_leaves_no_activity_record() {
     let failed = failure(plan.advance(rpc_reply(id, &refused)).unwrap());
     assert_eq!(failed.code, SendFailureCode::NodeError);
     assert!(core
-        .activity(bramble_core::NetworkId::Sepolia, 0)
+        .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
         .unwrap()
         .is_empty());
 }
@@ -209,7 +219,7 @@ fn a_refused_deploy_write_leaves_no_activity_record() {
     let failed = failure(plan.advance(rpc_reply(id, &refused)).unwrap());
     assert_eq!(failed.code, SendFailureCode::AutoDeploymentFailed);
     assert!(core
-        .activity(bramble_core::NetworkId::Sepolia, 0)
+        .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
         .unwrap()
         .is_empty());
 }

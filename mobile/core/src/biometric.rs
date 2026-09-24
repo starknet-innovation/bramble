@@ -14,7 +14,7 @@ use zeroize::Zeroizing;
 
 use crate::container::{self, StoredVault};
 use crate::files::storage;
-use crate::migrations::Opened;
+use crate::migrations::{open_container, Opened, VAULT_VERSION};
 use crate::wallet::{expire, WalletCore};
 use crate::CoreError;
 
@@ -49,8 +49,8 @@ impl WalletCore {
     fn drop_biometric_slot(&self, expected_id: Option<&str>) -> Result<(), CoreError> {
         let _file = self.lock_file();
         let mut file = match self.read_vault() {
-            Ok(StoredVault::V2(file)) => file,
-            Ok(StoredVault::V1(_)) | Err(CoreError::NoWallet) => return Ok(()),
+            Ok(StoredVault::Container(file)) => file,
+            Ok(StoredVault::Envelope(_)) | Err(CoreError::NoWallet) => return Ok(()),
             Err(error) => return Err(error),
         };
         match (&file.biometric_slot, expected_id) {
@@ -85,20 +85,31 @@ impl WalletCore {
             expire(&mut session, &self.now());
             let _file = self.lock_file();
             let (mut base, dek) = match self.read_vault()? {
-                StoredVault::V2(file) if file.password_slot == opened.container.password_slot => {
-                    (*file, opened.dek)
-                }
-                StoredVault::V1(_) => match session.as_ref().and_then(|s| s.pending.clone()) {
-                    Some(pending) => {
-                        let dek = session
-                            .as_ref()
-                            .map(|s| s.dek.clone())
-                            .unwrap_or(opened.dek);
-                        (pending, dek)
+                // The file on disk, freshly read under the file lock; an older-version file is
+                // replaced by the current-version one this attempt built from it (no session
+                // write can have happened since, as every payload write is current-version).
+                StoredVault::Container(file)
+                    if file.password_slot == opened.container.password_slot =>
+                {
+                    if file.version < VAULT_VERSION {
+                        (opened.container, opened.dek)
+                    } else {
+                        (*file, opened.dek)
                     }
-                    None => (opened.container, opened.dek),
-                },
-                StoredVault::V2(_) => return Err(storage("vault changed on disk")),
+                }
+                StoredVault::Envelope(_) => {
+                    match session.as_ref().and_then(|s| s.pending.clone()) {
+                        Some(pending) => {
+                            let dek = session
+                                .as_ref()
+                                .map(|s| s.dek.clone())
+                                .unwrap_or(opened.dek);
+                            (pending, dek)
+                        }
+                        None => (opened.container, opened.dek),
+                    }
+                }
+                StoredVault::Container(_) => return Err(storage("vault changed on disk")),
             };
             base.biometric_slot = Some(base.seal_biometric(&dek, &secret, domain)?);
             self.write_vault(&base)?;
@@ -126,7 +137,7 @@ impl WalletCore {
     pub fn unlock_with_biometric(&self, wrap_secret: Vec<u8>) -> Result<(), CoreError> {
         let secret = self::wrap_secret(wrap_secret)?;
         let epoch = self.lock_epoch.load(Ordering::SeqCst);
-        let StoredVault::V2(file) = self.read_vault()? else {
+        let StoredVault::Container(file) = self.read_vault()? else {
             return Err(CoreError::BiometricUnavailable);
         };
         let dek = match file.open_biometric(&secret) {
@@ -137,14 +148,10 @@ impl WalletCore {
             }
             other => other?,
         };
-        let payload = file.open_payload(&dek)?;
-        let opened = Opened {
-            payload,
-            dek,
-            container: *file,
-            migrated: false,
-        };
-        self.install(epoch, opened, None)
+        // A version-2 container opened this way is migrated with the DEK alone (no KDF needed).
+        let opened = open_container(*file, dek)?;
+        let pending = self.commit_migration(&opened);
+        self.install(epoch, opened, pending)
     }
 
     /// Compares the host's biometric domain with the slot, each time the app becomes active. A
@@ -152,8 +159,8 @@ impl WalletCore {
     /// dropped, and `BiometricInvalidated` is returned. `Unavailable` changes nothing.
     pub fn reconcile_biometric_domain(&self, domain: BiometricDomain) -> Result<(), CoreError> {
         let file = match self.read_vault() {
-            Ok(StoredVault::V2(file)) => file,
-            Ok(StoredVault::V1(_)) | Err(CoreError::NoWallet) => return Ok(()),
+            Ok(StoredVault::Container(file)) => file,
+            Ok(StoredVault::Envelope(_)) | Err(CoreError::NoWallet) => return Ok(()),
             Err(error) => return Err(error),
         };
         let Some(slot) = file.biometric_slot else {

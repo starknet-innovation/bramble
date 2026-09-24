@@ -38,7 +38,9 @@ fn deployed_send_confirms_and_records() {
             hash: hash.clone(),
         }
     );
-    let record = &core.activity(bramble_core::NetworkId::Sepolia, 0).unwrap()[0];
+    let record = &core
+        .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
+        .unwrap()[0];
     assert_eq!(
         (record.hash.as_str(), record.status),
         (hash.as_str(), TxStatus::Accepted)
@@ -90,7 +92,7 @@ fn a_fee_above_three_halves_is_refused_before_signing() {
     assert_eq!(failed.code, SendFailureCode::ReviewedFeeExceeded);
     assert_eq!(plan.signatures_made(), 0);
     assert!(core
-        .activity(bramble_core::NetworkId::Sepolia, 0)
+        .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
         .unwrap()
         .is_empty());
 }
@@ -282,22 +284,88 @@ fn wrong_chain_and_out_of_order_replies_close_the_plan() {
 #[test]
 fn a_locked_wallet_cannot_prepare() {
     let (_dir, core) = wallet();
+    let first = oz_id(&core, bramble_core::NetworkId::Sepolia, 0);
     core.lock();
     assert_eq!(
         core.clone().prepare_transfer(request(ACCOUNT_1)).err(),
         Some(SendError::Locked)
     );
     assert_eq!(
-        core.clone()
-            .prepare_deployment(bramble_core::NetworkId::Sepolia, 0)
-            .err(),
+        core.clone().prepare_deployment(first.clone()).err(),
         Some(SendError::Locked)
     );
     core.unlock(PASSWORD.into()).unwrap();
     let mut beyond = request(ACCOUNT_1);
-    beyond.account_index = 5;
+    beyond.account_id = "SN_SEPOLIA:0x5".into();
     assert_eq!(
         core.clone().prepare_transfer(beyond).err(),
         Some(SendError::UnknownAccount)
     );
+    let mut elsewhere = request(ACCOUNT_1);
+    elsewhere.account_id = oz_id(&core, bramble_core::NetworkId::Mainnet, 0);
+    assert_eq!(
+        core.clone().prepare_transfer(elsewhere).err(),
+        Some(SendError::UnknownAccount),
+        "the record must be on the request's network"
+    );
+}
+
+/// Signing goes through the account record: a view-only (Braavos) record and an Argent (Ready)
+/// record are refused before a plan exists, even though every family at one index shares the
+/// OZ record's key; a vault still waiting for discovery has nothing to send from.
+#[test]
+fn only_openzeppelin_records_can_send_or_deploy() {
+    let (_dir, _clock, core) = common_pending();
+    let class = |label: &str| {
+        bramble_core::account_classes()
+            .into_iter()
+            .find(|class| class.label == label)
+            .unwrap()
+            .class_hash
+    };
+    assert_eq!(
+        core.clone().prepare_transfer(request(ACCOUNT_1)).err(),
+        Some(SendError::UnknownAccount),
+        "recovery pending"
+    );
+    let restored = core
+        .restore_recovered_accounts(
+            bramble_core::NetworkId::Sepolia,
+            vec![
+                bramble_core::RecoverySelection {
+                    family: bramble_core::AccountFamily::OpenZeppelin,
+                    account_index: 0,
+                    class_hash: None,
+                },
+                bramble_core::RecoverySelection {
+                    family: bramble_core::AccountFamily::Argent,
+                    account_index: 0,
+                    class_hash: Some(class("argent 0.4.0")),
+                },
+                bramble_core::RecoverySelection {
+                    family: bramble_core::AccountFamily::Braavos,
+                    account_index: 0,
+                    class_hash: Some(class("braavos 1.0.0")),
+                },
+            ],
+        )
+        .unwrap();
+    for (record, refusal) in [
+        (&restored[1], SendError::UnsupportedAccount),
+        (&restored[2], SendError::ViewOnlyAccount),
+    ] {
+        let mut transfer = request(ACCOUNT_1);
+        transfer.account_id = record.id.clone();
+        assert_eq!(
+            core.clone().prepare_transfer(transfer).err(),
+            Some(refusal.clone())
+        );
+        assert_eq!(
+            core.clone().prepare_deployment(record.id.clone()).err(),
+            Some(refusal)
+        );
+        // Reading activity is not signing; any stored record may be read.
+        assert!(core.activity(record.id.clone()).unwrap().is_empty());
+    }
+    assert!(core.clone().prepare_transfer(request(ACCOUNT_1)).is_ok());
 }

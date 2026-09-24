@@ -1,25 +1,10 @@
 import SwiftUI
-import UIKit
-import UniformTypeIdentifiers
 
 // `.toast` from `styles-components.ts` with the behaviour of `showToast` in `shared/dom.ts`: a
 // leading tone chip, the message, and on errors a copy control for the full details. It springs
 // in with the momentum spring, can be swiped away, and stays for the tone's lifetime.
 
 enum ToastTone: Equatable { case success, error }
-
-/// The clipboard every copy action uses: this device only (no Universal Clipboard hand-off) and
-/// expiring after two minutes (SCOPE.md, "Clipboard").
-enum SecurePasteboard {
-    static let lifetime: TimeInterval = 120
-
-    static func copy(_ text: String) {
-        UIPasteboard.general.setItems(
-            [[UTType.plainText.identifier: text]],
-            options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(lifetime)]
-        )
-    }
-}
 
 struct ToastView: View {
     @Environment(\.skin) private var skin
@@ -42,7 +27,7 @@ struct ToastView: View {
                 .accessibilityLabel(tone == .error ? "Error: \(message)" : message)
             if tone == .error {
                 Button {
-                    SecurePasteboard.copy(details ?? message)
+                    Clipboard.copy(details ?? message)
                     copied = true
                 } label: {
                     BrambleIcon(copied ? .check : .copy)

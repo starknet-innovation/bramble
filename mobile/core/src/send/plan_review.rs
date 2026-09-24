@@ -224,7 +224,7 @@ impl PlanState {
                 let recipient = felt::canonical(&transfer.recipient);
                 TransferReview {
                     summary: transfer.summary.clone(),
-                    recipient_short: super::calls::short_address(&recipient),
+                    recipient_short: crate::account_names::short_label(&recipient),
                     recipient,
                     amount_display: transfer.amount_text.clone(),
                     token_symbol: transfer.symbol.clone(),
@@ -244,7 +244,7 @@ impl PlanState {
                 let address = felt::canonical(&self.account.address);
                 TransferReview {
                     summary: DEPLOY_SUMMARY.into(),
-                    recipient_short: super::calls::short_address(&address),
+                    recipient_short: crate::account_names::short_label(&address),
                     recipient: address,
                     amount_display: String::new(),
                     token_symbol: String::new(),

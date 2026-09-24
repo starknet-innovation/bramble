@@ -47,7 +47,7 @@ class LiveMainnetWalletTest {
         words.forEachIndexed { index, word -> r.typeSecret("Word ${index + 1}", word) }
         r.tap("Continue")
         r.setPassphrase("Find your accounts")
-        r.reviewAndAdd(expectingShort = shortAddress(canonical(address!!)))
+        r.findAndRestore(expectingShort = shortAddress(canonical(address!!)))
         r.finishAndCheckHome()
     }
 

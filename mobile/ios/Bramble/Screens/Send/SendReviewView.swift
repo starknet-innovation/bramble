@@ -44,7 +44,7 @@ struct SendDetailsView: View {
         VStack(alignment: .leading, spacing: m.formGap) {
             Eyebrow(text: SendCopy.accountsHeading)
             SendReceipt(rows: [
-                (SendCopy.fromLabel, "Account \(model.account.index + 1)", false),
+                (SendCopy.fromLabel, model.account.displayName, false),
                 (SendCopy.toLabel, model.recipient.map { shortAddress($0) } ?? "—", true),
                 (SendCopy.networkLabel, store.networkLabel, false),
             ])
@@ -173,7 +173,7 @@ struct SendReviewView: View {
                     .foregroundStyle(skin.muted)
                     .lineLimit(1)
                 IconButton(icon: copied ? .check : .copy, label: SendCopy.copyRecipient, tint: skin.muted) {
-                    SecurePasteboard.copy(review.recipient)
+                    Clipboard.copy(review.recipient)
                     copied = true
                 }
                 .brambleHaptic(.success, trigger: copied) { _, new in new }

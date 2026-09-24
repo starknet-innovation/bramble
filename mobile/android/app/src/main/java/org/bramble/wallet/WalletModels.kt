@@ -2,8 +2,16 @@ package org.bramble.wallet
 
 import org.bramble.core.NetworkId
 
-/** Top-level screens, as iOS `WalletStore.Route`. In memory only; never persisted. */
-enum class Route { ONBOARDING, LOCKED, WALLET }
+/**
+ * Top-level screens, as iOS `WalletStore.Route`. In memory only; never persisted. DISCOVERY is an
+ * imported vault still waiting for "Find your accounts" (recovery pending, no accounts yet).
+ */
+enum class Route {
+    ONBOARDING, LOCKED, DISCOVERY, WALLET;
+
+    /** The routes shown only while the core holds an unlocked session. */
+    val unlocked: Boolean get() = this == DISCOVERY || this == WALLET
+}
 
 /** Dock tabs, as iOS `WalletStore.Tab`. */
 enum class Tab { HOME, ACTIVITY, SETTINGS }

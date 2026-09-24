@@ -57,7 +57,7 @@ import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.send.SendScreen
 
 /** Screens pushed over the shell, without the dock. */
-enum class Flow { RECEIVE, SEND, NETWORK, APPEARANCE, SECURITY, REVEAL, REMOVE }
+enum class Flow { RECEIVE, SEND, MANAGE_ACCOUNTS, NETWORK, APPEARANCE, SECURITY, REVEAL, REMOVE }
 
 /**
  * The wallet frame from `wallet-shell.ts` / `styles-dock.ts`, port of the iOS `WalletShell`:
@@ -81,6 +81,7 @@ fun WalletShell(store: WalletStore) {
             when (flow) {
                 Flow.RECEIVE -> ReceiveScreen(store, back = pop)
                 Flow.SEND -> SendScreen(store, back = pop)
+                Flow.MANAGE_ACCOUNTS -> ManageAccountsScreen(store, back = pop)
                 Flow.NETWORK -> NetworkScreen(store, back = pop)
                 Flow.APPEARANCE -> AppearanceScreen(store, back = pop)
                 Flow.SECURITY -> SecurityScreen(store, back = pop)
@@ -134,15 +135,20 @@ fun WalletShell(store: WalletStore) {
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = BrambleSpace.lg),
         )
     }
-    if (accountsOpen) AccountsSheet(store, onDismiss = { accountsOpen = false })
+    if (accountsOpen) {
+        AccountsSheet(store, onDismiss = { accountsOpen = false }, openManage = { flows = flows + Flow.MANAGE_ACCOUNTS })
+    }
 }
 
-/** `.wallet-header`: avatar, account name with the drawer chevron, network status, actions. */
+/**
+ * `.wallet-header` (`docs/accounts.md` §2.1): avatar, the core's display name with the drawer
+ * chevron, network status, actions. No address and no copy here, as in the extension.
+ */
 @Composable
 private fun WalletHeader(store: WalletStore, openAccounts: () -> Unit) {
     val skin = LocalSkin.current
     val context = LocalContext.current
-    val account = store.account
+    val account = store.activeRecord
     val explorer = account?.let { explorerAccountUrl(store.network, it.address) }
     Row(
         Modifier.fillMaxWidth().padding(top = BrambleSpace.sm),
@@ -163,7 +169,7 @@ private fun WalletHeader(store: WalletStore, openAccounts: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(BrambleLayout.subtitleGap)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Account ${(account?.index ?: 0u) + 1u}",
+                        account?.displayName.orEmpty(),
                         color = skin.text,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

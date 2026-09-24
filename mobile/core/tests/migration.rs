@@ -1,5 +1,8 @@
-//! Vault file v1 → v2: old data migrates on the first passphrase unlock, current data round-trips,
-//! and invalid data fails closed with no partial state.
+//! The one vault migration chain (`src/migrations.rs`), end to end over real files: a vault
+//! written by the original core (v1), by vault-security (v2 container, account count), and by
+//! the accounts branch before the merge (v2 records in a bare envelope) each migrates to the
+//! current v3 container on unlock; current data round-trips; invalid data fails closed with no
+//! partial state.
 
 mod common;
 
@@ -7,7 +10,8 @@ use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
-use bramble_core::{CoreError, NetworkId, WalletStatus};
+use bramble_core::testing::{open_vault, seal_container_vault, seal_envelope_vault};
+use bramble_core::{AccountFamily, CoreError, NetworkId, WalletStatus};
 use common::{core, imported, open, FakeClock, PASSWORD, PHRASE};
 use serde_json::{json, Value};
 
@@ -15,6 +19,16 @@ use serde_json::{json, Value};
 /// accounts. Public test data.
 const V1_FIXTURE: &str = include_str!("fixtures/vault-v1.json");
 const V1_PASSWORD: &str = "v1 fixture passphrase";
+/// Written by vault-security's core (2785e57f): the published phrase imported, a second account
+/// added (`accountCount: 2`), and a biometric slot under the wrap secret `[7; 32]` with no domain.
+const V2_CONTAINER_FIXTURE: &str = include_str!("fixtures/vault-v2-container.json");
+const V2_CONTAINER_PASSWORD: &str = "v2 fixture passphrase";
+const V2_WRAP_SECRET: [u8; 32] = [7; 32];
+/// Written by the accounts branch's core (e94b8ef2), whose payload v2 held records in a bare
+/// envelope: OZ 0, Argent 0.4.0 at 1 and Braavos 1.0.0 at 2 on Sepolia, OZ 0 projected onto
+/// Mainnet (active), the label "Savings" on OZ 0, and the Argent record in the group "Long term".
+const V2_RECORDS_FIXTURE: &str = include_str!("fixtures/vault-v2-records.json");
+const V2_RECORDS_PASSWORD: &str = "records fixture passphrase";
 
 fn read(dir: &tempfile::TempDir) -> Value {
     serde_json::from_str(&std::fs::read_to_string(dir.path().join("vault.json")).unwrap()).unwrap()
@@ -43,7 +57,16 @@ fn an_old_v1_vault_migrates_on_unlock_and_opens_again() {
 
     let migrated = read(&dir);
     assert_eq!(migrated["format"], "bramble.mobile.vault");
-    assert_eq!(migrated["version"], 2);
+    assert_eq!(migrated["version"], 3);
+    for network in [NetworkId::Mainnet, NetworkId::Sepolia] {
+        let indices: Vec<u32> = core
+            .account_records(network)
+            .unwrap()
+            .iter()
+            .map(|record| record.account_index)
+            .collect();
+        assert_eq!(indices, [0, 1], "v1 showed every index on every network");
+    }
     let v1: Value = serde_json::from_str(V1_FIXTURE).unwrap();
     assert_eq!(migrated["lineage"], v1["lineage"], "lineage is kept");
     assert_eq!(migrated["passwordSlot"]["iterations"], 600_000);
@@ -123,17 +146,17 @@ fn a_failed_migration_write_keeps_v1_and_the_next_write_commits_it() {
     assert!(core.add_account(NetworkId::Sepolia).is_err());
     std::fs::remove_dir(&blocker).unwrap();
     core.add_account(NetworkId::Sepolia).unwrap();
-    assert_eq!(read(&dir)["version"], 2);
+    assert_eq!(read(&dir)["version"], 3);
     core.lock();
     core.unlock(V1_PASSWORD.into()).unwrap();
     assert_eq!(core.accounts(NetworkId::Sepolia).unwrap().len(), 3);
 }
 
 #[test]
-fn a_current_v2_vault_round_trips() {
+fn a_current_vault_round_trips() {
     let (dir, clock, core) = imported();
     let first = read(&dir);
-    assert_eq!(first["version"], 2);
+    assert_eq!(first["version"], 3);
     assert_eq!(first["biometricSlot"], Value::Null);
     core.lock();
     let reopened = open(dir.path(), &clock);
@@ -168,7 +191,8 @@ fn invalid_containers_fail_closed() {
         cases.push(value);
     };
     edit(&|v| v["format"] = json!("bramble.other"));
-    edit(&|v| v["version"] = json!(3));
+    edit(&|v| v["version"] = json!(4));
+    edit(&|v| v["version"] = json!(2)); // a v3 payload under a v2 label
     edit(&|v| v["version"] = json!(1));
     edit(&|v| v["extra"] = json!(true));
     edit(&|v| v["lineage"] = json!("00".repeat(16)));
@@ -229,4 +253,179 @@ fn slots_and_payloads_cannot_be_swapped_between_vaults() {
     slot_swapped["passwordSlot"] = b["passwordSlot"].clone();
     write(&dir_a, &slot_swapped);
     refused(&dir_a, &slot_swapped);
+}
+
+fn fixture_dir(text: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("vault.json"), text).unwrap();
+    dir
+}
+
+#[test]
+fn a_vault_security_v2_container_migrates_in_place_on_passphrase_unlock() {
+    let dir = fixture_dir(V2_CONTAINER_FIXTURE);
+    let before: Value = serde_json::from_str(V2_CONTAINER_FIXTURE).unwrap();
+    let clock = FakeClock::new();
+    let core = open(dir.path(), &clock);
+    assert!(core.security_status().biometric_enabled);
+    core.unlock(V2_CONTAINER_PASSWORD.into()).unwrap();
+
+    let after = read(&dir);
+    assert_eq!(after["version"], 3);
+    assert_eq!(after["lineage"], before["lineage"]);
+    assert_eq!(
+        after["passwordSlot"], before["passwordSlot"],
+        "same DEK, no KDF re-run"
+    );
+    assert_eq!(
+        after["biometricSlot"], before["biometricSlot"],
+        "the slot survives"
+    );
+    for network in [NetworkId::Mainnet, NetworkId::Sepolia] {
+        let records = core.account_records(network).unwrap();
+        assert_eq!(records.len(), 2, "accountCount 2 on {network:?}");
+        assert!(records
+            .iter()
+            .all(|r| r.family == AccountFamily::OpenZeppelin));
+    }
+    assert_eq!(
+        core.active_account().unwrap().unwrap().network,
+        NetworkId::Mainnet
+    );
+
+    // The migrated file still opens by biometrics, and a second unlock writes nothing.
+    core.lock();
+    core.unlock_with_biometric(V2_WRAP_SECRET.to_vec()).unwrap();
+    assert_eq!(read(&dir), after);
+}
+
+#[test]
+fn a_vault_security_v2_container_migrates_on_biometric_unlock_too() {
+    let dir = fixture_dir(V2_CONTAINER_FIXTURE);
+    let core = open(dir.path(), &FakeClock::new());
+    core.unlock_with_biometric(V2_WRAP_SECRET.to_vec()).unwrap();
+    assert_eq!(
+        read(&dir)["version"],
+        3,
+        "no passphrase needed: the DEK re-seals it"
+    );
+    assert_eq!(core.account_records(NetworkId::Sepolia).unwrap().len(), 2);
+    core.lock();
+    core.unlock(V2_CONTAINER_PASSWORD.into()).unwrap();
+    assert_eq!(core.account_records(NetworkId::Mainnet).unwrap().len(), 2);
+}
+
+#[test]
+fn an_accounts_branch_records_vault_migrates_into_a_container() {
+    let dir = fixture_dir(V2_RECORDS_FIXTURE);
+    let envelope: Value = serde_json::from_str(V2_RECORDS_FIXTURE).unwrap();
+    let clock = FakeClock::new();
+    let core = open(dir.path(), &clock);
+    assert!(!core.security_status().biometric_enabled);
+    core.unlock(V2_RECORDS_PASSWORD.into()).unwrap();
+
+    let after = read(&dir);
+    assert_eq!(after["format"], "bramble.mobile.vault");
+    assert_eq!(after["version"], 3);
+    assert_eq!(after["lineage"], envelope["lineage"], "lineage is kept");
+    let sepolia = core.account_records(NetworkId::Sepolia).unwrap();
+    let families: Vec<_> = sepolia
+        .iter()
+        .map(|r| (r.family, r.account_index))
+        .collect();
+    assert_eq!(
+        families,
+        [
+            (AccountFamily::OpenZeppelin, 0),
+            (AccountFamily::Argent, 1),
+            (AccountFamily::Braavos, 2)
+        ]
+    );
+    assert_eq!(sepolia[0].label.as_deref(), Some("Savings"));
+    assert_eq!(sepolia[1].group_id.as_deref(), Some("long-term"));
+    assert!(sepolia[2].view_only);
+    let active = core.active_account().unwrap().unwrap();
+    assert_eq!(active.network, NetworkId::Mainnet);
+    assert_eq!(active.public_key, sepolia[0].public_key);
+
+    core.lock();
+    let reopened = open(dir.path(), &clock);
+    reopened.unlock(V2_RECORDS_PASSWORD.into()).unwrap();
+    assert_eq!(
+        reopened.account_records(NetworkId::Sepolia).unwrap(),
+        sepolia
+    );
+    assert_eq!(read(&dir), after, "migrates once");
+}
+
+fn payload_count(version: u32) -> String {
+    json!({"accountCount": 1, "mnemonic": PHRASE, "mnemonicPassphrase": null, "version": version})
+        .to_string()
+}
+
+#[test]
+fn each_layout_refuses_payloads_it_was_never_written_with() {
+    let (dir, clock, core) = imported();
+    core.lock();
+    let path = dir.path().to_string_lossy().to_string();
+    let records: Value = serde_json::from_str(&open_vault(&path, PASSWORD).unwrap()).unwrap();
+    let with_version = |version: u32| {
+        let mut payload = records.clone();
+        payload["version"] = json!(version);
+        payload.to_string()
+    };
+    // (why, container version or None for a bare envelope, payload)
+    let cases = [
+        (
+            "an envelope never held a count payload tagged 2",
+            None,
+            payload_count(2),
+        ),
+        (
+            "an envelope never held records tagged 3",
+            None,
+            with_version(3),
+        ),
+        (
+            "an envelope never held records tagged 1",
+            None,
+            with_version(1),
+        ),
+        (
+            "a container never held a v1 payload",
+            Some(2),
+            payload_count(1),
+        ),
+        (
+            "a v2 container never held records",
+            Some(2),
+            with_version(2),
+        ),
+        (
+            "a v3 container never held a count",
+            Some(3),
+            payload_count(3),
+        ),
+        (
+            "container and payload versions are bound",
+            Some(3),
+            payload_count(2),
+        ),
+    ];
+    for (why, container, payload) in cases {
+        match container {
+            None => seal_envelope_vault(&path, PASSWORD, &payload).unwrap(),
+            Some(version) => seal_container_vault(&path, PASSWORD, version, &payload).unwrap(),
+        }
+        let before = read(&dir);
+        // Each refusal counts as a failed attempt; start every case unthrottled.
+        let _ = std::fs::remove_file(dir.path().join("security.json"));
+        let fresh = open(dir.path(), &clock);
+        let result = fresh.unlock(PASSWORD.into());
+        assert!(
+            matches!(result, Err(CoreError::Storage { .. })),
+            "{why}: {result:?}"
+        );
+        assert_eq!(read(&dir), before, "{why}: the file is left as it was");
+    }
 }

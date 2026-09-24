@@ -159,6 +159,11 @@ ciphertext of W and its IV live in `noBackupFilesDir/biometric-w.bin`, written b
 
 ### 3.2 Migration v1 → v2 (single adjacent step, deterministic)
 
+**Merged with accounts:** this step is now the first of one chain, v1 → v2 → v3; v3 keeps this
+container and seals the account-records payload, and a v2 container is upgraded in place (same
+DEK and slots, so biometric unlock migrates it too). See accounts.md §5.1 and
+accounts-verification.md §11.
+
 The mobile core has no migration framework. It gains a `migrations.rs` with one table,
 `VAULT_MIGRATIONS: [(from, step)]`, following `packages/platform/vault/src/schema/migrations.ts`:
 exactly one adjacent step per version, and a pure step function `(v1 plaintext, fresh DEK, fresh
@@ -249,7 +254,8 @@ Shared by every passphrase entry point: `unlock`, `reveal_recovery_phrase`, `del
   and returns `Locked`. `status()` runs the same check. Nothing on this path can panic.
 - **Renewal follows the extension's rule exactly:** renewal is a privilege of the operations that
   mirror the extension's `getPassphrase` (user-initiated wallet operations): a successful
-  `unlock`, `unlock_with_biometric`, `enable_biometric_unlock`, `add_account`, `sign_hash` and
+  `unlock`, `unlock_with_biometric`, `enable_biometric_unlock`, `add_regular_account`,
+  `ensure_network_account`, discovery and restore, `sign_hash_for_account`, plan signing and
   `reveal_recovery_phrase`. Every read is passive, as `PassiveUnlockSession`: `accounts()`,
   `status()`, `security_status()`, `session_remaining_ms()`, balance polling and every `rpc_*`
   helper. There is no touch- or scroll-driven renewal, so browsing Home locks at 30 minutes just

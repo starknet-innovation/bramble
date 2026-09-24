@@ -31,12 +31,6 @@ pub fn validate_recipient(input: String) -> Option<String> {
     calls::validate_recipient(&input).map(|value| felt::canonical(&value))
 }
 
-/// The extension's `shortAddress`: `0x1234…abcd`.
-#[uniffi::export]
-pub fn short_address(address: String) -> String {
-    calls::short_address(&address)
-}
-
 /// `parseTokenAmount`: base-10 base units, or the reason the extension would refuse the text.
 #[uniffi::export]
 pub fn parse_token_amount(amount: String, decimals: u8) -> Result<String, SendError> {

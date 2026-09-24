@@ -1,12 +1,14 @@
+import BrambleCore
 import CoreImage.CIFilterBuiltins
 import SwiftUI
 
-/// `receive` from the activity-and-assets journey: QR card, full address, network line, copy.
+/// `receive` from the activity-and-assets journey: QR card, full address, network line, copy, and
+/// the collapsed "Wallet identity" disclosure with the signer public key (`receive-view.ts`).
 struct ReceiveView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
-    @State private var copied = false
+    @State private var identityOpen = false
 
     var body: some View {
         let address = store.account?.address ?? ""
@@ -33,14 +35,28 @@ struct ReceiveView: View {
                     .foregroundStyle(skin.muted)
                     .multilineTextAlignment(.center)
                 }
-                PillButton(copied ? "Copied" : "Copy address", icon: copied ? .check : .copy) {
-                    SecurePasteboard.copy(address)
-                    copied = true
-                }
-                .accessibilityHint("Copies the address to this device's clipboard for two minutes")
-                .brambleHaptic(.success, trigger: copied) { _, new in new }
+                // Local-only and expiring (`Clipboard`); "Copied" through `store.notify`.
+                CopyButton(value: address, label: "Copy address", style: .pill(.primary))
+                    .accessibilityHint("Copies the address to this device's clipboard for two minutes")
+                if let publicKey = store.activeRecord?.publicKey { identity(publicKey) }
             }
             .padding(BrambleMetrics.Screen.shellPadding)
+        }
+    }
+}
+
+extension ReceiveView {
+    /// `.receive-identity`: collapsed by default; the signer key truncated with `accountLabel`,
+    /// copied in full. The coordination key row belongs to the Nostr workstream.
+    fileprivate func identity(_ publicKey: String) -> some View {
+        Disclosure(title: "Wallet identity", summary: "Signer and coordination keys", isOpen: $identityOpen) {
+            HStack(spacing: BrambleMetrics.MenuRow.gap) {
+                Text("Signer public key")
+                    .brambleText(BrambleTypeScale.body.sized(BrambleMetrics.MenuRow.titleSize), weight: BrambleMetrics.MenuRow.titleWeight)
+                Spacer(minLength: BrambleMetrics.MenuRow.gap)
+                Text(shortAddress(publicKey)).brambleText(BrambleTypeScale.caption, mono: true).foregroundStyle(skin.muted)
+                CopyButton(value: publicKey, label: "Copy signer public key")
+            }
         }
     }
 }

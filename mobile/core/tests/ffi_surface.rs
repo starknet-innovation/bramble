@@ -2,8 +2,17 @@
 //! modules that carry `#[uniffi::export]` and fails when one returns raw bytes, so a future method
 //! cannot hand the DEK, a wrap secret or vault bytes to Swift or Kotlin without this test changing.
 
-const EXPORTING: [(&str, &str); 6] = [
+const EXPORTING: [(&str, &str); 9] = [
     ("lib.rs", include_str!("../src/lib.rs")),
+    (
+        "account_catalog.rs",
+        include_str!("../src/account_catalog.rs"),
+    ),
+    ("account_names.rs", include_str!("../src/account_names.rs")),
+    (
+        "wallet_accounts.rs",
+        include_str!("../src/wallet_accounts.rs"),
+    ),
     ("wallet.rs", include_str!("../src/wallet.rs")),
     ("biometric.rs", include_str!("../src/biometric.rs")),
     ("send/mod.rs", include_str!("../src/send/mod.rs")),
@@ -69,4 +78,35 @@ fn the_wrap_secret_only_flows_into_the_core() {
             assert!(returns.contains("Result<(), CoreError>"), "{signature}");
         }
     }
+}
+
+/// Signing is by account record only (`docs/accounts.md` §2.7): no exported function signs, plans
+/// a transfer or deployment, or reads activity by account index, so the retired `sign_hash(index)`
+/// cannot come back as a path the apps could reach.
+#[test]
+fn nothing_exported_signs_or_plans_by_account_index() {
+    let mut signers = 0;
+    for (file, source) in EXPORTING {
+        for signature in exported_signatures(source) {
+            let name = signature
+                .trim_start_matches("pub fn ")
+                .split('(')
+                .next()
+                .unwrap_or("");
+            assert_ne!(name, "sign_hash", "{file}: the index shim is retired");
+            let acts =
+                name.contains("sign") || name.starts_with("prepare_") || name.ends_with("activity");
+            if acts {
+                signers += 1;
+                assert!(
+                    !signature.contains("account_index"),
+                    "{file}: `{signature}` takes an account index"
+                );
+            }
+        }
+    }
+    assert!(
+        signers >= 5,
+        "found only {signers} signing or planning functions"
+    );
 }

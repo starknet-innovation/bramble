@@ -4,30 +4,39 @@ import SwiftUI
 /// First-run flow, step for step with the extension's onboarding wizard:
 ///
 ///   create: welcome → passphrase → review account → save phrase → confirm backup → all set
-///   import: welcome → method → recovery phrase → passphrase → review account → all set
+///   import: welcome → method → recovery phrase → passphrase → find your accounts → all set
 ///
 /// The vault is written when the passphrase is accepted (the core generates or imports the phrase
-/// and seals it in one call); later steps only read public data or the words kept for backup.
+/// and seals it in one call); later steps only read public data or the words kept for backup. An
+/// imported vault stays "recovery pending" until discovery restores its accounts, so unlocking one
+/// resumes at "Find your accounts" (`resumingDiscovery`).
 struct OnboardingFlow: View {
     enum Path: Equatable { case create, recover }
     enum Step: Equatable {
-        case welcome, importMethod, recoveryPhrase, passphrase, reviewAccount, savePhrase, confirmBackup, complete
+        case welcome, importMethod, recoveryPhrase, passphrase, reviewAccount, findAccounts, savePhrase, confirmBackup, complete
 
         /// The edge back-swipe runs only on the steps before the vault is written. `welcome` is
-        /// the root, and every step from `reviewAccount` on comes after `replace(with:)`, so a
-        /// swipe there must do nothing (design-mobile.md 4.6).
+        /// the root, and every step from `reviewAccount` / `findAccounts` on comes after
+        /// `replace(with:)`, so a swipe there must do nothing (design-mobile.md 4.6).
         var allowsSwipeBack: Bool {
             switch self {
             case .importMethod, .recoveryPhrase, .passphrase: true
-            case .welcome, .reviewAccount, .savePhrase, .confirmBackup, .complete: false
+            case .welcome, .reviewAccount, .findAccounts, .savePhrase, .confirmBackup, .complete: false
             }
         }
     }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var steps: [Step] = [.welcome]
-    @State private var path: Path = .create
+    @State private var steps: [Step]
+    @State private var path: Path
+
+    /// `resumingDiscovery`: an imported vault unlocked while still recovery pending re-enters at
+    /// "Find your accounts"; there is no way into the wallet with zero accounts.
+    init(resumingDiscovery: Bool = false) {
+        _steps = State(initialValue: [resumingDiscovery ? .findAccounts : .welcome])
+        _path = State(initialValue: resumingDiscovery ? .recover : .create)
+    }
     @State private var forward = true
     /// Phrase typed on the recovery step, handed to the core at the passphrase step, then cleared.
     @State private var importedPhrase = ""
@@ -89,12 +98,12 @@ struct OnboardingFlow: View {
                     try await store.importWallet(phrase: importedPhrase, password: passphrase)
                     importedPhrase = ""
                 }
-                replace(with: .reviewAccount)
+                replace(with: path == .create ? .reviewAccount : .findAccounts)
             }
         case .reviewAccount:
-            ReviewAccountStep(network: store.network) {
-                replace(with: path == .create ? .savePhrase : .complete)
-            }
+            ReviewAccountStep(network: store.network) { replace(with: .savePhrase) }
+        case .findAccounts:
+            FindAccountsStep { replace(with: .complete) }
         case .savePhrase:
             SavePhraseStep(words: store.pendingBackup) { push(.confirmBackup) }
         case .confirmBackup:

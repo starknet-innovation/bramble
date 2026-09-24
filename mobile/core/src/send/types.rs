@@ -8,7 +8,8 @@ use crate::networks::NetworkId;
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct TransferRequest {
     pub network: NetworkId,
-    pub account_index: u32,
+    /// The vault record's id (`AccountRecord.id`), never an index.
+    pub account_id: String,
     /// Must be one of the network's bundled tokens.
     pub token_address: String,
     /// Any spelling `validate_recipient` accepts; canonicalised in the core.
@@ -170,6 +171,12 @@ pub enum SendError {
     Locked,
     #[error("unknown account")]
     UnknownAccount,
+    /// A Braavos record: restored to be seen, never signed for.
+    #[error("view-only account")]
+    ViewOnlyAccount,
+    /// An Argent (Ready) record: this core does not build its authorization yet.
+    #[error("unsupported account type")]
+    UnsupportedAccount,
     #[error("reply out of order")]
     OutOfOrder,
     #[error("plan closed")]

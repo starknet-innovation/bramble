@@ -16,13 +16,13 @@ const BALANCE_OF_SELECTOR: &str =
 /// Longest response body the core will parse.
 pub(crate) const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
-fn rpc_error(reason: &str) -> CoreError {
+pub(crate) fn rpc_error(reason: &str) -> CoreError {
     CoreError::Rpc {
         reason: reason.into(),
     }
 }
 
-fn envelope(id: u64, method: &str, params: Value) -> String {
+pub(crate) fn envelope(id: u64, method: &str, params: Value) -> String {
     json!({ "id": id, "jsonrpc": "2.0", "method": method, "params": params }).to_string()
 }
 

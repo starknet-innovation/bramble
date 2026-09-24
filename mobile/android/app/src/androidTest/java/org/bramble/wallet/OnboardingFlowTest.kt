@@ -75,7 +75,7 @@ class OnboardingFlowTest {
         r.snapshot("recovery-phrase")
         r.tap("Continue")
         r.setPassphrase("Find your accounts")
-        r.reviewAndAdd(expectingShort = shortAddress(PublicWallet.ADDRESS))
+        r.findAndRestore(expectingShort = shortAddress(PublicWallet.ADDRESS))
         r.finishAndCheckHome()
 
         r.tap("Receive")
@@ -98,7 +98,7 @@ class OnboardingFlowTest {
         r.waitForButton("Add account")
         assertTrue("the drawer lists the expected mainnet account", r.hasTextNow(shortAddress(PublicWallet.ADDRESS)))
         r.snapshot("accounts")
-        r.tapDescribed("Close")
+        r.tapDescribed("Close accounts")
 
         r.tapDescribed("Lock wallet")
         r.waitForText("Welcome back")
@@ -108,6 +108,6 @@ class OnboardingFlowTest {
         r.snapshot("unlock-failed")
         r.typeSecret("Enter your passphrase", PublicWallet.PASSPHRASE)
         r.tap("Unlock")
-        r.waitForText("Account 1", 20_000)
+        r.waitForHome()
     }
 }

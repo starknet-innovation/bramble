@@ -46,6 +46,8 @@ fun Root(store: WalletStore) {
             // Keyed so a lock before the vault exists disposes the flow and its typed secrets.
             Route.ONBOARDING -> key(store.onboardingGeneration) { OnboardingFlow(store) }
             Route.LOCKED -> UnlockScreen(store)
+            // An imported vault still recovery pending resumes at "Find your accounts".
+            Route.DISCOVERY -> OnboardingFlow(store, resumingDiscovery = true)
             Route.WALLET -> WalletShell(store)
         }
         ToastHost(store, Modifier.align(Alignment.BottomCenter))

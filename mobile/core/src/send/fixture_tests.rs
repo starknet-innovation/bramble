@@ -167,7 +167,7 @@ fn presentation_rules_match_the_extension() {
     }
     for case in presentation["shortAddresses"].as_array().unwrap() {
         assert_eq!(
-            calls::short_address(case["input"].as_str().unwrap()),
+            crate::account_names::short_label(case["input"].as_str().unwrap()),
             case["short"].as_str().unwrap()
         );
     }

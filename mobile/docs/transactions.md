@@ -176,7 +176,7 @@ request bodies and their replies. The core allocates JSON-RPC ids.
 ```rust
 // send/types.rs
 #[derive(uniffi::Record)] pub struct TransferRequest {
-    pub network: NetworkId, pub account_index: u32,
+    pub network: NetworkId, pub account_id: String,   // vault record id (merge with accounts)
     pub token_address: String,   // must be a bundled token of `network`
     pub recipient: String,       // any accepted input spelling; canonicalised in core
     pub amount: String,          // decimal text as typed
@@ -245,16 +245,15 @@ impl WalletCore {
     /// ERC-20 call. Does no I/O. Records the session generation it was prepared under.
     pub fn prepare_transfer(self: Arc<Self>, request: TransferRequest) -> Result<Arc<TransferPlan>, SendError>;
     /// Standalone deployment for the home chip; same state machine without the invoke.
-    pub fn prepare_deployment(self: Arc<Self>, network: NetworkId, account_index: u32) -> Result<Arc<TransferPlan>, SendError>;
-    /// Local activity for one account on one network, newest first (§4).
-    pub fn activity(&self, network: NetworkId, account_index: u32) -> Result<Vec<ActivityRecord>, SendError>;
+    pub fn prepare_deployment(self: Arc<Self>, account_id: String) -> Result<Arc<TransferPlan>, SendError>;
+    /// Local activity for one stored account, newest first (§4).
+    pub fn activity(&self, account_id: String) -> Result<Vec<ActivityRecord>, SendError>;
     /// Starts a plan that only reads status for an existing record and settles it; never signs.
-    pub fn refresh_activity(self: Arc<Self>, network: NetworkId, account_index: u32, hash: String) -> Result<Arc<TransferPlan>, SendError>;
+    pub fn refresh_activity(self: Arc<Self>, account_id: String, hash: String) -> Result<Arc<TransferPlan>, SendError>;
 }
 
 // send/mod.rs: pure helpers, #[uniffi::export] free functions.
 pub fn validate_recipient(input: String) -> Option<String>;               // canonical felt (0x0 included, as the extension's field check) or None
-pub fn short_address(address: String) -> String;                           // 0x1234…abcd
 pub fn parse_token_amount(amount: String, decimals: u8) -> Result<String, SendError>; // base units
 pub fn explorer_transaction_url(network: NetworkId, hash: String) -> Option<String>;
 pub fn confirmation_checkpoints_ms() -> Vec<u32>;
@@ -364,7 +363,9 @@ extension's `captureSessionAuthorization` / `isCurrent`. The host still calls `c
 as defence in depth.
 
 **Signing inside the core.** At a signing point the core runs `with_session(renew = true)`, which
-applies the idle lock first, checks the generation, derives the key for `account_index` exactly as `kms::sign_hash` does (a per-call
+applies the idle lock first, checks the generation, passes the plan's record through the one
+signing gate (`signing_record`: no pending discovery, no view-only record, OpenZeppelin only;
+accounts.md §2.7a), derives the key for the record's `account_index` as `kms::sign_hash` does (a per-call
 zeroizing `SecretFelt`), checks that the returned public key equals the plan's stored
 `public_key`, signs, serialises the OZ signature as `[r, s]`, and drops the key.
 
@@ -388,11 +389,9 @@ never crossing into the core: resource bounds as editable input, a raw hash for 
 sign, and the nonce as host input. The host sees signed request bodies, which are public on
 broadcast, and the resulting hash.
 
-**`WalletCore::sign_hash` stays exported in this branch.** Sibling workstreams (android-parity's
-Kotlin mirror of `CoreBridgeTests.signHash`, nostr-multisig, vault-security) may depend on it,
-so removing it here would break them at merge. The send path never uses it: it signs only
-inside the plan. Withdrawing it from the FFI is recorded as a follow-up for vault-security once
-all workstreams have merged.
+**`WalletCore::sign_hash(index)` is withdrawn** (merge with accounts): plans name their account
+by record id, and the only other signer, `sign_hash_for_account`, uses the same gate. Truncation
+uses the core's one `account_label` rule; the separate `short_address` export was folded into it.
 
 **Errors.** Every `SendError` and `SendFailureCode` is a fixed variant. None carries a recipient,
 an amount, node text or a key. Node error messages are never forwarded.

@@ -7,6 +7,7 @@ use starknet_types_core::felt::Felt;
 
 use super::types::{ReviewFlag, SendAmountError};
 use super::u256::U256;
+use crate::account_names::{js_trim, short_label};
 use crate::felt;
 
 /// `starknet_keccak("transfer")`, checked against a Keccak implementation in the tests and
@@ -15,11 +16,6 @@ pub const TRANSFER_SELECTOR: &str =
     "0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e";
 /// The extension's `isSafeDecimals` ceiling.
 const MAX_DECIMALS: u8 = 36;
-
-/// JavaScript `String.prototype.trim`: Unicode white space plus the byte-order mark.
-fn js_trim(value: &str) -> &str {
-    value.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
-}
 
 /// `normalizeFeltInput` then `isStarkFieldElement`: trims; lowercases and strips leading zeros
 /// when the text starts with `0x`; then applies the lowercase-hex felt grammar. Returns the
@@ -43,15 +39,6 @@ pub fn validate_recipient(input: &str) -> Option<Felt> {
         _ => trimmed.to_string(),
     };
     felt::parse(&normalised)
-}
-
-/// The extension's `shortAddress`: the first six characters, "…", then the last four, applied to
-/// the text as given.
-pub fn short_address(address: &str) -> String {
-    let chars: Vec<char> = address.chars().collect();
-    let head: String = chars[..chars.len().min(6)].iter().collect();
-    let tail: String = chars[chars.len().saturating_sub(4)..].iter().collect();
-    format!("{head}…{tail}")
 }
 
 /// `parseTokenAmount`: base units from decimal text. The extension has no upper bound here and
@@ -121,7 +108,7 @@ pub fn transfer_summary(amount: &U256, decimals: u8, symbol: &str, recipient: &F
     format!(
         "Send {} {symbol} to {}",
         format_token_amount(amount, decimals),
-        short_address(&felt::canonical(recipient))
+        short_label(&felt::canonical(recipient))
     )
 }
 
@@ -133,7 +120,7 @@ pub fn transfer_flags(recipient: &Felt, account: &Felt) -> Vec<ReviewFlag> {
         flags.push(ReviewFlag::SelfTransfer);
     }
     let (left, right) = (felt::canonical(recipient), felt::canonical(account));
-    if left != right && short_address(&left) == short_address(&right) {
+    if left != right && short_label(&left) == short_label(&right) {
         flags.push(ReviewFlag::AddressPoisoning);
     }
     flags
@@ -184,7 +171,7 @@ mod tests {
 
     #[test]
     fn short_address_matches_short_inputs() {
-        assert_eq!(short_address("0x1"), "0x1…0x1");
-        assert_eq!(short_address(""), "…");
+        assert_eq!(short_label("0x1"), "0x1…0x1");
+        assert_eq!(short_label(""), "…");
     }
 }

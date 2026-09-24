@@ -3,6 +3,7 @@ package org.bramble.wallet
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.captureToImage
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -23,6 +25,8 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import org.bramble.core.AccountFamily
+import org.bramble.core.RecoverySelection
 import org.bramble.core.WalletStatus
 import org.bramble.wallet.design.secretFieldTag
 
@@ -132,18 +136,45 @@ class Robot(
         tap("Add selected account")
     }
 
+    /**
+     * "Find your accounts" after an import: waits for the search over the configured RPC endpoint,
+     * makes sure the Bramble row with [expectingShort] is checked (an unfunded account is not
+     * selected automatically), ticks the acknowledgement, and restores.
+     */
+    fun findAndRestore(expectingShort: String) {
+        waitForText("Find your accounts", 20_000)
+        waitFor(hasText("Search complete", substring = true), 120_000)
+        snapshot("find-accounts")
+        val row = hasText(expectingShort) and isToggleable()
+        if (!exists(row)) tap("Bramble accounts")
+        waitFor(row)
+        val node = rule.onAllNodes(row)[0]
+        runCatching { node.performScrollTo() }
+        val state = node.fetchSemanticsNode().config.getOrElse(SemanticsProperties.ToggleableState) { ToggleableState.Off }
+        if (state != ToggleableState.On) node.performClick()
+        tap("I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet.")
+        tap("Restore selected accounts")
+    }
+
+    /** The home screen, whose account name is the core's address-derived nickname. */
+    fun waitForHome(timeoutMs: Long = 20_000) = waitForText("Tokens", timeoutMs)
+
     fun finishAndCheckHome() {
-        waitForText("You’re all set")
+        waitForText("You’re all set", 20_000)
         snapshot("complete")
         tap("Open Bramble")
-        waitForText("Account 1", 20_000)
+        waitForHome()
         snapshot("home")
     }
 
-    /** Lets a test reach the wallet without the UI flow: import, then open the wallet. */
+    /**
+     * Lets a test reach the wallet without the UI flow: import (recovery pending, no accounts),
+     * restore the Bramble account at index 0, then open the wallet.
+     */
     fun importPublicWalletDirectly() {
         onMain {
             importWallet(PublicWallet.PHRASE, PublicWallet.PASSPHRASE)
+            restoreRecoveredAccounts(listOf(RecoverySelection(AccountFamily.OPEN_ZEPPELIN, 0u, null)))
             finishOnboarding()
         }
     }

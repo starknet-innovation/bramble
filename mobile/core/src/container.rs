@@ -1,6 +1,11 @@
-//! Vault file v2: a random data-encryption key (DEK) seals the payload, and the DEK is wrapped by
-//! a passphrase slot (the extension's EncryptedEnvelope v3, unchanged) and, optionally, by a
-//! biometric slot keyed by a host-held wrap secret W.
+//! The vault container (vault versions 2 and 3): a random data-encryption key (DEK) seals the
+//! payload, and the DEK is wrapped by a passphrase slot (the extension's EncryptedEnvelope v3,
+//! unchanged) and, optionally, by a biometric slot keyed by a host-held wrap secret W.
+//!
+//! The container's `version` is the vault version (`migrations::VAULT_VERSION`), and it must
+//! equal the `version` of the payload it seals: a version-2 container holds vault-security's
+//! account-count payload, a version-3 container the account records (`account_store.rs`). The
+//! payload is opaque bytes here; `migrations.rs` parses and upgrades it.
 //!
 //! The DEK is generated, wrapped, unwrapped and zeroized here and never crosses the FFI. Every
 //! part of the file is bound to one lineage; a container of the wrong shape fails closed as
@@ -13,7 +18,7 @@ use sha2::{Digest, Sha256};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::files::storage;
-use crate::kms;
+use crate::migrations::VAULT_VERSION;
 use crate::vault::{
     self, additional_data, aead_open, aead_seal, decode, is_lower_hex, random, random_hex,
     Envelope, SealingKey,
@@ -21,49 +26,18 @@ use crate::vault::{
 use crate::CoreError;
 
 pub(crate) const FORMAT: &str = "bramble.mobile.vault";
-pub(crate) const CONTAINER_VERSION: u32 = 2;
-/// Scope of the v1 file, which was a bare envelope around the payload.
+/// The oldest container version (vault-security's layout); older vaults are bare envelopes.
+pub(crate) const FIRST_CONTAINER_VERSION: u32 = 2;
+/// Scope of the pre-container file, a bare envelope around the payload (vault version 1, and
+/// the accounts branch's records payload before the branches merged).
 pub(crate) const V1_SCOPE: &str = "bramble.mobile.vault.v1";
 pub(crate) const DEK_SCOPE: &str = "bramble.mobile.dek.v1";
+/// Names the sealed payload's purpose, not its schema: every container version uses it, and the
+/// payload's own `version` (bound to the container's) carries the schema.
 pub(crate) const PAYLOAD_SCOPE: &str = "bramble.mobile.payload.v2";
 pub(crate) const BIOMETRIC_SCOPE: &str = "bramble.mobile.biometric.v1";
-/// Accounts one phrase may hold; bounds derivation work and vault size.
-pub(crate) const MAX_ACCOUNTS: u32 = 32;
-
 /// The vault's data-encryption key.
 pub(crate) type Dek = Zeroizing<[u8; 32]>;
-
-/// Plaintext sealed under the DEK (v2) or directly in the v1 envelope.
-#[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct VaultPayload {
-    pub account_count: u32,
-    pub mnemonic: String,
-    pub mnemonic_passphrase: Option<String>,
-    pub version: u32,
-}
-
-impl VaultPayload {
-    /// Parses and checks a payload of the expected version.
-    pub fn parse(plaintext: &[u8], version: u32) -> Result<Self, CoreError> {
-        let payload: Self =
-            serde_json::from_slice(plaintext).map_err(|_| storage("vault payload is invalid"))?;
-        if payload.version != version
-            || payload.account_count == 0
-            || payload.account_count > MAX_ACCOUNTS
-            || !kms::validate_mnemonic(&payload.mnemonic)
-        {
-            return Err(storage("vault payload is invalid"));
-        }
-        Ok(payload)
-    }
-
-    pub fn to_json(&self) -> Result<Zeroizing<Vec<u8>>, CoreError> {
-        serde_json::to_vec(self)
-            .map(Zeroizing::new)
-            .map_err(|_| storage("serialise vault"))
-    }
-}
 
 /// Passphrase-slot plaintext. JSON so the extension's own `encryptJson` can produce one.
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -91,7 +65,7 @@ pub(crate) struct SealedPayload {
     pub data: String,
 }
 
-/// `vault.json` version 2.
+/// `vault.json` from vault version 2 on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct VaultFile {
@@ -105,26 +79,29 @@ pub(crate) struct VaultFile {
 
 /// What is on disk.
 pub(crate) enum StoredVault {
-    V1(Envelope),
-    V2(Box<VaultFile>),
+    /// A bare envelope (scope `V1_SCOPE`): vault version 1, or the accounts branch's pre-container
+    /// records payload. `migrations.rs` tells them apart by the payload inside.
+    Envelope(Envelope),
+    /// A DEK container, vault version 2 or later.
+    Container(Box<VaultFile>),
 }
 
 fn invalid() -> CoreError {
     storage("vault file is invalid")
 }
 
-/// Classifies `vault.json`: a top-level `format` key is a container, an envelope is v1, anything
-/// else fails closed.
+/// Classifies `vault.json`: a top-level `format` key is a container, an envelope is a
+/// pre-container vault, anything else fails closed.
 pub(crate) fn parse(text: &str) -> Result<StoredVault, CoreError> {
     let value: serde_json::Value = serde_json::from_str(text).map_err(|_| invalid())?;
     let object = value.as_object().ok_or_else(invalid)?;
     if object.contains_key("format") {
         let file: VaultFile = serde_json::from_value(value).map_err(|_| invalid())?;
         file.validate()?;
-        Ok(StoredVault::V2(Box::new(file)))
+        Ok(StoredVault::Container(Box::new(file)))
     } else if object.contains_key("cipher") && object.contains_key("kdf") {
         serde_json::from_value(value)
-            .map(StoredVault::V1)
+            .map(StoredVault::Envelope)
             .map_err(|_| invalid())
     } else {
         Err(invalid())
@@ -198,11 +175,12 @@ pub(crate) fn decode_dek(plaintext: &[u8]) -> Result<Dek, CoreError> {
     Ok(dek)
 }
 
-/// Builds a v2 file: the DEK sealed under `key` (the passphrase slot) and `payload` under the DEK.
+/// Builds a current-version file: the DEK sealed under `key` (the passphrase slot) and the
+/// serialised current-version `payload` under the DEK.
 pub(crate) fn seal_new(
     key: &SealingKey,
     dek: &[u8; 32],
-    payload: &VaultPayload,
+    payload: &[u8],
     randomness: &Randomness,
 ) -> Result<VaultFile, CoreError> {
     let record = DekRecord {
@@ -220,13 +198,13 @@ pub(crate) fn seal_new(
     let payload = seal_payload(
         dek,
         &lineage,
-        &payload.to_json()?,
+        payload,
         &randomness.payload_iv,
         &randomness.payload_commit,
     )?;
     Ok(VaultFile {
         format: FORMAT.into(),
-        version: CONTAINER_VERSION,
+        version: VAULT_VERSION,
         lineage,
         password_slot,
         biometric_slot: None,
@@ -243,7 +221,7 @@ impl VaultFile {
                 && (slot.domain.is_empty() || is_lower_hex(&slot.domain, 64))
         });
         let ok = self.format == FORMAT
-            && self.version == CONTAINER_VERSION
+            && (FIRST_CONTAINER_VERSION..=VAULT_VERSION).contains(&self.version)
             && is_lower_hex(&self.lineage, 32)
             && self.password_slot.lineage == self.lineage
             && self.password_slot.scope == DEK_SCOPE
@@ -269,8 +247,9 @@ impl VaultFile {
         decode_dek(&key.open_sealed(&self.password_slot, DEK_SCOPE)?)
     }
 
-    /// Decrypts and checks the payload. The DEK is already proven, so a failure is tampering.
-    pub fn open_payload(&self, dek: &[u8; 32]) -> Result<VaultPayload, CoreError> {
+    /// Decrypts the payload bytes. The DEK is already proven, so a failure is tampering. The
+    /// caller (`migrations::open_container`) checks the payload's version against `self.version`.
+    pub fn open_payload(&self, dek: &[u8; 32]) -> Result<Zeroizing<Vec<u8>>, CoreError> {
         let (Some(iv), Ok(data)) = (
             decode::<12>(&self.payload.iv),
             BASE64.decode(&self.payload.data),
@@ -278,20 +257,16 @@ impl VaultFile {
             return Err(invalid());
         };
         let aad = additional_data(PAYLOAD_SCOPE, &self.lineage, &self.payload.commit);
-        let plaintext = aead_open(dek, &iv, &aad, &data).ok_or_else(invalid)?;
-        VaultPayload::parse(&plaintext, CONTAINER_VERSION)
+        aead_open(dek, &iv, &aad, &data).ok_or_else(invalid)
     }
 
-    /// The same file with `payload` re-sealed under a fresh IV and commit; no KDF, same DEK.
-    pub fn with_payload(&self, dek: &[u8; 32], payload: &VaultPayload) -> Result<Self, CoreError> {
+    /// The same file with a current-version `payload` re-sealed under a fresh IV and commit; no
+    /// KDF, same DEK, same slots. The file's version becomes the current one, so re-sealing a
+    /// version-2 container is how it is upgraded in place.
+    pub fn with_payload(&self, dek: &[u8; 32], payload: &[u8]) -> Result<Self, CoreError> {
         Ok(Self {
-            payload: seal_payload(
-                dek,
-                &self.lineage,
-                &payload.to_json()?,
-                &random()?,
-                &random()?,
-            )?,
+            version: VAULT_VERSION,
+            payload: seal_payload(dek, &self.lineage, payload, &random()?, &random()?)?,
             ..self.clone()
         })
     }
@@ -340,37 +315,35 @@ impl VaultFile {
 mod tests {
     use super::*;
 
-    const PHRASE: &str =
-        "habit hope tip crystal because grunt nation idea electric witness alert like";
-
-    fn payload(version: u32) -> VaultPayload {
-        VaultPayload {
-            account_count: 1,
-            mnemonic: PHRASE.into(),
-            mnemonic_passphrase: None,
-            version,
-        }
+    #[test]
+    fn a_container_seals_the_current_version_and_opens_only_under_its_dek() {
+        let key = SealingKey::fixed("fixture passphrase", [1; 16], &"ef".repeat(16));
+        let dek = [3u8; 32];
+        let file = seal_new(&key, &dek, b"{}", &Randomness::draw().unwrap()).unwrap();
+        assert_eq!(file.version, VAULT_VERSION);
+        assert_eq!(file.open_payload(&dek).unwrap().as_slice(), b"{}");
+        assert!(file.open_payload(&[4u8; 32]).is_err());
     }
 
     #[test]
-    fn a_container_carrying_a_v1_payload_is_refused() {
+    fn only_known_container_versions_parse() {
         let key = SealingKey::fixed("fixture passphrase", [1; 16], &"ef".repeat(16));
-        let dek = [3u8; 32];
-        let file = seal_new(&key, &dek, &payload(1), &Randomness::draw().unwrap()).unwrap();
-        assert!(matches!(
-            file.open_payload(&dek),
-            Err(CoreError::Storage { .. })
-        ));
-        let file = seal_new(&key, &dek, &payload(2), &Randomness::draw().unwrap()).unwrap();
-        assert_eq!(file.open_payload(&dek).unwrap().version, 2);
-        assert!(file.open_payload(&[4u8; 32]).is_err());
+        let file = seal_new(&key, &[3u8; 32], b"{}", &Randomness::draw().unwrap()).unwrap();
+        for (version, ok) in [(1, false), (2, true), (3, true), (4, false)] {
+            let text = serde_json::to_string(&VaultFile {
+                version,
+                ..file.clone()
+            })
+            .unwrap();
+            assert_eq!(parse(&text).is_ok(), ok, "container version {version}");
+        }
     }
 
     #[test]
     fn the_biometric_slot_is_bound_to_its_lineage_and_id() {
         let key = SealingKey::fixed("fixture passphrase", [1; 16], &"ef".repeat(16));
         let dek = [3u8; 32];
-        let mut file = seal_new(&key, &dek, &payload(2), &Randomness::draw().unwrap()).unwrap();
+        let mut file = seal_new(&key, &dek, b"{}", &Randomness::draw().unwrap()).unwrap();
         let slot = file.seal_biometric(&dek, &[9; 32], String::new()).unwrap();
         file.biometric_slot = Some(slot.clone());
         assert_eq!(*file.open_biometric(&[9; 32]).unwrap(), dek);

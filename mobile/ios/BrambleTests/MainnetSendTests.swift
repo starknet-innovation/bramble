@@ -26,7 +26,9 @@ final class MainnetSendTests: XCTestCase {
         let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
         try core.importWallet(password: "mainnet send test", phrase: phrase, passphrase: nil)
         let network = supportedNetworks().first { $0.network == .mainnet }!
-        let account = try core.accounts(network: .mainnet)[0]
+        let account = try XCTUnwrap(try core.restoreRecoveredAccounts(network: .mainnet, selections: [
+            RecoverySelection(family: .openZeppelin, accountIndex: 0, classHash: nil),
+        ]).first)
         let model = SendFlowModel(core: core, network: network, account: account, otherAccounts: [], balances: [:], transport: URLSessionRpcTransport())
         model.recipientInput = account.address
         model.continueWithRecipient()

@@ -1,4 +1,4 @@
-//! The only module that calls Krusty KMS. Mirrors `packages/platform/kms-krusty/src/adapter.ts`:
+//! One of the two modules that call Krusty KMS (with `kms_accounts.rs`). Mirrors `packages/platform/kms-krusty/src/adapter.ts`:
 //! inputs are validated before they reach Krusty, and outputs are re-checked before they leave,
 //! so a Krusty regression surfaces as an error here rather than as a wrong key or address.
 //!
@@ -20,14 +20,6 @@ const MAX_BIP39_PASSPHRASE_LENGTH: usize = 256;
 /// Upper bound on phrase text accepted from the UI before BIP-39 parsing.
 const MAX_MNEMONIC_TEXT_LENGTH: usize = 512;
 
-/// Public outputs of deriving one Starknet account.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DerivedAccount {
-    pub address: String,
-    pub class_hash: String,
-    pub public_key: String,
-}
-
 /// A Stark ECDSA signature over a caller-supplied hash.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Signature {
@@ -36,7 +28,7 @@ pub struct Signature {
     pub s: String,
 }
 
-fn kms_error(context: &str) -> impl Fn(krusty_kms_common::KmsError) -> CoreError + '_ {
+pub(crate) fn kms_error(context: &str) -> impl Fn(krusty_kms_common::KmsError) -> CoreError + '_ {
     // Krusty's messages can echo input; only the operation name crosses the boundary.
     move |_| CoreError::Kms {
         operation: context.to_string(),
@@ -99,7 +91,7 @@ fn check_derivation_input(phrase: &str, passphrase: Option<&str>) -> Result<(), 
 }
 
 /// Derives the Starknet signing key at `m/44'/9004'/account'/0/index` (Krusty's layout).
-fn private_key(
+pub(crate) fn private_key(
     phrase: &str,
     passphrase: Option<&str>,
     account_index: u32,
@@ -132,33 +124,6 @@ pub fn oz_class_hash(chain: ChainId) -> Result<Felt, CoreError> {
         });
     }
     Ok(class_hash)
-}
-
-/// Derives an account's public key and OpenZeppelin counterfactual address (salt `0x0`,
-/// exactly as `deriveAccountContractAddress` in the extension).
-pub fn derive_account(
-    phrase: &str,
-    passphrase: Option<&str>,
-    account_index: u32,
-    chain: ChainId,
-) -> Result<DerivedAccount, CoreError> {
-    let key = private_key(phrase, passphrase, account_index)?;
-    let public_key =
-        krusty_kms::stark_public_key(key.expose_secret()).map_err(kms_error("public key"))?;
-    let class_hash = oz_class_hash(chain)?;
-    let address =
-        krusty_kms::derive_oz_account_address(&public_key, &class_hash, Some(&Felt::ZERO))
-            .map_err(kms_error("address"))?;
-    if public_key == Felt::ZERO || address == Felt::ZERO {
-        return Err(CoreError::Kms {
-            operation: "address".into(),
-        });
-    }
-    Ok(DerivedAccount {
-        address: felt::canonical(&address),
-        class_hash: felt::canonical(&class_hash),
-        public_key: felt::canonical(&public_key),
-    })
 }
 
 /// Signs a message hash with deterministic RFC-6979 Stark ECDSA.

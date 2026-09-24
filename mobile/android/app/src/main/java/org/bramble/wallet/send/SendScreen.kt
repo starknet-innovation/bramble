@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,7 +78,12 @@ internal val capsule = RoundedCornerShape(percent = 50)
  */
 @Composable
 fun SendScreen(store: WalletStore, back: () -> Unit) {
-    val model = remember { store.makeSendModel() } ?: return
+    val model = remember { store.makeSendModel() }
+    if (model == null) {
+        // Locked, or an account the core will not sign for (Home says why): nothing to show.
+        LaunchedEffect(Unit) { back() }
+        return
+    }
     val scope = rememberCoroutineScope()
     DisposableEffect(model) { onDispose { model.close() } }
     val onBack = {
@@ -204,8 +210,8 @@ private fun RecipientStage(model: SendFlowModel) {
             ) {
                 AccountAvatar(model.account.address)
                 Column(verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
-                    Text("Account ${model.account.index + 1u}", color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold))
-                    Text(shortAddress(model.account.address), color = skin.muted, style = textStyle(BrambleTypeScale.caption, mono = true))
+                    Text(model.account.displayName, color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold))
+                    Text(model.account.shortAddress, color = skin.muted, style = textStyle(BrambleTypeScale.caption, mono = true))
                 }
             }
         }
@@ -227,8 +233,8 @@ private fun RecipientStage(model: SendFlowModel) {
         if (tab == 0) {
             Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
                 model.otherAccounts.forEach { account ->
-                    val name = "Account ${account.index + 1u}"
-                    ChoiceRow(name, shortAddress(account.address), null, "$name, ${shortAddress(account.address)}", mark = {
+                    val name = account.displayName
+                    ChoiceRow(name, account.shortAddress, null, "$name, ${account.shortAddress}", mark = {
                         AccountAvatar(account.address, BrambleSize.mark)
                     }) { model.useRecipient(account.address) }
                 }
@@ -270,7 +276,7 @@ private fun DetailsStage(store: WalletStore, model: SendFlowModel, review: () ->
         Eyebrow(SendCopy.accountsHeading)
         Receipt(
             listOf(
-                SendCopy.fromLabel to "Account ${model.account.index + 1u}",
+                SendCopy.fromLabel to model.account.displayName,
                 SendCopy.toLabel to (model.recipient?.let { shortAddress(it) } ?: "—"),
                 SendCopy.networkLabel to store.networkLabel,
             ),

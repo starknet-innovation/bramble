@@ -13,7 +13,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.bramble.core.AccountInfo
+import org.bramble.core.AccountGroup
+import org.bramble.core.AccountRecord
 import org.bramble.core.BiometricDomain
 import org.bramble.core.CoreException
 import org.bramble.core.NetworkId
@@ -23,7 +24,6 @@ import org.bramble.core.TokenInfo
 import org.bramble.core.TransferPlan
 import org.bramble.core.WalletCore
 import org.bramble.core.WalletStatus
-import org.bramble.core.formatTokenAmount
 import org.bramble.core.supportedNetworks
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.ThemeChoice
@@ -51,7 +51,9 @@ class WalletStore(
     val appScope: CoroutineScope,
 ) {
     private val session = SessionGuard()
-    private val rpc = RpcClient()
+    private val book = Balances()
+    /** For the discovery scan's sans-IO steps (`RecoveryScanDriver`); restoring goes through [accountCall]. */
+    internal val walletCore: WalletCore get() = core
     /** Whether a vault exists on disk, tracked here so `lock()` never waits on the core mutex. */
     private var vaultWritten = core.status() != WalletStatus.NO_WALLET
     private var pendingLock: Job? = null
@@ -63,23 +65,23 @@ class WalletStore(
     var route by mutableStateOf(if (vaultWritten) Route.LOCKED else Route.ONBOARDING)
         private set
     var tab by mutableStateOf(Tab.HOME)
-    var accounts by mutableStateOf(emptyList<AccountInfo>())
-        private set
-    var balances by mutableStateOf(emptyMap<String, String>())
-        private set
-    /** Network and address [balances] were read for; [amount] shows nothing for any other view. */
-    private var balancesOwner by mutableStateOf<Pair<NetworkId, String>?>(null)
+    /** The account state as last read from the core; emptied on lock and before each entry. */
+    private var accountState by mutableStateOf(AccountsSnapshot())
+    /** This network's accounts as the core renders them (name, label, type, group). */
+    val records: List<AccountRecord> get() = accountState.records
+    /** Every network's accounts, for group membership lists. */
+    val allRecords: List<AccountRecord> get() = accountState.allRecords
+    val groups: List<AccountGroup> get() = accountState.groups
+    /** The vault's one active account (on this network once [enterWallet] has run); signing uses its id. */
+    val activeRecord: AccountRecord? get() = accountState.active
     /**
      * Bumped when a lock lands before any vault exists. Root keys the onboarding flow on it, so a
      * typed recovery phrase or passphrase is disposed with the flow instead of surviving the lock.
      */
     var onboardingGeneration by mutableStateOf(0)
         private set
-    var networkHealthy by mutableStateOf(true)
-        private set
+    val networkHealthy: Boolean get() = book.networkHealthy
     var busy by mutableStateOf(false)
-        private set
-    var selectedAccount by mutableStateOf(0u)
         private set
     /** Words of a just-created wallet; never persisted, cleared on finish or lock. */
     var pendingBackup by mutableStateOf(emptyList<String>())
@@ -111,7 +113,6 @@ class WalletStore(
 
     val networkInfo: NetworkInfo get() = supportedNetworks().first { it.network == network }
     val networkLabel: String get() = NetworkPreference.label(network)
-    val account: AccountInfo? get() = accounts.firstOrNull { it.index == selectedAccount } ?: accounts.firstOrNull()
     /** Whether a strong biometric is enrolled and usable on this device now. */
     val biometricsAvailable: Boolean get() = biometrics.available
     val keyStorageLabel: String
@@ -183,25 +184,20 @@ class WalletStore(
 
     suspend fun create(password: String) {
         val ticket = session.ticket()
-        val words = work(ticket) { core.createWallet(password, 12u) }.words
+        val network = network
+        val words = work(ticket) { core.createWalletOnNetwork(password, 12u, network) }.words
         vaultWritten = true
         pendingBackup = words
     }
 
+    /** Writes the vault with recovery pending and no accounts; "Find your accounts" comes next. */
     suspend fun importWallet(phrase: String, password: String) {
         val ticket = session.ticket()
         work(ticket) { core.importWallet(password, phrase, null) }
         vaultWritten = true
     }
 
-    /** The first account of a just-written vault, for the review step. */
-    suspend fun previewAccount(): AccountInfo? {
-        val ticket = session.ticket()
-        val network = network
-        return work(ticket) { core.accounts(network) }.firstOrNull()
-    }
-
-    /** Leaves onboarding for the wallet; the backup words are dropped here. */
+    /** Leaves onboarding (or "Find your accounts") for the wallet; the backup words are dropped here. */
     suspend fun finishOnboarding() {
         pendingBackup = emptyList()
         enterWallet(session.ticket())
@@ -233,7 +229,7 @@ class WalletStore(
         idleTimer?.cancel()
         idleTimer = null
         pendingBackup = emptyList()
-        accounts = emptyList()
+        accountState = AccountsSnapshot()
         clearBalances()
         tab = Tab.HOME
         if (!vaultWritten) onboardingGeneration += 1
@@ -259,21 +255,28 @@ class WalletStore(
         prefs.edit().putString(ThemeChoice.STORAGE_KEY, choice.stored).apply()
     }
 
-    suspend fun addAccount() {
+    /** One account call (WalletAccounts.kt) for this session, then with [reload] a fresh read of accounts and balances. */
+    internal suspend fun <T> accountCall(reload: Boolean = true, body: (WalletCore) -> T): T {
         val ticket = session.ticket()
-        val network = network
-        val added = work(ticket) { core.addAccount(network) }
+        val before = activeRecord?.id
+        val result = work(ticket) { body(core) }
         scheduleIdleLock()
-        accounts = accounts + added
-        selectedAccount = added.index
-        clearBalances()
-        refreshBalances(ticket)
+        if (!reload) return result
+        reloadAccounts(ticket, ensure = false)
+        if (activeRecord?.id != before) {
+            clearBalances()
+            refreshBalances(ticket)
+        }
+        return result
     }
 
-    suspend fun select(index: UInt) {
-        selectedAccount = index
-        clearBalances()
-        refreshBalances()
+    /** Re-reads records and groups; with [ensure], first keeps, picks or projects this network's active account. */
+    private suspend fun reloadAccounts(ticket: Long, ensure: Boolean) {
+        val network = network
+        accountState = work(ticket) {
+            if (ensure) core.ensureNetworkAccount(network)
+            AccountsSnapshot(core.accountRecords(network), core.allAccountRecords(), core.accountGroups())
+        }
     }
 
     /** Re-checks the password in the core (throttled; biometrics never reveal) and returns the phrase for display only. */
@@ -300,17 +303,23 @@ class WalletStore(
         lock()
     }
 
+    /**
+     * On unlock and every network switch: back to "Find your accounts" while recovery is pending
+     * (never a wallet with zero accounts), else `ensureNetworkAccount` runs before anything renders.
+     */
     private suspend fun enterWallet(ticket: Long) {
-        val network = network
-        val loaded = try {
-            work(ticket) { core.accounts(network) }
-        } catch (ended: SessionEndedException) {
-            throw ended
-        } catch (ignored: Exception) {
-            emptyList()
+        accountState = AccountsSnapshot()
+        if (work(ticket) { core.recoveryPending() }) {
+            route = Route.DISCOVERY
+            scheduleIdleLock()
+            return
         }
-        accounts = loaded
-        if (loaded.none { it.index == selectedAccount }) selectedAccount = 0u
+        try {
+            reloadAccounts(ticket, ensure = true)
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            showError(error)
+        }
         route = Route.WALLET
         scheduleIdleLock()
         refreshBalances(ticket)
@@ -332,7 +341,7 @@ class WalletStore(
         idleTimer?.cancel()
         val remaining = core.sessionRemainingMs()
         if (remaining == null) {
-            if (route == Route.WALLET) lock()
+            if (route.unlocked) lock()
             return
         }
         idleTimer = appScope.launch {
@@ -359,7 +368,7 @@ class WalletStore(
         } catch (ignored: CoreException) {
         }
         if (security.biometricEnabled && biometrics.invalidated()) invalidateBiometric()
-        if (route == Route.WALLET && core.status() != WalletStatus.UNLOCKED) lock()
+        if (route.unlocked && core.status() != WalletStatus.UNLOCKED) lock()
         refreshSecurity()
     }
 
@@ -447,48 +456,43 @@ class WalletStore(
 
     // Send
 
-    /** A Send journey for the selected account (null while locked), with balances of this view only. */
+    /**
+     * A Send journey for the active account, with balances of this view only. Null while locked
+     * and for an account the core will not sign for ([sendRefusal]: Braavos, Ready).
+     */
     fun makeSendModel(): SendFlowModel? {
-        val account = account ?: return null
-        val current = if (balancesOwner != null && balancesOwner == currentView()) balances else emptyMap()
-        return SendFlowModel(core, networkInfo, account, accounts.filter { it.index != account.index }, current, { plans += it }) { message, success ->
+        val account = activeRecord ?: return null
+        if (sendRefusal(account) != null) return null
+        val current = book.of(currentView())
+        return SendFlowModel(core, networkInfo, account, records.filter { it.id != account.id }, current, { plans += it }) { message, success ->
             showToast(message, positive = success)
         }
     }
 
     // Balances
 
-    private fun clearBalances() {
-        balances = emptyMap()
-        balancesOwner = null
-    }
+    private fun clearBalances() = book.clear()
 
-    private fun currentView(): Pair<NetworkId, String>? = account?.let { network to it.address }
+    private fun currentView(): BalanceView? = activeRecord?.let { network to it.address }
 
-    /**
-     * Reads public balances for the selected account; a failure only marks the network unhealthy.
-     * The read is tied to the network and account it was sent for: a result that returns after a
-     * lock, a network switch, or an account change is dropped, never shown under the new view.
-     */
+    /** Reads public balances for the active account; a late result is dropped ([Balances]). */
     suspend fun refreshBalances(ticket: Long = session.ticket()) {
         val view = currentView() ?: return
-        val info = networkInfo
-        val result = runCatching { rpc.balances(view.second, info) }
-        if (!session.isCurrent(ticket) || currentView() != view) return
-        result.onSuccess {
-            balances = it
-            balancesOwner = view
-            networkHealthy = true
-        }.onFailure { networkHealthy = false }
+        book.refresh(view, networkInfo) { session.isCurrent(ticket) && currentView() == view }
     }
 
     /** Base-unit balance formatted for display, or null until it has loaded for this view. */
-    fun amount(token: TokenInfo): String? {
-        if (balancesOwner == null || balancesOwner != currentView()) return null
-        val raw = balances[token.symbol] ?: return null
-        return runCatching { formatTokenAmount(raw, token.decimals, 4u) }.getOrNull()
-    }
+    fun amount(token: TokenInfo): String? = book.amount(token, currentView())
 
     /** Core lifecycle state, for tests and diagnostics. Takes the core's session mutex. */
     internal fun coreStatus(): WalletStatus = core.status()
+}
+
+/** One consistent read of the account state, taken off the main thread. */
+private class AccountsSnapshot(
+    val records: List<AccountRecord> = emptyList(),
+    val allRecords: List<AccountRecord> = emptyList(),
+    val groups: List<AccountGroup> = emptyList(),
+) {
+    val active: AccountRecord? = records.firstOrNull { it.active }
 }

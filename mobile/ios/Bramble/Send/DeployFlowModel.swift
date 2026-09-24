@@ -16,22 +16,22 @@ final class DeployFlowModel {
 
     private let core: WalletCore
     private let network: NetworkInfo
-    private let accountIndex: UInt32
+    private let accountId: String
     private let transport: RpcTransport
     private let track: (TransferPlan) -> Void
     private var driver: SendDriver?
 
-    init(core: WalletCore, network: NetworkInfo, accountIndex: UInt32, transport: RpcTransport, track: @escaping (TransferPlan) -> Void = { _ in }) {
+    init(core: WalletCore, network: NetworkInfo, accountId: String, transport: RpcTransport, track: @escaping (TransferPlan) -> Void = { _ in }) {
         self.core = core
         self.network = network
-        self.accountIndex = accountIndex
+        self.accountId = accountId
         self.transport = transport
         self.track = track
     }
 
     func review() async {
         close()
-        guard let plan = try? core.prepareDeployment(network: network.network, accountIndex: accountIndex) else {
+        guard let plan = try? core.prepareDeployment(accountId: accountId) else {
             return fail(SendFailure(code: .locked, hash: nil))
         }
         track(plan)

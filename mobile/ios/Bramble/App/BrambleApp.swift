@@ -8,7 +8,9 @@ struct BrambleApp: App {
     @State private var store: WalletStore
 
     init() {
-        let core = try! WalletCore(dataDir: VaultDirectory.prepare().path, clock: DeviceClock())
+        let directory = try! VaultDirectory.prepare()
+        UITestHooks.prepare(vaultDirectory: directory)
+        let core = try! WalletCore(dataDir: directory.path, clock: DeviceClock())
         _store = State(initialValue: WalletStore(core: core))
     }
 
@@ -68,6 +70,7 @@ struct RootView: View {
                 switch store.route {
                 case .onboarding: OnboardingFlow()
                 case .locked: UnlockView()
+                case .discovery: OnboardingFlow(resumingDiscovery: true)
                 case .wallet: WalletShell()
                 }
                 // Errors, plus the few confirmations raised through `store.notify`; other success is

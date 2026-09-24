@@ -21,14 +21,17 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use zeroize::Zeroizing;
 
+use crate::account_catalog::AccountFamily;
+use crate::account_store::{self, VaultPayload};
 use crate::clock::{ClockReading, HostClock};
-use crate::container::{self, Dek, Randomness, StoredVault, VaultFile, VaultPayload, MAX_ACCOUNTS};
+use crate::container::{self, Dek, Randomness, StoredVault, VaultFile};
 use crate::files::{storage, write_atomic};
-use crate::migrations::{open_stored, Opened};
+use crate::migrations::{open_stored, Opened, VAULT_VERSION};
 use crate::networks::NetworkId;
 pub use crate::records::{
     AccountInfo, RecoveryPhrase, SecurityStatus, StarkSignature, WalletStatus,
 };
+use crate::recovery_scan::ScanState;
 use crate::security;
 use crate::vault::{self, Envelope, SealingKey};
 use crate::{kms, CoreError};
@@ -45,6 +48,8 @@ pub(crate) struct Session {
     /// A migrated container that could not be written yet; the next payload write commits it.
     pub pending: Option<VaultFile>,
     pub last_activity: ClockReading,
+    /// The discovery scan, never persisted; dropped with the session on lock.
+    pub scan: Option<ScanState>,
 }
 
 /// Key custody and vault lifecycle. Thread-safe; every method takes `&self`.
@@ -150,6 +155,7 @@ impl WalletCore {
             password_slot: opened.container.password_slot.clone(),
             pending,
             last_activity: self.now(),
+            scan: None,
         });
         // A new session is a new generation: a plan from an idle-expired session stays void.
         self.lock_epoch.fetch_add(1, Ordering::SeqCst);
@@ -179,40 +185,41 @@ impl WalletCore {
         }
     }
 
-    /// Re-seals the session payload under its DEK (no KDF), keeping the file's slots.
-    fn persist_payload(&self, session: &mut Session) -> Result<(), CoreError> {
+    /// Re-seals the session payload under its DEK (no KDF), keeping the file's slots. Checks
+    /// every structural invariant first, so a write can never store a payload `open` would refuse.
+    pub(crate) fn persist_payload(&self, session: &mut Session) -> Result<(), CoreError> {
+        account_store::check_consistent(&session.payload)?;
         let _file = self.lock_file();
         let base = match self.read_vault()? {
-            StoredVault::V2(file) if file.password_slot == session.password_slot => *file,
-            StoredVault::V1(_) => session
+            StoredVault::Container(file) if file.password_slot == session.password_slot => *file,
+            StoredVault::Envelope(_) => session
                 .pending
                 .clone()
                 .ok_or_else(|| storage("vault changed on disk"))?,
-            StoredVault::V2(_) => return Err(storage("vault changed on disk")),
+            StoredVault::Container(_) => return Err(storage("vault changed on disk")),
         };
-        self.write_vault(&base.with_payload(&session.dek, &session.payload)?)?;
+        self.write_vault(&base.with_payload(&session.dek, &session.payload.to_json()?)?)?;
         session.pending = None;
         Ok(())
     }
 
-    pub(crate) fn account(
-        session: &Session,
-        index: u32,
-        network: NetworkId,
-    ) -> Result<AccountInfo, CoreError> {
-        let derived = kms::derive_account(
-            &session.payload.mnemonic,
-            session.payload.mnemonic_passphrase.as_deref(),
-            index,
-            network.chain(),
-        )?;
-        Ok(AccountInfo {
-            index,
-            address: derived.address,
-            public_key: derived.public_key,
-            class_hash: derived.class_hash,
-            network,
-        })
+    /// After a migrating open: writes the current-version file if the file it was built from is
+    /// still what is on disk. Returns the file to keep pending when that write did not happen;
+    /// the next payload write commits it. Call with no file lock held.
+    pub(crate) fn commit_migration(&self, opened: &Opened) -> Option<VaultFile> {
+        if !opened.migrated {
+            return None;
+        }
+        let _file = self.lock_file();
+        let unchanged = match self.read_vault() {
+            Ok(StoredVault::Envelope(_)) => true,
+            Ok(StoredVault::Container(file)) => {
+                file.password_slot == opened.container.password_slot && file.version < VAULT_VERSION
+            }
+            Err(_) => false,
+        };
+        let written = unchanged && self.write_vault(&opened.container).is_ok();
+        (!written).then(|| opened.container.clone())
     }
 
     fn create_vault(
@@ -220,17 +227,14 @@ impl WalletCore {
         password: &str,
         mnemonic: Zeroizing<String>,
         passphrase: Option<String>,
+        first_account: Option<NetworkId>,
     ) -> Result<(), CoreError> {
         let epoch = self.lock_epoch.load(Ordering::SeqCst);
-        let payload = VaultPayload {
-            account_count: 1,
-            mnemonic: mnemonic.to_string(),
-            mnemonic_passphrase: passphrase,
-            version: container::CONTAINER_VERSION,
-        };
+        let payload = VaultPayload::new(mnemonic.to_string(), passphrase, first_account)?;
+        account_store::check_consistent(&payload)?;
         let key = SealingKey::create(password)?;
         let dek = container::new_dek()?;
-        let file = container::seal_new(&key, &dek, &payload, &Randomness::draw()?)?;
+        let file = container::seal_new(&key, &dek, &payload.to_json()?, &Randomness::draw()?)?;
         {
             let _file = self.lock_file();
             if self.vault_path().exists() {
@@ -280,22 +284,35 @@ impl WalletCore {
         }
     }
 
-    /// Creates a wallet from fresh entropy and leaves it unlocked. The returned phrase is the
-    /// only copy the UI ever receives unprompted; it must be shown once for backup and dropped.
-    pub fn create_wallet(
+    /// Creates a wallet from fresh entropy with its first account (OZ index 0) on `network` and
+    /// leaves it unlocked. The returned phrase is the only copy the UI ever receives unprompted;
+    /// it must be shown once for backup and dropped.
+    pub fn create_wallet_on_network(
         &self,
         password: String,
         word_count: u8,
+        network: NetworkId,
     ) -> Result<RecoveryPhrase, CoreError> {
         let password = Zeroizing::new(password);
         vault::check_password(&password)?;
         let mnemonic = kms::generate_mnemonic(word_count)?;
         let words = mnemonic.split(' ').map(str::to_string).collect();
-        self.create_vault(&password, mnemonic, None)?;
+        self.create_vault(&password, mnemonic, None, Some(network))?;
         Ok(RecoveryPhrase { words })
     }
 
-    /// Imports an existing phrase (and optional BIP-39 passphrase) and leaves the wallet unlocked.
+    /// `create_wallet_on_network` on Mainnet, the extension's default network.
+    pub fn create_wallet(
+        &self,
+        password: String,
+        word_count: u8,
+    ) -> Result<RecoveryPhrase, CoreError> {
+        self.create_wallet_on_network(password, word_count, NetworkId::Mainnet)
+    }
+
+    /// Imports an existing phrase (and optional BIP-39 passphrase) and leaves the wallet unlocked
+    /// with no accounts yet: `recovery_pending` is set until discovery restores the user's
+    /// selection (`restore_recovered_accounts`).
     pub fn import_wallet(
         &self,
         password: String,
@@ -310,22 +327,22 @@ impl WalletCore {
                 reason: "invalid recovery phrase".into(),
             });
         }
-        self.create_vault(&password, mnemonic, passphrase.filter(|p| !p.is_empty()))
+        self.create_vault(
+            &password,
+            mnemonic,
+            passphrase.filter(|p| !p.is_empty()),
+            None,
+        )
     }
 
-    /// Decrypts the vault into memory: throttled and counted, and the first successful unlock of
-    /// a v1 vault migrates it to v2 (a failed write keeps v1 and retries on the next write).
+    /// Decrypts the vault into memory: throttled and counted. An older vault is migrated along the
+    /// one chain in `migrations.rs` and written back (a failed write keeps the old file and
+    /// retries on the next payload write).
     pub fn unlock(&self, password: String) -> Result<(), CoreError> {
         let password = Zeroizing::new(password);
         let epoch = self.lock_epoch.load(Ordering::SeqCst);
         let (opened, pending) = self.passphrase_attempt(&password, |opened| {
-            if !opened.migrated {
-                return Ok((opened, None));
-            }
-            let _file = self.lock_file();
-            let written = matches!(self.read_vault(), Ok(StoredVault::V1(_)))
-                && self.write_vault(&opened.container).is_ok();
-            let pending = (!written).then(|| opened.container.clone());
+            let pending = self.commit_migration(&opened);
             Ok((opened, pending))
         })?;
         self.install(epoch, opened, pending)
@@ -338,58 +355,39 @@ impl WalletCore {
         *session = None;
     }
 
-    /// Every account on `network`. Passive: never renews the idle window.
+    /// Deprecated shim (`docs/accounts.md` §3.1): the **OpenZeppelin** records on `network`, as
+    /// `AccountInfo` with `index = account_index`. Argent and Braavos records are never returned
+    /// here, so no caller can mistake one for OZ. Use `account_records`. Empty while recovery is
+    /// pending. Passive: never renews the idle window.
     pub fn accounts(&self, network: NetworkId) -> Result<Vec<AccountInfo>, CoreError> {
         self.with_session(false, |session| {
-            (0..session.payload.account_count)
-                .map(|index| Self::account(session, index, network))
-                .collect()
+            Ok(session
+                .payload
+                .accounts
+                .iter()
+                .filter(|record| {
+                    record.network() == network && record.family() == AccountFamily::OpenZeppelin
+                })
+                .map(|record| AccountInfo {
+                    index: record.account_index,
+                    address: record.address.clone(),
+                    public_key: record.public_key.clone(),
+                    class_hash: record.class_hash.clone(),
+                    network,
+                })
+                .collect())
         })
     }
 
-    /// Derives the next account and persists the new count (no KDF). Renews the idle window.
+    /// Deprecated alias of `add_regular_account`, returning `AccountInfo`. Renews.
     pub fn add_account(&self, network: NetworkId) -> Result<AccountInfo, CoreError> {
-        self.with_session(true, |session| {
-            let index = session.payload.account_count;
-            if index >= MAX_ACCOUNTS {
-                return Err(CoreError::InvalidInput {
-                    reason: "account limit reached".into(),
-                });
-            }
-            let account = Self::account(session, index, network)?;
-            session.payload.account_count += 1;
-            if let Err(error) = self.persist_payload(session) {
-                session.payload.account_count -= 1;
-                return Err(error);
-            }
-            Ok(account)
-        })
-    }
-
-    /// Signs a transaction or message hash for one account. The host computes the hash from the
-    /// reviewed request; the key is derived, used, and wiped inside this call. Renews.
-    pub fn sign_hash(
-        &self,
-        account_index: u32,
-        message_hash: String,
-    ) -> Result<StarkSignature, CoreError> {
-        self.with_session(true, |session| {
-            if account_index >= session.payload.account_count {
-                return Err(CoreError::InvalidInput {
-                    reason: "unknown account".into(),
-                });
-            }
-            let signature = kms::sign_hash(
-                &session.payload.mnemonic,
-                session.payload.mnemonic_passphrase.as_deref(),
-                account_index,
-                &message_hash,
-            )?;
-            Ok(StarkSignature {
-                public_key: signature.public_key,
-                r: signature.r,
-                s: signature.s,
-            })
+        let record = self.add_regular_account(network)?;
+        Ok(AccountInfo {
+            index: record.account_index,
+            address: record.address,
+            public_key: record.public_key,
+            class_hash: record.class_hash,
+            network,
         })
     }
 
@@ -438,7 +436,7 @@ impl WalletCore {
         let (failed_attempts, retry_after_ms) = security::status(&self.data_dir, &now);
         let biometric_enabled = matches!(
             self.read_vault(),
-            Ok(StoredVault::V2(file)) if file.biometric_slot.is_some()
+            Ok(StoredVault::Container(file)) if file.biometric_slot.is_some()
         );
         SecurityStatus {
             biometric_enabled,

@@ -144,12 +144,7 @@ struct CheckRow: View {
     var body: some View {
         Button { isOn.toggle() } label: {
             HStack(alignment: .top, spacing: BrambleSpace.sm) {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(isOn ? skin.accent : Color.clear)
-                    .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).stroke(isOn ? skin.accent : skin.border, lineWidth: 1.5))
-                    .overlay { if isOn { BrambleIcon(.check, size: 13).foregroundStyle(skin.accentText) } }
-                    .frame(width: BrambleMetrics.Checkbox.size, height: BrambleMetrics.Checkbox.size)
-                    .padding(.top, 1)
+                CheckBox(isOn: isOn).padding(.top, 1)
                 Text(text).brambleText(BrambleTypeScale.body).foregroundStyle(skin.text).multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
             }

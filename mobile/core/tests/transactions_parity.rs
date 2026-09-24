@@ -83,7 +83,7 @@ fn run(core: &std::sync::Arc<WalletCore>, scenario: &Value) {
         core.clone()
             .prepare_transfer(TransferRequest {
                 network,
-                account_index: 0,
+                account_id: oz_id(core, network, 0),
                 token_address: scenario["token"].as_str().unwrap().into(),
                 recipient: scenario["recipient"].as_str().unwrap().into(),
                 amount: scenario["amount"].as_str().unwrap().into(),
@@ -91,7 +91,9 @@ fn run(core: &std::sync::Arc<WalletCore>, scenario: &Value) {
             })
             .unwrap()
     } else {
-        core.clone().prepare_deployment(network, 0).unwrap()
+        core.clone()
+            .prepare_deployment(oz_id(core, network, 0))
+            .unwrap()
     };
     let deployed_at_review = scenario["reviewState"]["deployed"].as_bool().unwrap();
     let mut review_node = Node::new(network, deployed_at_review);
@@ -120,7 +122,7 @@ fn run(core: &std::sync::Arc<WalletCore>, scenario: &Value) {
     );
 
     // The pending record was written before the write left the core, keyed by the signed hash.
-    let records = core.activity(network, 0).unwrap();
+    let records = core.activity(oz_id(core, network, 0)).unwrap();
     let record = records
         .iter()
         .find(|r| r.hash == hash)

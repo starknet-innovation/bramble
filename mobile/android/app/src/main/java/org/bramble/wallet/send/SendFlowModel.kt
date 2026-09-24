@@ -3,7 +3,7 @@ package org.bramble.wallet.send
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import org.bramble.core.AccountInfo
+import org.bramble.core.AccountRecord
 import org.bramble.core.NetworkInfo
 import org.bramble.core.ReviewFlag
 import org.bramble.core.SendException
@@ -19,6 +19,7 @@ import org.bramble.core.WalletCore
 import org.bramble.core.formatTokenAmount
 import org.bramble.core.parseTokenAmount
 import org.bramble.core.validateRecipient
+import org.bramble.wallet.design.BrambleCopy
 
 /**
  * The Send journey's UI state, mirroring iOS `SendFlowModel`: every protocol decision is the
@@ -32,8 +33,10 @@ import org.bramble.core.validateRecipient
 class SendFlowModel(
     private val core: WalletCore,
     val network: NetworkInfo,
-    val account: AccountInfo,
-    val otherAccounts: List<AccountInfo>,
+    /** The sending account; the core signs by its id and refuses Braavos and Ready records. */
+    val account: AccountRecord,
+    /** This network's other accounts, offered as recipients. */
+    val otherAccounts: List<AccountRecord>,
     private val balances: Map<String, String>,
     private val track: (org.bramble.core.TransferPlan) -> Unit = {},
     private val notice: (message: String, success: Boolean) -> Unit = { _, _ -> },
@@ -155,10 +158,16 @@ class SendFlowModel(
         val to = recipient ?: run { stage = Stage.RECIPIENT; return }
         dropPlan()
         val plan = try {
-            core.prepareTransfer(TransferRequest(network.network, account.index, token.address, to, amount, balances["STRK"]))
+            core.prepareTransfer(TransferRequest(network.network, account.id, token.address, to, amount, balances["STRK"]))
         } catch (error: SendException.InvalidRecipient) {
             recipientError = SendCopy.invalidRecipient
             stage = Stage.RECIPIENT
+            return
+        } catch (error: SendException.ViewOnlyAccount) {
+            notice(BrambleCopy.sendViewOnlyAccount, false)
+            return
+        } catch (error: SendException.UnsupportedAccount) {
+            notice(BrambleCopy.sendUnsupportedAccount, false)
             return
         } catch (error: SendException) {
             amountError = SendCopy.amountInvalid

@@ -33,13 +33,19 @@ final class CoreBridgeTests: XCTestCase {
         let fixture = try fixture()
         let core = try core()
         try core.importWallet(password: "parity password", phrase: fixture.mnemonic, passphrase: nil)
-        _ = try core.addAccount(network: .sepolia)
+        // An import waits for discovery; restore OZ 0 and 1, then project index 0 onto Mainnet.
+        let restored = try core.restoreRecoveredAccounts(network: .sepolia, selections: [0, 1].map {
+            RecoverySelection(family: .openZeppelin, accountIndex: $0, classHash: nil)
+        })
+        try core.selectAccount(accountId: restored[0].id)
+        _ = try core.ensureNetworkAccount(network: .mainnet)
         for vector in fixture.accounts {
             let network: NetworkId = vector.networkId == "SN_MAIN" ? .mainnet : .sepolia
-            let account = try core.accounts(network: network)[Int(vector.accountIndex)]
+            let account = try XCTUnwrap(try core.accountRecords(network: network).first { $0.accountIndex == vector.accountIndex })
             XCTAssertEqual(account.address, vector.address)
             XCTAssertEqual(account.publicKey, vector.publicKeyX)
-            let signature = try core.signHash(accountIndex: vector.accountIndex, messageHash: fixture.messageHash)
+            // Signing is by account record, never by index (docs/accounts.md §2.7).
+            let signature = try core.signHashForAccount(accountId: account.id, messageHash: fixture.messageHash)
             XCTAssertEqual(signature.r, vector.signatureR)
             XCTAssertEqual(signature.s, vector.signatureS)
         }
@@ -49,9 +55,10 @@ final class CoreBridgeTests: XCTestCase {
         let core = try core()
         let phrase = try core.createWallet(password: "a strong password", wordCount: 12)
         XCTAssertEqual(phrase.words.count, 12)
+        let id = try XCTUnwrap(try core.activeAccount()).id
         core.lock()
         XCTAssertEqual(core.status(), .locked)
-        XCTAssertThrowsError(try core.signHash(accountIndex: 0, messageHash: "0x1")) { error in
+        XCTAssertThrowsError(try core.signHashForAccount(accountId: id, messageHash: "0x1")) { error in
             guard case .Locked = error as? CoreError else { return XCTFail("expected Locked, got \(error)") }
         }
         XCTAssertThrowsError(try core.unlock(password: "wrong password")) { error in

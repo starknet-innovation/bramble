@@ -28,13 +28,13 @@ struct DeployAccountView: View {
         .onDisappear { model?.close() }
     }
 
-    private func form(_ model: DeployFlowModel, account: AccountInfo) -> some View {
+    private func form(_ model: DeployFlowModel, account: AccountRecord) -> some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Send.formGap) {
             Eyebrow(text: SendCopy.whatWillHappen)
             Text(SendCopy.deployOutcome).brambleText(BrambleTypeScale.body)
             SendReceipt(rows: [
-                (SendCopy.deployAccountRow, "Account \(account.index + 1)", false),
-                (SendCopy.deployAddressRow, shortAddress(account.address), true),
+                (SendCopy.deployAccountRow, account.displayName, false),
+                (SendCopy.deployAddressRow, account.shortAddress, true),
                 (SendCopy.deployContractRow, SendCopy.deployContractValue, false),
                 (SendCopy.deployNetworkRow, store.networkLabel, false),
             ])

@@ -5,6 +5,9 @@
  * (biometric unlock and the Security screen have no extension counterpart) and are written here
  * once, so neither native app restates them. `{biometry}`, `{time}` and `{minutes}` are filled
  * in by the apps (`Face ID` / `Touch ID` / `fingerprint`, a `m:ss` countdown, the idle minutes).
+ * The two `send…Account` strings are the mobile core's signing refusals (`SendError.ViewOnlyAccount`
+ * and `UnsupportedAccount`, `mobile/docs/accounts.md` §2.7a): the extension signs for Ready
+ * accounts, mobile does not yet, so this wording has no extension source.
  */
 import { KDF_ITERATIONS } from "@bramble/vault/encrypted-store";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
@@ -40,6 +43,9 @@ const SECURITY_COPY: Readonly<Record<string, string>> = {
   securityRowOn: "{biometry} on",
   securitySubtitle: "How this device opens your wallet",
   securityTitle: "Unlock & auto-lock",
+  sendUnsupportedAccount:
+    "Sending from Ready accounts is not available on mobile yet. Use the Bramble extension to send from this account.",
+  sendViewOnlyAccount: "Braavos accounts are view only for now.",
   throttled: "Too many attempts. Try again in {time}.",
   unlockWithBiometry: "Unlock with {biometry}",
 };

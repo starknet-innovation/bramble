@@ -5,7 +5,7 @@ mod common;
 
 use bramble_core::testing::IDLE_LOCK_MS;
 use bramble_core::{CoreError, NetworkId, WalletStatus};
-use common::{imported, PASSWORD};
+use common::{account_id, imported, PASSWORD};
 
 #[test]
 fn the_session_ends_after_thirty_idle_minutes() {
@@ -43,10 +43,15 @@ fn reads_never_renew_the_window() {
 #[test]
 fn user_initiated_operations_renew_the_window() {
     let (_dir, clock, core) = imported();
+    let first = account_id(&core);
     clock.advance(IDLE_LOCK_MS - 1_000);
-    core.sign_hash(0, "0x1".into()).unwrap();
+    core.sign_hash_for_account(first.clone(), "0x1".into())
+        .unwrap();
     clock.advance(IDLE_LOCK_MS - 1_000);
-    core.add_account(NetworkId::Sepolia).unwrap();
+    core.add_regular_account(NetworkId::Sepolia).unwrap();
+    clock.advance(IDLE_LOCK_MS - 1_000);
+    // Deriving onto another network is a phrase operation, as in the extension.
+    core.ensure_network_account(NetworkId::Mainnet).unwrap();
     clock.advance(IDLE_LOCK_MS - 1_000);
     core.reveal_recovery_phrase(PASSWORD.into()).unwrap();
     clock.advance(IDLE_LOCK_MS - 1_000);
@@ -84,10 +89,28 @@ fn moving_the_wall_clock_does_not_touch_the_session() {
 #[test]
 fn lock_always_ends_the_session() {
     let (_dir, _clock, core) = imported();
+    let first = account_id(&core);
     core.lock();
     assert_eq!(core.status(), WalletStatus::Locked);
     assert!(matches!(
-        core.sign_hash(0, "0x1".into()),
+        core.sign_hash_for_account(first, "0x1".into()),
         Err(CoreError::Locked)
     ));
+}
+
+#[test]
+fn account_reads_and_preferences_are_passive() {
+    // Labels, groups and selection are plain preferences in the extension: no `getPassphrase`,
+    // so they never renew the window.
+    let (_dir, clock, core) = imported();
+    let first = account_id(&core);
+    clock.advance(IDLE_LOCK_MS - 1_000);
+    core.account_records(NetworkId::Sepolia).unwrap();
+    core.active_account().unwrap();
+    core.select_account(first.clone()).unwrap();
+    core.set_account_label(first, "Savings".into()).unwrap();
+    core.create_account_group("Long term".into(), "piggyBank".into())
+        .unwrap();
+    clock.advance(1_000);
+    assert_eq!(core.status(), WalletStatus::Locked);
 }

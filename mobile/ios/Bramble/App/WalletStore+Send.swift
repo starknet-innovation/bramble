@@ -4,24 +4,34 @@ import Foundation
 /// Send, deploy and local activity on top of `WalletStore`. Kept in its own file so the store
 /// itself only gained the few stored properties these need.
 extension WalletStore {
-    /// A Send journey for the selected account, or nil while locked.
+    /// Why the active account cannot send, in the words the Send action shows instead of opening
+    /// the journey; nil for an account the core signs for. The core refuses the same records
+    /// (`SendError.ViewOnlyAccount` / `.UnsupportedAccount`), so this only saves a dead end.
+    var sendRefusal: String? {
+        guard let account = activeRecord else { return nil }
+        if account.viewOnly { return BrambleCopy.sendViewOnlyAccount }
+        return account.family == .openZeppelin ? nil : BrambleCopy.sendUnsupportedAccount
+    }
+
+    /// A Send journey for the active account, or nil while locked or when it cannot send.
     func makeSendModel() -> SendFlowModel? {
-        guard let account else { return nil }
+        guard let account = activeRecord, sendRefusal == nil else { return nil }
         return SendFlowModel(
             core: core,
             network: networkInfo,
             account: account,
-            otherAccounts: accounts.filter { $0.index != account.index },
+            otherAccounts: records.filter { $0.id != account.id },
             balances: balances,
             transport: rpc.transport,
             track: { [weak self] plan in self?.plans.append(plan) }
         )
     }
 
-    /// The standalone Deploy account flow for the selected account.
+    /// The standalone Deploy account flow for the active account (OpenZeppelin only: the core
+    /// builds no other family's deployment).
     func makeDeployModel() -> DeployFlowModel? {
-        guard let account else { return nil }
-        return DeployFlowModel(core: core, network: networkInfo, accountIndex: account.index, transport: rpc.transport) { [weak self] plan in
+        guard let account = activeRecord, sendRefusal == nil else { return nil }
+        return DeployFlowModel(core: core, network: networkInfo, accountId: account.id, transport: rpc.transport) { [weak self] plan in
             self?.plans.append(plan)
         }
     }
@@ -33,18 +43,19 @@ extension WalletStore {
     /// each at most once per observation period, as the extension's `tx-observation.ts`; older
     /// ones keep the status they have.
     func refreshSendState() async {
-        guard let account else { return }
+        guard let account = activeRecord else { return }
         let network = networkInfo
-        deployment = await rpc.deploymentState(of: account.address, on: network)
-        activity = (try? core.activity(network: network.network, accountIndex: account.index)) ?? []
+        // The deploy notice is for accounts this core can deploy; others never show it.
+        deployment = sendRefusal == nil ? await rpc.deploymentState(of: account.address, on: network) : .unknown
+        activity = (try? core.activity(accountId: account.id)) ?? []
         let now = UInt64(Date().timeIntervalSince1970 * 1000)
         let period = activityObservationPeriodMs()
         for record in activity where activityNeedsObservation(record: record, nowMs: now) {
             if let last = observedAtMs[record.hash], now &- last < period { continue }
             observedAtMs[record.hash] = now
-            guard let plan = try? core.refreshActivity(network: network.network, accountIndex: account.index, hash: record.hash) else { continue }
+            guard let plan = try? core.refreshActivity(accountId: account.id, hash: record.hash) else { continue }
             _ = try? await SendDriver(plan: plan, network: network, transport: rpc.transport).run(from: .start)
         }
-        activity = (try? core.activity(network: network.network, accountIndex: account.index)) ?? activity
+        activity = (try? core.activity(accountId: account.id)) ?? activity
     }
 }

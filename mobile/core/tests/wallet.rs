@@ -2,7 +2,9 @@
 
 mod common;
 
-use bramble_core::{CoreError, NetworkId, WalletStatus};
+use bramble_core::{
+    AccountFamily, CoreError, NetworkId, RecoverySelection, WalletCore, WalletStatus,
+};
 use common::{FakeClock, PASSWORD, PHRASE};
 
 fn core() -> (tempfile::TempDir, std::sync::Arc<bramble_core::WalletCore>) {
@@ -14,6 +16,19 @@ fn reopen(dir: &tempfile::TempDir) -> std::sync::Arc<bramble_core::WalletCore> {
     common::open(dir.path(), &FakeClock::new())
 }
 
+/// An imported wallet waits for discovery; restore its OZ index 0 on `network`.
+fn restore_first(core: &WalletCore, network: NetworkId) {
+    core.restore_recovered_accounts(
+        network,
+        vec![RecoverySelection {
+            family: AccountFamily::OpenZeppelin,
+            account_index: 0,
+            class_hash: None,
+        }],
+    )
+    .unwrap();
+}
+
 #[test]
 fn lifecycle_gates_every_key_operation() {
     let (dir, core) = core();
@@ -23,10 +38,19 @@ fn lifecycle_gates_every_key_operation() {
         Err(CoreError::NoWallet)
     ));
 
-    let phrase = core.create_wallet(PASSWORD.into(), 12).unwrap();
+    let phrase = core
+        .create_wallet_on_network(PASSWORD.into(), 12, NetworkId::Sepolia)
+        .unwrap();
     assert_eq!(phrase.words.len(), 12);
     assert_eq!(core.status(), WalletStatus::Unlocked);
     let first = core.accounts(NetworkId::Sepolia).unwrap();
+    assert_eq!(
+        first.len(),
+        1,
+        "create writes OZ index 0 on the chosen network"
+    );
+    assert!(core.accounts(NetworkId::Mainnet).unwrap().is_empty());
+    let first_id = core.active_account().unwrap().unwrap().id;
 
     core.lock();
     assert_eq!(core.status(), WalletStatus::Locked);
@@ -35,7 +59,7 @@ fn lifecycle_gates_every_key_operation() {
         Err(CoreError::Locked)
     ));
     assert!(matches!(
-        core.sign_hash(0, "0x1".into()),
+        core.sign_hash_for_account(first_id.clone(), "0x1".into()),
         Err(CoreError::Locked)
     ));
     assert!(matches!(
@@ -75,15 +99,24 @@ fn added_accounts_persist_and_are_bounded_to_known_indexes() {
     let (dir, core) = core();
     core.import_wallet(PASSWORD.into(), PHRASE.into(), None)
         .unwrap();
-    let second = core.add_account(NetworkId::Sepolia).unwrap();
-    assert_eq!(second.index, 1);
-    assert!(core.sign_hash(1, "0x1".into()).is_ok());
+    assert!(core.recovery_pending().unwrap());
+    assert!(core.accounts(NetworkId::Sepolia).unwrap().is_empty());
+    assert!(
+        core.add_account(NetworkId::Sepolia).is_err(),
+        "no adding before discovery"
+    );
+    restore_first(&core, NetworkId::Sepolia);
+    let second = core.add_regular_account(NetworkId::Sepolia).unwrap();
+    assert_eq!(second.account_index, 1);
+    assert!(core
+        .sign_hash_for_account(second.id.clone(), "0x1".into())
+        .is_ok());
     assert!(matches!(
-        core.sign_hash(2, "0x1".into()),
+        core.sign_hash_for_account("SN_SEPOLIA:0x2".into(), "0x1".into()),
         Err(CoreError::InvalidInput { .. })
     ));
     assert!(matches!(
-        core.sign_hash(0, "0xZZ".into()),
+        core.sign_hash_for_account(second.id, "0xZZ".into()),
         Err(CoreError::InvalidInput { .. })
     ));
 
@@ -137,6 +170,8 @@ fn bip39_passphrase_changes_every_account() {
     protected
         .import_wallet(PASSWORD.into(), PHRASE.into(), Some("extra words".into()))
         .unwrap();
+    restore_first(&plain, NetworkId::Sepolia);
+    restore_first(&protected, NetworkId::Sepolia);
     assert_ne!(
         plain.accounts(NetworkId::Sepolia).unwrap(),
         protected.accounts(NetworkId::Sepolia).unwrap()

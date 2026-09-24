@@ -6,6 +6,10 @@
  * node answers recorded from the extension's own send path in the transaction fixture
  * (`bun run mobile:parity`), so the Send UI test reviews exactly what the extension reviewed.
  * The Swift file is wrapped in `#if DEBUG`, so a Release build carries none of it.
+ *
+ * The node only knows the published E2E wallet's primary account (OZ index 0, read from the
+ * extension-written parity fixture): account discovery over these fixtures finds that one account
+ * with activity, as it would on a real node, instead of every probed shape.
  */
 import { readFileSync } from "node:fs";
 import {
@@ -20,6 +24,9 @@ import { HEADER } from "./shared";
 export const RPC_FIXTURES_PATH = "mobile/ios/Bramble/App/RpcFixtures.generated.swift";
 
 const NETWORK_IDS = ["SN_MAIN", "SN_SEPOLIA"] as const;
+
+/** The published phrase's derived accounts, written from the extension by `bun run mobile:parity`. */
+const PARITY_FIXTURE = "mobile/core/tests/fixtures/extension-parity.json";
 
 /** The recorded send path (written by `generate-mobile-transaction-vectors.ts`). */
 const WIRE_FIXTURE = "mobile/core/tests/fixtures/extension-transactions-wire.json";
@@ -95,6 +102,18 @@ const canonical = (address: string): string => {
   return value;
 };
 
+/** Canonical addresses of the published wallet's OZ index-0 account on each network. */
+const primaryAccounts = (): string[] => {
+  const parity = JSON.parse(readFileSync(PARITY_FIXTURE, "utf8")) as {
+    readonly accounts: readonly { readonly accountIndex: number; readonly address: string }[];
+  };
+  const addresses = parity.accounts
+    .filter((account) => account.accountIndex === 0)
+    .map((account) => canonical(account.address));
+  if (addresses.length === 0) throw new Error(`${PARITY_FIXTURE} has no index-0 account`);
+  return [...new Set(addresses)].sort();
+};
+
 /** The Swift source for `RpcFixtures`. */
 export const renderRpcFixtures = (): string => {
   const endpoints = NETWORK_IDS.flatMap((id) =>
@@ -127,6 +146,12 @@ export const renderRpcFixtures = (): string => {
     "    /// Bundled endpoint → the chain id its `starknet_chainId` answers.",
     "    static let chainIds: [String: String] = [",
     ...endpoints,
+    "    ]",
+    "",
+    "    /// The published wallet's primary account (OZ index 0) on each network: the only address",
+    "    /// this node reports as deployed or funded, so discovery finds exactly that account.",
+    "    static let primaryAccounts: Set<String> = [",
+    ...primaryAccounts().map((address) => `        "${address}",`),
     "    ]",
     "",
     "    /// Canonical token address → `balanceOf` u256 limbs (low, high) in the `ready` state.",

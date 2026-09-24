@@ -61,7 +61,7 @@ final class SecurityFlowTests: XCTestCase {
         UITest.type(UITest.passphrase, into: locked)
         waitUntilEnabled(unlock, timeout: 90)
         unlock.tap()
-        XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20),
+        XCTAssertTrue(app.buttons["Accounts"].waitForExistence(timeout: 20),
                       "a leftover wallet uses a passphrase other than the suite's; uninstall Bramble from Bramble Workflow")
         UITest.removeWallet(app)
         return app
@@ -86,10 +86,9 @@ final class SecurityFlowTests: XCTestCase {
         UITest.type(UITest.passphrase, into: app.secureTextFields["Vault passphrase"])
         UITest.type(UITest.passphrase, into: app.secureTextFields["Confirm passphrase"])
         UITest.tap(app.buttons["Find your accounts"])
-        XCTAssertTrue(app.staticTexts["Review your account"].waitForExistence(timeout: 20))
-        UITest.tap(app.buttons["Add selected account"])
+        UITest.restorePrimaryAccount(app)
         UITest.tap(app.buttons["Open Bramble"])
-        XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20))
+        UITest.waitForWallet(app)
         return app
     }
 
@@ -134,7 +133,7 @@ final class SecurityFlowTests: XCTestCase {
         UITest.tap(app.buttons["Lock wallet"].firstMatch)
         XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 5))
         face(matching: true)
-        XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20), "Face ID opened the wallet")
+        XCTAssertTrue(app.buttons["Accounts"].waitForExistence(timeout: 20), "Face ID opened the wallet")
 
         // 2. A non-matching face leaves the passphrase usable and keeps the slot.
         UITest.tap(app.buttons["Lock wallet"].firstMatch)
@@ -204,7 +203,7 @@ final class SecurityFlowTests: XCTestCase {
         UITest.type(UITest.passphrase, into: relaunched.secureTextFields["Enter your passphrase"])
         waitUntilEnabled(ready, timeout: 40)
         ready.tap()
-        XCTAssertTrue(relaunched.staticTexts["Account 1"].waitForExistence(timeout: 20))
+        UITest.waitForWallet(relaunched)
         UITest.removeWallet(relaunched)
     }
 }

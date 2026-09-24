@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 
@@ -182,13 +184,24 @@ fun BrambleField(
     }
 }
 
-/** `label:has(> input[type=checkbox])`: an accent checkbox row; the whole row toggles. */
+/**
+ * `label:has(> input[type=checkbox])`: an accent checkbox row; the whole row toggles. With
+ * [detail] (a recovery candidate's address and hint) the text is the row's semibold title.
+ */
 @Composable
-fun CheckRow(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+fun CheckRow(
+    text: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+    detail: (@Composable ColumnScope.() -> Unit)? = null,
+) {
     val skin = LocalSkin.current
     val box = RoundedCornerShape(BrambleLayout.checkRadius)
     Row(
-        Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Checkbox, onValueChange = onCheckedChange),
+        Modifier.fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.5f)
+            .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange),
         horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
     ) {
         Box(
@@ -200,7 +213,39 @@ fun CheckRow(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit)
         ) {
             if (checked) BrambleIcon(BrambleIconName.CHECK, skin.accentText, BrambleLayout.checkIcon)
         }
-        Text(text, color = skin.text, style = textStyle(BrambleTypeScale.body), modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
+            Text(
+                text,
+                color = skin.text,
+                style = textStyle(BrambleTypeScale.body, if (detail != null) BrambleWeight.semibold else BrambleWeight.regular),
+            )
+            detail?.invoke(this)
+        }
+    }
+}
+
+/**
+ * `.account-filter-chip` / the group icon picker: a capsule toggle on the elevated fill, accent-soft
+ * when [selected] (the extension's `aria-pressed`). An icon-only chip is named by [description].
+ */
+@Composable
+fun FilterChip(label: String?, icon: BrambleIconName?, selected: Boolean, description: String? = null, onClick: () -> Unit) {
+    val skin = LocalSkin.current
+    Row(
+        Modifier.semantics(mergeDescendants = true) {
+            this.selected = selected
+            if (description != null) contentDescription = description
+        }
+            .fillPress(if (selected) skin.accentSoft else skin.elevated, skin.softPress, capsule, onClick = onClick)
+            .heightIn(min = BrambleControl.hitSmall)
+            .padding(horizontal = BrambleSpace.md),
+        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) BrambleIcon(icon, if (selected) skin.accent else skin.muted, BrambleLayout.detailIcon)
+        if (label != null) {
+            Text(label, color = if (selected) skin.text else skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
+        }
     }
 }
 

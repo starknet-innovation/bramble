@@ -1,9 +1,9 @@
 package org.bramble.wallet.ui
 
+import org.bramble.core.accountLabel
+
 /**
- * `0x1234…abcd`, the extension's shortened address (`verify-decode.ts`, iOS `shortAddress`).
- * Core addresses are canonical lowercase hex, so taking characters is exact. Shared with the
- * sibling workstreams; replace with a core `short_address` if one is added.
+ * The app's one short-address helper: the core's `accountLabel` (the extension's 6…4 rule with
+ * U+2026), so every screen and platform truncates identically. Kept only for call-site brevity.
  */
-fun shortAddress(address: String): String =
-    if (address.length <= 14) address else "${address.take(6)}…${address.takeLast(4)}"
+fun shortAddress(address: String): String = accountLabel(address)

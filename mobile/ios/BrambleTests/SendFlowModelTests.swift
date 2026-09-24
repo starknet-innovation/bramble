@@ -14,11 +14,12 @@ final class SendFlowModelTests: XCTestCase {
         core = try unlockedCore()
         node = MockNode()
         let core = core!
-        node.pendingHash = { (try? core.activity(network: .sepolia, accountIndex: 0))?.first?.hash }
+        let id = try ozRecord(core, .sepolia).id
+        node.pendingHash = { (try? core.activity(accountId: id))?.first?.hash }
     }
 
     private func model(balances: [String: String] = ["STRK": "100000000000000000000"]) throws -> SendFlowModel {
-        let accounts = try core.accounts(network: .sepolia)
+        let accounts = try core.accountRecords(network: .sepolia)
         return SendFlowModel(core: core, network: sepolia(), account: accounts[0], otherAccounts: Array(accounts.dropFirst()), balances: balances, transport: node)
     }
 
@@ -44,7 +45,7 @@ final class SendFlowModelTests: XCTestCase {
         await model.confirm()
         XCTAssertEqual(model.stage, .submitted)
         XCTAssertEqual(model.toast, SendFlowModel.Toast(message: SendCopy.toastConfirmed, success: true))
-        XCTAssertEqual(model.hash, try core.activity(network: .sepolia, accountIndex: 0).first?.hash)
+        XCTAssertEqual(model.hash, try core.activity(accountId: try ozRecord(core, .sepolia).id).first?.hash)
         XCTAssertNotNil(model.explorerURL)
     }
 
@@ -93,7 +94,7 @@ final class SendFlowModelTests: XCTestCase {
         await model.confirm()
         XCTAssertEqual(model.stage, .failed)
         XCTAssertFalse(node.posts.contains { $0.write })
-        XCTAssertTrue(try core.activity(network: .sepolia, accountIndex: 0).isEmpty)
+        XCTAssertTrue(try core.activity(accountId: try ozRecord(core, .sepolia).id).isEmpty)
     }
 
     func testFeeFailureBlocksConfirm() async throws {
@@ -115,7 +116,7 @@ final class SendFlowModelTests: XCTestCase {
         await model.confirm()
         XCTAssertEqual(model.stage, .failed)
         XCTAssertEqual(node.posts.filter(\.write).count, 1)
-        let hash = try XCTUnwrap(try core.activity(network: .sepolia, accountIndex: 0).first?.hash)
+        let hash = try XCTUnwrap(try core.activity(accountId: try ozRecord(core, .sepolia).id).first?.hash)
         XCTAssertEqual(model.failureMessage, SendCopy.failurePrefix + SendCopy.failureIndeterminate)
         XCTAssertEqual(model.hash, hash, "the pending record's hash stays visible")
     }
@@ -126,7 +127,7 @@ final class SendFlowModelTests: XCTestCase {
         node.onWrite = { await model.close() } // backgrounded while the write is in flight
         await model.confirm()
         XCTAssertEqual(model.stage, .failed)
-        let hash = try XCTUnwrap(try core.activity(network: .sepolia, accountIndex: 0).first?.hash)
+        let hash = try XCTUnwrap(try core.activity(accountId: try ozRecord(core, .sepolia).id).first?.hash)
         XCTAssertEqual(model.failureMessage, SendCopy.failurePrefix + SendCopy.failureIndeterminate)
         XCTAssertEqual(model.hash, hash, "the hash of the write that may be on chain stays visible")
     }

@@ -14,7 +14,7 @@ final class TransferBridgeTests: XCTestCase {
     private func replay(_ scenario: [String: Any], core: WalletCore) throws -> String {
         let network: NetworkId = scenario["networkId"] as? String == "SN_MAIN" ? .mainnet : .sepolia
         let plan = try core.prepareTransfer(request: TransferRequest(
-            network: network, accountIndex: 0, tokenAddress: scenario["token"] as! String,
+            network: network, accountId: try ozRecord(core, network).id, tokenAddress: scenario["token"] as! String,
             recipient: scenario["recipient"] as! String, amount: scenario["amount"] as! String, feeBalance: nil))
         let chain = network == .mainnet ? "0x534e5f4d41494e" : "0x534e5f5345504f4c4941"
         let review = ((scenario["reviewInvoke"] as! [[String: Any]]) + (scenario["reviewDeployment"] as! [[String: Any]]))
@@ -69,7 +69,7 @@ final class TransferBridgeTests: XCTestCase {
             let core = try unlockedCore()
             XCTAssertEqual(try replay(scenario, core: core), scenario["transactionHash"] as? String, scenario["name"] as! String)
             // Nothing but public data left the plan: bodies carry [r, s]; no key, no bare signature.
-            let pending = try core.activity(network: scenario["networkId"] as? String == "SN_MAIN" ? .mainnet : .sepolia, accountIndex: 0)
+            let pending = try core.activity(accountId: try ozRecord(core, scenario["networkId"] as? String == "SN_MAIN" ? .mainnet : .sepolia).id)
             XCTAssertEqual(pending.first?.hash, scenario["transactionHash"] as? String)
         }
     }
@@ -80,7 +80,7 @@ final class TransferBridgeTests: XCTestCase {
             XCTAssertEqual(validateRecipient(input: entry["input"] as! String), entry["valid"] as? String)
         }
         for case let entry as [String: Any] in presentation["shortAddresses"] as! [Any] {
-            XCTAssertEqual(shortAddress(address: entry["input"] as! String), entry["short"] as? String)
+            XCTAssertEqual(shortAddress(entry["input"] as! String), entry["short"] as? String)
         }
         for case let entry as [String: Any] in presentation["explorerTransactionUrls"] as! [Any] {
             let network: NetworkId = entry["networkId"] as? String == "SN_MAIN" ? .mainnet : .sepolia
@@ -130,7 +130,7 @@ final class TransferBridgeTests: XCTestCase {
         let core = try unlockedCore()
         let token = sepolia().tokens.first { $0.symbol == "STRK" }!.address
         for zero in ["0x0", "0x" + String(repeating: "0", count: 64)] {
-            XCTAssertThrowsError(try core.prepareTransfer(request: TransferRequest(network: .sepolia, accountIndex: 0, tokenAddress: token, recipient: zero, amount: "1", feeBalance: nil))) { error in
+            XCTAssertThrowsError(try core.prepareTransfer(request: TransferRequest(network: .sepolia, accountId: try ozRecord(core, .sepolia).id, tokenAddress: token, recipient: zero, amount: "1", feeBalance: nil))) { error in
                 guard case .InvalidRecipient = error as? SendError else { return XCTFail("\(error)") }
             }
         }

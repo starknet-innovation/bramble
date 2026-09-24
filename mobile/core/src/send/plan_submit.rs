@@ -311,7 +311,7 @@ impl PlanState {
     /// Signs under the plan's session generation. The public key must be the account's.
     pub(super) fn sign(&mut self, core: &WalletCore, hash: &Felt) -> Result<[Felt; 2], Code> {
         let signature = core
-            .plan_sign(self.generation, self.account.index, hash)
+            .plan_sign(self.generation, &self.account.account_id, hash)
             .map_err(|error| match error {
                 CoreError::Locked | CoreError::NoWallet => Code::Locked,
                 _ => Code::SigningFailed,
@@ -333,7 +333,7 @@ impl PlanState {
     /// Persists the pending record for a write about to leave the core. Best effort, as the
     /// extension's `recordSubmittedActivity`: a storage failure never blocks or rewrites a send.
     pub(super) fn persist_pending(&self, core: &WalletCore, hash: &Felt, invoke: bool) {
-        let network_id = super::plan::network_id_text(self.account.network);
+        let network_id = self.account.network.catalog_id();
         let (kind, summary, amount, counterparty, token) = match (&self.kind, invoke) {
             (Kind::Transfer(t), true) => (
                 store::kind_text(ActivityKind::Transfer),

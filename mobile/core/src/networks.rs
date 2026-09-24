@@ -19,11 +19,18 @@ pub enum NetworkId {
 }
 
 impl NetworkId {
-    fn catalog_id(self) -> &'static str {
+    /// The extension's network id, used in account ids and stored records.
+    pub(crate) fn catalog_id(self) -> &'static str {
         match self {
             Self::Mainnet => "SN_MAIN",
             Self::Sepolia => "SN_SEPOLIA",
         }
+    }
+
+    pub(crate) fn from_catalog_id(value: &str) -> Option<Self> {
+        [Self::Mainnet, Self::Sepolia]
+            .into_iter()
+            .find(|network| network.catalog_id() == value)
     }
 
     pub(crate) fn chain(self) -> ChainId {

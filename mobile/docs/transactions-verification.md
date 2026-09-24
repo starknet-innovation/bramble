@@ -72,7 +72,7 @@ path, never from Krusty. Accounts: the published E2E phrase, indices 0 and 1, SN
 **Swift unit (`BrambleTests`, "Bramble transactions" simulator).**
 - `TransferBridgeTests.swift`: loads the `extension-transactions-*.json` fixture, drives `prepare_transfer` /
   `advance` with canned replies, asserts bodies and final hash match the fixture and that no step
-  exposes a key or a bare signature; checks `validate_recipient`, `short_address`,
+  exposes a key or a bare signature; checks `validate_recipient`, `shortAddress` (the core's `account_label`),
   `explorer_transaction_url` and `parse_token_amount` from Swift.
 - `SendFlowModelTests.swift`: stage transitions and titles; Max uses the full balance; an edit
   drops the plan; lock closes it; a fee failure disables Confirm; failure codes map to the
@@ -167,5 +167,5 @@ and the inactivity lock (vault-security), and a fee-speed control (the extension
 | Close after the write discards the hash | Same resolution as the first row. |
 | Zero address accepted | `prepare_transfer` refuses a zero recipient or token with `InvalidRecipient`; fixture item 4 pins `buildErc20TransferCall`'s refusal. |
 | Endpoint-binding claim unenforceable | `ChainId` added to `RpcPurpose` and emitted at the start of each plan and submit path; binding to one endpoint is stated as host-enforced and tested in Swift (§3, §5). |
-| `sign_hash` withdrawal breaks sibling branches | Kept exported; withdrawal recorded as a vault-security follow-up (§3). |
+| `sign_hash` withdrawal breaks sibling branches | Kept exported here; withdrawn when accounts merged, which moved every signature to the record gate (transactions.md §3). |
 

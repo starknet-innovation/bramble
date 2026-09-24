@@ -311,12 +311,12 @@ Tier usage matches the extension:
 
 ### 3.3 Shared helpers the siblings will reuse
 
-- `ui/AddressText.kt` holds `shortAddress(a) = a.take(6) + "…" + a.takeLast(4)`. This is the
-  extension's `verify-decode.ts` rule; core addresses are canonical `{:#x}`, so it is exact.
+- `shortAddress(a)` delegates to the core's `accountLabel` (the extension's 6…4 rule, no length
+  guard); the accounts merge replaced android-parity's own `AddressText.kt` copy with it.
 - `ui/AddressClipboard.kt` (`copy`, `clearIfExpired`) with the pure `ClipboardPolicy.kt` holds the
   clipboard rules in section 6 (T7).
 
-If `accounts` later adds a core `short_address`, Android switches to it and deletes the helper.
+Every Android screen truncates through that one wrapper (accounts.md §4).
 
 ## 4. Assets
 

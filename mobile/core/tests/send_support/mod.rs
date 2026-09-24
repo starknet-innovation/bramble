@@ -67,12 +67,35 @@ pub fn chain_id(network: NetworkId) -> &'static str {
     }
 }
 
-/// An unlocked wallet on the published phrase with two accounts, on vault-security's
-/// hand-driven host clock (so a test can let the idle lock fire).
+/// An unlocked wallet on the published phrase with OZ indices 0 and 1 on Sepolia and OZ index 0
+/// projected onto Mainnet, on vault-security's hand-driven host clock (so a test can let the idle
+/// lock fire).
 pub fn wallet_with_clock() -> (tempfile::TempDir, Arc<FakeClock>, Arc<WalletCore>) {
     let (dir, clock, core) = common::imported();
-    core.add_account(NetworkId::Sepolia).unwrap();
+    let first = common::account_id(&core);
+    core.add_regular_account(NetworkId::Sepolia).unwrap();
+    core.select_account(first.clone()).unwrap();
+    core.ensure_network_account(NetworkId::Mainnet).unwrap();
+    core.select_account(first).unwrap();
     (dir, clock, core)
+}
+
+/// A wallet imported from the published phrase and still waiting for discovery.
+pub fn common_pending() -> (tempfile::TempDir, Arc<FakeClock>, Arc<WalletCore>) {
+    common::pending()
+}
+
+/// The vault record id of the OZ account at `index` on `network`.
+pub fn oz_id(core: &WalletCore, network: NetworkId, index: u32) -> String {
+    core.account_records(network)
+        .unwrap()
+        .into_iter()
+        .find(|record| {
+            record.account_index == index
+                && record.family == bramble_core::AccountFamily::OpenZeppelin
+        })
+        .expect("an OZ record at that index")
+        .id
 }
 
 /// An unlocked wallet on the published phrase with two accounts.
@@ -186,7 +209,7 @@ impl Node {
 pub fn request(recipient: &str) -> TransferRequest {
     TransferRequest {
         network: bramble_core::NetworkId::Sepolia,
-        account_index: 0,
+        account_id: format!("SN_SEPOLIA:{ACCOUNT_0}"),
         token_address: STRK.into(),
         recipient: recipient.into(),
         amount: "1.5".into(),
@@ -195,7 +218,7 @@ pub fn request(recipient: &str) -> TransferRequest {
 }
 
 pub fn latest_hash(core: &WalletCore) -> String {
-    core.activity(bramble_core::NetworkId::Sepolia, 0).unwrap()[0]
+    core.activity(oz_id(core, NetworkId::Sepolia, 0)).unwrap()[0]
         .hash
         .clone()
 }

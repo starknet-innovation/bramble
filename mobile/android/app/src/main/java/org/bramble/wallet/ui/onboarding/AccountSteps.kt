@@ -25,8 +25,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import org.bramble.core.AccountInfo
+import org.bramble.core.AccountRecord
 import org.bramble.core.NetworkId
+import org.bramble.core.accountPreviewLabel
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.AccountAvatar
 import org.bramble.wallet.design.BrambleIconName
@@ -46,16 +47,18 @@ import org.bramble.wallet.design.brambleShadow
 import org.bramble.wallet.design.brambleTween
 import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
-import org.bramble.wallet.ui.shortAddress
+import org.bramble.wallet.previewAccount
 
 /**
  * `#account-preview` with the Mainnet acknowledgement, port of the iOS `ReviewAccountStep`:
- * confirm the derived public address (read from the core), then add it. The card starts selected.
+ * confirm the derived public address (the new vault's active record, OpenZeppelin index 0 on this
+ * network, shown with the core's 10…8 `accountPreviewLabel`), then add it. Create path only; an
+ * import goes to "Find your accounts". The card starts selected.
  */
 @Composable
 fun ReviewAccountStep(store: WalletStore, network: NetworkId, next: () -> Unit) {
     val skin = LocalSkin.current
-    var account by remember { mutableStateOf<AccountInfo?>(null) }
+    var account by remember { mutableStateOf<AccountRecord?>(null) }
     var selected by remember { mutableStateOf(true) }
     var acknowledged by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { account = runCatching { store.previewAccount() }.getOrNull() }
@@ -87,7 +90,7 @@ fun ReviewAccountStep(store: WalletStore, network: NetworkId, next: () -> Unit) 
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
                         Text("Primary Bramble account", color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold))
                         Text(
-                            address?.let(::shortAddress) ?: "Deriving account…",
+                            address?.let(::accountPreviewLabel) ?: "Deriving account…",
                             color = skin.muted,
                             style = textStyle(BrambleTypeScale.caption, mono = true),
                         )

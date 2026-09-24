@@ -74,7 +74,8 @@ Google Maven / Maven Central. No new production dependency.
 
 ### 8.3 JVM unit tests (`app/src/test`, no device)
 
-`ErrorTextTest` (every `CoreError` → iOS string), `AddressTextTest` (6…4 vs the XCUITest short form),
+`ErrorTextTest` (every `CoreError` → iOS string), `AddressTextTest` (now instrumented: it calls the
+core's `accountLabel`, which the host JVM cannot load),
 `QrCodeTest` (matches `qr-parity.txt`), `BackupVerifyTest` (positions, trim, case, empty, short
 phrase), `WeakAckStateTest` (tick cleared when the acknowledgement stops applying, kept while it
 applies), `RecoveryEntryTest` (lowercase, space-advance, paste spread, growth to 24),

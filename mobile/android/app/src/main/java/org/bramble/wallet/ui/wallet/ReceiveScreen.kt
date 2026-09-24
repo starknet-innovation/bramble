@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,8 +31,11 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import org.bramble.core.AccountRecord
+import org.bramble.core.accountLabel
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleIconName
+import org.bramble.wallet.design.Disclosure
 import org.bramble.wallet.design.BrambleLayout
 import org.bramble.wallet.design.BrambleRadius
 import org.bramble.wallet.design.BrambleShadow
@@ -46,6 +50,7 @@ import org.bramble.wallet.design.brambleShadow
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.design.weight
 import org.bramble.wallet.ui.AddressClipboard
+import org.bramble.wallet.ui.CopyButton
 import org.bramble.wallet.ui.QrCode
 
 private const val QUIET_ZONE = 4
@@ -58,7 +63,8 @@ private const val QUIET_ZONE = 4
 fun ReceiveScreen(store: WalletStore, back: () -> Unit) {
     val skin = LocalSkin.current
     val context = LocalContext.current
-    val address = store.account?.address.orEmpty()
+    val active = store.activeRecord
+    val address = active?.address.orEmpty()
     val networkName = store.networkInfo.name
     var copied by remember { mutableStateOf(false) }
     val matrix = remember(address) { if (address.isEmpty()) null else QrCode.matrix(address) }
@@ -113,8 +119,31 @@ fun ReceiveScreen(store: WalletStore, back: () -> Unit) {
             icon = BrambleIconName.COPY,
             enabled = address.isNotEmpty(),
         ) {
-            AddressClipboard.copy(context, address, store.appScope)
-            copied = true
+            copied = AddressClipboard.copy(context, address, store.appScope)
+            if (!copied) store.showToast("Copy failed")
+        }
+        if (active != null) WalletIdentity(store, active)
+    }
+}
+
+/**
+ * The collapsed "Wallet identity" disclosure (`receive-view.ts`, `docs/accounts.md` §2.5): the
+ * signer public key, truncated with the core's `accountLabel`, copied in full. The coordination
+ * (Nostr) key and contact card belong to the multisig workstream.
+ */
+@Composable
+private fun WalletIdentity(store: WalletStore, active: AccountRecord) {
+    val skin = LocalSkin.current
+    var open by remember { mutableStateOf(false) }
+    Box(Modifier.padding(top = BrambleSpace.sm)) {
+        Disclosure("Wallet identity", open = open, onToggle = { open = !open }, detail = "Signer and coordination keys") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
+                    Text("Signer public key", color = skin.muted, style = textStyle(BrambleTypeScale.label))
+                    Text(accountLabel(active.publicKey), color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold, mono = true))
+                }
+                CopyButton(store, active.publicKey, "Copy signer public key")
+            }
         }
     }
 }

@@ -4,6 +4,7 @@
 //! (`wallet-ui/.../recovery-word-assist.ts`). Each is checked against output the TypeScript
 //! produced (`tests/fixtures/extension-parity.json`), so the two wallets cannot drift apart.
 
+use crate::account_names::{js_trim, utf16_len};
 use crate::felt;
 
 const AVATAR_SIZE: i64 = 36;
@@ -130,15 +131,6 @@ pub struct PassphraseStrength {
     pub acceptable: bool,
     /// Accepted but weak: the user must acknowledge it (`requiresWeakPassphraseAcknowledgement`).
     pub needs_acknowledgement: bool,
-}
-
-fn utf16_len(value: &str) -> usize {
-    value.encode_utf16().count()
-}
-
-/// JavaScript's `String.prototype.trim` whitespace set.
-fn js_trim(value: &str) -> &str {
-    value.trim_matches(|c: char| c.is_whitespace() || c == '\u{FEFF}')
 }
 
 /// `isVaultPassphrase`: at most 1024 UTF-16 units, at least 8 after trimming.

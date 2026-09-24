@@ -27,14 +27,15 @@ pub const CONFIRMATION_DELAYS_MS: [u32; 12] = [
 pub const DEPLOY_POLL_INTERVAL_MS: u32 = 5_000;
 pub const DEPLOY_POLL_ATTEMPTS: u32 = 200;
 
-/// The acting account, as derived when the plan was prepared.
+/// The acting account, as stored in the vault when the plan was prepared. Always an
+/// OpenZeppelin record that passed `wallet_accounts::signing_record`.
 pub(crate) struct Account {
     pub network: NetworkId,
-    pub index: u32,
     pub address: Felt,
     pub public_key: Felt,
     pub class_hash: Felt,
-    /// The extension's account id, `<networkId>:<address>`, which scopes activity.
+    /// The vault record's id, `<networkId>:<address>` (the extension's account id). It scopes
+    /// activity and is what every signature for this plan is requested by.
     pub account_id: String,
 }
 
@@ -137,13 +138,6 @@ pub(crate) struct PlanState {
 pub struct TransferPlan {
     core: Weak<WalletCore>,
     state: Mutex<PlanState>,
-}
-
-pub(crate) fn network_id_text(network: NetworkId) -> &'static str {
-    match network {
-        NetworkId::Mainnet => "SN_MAIN",
-        NetworkId::Sepolia => "SN_SEPOLIA",
-    }
 }
 
 impl TransferPlan {

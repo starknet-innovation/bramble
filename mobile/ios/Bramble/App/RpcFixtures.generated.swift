@@ -18,6 +18,12 @@ enum RpcFixtures {
         "https://api.cartridge.gg/x/starknet/sepolia": "0x534e5f5345504f4c4941",
     ]
 
+    /// The published wallet's primary account (OZ index 0) on each network: the only address
+    /// this node reports as deployed or funded, so discovery finds exactly that account.
+    static let primaryAccounts: Set<String> = [
+        "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+    ]
+
     /// Canonical token address → `balanceOf` u256 limbs (low, high) in the `ready` state.
     static let readyBalances: [String: [String]] = [
         "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7": ["0x9591ba190b4000", "0x0"],

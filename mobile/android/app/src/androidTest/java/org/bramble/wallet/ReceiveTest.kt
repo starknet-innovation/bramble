@@ -34,7 +34,7 @@ class ReceiveTest {
             val clipboard = rule.activity.getSystemService(ClipboardManager::class.java)
             clipboard.primaryClip
         }
-        val address = r.onMain { account?.address }
+        val address = r.onMain { activeRecord?.address }
         assertEquals(ClipboardPolicy.LABEL, clip?.description?.label?.toString())
         assertEquals(address, clip?.getItemAt(0)?.text?.toString())
         assertEquals(PublicWallet.ADDRESS, address)

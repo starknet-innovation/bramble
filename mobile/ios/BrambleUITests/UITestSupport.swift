@@ -73,7 +73,39 @@ enum UITest {
     static func unlock(_ app: XCUIApplication) {
         type(passphrase, into: app.secureTextFields["Enter your passphrase"])
         tap(app.buttons["Unlock"])
-        wait(app.staticTexts["Account 1"])
+        waitForWallet(app)
+    }
+
+    /// Waits for Home: the header names the active account the extension's way (its label or its
+    /// nickname, never "Account 1").
+    static func waitForWallet(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        let header = app.buttons["Accounts"]
+        wait(header, file: file, line: line)
+        let name = header.value as? String ?? ""
+        XCTAssertFalse(name.isEmpty || name.hasPrefix("Account "), "header shows \(name)", file: file, line: line)
+    }
+
+    /// The published wallet's primary account as "Find your accounts" titles it.
+    static let primaryCandidate = "Account 0, 0x2083…98d9"
+
+    /// "Find your accounts" over the fixture node, which knows only the published wallet's primary
+    /// account: waits for the search, keeps that account selected (a funded or deployed state
+    /// selects it automatically; `unfunded` leaves it to the user, as the extension does),
+    /// acknowledges, and restores. `shot` captures the review before the restore.
+    static func restorePrimaryAccount(_ app: XCUIApplication, shot: (() -> Void)? = nil) {
+        wait(app.staticTexts["Find your accounts"])
+        wait(app.staticTexts["Search complete. Checked 20 indices across every account type."], 90)
+        let group = app.buttons["Bramble accounts"]
+        if (group.value as? String) != "Expanded" { tap(group) }
+        let row = app.buttons[primaryCandidate]
+        wait(row, 5)
+        if !row.isSelected { row.tap() }
+        shot?()
+        let acknowledge = app.buttons["I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet."]
+        if !acknowledge.isHittable { app.swipeUp() }
+        tap(acknowledge)
+        tap(app.buttons["Restore selected accounts"])
+        wait(app.staticTexts["You’re all set"])
     }
 
     static func removeWallet(_ app: XCUIApplication) {
@@ -103,7 +135,7 @@ enum UITest {
         type(passphrase, into: app.secureTextFields["Confirm passphrase"])
     }
 
-    /// Welcome → import → passphrase → review → complete → home, with no capture.
+    /// Welcome → import → passphrase → find your accounts → complete → home, with no capture.
     static func importPublicWallet(_ app: XCUIApplication) {
         tap(app.buttons["Add an existing wallet"])
         tap(app.buttons["Recovery phrase"])
@@ -111,9 +143,9 @@ enum UITest {
         tap(app.buttons["Continue"])
         setPassphrase(app)
         tap(app.buttons["Find your accounts"])
-        tap(app.buttons["Add selected account"])
+        restorePrimaryAccount(app)
         tap(app.buttons["Open Bramble"])
-        wait(app.staticTexts["Account 1"])
+        waitForWallet(app)
     }
 
     /// Any element whose accessibility label contains `text`.

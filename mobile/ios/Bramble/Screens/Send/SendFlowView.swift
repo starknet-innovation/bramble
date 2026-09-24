@@ -70,15 +70,15 @@ struct SendStageView: View {
 /// `.send-origin-account`: the sending account on the elevated fill.
 struct SendOriginCard: View {
     @Environment(\.skin) private var skin
-    let account: AccountInfo
+    let account: AccountRecord
 
     var body: some View {
         let m = BrambleMetrics.Send.self
         HStack(spacing: m.searchGap) {
             AccountAvatarView(address: account.address)
             VStack(alignment: .leading, spacing: m.rowCopyGap) {
-                Text("Account \(account.index + 1)").brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
-                Text(shortAddress(account.address)).brambleText(BrambleTypeScale.caption, mono: true).foregroundStyle(skin.muted)
+                Text(account.displayName).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
+                Text(account.shortAddress).brambleText(BrambleTypeScale.caption, mono: true).foregroundStyle(skin.muted)
             }
             Spacer(minLength: 0)
         }
@@ -204,11 +204,11 @@ struct SendRecipientView: View {
             SegmentedControl(options: [(SendCopy.myAccounts, 0), (SendCopy.addressBook, 1)], selection: $tab)
             if tab == 0 {
                 VStack(spacing: m.listGap) {
-                    ForEach(model.otherAccounts, id: \.index) { account in
+                    ForEach(model.otherAccounts, id: \.id) { account in
                         SendChoiceRow(
-                            title: "Account \(account.index + 1)",
-                            detail: shortAddress(account.address),
-                            label: "Account \(account.index + 1), \(shortAddress(account.address))",
+                            title: account.displayName,
+                            detail: account.shortAddress,
+                            label: "\(account.displayName), \(account.shortAddress)",
                             mark: { AccountAvatarView(address: account.address, size: BrambleSize.mark) },
                             action: { model.useRecipient(account.address) }
                         )
