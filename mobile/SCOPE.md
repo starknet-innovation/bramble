@@ -92,7 +92,6 @@ audit of the core and FFI surface, reproducible builds, crash reporting without 
   mobile ABI public-material-only. A software-key wallet core belongs here, not in that crate —
   confirm with the Krusty maintainers.
 - **Minimum OS.** iOS 17 (for `@Observable`) and Android 9 / API 28 are assumed.
-- **App icon.** None yet; brand needs to supply a 1024px master.
 
 ## Known limits
 

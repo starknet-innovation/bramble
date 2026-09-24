@@ -48,8 +48,8 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         TARGETED_DEVICE_FAMILY: "1"
-        # No app icon until brand supplies a 1024px master (tracked in mobile/SCOPE.md).
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        # AppIcon is rendered by scripts/render-brand-assets.ts, the extension icon's source.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Vault files default to complete protection even outside VaultDirectory.
         INFOPLIST_KEY_NSFileProtectionComplete: YES
 
