@@ -94,6 +94,13 @@ targets:
         buildPhase: resources
       - path: ../core/tests/fixtures/portfolio-parity.jsonl
         buildPhase: resources
+      # The privacy fixture the privacy tests replay (docs/privacy.md §7).
+      - path: ../core/tests/fixtures/extension-privacy-wire.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-privacy-rules.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-privacy-copy.json
+        buildPhase: resources
     dependencies:
       # Hosted in the app so `@testable import Bramble` reaches the Keychain, clock and copy code,
       # and the host-side account code (Clipboard, the discovery driver, routing).

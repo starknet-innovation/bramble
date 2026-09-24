@@ -11,3 +11,7 @@ fun WalletStore.amount(token: TokenInfo): String? {
     val raw = portfolio.rawBalances(networkInfo)[token.symbol] ?: return null
     return runCatching { formatTokenAmount(raw, token.decimals, 4u) }.getOrNull()
 }
+
+/** `strkAvailableForFees`: null until the public balances have loaded (privacy gates). */
+val WalletStore.strkFunded: Boolean?
+    get() = portfolio.rawBalances(networkInfo)["STRK"]?.let { it.trimStart('0').isNotEmpty() }

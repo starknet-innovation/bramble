@@ -4,7 +4,7 @@ import SwiftUI
 /// The wallet frame from `wallet-shell.ts` / `styles-dock.ts`: persistent account header, the
 /// active dock screen, and the floating dock. Flow screens push over it without the dock.
 struct WalletShell: View {
-    enum Flow: Hashable { case receive, network, appearance, security, reveal, remove, send, deploy, accounts, coordination(CoordinationFlow), tokens, addToken, discoverTokens, token(String) }
+    enum Flow: Hashable { case receive, network, appearance, security, reveal, remove, send, deploy, accounts, coordination(CoordinationFlow), tokens, addToken, discoverTokens, token(String), privacy }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -21,7 +21,7 @@ struct WalletShell: View {
                     case .home: HomeView(receive: { flows.append(.receive) }, open: { flows.append($0) }, send: {
                         // Ready and Braavos accounts are refused by the core; say why up front.
                         if let refusal = store.sendRefusal { store.toast = refusal } else { flows.append(.send) }
-                    }, deploy: { flows.append(.deploy) })
+                    }, deploy: { flows.append(.deploy) }, privacy: { flows.append(.privacy) })
                     case .activity: ActivityScreen()
                     case .settings: SettingsHubView(open: { flows.append($0) })
                     }
@@ -53,7 +53,8 @@ struct WalletShell: View {
                     case .tokens: TokensView(open: { flows.append($0) })
                     case .addToken: AddTokenView()
                     case .discoverTokens: DiscoverTokensView()
-                    case let .token(id): TokenDetailView(tokenId: id)
+                    case let .token(id): TokenDetailView(tokenId: id, receive: { flows.append(.receive) }, journey: { flows.append(.privacy) })
+                    case .privacy: PrivacyJourneyView(chooseNetwork: { flows.append(.network) })
                     }
                 }
                 .toolbar(.hidden, for: .navigationBar)
@@ -98,6 +99,8 @@ struct WalletHeader: View {
                             StatusDot(healthy: store.networkHealthy && store.portfolio.issue == nil, size: m.netDot)
                             Text(store.networkLabel).brambleText(BrambleTypeScale.caption.sized(m.netSize)).foregroundStyle(skin.muted)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityValue(privacyStatusText)
                     }
                 }
                 .padding(m.triggerPadding)
@@ -114,6 +117,15 @@ struct WalletHeader: View {
             }
         }
         .padding(m.padding)
+    }
+
+    /// `privacyDataIssue`, spoken with the network status (the extension shows it in the header).
+    private var privacyStatusText: String {
+        switch store.privacyHeaderStatus {
+        case .current: ""
+        case .refreshing: PrivacyCopy.statusRefreshing
+        case .unavailable: PrivacyCopy.statusUnavailable
+        }
     }
 
     private func openExplorer() {

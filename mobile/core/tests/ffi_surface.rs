@@ -2,7 +2,7 @@
 //! modules that carry `#[uniffi::export]` and fails when one returns raw bytes, so a future method
 //! cannot hand the DEK, a wrap secret or vault bytes to Swift or Kotlin without this test changing.
 
-const EXPORTING: [(&str, &str); 11] = [
+const EXPORTING: [(&str, &str); 16] = [
     ("lib.rs", include_str!("../src/lib.rs")),
     (
         "account_catalog.rs",
@@ -28,6 +28,17 @@ const EXPORTING: [(&str, &str); 11] = [
     (
         "ffi_coordination.rs",
         include_str!("../src/ffi_coordination.rs"),
+    ),
+    (
+        "privacy/wallet_ext.rs",
+        include_str!("../src/privacy/wallet_ext.rs"),
+    ),
+    ("privacy/mod.rs", include_str!("../src/privacy/mod.rs")),
+    ("privacy/plan.rs", include_str!("../src/privacy/plan.rs")),
+    ("activity/feed.rs", include_str!("../src/activity/feed.rs")),
+    (
+        "history/activity_book.rs",
+        include_str!("../src/history/activity_book.rs"),
     ),
 ];
 

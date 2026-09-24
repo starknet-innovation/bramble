@@ -45,6 +45,8 @@ final class WalletStore {
     var plans: [TransferPlan] = []
     /// When each pending record was last read (ms), so reconciliation keeps the extension's cadence.
     var observedAtMs: [String: UInt64] = [:]
+    /// The selected account's private-balance reading (WalletStore+Privacy.swift); never persisted.
+    let privacy = PrivacyModel()
 
     var network: NetworkId {
         didSet { UserDefaults.standard.set(network == .sepolia ? "sepolia" : "mainnet", forKey: "network") }
@@ -134,6 +136,7 @@ final class WalletStore {
 
     func lock() {
         idleTimer?.cancel()
+        privacy.reset()
         plans.forEach { $0.close() }
         plans = []
         observedAtMs = [:]
@@ -152,6 +155,7 @@ final class WalletStore {
     }
 
     func switchNetwork(_ next: NetworkId) async {
+        privacy.reset()
         network = next
         await enterWallet()
     }
@@ -298,6 +302,8 @@ final class WalletStore {
     /// tokens, saved snapshots, prices). `reset` enters the account's scope, serving its saved
     /// figures first; otherwise the read is forced, as pull-to-refresh and Retry ask.
     func refreshBalances(reset: Bool = false) async {
+        // A private reading belongs to one account record on one network; anything else is dropped.
+        privacy.retain(network: network, accountId: activeRecord?.id)
         guard let account = activeRecord else { return }
         if reset || portfolio.scope?.accountId != account.id {
             await portfolio.load(account: account, network: networkInfo)
@@ -305,6 +311,7 @@ final class WalletStore {
             await portfolio.refresh(force: true)
         }
         await refreshSendState()
+        await refreshPrivacy()
     }
 
     /// Base units per symbol of the network's own tokens, from the portfolio's loaded balances

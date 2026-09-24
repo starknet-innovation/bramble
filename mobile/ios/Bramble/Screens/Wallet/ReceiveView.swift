@@ -18,6 +18,7 @@ struct ReceiveView: View {
                         signerKey: account.publicKey
                     )
                 }
+                PoolNoticeView()
             }
             .padding(BrambleMetrics.Screen.shellPadding)
         }

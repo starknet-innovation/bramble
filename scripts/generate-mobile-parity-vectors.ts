@@ -86,3 +86,6 @@ console.log(`wrote ${await writeNostrMultisigParity()}`);
 
 await writeFile(PORTFOLIO_PARITY_FIXTURE_PATH, await renderPortfolioParity());
 console.log(`wrote ${PORTFOLIO_PARITY_FIXTURE_PATH}`);
+
+// So are the privacy fixture and the privacy copy tables.
+await import("./generate-mobile-privacy-vectors");

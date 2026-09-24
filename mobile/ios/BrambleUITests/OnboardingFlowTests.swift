@@ -44,7 +44,9 @@ final class OnboardingFlowTests: XCTestCase {
 
     private func launchFresh() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-network", "mainnet", "-BrambleUITestReset"]
+        // The live node is this suite's point; the privacy service is not, so its read stays
+        // offline (no viewing key leaves the simulator from a test; docs/privacy.md §7).
+        app.launchArguments = ["-network", "mainnet", "-BrambleUITestReset", "-BramblePrivacyFixture", "offline"]
         app.launch()
         XCTAssertTrue(app.buttons["Create a new wallet"].waitForExistence(timeout: 10),
                       "Uninstall Bramble from the simulator before running the UI suite")

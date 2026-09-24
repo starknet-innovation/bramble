@@ -37,6 +37,7 @@ import org.bramble.core.WalletContactCard
 import org.bramble.core.accountLabel
 import org.bramble.core.walletContactCardEncode
 import org.bramble.wallet.WalletStore
+import org.bramble.wallet.strkFunded
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.Disclosure
 import org.bramble.wallet.design.BrambleLayout
@@ -68,7 +69,7 @@ private const val QUIET_ZONE = 4
  * the card never blocks the address.
  */
 @Composable
-fun ReceiveScreen(store: WalletStore, back: () -> Unit) {
+fun ReceiveScreen(store: WalletStore, back: () -> Unit, openPrivacy: () -> Unit = {}) {
     val skin = LocalSkin.current
     val context = LocalContext.current
     val active = store.activeRecord
@@ -162,6 +163,10 @@ fun ReceiveScreen(store: WalletStore, back: () -> Unit) {
                 if (card != null && !AddressClipboard.copy(context, card, store.appScope)) store.showToast("Copy failed")
             }
         }
+        org.bramble.wallet.privacy.PoolNoticeCard(
+            org.bramble.core.receivePoolNotice(org.bramble.core.DeploymentState.UNKNOWN, store.strkFunded, store.privacy.reading),
+            journey = openPrivacy,
+        )
         if (active != null) WalletIdentity(store, active)
     }
 }

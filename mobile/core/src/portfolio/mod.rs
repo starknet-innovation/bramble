@@ -6,7 +6,7 @@ pub mod model;
 pub(crate) mod ordered;
 mod price_cache;
 pub mod prices;
-mod registry;
+pub(crate) mod registry;
 pub mod snapshots;
 pub mod token_meta;
 pub mod tokens;

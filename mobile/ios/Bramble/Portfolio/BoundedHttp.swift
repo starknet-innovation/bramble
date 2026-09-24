@@ -56,9 +56,22 @@ final class BoundedHttp: NSObject, PortfolioTransport, URLSessionTaskDelegate, @
         if let body = request.body {
             urlRequest.httpBody = Data(body.utf8)
         }
-        let limit = request.maxBodyBytes
-        let deadline = request.deadlineMs
-        return await withTaskGroup(of: HttpOutcome?.self) { group in
+        return await exchange(urlRequest, limit: request.maxBodyBytes, deadline: request.deadlineMs)
+    }
+
+    /// A JSON POST of a caller-owned buffer (the privacy service's body, which the caller wipes
+    /// afterwards), under the same bounds as `perform`.
+    func post(_ body: Data, to url: URL, maxBodyBytes: UInt64, deadlineMs: UInt64) async -> HttpOutcome {
+        guard url.scheme == "https" else { return .unanswered }
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = body
+        return await exchange(urlRequest, limit: maxBodyBytes, deadline: deadlineMs)
+    }
+
+    private func exchange(_ urlRequest: URLRequest, limit: UInt64, deadline: UInt64) async -> HttpOutcome {
+        await withTaskGroup(of: HttpOutcome?.self) { group in
             group.addTask { await self.read(urlRequest, limit: limit) }
             group.addTask {
                 try? await Task.sleep(for: .milliseconds(Int(deadline)))

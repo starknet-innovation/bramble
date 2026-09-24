@@ -150,3 +150,35 @@ pub fn sign_hash(
         s: felt::canonical(&signature.s),
     })
 }
+
+/// Derives the account's STRK20 viewing key scoped to `"<chain_id>:<pool>"`, exactly as the
+/// extension's adapter (`deriveStrk20ViewingKey`): both scope values must be canonical non-zero
+/// felts, and the result must be a usable scalar (`isStarkPrivateKey`). The account key is derived
+/// per call into a zeroizing `SecretFelt`; Krusty 0.11.0 returns the viewing key as a plain `Felt`,
+/// which callers must use for one request body and drop (mobile/docs/privacy.md §5, residual).
+pub fn derive_scoped_viewing_key(
+    phrase: &str,
+    passphrase: Option<&str>,
+    account_index: u32,
+    chain_id: &str,
+    pool_address: &str,
+) -> Result<Felt, CoreError> {
+    let canonical = |value: &str| {
+        felt::parse_non_zero(value).is_some_and(|parsed| felt::canonical(&parsed) == value)
+    };
+    if !canonical(chain_id) || !canonical(pool_address) {
+        return Err(CoreError::InvalidInput {
+            reason: "invalid viewing-key scope".into(),
+        });
+    }
+    let key = private_key(phrase, passphrase, account_index)?;
+    let viewing_key =
+        krusty_kms::derive_scoped_strk20_viewing_key(key.expose_secret(), chain_id, pool_address)
+            .map_err(kms_error("viewing key"))?;
+    if !felt::is_private_key(&viewing_key) {
+        return Err(CoreError::Kms {
+            operation: "viewing key".into(),
+        });
+    }
+    Ok(viewing_key)
+}

@@ -42,6 +42,10 @@ class PortfolioStore(
     var currency by mutableStateOf(preferences.displayCurrency()); private set
     var activityView by mutableStateOf<ActivityView?>(null); private set
     var groups by mutableStateOf(emptyList<ActivityDayGroup>()); private set
+    /** Home rows with private value summed in (`unifiedHomeBalances` over the visible rows). */
+    var unified by mutableStateOf(emptyList<UnifiedBalance>()); private set
+    private var privacyReading: PrivacyReading = PrivacyReading.Idle
+    private var privacyState: PrivacyState? = null
     private var generation = 0
 
     private val limits = rpcLimits()
@@ -155,7 +159,8 @@ class PortfolioStore(
 
     fun lock() {
         generation += 1
-        scope = null; balances = null; balanceError = null; priceView = null; home = null
+        scope = null; balances = null; balanceError = null; priceView = null; home = null; unified = emptyList()
+        privacyReading = PrivacyReading.Idle; privacyState = null
         hero = PortfolioHero(null, null, null); activityView = null; groups = emptyList()
     }
 
@@ -184,11 +189,25 @@ class PortfolioStore(
 
     private fun addresses() = tracked.map { it.token.address }
 
+    /** Tokens hidden from Home, whose private balances Home must not count either. */
+    val hiddenTokenAddresses: List<String> get() = tracked.filter { it.hiddenFromHome }.map { it.token.address }
+
+    /** Takes the latest private reading (PrivacyModel) and recomputes the unified rows and hero. */
+    fun setPrivacy(reading: PrivacyReading, state: PrivacyState?) {
+        privacyReading = reading
+        privacyState = state
+        recompute()
+    }
+
     private fun recompute() {
         val view = priceView ?: emptyPrices
         val loaded = balances
         home = loaded?.let { preferences.homeRows(it.balances) }
-        hero = portfolioHero(home?.visible, view, scope != null)
+        val current = scope
+        unified = if (current != null && home != null) {
+            unifiedHomeBalances(current.network.network, home!!.visible, hiddenTokenAddresses, privacyReading, privacyState)
+        } else emptyList()
+        hero = portfolioHero(home?.let { unified.map { it.balance } }, view, scope != null)
         val current = scope
         groups = if (current != null && activityView != null) {
             activityGroups(activityView!!.entries, tracked.map { it.token }, view, clock())

@@ -7,6 +7,9 @@ struct TokenDetailView: View {
     @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
     let tokenId: String
+    var receive: () -> Void = {}
+    /// Opens the privacy journey (Shield, Go private, Deploy and enable).
+    var journey: () -> Void = {}
     @State private var points: [Double] = []
 
     var body: some View {
@@ -17,6 +20,8 @@ struct TokenDetailView: View {
                     FlowHeader(title: token.symbol, subtitle: token.name, network: store.networkLabel) { dismiss() }
                     price(token, portfolio: portfolio)
                     balance(token, portfolio: portfolio)
+                    // The private half of this token (`tokenDetailPrivacy`): amount, retry, actions.
+                    TokenPrivacySection(tokenAddress: token.address, receive: receive, journey: journey)
                     contract(token)
                 }
                 .padding(BrambleMetrics.Screen.shellPadding)

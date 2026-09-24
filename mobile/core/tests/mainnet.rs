@@ -19,10 +19,17 @@ use bramble_core::{
 };
 
 fn refuse_ci() {
-    assert!(
-        std::env::var_os("CI").is_none(),
-        "the mainnet wallet check never runs in CI"
-    );
+    for marker in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "TEST_RUNNER_CI",
+        "TEST_RUNNER_GITHUB_ACTIONS",
+    ] {
+        assert!(
+            std::env::var_os(marker).is_none(),
+            "the mainnet wallet check never runs in CI ({marker} is set)"
+        );
+    }
 }
 
 fn imported() -> (tempfile::TempDir, std::sync::Arc<WalletCore>) {

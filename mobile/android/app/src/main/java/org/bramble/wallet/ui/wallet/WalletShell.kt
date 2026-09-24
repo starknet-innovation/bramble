@@ -57,7 +57,7 @@ import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.send.SendScreen
 
 /** Screens pushed over the shell, without the dock. */
-enum class Flow { RECEIVE, SEND, MANAGE_ACCOUNTS, NETWORK, APPEARANCE, SECURITY, REVEAL, REMOVE, ADDRESS_BOOK, SHARED_ACCOUNTS, READY_MULTISIG }
+enum class Flow { RECEIVE, SEND, MANAGE_ACCOUNTS, NETWORK, APPEARANCE, SECURITY, REVEAL, REMOVE, ADDRESS_BOOK, SHARED_ACCOUNTS, READY_MULTISIG, PRIVACY }
 
 /**
  * The wallet frame from `wallet-shell.ts` / `styles-dock.ts`, port of the iOS `WalletShell`:
@@ -79,7 +79,7 @@ fun WalletShell(store: WalletStore) {
     if (flow != null) {
         Box(Modifier.fillMaxSize().background(skin.bg).safeDrawingPadding()) {
             when (flow) {
-                Flow.RECEIVE -> ReceiveScreen(store, back = pop)
+                Flow.RECEIVE -> ReceiveScreen(store, back = pop, openPrivacy = { flows = flows + Flow.PRIVACY })
                 Flow.SEND -> SendScreen(store, back = pop)
                 Flow.MANAGE_ACCOUNTS -> ManageAccountsScreen(store, back = pop)
                 Flow.NETWORK -> NetworkScreen(store, back = pop)
@@ -90,6 +90,12 @@ fun WalletShell(store: WalletStore) {
                 Flow.ADDRESS_BOOK -> org.bramble.wallet.coordination.AddressBookScreen(store, back = pop)
                 Flow.SHARED_ACCOUNTS -> org.bramble.wallet.coordination.SharedAccountsScreen(store, back = pop)
                 Flow.READY_MULTISIG -> org.bramble.wallet.coordination.ReadyMultisigScreen(store, back = pop)
+                Flow.PRIVACY -> {
+                    // Mobile writes nothing yet (docs/privacy.md §1): the journey's answer is a blocker.
+                    val entry = org.bramble.core.privacyEntry(store.network, org.bramble.core.DeploymentState.UNKNOWN, store.privacy.reading, true)
+                    val blocker = (entry as? org.bramble.core.PrivacyEntry.Blocked)?.blocker ?: org.bramble.core.PrivacyBlocker.SERVICE
+                    org.bramble.wallet.privacy.PrivacyBlockedScreen(blocker, null, chooseNetwork = { flows = flows + Flow.NETWORK }, retry = pop, back = pop)
+                }
             }
         }
         return
@@ -124,7 +130,12 @@ fun WalletShell(store: WalletStore) {
             ) {
                 WalletHeader(store, openAccounts = { accountsOpen = true })
                 when (store.tab) {
-                    Tab.HOME -> HomeScreen(store, receive = { flows = flows + Flow.RECEIVE }, send = { flows = flows + Flow.SEND })
+                    Tab.HOME -> HomeScreen(
+                        store,
+                        receive = { flows = flows + Flow.RECEIVE },
+                        send = { flows = flows + Flow.SEND },
+                        privacy = { flows = flows + Flow.PRIVACY },
+                    )
                     Tab.ACTIVITY -> ActivityScreen(store)
                     Tab.SETTINGS -> SettingsHubScreen(store, open = { flows = flows + it })
                 }

@@ -10,18 +10,20 @@ struct HomeView: View {
     let open: (WalletShell.Flow) -> Void
     var send: () -> Void = {}
     var deploy: () -> Void = {}
+    var privacy: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             PortfolioHeroView()
+            ShieldedHeroLabel()
             DeployNoticeView(receive: receive, deploy: deploy)
             HStack(spacing: BrambleMetrics.ActionRow.gap) {
                 ActionTile(title: "Send", icon: .send, action: send).disabled(store.account == nil)
                 ActionTile(title: "Swap", icon: .shuffle) {}.disabled(true)
                 ActionTile(title: "Receive", icon: .qrCode, action: receive)
-                ActionTile(title: "Shield", icon: .shield) {}.disabled(true)
+                ShieldActionTile(receive: receive, journey: privacy)
             }
-            PortfolioTokens(open: open)
+            PortfolioTokens(open: open, receive: receive, privacy: privacy)
         }
     }
 }

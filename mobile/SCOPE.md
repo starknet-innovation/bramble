@@ -69,6 +69,12 @@ What is reused from the extension, and how drift is prevented:
 - **Network.** Sans-IO: no TLS or HTTP code in Rust. HTTPS only (ATS / `usesCleartextTraffic=false`),
   ephemeral URLSession. An endpoint is trusted only after `starknet_chainId` proves the chain;
   responses must answer their request id, are size-bounded, and u256 limbs are range-checked.
+- **STRK20 viewing key (owner-approved exemption, 2026-09-24).** The one secret-derived value that
+  leaves the core: the scoped viewing key may travel inside the discovery request body the
+  Swift/Kotlin host carries, in a buffer the host wipes after the exchange, over HTTPS only, to the
+  configured discovery service only (never an OHTTP network, which is not routed). It is never
+  persisted, logged or shown, no exported type holds it alone, and this matches what the
+  extension sends. Terms and enforcement: [docs/privacy.md](docs/privacy.md) §1.1.
 - **Clipboard.** Public identifiers only (account address, signer public key, class hash; see
   `docs/accounts.md` §2.8), local-only and expiring after two minutes on iOS; Android clears its
   own clip after two minutes. Never the phrase, a private key, or a viewing key.
@@ -77,81 +83,69 @@ What is reused from the extension, and how drift is prevented:
 
 ## Phases
 
-**Phase 0 — prototype (this branch).** Create/import, backup, unlock/lock, multiple accounts,
-mainnet/Sepolia, live STRK/ETH balances, receive with QR, explorer, reveal phrase, delete
-wallet. iOS verified. Android now matches the iOS screens one for one (onboarding, unlock,
-wallet shell, home, accounts, receive, settings, reveal, remove), uses only generated tokens,
-icons, token logos, and the build-time onboarding landscape, and has FLAG_SECURE, overlay and
-autofill hardening, secret fields without suggestions, lock on background (including a lock that
-lands mid-PBKDF2, and dropping onboarding input typed before a vault exists), and balances tied to
-the network and account they were read for. It is still uncompiled: no JDK or Android SDK was
-available where it was written (see `docs/android-parity.md`).
+State of `feature/mobile-wallet` after merging vault-security, android-parity, design-mobile,
+transactions, accounts, nostr-multisig, portfolio-activity and privacy. iOS is built and was
+verified on each branch; every Android change is written against bindings generated from the
+merged core but has never been compiled (no JDK or Android SDK where it was written; see
+`docs/android-parity.md`).
+
+**Phase 0 — prototype (done).** Create/import, backup, unlock/lock, mainnet/Sepolia, receive with
+QR, explorer, reveal phrase, delete wallet. Android matches the iOS screens one for one with
+FLAG_SECURE, overlay and autofill hardening, secret fields without suggestions, and lock on
+background (including a lock that lands mid-PBKDF2).
 
 **Phase 0.1 — iOS design parity (done, presentation only).** Generated elevation, press,
 breakpoint and per-component metrics read from the extension's side-panel stylesheet; Dynamic
-Type from the type tokens, 44pt hit targets, haptics, SPRING presses with reduced motion,
-edge swipe-back, sheet detents, SE short-height rules; shared callout / empty / error / pill /
-toast / skeleton components; VoiceOver labels and generated-skin contrast tests; a Debug-only
-offline RPC fixture transport and snapshot XCUITests in both themes. Parity tables in
-`docs/design-mobile-parity.md`. Still open: SE / Pro Max device runs, large Dynamic Type and
-Reduce Motion snapshot passes, Android.
+Type, 44pt hit targets, haptics, reduced motion, edge swipe-back, sheet detents; shared callout /
+empty / error / pill / toast / skeleton components; flat input fields (no edge, stroke or shadow,
+enforced by `tests/conformance/mobile-design-system.test.ts`); a Debug-only offline RPC fixture
+transport. Every merged feature's screens use these components and metrics, and success toasts
+go through `store.notify`. Still open: SE / Pro Max device runs, large Dynamic Type and Reduce
+Motion snapshot passes.
 
-**Phase 0.5 — account parity (built on `mobile/accounts`; see `docs/accounts.md`).** The
-extension's account naming (address-derived nickname, 1–64 character labels) and address
-truncation; vault v3 with typed account records, one active account, labels and groups (one
-migration chain v1 → v2 → v3 over both branches' formats, every record re-derived and checked);
-sans-IO "Find your accounts" discovery over the first 20 indices for Bramble (OpenZeppelin),
-Ready (Argent 0.4.0/0.3.1/0.3.0) and Braavos (1.0.0/base, view-only), with manual index and the
-extension's restore acknowledgement; "Regular account" from the drawer's Add account; account
-drawer groups, selected row and "Manage accounts & groups"; copy of public identifiers through
-the expiring local-only clipboard with the extension's toast. Signing is by record
-(`sign_hash_for_account` and the transfer plan share one gate refusing view-only and Ready
-records; `sign_hash(index)` removed). iOS verified; Android source only. Not yet: private-key
-import (Bramble/Ready contract choice and deployment salt), Ready (`argent-signer-array`) and
-Braavos signing.
+**Phase 0.5 — account parity (done; `docs/accounts.md`).** Vault v3 with typed account records,
+one active account, labels and groups, and one migration chain v1 → v2 → v3; sans-IO "Find your
+accounts" discovery for Bramble (OpenZeppelin), Ready (Argent) and Braavos (view-only); the
+drawer's Add account ("Regular account", and "Multisig account" into the Ready Multisig
+gateway). Everything that acts for an account names its record id: signing, transfer and
+deployment plans, activity, shared-account signers, and private-balance reads
+(`sign_hash(index)` is removed and `tests/ffi_surface.rs` forbids index-based signing or planning
+exports). Not yet: private-key import, Ready (`argent-signer-array`) and Braavos signing.
 
 **Phase 1 — sendable wallet.**
 1. Android in CI: NDK build via `build-core-android.sh`, then the JVM unit and instrumented
-   suites (`:app:testDebugUnitTest`, `:app:connectedDebugAndroidTest`). The pinned Gradle 8.11.1
-   wrapper and the Compose/Espresso suites mirroring the iOS XCUITests now exist; they have
-   never been run.
-2. Transactions in the core — **done (iOS; Android sources uncompiled).** ERC-20 transfer via a
-   core-owned `TransferPlan`: sans-IO nonce, fee estimation and status bodies, the extension's
-   fee margins and 3/2 ceiling, invoke/deploy-account v3 hashing and signing inside the core
-   (`krusty_kms` 0.11.0), automatic OZ deployment before the first send, a standalone Deploy
-   account flow, local activity records with status reconciliation, and a Send journey matching
-   the extension's review. A plan binds to vault-security's session generation (`lock_epoch`):
-   any lock, idle lock or new unlock voids it. Proven against a fixture recorded from the
-   extension's own send path (mobile/docs/transactions.md).
-3. ~~Biometric unlock and persisted wrong-password back-off~~ Done: vault v2 (random DEK,
-   passphrase slot + optional biometric slot, one-step v1 → v2 migration), core-enforced
-   exponential back-off persisted across restarts, core-enforced 30-minute idle lock on a
-   monotonic clock, lock on biometric enrolment change, secret-screen and secret-field hardening,
-   and the Security settings screen. Verified on iOS (unit + XCUITest); Android written but
-   uncompiled. Open decisions D1–D6 in [docs/vault-security.md](docs/vault-security.md).
-4. CI job for `cargo test --locked`, clippy, `cargo deny`, and the iOS unit suite.
+   suites. The pinned Gradle wrapper and the Compose/Espresso suites exist; they have never been
+   run. **Open.**
+2. Transactions in the core — **done** (`docs/transactions.md`). ERC-20 transfer via a core-owned
+   `TransferPlan` bound to the session generation (`lock_epoch`), automatic OZ deployment, a
+   standalone Deploy flow, and the extension's review, fixture-checked against the extension.
+3. Biometric unlock, persisted back-off and idle lock — **done** (`docs/vault-security.md`;
+   decisions D1–D6 open there).
+4. CI job for `cargo test --locked`, clippy, `cargo deny`, and the iOS unit suite. **Open.**
+5. STRK20 private balances (read-only) — **done** (`docs/privacy.md`). The scoped viewing key is
+   derived in the core from the account record; a sans-IO `PrivacyReadPlan` reads registration,
+   private totals and the pool fee; private balances feed the portfolio's Home rows and hero
+   (`unified_home_balances`), token detail shows the private line and actions, Receive the pool
+   notice. The discovery endpoint is overridable for testing and OHTTP networks are refused.
+   **Decided:** the owner approved the viewing-key exemption (Security posture, docs §1.1).
+   Registration, shield, private transfer and unshield are not built (no Krusty privacy client).
 
-**Phase 2 — feature parity.** Token list and prices, activity history, private-key import,
-multisig, WalletConnect in place of the injected provider, STRK20 privacy (viewing keys stay in
-the core, as the extension's AGENTS.md rules require), Ledger over BLE.
-- *Done (portfolio-activity, iOS verified; Android source only, uncompiled):* fiat prices in
-  USD/EUR/GBP with the hero total and 24h change, per-token fiat and change, tracked/hidden
-  tokens with "Manage tokens · N not shown", add by contract, find held tokens, token chart, and
-  an Activity tab fed by the Starkscan lane or the RPC scan with explorer links. The saved-data,
-  prices-offline, balance-failed and history-unavailable states match the extension's stories.
-  All request building and response judging is in the core, byte-checked against the extension
-  by `bun run mobile:parity` (`mobile/docs/portfolio-activity.md`).
-
-*Phase 2 — delivered on `mobile/nostr-multisig`* (design and status: `docs/nostr-multisig.md`,
-`docs/nostr-multisig-status.md`). Nostr coordination key derived in the core (private key never
-crosses FFI), gift-wrap open/wrap with the extension's bounds, the Receive "Address / Bramble contact
-card" switch with wallet identity and Copy wallet card, an address book, the coordination relay
-setting, and Argent Multisig 0.2 shared accounts: create (participants, approval, fund), join by
-address over a chain-id-proven pinned-block authority read, and co-signer update checks judged by
-the core over the extension's relay protocol. Parity fixtures come from the extension's TypeScript.
-Still deferred: deploying the multisig, importing/signing/submitting intents (Krusty 0.11.0 exports
-no Stark signature verification), `SignerLinked` discovery, and the opt-in live relay/Sepolia
-checks. Android is written but uncompiled.
+**Phase 2 — feature parity.**
+- *Portfolio and activity — done* (`docs/portfolio-activity.md`). Fiat prices in USD/EUR/GBP with
+  the hero total and 24h change, tracked/hidden tokens, add by contract ("Token added" / "Token
+  shown" success toasts), find held tokens, token chart and detail, the display currency in the
+  one Appearance screen. The portfolio is the wallet's one balance read. Activity is one list
+  and one store: submitted transactions and on-chain history (Starkscan lane or RPC scan) live in
+  the core's `activity.v1.json`, scoped by account record id. Explorer and price text runs
+  through a regex matcher with a hard per-search step and depth budget that fails closed.
+- *Nostr coordination and multisig — done* (`docs/nostr-multisig.md`). Coordination key in the
+  core, gift-wrap open/wrap, the Receive contact card and wallet identity, an address book, the
+  relay setting, and Argent Multisig 0.2 shared accounts (create, join over a pinned-block
+  authority read through the one RPC transport, co-signer update checks). Deleting a wallet
+  removes contacts, shared accounts and coordination state; a new wallet clears leftovers.
+  Deferred: deploying the multisig, intent import/signing/submission, `SignerLinked` discovery.
+- *Open:* private-key import, WalletConnect in place of the injected provider, STRK20 privacy
+  submission (needs an upstream Krusty privacy client), Ledger over BLE.
 
 **Phase 3 — release.** Store listings, App Store privacy labels / Play data safety, external
 audit of the core and FFI surface, reproducible builds, crash reporting without PII.
@@ -183,5 +177,8 @@ audit of the core and FFI surface, reproducible builds, crash reporting without 
 - A created wallet's vault is written before its backup is confirmed (iOS and Android). If the
   app locks during Save phrase or Confirm backup, nothing prompts the user to finish the backup
   after unlock; Reveal secrets is the way back. The extension verifies words before creating.
+- The STRK20 viewing key reaches host memory inside each discovery request body; hosts wipe their
+  buffer after the send, but HTTP/TLS internals cannot be wiped (docs/privacy.md §1.1, §5). This is
+  the owner-approved exemption under Security posture.
 - Send (ERC-20 from an OpenZeppelin account, with automatic deployment) is implemented on iOS;
   the Android Send sources are written but uncompiled. See docs/transactions.md.

@@ -20,6 +20,7 @@ import { parseCss } from "./mobile-assets/css";
 import { TOAST_SOURCE } from "./mobile-assets/feedback";
 import { renderKotlin } from "./mobile-assets/kotlin";
 import { MULTISIG_JSON_PATH, renderMultisigConstants } from "./mobile-assets/multisig";
+import { PRIVACY_JSON_PATH, renderPrivacyRouting } from "./mobile-assets/privacy";
 import { RPC_FIXTURES_PATH, renderRpcFixtures } from "./mobile-assets/rpc-fixtures";
 import { renderKotlinCopy, renderPolicyJson, renderSwiftCopy } from "./mobile-assets/security-copy";
 import { HEADER } from "./mobile-assets/shared";
@@ -159,6 +160,7 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [ACCOUNTS_JSON_PATH, renderAccountsCatalog()],
     [MULTISIG_JSON_PATH, renderMultisigConstants()],
     [TOKEN_REGISTRY_JSON_PATH, renderTokenRegistry()],
+    [PRIVACY_JSON_PATH, renderPrivacyRouting()],
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],
     [ANDROID_MARK_PATH, renderMarkDrawable()],

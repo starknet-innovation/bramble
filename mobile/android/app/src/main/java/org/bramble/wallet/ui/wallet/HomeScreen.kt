@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import org.bramble.core.TokenInfo
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.sendRefusal
+import org.bramble.wallet.strkFunded
 import org.bramble.wallet.design.BrambleControl
 import org.bramble.wallet.design.BrambleIcon
 import org.bramble.wallet.design.BrambleIconName
@@ -43,7 +44,7 @@ import org.bramble.wallet.design.textStyle
  * all from the portfolio store (prices, tracked tokens, the one balance read).
  */
 @Composable
-fun HomeScreen(store: WalletStore, receive: () -> Unit, send: () -> Unit) {
+fun HomeScreen(store: WalletStore, receive: () -> Unit, send: () -> Unit, privacy: () -> Unit = {}) {
     val skin = LocalSkin.current
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xl)) {
         org.bramble.wallet.portfolio.PortfolioHeroSection(store.portfolio)
@@ -56,7 +57,13 @@ fun HomeScreen(store: WalletStore, receive: () -> Unit, send: () -> Unit) {
             }
             ActionTile("Swap", BrambleIconName.SHUFFLE, enabled = false, modifier = Modifier.weight(1f)) {}
             ActionTile("Receive", BrambleIconName.QR_CODE, modifier = Modifier.weight(1f), onClick = receive)
-            ActionTile("Shield", BrambleIconName.SHIELD, enabled = false, modifier = Modifier.weight(1f)) {}
+            // The core's Shield gate; this app does not read deployment yet, so it passes Unknown.
+            org.bramble.wallet.privacy.ShieldActionTile(
+                org.bramble.core.shieldTile(store.network, org.bramble.core.DeploymentState.UNKNOWN, store.strkFunded, store.privacy.reading),
+                modifier = Modifier.weight(1f),
+                receive = receive,
+                journey = privacy,
+            )
         }
         Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

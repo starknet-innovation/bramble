@@ -68,9 +68,10 @@ fun PortfolioTokenList(store: PortfolioStore) {
     val prices = store.priceView ?: store.emptyPrices
     Column {
         StatusLine(store.balanceError, StatusTone.DANGER)
-        store.home?.visible?.forEachIndexed { offset, balance ->
+        // Public and private summed per token (`unifiedHomeBalances`, docs/privacy.md §2.2).
+        store.unified.forEachIndexed { offset, row ->
             if (offset > 0) Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(skin.hairline))
-            PortfolioTokenRow(balance, prices)
+            PortfolioTokenRow(row.balance, prices)
         }
         store.home?.notShown?.takeIf { it > 0u }?.let { StatusLine("Manage tokens · $it not shown") }
     }

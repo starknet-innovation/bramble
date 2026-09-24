@@ -34,12 +34,15 @@ struct PortfolioHeroView: View {
 }
 
 /// The Tokens section of `home-tabs.ts`: heading with the portfolio overflow menu, the visible
-/// rows (STRK first, hidden and likely-spam tokens off), the error panel, the empty state, and the
-/// "Manage tokens · N not shown" row.
+/// rows (STRK first, hidden and likely-spam tokens off) with private value summed in
+/// (`unifiedHomeBalances`; each token's public/private breakdown is on its detail screen), the
+/// error panel, the empty state, "Private balances · Try again", and "Manage tokens · N not shown".
 struct PortfolioTokens: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     let open: (WalletShell.Flow) -> Void
+    var receive: () -> Void = {}
+    var privacy: () -> Void = {}
     @State private var retrying = false
 
     var body: some View {
@@ -78,7 +81,7 @@ struct PortfolioTokens: View {
                 }
                 .padding(.top, BrambleSpace.sm)
             case .loaded:
-                let rows = portfolio.home?.visible ?? []
+                let rows = portfolio.unified.map(\.balance)
                 if rows.isEmpty {
                     EmptyState(message: "No tracked balances yet. Add or detect tokens to see them here.")
                 } else {
@@ -95,6 +98,7 @@ struct PortfolioTokens: View {
                     }
                 }
             }
+            PrivacyRetryRow()
             if let notShown = portfolio.home?.notShown, notShown > 0 {
                 MenuGroup {
                     MenuRow(icon: .coins, title: "Manage tokens", value: "\(notShown) not shown") { open(.tokens) }

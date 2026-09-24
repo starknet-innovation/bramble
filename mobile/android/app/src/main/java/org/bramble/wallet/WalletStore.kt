@@ -118,6 +118,8 @@ class WalletStore(
 
     /** Wallet card, contacts, shared accounts, and Nostr coordination (public state only). */
     val coordination = org.bramble.wallet.coordination.CoordinationStore(core) { networkInfo }
+    /** The active account's private-balance reading (docs/privacy.md); never persisted. */
+    val privacy = org.bramble.wallet.privacy.PrivacyModel()
 
     val networkInfo: NetworkInfo get() = supportedNetworks().first { it.network == network }
     val networkLabel: String get() = NetworkPreference.label(network)
@@ -237,6 +239,7 @@ class WalletStore(
         idleTimer?.cancel()
         idleTimer = null
         coordination.reset()
+        privacy.reset()
         pendingBackup = emptyList()
         accountState = AccountsSnapshot()
         portfolio.lock()
@@ -253,6 +256,7 @@ class WalletStore(
     }
 
     suspend fun switchNetwork(next: NetworkId) {
+        privacy.reset()
         network = next
         portfolio.lock()
         prefs.edit().putString(NetworkPreference.KEY, NetworkPreference.stored(next)).apply()
@@ -286,6 +290,7 @@ class WalletStore(
             if (ensure) core.ensureNetworkAccount(network)
             AccountsSnapshot(core.accountRecords(network), core.allAccountRecords(), core.accountGroups())
         }
+        account?.let { privacy.refresh(core, networkInfo, it.index) }
     }
 
     /** Re-checks the password in the core (throttled; biometrics never reveal) and returns the phrase for display only. */
@@ -479,20 +484,15 @@ class WalletStore(
         }
     }
 
-    // Balances
-
-    /**
-     * Reads the active account's balances through the portfolio (the one balance read): entering
-     * the account's scope serves its saved figures first; otherwise the read is forced. A late
-     * result is dropped by the portfolio's generation.
-     */
+    /** Balances through the portfolio (the one read; a new scope serves saved figures first), then privacy. */
     suspend fun refreshBalances(ticket: Long = session.ticket()) {
         val account = activeRecord ?: return
         if (!session.isCurrent(ticket)) return
         if (portfolio.scope?.accountId != account.id) portfolio.load(account, networkInfo) else portfolio.refresh(force = true)
+        privacy.retain(network, account.id) // one reading per account record, fed into Home's rows
+        privacy.refresh(core, networkInfo, account.id)
+        portfolio.setPrivacy(privacy.reading, privacy.state)
     }
 
-
-    /** Core lifecycle state, for tests and diagnostics. Takes the core's session mutex. */
-    internal fun coreStatus(): WalletStatus = core.status()
+    internal fun coreStatus(): WalletStatus = core.status() // tests and diagnostics; takes the session mutex
 }

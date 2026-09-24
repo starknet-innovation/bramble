@@ -40,6 +40,12 @@ final class PortfolioStore {
     private(set) var balances: PortfolioBalances = .loading
     private(set) var priceView: PriceView?
     private(set) var home: HomeRows?
+    /// Home's rows with private value summed in (`unifiedHomeBalances` over `home.visible`); the
+    /// public rows unchanged until a registered private reading settles.
+    private(set) var unified: [UnifiedBalance] = []
+    /// The last private-balance reading for this scope (`PrivacyModel`), fed in by the wallet.
+    private(set) var privacyReading: PrivacyReading = .idle
+    private(set) var privacyState: PrivacyState?
     private(set) var hero = PortfolioHero(totalText: nil, totalValue: nil, delta: nil)
     private(set) var currency: DisplayCurrency
     private(set) var tracked: [TrackedToken] = []
@@ -200,6 +206,16 @@ final class PortfolioStore {
 
     var addresses: [String] { tracked.map(\.token.address) }
 
+    /// Tokens the user hid from Home, whose private balances Home must not count either.
+    var hiddenTokenAddresses: [String] { tracked.filter(\.hiddenFromHome).map(\.token.address) }
+
+    /// Takes the latest private reading and recomputes the unified rows and the hero.
+    func setPrivacy(reading: PrivacyReading, state: PrivacyState?) {
+        privacyReading = reading
+        privacyState = state
+        recompute()
+    }
+
     func recompute() {
         if let scope {
             tracked = preferences.tracked(network: scope.network.network)
@@ -208,9 +224,14 @@ final class PortfolioStore {
         if case let .loaded(saved) = balances {
             let rows = preferences.homeRows(balances: saved.balances)
             home = rows
-            hero = portfolioHero(visible: rows.visible, prices: view, hasAccount: scope != nil)
+            unified = scope.map {
+                unifiedHomeBalances(network: $0.network.network, visible: rows.visible, hiddenTokenAddresses: hiddenTokenAddresses,
+                                    reading: privacyReading, state: privacyState)
+            } ?? rows.visible.map { UnifiedBalance(balance: $0, publicCompact: portfolioAmount(formatted: $0.formatted), privateOnly: false) }
+            hero = portfolioHero(visible: unified.map(\.balance), prices: view, hasAccount: scope != nil)
         } else {
             home = nil
+            unified = []
             hero = portfolioHero(visible: nil, prices: view, hasAccount: scope != nil)
         }
         recomputeGroups()
@@ -227,6 +248,9 @@ final class PortfolioStore {
         balances = .loading
         priceView = nil
         home = nil
+        unified = []
+        privacyReading = .idle
+        privacyState = nil
         hero = PortfolioHero(totalText: nil, totalValue: nil, delta: nil)
         tracked = []
         activityView = nil
